@@ -1192,7 +1192,9 @@ async def validate_cron_expression(
             "success": True,
             "cron_expression": cron_expr,
             "next_runs": next_runs,
-            "description": croniter.croniter(cron_expr).description
+            # croniter does not provide a stable human-readable description API
+            # across versions. Return a safe fallback instead of failing the endpoint.
+            "description": cron_expr
         }
     except Exception as e:
         logger.error("Failed to validate cron expression", error=str(e))

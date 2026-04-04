@@ -25,6 +25,23 @@ os.environ["ENVIRONMENT"] = "test"
 os.environ["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 os.environ["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 
+_borg_base_dir = os.path.join(os.environ["DATA_DIR"], "borg")
+_borg_config_dir = os.path.join(_borg_base_dir, "config")
+_borg_cache_dir = os.path.join(_borg_base_dir, "cache")
+_borg_security_dir = os.path.join(_borg_base_dir, "security")
+_borg_keys_dir = os.path.join(_borg_base_dir, "keys")
+
+os.makedirs(_borg_config_dir, exist_ok=True)
+os.makedirs(_borg_cache_dir, exist_ok=True)
+os.makedirs(_borg_security_dir, exist_ok=True)
+os.makedirs(_borg_keys_dir, exist_ok=True)
+
+os.environ["BORG_BASE_DIR"] = _borg_base_dir
+os.environ["BORG_CONFIG_DIR"] = _borg_config_dir
+os.environ["BORG_CACHE_DIR"] = _borg_cache_dir
+os.environ["BORG_SECURITY_DIR"] = _borg_security_dir
+os.environ["BORG_KEYS_DIR"] = _borg_keys_dir
+
 # Add parent directory to path so we can import from app/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 

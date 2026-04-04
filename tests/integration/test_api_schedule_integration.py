@@ -4,10 +4,45 @@ Integration tests for scheduled jobs API with real borg execution
 These tests verify scheduled job functionality end-to-end.
 Focus on timezone handling and cron expression correctness.
 """
+import json
+import subprocess
+import time
+
 import pytest
 from fastapi.testclient import TestClient
-from app.database.models import Repository, ScheduledJob
+from app.database.models import BackupJob, Repository, ScheduledJob, ScheduledJobRepository
 from datetime import datetime, timedelta
+
+from tests.integration.test_helpers import parse_archives_payload
+
+
+def _create_registered_borg_repo(test_db, borg_binary, tmp_path, name: str, slug: str):
+    repo_path = tmp_path / f"{slug}-repo"
+    source_path = tmp_path / f"{slug}-data"
+    repo_path.mkdir()
+    source_path.mkdir()
+    (source_path / f"{slug}.txt").write_text(f"content for {slug}")
+
+    subprocess.run(
+        [borg_binary, "init", "--encryption=none", str(repo_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    repo = Repository(
+        name=name,
+        path=str(repo_path),
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        mode="full",
+        source_directories=json.dumps([str(source_path)]),
+    )
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
+    return repo, repo_path, source_path
 
 
 @pytest.mark.integration
@@ -424,3 +459,212 @@ class TestScheduledJobValidation:
             # Each invalid cron should be rejected or cause validation error
             # We're just verifying the API doesn't crash
             assert response.status_code in [200, 201, 400, 422, 500]
+
+
+@pytest.mark.integration
+@pytest.mark.requires_borg
+class TestMultiRepositorySchedules:
+    """High-value integration tests for multi-repo schedule behavior."""
+
+    def test_create_multi_repo_schedule_dedupes_repository_ids_preserves_order(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        borg_binary,
+        tmp_path,
+    ):
+        repo1, _, _ = _create_registered_borg_repo(test_db, borg_binary, tmp_path, "Repo One", "repo-one")
+        repo2, _, _ = _create_registered_borg_repo(test_db, borg_binary, tmp_path, "Repo Two", "repo-two")
+
+        create_response = test_client.post(
+            "/api/schedule/",
+            json={
+                "name": "Ordered Multi Repo Schedule",
+                "cron_expression": "0 2 * * *",
+                "repository_ids": [repo2.id, repo1.id, repo2.id],
+                "enabled": True,
+            },
+            headers=admin_headers,
+        )
+
+        assert create_response.status_code in [200, 201], create_response.json()
+        schedule_payload = create_response.json()
+        schedule_data = (
+            schedule_payload.get("schedule")
+            or schedule_payload.get("job")
+            or schedule_payload
+        )
+        schedule_id = schedule_data["id"]
+
+        detail_response = test_client.get(f"/api/schedule/{schedule_id}", headers=admin_headers)
+        assert detail_response.status_code == 200
+        detail_payload = detail_response.json()
+        schedule_data = detail_payload.get("schedule") or detail_payload.get("job") or detail_payload
+
+        links = (
+            test_db.query(ScheduledJobRepository)
+            .filter_by(scheduled_job_id=schedule_id)
+            .order_by(ScheduledJobRepository.execution_order)
+            .all()
+        )
+        assert schedule_data["id"] == schedule_id
+        assert [link.repository_id for link in links] == [repo2.id, repo1.id]
+
+    def test_duplicate_multi_repo_schedule_preserves_repositories_and_disables_copy(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        borg_binary,
+        tmp_path,
+    ):
+        repo1, _, _ = _create_registered_borg_repo(test_db, borg_binary, tmp_path, "Repo Alpha", "repo-alpha")
+        repo2, _, _ = _create_registered_borg_repo(test_db, borg_binary, tmp_path, "Repo Beta", "repo-beta")
+
+        create_response = test_client.post(
+            "/api/schedule/",
+            json={
+                "name": "Source Multi Repo Schedule",
+                "cron_expression": "0 5 * * *",
+                "repository_ids": [repo1.id, repo2.id],
+                "enabled": True,
+                "archive_name_template": "{job_name}-{repo_name}-{date}",
+                "run_prune_after": True,
+            },
+            headers=admin_headers,
+        )
+        assert create_response.status_code in [200, 201], create_response.json()
+        schedule_payload = create_response.json()
+        schedule_data = (
+            schedule_payload.get("schedule")
+            or schedule_payload.get("job")
+            or schedule_payload
+        )
+        original_id = schedule_data["id"]
+
+        duplicate_response = test_client.post(
+            f"/api/schedule/{original_id}/duplicate",
+            headers=admin_headers,
+        )
+        assert duplicate_response.status_code == 200, duplicate_response.json()
+        duplicate_id = duplicate_response.json()["job"]["id"]
+
+        detail_response = test_client.get(f"/api/schedule/{duplicate_id}", headers=admin_headers)
+        assert detail_response.status_code == 200
+        detail_payload = detail_response.json()
+        duplicated = detail_payload.get("schedule") or detail_payload.get("job") or detail_payload
+
+        assert duplicated["enabled"] is False
+        assert duplicated["archive_name_template"] == "{job_name}-{repo_name}-{date}"
+        assert duplicated["run_prune_after"] is True
+
+        links = (
+            test_db.query(ScheduledJobRepository)
+            .filter_by(scheduled_job_id=duplicate_id)
+            .order_by(ScheduledJobRepository.execution_order)
+            .all()
+        )
+        assert [link.repository_id for link in links] == [repo1.id, repo2.id]
+
+    def test_run_now_multi_repo_schedule_creates_backups_for_each_repository(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        borg_binary,
+        tmp_path,
+    ):
+        repo1, repo1_path, _ = _create_registered_borg_repo(
+            test_db, borg_binary, tmp_path, "RunNow Repo One", "run-now-one"
+        )
+        repo2, repo2_path, _ = _create_registered_borg_repo(
+            test_db, borg_binary, tmp_path, "RunNow Repo Two", "run-now-two"
+        )
+
+        create_response = test_client.post(
+            "/api/schedule/",
+            json={
+                "name": "Run Now Multi Repo",
+                "cron_expression": "0 6 * * *",
+                "repository_ids": [repo1.id, repo2.id],
+                "enabled": True,
+            },
+            headers=admin_headers,
+        )
+        assert create_response.status_code in [200, 201], create_response.json()
+        schedule_payload = create_response.json()
+        schedule_data = (
+            schedule_payload.get("schedule")
+            or schedule_payload.get("job")
+            or schedule_payload
+        )
+        schedule_id = schedule_data["id"]
+
+        run_response = test_client.post(
+            f"/api/schedule/{schedule_id}/run-now",
+            headers=admin_headers,
+        )
+        assert run_response.status_code == 200, run_response.json()
+
+        deadline = datetime.now() + timedelta(seconds=60)
+        matching_jobs = []
+        while datetime.now() < deadline:
+            test_db.expire_all()
+            matching_jobs = (
+                test_db.query(BackupJob)
+                .filter(BackupJob.scheduled_job_id == schedule_id)
+                .order_by(BackupJob.id.asc())
+                .all()
+            )
+            if len(matching_jobs) == 2 and all(
+                job.status in ["completed", "completed_with_warnings", "failed"] for job in matching_jobs
+            ):
+                break
+            time.sleep(0.25)
+        assert len(matching_jobs) == 2
+        assert all(job.status in ["completed", "completed_with_warnings"] for job in matching_jobs)
+
+        repo1_archives = test_client.get(
+            f"/api/archives/list?repository={repo1_path}",
+            headers=admin_headers,
+        )
+        repo2_archives = test_client.get(
+            f"/api/archives/list?repository={repo2_path}",
+            headers=admin_headers,
+        )
+        assert repo1_archives.status_code == 200
+        assert repo2_archives.status_code == 200
+        assert len(parse_archives_payload(repo1_archives.json())) == 1
+        assert len(parse_archives_payload(repo2_archives.json())) == 1
+
+    def test_create_schedule_rejects_observability_only_repository(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        observe_repo = Repository(
+            name="Observe Only Repo",
+            path="/tmp/observe-only-repo",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(observe_repo)
+        test_db.commit()
+        test_db.refresh(observe_repo)
+
+        response = test_client.post(
+            "/api/schedule/",
+            json={
+                "name": "Observe Schedule",
+                "cron_expression": "0 2 * * *",
+                "repository_ids": [observe_repo.id],
+                "enabled": True,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["key"] == "backend.errors.schedule.observabilityOnlyRepo"

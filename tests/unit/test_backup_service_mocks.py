@@ -1,7 +1,7 @@
-
+import json
 import pytest
 import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock, call
+from unittest.mock import MagicMock, patch, AsyncMock, call, Mock
 from app.services.backup_service import BackupService, backup_service
 from app.database.models import BackupJob, Repository, SystemSettings, RepositoryScript
 
@@ -217,6 +217,22 @@ def _make_skip_query_side_effect(job, repo):
     return query_side_effect
 
 
+def _make_execute_query_side_effect(job, repo):
+    """Shared DB query mock used by execute_backup branch tests."""
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == BackupJob:
+            m.filter.return_value.first.return_value = job
+        elif model == Repository:
+            m.filter.return_value.first.return_value = repo
+        elif model == SystemSettings:
+            m.first.return_value = SystemSettings()
+        elif model == RepositoryScript:
+            m.filter.return_value.count.return_value = 0
+        return m
+    return query_side_effect
+
+
 @pytest.mark.asyncio
 async def test_pre_backup_inline_script_failure_skips_when_flag_set(
     backup_service_fixture, mock_db_session
@@ -373,3 +389,86 @@ async def test_log_rotation(backup_service_fixture, mock_db_session):
         kwargs = mock_cleanup.call_args.kwargs
         assert kwargs['max_age_days'] == 7
         assert kwargs['max_total_size_mb'] == 100
+
+
+@pytest.mark.asyncio
+async def test_execute_backup_delegates_remote_ssh_job(backup_service_fixture, mock_db_session):
+    job_id = 50
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        source_directories='["/remote/data"]',
+        exclude_patterns='["*.tmp"]',
+        compression="lz4",
+    )
+    job = BackupJob(id=job_id, status="pending", execution_mode="remote_ssh", source_ssh_connection_id=77)
+    mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
+
+    with patch(
+        "app.services.remote_backup_service.remote_backup_service.execute_remote_backup",
+        new=AsyncMock(),
+    ) as mock_remote_execute:
+        await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
+
+    mock_remote_execute.assert_awaited_once()
+    assert job.status == "pending"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source_directories",
+    [
+        "[]",
+        "not-json",
+    ],
+)
+async def test_execute_backup_rejects_missing_or_invalid_source_directories(
+    backup_service_fixture, mock_db_session, source_directories
+):
+    job_id = 51
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        source_directories=source_directories,
+        compression="lz4",
+    )
+    job = BackupJob(id=job_id, status="pending")
+    mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
+
+    notifications = MagicMock()
+    notifications.send_backup_failure = AsyncMock()
+    notifications.send_backup_start = AsyncMock()
+    notifications.send_backup_success = AsyncMock()
+    notifications.send_backup_warning = AsyncMock()
+
+    with patch("app.services.backup_service.notification_service", notifications), patch(
+        "app.services.backup_service.mqtt_service"
+    ) as mqtt:
+        mqtt.sync_state_with_db = Mock()
+        await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
+
+    assert job.status == "failed"
+    assert job.error_message == json.dumps({"key": "backend.errors.borg.unknownError"})
+
+
+@pytest.mark.asyncio
+async def test_execute_backup_rejects_observe_mode(backup_service_fixture, mock_db_session):
+    job_id = 52
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        source_directories='["/data"]',
+        mode="observe",
+        compression="lz4",
+    )
+    job = BackupJob(id=job_id, status="pending")
+    mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
+
+    with patch("app.services.backup_service.notification_service"), patch(
+        "app.services.backup_service.mqtt_service"
+    ) as mqtt:
+        mqtt.sync_state_with_db = Mock()
+        await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
+
+    assert job.status == "failed"
+    assert job.error_message == json.dumps({"key": "backend.errors.borg.unknownError"})

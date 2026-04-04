@@ -3,15 +3,35 @@ Comprehensive unit tests for dashboard API endpoints
 """
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import patch
+
+from app.api.dashboard import SystemMetrics
 
 
 @pytest.mark.unit
 class TestDashboardStatus:
     """Test dashboard status endpoints"""
 
+    def _mock_dashboard_status(self):
+        return patch(
+            "app.api.dashboard.get_system_metrics",
+            return_value=SystemMetrics(
+                cpu_usage=12.5,
+                cpu_count=8,
+                memory_usage=43.0,
+                memory_total=1024,
+                memory_available=512,
+                disk_usage=55.0,
+                disk_total=2048,
+                disk_free=1024,
+                uptime=123456,
+            ),
+        )
+
     def test_dashboard_status(self, test_client: TestClient, admin_headers):
         """Test dashboard status endpoint"""
-        response = test_client.get("/api/dashboard/status", headers=admin_headers)
+        with self._mock_dashboard_status():
+            response = test_client.get("/api/dashboard/status", headers=admin_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -20,7 +40,8 @@ class TestDashboardStatus:
 
     def test_dashboard_status_structure(self, test_client: TestClient, admin_headers):
         """Test dashboard status returns proper structure"""
-        response = test_client.get("/api/dashboard/status", headers=admin_headers)
+        with self._mock_dashboard_status():
+            response = test_client.get("/api/dashboard/status", headers=admin_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -30,7 +51,8 @@ class TestDashboardStatus:
 
     def test_dashboard_status_contains_repositories(self, test_client: TestClient, admin_headers):
         """Test that dashboard status includes repository count"""
-        response = test_client.get("/api/dashboard/status", headers=admin_headers)
+        with self._mock_dashboard_status():
+            response = test_client.get("/api/dashboard/status", headers=admin_headers)
 
         if response.status_code == 200:
             data = response.json()
@@ -39,8 +61,9 @@ class TestDashboardStatus:
 
     def test_dashboard_status_caching(self, test_client: TestClient, admin_headers):
         """Test that dashboard status can be called multiple times"""
-        response1 = test_client.get("/api/dashboard/status", headers=admin_headers)
-        response2 = test_client.get("/api/dashboard/status", headers=admin_headers)
+        with self._mock_dashboard_status():
+            response1 = test_client.get("/api/dashboard/status", headers=admin_headers)
+            response2 = test_client.get("/api/dashboard/status", headers=admin_headers)
 
         assert response1.status_code == response2.status_code
         assert response1.status_code == 200

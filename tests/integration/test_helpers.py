@@ -1,11 +1,34 @@
 #!/usr/bin/env python3
 """
-Shared utilities for integration tests
+Shared utilities for integration tests.
 
-Provides helpers for Docker environment detection and path conversion.
+Provides helpers for Docker environment detection, path conversion, and polling
+long-running API jobs.
 """
 
+import json
 import os
+import time
+from pathlib import Path
+
+
+def make_borg_env(base_path: str) -> dict:
+    """
+    Build a Borg-safe environment rooted under a temporary directory.
+
+    Borg writes cache/security metadata under the user's home directory by
+    default. Integration tests should not touch the real home directory, and
+    the sandbox may reject that path entirely.
+    """
+    borg_home = Path(base_path) / "borg-home"
+    borg_base_dir = Path(base_path) / "borg-base"
+    borg_home.mkdir(parents=True, exist_ok=True)
+    borg_base_dir.mkdir(parents=True, exist_ok=True)
+
+    env = os.environ.copy()
+    env["HOME"] = str(borg_home)
+    env["BORG_BASE_DIR"] = str(borg_base_dir)
+    return env
 
 
 class DockerPathHelper:
@@ -98,3 +121,43 @@ class DockerPathHelper:
         else:
             logger_func("ℹ️  Local/CI backend detected (direct filesystem access)")
             logger_func(f"   Backend URL: {self.base_url}")
+
+
+def wait_for_job_terminal_status(
+    test_client,
+    job_endpoint: str,
+    job_id: int,
+    headers: dict,
+    *,
+    timeout: float = 30.0,
+    poll_interval: float = 0.25,
+    terminal_statuses=("completed", "completed_with_warnings", "failed", "cancelled"),
+):
+    """Poll a job endpoint until it reaches a terminal state."""
+    start = time.time()
+    last_data = None
+
+    while time.time() - start < timeout:
+        response = test_client.get(f"{job_endpoint}/{job_id}", headers=headers)
+        response.raise_for_status()
+        last_data = response.json()
+
+        if last_data.get("status") in terminal_statuses:
+            return last_data
+
+        time.sleep(poll_interval)
+
+    raise TimeoutError(
+        f"Job {job_id} at {job_endpoint} did not reach terminal state within {timeout}s. "
+        f"Last payload: {last_data}"
+    )
+
+
+def parse_archives_payload(payload: dict) -> list:
+    """Normalize the archives API payload into a list of archive dicts."""
+    archives_raw = payload.get("archives", "{}")
+    if isinstance(archives_raw, str):
+        archives_data = json.loads(archives_raw)
+    else:
+        archives_data = archives_raw
+    return archives_data.get("archives", [])

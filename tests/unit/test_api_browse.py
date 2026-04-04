@@ -1,9 +1,28 @@
 """
 Unit tests for browse/filesystem API endpoints
 """
+import json
+from unittest.mock import AsyncMock, patch
+
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from app.database.models import Repository
+from app.api import browse as browse_api
+from app.database.models import Repository, SystemSettings
+
+
+def _create_repository(test_db, name="Browse Test Repo"):
+    repo = Repository(
+        name=name,
+        path="/tmp/test-browse-repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+    )
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
+    return repo
 
 
 @pytest.mark.unit
@@ -85,6 +104,210 @@ class TestBrowseEndpoints:
         )
 
         assert response.status_code in [404, 405]  # Not found or not implemented
+
+
+@pytest.mark.unit
+class TestBrowseArchiveBehavior:
+    @pytest.mark.asyncio
+    async def test_browse_archive_invalid_repository_returns_contract_error(
+        self,
+        test_db,
+        admin_user,
+    ):
+        with pytest.raises(browse_api.HTTPException) as exc:
+            await browse_api.browse_archive_contents(
+                repository_id=99999,
+                archive_name="archive-name",
+                path="",
+                current_user=admin_user,
+                db=test_db,
+            )
+
+        assert exc.value.status_code == 404
+        assert exc.value.detail["key"] == "backend.errors.restore.repositoryNotFound"
+
+    @pytest.mark.asyncio
+    async def test_browse_archive_uses_cached_items_without_hitting_borg(
+        self,
+        test_db,
+        admin_user,
+    ):
+        repo = _create_repository(test_db)
+        cached_items = [
+            {"path": "docs", "type": "d", "size": None, "mtime": "2024-01-01T00:00:00"},
+            {"path": "docs/readme.md", "type": "f", "size": 12, "mtime": "2024-01-01T00:00:01"},
+            {"path": "z.txt", "type": "f", "size": 3, "mtime": "2024-01-01T00:00:02"},
+        ]
+
+        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)):
+            with patch.object(browse_api.borg, "list_archive_contents", new=AsyncMock()) as mock_list:
+                response = await browse_api.browse_archive_contents(
+                    repository_id=repo.id,
+                    archive_name="test-archive",
+                    path="",
+                    current_user=admin_user,
+                    db=test_db,
+                )
+
+        assert response["items"]
+        data = response
+        assert [item["name"] for item in data["items"]] == ["docs", "z.txt"]
+        assert data["items"][0]["type"] == "directory"
+        assert data["items"][0]["size"] == 12
+        assert data["items"][1]["type"] == "file"
+        mock_list.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_browse_archive_rejects_streams_that_exceed_line_limit(
+        self,
+        test_db,
+        admin_user,
+    ):
+        repo = _create_repository(test_db, name="Line Limit Repo")
+
+        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
+            with patch.object(
+                browse_api.borg,
+                "list_archive_contents",
+                new=AsyncMock(return_value={"line_count_exceeded": True, "lines_read": 77}),
+            ):
+                with pytest.raises(HTTPException) as exc:
+                    await browse_api.browse_archive_contents(
+                        repository_id=repo.id,
+                        archive_name="huge-archive",
+                        path="",
+                        current_user=admin_user,
+                        db=test_db,
+                    )
+
+        assert exc.value.status_code == 413
+        assert exc.value.detail["key"] == "backend.errors.browse.archiveTooLarge"
+
+    @pytest.mark.asyncio
+    async def test_browse_archive_rejects_memory_estimate_overage(
+        self,
+        test_db,
+        admin_user,
+        monkeypatch,
+    ):
+        repo = _create_repository(test_db, name="Memory Limit Repo")
+        settings = test_db.query(SystemSettings).first()
+        if settings is None:
+            settings = SystemSettings()
+            test_db.add(settings)
+        settings.browse_max_memory_mb = 1
+        test_db.commit()
+
+        stdout = "\n".join(
+            [
+                json.dumps({"path": "docs", "type": "d", "mtime": "2024-01-01T00:00:00"}),
+                json.dumps({"path": "docs/readme.md", "type": "f", "size": 12, "mtime": "2024-01-01T00:00:01"}),
+            ]
+        )
+
+        monkeypatch.setattr(browse_api, "ITEM_SIZE_ESTIMATE", 1024 * 1024)
+
+        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
+            with patch.object(
+                browse_api.borg,
+                "list_archive_contents",
+                new=AsyncMock(return_value={"stdout": stdout}),
+            ):
+                with pytest.raises(HTTPException) as exc:
+                    await browse_api.browse_archive_contents(
+                        repository_id=repo.id,
+                        archive_name="memory-archive",
+                        path="",
+                        current_user=admin_user,
+                        db=test_db,
+                    )
+
+        assert exc.value.status_code == 413
+        assert exc.value.detail["key"] == "backend.errors.browse.archiveMemoryTooHigh"
+
+    @pytest.mark.asyncio
+    async def test_browse_archive_parses_and_caches_items(
+        self,
+        test_db,
+        admin_user,
+    ):
+        repo = _create_repository(test_db, name="Parse Repo")
+        stdout = "\n".join(
+            [
+                json.dumps({"path": "docs", "type": "d", "mtime": "2024-01-01T00:00:00"}),
+                "not-json",
+                json.dumps({"path": "docs/readme.md", "type": "f", "size": 7, "mtime": "2024-01-01T00:00:01"}),
+                json.dumps({"path": "notes.txt", "type": "f", "size": 3, "mtime": "2024-01-01T00:00:02"}),
+            ]
+        )
+
+        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
+            with patch.object(browse_api.archive_cache, "set", new=AsyncMock(return_value=True)) as mock_set:
+                with patch.object(
+                    browse_api.borg,
+                    "list_archive_contents",
+                    new=AsyncMock(return_value={"stdout": stdout}),
+                ) as mock_list:
+                    response = await browse_api.browse_archive_contents(
+                        repository_id=repo.id,
+                        archive_name="parsed-archive",
+                        path="",
+                        current_user=admin_user,
+                        db=test_db,
+                    )
+
+        data = response
+        assert [item["name"] for item in data["items"]] == ["docs", "notes.txt"]
+        assert data["items"][0]["size"] == 7
+        assert data["items"][1]["size"] == 3
+        mock_list.assert_awaited_once()
+        mock_set.assert_awaited_once()
+        cached_args = mock_set.await_args.args
+        assert cached_args[0] == repo.id
+        assert cached_args[1] == "parsed-archive"
+        assert len(cached_args[2]) == 3
+
+    @pytest.mark.asyncio
+    async def test_browse_archive_subdirectory_only_returns_immediate_children(
+        self,
+        test_db,
+        admin_user,
+    ):
+        repo = _create_repository(test_db, name="Nested Repo")
+        cached_items = [
+            {"path": "home/user", "type": "d", "size": None, "mtime": "2024-01-01T00:00:00"},
+            {"path": "home/user/file.txt", "type": "f", "size": 10, "mtime": "2024-01-01T00:00:01"},
+            {"path": "home/user/docs", "type": "d", "size": None, "mtime": "2024-01-01T00:00:02"},
+            {"path": "home/user/docs/a.txt", "type": "f", "size": 11, "mtime": "2024-01-01T00:00:03"},
+            {"path": "home/user/docs/b.txt", "type": "f", "size": 12, "mtime": "2024-01-01T00:00:04"},
+            {"path": "home/other/skip.txt", "type": "f", "size": 99, "mtime": "2024-01-01T00:00:05"},
+        ]
+
+        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)):
+            response = await browse_api.browse_archive_contents(
+                repository_id=repo.id,
+                archive_name="nested-archive",
+                path="home/user",
+                current_user=admin_user,
+                db=test_db,
+            )
+
+        assert response["items"] == [
+            {
+                "name": "docs",
+                "type": "directory",
+                "size": 23,
+                "mtime": "2024-01-01T00:00:02",
+                "path": "home/user/docs",
+            },
+            {
+                "name": "file.txt",
+                "type": "file",
+                "size": 10,
+                "mtime": "2024-01-01T00:00:01",
+                "path": "home/user/file.txt",
+            },
+        ]
 
 
 @pytest.mark.unit

@@ -3,6 +3,9 @@ Unit tests for system API endpoints
 """
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+
+from app.core.features import Plan
 
 
 @pytest.mark.unit
@@ -10,48 +13,75 @@ class TestSystemEndpoints:
     """Test system API endpoints"""
 
     def test_system_info(self, test_client: TestClient, admin_headers):
-        """Test getting system information"""
         response = test_client.get("/api/system/info", headers=admin_headers)
 
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, dict)
-        # Should contain basic system info
-        assert "app_version" in data or "borg_version" in data or "platform" in data or "system" in data
+        assert "app_version" in data
+        assert "plan" in data
+        assert "features" in data
 
     def test_system_info_unauthorized(self, test_client: TestClient):
-        """Test system info without authentication"""
         response = test_client.get("/api/system/info")
 
-        # System info might be public or require auth
         assert response.status_code in [200, 401, 403]
 
-    def test_borg_version(self, test_client: TestClient, admin_headers):
-        """Test getting borg version"""
-        response = test_client.get("/api/system/borg-version", headers=admin_headers)
+    def test_system_info_uses_reported_versions_and_plan(self, test_client: TestClient, admin_headers):
+        plan = MagicMock()
+        plan.value = "pro"
 
-        # Should return version or error if borg not installed
-        assert response.status_code in [200, 404, 500]
-        if response.status_code == 200:
-            data = response.json()
-            assert isinstance(data, dict)
+        with patch("app.api.system.borg.get_system_info", new=AsyncMock(return_value={"borg_version": "1.2.3"})):
+            with patch("app.api.system.borg2.get_system_info", new=AsyncMock(return_value={"success": True, "borg_version": "2.0.0"})):
+                with patch("app.api.system.get_current_plan", return_value=plan):
+                    response = test_client.get("/api/system/info", headers=admin_headers)
 
-    def test_disk_usage(self, test_client: TestClient, admin_headers):
-        """Test getting disk usage information"""
-        response = test_client.get("/api/system/disk-usage", headers=admin_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["borg_version"] == "1.2.3"
+        assert data["borg2_version"] == "2.0.0"
+        assert data["plan"] == "pro"
 
-        assert response.status_code in [200, 404, 500]
-        if response.status_code == 200:
-            data = response.json()
-            assert isinstance(data, dict)
+    def test_system_info_falls_back_when_borg_checks_fail(self, test_client: TestClient, admin_headers):
+        plan = MagicMock()
+        plan.value = "community"
 
-    def test_system_health(self, test_client: TestClient, admin_headers):
-        """Test system health check"""
-        response = test_client.get("/api/system/health", headers=admin_headers)
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            with patch("app.api.system.borg.get_system_info", new=AsyncMock(side_effect=RuntimeError("boom"))):
+                with patch("app.api.system.borg2.get_system_info", new=AsyncMock(side_effect=RuntimeError("boom"))):
+                    with patch("app.api.system.get_current_plan", return_value=plan):
+                        response = test_client.get("/api/system/info", headers=admin_headers)
 
-        assert response.status_code in [200, 404, 503]
-        if response.status_code == 200:
-            data = response.json()
-            assert isinstance(data, dict)
-            # Should have some health indicator
-            assert "status" in data or "healthy" in data or "health" in data
+        assert response.status_code == 200
+        data = response.json()
+        assert data["app_version"] == "dev"
+        assert data["borg_version"] is None
+        assert data["borg2_version"] is None
+        assert data["plan"] == "community"
+
+    def test_system_info_reads_version_file(self, test_client: TestClient, admin_headers):
+        with patch("app.api.system.open", mock_open(read_data="7.8.9"), create=True):
+            with patch("app.api.system.borg.get_system_info", new=AsyncMock(return_value={"borg_version": "1.4.3"})):
+                with patch("app.api.system.borg2.get_system_info", new=AsyncMock(return_value={"success": False})):
+                    with patch("app.api.system.get_current_plan", return_value=Plan.PRO):
+                        response = test_client.get("/api/system/info", headers=admin_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["app_version"] == "7.8.9"
+        assert data["borg_version"] == "1.4.3"
+        assert data["borg2_version"] is None
+        assert data["plan"] == "pro"
+
+    def test_system_info_returns_safe_fallback_on_unexpected_error(self, test_client: TestClient, admin_headers):
+        with patch("app.api.system.get_current_plan", side_effect=RuntimeError("db down")):
+            response = test_client.get("/api/system/info", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "app_version": "unknown",
+            "borg_version": None,
+            "borg2_version": None,
+            "plan": "community",
+            "features": {},
+        }

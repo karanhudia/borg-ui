@@ -63,27 +63,51 @@ class ScheduleResponse(BaseModel):
 def get_system_metrics() -> SystemMetrics:
     """Get system resource metrics"""
     try:
-        # CPU usage
-        cpu_usage = psutil.cpu_percent(interval=1)
-        
-        # Memory usage
-        memory = psutil.virtual_memory()
-        
-        # Disk usage
-        disk = psutil.disk_usage('/')
-        
-        # System uptime
-        uptime = int(psutil.boot_time())
+        try:
+            cpu_usage = psutil.cpu_percent(interval=1)
+            cpu_count = psutil.cpu_count(logical=True) or 1
+        except Exception as e:
+            logger.warning("Failed to read CPU metrics", error=str(e))
+            cpu_usage = 0.0
+            cpu_count = 1
+
+        try:
+            memory = psutil.virtual_memory()
+            memory_usage = memory.percent
+            memory_total = memory.total
+            memory_available = memory.available
+        except Exception as e:
+            logger.warning("Failed to read memory metrics", error=str(e))
+            memory_usage = 0.0
+            memory_total = 0
+            memory_available = 0
+
+        try:
+            disk = psutil.disk_usage('/')
+            disk_usage = disk.percent
+            disk_total = disk.total
+            disk_free = disk.free
+        except Exception as e:
+            logger.warning("Failed to read disk metrics", error=str(e))
+            disk_usage = 0.0
+            disk_total = 0
+            disk_free = 0
+
+        try:
+            uptime = int(psutil.boot_time())
+        except Exception as e:
+            logger.warning("Failed to read system uptime", error=str(e))
+            uptime = 0
         
         return SystemMetrics(
             cpu_usage=cpu_usage,
-            cpu_count=psutil.cpu_count(logical=True) or 1,
-            memory_usage=memory.percent,
-            memory_total=memory.total,
-            memory_available=memory.available,
-            disk_usage=disk.percent,
-            disk_total=disk.total,
-            disk_free=disk.free,
+            cpu_count=cpu_count,
+            memory_usage=memory_usage,
+            memory_total=memory_total,
+            memory_available=memory_available,
+            disk_usage=disk_usage,
+            disk_total=disk_total,
+            disk_free=disk_free,
             uptime=uptime
         )
     except Exception as e:
@@ -660,4 +684,3 @@ def calculate_average_dedup(repositories: List[Repository]) -> int:
     # This is a placeholder - would need actual dedup data from borg info
     # For now, return None to indicate we don't have this data
     return None
-

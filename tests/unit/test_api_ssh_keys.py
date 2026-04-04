@@ -1,10 +1,14 @@
 """
 Unit tests for SSH keys API endpoints
 """
+from datetime import datetime
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
+
+from app.api import ssh_keys as ssh_keys_api
+from app.database.models import SSHConnection, SSHKey
 
 
 @pytest.mark.unit
@@ -373,6 +377,15 @@ u331525-sub1        10485760000 8665169920 1820590080  83% /home"""
 
 
 @pytest.mark.unit
+class TestSSHKeyHelpers:
+    def test_format_bytes_formats_units(self):
+        assert ssh_keys_api.format_bytes(999) == "999.00 B"
+        assert ssh_keys_api.format_bytes(1024) == "1.00 KB"
+        assert ssh_keys_api.format_bytes(1024 * 1024) == "1.00 MB"
+        assert ssh_keys_api.format_bytes(5 * 1024 * 1024 * 1024) == "5.00 GB"
+
+
+@pytest.mark.unit
 class TestCollectStorageInfo:
     """Test collect_storage_info function with fallback logic"""
 
@@ -576,6 +589,16 @@ class TestCollectStorageInfo:
 
         assert unlink_called
 
+    @pytest.mark.asyncio
+    async def test_invalid_encrypted_private_key_returns_none(self, mock_connection):
+        from app.api.ssh_keys import collect_storage_info
+
+        bad_key = MagicMock()
+        bad_key.private_key = "not-a-valid-token"
+
+        result = await collect_storage_info(mock_connection, bad_key)
+        assert result is None
+
 
 @pytest.mark.unit
 class TestSSHConnectionDelete:
@@ -676,3 +699,135 @@ class TestSSHConnectionDelete:
         """Deleting a connection without authentication is rejected"""
         response = test_client.delete("/api/ssh-keys/connections/1")
         assert response.status_code in [401, 403]
+
+
+@pytest.mark.unit
+class TestSSHKeyStorageAndHelpers:
+    def test_get_system_key_empty_returns_exists_false(self, test_client: TestClient, admin_headers):
+        response = test_client.get("/api/ssh-keys/system-key", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert response.json() == {"success": True, "exists": False, "ssh_key": None}
+
+    def test_get_connections_formats_storage_information(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        key = SSHKey(
+            name="system-key",
+            public_key="ssh-rsa AAA",
+            private_key="encrypted",
+            key_type="rsa",
+            is_system_key=True,
+            is_active=True,
+        )
+        connection = SSHConnection(
+            ssh_key=key,
+            host="storage.example.com",
+            username="borg",
+            port=22,
+            status="connected",
+            storage_total=1536,
+            storage_used=1024,
+            storage_available=512,
+            storage_percent_used=66.7,
+            last_storage_check=datetime(2024, 1, 2, 3, 4, 5),
+            last_test=datetime(2024, 1, 2, 4, 5, 6),
+            last_success=datetime(2024, 1, 2, 4, 6, 7),
+        )
+        test_db.add_all([key, connection])
+        test_db.commit()
+
+        response = test_client.get("/api/ssh-keys/connections", headers=admin_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert len(data["connections"]) == 1
+        storage = data["connections"][0]["storage"]
+        assert storage["total"] == 1536
+        assert storage["total_formatted"] == "1.50 KB"
+        assert storage["used_formatted"] == "1.00 KB"
+        assert storage["available_formatted"] == "512.00 B"
+        assert storage["last_check"].startswith("2024-01-02")
+
+    def test_refresh_storage_links_system_key_and_updates_connection(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        system_key = SSHKey(
+            name="system-key",
+            public_key="ssh-rsa AAA",
+            private_key="encrypted",
+            key_type="rsa",
+            is_system_key=True,
+            is_active=True,
+        )
+        connection = SSHConnection(
+            host="storage.example.com",
+            username="borg",
+            port=22,
+            status="connected",
+        )
+        test_db.add_all([system_key, connection])
+        test_db.commit()
+        test_db.refresh(system_key)
+        test_db.refresh(connection)
+
+        storage_info = {
+            "total": 1536,
+            "used": 1024,
+            "available": 512,
+            "percent_used": 66.7,
+        }
+
+        with patch.object(ssh_keys_api, "collect_storage_info", new=AsyncMock(return_value=storage_info)) as mock_collect:
+            response = test_client.post(
+                f"/api/ssh-keys/connections/{connection.id}/refresh-storage",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["storage"]["total_formatted"] == "1.50 KB"
+        assert data["storage"]["used_formatted"] == "1.00 KB"
+        assert data["storage"]["available_formatted"] == "512.00 B"
+        mock_collect.assert_awaited_once()
+
+        test_db.expire_all()
+        refreshed = test_db.query(SSHConnection).filter(SSHConnection.id == connection.id).first()
+        assert refreshed.ssh_key_id == system_key.id
+        assert refreshed.storage_total == 1536
+        assert refreshed.storage_used == 1024
+        assert refreshed.storage_available == 512
+        assert refreshed.storage_percent_used == 66.7
+        assert refreshed.last_storage_check is not None
+
+    def test_refresh_storage_without_system_key_returns_404(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        connection = SSHConnection(
+            host="storage.example.com",
+            username="borg",
+            port=22,
+            status="connected",
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        response = test_client.post(
+            f"/api/ssh-keys/connections/{connection.id}/refresh-storage",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["key"] == "backend.errors.ssh.noSystemKeyFound"

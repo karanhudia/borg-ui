@@ -346,26 +346,45 @@ class TestScheduleHelpers:
         assert isinstance(data, (list, dict))
 
     def test_validate_cron_valid(self, test_client: TestClient, admin_headers):
-        """Test validating cron expression returns 500 (croniter bug)"""
+        """Test validating cron expression returns preview metadata"""
         response = test_client.post(
             "/api/schedule/validate-cron",
-            json={"cron_expression": "0 2 * * *"},
+            json={
+                "minute": "0",
+                "hour": "2",
+                "day_of_month": "*",
+                "month": "*",
+                "day_of_week": "*",
+            },
             headers=admin_headers
         )
 
-        # Endpoint has bug: croniter object has no attribute 'description'
-        assert response.status_code == 500
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["cron_expression"] == "0 2 * * *"
+        assert len(data["next_runs"]) == 10
+        assert data["description"] == "0 2 * * *"
 
     def test_validate_cron_invalid(self, test_client: TestClient, admin_headers):
-        """Test validating invalid cron expression returns 500 (croniter bug)"""
+        """Test validating invalid cron expression returns structured failure"""
         response = test_client.post(
             "/api/schedule/validate-cron",
-            json={"cron_expression": "invalid cron"},
+            json={
+                "minute": "invalid",
+                "hour": "*",
+                "day_of_month": "*",
+                "month": "*",
+                "day_of_week": "*",
+            },
             headers=admin_headers
         )
 
-        # Endpoint has bug but invalid cron also causes error
-        assert response.status_code == 500
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert data["cron_expression"] == "invalid * * * *"
+        assert "Invalid cron expression" in data["error"]
 
     def test_get_upcoming_jobs(self, test_client: TestClient, admin_headers):
         """Test getting upcoming jobs returns 200"""

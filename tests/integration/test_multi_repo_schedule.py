@@ -4,12 +4,18 @@ import shutil
 import subprocess
 import os
 import asyncio
+from unittest.mock import patch
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
 from app.database.models import ScheduledJob, Repository, ScheduledJobRepository
 from app.api.schedule import execute_multi_repo_schedule
 from app.utils.archive_names import sanitize_archive_component
+
+try:
+    from .test_helpers import make_borg_env
+except ImportError:
+    from test_helpers import make_borg_env
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -24,6 +30,8 @@ async def test_multi_repo_schedule_execution_real(
     This ensures that the session handling is correct throughout the entire lifecycle.
     """
     
+    borg_env = make_borg_env(str(tmp_path))
+
     # --- Helper to create a repo ---
     def create_repo(name, index):
         repo_path = tmp_path / f"repo-{index}"
@@ -37,7 +45,7 @@ async def test_multi_repo_schedule_execution_real(
         # Init borg repo
         subprocess.run(
             [borg_binary, "init", "--encryption=none", str(repo_path)],
-            check=True, capture_output=True
+            check=True, capture_output=True, env=borg_env
         )
         
         # Add to DB
@@ -81,7 +89,8 @@ async def test_multi_repo_schedule_execution_real(
     # This should succeed for BOTH repositories if the session is handled correctly.
     print("\n[TEST] Starting execution...")
     try:
-        await execute_multi_repo_schedule(job, db_session)
+        with patch.dict(os.environ, borg_env, clear=False):
+            await execute_multi_repo_schedule(job, db_session)
     except Exception as e:
         print(f"\n[TEST] Execution failed with exception: {e}")
         # Failure here is expected if the bug is present (detached instance)
@@ -94,7 +103,7 @@ async def test_multi_repo_schedule_execution_real(
     def check_archive_exists(repo_path):
         result = subprocess.run(
             [borg_binary, "list", "--json", str(repo_path)],
-            capture_output=True, text=True
+            capture_output=True, text=True, env=borg_env
         )
         # Archive names are sanitized (spaces/slashes → hyphens) by build_archive_name
         sanitized_job_name = sanitize_archive_component(job.name)
