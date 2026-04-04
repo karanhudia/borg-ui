@@ -39,7 +39,6 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
   const label = PLAN_LABEL[plan]
 
   const selectedColor = PLAN_COLOR[selectedPlan]
-  const isComingSoon = selectedPlan !== plan
   const visibleFeatures = Object.entries(features ?? {}).filter(
     ([, required]) => required === selectedPlan
   )
@@ -168,7 +167,6 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
                   mb: 1.25,
                 }}
               >
@@ -184,30 +182,9 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
                 >
                   {t('plan.planFeatures', { plan: PLAN_LABEL[selectedPlan] })}
                 </Typography>
-                {isComingSoon && (
-                  <Chip
-                    icon={<Clock size={10} />}
-                    label={t('plan.comingSoon')}
-                    size="small"
-                    sx={{
-                      height: 18,
-                      fontSize: '0.6rem',
-                      fontWeight: 600,
-                      bgcolor: `${selectedColor}14`,
-                      color: selectedColor,
-                      border: '1px solid',
-                      borderColor: `${selectedColor}30`,
-                      '& .MuiChip-icon': { color: selectedColor, ml: 0.5 },
-                      '& .MuiChip-label': { px: 0.75 },
-                    }}
-                  />
-                )}
               </Box>
               {visibleFeatures.map(([key]) => (
-                <Box
-                  key={key}
-                  sx={{ display: 'flex', gap: 1.25, mb: 1.5, opacity: isComingSoon ? 0.65 : 1 }}
-                >
+                <Box key={key} sx={{ display: 'flex', gap: 1.25, mb: 1.5 }}>
                   <Box
                     sx={{
                       width: 16,
