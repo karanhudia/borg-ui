@@ -20,8 +20,8 @@ env:
   SMOKE_URL: "http://localhost:8082"
 
 jobs:
-  backend-coverage:
-    name: Backend Coverage
+  backend-unit-coverage:
+    name: Backend Unit Coverage
     runs-on: ubuntu-latest
 
     services:
@@ -66,18 +66,10 @@ jobs:
           mkdir -p data
           mkdir -p logs
 
-      - name: Run backend coverage suite
+      - name: Run backend unit coverage
         run: |
           pytest \
             tests/unit \
-            tests/integration/test_api_archives_integration.py \
-            tests/integration/test_api_backup_integration.py \
-            tests/integration/test_api_mounts_integration.py \
-            tests/integration/test_backup_workflows_integration.py \
-            tests/integration/test_api_repositories_integration.py \
-            tests/integration/test_api_restore_integration.py \
-            tests/integration/test_api_schedule_integration.py \
-            tests/integration/test_multi_repo_schedule.py \
             -v \
             --cov=app \
             --cov-report=term-missing \
@@ -92,8 +84,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
-          flags: backend
-          name: backend-coverage
+          flags: backend-unit
+          name: backend-unit-coverage
           fail_ci_if_error: false
 
       - name: Upload coverage HTML report
@@ -112,8 +104,70 @@ jobs:
           MINIMUM_GREEN: 70
           MINIMUM_ORANGE: 50
 
-  frontend-quality:
-    name: Frontend Quality
+  backend-api-integration:
+    name: Borg API Integration
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y borgbackup
+
+      - name: Verify Borg installation
+        run: |
+          borg --version
+          which borg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create test directories
+        run: |
+          mkdir -p /tmp/borg-ui-tests
+          mkdir -p data
+          mkdir -p logs
+
+      - name: Run Borg API integration suite
+        run: |
+          pytest \
+            tests/integration/test_api_archives_integration.py \
+            tests/integration/test_api_backup_integration.py \
+            tests/integration/test_api_mounts_integration.py \
+            tests/integration/test_backup_workflows_integration.py \
+            tests/integration/test_api_repositories_integration.py \
+            tests/integration/test_api_restore_integration.py \
+            tests/integration/test_api_schedule_integration.py \
+            tests/integration/test_multi_repo_schedule.py \
+            -v
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+  typecheck-lint-format:
+    name: Typecheck Lint Format
     runs-on: ubuntu-latest
 
     steps:
@@ -147,8 +201,8 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
-  frontend-tests:
-    name: Frontend Tests
+  frontend-vitest:
+    name: Frontend Vitest
     runs-on: ubuntu-latest
 
     steps:
@@ -217,8 +271,8 @@ jobs:
             exit 1
           fi
 
-  smoke-core:
-    name: Smoke Core
+  smoke-borg-core:
+    name: Borg Smoke Core
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -318,9 +372,8 @@ jobs:
             logs/
           retention-days: 7
 
-  smoke-extended:
-    name: Smoke Extended
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+  smoke-borg-extended:
+    name: Borg Smoke Extended
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -419,8 +472,8 @@ jobs:
             logs/
           retention-days: 7
 
-  smoke-ssh-localhost:
-    name: Smoke SSH Localhost
+  smoke-borg-ssh-localhost:
+    name: Borg Smoke SSH Localhost
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -537,32 +590,38 @@ jobs:
   test-results:
     name: Test Results Summary
     runs-on: ubuntu-latest
-    needs: [backend-coverage, frontend-quality, frontend-tests, frontend-build, smoke-core, smoke-extended, smoke-ssh-localhost]
+    needs: [backend-unit-coverage, backend-api-integration, typecheck-lint-format, frontend-vitest, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
     if: always()
 
     steps:
       - name: Check test results
         run: |
-          echo "Backend coverage: ${{ needs.backend-coverage.result }}"
-          echo "Frontend quality: ${{ needs.frontend-quality.result }}"
-          echo "Frontend tests: ${{ needs.frontend-tests.result }}"
+          echo "Backend unit coverage: ${{ needs.backend-unit-coverage.result }}"
+          echo "Borg API integration: ${{ needs.backend-api-integration.result }}"
+          echo "Typecheck/lint/format: ${{ needs.typecheck-lint-format.result }}"
+          echo "Frontend vitest: ${{ needs.frontend-vitest.result }}"
           echo "Frontend build: ${{ needs.frontend-build.result }}"
-          echo "Smoke core: ${{ needs.smoke-core.result }}"
-          echo "Smoke extended: ${{ needs.smoke-extended.result }}"
-          echo "Smoke SSH localhost: ${{ needs.smoke-ssh-localhost.result }}"
+          echo "Borg smoke core: ${{ needs.smoke-borg-core.result }}"
+          echo "Borg smoke extended: ${{ needs.smoke-borg-extended.result }}"
+          echo "Borg smoke SSH localhost: ${{ needs.smoke-borg-ssh-localhost.result }}"
 
-          if [ "${{ needs.backend-coverage.result }}" != "success" ]; then
-            echo "Backend coverage failed"
+          if [ "${{ needs.backend-unit-coverage.result }}" != "success" ]; then
+            echo "Backend unit coverage failed"
             exit 1
           fi
 
-          if [ "${{ needs.frontend-quality.result }}" != "success" ]; then
-            echo "Frontend quality failed"
+          if [ "${{ needs.backend-api-integration.result }}" != "success" ]; then
+            echo "Borg API integration failed"
             exit 1
           fi
 
-          if [ "${{ needs.frontend-tests.result }}" != "success" ]; then
-            echo "Frontend tests failed"
+          if [ "${{ needs.typecheck-lint-format.result }}" != "success" ]; then
+            echo "Typecheck/lint/format failed"
+            exit 1
+          fi
+
+          if [ "${{ needs.frontend-vitest.result }}" != "success" ]; then
+            echo "Frontend vitest failed"
             exit 1
           fi
 
@@ -571,18 +630,18 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ needs.smoke-core.result }}" != "success" ] && [ "${{ needs.smoke-core.result }}" != "skipped" ]; then
-            echo "Smoke core failed"
+          if [ "${{ needs.smoke-borg-core.result }}" != "success" ] && [ "${{ needs.smoke-borg-core.result }}" != "skipped" ]; then
+            echo "Borg smoke core failed"
             exit 1
           fi
 
-          if [ "${{ needs.smoke-extended.result }}" != "success" ] && [ "${{ needs.smoke-extended.result }}" != "skipped" ]; then
-            echo "Smoke extended failed"
+          if [ "${{ needs.smoke-borg-extended.result }}" != "success" ] && [ "${{ needs.smoke-borg-extended.result }}" != "skipped" ]; then
+            echo "Borg smoke extended failed"
             exit 1
           fi
 
-          if [ "${{ needs.smoke-ssh-localhost.result }}" != "success" ] && [ "${{ needs.smoke-ssh-localhost.result }}" != "skipped" ]; then
-            echo "Smoke SSH localhost failed"
+          if [ "${{ needs.smoke-borg-ssh-localhost.result }}" != "success" ] && [ "${{ needs.smoke-borg-ssh-localhost.result }}" != "skipped" ]; then
+            echo "Borg smoke SSH localhost failed"
             exit 1
           fi
 
