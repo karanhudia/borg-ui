@@ -8,7 +8,12 @@ long-running API jobs.
 
 import json
 import os
+import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from tests.utils.jobs import wait_for_payload_status
 from tests.utils.borg import make_borg_test_env
