@@ -187,6 +187,10 @@ pytest
 pytest --cov=app --cov-report=html
 ```
 
+Production-critical Borg work is tested primarily through API-driven flows. The current focus is real Borg 1 coverage for repository lifecycle, backup execution, archive operations, restore, maintenance, and schedule-triggered runs.
+
+See [Testing](testing) for the short list of scenarios we treat as mandatory before trusting a release with production backups.
+
 ---
 
 ## Troubleshooting

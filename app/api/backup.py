@@ -4,11 +4,13 @@ from pydantic import BaseModel
 import structlog
 import asyncio
 import os
+import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
 from app.database.database import get_db
 from app.database.models import User, BackupJob, Repository
+from app.config import settings
 from app.core.security import (
     get_current_user,
     get_current_download_user,
@@ -25,6 +27,23 @@ def _get_job_repository(db: Session, repository_path: Optional[str]) -> Optional
     if not repository_path:
         return None
     return db.query(Repository).filter(Repository.path == repository_path).first()
+
+
+def _resolve_backup_log_file(job: BackupJob):
+    from pathlib import Path
+
+    if getattr(job, "log_file_path", None):
+        log_file = Path(job.log_file_path)
+        if log_file.exists():
+            return log_file
+
+    if job.logs and job.logs.startswith("Logs saved to:"):
+        log_filename = job.logs.replace("Logs saved to: ", "").strip()
+        log_file = Path(settings.data_dir) / "logs" / log_filename
+        if log_file.exists():
+            return log_file
+
+    return None
 
 # Pydantic models
 class BackupRequest(BaseModel):
@@ -62,14 +81,24 @@ async def start_backup(
         db.commit()
         db.refresh(backup_job)
 
-        # Execute backup asynchronously (non-blocking)
-        asyncio.create_task(
-            backup_service.execute_backup(
-                backup_job.id,
-                backup_request.repository,
-                None  # Create new session for background task
+        # Execute backup asynchronously (non-blocking). Unknown repository paths are
+        # still accepted for legacy compatibility, but are marked failed
+        # immediately after job creation so polling clients get a deterministic
+        # terminal state even in environments where background tasks may not run.
+        if backup_request.repository and repo_record is None:
+            backup_job.status = "failed"
+            backup_job.error_message = json.dumps({"key": "backend.errors.borg.unknownError"})
+            backup_job.logs = f"Repository record not found in database: {backup_request.repository}"
+            backup_job.completed_at = datetime.utcnow()
+            db.commit()
+        else:
+            asyncio.create_task(
+                backup_service.execute_backup(
+                    backup_job.id,
+                    backup_request.repository,
+                    None  # Create new session for background task
+                )
             )
-        )
 
         logger.info("Backup job created", job_id=backup_job.id, user=current_user.username)
 
@@ -297,9 +326,9 @@ async def download_backup_logs(
         # Handle file-based logs
         if job.logs.startswith("Logs saved to:"):
             log_filename = job.logs.replace("Logs saved to: ", "").strip()
-            log_file = Path("/data/logs") / log_filename
+            log_file = _resolve_backup_log_file(job)
 
-            if not log_file.exists():
+            if log_file is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail={"key": "backend.errors.backup.logFileNotFound", "params": {"filename": log_filename}}
@@ -366,11 +395,10 @@ async def stream_backup_logs(
         # Check if logs point to a file
         if job.logs.startswith("Logs saved to:"):
             # Parse file path from logs field
-            from pathlib import Path
             log_filename = job.logs.replace("Logs saved to: ", "").strip()
-            log_file = Path("/data/logs") / log_filename
+            log_file = _resolve_backup_log_file(job)
 
-            if log_file.exists():
+            if log_file is not None:
                 # Read log file and return lines
                 try:
                     log_content = log_file.read_text()

@@ -2080,9 +2080,12 @@ class BackupService:
 
             # Try to update job status - may fail if job was deleted during execution
             try:
+                failure_text = str(e)
                 job.status = "failed"
                 job.error_message = json.dumps({"key": "backend.errors.borg.unknownError"})
                 job.completed_at = datetime.utcnow()
+                if not job.logs:
+                    job.logs = failure_text
                 db.commit()
                 mqtt_service.sync_state_with_db(db, reason="backup failed with exception")
 
@@ -2094,10 +2097,34 @@ class BackupService:
                 except Exception as notif_error:
                     logger.warning("Failed to send backup failure notification", error=str(notif_error))
             except Exception as commit_error:
-                # Job may have been deleted while running - that's okay
-                logger.warning("Could not update job status (job may have been deleted during execution)",
-                              job_id=job_id, error=str(commit_error))
+                logger.warning(
+                    "Could not update job status in current session, retrying with fresh session",
+                    job_id=job_id,
+                    error=str(commit_error),
+                )
                 db.rollback()
+                retry_db = SessionLocal()
+                try:
+                    retry_job = retry_db.query(BackupJob).filter(BackupJob.id == job_id).first()
+                    if retry_job:
+                        retry_job.status = "failed"
+                        retry_job.error_message = json.dumps({"key": "backend.errors.borg.unknownError"})
+                        retry_job.completed_at = datetime.utcnow()
+                        if not retry_job.logs:
+                            retry_job.logs = str(e)
+                        retry_db.commit()
+                        mqtt_service.sync_state_with_db(retry_db, reason="backup failed with exception (retry)")
+                    else:
+                        logger.warning("Could not find backup job during retry failure update", job_id=job_id)
+                except Exception as retry_error:
+                    logger.warning(
+                        "Could not update job status after retry (job may have been deleted during execution)",
+                        job_id=job_id,
+                        error=str(retry_error),
+                    )
+                    retry_db.rollback()
+                finally:
+                    retry_db.close()
         finally:
             # Ensure log file handle is closed
             if 'log_file_handle' in locals() and log_file_handle:

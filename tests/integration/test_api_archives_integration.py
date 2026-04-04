@@ -8,6 +8,8 @@ import pytest
 import json
 from fastapi.testclient import TestClient
 
+from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
+
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -244,9 +246,8 @@ class TestDeleteArchiveIntegration:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        test_db
     ):
-        """Test successfully deleting a real archive (now returns background job)"""
+        """Test successfully deleting a real archive through the API job flow."""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         # Delete the first archive
@@ -265,9 +266,24 @@ class TestDeleteArchiveIntegration:
         assert data["status"] in ["pending", "running"]
         assert "deletion" in data["message"].lower()
 
-        # Note: Archive deletion now happens in background
-        # We verify the job was created successfully
-        # Actual deletion verification would require polling the job status endpoint
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/archives/delete-jobs",
+            data["job_id"],
+            admin_headers,
+            timeout=45,
+        )
+
+        assert job_data["status"] in ["completed", "completed_with_warnings"]
+
+        list_response = test_client.get(
+            f"/api/archives/list?repository={repo.path}",
+            headers=admin_headers,
+        )
+        assert list_response.status_code == 200
+        archive_names_after = [archive["name"] for archive in parse_archives_payload(list_response.json())]
+        assert archive_names[0] not in archive_names_after
+        assert archive_names[1] in archive_names_after
 
     def test_delete_nonexistent_archive(
         self,
@@ -385,24 +401,18 @@ class TestDownloadFileIntegration:
         """Test downloading a real file from an archive"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
-        # Try to download file1.txt from the first archive
-        # Note: The path in the archive includes the full source path
-        file_path = f"{test_data_path}/file1.txt"
+        file_path = test_data_path.joinpath("file1.txt").as_posix()
 
         response = test_client.get(
             f"/api/archives/download?repository={repo.path}&archive={archive_names[0]}&file_path={file_path}",
             headers=admin_headers
         )
 
-        # This should succeed or fail with 500 (extraction issues)
-        # 404 would mean repository not found (shouldn't happen)
-        assert response.status_code in [200, 500]
-
-        if response.status_code == 200:
-            # Verify it's a file download
-            assert "application/octet-stream" in response.headers.get("content-type", "")
-            # Should have content
-            assert len(response.content) > 0
+        assert response.status_code == 200, response.text
+        assert "application/octet-stream" in response.headers.get("content-type", "")
+        assert "attachment;" in response.headers.get("content-disposition", "")
+        assert "file1.txt" in response.headers.get("content-disposition", "")
+        assert response.content == b"Content of file 1"
 
 
 @pytest.mark.integration

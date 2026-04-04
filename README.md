@@ -33,6 +33,14 @@
     Zero-configuration deployment - just run and go.
 </p>
 
+<p align="center">
+    Testing priority: API-driven real Borg workflows for the backup, archive, restore, maintenance, and schedule paths people trust in production.
+</p>
+
+<p align="center">
+    Releases aim to verify both the FastAPI contract and the resulting Borg state so backup safety does not depend on UI-only checks.
+</p>
+
 </div>
 
 ---

@@ -3,7 +3,7 @@ Unit tests for activity API - log buffer functionality.
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.services.backup_service import BackupService
 
 
@@ -98,6 +98,324 @@ class TestActivityLogDownloads:
         response = test_client.get(
             f"/api/activity/backup/{job.id}/logs/download",
             headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert "text/plain" in response.headers.get("content-type", "")
+
+
+@pytest.mark.unit
+class TestRecentActivityEndpoint:
+    """Test the aggregated recent activity feed."""
+
+    def test_recent_activity_aggregates_job_types_and_schedule_metadata(self, test_client, admin_headers, test_db):
+        from app.database.models import (
+            BackupJob,
+            CheckJob,
+            CompactJob,
+            InstalledPackage,
+            PackageInstallJob,
+            PruneJob,
+            Repository,
+            RestoreJob,
+            ScheduledJob,
+        )
+
+        base = datetime(2024, 1, 1, 12, 0, 0)
+        repository = Repository(
+            name="Activity Repo",
+            path="/tmp/activity-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+
+        schedule = ScheduledJob(
+            name="Nightly Activity",
+            cron_expression="0 2 * * *",
+            repository_id=repository.id,
+            enabled=True,
+        )
+        test_db.add(schedule)
+        test_db.commit()
+        test_db.refresh(schedule)
+
+        package = InstalledPackage(
+            name="borgmatic",
+            install_command="apt-get install -y borgmatic",
+            description="Backup helper",
+            status="installed",
+        )
+        test_db.add(package)
+        test_db.commit()
+        test_db.refresh(package)
+
+        jobs = [
+            BackupJob(
+                repository=repository.path,
+                status="completed",
+                started_at=base + timedelta(minutes=5),
+                completed_at=base + timedelta(minutes=6),
+                scheduled_job_id=schedule.id,
+            ),
+            RestoreJob(
+                repository=repository.path,
+                archive="archive-1",
+                destination="/restore",
+                status="completed",
+                started_at=base + timedelta(minutes=4),
+                completed_at=base + timedelta(minutes=5),
+            ),
+            CheckJob(
+                repository_id=repository.id,
+                repository_path=repository.path,
+                status="completed",
+                started_at=base + timedelta(minutes=3),
+                completed_at=base + timedelta(minutes=4),
+            ),
+            CompactJob(
+                repository_id=repository.id,
+                repository_path=repository.path,
+                status="completed",
+                started_at=base + timedelta(minutes=2),
+                completed_at=base + timedelta(minutes=3),
+            ),
+            PruneJob(
+                repository_id=repository.id,
+                repository_path=repository.path,
+                status="completed",
+                started_at=base + timedelta(minutes=1),
+                completed_at=base + timedelta(minutes=2),
+                logs="prune complete",
+            ),
+            PackageInstallJob(
+                package_id=package.id,
+                status="completed",
+                started_at=base,
+                completed_at=base + timedelta(minutes=1),
+                stdout="installed",
+            ),
+        ]
+        test_db.add_all(jobs)
+        test_db.commit()
+
+        response = test_client.get("/api/activity/recent", headers=admin_headers)
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert len(activity) == 6
+        assert activity[0]["type"] == "backup"
+        assert activity[0]["triggered_by"] == "schedule"
+        assert activity[0]["schedule_id"] == schedule.id
+        assert activity[0]["schedule_name"] == schedule.name
+        assert activity[0]["repository"] == repository.name
+        assert activity[-1]["type"] == "package"
+        assert activity[-1]["package_name"] == package.name
+
+    def test_recent_activity_filters_by_type_and_status(self, test_client, admin_headers, test_db):
+        from app.database.models import (
+            BackupJob,
+            CheckJob,
+            CompactJob,
+            InstalledPackage,
+            PackageInstallJob,
+            PruneJob,
+            Repository,
+            RestoreJob,
+        )
+
+        repository = Repository(
+            name="Filtered Repo",
+            path="/tmp/filtered-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+
+        completed_job = BackupJob(
+            repository=repository.path,
+            status="completed",
+            started_at=datetime(2024, 1, 1, 10, 0, 0),
+            completed_at=datetime(2024, 1, 1, 10, 1, 0),
+        )
+        pending_job = BackupJob(
+            repository=repository.path,
+            status="pending",
+            started_at=datetime(2024, 1, 1, 11, 0, 0),
+        )
+        restore_pending = RestoreJob(
+            repository=repository.path,
+            archive="archive-1",
+            destination="/restore",
+            status="pending",
+            started_at=datetime(2024, 1, 1, 9, 0, 0),
+        )
+        check_pending = CheckJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="pending",
+            started_at=datetime(2024, 1, 1, 9, 5, 0),
+        )
+        compact_pending = CompactJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="pending",
+            started_at=datetime(2024, 1, 1, 9, 10, 0),
+        )
+        prune_pending = PruneJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="pending",
+            started_at=datetime(2024, 1, 1, 9, 15, 0),
+        )
+        package = InstalledPackage(
+            name="restic",
+            install_command="apt-get install -y restic",
+            status="installed",
+        )
+        test_db.add(package)
+        test_db.commit()
+        test_db.refresh(package)
+        package_pending = PackageInstallJob(
+            package_id=package.id,
+            status="pending",
+            started_at=datetime(2024, 1, 1, 9, 20, 0),
+        )
+        test_db.add_all([
+            completed_job,
+            pending_job,
+            restore_pending,
+            check_pending,
+            compact_pending,
+            prune_pending,
+            package_pending,
+        ])
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=backup&status=completed",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert len(activity) == 1
+        assert activity[0]["id"] == completed_job.id
+        assert activity[0]["status"] == "completed"
+        assert activity[0]["type"] == "backup"
+
+
+@pytest.mark.unit
+class TestActivityLogContracts:
+    """Test route-contract edge cases for activity log endpoints."""
+
+    def test_get_job_logs_rejects_invalid_job_type(self, test_client, admin_headers):
+        response = test_client.get(
+            "/api/activity/invalid/123/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["key"] == "backend.errors.activity.invalidJobType"
+
+    def test_get_job_logs_uses_file_backed_pagination(self, test_client, admin_headers, test_db, tmp_path):
+        from app.database.models import BackupJob
+
+        log_file = tmp_path / "activity-log.txt"
+        log_file.write_text("line-1\nline-2\nline-3\nline-4\n")
+
+        job = BackupJob(
+            repository="/tmp/repo",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_file_path=str(log_file),
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/backup/{job.id}/logs?offset=1&limit=2",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total_lines"] == 4
+        assert payload["has_more"] is True
+        assert [line["content"] for line in payload["lines"]] == ["line-2", "line-3"]
+        assert [line["line_number"] for line in payload["lines"]] == [2, 3]
+
+    def test_download_job_logs_without_logs_returns_404(self, test_client, admin_headers, test_db):
+        from app.database.models import BackupJob
+
+        job = BackupJob(
+            repository="/tmp/repo",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/backup/{job.id}/logs/download",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"]["key"] == "backend.errors.activity.noLogsAvailableForJob"
+
+    def test_get_job_logs_uses_database_log_fallback(self, test_client, admin_headers, test_db):
+        from app.database.models import BackupJob
+
+        job = BackupJob(
+            repository="/tmp/repo",
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            logs="db line 1\ndb line 2\ndb line 3",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/backup/{job.id}/logs?offset=1&limit=1",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total_lines"] == 3
+        assert payload["has_more"] is True
+        assert payload["lines"][0]["content"] == "db line 2"
+
+    def test_download_job_logs_uses_database_logs_when_no_file(self, test_client, admin_headers, test_db):
+        from app.database.models import BackupJob
+
+        job = BackupJob(
+            repository="/tmp/repo",
+            status="failed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            logs="download me",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/backup/{job.id}/logs/download",
+            headers=admin_headers,
         )
 
         assert response.status_code == 200

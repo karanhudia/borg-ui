@@ -1,0 +1,31 @@
+---
+layout: default
+title: Testing
+nav_order: 11
+description: "What Borg Web UI tests before you trust it with production backups"
+permalink: /testing
+---
+
+# Testing
+
+Borg Web UI prioritizes API-driven tests for the Borg 1 workflows that can affect production backups and restores.
+
+## What We Cover
+
+- Repository create, import, info, stats, keyfile upload, and keyfile download
+- Manual backup start, job status polling, archive creation, and encrypted repository backups
+- Archive list, info, contents browsing, file download, and delete-job completion
+- Restore preview, archive tree browsing, selected-path restore, restore start, job status polling, and restored file verification
+- Repository maintenance: check, compact, prune, break-lock, and job-history/status endpoints
+- Scheduled backup creation, duplication, and `run-now` execution across one or many repositories
+
+## Mount Coverage
+
+- Archive mount and unmount are tested through the FastAPI API when the environment supports `borg mount` and FUSE
+- In environments without FUSE support, mount API tests are skipped instead of producing false negatives
+
+## Test Philosophy
+
+- Exercise the same FastAPI endpoints the frontend uses
+- Run real Borg commands against temporary repositories whenever the feature ends in a real Borg operation
+- Verify both the API response and the resulting repository or filesystem state

@@ -1,29 +1,85 @@
-"""
-Integration tests for restore API with real borg execution
-"""
-import pytest
-import os
+"""Integration tests for restore API with real borg execution."""
 import time
 from pathlib import Path
+
+import pytest
 from fastapi.testclient import TestClient
+
+from tests.integration.test_helpers import wait_for_job_terminal_status
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
 class TestRestoreOperation:
     """Test restore operations with real borg execution"""
 
-    def wait_for_job_completion(self, test_client, job_endpoint, job_id, admin_headers, timeout=30):
-        """Poll job status until completion or timeout"""
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            response = test_client.get(f"{job_endpoint}/{job_id}", headers=admin_headers)
-            if response.status_code == 200:
-                data = response.json()
-                status = data.get("status", "")
-                if status in ["completed", "failed", "cancelled"]:
-                    return status
-            time.sleep(0.5)
-        raise TimeoutError(f"Job did not complete within {timeout}s")
+    @pytest.mark.asyncio
+    async def test_restore_preview_returns_expected_file_listing(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+        tmp_path,
+    ):
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+        latest_archive = archive_names[-1]
+        preview_dest = tmp_path / "preview-destination"
+        preview_dest.mkdir()
+
+        response = test_client.post(
+            "/api/restore/preview",
+            json={
+                "repository": str(repo_path),
+                "archive": latest_archive,
+                "paths": [],
+                "destination": str(preview_dest),
+                "repository_id": repo.id,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        preview = response.json()["preview"]
+        assert isinstance(preview, str)
+        assert list(preview_dest.iterdir()) == []
+
+    def test_restore_contents_uses_api_and_returns_nested_items(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+    ):
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+
+        root_response = test_client.get(
+            f"/api/restore/contents/{repo.id}/{archive_names[0]}",
+            headers=admin_headers,
+        )
+        assert root_response.status_code == 200
+        root_items = root_response.json()["items"]
+        root_names = [item["name"] for item in root_items]
+        assert root_names
+        root_prefix = test_data_path.as_posix().lstrip("/").split("/")[0]
+        assert root_prefix in root_names
+
+        archive_root_path = test_data_path.as_posix().lstrip("/")
+        nested_response = test_client.get(
+            f"/api/restore/contents/{repo.id}/{archive_names[0]}?path={archive_root_path}",
+            headers=admin_headers,
+        )
+        assert nested_response.status_code == 200
+        nested_names = [item["name"] for item in nested_response.json()["items"]]
+        assert "file1.txt" in nested_names
+        assert "file2.txt" in nested_names
+        assert "subdir" in nested_names
+
+        subdir_response = test_client.get(
+            f"/api/restore/contents/{repo.id}/{archive_names[0]}?path={archive_root_path}/subdir",
+            headers=admin_headers,
+        )
+        assert subdir_response.status_code == 200
+        subdir_names = [item["name"] for item in subdir_response.json()["items"]]
+        assert "file3.txt" in subdir_names
+        assert "file4.log" in subdir_names
 
     @pytest.mark.asyncio
     async def test_restore_success(
@@ -31,99 +87,89 @@ class TestRestoreOperation:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        tmp_path
+        tmp_path,
     ):
-        """
-        Test successful restore operation via API
-        
-        Steps:
-        1. List existing archives
-        2. Trigger restore to temp directory
-        3. Poll for restore completion
-        4. Verify restored files exist
-        """
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
-        
-        # 1. Use archive from fixture (already created)
         latest_archive = archive_names[-1]
-        
-        # 2. Prepare restore destination
         restore_dest = tmp_path / "restored_data"
         restore_dest.mkdir()
-        
-        # MOCK BORG PROCESS: Avoid hanging on real binary interaction (proven necessary)
-        from unittest.mock import MagicMock, AsyncMock, patch
-        import asyncio
-        
-        # Create a mock process that simulates successful restore
-        mock_process = MagicMock()
-        mock_process.returncode = 0
-        mock_process.pid = 12345
-        mock_process.wait = AsyncMock(return_value=None)
-        
-        # Mock stderr (Borg progress output)
-        async def mock_stderr_read(n):
-            # Return progress line then EOF
-            if not getattr(mock_stderr_read, 'called', False):
-                mock_stderr_read.called = True
-                return b"50.0% Extracting: file1.txt\n"
-            return b""
-        
-        mock_process.stderr.read = AsyncMock(side_effect=mock_stderr_read)
-        
-        # Mock stdout (empty)
-        class AsyncIterator:
-            def __aiter__(self): return self
-            async def __anext__(self): raise StopAsyncIteration
-            
-        mock_process.stdout = AsyncIterator()
-        
-        # 3. Trigger restore via API with PATCHED subprocess
-        with patch("app.services.restore_service.asyncio.create_subprocess_exec", new_callable=AsyncMock) as mock_exec:
-            mock_exec.return_value = mock_process
-            
-            payload = {
+
+        restore_response = test_client.post(
+            "/api/restore/start",
+            json={
                 "repository": str(repo_path),
                 "archive": latest_archive,
-                "paths": [],  # Full restore
+                "paths": [],
                 "destination": str(restore_dest),
-                "repository_id": repo.id
-            }
-            
-            restore_response = test_client.post(
-                "/api/restore/start",
-                json=payload,
-                headers=admin_headers
-            )
-            
-            assert restore_response.status_code == 200
-            restore_job_id = restore_response.json()["job_id"]
-            
-            # 4. Wait for restore to complete
-            restore_status = self.wait_for_job_completion(
-                test_client, "/api/restore/status", restore_job_id, admin_headers, timeout=10
-            ) 
-            
-            # Manually act as if files were restored (since we mocked borg)
-            (restore_dest / "restored_file.txt").write_text("restored content")
-
-        
-        # Get detailed status for error reporting
-        status_response = test_client.get(
-            f"/api/restore/status/{restore_job_id}",
-            headers=admin_headers
+                "repository_id": repo.id,
+            },
+            headers=admin_headers,
         )
-        status_data = status_response.json()
-        
-        if restore_status != "completed":
-            pytest.fail(f"Restore failed: {status_data.get('error_message', 'Unknown error')}")
-        
-        # 5. Verify restored files exist (we created a dummy one)
-        restored_files = list(restore_dest.rglob("*"))
-        assert len(restored_files) > 0, "No files were restored"
 
+        assert restore_response.status_code == 200
+        restore_job_id = restore_response.json()["job_id"]
 
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/restore/status",
+            restore_job_id,
+            admin_headers,
+            timeout=45,
+        )
 
+        assert job_data["status"] == "completed"
+        restored_files = {path.relative_to(restore_dest).as_posix() for path in restore_dest.rglob("*") if path.is_file()}
+        assert any(name.endswith("file1.txt") for name in restored_files)
+        assert any(name.endswith("file5.txt") for name in restored_files)
+
+    @pytest.mark.asyncio
+    async def test_restore_selected_path_only(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+        tmp_path,
+    ):
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+        latest_archive = archive_names[-1]
+        restore_dest = tmp_path / "restored-selected-path"
+        restore_dest.mkdir()
+        selected_path = test_data_path.joinpath("subdir").as_posix().lstrip("/")
+
+        restore_response = test_client.post(
+            "/api/restore/start",
+            json={
+                "repository": str(repo_path),
+                "archive": latest_archive,
+                "paths": [selected_path],
+                "destination": str(restore_dest),
+                "repository_id": repo.id,
+            },
+            headers=admin_headers,
+        )
+
+        assert restore_response.status_code == 200
+        restore_job_id = restore_response.json()["job_id"]
+
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/restore/status",
+            restore_job_id,
+            admin_headers,
+            timeout=45,
+        )
+
+        assert job_data["status"] == "completed"
+        restored_files = {
+            path.relative_to(restore_dest).as_posix()
+            for path in restore_dest.rglob("*")
+            if path.is_file()
+        }
+
+        assert any(name.endswith("subdir/file3.txt") for name in restored_files)
+        assert any(name.endswith("subdir/file4.log") for name in restored_files)
+        assert not any(name.endswith("file1.txt") for name in restored_files)
+        assert not any(name.endswith("file5.txt") for name in restored_files)
 
 @pytest.mark.integration
 @pytest.mark.requires_borg

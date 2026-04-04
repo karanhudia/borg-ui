@@ -24,17 +24,20 @@ os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 os.environ["ENVIRONMENT"] = "test"
 os.environ["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 os.environ["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+os.environ["HOME"] = os.path.join(os.environ["DATA_DIR"], "home")
 
 _borg_base_dir = os.path.join(os.environ["DATA_DIR"], "borg")
 _borg_config_dir = os.path.join(_borg_base_dir, "config")
 _borg_cache_dir = os.path.join(_borg_base_dir, "cache")
 _borg_security_dir = os.path.join(_borg_base_dir, "security")
 _borg_keys_dir = os.path.join(_borg_base_dir, "keys")
+_user_borg_keys_dir = os.path.join(os.environ["HOME"], ".config", "borg", "keys")
 
 os.makedirs(_borg_config_dir, exist_ok=True)
 os.makedirs(_borg_cache_dir, exist_ok=True)
 os.makedirs(_borg_security_dir, exist_ok=True)
 os.makedirs(_borg_keys_dir, exist_ok=True)
+os.makedirs(_user_borg_keys_dir, exist_ok=True)
 
 os.environ["BORG_BASE_DIR"] = _borg_base_dir
 os.environ["BORG_CONFIG_DIR"] = _borg_config_dir

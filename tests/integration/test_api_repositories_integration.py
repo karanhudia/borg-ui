@@ -6,6 +6,7 @@ These tests use actual borg repositories to verify end-to-end functionality.
 import pytest
 import json
 from fastapi.testclient import TestClient
+from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
 
 
 @pytest.mark.integration
@@ -265,6 +266,104 @@ class TestRepositoryWithArchives:
             if our_repo and "archive_count" in our_repo:
                 assert our_repo["archive_count"] >= 2
 
+    def test_list_archive_files_uses_api_for_real_archive_contents(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives
+    ):
+        """Test listing archive files through the repository API."""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{archive_names[1]}/files",
+            headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["success"] is True
+        assert data["archive_name"] == archive_names[1]
+        assert data["total_count"] >= 5
+
+        file_paths = [entry["path"] for entry in data["files"]]
+        assert any(path.endswith("/file1.txt") for path in file_paths)
+        assert any(path.endswith("/file2.txt") for path in file_paths)
+        assert any(path.endswith("/file5.txt") for path in file_paths)
+        assert any(path.endswith("/subdir/file3.txt") for path in file_paths)
+        assert any(path.endswith("/subdir/file4.log") for path in file_paths)
+
+    def test_list_archive_files_honors_limit_parameter(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives
+    ):
+        """Test archive file listing limit is applied by the API."""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{archive_names[1]}/files?limit=2",
+            headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["success"] is True
+        assert data["archive_name"] == archive_names[1]
+        assert data["total_count"] == 2
+        assert len(data["files"]) == 2
+
+    def test_list_repository_archives_returns_real_borg_archives(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives
+    ):
+        """Test listing repository archives through FastAPI."""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/archives",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["repository"]["id"] == repo.id
+        assert data["repository"]["path"] == repo.path
+
+        returned_names = [archive["name"] for archive in data["archives"]]
+        assert returned_names == archive_names
+
+    def test_get_repository_archive_info_returns_stats_and_files(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives
+    ):
+        """Test repository archive info includes stats and file details."""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/archives/{archive_names[1]}/info?include_files=true&file_limit=3",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["archive"]["name"] == archive_names[1]
+        assert "stats" in data["archive"]
+        assert data["archive"]["file_count"] == 3
+        assert len(data["archive"]["files"]) == 3
+        assert isinstance(data["repository"], dict)
+        assert isinstance(data["cache"], dict)
+        assert isinstance(data["encryption"], dict)
+
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -429,12 +528,37 @@ class TestRepositoryMaintenanceOperations:
         # Should return job info
         assert "job_id" in data or "id" in data or "status" in data
 
+        job_id = data.get("job_id") or data.get("id")
+        assert job_id is not None
+
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/repositories/check-jobs",
+            job_id,
+            admin_headers,
+        )
+        assert job_data["status"] in {"completed", "completed_with_warnings"}
+
+        history_response = test_client.get(
+            f"/api/repositories/{repo.id}/check-jobs",
+            headers=admin_headers,
+        )
+        assert history_response.status_code == 200
+        history_jobs = history_response.json()["jobs"]
+        assert any(job["id"] == job_id for job in history_jobs)
+
+        running_response = test_client.get(
+            f"/api/repositories/{repo.id}/running-jobs",
+            headers=admin_headers,
+        )
+        assert running_response.status_code == 200
+        assert running_response.json()["check_job"] is None
+
     def test_repository_compact_operation(
         self,
         test_client: TestClient,
         admin_headers,
-        db_borg_repo_with_archives,
-        borg_binary
+        db_borg_repo_with_archives
     ):
         """
         Test repository compact operation
@@ -444,15 +568,6 @@ class TestRepositoryMaintenanceOperations:
         """
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
-        # Get initial repository size
-        import subprocess
-        info_before = subprocess.run(
-            [borg_binary, "info", str(repo_path)],
-            capture_output=True,
-            text=True
-        )
-        assert info_before.returncode == 0
-
         # Start compact operation
         response = test_client.post(
             f"/api/repositories/{repo.id}/compact",
@@ -461,24 +576,39 @@ class TestRepositoryMaintenanceOperations:
 
         # Compact should start
         assert response.status_code in [200, 201, 202], f"Compact failed: {response.json()}"
+        data = response.json()
+        job_id = data.get("job_id") or data.get("id")
+        assert job_id is not None
 
-        # Verify repository still accessible after compact
-        import time
-        time.sleep(2)  # Give compact time to run
-
-        info_after = subprocess.run(
-            [borg_binary, "info", str(repo_path)],
-            capture_output=True,
-            text=True
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/repositories/compact-jobs",
+            job_id,
+            admin_headers,
         )
-        assert info_after.returncode == 0, "Repository not accessible after compact"
+        assert job_data["status"] in {"completed", "completed_with_warnings"}
+
+        history_response = test_client.get(
+            f"/api/repositories/{repo.id}/compact-jobs",
+            headers=admin_headers,
+        )
+        assert history_response.status_code == 200
+        history_jobs = history_response.json()["jobs"]
+        assert any(job["id"] == job_id for job in history_jobs)
+
+        list_response = test_client.get(
+            f"/api/archives/list?repository={repo.path}",
+            headers=admin_headers,
+        )
+        assert list_response.status_code == 200, "Repository not accessible after compact"
+        archive_names_after = [archive["name"] for archive in parse_archives_payload(list_response.json())]
+        assert archive_names_after == archive_names
 
     def test_repository_prune_operation(
         self,
         test_client: TestClient,
         admin_headers,
-        db_borg_repo_with_archives,
-        borg_binary
+        db_borg_repo_with_archives
     ):
         """
         Test repository prune operation
@@ -488,36 +618,39 @@ class TestRepositoryMaintenanceOperations:
         """
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
-        # We have 2 archives, set policy to keep only 1
-        # Start prune with keep-last:1
+        list_before = test_client.get(
+            f"/api/archives/list?repository={repo.path}",
+            headers=admin_headers
+        )
+        assert list_before.status_code == 200
+        assert len(parse_archives_payload(list_before.json())) == 2
+
         response = test_client.post(
             f"/api/repositories/{repo.id}/prune",
-            json={"keep_last": 1},
+            json={
+                "keep_hourly": 0,
+                "keep_daily": 1,
+                "keep_weekly": 0,
+                "keep_monthly": 0,
+                "keep_quarterly": 0,
+                "keep_yearly": 0,
+            },
             headers=admin_headers
         )
 
-        # Prune should start
-        assert response.status_code in [200, 201, 202], f"Prune failed: {response.json()}"
+        assert response.status_code == 200, f"Prune failed: {response.json()}"
+        data = response.json()
+        assert data["status"] == "completed"
+        assert data["prune_result"]["success"] is True
 
-        # Wait a bit for prune to complete
-        import time
-        time.sleep(3)
-
-        # Verify one archive was removed
-        import subprocess
-        list_result = subprocess.run(
-            [borg_binary, "list", str(repo_path)],
-            capture_output=True,
-            text=True
+        list_after = test_client.get(
+            f"/api/archives/list?repository={repo.path}",
+            headers=admin_headers
         )
-
-        assert list_result.returncode == 0
-        remaining_archives = list_result.stdout.strip().split('\n')
-        remaining_count = len([a for a in remaining_archives if a])
-
-        # Should have only 1 archive left (or prune might not have completed yet)
-        # Just verify repository is still accessible
-        assert list_result.returncode == 0, "Repository should be accessible after prune"
+        assert list_after.status_code == 200
+        remaining_archives = parse_archives_payload(list_after.json())
+        assert len(remaining_archives) == 1
+        assert remaining_archives[0]["name"] == archive_names[-1]
 
     def test_repository_break_lock_operation(
         self,
@@ -632,7 +765,6 @@ class TestRepositoryValidation:
         # Should reject duplicate path
         assert response.status_code in [400, 409, 422, 500], \
             "Duplicate repository path should be rejected"
-
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -810,3 +942,46 @@ class TestKeyfileEncryption:
             stat = os.stat(keyfile)
             mode = oct(stat.st_mode)[-3:]
             assert mode == "600", f"Keyfile should have 600 permissions, got {mode}"
+
+    def test_download_uploaded_keyfile_returns_export_data(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        keyfile_borg_repo
+    ):
+        """Uploaded keyfiles should be downloadable through the repository API."""
+        repo_path, test_data_path, passphrase, keyfile_path = keyfile_borg_repo
+
+        import_response = test_client.post(
+            "/api/repositories/import",
+            json={
+                "name": "Keyfile Download Test",
+                "path": str(repo_path),
+                "encryption": "keyfile",
+                "passphrase": passphrase,
+                "source_directories": ["/tmp"],
+            },
+            headers=admin_headers,
+        )
+
+        assert import_response.status_code in [200, 201], import_response.json()
+        repo_id = import_response.json().get("repository", import_response.json())["id"]
+
+        with open(keyfile_path, "rb") as handle:
+            upload_response = test_client.post(
+                f"/api/repositories/{repo_id}/keyfile",
+                files={"keyfile": ("download-test.key", handle, "application/octet-stream")},
+                headers=admin_headers,
+            )
+
+        assert upload_response.status_code == 200, upload_response.json()
+
+        download_response = test_client.get(
+            f"/api/repositories/{repo_id}/keyfile",
+            headers=admin_headers,
+        )
+
+        assert download_response.status_code == 200
+        assert "text/plain" in download_response.headers["content-type"]
+        assert "attachment;" in download_response.headers.get("content-disposition", "")
+        assert download_response.content

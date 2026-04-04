@@ -57,16 +57,34 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Install borg for backend coverage suite
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y borgbackup
+
       - name: Create test directories
         run: |
           mkdir -p /tmp/borg-ui-tests
           mkdir -p data
           mkdir -p logs
 
-      - name: Run unit tests with coverage
+      - name: Run backend coverage suite
         run: |
           pytest tests/unit/ -v \
             --cov=app \
+            --cov-report=term-missing
+          pytest \
+            tests/integration/test_api_archives_integration.py \
+            tests/integration/test_api_backup_integration.py \
+            tests/integration/test_api_mounts_integration.py \
+            tests/integration/test_backup_workflows_integration.py \
+            tests/integration/test_api_repositories_integration.py \
+            tests/integration/test_api_restore_integration.py \
+            tests/integration/test_api_schedule_integration.py \
+            tests/integration/test_multi_repo_schedule.py \
+            -v -m "integration and requires_borg" \
+            --cov=app \
+            --cov-append \
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-report=html
