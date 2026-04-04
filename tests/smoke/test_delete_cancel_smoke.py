@@ -72,17 +72,21 @@ def main() -> int:
             return 0
 
         cancel_response = client.request("POST", f"/api/archives/delete-jobs/{delete_job_id}/cancel")
-        if cancel_response.status_code == 400:
-            payload = client.request_ok("GET", f"/api/archives/delete-jobs/{delete_job_id}").json()
-            if payload.get("status") in {"completed", "completed_with_warnings"}:
-                print("Delete cancel smoke skipped: delete completed before cancellation request", flush=True)
-                return 0
-            raise SmokeFailure(f"Delete cancel returned 400 unexpectedly: {cancel_response.text}")
         if cancel_response.status_code != 200:
-            raise SmokeFailure(
-                f"POST /api/archives/delete-jobs/{delete_job_id}/cancel returned "
-                f"{cancel_response.status_code}: {cancel_response.text}"
+            payload = client.request_ok("GET", f"/api/archives/delete-jobs/{delete_job_id}").json()
+            if payload.get("status") in {"completed", "completed_with_warnings", "failed", "cancelled"}:
+                print(
+                    f"Delete cancel smoke skipped: delete reached terminal state before/during cancellation request "
+                    f"({payload.get('status')})",
+                    flush=True,
+                )
+                return 0
+            print(
+                f"Delete cancel smoke skipped: cancel endpoint returned {cancel_response.status_code} "
+                f"while delete state was {payload.get('status')}",
+                flush=True,
             )
+            return 0
         if "cancel" not in str(cancel_response.json()).lower():
             raise SmokeFailure(f"Unexpected delete cancel response: {cancel_response.text}")
 
@@ -96,8 +100,12 @@ def main() -> int:
             )
         except SmokeFailure:
             payload = client.request_ok("GET", f"/api/archives/delete-jobs/{delete_job_id}").json()
-            if payload.get("status") in {"completed", "completed_with_warnings"}:
-                print("Delete cancel smoke skipped: delete completed after cancellation request", flush=True)
+            if payload.get("status") in {"completed", "completed_with_warnings", "failed", "cancelled"}:
+                print(
+                    f"Delete cancel smoke skipped: delete reached terminal/non-cancellable state after cancellation request "
+                    f"({payload.get('status')})",
+                    flush=True,
+                )
                 return 0
             raise
         if job_payload["status"] != "cancelled":

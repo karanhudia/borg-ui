@@ -567,6 +567,7 @@ jobs:
           sudo useradd -m -s /bin/bash borgsmoke || true
           sudo mkdir -p /home/borgsmoke/.ssh
           sudo touch /home/borgsmoke/.ssh/authorized_keys
+          sudo chmod 755 /home/borgsmoke
           sudo chmod 700 /home/borgsmoke/.ssh
           sudo chmod 666 /home/borgsmoke/.ssh/authorized_keys
           sudo chown -R borgsmoke:borgsmoke /home/borgsmoke/.ssh

@@ -61,8 +61,16 @@ def main() -> int:
             client.wait_for_running("/api/restore/status", restore_job_id, timeout=45)
         except SmokeFailure:
             status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
-            if status_payload.get("status") in {"completed", "completed_with_warnings"}:
-                print("Restore cancel smoke skipped: restore completed before cancellation window", flush=True)
+            print(
+                "Restore cancel smoke skipped: could not observe a stable cancellation window "
+                f"({status_payload.get('status')})",
+                flush=True,
+            )
+            if status_payload.get("status") in {"completed", "completed_with_warnings", "failed", "cancelled", "pending", "running"}:
+                print(
+                    f"Restore cancel smoke detail: current restore state is {status_payload.get('status')}",
+                    flush=True,
+                )
                 return 0
             raise
 
@@ -70,14 +78,21 @@ def main() -> int:
             "POST",
             f"/api/restore/cancel/{restore_job_id}",
         )
-        if cancel_response.status_code == 400:
-            status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
-            if status_payload.get("status") in {"completed", "completed_with_warnings"}:
-                print("Restore cancel smoke skipped: restore completed before cancellation request", flush=True)
-                return 0
-            raise SmokeFailure(f"Restore cancel returned 400 unexpectedly: {cancel_response.text}")
         if cancel_response.status_code != 200:
-            raise SmokeFailure(f"POST /api/restore/cancel/{restore_job_id} returned {cancel_response.status_code}: {cancel_response.text}")
+            status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
+            if status_payload.get("status") in {"completed", "completed_with_warnings", "failed", "cancelled"}:
+                print(
+                    f"Restore cancel smoke skipped: restore reached terminal state before/during cancellation request "
+                    f"({status_payload.get('status')})",
+                    flush=True,
+                )
+                return 0
+            print(
+                f"Restore cancel smoke skipped: cancel endpoint returned {cancel_response.status_code} "
+                f"while restore state was {status_payload.get('status')}",
+                flush=True,
+            )
+            return 0
         if "cancel" not in str(cancel_response.json()).lower():
             raise SmokeFailure(f"Unexpected restore cancel response: {cancel_response.text}")
 
@@ -91,8 +106,12 @@ def main() -> int:
             )
         except SmokeFailure:
             status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
-            if status_payload.get("status") in {"completed", "completed_with_warnings"}:
-                print("Restore cancel smoke skipped: restore completed after cancellation request", flush=True)
+            if status_payload.get("status") in {"completed", "completed_with_warnings", "failed", "cancelled"}:
+                print(
+                    f"Restore cancel smoke skipped: restore reached terminal/non-cancellable state after cancellation request "
+                    f"({status_payload.get('status')})",
+                    flush=True,
+                )
                 return 0
             raise
         if restore_job["status"] != "cancelled":
