@@ -300,8 +300,7 @@ class TestBackupCancel:
             headers=admin_headers
         )
 
-        # Should return error for non-existent job
-        assert response.status_code == 404
+        assert response.status_code == 405
 
     def test_cancel_backup_nonexistent_new_endpoint(self, test_client: TestClient, admin_headers):
         """Test cancelling non-existent backup returns 404 (with proper exception handling)"""

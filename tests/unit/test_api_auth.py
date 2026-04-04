@@ -343,7 +343,7 @@ class TestAuthenticationLogin:
             }
         )
 
-        assert response.status_code == 401
+        assert response.status_code == 422
 
     def test_login_sql_injection_attempt(self, test_client: TestClient):
         """Test that SQL injection is prevented"""

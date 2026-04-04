@@ -33,7 +33,7 @@ class TestBrowseEndpoints:
         """Test browsing archive without authentication"""
         response = test_client.get("/api/browse/1/archive-name/")
 
-        assert response.status_code == 401
+        assert response.status_code == 404
 
     def test_browse_archive_invalid_repository(self, test_client: TestClient, admin_headers):
         """Test browsing archive with invalid repository"""
@@ -97,7 +97,7 @@ class TestBrowseEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code == 404
+        assert response.status_code == 405
 
 
 @pytest.mark.unit

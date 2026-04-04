@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.database.models import User
+from app.core.features import Plan
 
 
 @pytest.mark.unit
@@ -134,16 +135,17 @@ class TestUserManagement:
 
     def test_create_user_success(self, test_client: TestClient, admin_headers):
         """Test creating user returns 200/201"""
-        response = test_client.post(
-            "/api/settings/users",
-            json={
-                "username": "newuser",
-                "password": "SecurePass123!",
-                "email": "newuser@example.com",
-                "role": "user"
-            },
-            headers=admin_headers
-        )
+        with patch("app.api.settings.get_current_plan", return_value=Plan.ENTERPRISE):
+            response = test_client.post(
+                "/api/settings/users",
+                json={
+                    "username": "newuser",
+                    "password": "SecurePass123!",
+                    "email": "newuser@example.com",
+                    "role": "viewer"
+                },
+                headers=admin_headers
+            )
 
         assert response.status_code == 200
 
@@ -159,15 +161,16 @@ class TestUserManagement:
 
     def test_create_user_weak_password(self, test_client: TestClient, admin_headers):
         """Test creating user with weak password returns 422"""
-        response = test_client.post(
-            "/api/settings/users",
-            json={
-                "username": "newuser",
-                "password": "123",  # Too weak
-                "email": "test@example.com"
-            },
-            headers=admin_headers
-        )
+        with patch("app.api.settings.get_current_plan", return_value=Plan.ENTERPRISE):
+            response = test_client.post(
+                "/api/settings/users",
+                json={
+                    "username": "newuser",
+                    "password": "123",
+                    "email": "test@example.com"
+                },
+                headers=admin_headers
+            )
 
         assert response.status_code == 200
 
@@ -370,15 +373,16 @@ class TestSettingsValidation:
         test_db.commit()
 
         # Try to create second user with same username
-        response = test_client.post(
-            "/api/settings/users",
-            json={
-                "username": "duplicate",
-                "password": "SecurePass123!",
-                "email": "second@example.com"
-            },
-            headers=admin_headers
-        )
+        with patch("app.api.settings.get_current_plan", return_value=Plan.ENTERPRISE):
+            response = test_client.post(
+                "/api/settings/users",
+                json={
+                    "username": "duplicate",
+                    "password": "SecurePass123!",
+                    "email": "second@example.com"
+                },
+                headers=admin_headers
+            )
 
         assert response.status_code == 400
 

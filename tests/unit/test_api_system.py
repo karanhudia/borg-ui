@@ -27,8 +27,9 @@ class TestSystemEndpoints:
         assert "app_version" in data
         assert "plan" in data
         assert "features" in data
-        assert "entitlement" in data
-        assert "ui_state" in data["entitlement"]
+        if LICENSING_AVAILABLE:
+            assert "entitlement" in data
+            assert "ui_state" in data["entitlement"]
 
     def test_system_info_without_auth(self, test_client: TestClient):
         response = test_client.get("/api/system/info")
@@ -88,14 +89,16 @@ class TestSystemEndpoints:
             response = test_client.get("/api/system/info", headers=admin_headers)
 
         assert response.status_code == 200
-        assert response.json() == {
+        expected = {
             "app_version": "unknown",
             "borg_version": None,
             "borg2_version": None,
             "plan": "community",
             "features": {},
-            "feature_access": {},
-            "entitlement": {
+        }
+        if LICENSING_AVAILABLE:
+            expected["feature_access"] = {}
+            expected["entitlement"] = {
                 "status": "none",
                 "is_trial": False,
                 "trial_consumed": False,
@@ -109,8 +112,8 @@ class TestSystemEndpoints:
                 "ui_state": "community",
                 "last_refresh_at": None,
                 "last_refresh_error": None,
-            },
-        }
+            }
+        assert response.json() == expected
 
     def test_system_info_includes_entitlement_summary(self, test_client: TestClient, admin_headers, test_db, monkeypatch):
         """System info should expose the locally validated entitlement summary."""

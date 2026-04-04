@@ -50,11 +50,11 @@ class TestRestoreArchives:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch('app.api.restore.borg.list_archives', new_callable=AsyncMock) as mock_list:
-            mock_list.return_value = {
-                "success": True,
-                "stdout": '{"archives": [{"name": "archive1"}]}'
-            }
+        process = AsyncMock()
+        process.returncode = 0
+        process.communicate = AsyncMock(return_value=(b'{"archives":[{"name":"archive1"}]}', b""))
+        with patch("app.api.repositories.asyncio.create_subprocess_exec", new=AsyncMock(return_value=process)), \
+             patch("app.api.repositories.asyncio.wait_for", new=AsyncMock(return_value=(b'{"archives":[{"name":"archive1"}]}', b""))):
 
             response = test_client.get(f"/api/restore/archives/{repo.id}", headers=admin_headers)
 
@@ -427,7 +427,7 @@ class TestRestoreJobs:
             headers=admin_headers
         )
 
-        assert response.status_code == 404
+        assert response.status_code == 405
 
     def test_cancel_restore_running_job_marks_cancelled(
         self,

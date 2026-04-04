@@ -189,7 +189,8 @@ class TestRepositoriesListAndGet:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["name"] == "Detail Test Repo"
+        repository = data.get("repository", data)
+        assert repository["name"] == "Detail Test Repo"
 
 
 @pytest.mark.unit
@@ -768,7 +769,11 @@ class TestRepositoriesStatistics:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch("app.api.repositories.borg.get_repository_info", new=AsyncMock(return_value={"success": True, "info": {"repository": {"id": "abc"}}})):
+        process = AsyncMock()
+        process.returncode = 0
+        process.communicate = AsyncMock(return_value=(b'{"repository":{"id":"abc"}}', b""))
+        with patch("app.api.repositories.asyncio.create_subprocess_exec", new=AsyncMock(return_value=process)), \
+             patch("app.api.repositories.asyncio.wait_for", new=AsyncMock(return_value=(b'{"repository":{"id":"abc"}}', b""))):
             response = test_client.get(
                 f"/api/repositories/{repo.id}/info",
                 headers=admin_headers

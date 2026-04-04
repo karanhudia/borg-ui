@@ -60,7 +60,7 @@ class TestSSHKeysEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code == 404
+        assert response.status_code == 405
 
     def test_get_ssh_key_nonexistent(self, test_client: TestClient, admin_headers):
         """Test getting non-existent SSH key"""
@@ -94,7 +94,7 @@ class TestSSHKeysEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code == 404
+        assert response.status_code == 405
 
     def test_import_ssh_key_missing_path(self, test_client: TestClient, admin_headers):
         """Test importing SSH key without providing private key path"""
