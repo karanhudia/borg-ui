@@ -104,19 +104,6 @@ const AccountTab: React.FC = () => {
   })
 
   useEffect(() => {
-    if (!user) return
-    setProfileForm({
-      username: user.username || '',
-      email: user.email || '',
-      full_name: user.full_name || '',
-    })
-    setDeploymentForm({
-      deployment_type: user.deployment_type === 'enterprise' ? 'enterprise' : 'individual',
-      enterprise_name: user.enterprise_name || '',
-    })
-  }, [user])
-
-  useEffect(() => {
     if (user?.must_change_password) {
       setShowChangePasswordDialog(true)
       setAccountView('security')
@@ -128,12 +115,32 @@ const AccountTab: React.FC = () => {
     trackSettings(EventAction.VIEW, { section: 'account', surface: view })
   }
 
-  const accountDisplayName = user?.full_name || user?.username || ''
+  const username = user?.username || ''
+  const email = user?.email || ''
+  const fullName = user?.full_name || ''
+  const userId = user?.id
+  const deploymentType = user?.deployment_type === 'enterprise' ? 'enterprise' : 'individual'
+  const enterpriseName = user?.enterprise_name || ''
+
+  const accountDisplayName = fullName || username || ''
   const deploymentLabel =
-    user?.deployment_type === 'enterprise'
-      ? user.enterprise_name || 'Enterprise deployment'
+    deploymentType === 'enterprise'
+      ? enterpriseName || 'Enterprise deployment'
       : 'Individual deployment'
   const currentUserRolePresentation = getGlobalRolePresentation(user?.role, t)
+
+  useEffect(() => {
+    if (!userId) return
+    setProfileForm({
+      username,
+      email,
+      full_name: fullName,
+    })
+    setDeploymentForm({
+      deployment_type: deploymentType,
+      enterprise_name: enterpriseName,
+    })
+  }, [deploymentType, email, enterpriseName, fullName, userId, username])
 
   return (
     <>
