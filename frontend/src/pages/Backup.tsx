@@ -24,7 +24,7 @@ import {
 } from '../utils/dateUtils'
 import { generateBorgCreateCommand } from '../utils/borgUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import { BackupJob } from '../types'
+import { BackupJob, Repository } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
 import RepoSelect from '../components/RepoSelect'
 import LogViewerDialog from '../components/LogViewerDialog'
@@ -72,7 +72,9 @@ const Backup: React.FC = () => {
   // Get selected repository details
   const selectedRepoData = useMemo(() => {
     if (!selectedRepository || !repositoriesData?.data?.repositories) return null
-    return repositoriesData.data.repositories.find((repo) => repo.path === selectedRepository)
+    return repositoriesData.data.repositories.find(
+      (repo: Repository) => repo.path === selectedRepository
+    )
   }, [selectedRepository, repositoriesData])
 
   const canStartBackup = selectedRepoData ? permissions.canDo(selectedRepoData.id, 'backup') : false
@@ -121,7 +123,7 @@ const Backup: React.FC = () => {
   // Handle repository selection
   const handleRepositoryChange = (repoPath: string) => {
     setSelectedRepository(repoPath)
-    const repo = repositoriesData?.data?.repositories?.find((r) => r.path === repoPath)
+    const repo = repositoriesData?.data?.repositories?.find((r: Repository) => r.path === repoPath)
     if (repo) {
       trackBackup(EventAction.FILTER, undefined, repo)
     }
@@ -239,7 +241,7 @@ const Backup: React.FC = () => {
           </Stack>
 
           {repositoriesData?.data?.repositories?.some(
-            (repo) => !getRepoCapabilities(repo).canBackup
+            (repo: Repository) => !getRepoCapabilities(repo).canBackup
           ) &&
             !loadingRepositories && (
               <Alert severity="info" sx={{ mt: 2 }}>
