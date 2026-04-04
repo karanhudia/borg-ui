@@ -474,8 +474,18 @@ class BorgInterface:
         # Use streaming execution to prevent OOM on large archives
         return await self._execute_command_streaming(cmd, max_lines=max_lines, env=exec_env if exec_env else None)
 
-    async def extract_archive(self, repository: str, archive: str, paths: List[str],
-                            destination: str, dry_run: bool = False, remote_path: str = None, passphrase: str = None, bypass_lock: bool = False) -> Dict:
+    async def extract_archive(
+        self,
+        repository: str,
+        archive: str,
+        paths: List[str],
+        destination: str,
+        dry_run: bool = False,
+        remote_path: str = None,
+        passphrase: str = None,
+        bypass_lock: bool = False,
+        env: dict = None,
+    ) -> Dict:
         """Extract files from an archive"""
         cmd = [self.borg_cmd, "extract"]
 
@@ -498,13 +508,18 @@ class BorgInterface:
         if paths:
             cmd.extend(paths)
 
-        env = {}
+        exec_env = env.copy() if env else {}
         if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
+            exec_env["BORG_PASSPHRASE"] = passphrase
 
         # Borg extract always extracts to current directory
         # Use cwd parameter to change to destination directory
-        return await self._execute_command(cmd, timeout=settings.backup_timeout, cwd=destination, env=env if env else None)
+        return await self._execute_command(
+            cmd,
+            timeout=settings.backup_timeout,
+            cwd=destination,
+            env=exec_env if exec_env else None,
+        )
 
     async def delete_archive(self, repository: str, archive: str, remote_path: str = None, passphrase: str = None) -> Dict:
         """Delete an archive"""

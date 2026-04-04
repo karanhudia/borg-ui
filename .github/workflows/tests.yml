@@ -226,8 +226,8 @@ jobs:
       - name: Upload frontend coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-coverage-json
-          path: frontend/coverage/coverage-final.json
+          name: frontend-coverage-lcov
+          path: frontend/coverage/lcov.info
           if-no-files-found: error
           retention-days: 7
 
@@ -237,6 +237,9 @@ jobs:
     needs: [backend-unit-coverage, backend-api-integration, frontend-vitest]
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
       - name: Download backend coverage artifact
         uses: actions/download-artifact@v5
         with:
@@ -248,8 +251,10 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-artifacts/backend/coverage.xml
+          disable_search: true
           flags: backend-unit
           name: backend-unit-coverage
+          verbose: true
           fail_ci_if_error: false
 
   coverage-frontend:
@@ -258,19 +263,24 @@ jobs:
     needs: [backend-unit-coverage, backend-api-integration, frontend-vitest]
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
       - name: Download frontend coverage artifact
         uses: actions/download-artifact@v5
         with:
-          name: frontend-coverage-json
+          name: frontend-coverage-lcov
           path: coverage-artifacts/frontend
 
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-artifacts/frontend/coverage-final.json
+          files: ./coverage-artifacts/frontend/lcov.info
+          disable_search: true
           flags: frontend
           name: frontend-coverage
+          verbose: true
           fail_ci_if_error: false
 
   frontend-build:

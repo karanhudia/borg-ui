@@ -323,17 +323,23 @@ async def download_file_from_archive(
         temp_dir = tempfile.mkdtemp()
 
         try:
+            env, temp_key_file = _build_repo_env(repo, db)
             # Extract the specific file using borg extract
-            result = await borg.extract_archive(
-                repository,
-                archive,
-                [file_path],
-                temp_dir,
-                dry_run=False,
-                remote_path=repo.remote_path,
-                passphrase=repo.passphrase,
-                bypass_lock=repo.bypass_lock
-            )
+            try:
+                result = await borg.extract_archive(
+                    repository,
+                    archive,
+                    [file_path],
+                    temp_dir,
+                    dry_run=False,
+                    remote_path=repo.remote_path,
+                    passphrase=repo.passphrase,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
+            finally:
+                if temp_key_file and os.path.exists(temp_key_file):
+                    os.unlink(temp_key_file)
 
             if not result.get("success"):
                 raise HTTPException(
