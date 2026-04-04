@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.database.models import Repository, RestoreJob
+from tests.unit.helpers import assert_auth_required
 
 
 @pytest.mark.unit
@@ -35,7 +36,7 @@ class TestRestoreRepositories:
         """Test listing repositories without auth returns 403"""
         response = test_client.get("/api/restore/repositories")
 
-        assert response.status_code == 401
+        assert_auth_required(response)
 
 
 @pytest.mark.unit
@@ -69,7 +70,7 @@ class TestRestoreArchives:
         """Test listing archives without auth returns 403"""
         response = test_client.get("/api/restore/archives/1")
 
-        assert response.status_code == 401
+        assert_auth_required(response)
 
 
 @pytest.mark.unit
@@ -162,7 +163,7 @@ class TestRestoreContents:
         """Test listing contents without auth returns 403"""
         response = test_client.get("/api/restore/contents/1/test-archive")
 
-        assert response.status_code == 401
+        assert_auth_required(response)
 
     def test_list_contents_empty_archive_name(self, test_client: TestClient, admin_headers, test_db):
         """Test listing contents with empty archive name"""

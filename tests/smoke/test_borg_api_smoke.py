@@ -33,17 +33,10 @@ def main() -> int:
         restore_root = client.temp_dir / "restore"
         restore_root.mkdir(parents=True, exist_ok=True)
 
-        repo_id, repo_path = client.create_repository(
+        repo_id, repo_path, _backup_job_id, backup_data = client.create_repository_and_backup(
             name="Smoke Repo",
             repo_path=client.temp_dir / "repo",
             source_dirs=[source_root],
-        )
-        backup_job_id = client.start_backup(repo_path)
-        backup_data = client.wait_for_job(
-            "/api/backup/status",
-            backup_job_id,
-            expected={"completed", "completed_with_warnings"},
-            timeout=90,
         )
         client.log(f"Backup completed with status {backup_data['status']}")
 

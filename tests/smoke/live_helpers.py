@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
@@ -19,7 +18,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tests.integration.test_helpers import DockerPathHelper
+from tests.integration.test_helpers import DockerPathHelper, parse_archives_payload
+from tests.utils.jobs import wait_for_payload_status
 
 
 class SmokeFailure(RuntimeError):
@@ -212,6 +212,36 @@ class SmokeClient:
         self.log(f"Started backup job {job_id}")
         return job_id
 
+    def create_repository_and_backup(
+        self,
+        *,
+        name: str,
+        repo_path: Path,
+        source_dirs: list[Path],
+        token: Optional[str] = None,
+        timeout: float = 90.0,
+        encryption: str = "none",
+        passphrase: Optional[str] = None,
+        extra: Optional[dict] = None,
+    ) -> tuple[int, str, int, dict]:
+        repo_id, repository_path = self.create_repository(
+            name=name,
+            repo_path=repo_path,
+            source_dirs=source_dirs,
+            encryption=encryption,
+            passphrase=passphrase,
+            extra=extra,
+        )
+        job_id = self.start_backup(repository_path, token=token)
+        job_data = self.wait_for_job(
+            "/api/backup/status",
+            job_id,
+            expected={"completed", "completed_with_warnings"},
+            token=token,
+            timeout=timeout,
+        )
+        return repo_id, repository_path, job_id, job_data
+
     def wait_for_job(
         self,
         endpoint: str,
@@ -222,30 +252,38 @@ class SmokeClient:
         timeout: float = 90.0,
         terminal: Optional[set[str]] = None,
     ) -> dict:
-        deadline = time.time() + timeout
-        last_payload = None
-        terminal_statuses = terminal or {"failed", "cancelled", "completed", "completed_with_warnings"}
-        while time.time() < deadline:
+        def fetch_payload():
             response = self.request_ok("GET", f"{endpoint}/{job_id}", token=token)
-            last_payload = response.json()
-            status = last_payload.get("status")
-            if status in expected:
-                return last_payload
-            if status in terminal_statuses and status not in expected:
-                raise SmokeFailure(f"Job {endpoint}/{job_id} reached unexpected status {status}: {last_payload}")
-            time.sleep(0.5)
-        raise SmokeFailure(f"Timed out waiting for {endpoint}/{job_id}: {last_payload}")
+            return response.json()
+
+        try:
+            return wait_for_payload_status(
+                fetch_payload,
+                expected=expected,
+                timeout=timeout,
+                poll_interval=0.5,
+                terminal=terminal,
+                description=f"{endpoint}/{job_id}",
+            )
+        except TimeoutError as exc:
+            raise SmokeFailure(str(exc)) from exc
 
     def wait_for_running(self, endpoint: str, job_id: int, *, token: Optional[str] = None, timeout: float = 30.0) -> dict:
-        deadline = time.time() + timeout
-        last_payload = None
-        while time.time() < deadline:
+        def fetch_payload():
             response = self.request_ok("GET", f"{endpoint}/{job_id}", token=token)
-            last_payload = response.json()
-            if last_payload.get("status") == "running":
-                return last_payload
-            time.sleep(0.25)
-        raise SmokeFailure(f"Timed out waiting for running state on {endpoint}/{job_id}: {last_payload}")
+            return response.json()
+
+        try:
+            return wait_for_payload_status(
+                fetch_payload,
+                expected={"running"},
+                timeout=timeout,
+                poll_interval=0.25,
+                terminal=None,
+                description=f"{endpoint}/{job_id} running state",
+            )
+        except TimeoutError as exc:
+            raise SmokeFailure(str(exc)) from exc
 
     def list_archives(self, repository_path: str, *, token: Optional[str] = None) -> list[dict]:
         response = self.request_ok(
@@ -254,9 +292,7 @@ class SmokeClient:
             token=token,
             params={"repository": repository_path},
         )
-        archives_raw = response.json()["archives"]
-        archives_payload = json.loads(archives_raw) if isinstance(archives_raw, str) else archives_raw
-        return archives_payload.get("archives", [])
+        return parse_archives_payload(response.json())
 
     def get_archive_info(self, archive_name: str, repository_path: str, *, token: Optional[str] = None, include_files: bool = False) -> dict:
         params = {"repository": repository_path}

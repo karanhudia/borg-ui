@@ -1,12 +1,12 @@
 import json
 import os
-import time
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
+from tests.utils.jobs import wait_for_payload_status
 
 
 def _prepare_repository_for_backup(repo, test_db, source_paths):
@@ -24,25 +24,17 @@ def _wait_for_backup_status(
     timeout: float = 30.0,
     poll_interval: float = 0.25,
 ):
-    start = time.time()
-    last_data = None
-
-    while time.time() - start < timeout:
+    def fetch_payload():
         response = test_client.get(f"/api/backup/status/{job_id}", headers=headers)
         response.raise_for_status()
-        last_data = response.json()
+        return response.json()
 
-        if last_data.get("status") == expected_status:
-            return last_data
-
-        if last_data.get("status") in {"failed", "cancelled", "completed", "completed_with_warnings"}:
-            break
-
-        time.sleep(poll_interval)
-
-    raise TimeoutError(
-        f"Backup job {job_id} did not reach status {expected_status} within {timeout}s. "
-        f"Last payload: {last_data}"
+    return wait_for_payload_status(
+        fetch_payload,
+        expected={expected_status},
+        timeout=timeout,
+        poll_interval=poll_interval,
+        description=f"backup job {job_id}",
     )
 
 

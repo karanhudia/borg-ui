@@ -8,27 +8,15 @@ long-running API jobs.
 
 import json
 import os
-import time
 from pathlib import Path
+
+from tests.utils.jobs import wait_for_payload_status
+from tests.utils.borg import make_borg_test_env
 
 
 def make_borg_env(base_path: str) -> dict:
-    """
-    Build a Borg-safe environment rooted under a temporary directory.
-
-    Borg writes cache/security metadata under the user's home directory by
-    default. Integration tests should not touch the real home directory, and
-    the sandbox may reject that path entirely.
-    """
-    borg_home = Path(base_path) / "borg-home"
-    borg_base_dir = Path(base_path) / "borg-base"
-    borg_home.mkdir(parents=True, exist_ok=True)
-    borg_base_dir.mkdir(parents=True, exist_ok=True)
-
-    env = os.environ.copy()
-    env["HOME"] = str(borg_home)
-    env["BORG_BASE_DIR"] = str(borg_base_dir)
-    return env
+    """Backwards-compatible wrapper around the shared Borg test env helper."""
+    return make_borg_test_env(base_path)
 
 
 class DockerPathHelper:
@@ -134,22 +122,18 @@ def wait_for_job_terminal_status(
     terminal_statuses=("completed", "completed_with_warnings", "failed", "cancelled"),
 ):
     """Poll a job endpoint until it reaches a terminal state."""
-    start = time.time()
-    last_data = None
-
-    while time.time() - start < timeout:
+    def fetch_payload():
         response = test_client.get(f"{job_endpoint}/{job_id}", headers=headers)
         response.raise_for_status()
-        last_data = response.json()
+        return response.json()
 
-        if last_data.get("status") in terminal_statuses:
-            return last_data
-
-        time.sleep(poll_interval)
-
-    raise TimeoutError(
-        f"Job {job_id} at {job_endpoint} did not reach terminal state within {timeout}s. "
-        f"Last payload: {last_data}"
+    return wait_for_payload_status(
+        fetch_payload,
+        expected=set(terminal_statuses),
+        timeout=timeout,
+        poll_interval=poll_interval,
+        terminal=set(terminal_statuses),
+        description=f"job {job_id} at {job_endpoint}",
     )
 
 

@@ -6,8 +6,6 @@ These tests focus on gaps that are easy to miss in unit tests:
 - A scheduled job that fans out to multiple repositories
 """
 
-import json
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -16,95 +14,18 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.api.schedule import execute_multi_repo_schedule
-from app.database.models import BackupJob, Repository, ScheduledJob, ScheduledJobRepository
+from app.database.models import BackupJob, ScheduledJob, ScheduledJobRepository
 from app.services.backup_service import backup_service
+from tests.utils.borg import (
+    create_registered_local_repository,
+    get_latest_archive_name,
+    list_archive_paths,
+)
 
 try:
     from .test_helpers import make_borg_env
 except ImportError:
     from test_helpers import make_borg_env
-
-
-def _init_borg_repo_with_sources(
-    tmp_path: Path,
-    borg_binary: str,
-    borg_env: dict,
-    test_db: Session,
-    name: str,
-    repo_dirname: str,
-    sources: list[tuple[str, str]],
-) -> tuple[Repository, Path, list[Path]]:
-    repo_path = tmp_path / repo_dirname / "repo"
-    repo_path.mkdir(parents=True)
-
-    source_paths: list[Path] = []
-    for source_dir_name, file_name in sources:
-        source_dir = tmp_path / repo_dirname / source_dir_name
-        source_dir.mkdir(parents=True)
-        source_paths.append(source_dir)
-        (source_dir / file_name).write_text(f"payload for {file_name}")
-
-    result = subprocess.run(
-        [borg_binary, "init", "--encryption=none", str(repo_path)],
-        env=borg_env,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-
-    repo = Repository(
-        name=name,
-        path=str(repo_path),
-        encryption="none",
-        compression="lz4",
-        repository_type="local",
-        mode="full",
-        source_directories=json.dumps([str(path) for path in source_paths]),
-        created_at=datetime.now(timezone.utc),
-    )
-    test_db.add(repo)
-    test_db.commit()
-    test_db.refresh(repo)
-
-    return repo, repo_path, source_paths
-
-
-def _list_borg_archive_paths(
-    borg_binary: str,
-    repo_path: Path,
-    archive_name: str,
-    borg_env: dict,
-) -> set[str]:
-    result = subprocess.run(
-        [borg_binary, "list", "--json-lines", f"{repo_path}::{archive_name}"],
-        env=borg_env,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-
-    archive_paths: set[str] = set()
-    for line in result.stdout.splitlines():
-        if not line.strip():
-            continue
-        payload = json.loads(line)
-        path = payload.get("path")
-        if path:
-            archive_paths.add(path)
-    return archive_paths
-
-
-def _get_single_archive_name(borg_binary: str, repo_path: Path, borg_env: dict) -> str:
-    result = subprocess.run(
-        [borg_binary, "list", "--short", str(repo_path)],
-        env=borg_env,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    archives = [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    assert archives, f"expected at least one archive in {repo_path}"
-    return archives[-1]
 
 
 @pytest.mark.integration
@@ -120,17 +41,17 @@ class TestMultiSourceBackupIntegration:
         tmp_path: Path,
     ):
         borg_env = make_borg_env(str(tmp_path))
-        repo, repo_path, source_paths = _init_borg_repo_with_sources(
-            tmp_path,
-            borg_binary,
-            borg_env,
-            test_db,
+        repo, repo_path, _source_path = create_registered_local_repository(
+            test_db=test_db,
+            borg_binary=borg_binary,
+            tmp_path=tmp_path / "multi-source",
             name="Multi Source Repo",
-            repo_dirname="multi-source",
-            sources=[
-                ("alpha", "alpha-only.txt"),
-                ("beta", "beta-only.txt"),
-            ],
+            slug="multi-source",
+            source_files={
+                "alpha/alpha-only.txt": "payload for alpha-only.txt",
+                "beta/beta-only.txt": "payload for beta-only.txt",
+            },
+            borg_env=borg_env,
         )
 
         job = BackupJob(
@@ -156,8 +77,8 @@ class TestMultiSourceBackupIntegration:
         test_db.refresh(job)
         assert job.status in ["completed", "completed_with_warnings"]
 
-        archive_name = _get_single_archive_name(borg_binary, repo_path, borg_env)
-        archive_paths = _list_borg_archive_paths(borg_binary, repo_path, archive_name, borg_env)
+        archive_name = get_latest_archive_name(borg_binary, repo_path, env=borg_env)
+        archive_paths = list_archive_paths(borg_binary, repo_path, archive_name, env=borg_env)
 
         assert any(path.endswith("alpha-only.txt") for path in archive_paths)
         assert any(path.endswith("beta-only.txt") for path in archive_paths)
@@ -176,23 +97,23 @@ class TestMultiRepoScheduledBackupIntegration:
         tmp_path: Path,
     ):
         borg_env = make_borg_env(str(tmp_path))
-        repo1, repo1_path, _ = _init_borg_repo_with_sources(
-            tmp_path,
-            borg_binary,
-            borg_env,
-            test_db,
+        repo1, repo1_path, _ = create_registered_local_repository(
+            test_db=test_db,
+            borg_binary=borg_binary,
+            tmp_path=tmp_path / "schedule-one",
             name="Scheduled Repo One",
-            repo_dirname="schedule-one",
-            sources=[("source", "repo-one.txt")],
+            slug="schedule-one",
+            source_files={"source/repo-one.txt": "payload for repo-one.txt"},
+            borg_env=borg_env,
         )
-        repo2, repo2_path, _ = _init_borg_repo_with_sources(
-            tmp_path,
-            borg_binary,
-            borg_env,
-            test_db,
+        repo2, repo2_path, _ = create_registered_local_repository(
+            test_db=test_db,
+            borg_binary=borg_binary,
+            tmp_path=tmp_path / "schedule-two",
             name="Scheduled Repo Two",
-            repo_dirname="schedule-two",
-            sources=[("source", "repo-two.txt")],
+            slug="schedule-two",
+            source_files={"source/repo-two.txt": "payload for repo-two.txt"},
+            borg_env=borg_env,
         )
 
         schedule = ScheduledJob(
@@ -244,11 +165,11 @@ class TestMultiRepoScheduledBackupIntegration:
         assert len(backup_jobs) == 2
         assert all(job.status in ["completed", "completed_with_warnings"] for job in backup_jobs)
 
-        archive1 = _get_single_archive_name(borg_binary, repo1_path, borg_env)
-        archive2 = _get_single_archive_name(borg_binary, repo2_path, borg_env)
+        archive1 = get_latest_archive_name(borg_binary, repo1_path, env=borg_env)
+        archive2 = get_latest_archive_name(borg_binary, repo2_path, env=borg_env)
 
-        paths1 = _list_borg_archive_paths(borg_binary, repo1_path, archive1, borg_env)
-        paths2 = _list_borg_archive_paths(borg_binary, repo2_path, archive2, borg_env)
+        paths1 = list_archive_paths(borg_binary, repo1_path, archive1, env=borg_env)
+        paths2 = list_archive_paths(borg_binary, repo2_path, archive2, env=borg_env)
 
         assert any(path.endswith("repo-one.txt") for path in paths1)
         assert any(path.endswith("repo-two.txt") for path in paths2)

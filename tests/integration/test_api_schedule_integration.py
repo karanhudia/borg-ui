@@ -4,8 +4,6 @@ Integration tests for scheduled jobs API with real borg execution
 These tests verify scheduled job functionality end-to-end.
 Focus on timezone handling and cron expression correctness.
 """
-import json
-import subprocess
 import time
 
 import pytest
@@ -14,35 +12,18 @@ from app.database.models import BackupJob, Repository, ScheduledJob, ScheduledJo
 from datetime import datetime, timedelta
 
 from tests.integration.test_helpers import parse_archives_payload
+from tests.utils.borg import create_registered_local_repository
 
 
 def _create_registered_borg_repo(test_db, borg_binary, tmp_path, name: str, slug: str):
-    repo_path = tmp_path / f"{slug}-repo"
-    source_path = tmp_path / f"{slug}-data"
-    repo_path.mkdir()
-    source_path.mkdir()
-    (source_path / f"{slug}.txt").write_text(f"content for {slug}")
-
-    subprocess.run(
-        [borg_binary, "init", "--encryption=none", str(repo_path)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-    repo = Repository(
+    return create_registered_local_repository(
+        test_db=test_db,
+        borg_binary=borg_binary,
+        tmp_path=tmp_path,
         name=name,
-        path=str(repo_path),
-        encryption="none",
-        compression="lz4",
-        repository_type="local",
-        mode="full",
-        source_directories=json.dumps([str(source_path)]),
+        slug=slug,
+        source_files={f"{slug}.txt": f"content for {slug}"},
     )
-    test_db.add(repo)
-    test_db.commit()
-    test_db.refresh(repo)
-    return repo, repo_path, source_path
 
 
 @pytest.mark.integration

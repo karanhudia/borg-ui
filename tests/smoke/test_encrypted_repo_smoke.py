@@ -31,19 +31,12 @@ def main() -> int:
             },
         )
 
-        repokey_repo_id, repokey_repo_path = client.create_repository(
+        repokey_repo_id, repokey_repo_path, _backup_job_id, _backup_data = client.create_repository_and_backup(
             name="Repokey Smoke Repo",
             repo_path=client.temp_dir / "repokey-repo",
             source_dirs=[source_root],
             encryption="repokey",
             passphrase="repokey-smoke-passphrase",
-        )
-        backup_job_id = client.start_backup(repokey_repo_path)
-        client.wait_for_job(
-            "/api/backup/status",
-            backup_job_id,
-            expected={"completed", "completed_with_warnings"},
-            timeout=90,
         )
 
         archives = client.list_archives(repokey_repo_path)

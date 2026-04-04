@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.database.models import Repository, ScheduledJob
+from tests.unit.helpers import assert_auth_required
 
 
 @pytest.mark.unit
@@ -48,7 +49,7 @@ class TestScheduleList:
         """Test listing schedules without authentication returns 403"""
         response = test_client.get("/api/schedule/")
 
-        assert response.status_code == 401
+        assert_auth_required(response)
 
 
 @pytest.mark.unit
@@ -113,7 +114,7 @@ class TestScheduleCreate:
             }
         )
 
-        assert response.status_code == 401
+        assert_auth_required(response)
 
 
 @pytest.mark.unit

@@ -2,21 +2,20 @@
 Borg fixtures for integration testing with real borg repositories
 """
 import pytest
-import subprocess
-import tempfile
-import shutil
 import os
-from pathlib import Path
 from app.database.models import Repository
+from tests.utils.borg import (
+    create_archive,
+    create_source_tree,
+    init_borg_repo,
+    require_borg_binary,
+)
 
 
 @pytest.fixture
 def borg_binary():
     """Check if borg is available"""
-    borg_path = shutil.which("borg")
-    if not borg_path:
-        pytest.skip("Borg binary not found. Install borgbackup to run integration tests.")
-    return borg_path
+    return require_borg_binary()
 
 
 @pytest.fixture
@@ -29,18 +28,8 @@ def temp_borg_repo(tmp_path, borg_binary):
     repo_path = tmp_path / "test-repo"
     test_data_path = tmp_path / "test-data"
 
-    repo_path.mkdir()
     test_data_path.mkdir()
-
-    # Initialize borg repository (unencrypted for simplicity in tests)
-    result = subprocess.run(
-        [borg_binary, "init", "--encryption=none", str(repo_path)],
-        capture_output=True,
-        text=True
-    )
-
-    if result.returncode != 0:
-        pytest.fail(f"Failed to initialize borg repository: {result.stderr}")
+    init_borg_repo(borg_binary, repo_path)
 
     yield repo_path, test_data_path
 
@@ -55,47 +44,26 @@ def borg_repo_with_archives(temp_borg_repo, borg_binary):
     """
     repo_path, test_data_path = temp_borg_repo
 
-    # Create test files
-    (test_data_path / "file1.txt").write_text("Content of file 1")
-    (test_data_path / "file2.txt").write_text("Content of file 2")
-
-    subdir = test_data_path / "subdir"
-    subdir.mkdir()
-    (subdir / "file3.txt").write_text("Content of file 3")
-    (subdir / "file4.log").write_text("Log content")
+    create_source_tree(
+        test_data_path,
+        {
+            "file1.txt": "Content of file 1",
+            "file2.txt": "Content of file 2",
+            "subdir/file3.txt": "Content of file 3",
+            "subdir/file4.log": "Log content",
+        },
+    )
 
     # Create first archive
     archive1 = "test-archive-1"
-    result = subprocess.run(
-        [
-            borg_binary, "create",
-            f"{repo_path}::{archive1}",
-            str(test_data_path)
-        ],
-        capture_output=True,
-        text=True
-    )
-
-    if result.returncode != 0:
-        pytest.fail(f"Failed to create archive 1: {result.stderr}")
+    create_archive(borg_binary, repo_path, archive1, [test_data_path])
 
     # Modify files and create second archive
     (test_data_path / "file1.txt").write_text("Modified content of file 1")
     (test_data_path / "file5.txt").write_text("New file 5")
 
     archive2 = "test-archive-2"
-    result = subprocess.run(
-        [
-            borg_binary, "create",
-            f"{repo_path}::{archive2}",
-            str(test_data_path)
-        ],
-        capture_output=True,
-        text=True
-    )
-
-    if result.returncode != 0:
-        pytest.fail(f"Failed to create archive 2: {result.stderr}")
+    create_archive(borg_binary, repo_path, archive2, [test_data_path])
 
     return repo_path, test_data_path, [archive1, archive2]
 
@@ -156,7 +124,6 @@ def encrypted_borg_repo(tmp_path, borg_binary):
     repo_path = tmp_path / "encrypted-repo"
     test_data_path = tmp_path / "encrypted-data"
 
-    repo_path.mkdir()
     test_data_path.mkdir()
 
     passphrase = "test-passphrase-123"
@@ -165,33 +132,13 @@ def encrypted_borg_repo(tmp_path, borg_binary):
     env = os.environ.copy()
     env["BORG_PASSPHRASE"] = passphrase
 
-    result = subprocess.run(
-        [borg_binary, "init", "--encryption=repokey", str(repo_path)],
-        capture_output=True,
-        text=True,
-        env=env
-    )
-
-    if result.returncode != 0:
-        pytest.fail(f"Failed to initialize encrypted repository: {result.stderr}")
+    init_borg_repo(borg_binary, repo_path, env=env, encryption="repokey")
 
     # Create some test data
     (test_data_path / "secret.txt").write_text("Secret data")
 
     # Create an archive
-    result = subprocess.run(
-        [
-            borg_binary, "create",
-            f"{repo_path}::encrypted-archive",
-            str(test_data_path)
-        ],
-        capture_output=True,
-        text=True,
-        env=env
-    )
-
-    if result.returncode != 0:
-        pytest.fail(f"Failed to create encrypted archive: {result.stderr}")
+    create_archive(borg_binary, repo_path, "encrypted-archive", [test_data_path], env=env)
 
     yield repo_path, test_data_path, passphrase
 
@@ -231,7 +178,6 @@ def keyfile_borg_repo(tmp_path, borg_binary):
     test_data_path = tmp_path / "keyfile-data"
     keyfile_export_path = tmp_path / "exported-key.txt"
 
-    repo_path.mkdir()
     test_data_path.mkdir()
 
     passphrase = "test-keyfile-pass-456"
@@ -240,23 +186,16 @@ def keyfile_borg_repo(tmp_path, borg_binary):
     env = os.environ.copy()
     env["BORG_PASSPHRASE"] = passphrase
 
-    result = subprocess.run(
-        [borg_binary, "init", "--encryption=keyfile", str(repo_path)],
-        capture_output=True,
-        text=True,
-        env=env
-    )
-
-    if result.returncode != 0:
-        pytest.fail(f"Failed to initialize keyfile repository: {result.stderr}")
+    init_borg_repo(borg_binary, repo_path, env=env, encryption="keyfile")
 
     # Export the keyfile for import testing
     # This simulates a user who has an existing keyfile-encrypted repository
-    result = subprocess.run(
-        [borg_binary, "key", "export", str(repo_path), str(keyfile_export_path)],
-        capture_output=True,
-        text=True,
-        env=env
+    from tests.utils.borg import run_borg
+    result = run_borg(
+        borg_binary,
+        ["key", "export", str(repo_path), str(keyfile_export_path)],
+        env=env,
+        check=False,
     )
 
     if result.returncode != 0:
@@ -265,14 +204,6 @@ def keyfile_borg_repo(tmp_path, borg_binary):
     # Create test archive
     (test_data_path / "secret-file.txt").write_text("Keyfile-protected data")
 
-    result = subprocess.run(
-        [borg_binary, "create", f"{repo_path}::keyfile-archive", str(test_data_path)],
-        capture_output=True,
-        text=True,
-        env=env
-    )
-
-    if result.returncode != 0:
-        pytest.fail(f"Failed to create keyfile archive: {result.stderr}")
+    create_archive(borg_binary, repo_path, "keyfile-archive", [test_data_path], env=env)
 
     yield repo_path, test_data_path, passphrase, keyfile_export_path

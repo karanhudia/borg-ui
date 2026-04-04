@@ -6,6 +6,7 @@ from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.database.models import Repository, BackupJob
 from datetime import datetime
+from tests.unit.helpers import assert_auth_required
 
 
 @pytest.mark.unit
@@ -118,7 +119,7 @@ class TestBackupStart:
             }
         )
 
-        assert response.status_code == 401
+        assert_auth_required(response)
 
     def test_start_backup_with_options(self, test_client: TestClient, admin_headers, test_db):
         """Test starting backup with additional options"""

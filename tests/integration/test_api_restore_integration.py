@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tests.integration.test_helpers import wait_for_job_terminal_status
+from tests.utils.jobs import wait_for_payload_status
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -178,15 +179,22 @@ class TestRestoreSpeedETAIntegration:
 
     def wait_for_running_status(self, test_client, job_id, admin_headers, timeout=10):
         """Poll job status until it starts running"""
-        start_time = time.time()
-        while time.time() - start_time < timeout:
+        def fetch_payload():
             response = test_client.get(f"/api/restore/status/{job_id}", headers=admin_headers)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("status") == "running":
-                    return data
-            time.sleep(0.2)
-        return None
+            response.raise_for_status()
+            return response.json()
+
+        try:
+            return wait_for_payload_status(
+                fetch_payload,
+                expected={"running"},
+                timeout=timeout,
+                poll_interval=0.2,
+                terminal=None,
+                description=f"restore job {job_id} running state",
+            )
+        except TimeoutError:
+            return None
 
     @pytest.mark.asyncio
     async def test_restore_reports_speed_during_execution(

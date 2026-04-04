@@ -1,16 +1,13 @@
-
 import pytest
-import shutil
-import subprocess
 import os
-import asyncio
 from unittest.mock import patch
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from app.database.models import ScheduledJob, Repository, ScheduledJobRepository
+from app.database.models import ScheduledJob, ScheduledJobRepository
 from app.api.schedule import execute_multi_repo_schedule
 from app.utils.archive_names import sanitize_archive_component
+from tests.utils.borg import create_registered_local_repository, run_borg
 
 try:
     from .test_helpers import make_borg_env
@@ -20,52 +17,32 @@ except ImportError:
 @pytest.mark.integration
 @pytest.mark.requires_borg
 @pytest.mark.asyncio
-async def test_multi_repo_schedule_execution_real(
-    db_session: Session,
-    tmp_path,
-    borg_binary
-):
+async def test_multi_repo_schedule_execution_real(db_session: Session, tmp_path, borg_binary):
     """
     Test execute_multi_repo_schedule with REAL borg repositories.
     This ensures that the session handling is correct throughout the entire lifecycle.
     """
-    
     borg_env = make_borg_env(str(tmp_path))
 
-    # --- Helper to create a repo ---
-    def create_repo(name, index):
-        repo_path = tmp_path / f"repo-{index}"
-        data_path = tmp_path / f"data-{index}"
-        repo_path.mkdir()
-        data_path.mkdir()
-        
-        # Create a test file
-        (data_path / "test.txt").write_text(f"Content for repo {index}")
-
-        # Init borg repo
-        subprocess.run(
-            [borg_binary, "init", "--encryption=none", str(repo_path)],
-            check=True, capture_output=True, env=borg_env
-        )
-        
-        # Add to DB
-        repo = Repository(
-            name=name,
-            path=str(repo_path),
-            repository_type="local",
-            source_directories=f'["{str(data_path)}"]',
-            encryption="none", # Important for skipping password prompt
-            mode="full",
-            created_at=datetime.now(timezone.utc)
-        )
-        db_session.add(repo)
-        db_session.commit()
-        db_session.refresh(repo)
-        return repo
-
     # 1. Setup: Create 2 real repositories
-    repo1 = create_repo("Real Repo 1", 1)
-    repo2 = create_repo("Real Repo 2", 2)
+    repo1, _, _ = create_registered_local_repository(
+        test_db=db_session,
+        borg_binary=borg_binary,
+        tmp_path=tmp_path,
+        name="Real Repo 1",
+        slug="repo-1",
+        source_files={"test.txt": "Content for repo 1"},
+        borg_env=borg_env,
+    )
+    repo2, _, _ = create_registered_local_repository(
+        test_db=db_session,
+        borg_binary=borg_binary,
+        tmp_path=tmp_path,
+        name="Real Repo 2",
+        slug="repo-2",
+        source_files={"test.txt": "Content for repo 2"},
+        borg_env=borg_env,
+    )
 
     # 2. Setup: Create a scheduled job
     job = ScheduledJob(
@@ -99,11 +76,12 @@ async def test_multi_repo_schedule_execution_real(
 
     # 5. Verification: Check if archives exist in BOTH repos
     print("\n[TEST] Verifying archives...")
-    
+
     def check_archive_exists(repo_path):
-        result = subprocess.run(
-            [borg_binary, "list", "--json", str(repo_path)],
-            capture_output=True, text=True, env=borg_env
+        result = run_borg(
+            borg_binary,
+            ["list", "--json", str(repo_path)],
+            env=borg_env,
         )
         # Archive names are sanitized (spaces/slashes → hyphens) by build_archive_name
         sanitized_job_name = sanitize_archive_component(job.name)
