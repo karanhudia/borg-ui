@@ -25,10 +25,14 @@ Core smoke runs against a built app and a live FastAPI server:
 
 - App boot, routing, auth, and protected endpoint reachability
 - Repository create plus repository list through the public API
-- Manual backup through the public API with real multi-source data and terminal job verification
+- Manual backup, backup cancel, failed-backup log download, archive list, archive info, file download, selected-path restore, and archive delete
+- Schedule `run-now`, permissions enforcement, and key failure-path contracts
 
 Extended smoke covers slower Borg-heavy black-box checks:
 
+- Encrypted repositories, keyfile upload/download, and restore
+- Maintenance APIs: check, compact, prune, break-lock, restore cancel, and archive delete cancel
+- Multi-source backup correctness
 - Archive contents parity between Borg CLI and the API
 - Deep archive directory browsing behavior
 

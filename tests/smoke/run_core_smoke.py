@@ -27,7 +27,11 @@ def main() -> int:
     failures = []
     scripts = [
         ("tests/manual/test_app.py", "--url", args.url),
-        ("tests/integration/test_multiple_source_dirs.py", "--url", args.url),
+        ("tests/smoke/test_borg_api_smoke.py", "--url", args.url),
+        ("tests/smoke/test_backup_cancel_smoke.py", "--url", args.url),
+        ("tests/smoke/test_schedule_run_now_smoke.py", "--url", args.url),
+        ("tests/smoke/test_permissions_failure_smoke.py", "--url", args.url),
+        ("tests/smoke/test_failed_backup_logs_smoke.py", "--url", args.url),
     ]
 
     for script in scripts:

@@ -129,8 +129,21 @@ python3 tests/manual/test_app.py --output results.json
 
 ### 4. Smoke Runners (`tests/smoke/`)
 
-- `run_core_smoke.py` runs live app sanity checks plus the multi-source backup regression
-- `run_extended_smoke.py` runs the slower archive-browsing parity checks against Borg CLI
+- `run_core_smoke.py` runs live app sanity plus core Borg production flows:
+  - manual backup
+  - backup cancel
+  - schedule `run-now`
+  - permissions and failure-path checks
+  - failed-backup log download
+- `run_extended_smoke.py` runs slower Borg-heavy flows:
+  - encrypted repository and keyfile coverage
+  - maintenance APIs
+  - restore cancel
+  - archive delete cancel
+  - mount and unmount where the runner supports it
+  - multi-source backup regression
+  - archive contents parity
+  - archive directory browsing parity
 
 ## Test Scenarios
 
