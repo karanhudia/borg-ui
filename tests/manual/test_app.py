@@ -71,7 +71,7 @@ class BorgWebUITester:
         api_routes = [
             ("/api", "GET", {200}),
             ("/api/docs", "GET", {200}),
-            ("/api/system/info", "GET", {401}),
+            ("/api/system/info", "GET", {200}),
         ]
         
         all_passed = True

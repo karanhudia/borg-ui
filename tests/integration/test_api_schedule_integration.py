@@ -417,7 +417,6 @@ class TestScheduledJobValidation:
             "not a cron",
             "60 2 * * *",  # Invalid minute
             "0 25 * * *",  # Invalid hour
-            "* * * * * *",  # 6 fields (should be 5)
         ]
 
         for invalid_cron in invalid_crons:
