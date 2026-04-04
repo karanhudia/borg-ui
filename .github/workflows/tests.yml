@@ -80,7 +80,7 @@ jobs:
           REDIS_PORT: 6379
 
       - name: Upload backend coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-coverage-xml
           path: coverage.xml
@@ -88,7 +88,7 @@ jobs:
           retention-days: 7
 
       - name: Upload coverage HTML report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage-report-backend
@@ -224,7 +224,7 @@ jobs:
         run: npm run test:coverage
 
       - name: Upload frontend coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-coverage-lcov
           path: frontend/coverage/lcov.info
@@ -241,7 +241,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download backend coverage artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: backend-coverage-xml
           path: coverage-artifacts/backend
@@ -267,7 +267,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download frontend coverage artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: frontend-coverage-lcov
           path: coverage-artifacts/frontend
@@ -322,7 +322,7 @@ jobs:
           fi
 
       - name: Upload frontend build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-build-output
           path: |
@@ -370,7 +370,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Download frontend build artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: frontend-build-output
           path: frontend-artifact
@@ -427,13 +427,14 @@ jobs:
           fi
 
       - name: Upload smoke artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: smoke-core-artifacts
           path: |
             /tmp/borg-ui-tests/TEST_INFO.txt
             logs/
+          if-no-files-found: ignore
           retention-days: 7
 
   smoke-borg-extended:
@@ -474,7 +475,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Download frontend build artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: frontend-build-output
           path: frontend-artifact
@@ -531,13 +532,14 @@ jobs:
           fi
 
       - name: Upload smoke artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: smoke-extended-artifacts
           path: |
             /tmp/borg-ui-tests/TEST_INFO.txt
             logs/
+          if-no-files-found: ignore
           retention-days: 7
 
   smoke-borg-ssh-localhost:
@@ -595,7 +597,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Download frontend build artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: frontend-build-output
           path: frontend-artifact
@@ -652,12 +654,13 @@ jobs:
           fi
 
       - name: Upload smoke artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: smoke-ssh-localhost-artifacts
           path: |
             logs/
+          if-no-files-found: ignore
           retention-days: 7
 
   test-results:
