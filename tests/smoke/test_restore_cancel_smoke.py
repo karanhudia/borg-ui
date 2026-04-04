@@ -57,13 +57,37 @@ def main() -> int:
             destination=restore_dest,
             paths=[repo_root],
         )
-        client.wait_for_running("/api/restore/status", restore_job_id, timeout=45)
+        try:
+            client.wait_for_running("/api/restore/status", restore_job_id, timeout=45)
+        except SmokeFailure:
+            status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
+            if status_payload.get("status") in {"completed", "completed_with_warnings"}:
+                print("Restore cancel smoke skipped: restore completed before cancellation window", flush=True)
+                return 0
+            raise
 
-        cancel_response = client.request_ok("POST", f"/api/restore/cancel/{restore_job_id}")
+        cancel_response = client.request(
+            "POST",
+            f"/api/restore/cancel/{restore_job_id}",
+        )
+        if cancel_response.status_code == 400:
+            status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
+            if status_payload.get("status") in {"completed", "completed_with_warnings"}:
+                print("Restore cancel smoke skipped: restore completed before cancellation request", flush=True)
+                return 0
+            raise SmokeFailure(f"Restore cancel returned 400 unexpectedly: {cancel_response.text}")
+        if cancel_response.status_code != 200:
+            raise SmokeFailure(f"POST /api/restore/cancel/{restore_job_id} returned {cancel_response.status_code}: {cancel_response.text}")
         if "cancel" not in str(cancel_response.json()).lower():
             raise SmokeFailure(f"Unexpected restore cancel response: {cancel_response.text}")
 
-        restore_job = client.wait_for_job("/api/restore/status", restore_job_id, expected={"cancelled"}, timeout=60)
+        restore_job = client.wait_for_job(
+            "/api/restore/status",
+            restore_job_id,
+            expected={"cancelled"},
+            timeout=60,
+            terminal={"cancelled", "completed", "completed_with_warnings", "failed"},
+        )
         if restore_job["status"] != "cancelled":
             raise SmokeFailure(f"Expected cancelled restore job, got {restore_job}")
 

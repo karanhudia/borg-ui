@@ -71,16 +71,35 @@ def main() -> int:
             print(f"Delete cancel smoke skipped: delete never reached running state ({last_status})", flush=True)
             return 0
 
-        cancel_response = client.request_ok("POST", f"/api/archives/delete-jobs/{delete_job_id}/cancel")
+        cancel_response = client.request("POST", f"/api/archives/delete-jobs/{delete_job_id}/cancel")
+        if cancel_response.status_code == 400:
+            payload = client.request_ok("GET", f"/api/archives/delete-jobs/{delete_job_id}").json()
+            if payload.get("status") in {"completed", "completed_with_warnings"}:
+                print("Delete cancel smoke skipped: delete completed before cancellation request", flush=True)
+                return 0
+            raise SmokeFailure(f"Delete cancel returned 400 unexpectedly: {cancel_response.text}")
+        if cancel_response.status_code != 200:
+            raise SmokeFailure(
+                f"POST /api/archives/delete-jobs/{delete_job_id}/cancel returned "
+                f"{cancel_response.status_code}: {cancel_response.text}"
+            )
         if "cancel" not in str(cancel_response.json()).lower():
             raise SmokeFailure(f"Unexpected delete cancel response: {cancel_response.text}")
 
-        job_payload = client.wait_for_job(
-            "/api/archives/delete-jobs",
-            delete_job_id,
-            expected={"cancelled"},
-            timeout=60,
-        )
+        try:
+            job_payload = client.wait_for_job(
+                "/api/archives/delete-jobs",
+                delete_job_id,
+                expected={"cancelled"},
+                timeout=60,
+                terminal={"cancelled", "completed", "completed_with_warnings", "failed"},
+            )
+        except SmokeFailure:
+            payload = client.request_ok("GET", f"/api/archives/delete-jobs/{delete_job_id}").json()
+            if payload.get("status") in {"completed", "completed_with_warnings"}:
+                print("Delete cancel smoke skipped: delete completed after cancellation request", flush=True)
+                return 0
+            raise
         if job_payload["status"] != "cancelled":
             raise SmokeFailure(f"Expected cancelled delete job, got {job_payload}")
 

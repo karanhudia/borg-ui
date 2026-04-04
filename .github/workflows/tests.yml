@@ -21,7 +21,7 @@ env:
 
 jobs:
   backend-unit-coverage:
-    name: Backend Unit Coverage
+    name: Backend / Unit Tests
     runs-on: ubuntu-latest
 
     services:
@@ -79,14 +79,13 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Upload backend coverage artifact
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-          flags: backend-unit
-          name: backend-unit-coverage
-          fail_ci_if_error: false
+          name: backend-coverage-xml
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload coverage HTML report
         uses: actions/upload-artifact@v4
@@ -105,7 +104,7 @@ jobs:
           MINIMUM_ORANGE: 50
 
   backend-api-integration:
-    name: Borg API Integration
+    name: Backend / Integration Tests
     runs-on: ubuntu-latest
 
     services:
@@ -167,7 +166,7 @@ jobs:
           REDIS_PORT: 6379
 
   typecheck-lint-format:
-    name: Typecheck Lint Format
+    name: Frontend / Code Quality
     runs-on: ubuntu-latest
 
     steps:
@@ -202,7 +201,7 @@ jobs:
         run: npm run lint
 
   frontend-vitest:
-    name: Frontend Vitest
+    name: Frontend / Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -224,17 +223,52 @@ jobs:
         working-directory: frontend
         run: npm run test:coverage
 
-      - name: Upload frontend coverage
+      - name: Upload frontend coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-json
+          path: frontend/coverage/coverage-final.json
+          if-no-files-found: error
+          retention-days: 7
+
+  coverage-upload:
+    name: Coverage / Codecov
+    runs-on: ubuntu-latest
+    needs: [backend-unit-coverage, backend-api-integration, frontend-vitest]
+
+    steps:
+      - name: Download backend coverage artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: backend-coverage-xml
+          path: coverage-artifacts/backend
+
+      - name: Download frontend coverage artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: frontend-coverage-json
+          path: coverage-artifacts/frontend
+
+      - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./frontend/coverage/coverage-final.json
+          files: ./coverage-artifacts/backend/coverage.xml
+          flags: backend-unit
+          name: backend-unit-coverage
+          fail_ci_if_error: false
+
+      - name: Upload frontend coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-artifacts/frontend/coverage-final.json
           flags: frontend
           name: frontend-coverage
           fail_ci_if_error: false
 
   frontend-build:
-    name: Frontend Build
+    name: Frontend / Build
     runs-on: ubuntu-latest
 
     steps:
@@ -282,7 +316,7 @@ jobs:
           retention-days: 7
 
   smoke-borg-core:
-    name: Borg Smoke Core
+    name: Smoke / Core
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -383,7 +417,7 @@ jobs:
           retention-days: 7
 
   smoke-borg-extended:
-    name: Borg Smoke Extended
+    name: Smoke / Extended
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: [frontend-build]
@@ -483,7 +517,7 @@ jobs:
           retention-days: 7
 
   smoke-borg-ssh-localhost:
-    name: Borg Smoke SSH Localhost
+    name: Smoke / SSH
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [frontend-build]
@@ -597,9 +631,9 @@ jobs:
           retention-days: 7
 
   test-results:
-    name: Test Results Summary
+    name: CI / Summary
     runs-on: ubuntu-latest
-    needs: [backend-unit-coverage, backend-api-integration, typecheck-lint-format, frontend-vitest, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
+    needs: [backend-unit-coverage, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-upload, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
     if: always()
 
     steps:
@@ -609,6 +643,7 @@ jobs:
           echo "Borg API integration: ${{ needs.backend-api-integration.result }}"
           echo "Typecheck/lint/format: ${{ needs.typecheck-lint-format.result }}"
           echo "Frontend vitest: ${{ needs.frontend-vitest.result }}"
+          echo "Coverage upload: ${{ needs.coverage-upload.result }}"
           echo "Frontend build: ${{ needs.frontend-build.result }}"
           echo "Borg smoke core: ${{ needs.smoke-borg-core.result }}"
           echo "Borg smoke extended: ${{ needs.smoke-borg-extended.result }}"
@@ -631,6 +666,11 @@ jobs:
 
           if [ "${{ needs.frontend-vitest.result }}" != "success" ]; then
             echo "Frontend vitest failed"
+            exit 1
+          fi
+
+          if [ "${{ needs.coverage-upload.result }}" != "success" ]; then
+            echo "Coverage upload failed"
             exit 1
           fi
 
