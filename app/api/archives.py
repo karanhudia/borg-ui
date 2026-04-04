@@ -18,10 +18,19 @@ from app.core.security import (
 )
 from app.core.borg import borg
 from app.services.delete_archive_service import delete_archive_service
+from app.api.repositories import get_standard_ssh_opts, setup_borg_env
+from app.utils.ssh_utils import resolve_repo_ssh_key_file
 import asyncio
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+
+def _build_repo_env(repo: Repository, db: Session):
+    temp_key_file = resolve_repo_ssh_key_file(repo, db)
+    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+    env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
+    return env, temp_key_file
 
 @router.get("/list")
 async def list_archives(
@@ -33,12 +42,18 @@ async def list_archives(
     try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, 'viewer')
-        result = await borg.list_archives(
-            repository,
-            remote_path=repo.remote_path,
-            passphrase=repo.passphrase,
-            bypass_lock=repo.bypass_lock
-        )
+        env, temp_key_file = _build_repo_env(repo, db)
+        try:
+            result = await borg.list_archives(
+                repository,
+                remote_path=repo.remote_path,
+                passphrase=repo.passphrase,
+                bypass_lock=repo.bypass_lock,
+                env=env,
+            )
+        finally:
+            if temp_key_file and os.path.exists(temp_key_file):
+                os.unlink(temp_key_file)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -68,13 +83,19 @@ async def get_archive_info(
     try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, 'viewer')
-        result = await borg.info_archive(
-            repository,
-            archive_id,
-            remote_path=repo.remote_path,
-            passphrase=repo.passphrase,
-            bypass_lock=repo.bypass_lock
-        )
+        env, temp_key_file = _build_repo_env(repo, db)
+        try:
+            result = await borg.info_archive(
+                repository,
+                archive_id,
+                remote_path=repo.remote_path,
+                passphrase=repo.passphrase,
+                bypass_lock=repo.bypass_lock,
+                env=env,
+            )
+        finally:
+            if temp_key_file and os.path.exists(temp_key_file):
+                os.unlink(temp_key_file)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -118,13 +139,19 @@ async def get_archive_info(
 
             # Optionally fetch file listing
             if include_files:
-                list_result = await borg.list_archive_contents(
-                    repository,
-                    archive_id,
-                    remote_path=repo.remote_path,
-                    passphrase=repo.passphrase,
-                    bypass_lock=repo.bypass_lock
-                )
+                env, temp_key_file = _build_repo_env(repo, db)
+                try:
+                    list_result = await borg.list_archive_contents(
+                        repository,
+                        archive_id,
+                        remote_path=repo.remote_path,
+                        passphrase=repo.passphrase,
+                        bypass_lock=repo.bypass_lock,
+                        env=env,
+                    )
+                finally:
+                    if temp_key_file and os.path.exists(temp_key_file):
+                        os.unlink(temp_key_file)
                 if list_result["success"]:
                     try:
                         # Parse JSON-lines output
@@ -183,14 +210,20 @@ async def get_archive_contents(
     try:
         # Validate repository exists
         repo = require_repository_access_by_path(db, current_user, repository, 'viewer')
-        result = await borg.list_archive_contents(
-            repository,
-            archive_id,
-            path,
-            remote_path=repo.remote_path,
-            passphrase=repo.passphrase,
-            bypass_lock=repo.bypass_lock
-        )
+        env, temp_key_file = _build_repo_env(repo, db)
+        try:
+            result = await borg.list_archive_contents(
+                repository,
+                archive_id,
+                path,
+                remote_path=repo.remote_path,
+                passphrase=repo.passphrase,
+                bypass_lock=repo.bypass_lock,
+                env=env,
+            )
+        finally:
+            if temp_key_file and os.path.exists(temp_key_file):
+                os.unlink(temp_key_file)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

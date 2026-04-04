@@ -393,7 +393,14 @@ class BorgInterface:
 
         return await self._execute_command(cmd, timeout=settings.backup_timeout, env=env if env else None)
 
-    async def list_archives(self, repository: str, remote_path: str = None, passphrase: str = None, bypass_lock: bool = False) -> Dict:
+    async def list_archives(
+        self,
+        repository: str,
+        remote_path: str = None,
+        passphrase: str = None,
+        bypass_lock: bool = False,
+        env: dict = None,
+    ) -> Dict:
         """List archives in repository"""
         cmd = [self.borg_cmd, "list"]
         if remote_path:
@@ -402,13 +409,21 @@ class BorgInterface:
             cmd.append("--bypass-lock")
         cmd.extend([repository, "--json"])
 
-        env = {}
+        exec_env = env.copy() if env else {}
         if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
+            exec_env["BORG_PASSPHRASE"] = passphrase
 
-        return await self._execute_command(cmd, env=env if env else None)
+        return await self._execute_command(cmd, env=exec_env if exec_env else None)
 
-    async def info_archive(self, repository: str, archive: str, remote_path: str = None, passphrase: str = None, bypass_lock: bool = False) -> Dict:
+    async def info_archive(
+        self,
+        repository: str,
+        archive: str,
+        remote_path: str = None,
+        passphrase: str = None,
+        bypass_lock: bool = False,
+        env: dict = None,
+    ) -> Dict:
         """Get information about a specific archive"""
         cmd = [self.borg_cmd, "info"]
         if remote_path:
@@ -417,15 +432,16 @@ class BorgInterface:
             cmd.append("--bypass-lock")
         cmd.extend([f"{repository}::{archive}", "--json"])
 
-        env = {}
+        exec_env = env.copy() if env else {}
         if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
+            exec_env["BORG_PASSPHRASE"] = passphrase
 
-        return await self._execute_command(cmd, env=env if env else None)
+        return await self._execute_command(cmd, env=exec_env if exec_env else None)
 
     async def list_archive_contents(self, repository: str, archive: str, path: str = "",
                                    remote_path: str = None, passphrase: str = None,
-                                   max_lines: int = 1_000_000, bypass_lock: bool = False) -> Dict:
+                                   max_lines: int = 1_000_000, bypass_lock: bool = False,
+                                   env: dict = None) -> Dict:
         """List contents of an archive with streaming to prevent OOM
 
         Note: borg list doesn't support path filtering as an argument,
@@ -451,12 +467,12 @@ class BorgInterface:
         cmd.extend([f"{repository}::{archive}", "--json-lines"])
         # Note: path parameter is not passed to borg, filtering happens in the API layer
 
-        env = {}
+        exec_env = env.copy() if env else {}
         if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
+            exec_env["BORG_PASSPHRASE"] = passphrase
 
         # Use streaming execution to prevent OOM on large archives
-        return await self._execute_command_streaming(cmd, max_lines=max_lines, env=env if env else None)
+        return await self._execute_command_streaming(cmd, max_lines=max_lines, env=exec_env if exec_env else None)
 
     async def extract_archive(self, repository: str, archive: str, paths: List[str],
                             destination: str, dry_run: bool = False, remote_path: str = None, passphrase: str = None, bypass_lock: bool = False) -> Dict:

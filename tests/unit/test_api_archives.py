@@ -13,6 +13,8 @@ Integration tests (test_api_archives_integration.py) handle:
 - File downloads
 - Encryption
 """
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 from app.database.models import Repository
@@ -63,6 +65,79 @@ class TestArchivesResourceValidation:
 
         assert response.status_code == 404
         assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
+
+
+@pytest.mark.unit
+class TestArchivesSshEnvironment:
+    def test_list_archives_uses_repo_ssh_environment(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        repo = Repository(
+            name="SSH Repo",
+            path="ssh://borgsmoke@127.0.0.1:2222/home/borgsmoke/remote-repo",
+            repository_type="ssh",
+            connection_id=1,
+            passphrase=None,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        fake_key_path = "/tmp/test-ssh.key"
+        with patch("app.api.archives.resolve_repo_ssh_key_file", return_value=fake_key_path), \
+             patch("app.api.archives.os.path.exists", side_effect=lambda path: path == fake_key_path), \
+             patch("app.api.archives.os.unlink") as mock_unlink, \
+             patch(
+                 "app.api.archives.borg.list_archives",
+                 new=AsyncMock(return_value={"success": True, "stdout": {"archives": []}}),
+             ) as mock_list_archives:
+            response = test_client.get(
+                f"/api/archives/list?repository={repo.path}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        _, kwargs = mock_list_archives.await_args
+        assert kwargs["env"]["BORG_RSH"].startswith("ssh -i /tmp/test-ssh.key")
+        mock_unlink.assert_called_once_with(fake_key_path)
+
+    def test_archive_info_uses_repo_ssh_environment_for_contents(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        repo = Repository(
+            name="SSH Repo",
+            path="ssh://borgsmoke@127.0.0.1:2222/home/borgsmoke/remote-repo",
+            repository_type="ssh",
+            connection_id=1,
+            passphrase=None,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch("app.api.archives.resolve_repo_ssh_key_file", return_value=None), \
+             patch(
+                 "app.api.archives.borg.info_archive",
+                 new=AsyncMock(return_value={"success": True, "stdout": '{"archives":[{"name":"arch1"}]}'}),
+             ) as mock_info_archive, \
+             patch(
+                 "app.api.archives.borg.list_archive_contents",
+                 new=AsyncMock(return_value={"success": True, "stdout": ""}),
+             ) as mock_list_contents:
+            response = test_client.get(
+                f"/api/archives/arch1/info?repository={repo.path}&include_files=true",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        _, info_kwargs = mock_info_archive.await_args
+        _, contents_kwargs = mock_list_contents.await_args
+        assert "BORG_RSH" in info_kwargs["env"]
+        assert "BORG_RSH" in contents_kwargs["env"]
 
     def test_get_archive_info_nonexistent_repository_returns_404(
         self,
