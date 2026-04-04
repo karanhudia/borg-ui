@@ -20,6 +20,7 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
 [![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 [![Tests](https://github.com/karanhudia/borg-ui/workflows/Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/tests.yml)
+[![Smoke Tests](https://github.com/karanhudia/borg-ui/workflows/Smoke%20Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/smoke-tests.yml)
 [![codecov](https://codecov.io/gh/karanhudia/borg-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/karanhudia/borg-ui)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/5KfVa5QkdQ)
 
@@ -35,7 +36,7 @@
 
 <p align="center">
     <strong>Release confidence is built on API-first tests of real Borg workflows</strong><br/>
-    covering backup, archive, restore, maintenance, and scheduling so safety never depends on UI-only checks.
+    covering backup, archive, restore, maintenance, and scheduling, with separate smoke lanes against a running build so safety never depends on UI-only checks.
 </p>
 
 </div>

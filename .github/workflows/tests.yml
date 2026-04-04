@@ -2,24 +2,23 @@ name: Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
-  workflow_dispatch:  # Allow manual trigger
+    branches: [main, develop]
+  workflow_dispatch:
 
-# Cancel in-progress runs for same workflow on same branch/PR
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: '3.11'
-  NODE_VERSION: '22'
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  test-backend:
-    name: Backend Tests
+  backend-coverage:
+    name: Backend Coverage
     runs-on: ubuntu-latest
 
     services:
@@ -41,7 +40,7 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          cache: pip
 
       - name: Install system dependencies
         run: |
@@ -58,11 +57,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install borg for backend coverage suite
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y borgbackup
-
       - name: Create test directories
         run: |
           mkdir -p /tmp/borg-ui-tests
@@ -71,10 +65,8 @@ jobs:
 
       - name: Run backend coverage suite
         run: |
-          pytest tests/unit/ -v \
-            --cov=app \
-            --cov-report=term-missing
           pytest \
+            tests/unit \
             tests/integration/test_api_archives_integration.py \
             tests/integration/test_api_backup_integration.py \
             tests/integration/test_api_mounts_integration.py \
@@ -83,9 +75,8 @@ jobs:
             tests/integration/test_api_restore_integration.py \
             tests/integration/test_api_schedule_integration.py \
             tests/integration/test_multi_repo_schedule.py \
-            -v -m "integration and requires_borg" \
+            -v \
             --cov=app \
-            --cov-append \
             --cov-report=term-missing \
             --cov-report=xml \
             --cov-report=html
@@ -103,19 +94,12 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload coverage HTML report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report-backend
           path: htmlcov/
           retention-days: 30
-
-      - name: Generate coverage badge
-        if: github.ref == 'refs/heads/main'
-        run: |
-          COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(f\"{float(root.attrib['line-rate']) * 100:.1f}\")")
-          echo "Coverage: $COVERAGE%"
-          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
 
       - name: Comment coverage on PR
         if: github.event_name == 'pull_request'
@@ -125,140 +109,42 @@ jobs:
           MINIMUM_GREEN: 70
           MINIMUM_ORANGE: 50
 
-  test-integration:
-    name: Integration Tests
+  frontend-quality:
+    name: Frontend Quality
     runs-on: ubuntu-latest
-    # Run in parallel with backend tests (no dependency)
-
-    services:
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-
       - name: Set up Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y borgbackup
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+      - name: Check locale key parity
+        working-directory: frontend
+        run: npm run check:locales
 
-      - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm ci
+      - name: TypeScript type check
+        working-directory: frontend
+        run: npm run typecheck
 
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm run build
+      - name: Prettier format check
+        working-directory: frontend
+        run: npm run format:check
 
-      - name: Copy frontend build to static directory
-        run: |
-          mkdir -p app/static
-          cp -r frontend/build/* app/static/
-          # Rename build assets to assets directory if needed
-          if [ -d "app/static/assets" ]; then
-            echo "✅ Frontend assets directory found"
-            ls -la app/static/assets/ | head -10
-          fi
+      - name: Run linter
+        working-directory: frontend
+        run: npm run lint
 
-      - name: Create test directories and data
-        run: |
-          chmod +x tests/setup_test_env.sh
-          ./tests/setup_test_env.sh
-
-      - name: Start Borg UI backend
-        run: |
-          mkdir -p data logs
-          uvicorn app.main:app --host 0.0.0.0 --port 8082 &
-          echo $! > /tmp/borg-ui.pid
-        env:
-          DATA_DIR: ${{ github.workspace }}/data
-          SECRET_KEY: test-secret-key-for-ci-only
-          DATABASE_URL: sqlite:///${{ github.workspace }}/data/test.db
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-
-      - name: Wait for service to be ready
-        run: |
-          echo "Waiting for Borg UI to start..."
-          timeout 60 bash -c 'until curl -s http://localhost:8082/api/docs > /dev/null; do sleep 2; echo "Waiting..."; done'
-          echo "✅ Service is ready!"
-
-      - name: Run integration tests
-        run: |
-          python3 tests/manual/test_app.py --url http://localhost:8082
-        env:
-          TEST_BASE_URL: http://localhost:8082
-
-      - name: Run pytest integration tests
-        run: |
-          pytest tests/integration/ -v -m "integration and requires_borg"
-        env:
-          TEST_BASE_URL: http://localhost:8082
-
-      - name: Run archive contents tests
-        run: |
-          python3 tests/integration/test_archive_contents.py --url http://localhost:8082
-        env:
-          BORG_UI_CONTAINER: false  # Backend runs directly in CI, not in Docker
-
-      - name: Run multiple source directories test
-        run: |
-          python3 tests/integration/test_multiple_source_dirs.py --url http://localhost:8082
-        env:
-          BORG_UI_CONTAINER: false
-
-      - name: Run archive browsing test
-        run: |
-          python3 tests/integration/test_archive_directory_browsing.py --url http://localhost:8082
-        env:
-          BORG_UI_CONTAINER: false
-
-      - name: Stop Borg UI
-        if: always()
-        run: |
-          if [ -f /tmp/borg-ui.pid ]; then
-            kill $(cat /tmp/borg-ui.pid) || true
-          fi
-
-      - name: Upload test artifacts
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: test-artifacts
-          path: |
-            /tmp/borg-ui-tests/TEST_INFO.txt
-            logs/
-          retention-days: 7
-
-  test-frontend:
+  frontend-tests:
     name: Frontend Tests
     runs-on: ubuntu-latest
 
@@ -270,38 +156,16 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: |
-          cd frontend
-          npm ci
-
-      - name: Check locale key parity
-        run: |
-          cd frontend
-          npm run check:locales
-
-      - name: TypeScript type check
-        run: |
-          cd frontend
-          npm run typecheck
-
-      - name: Prettier format check
-        run: |
-          cd frontend
-          npm run format:check
-
-      - name: Run linter
-        run: |
-          cd frontend
-          npm run lint || true
+        working-directory: frontend
+        run: npm ci
 
       - name: Run frontend tests with coverage
-        run: |
-          cd frontend
-          npm run test:coverage
+        working-directory: frontend
+        run: npm run test:coverage
 
       - name: Upload frontend coverage
         uses: codecov/codecov-action@v5
@@ -312,22 +176,40 @@ jobs:
           name: frontend-coverage
           fail_ci_if_error: false
 
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
       - name: Build frontend
-        run: |
-          cd frontend
-          npm run build
+        working-directory: frontend
+        run: npm run build
 
       - name: Check build output
+        working-directory: frontend
         run: |
-          cd frontend
           if [ -d "dist" ]; then
-            echo "✅ Build successful - dist directory created"
+            echo "Build successful - dist directory created"
             ls -lah dist/ | head -20
           elif [ -d "build" ]; then
-            echo "✅ Build successful - build directory created"
+            echo "Build successful - build directory created"
             ls -lah build/ | head -20
           else
-            echo "❌ Build directory not found"
+            echo "Build directory not found"
             ls -lah
             exit 1
           fi
@@ -335,28 +217,35 @@ jobs:
   test-results:
     name: Test Results Summary
     runs-on: ubuntu-latest
-    needs: [test-backend, test-integration, test-frontend]
+    needs: [backend-coverage, frontend-quality, frontend-tests, frontend-build]
     if: always()
 
     steps:
       - name: Check test results
         run: |
-          echo "Backend tests: ${{ needs.test-backend.result }}"
-          echo "Integration tests: ${{ needs.test-integration.result }}"
-          echo "Frontend tests: ${{ needs.test-frontend.result }}"
+          echo "Backend coverage: ${{ needs.backend-coverage.result }}"
+          echo "Frontend quality: ${{ needs.frontend-quality.result }}"
+          echo "Frontend tests: ${{ needs.frontend-tests.result }}"
+          echo "Frontend build: ${{ needs.frontend-build.result }}"
 
-          if [ "${{ needs.test-backend.result }}" != "success" ]; then
-            echo "❌ Backend tests failed"
+          if [ "${{ needs.backend-coverage.result }}" != "success" ]; then
+            echo "Backend coverage failed"
             exit 1
           fi
 
-          if [ "${{ needs.test-frontend.result }}" != "success" ]; then
-            echo "❌ Frontend tests failed"
+          if [ "${{ needs.frontend-quality.result }}" != "success" ]; then
+            echo "Frontend quality failed"
             exit 1
           fi
 
-          if [ "${{ needs.test-integration.result }}" != "success" ]; then
-            echo "⚠️  Integration tests had issues (non-blocking)"
+          if [ "${{ needs.frontend-tests.result }}" != "success" ]; then
+            echo "Frontend tests failed"
+            exit 1
           fi
 
-          echo "✅ All critical tests passed!"
+          if [ "${{ needs.frontend-build.result }}" != "success" ]; then
+            echo "Frontend build failed"
+            exit 1
+          fi
+
+          echo "All blocking test lanes passed"

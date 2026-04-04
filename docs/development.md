@@ -191,6 +191,13 @@ Production-critical Borg work is tested primarily through API-driven flows. The 
 
 See [Testing](testing) for the short list of scenarios we treat as mandatory before trusting a release with production backups.
 
+CI separates fast coverage jobs from black-box smoke jobs. The main `Tests` workflow handles backend coverage plus frontend quality, tests, and build in parallel, while `Smoke Tests` runs a built app against core and extended Borg production flows.
+
+```bash
+python3 tests/smoke/run_core_smoke.py --url http://localhost:8082
+python3 tests/smoke/run_extended_smoke.py --url http://localhost:8082
+```
+
 ---
 
 ## Troubleshooting

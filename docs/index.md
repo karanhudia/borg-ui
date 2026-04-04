@@ -51,6 +51,7 @@ See [Installation Guide](installation) for other methods and security best pract
 - Responsive design - works on mobile
 - Production-ready with comprehensive test suite
 - API-driven Borg 1 integration coverage for backup, archive, restore, maintenance, and schedule workflows
+- Separate smoke workflows against a running build for core and extended Borg scenarios
 
 ---
 
@@ -75,7 +76,7 @@ See [Installation Guide](installation) for other methods and security best pract
 - **[API Documentation](http://localhost:8081/api/docs)** - Interactive Swagger UI (after installation)
 - **[System Specification](SPECIFICATION)** - Architecture and technical details
 - **[Development Guide](development)** - Setting up a development environment with hot reload
-- **[Testing](testing)** - Production-critical Borg workflows covered by API and integration tests
+- **[Testing](testing)** - Production-critical Borg workflows covered by API-driven integration and smoke tests
 
 ---
 

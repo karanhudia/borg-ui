@@ -10,7 +10,7 @@ permalink: /testing
 
 Borg Web UI prioritizes API-driven tests for the Borg 1 workflows that can affect production backups and restores.
 
-## What We Cover
+## API Integration Coverage
 
 - Repository create, import, info, stats, keyfile upload, and keyfile download
 - Manual backup start, job status polling, archive creation, and encrypted repository backups
@@ -18,6 +18,19 @@ Borg Web UI prioritizes API-driven tests for the Borg 1 workflows that can affec
 - Restore preview, archive tree browsing, selected-path restore, restore start, job status polling, and restored file verification
 - Repository maintenance: check, compact, prune, break-lock, and job-history/status endpoints
 - Scheduled backup creation, duplication, and `run-now` execution across one or many repositories
+
+## Smoke Coverage
+
+Core smoke runs against a built app and a live FastAPI server:
+
+- App boot, routing, auth, and protected endpoint reachability
+- Repository create plus repository list through the public API
+- Manual backup through the public API with real multi-source data and terminal job verification
+
+Extended smoke covers slower Borg-heavy black-box checks:
+
+- Archive contents parity between Borg CLI and the API
+- Deep archive directory browsing behavior
 
 ## Mount Coverage
 
