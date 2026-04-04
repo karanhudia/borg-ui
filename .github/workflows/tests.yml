@@ -231,8 +231,8 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  coverage-upload:
-    name: Coverage / Codecov
+  coverage-backend:
+    name: Coverage / Backend
     runs-on: ubuntu-latest
     needs: [backend-unit-coverage, backend-api-integration, frontend-vitest]
 
@@ -243,12 +243,6 @@ jobs:
           name: backend-coverage-xml
           path: coverage-artifacts/backend
 
-      - name: Download frontend coverage artifact
-        uses: actions/download-artifact@v5
-        with:
-          name: frontend-coverage-json
-          path: coverage-artifacts/frontend
-
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -257,6 +251,18 @@ jobs:
           flags: backend-unit
           name: backend-unit-coverage
           fail_ci_if_error: false
+
+  coverage-frontend:
+    name: Coverage / Frontend
+    runs-on: ubuntu-latest
+    needs: [backend-unit-coverage, backend-api-integration, frontend-vitest]
+
+    steps:
+      - name: Download frontend coverage artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: frontend-coverage-json
+          path: coverage-artifacts/frontend
 
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -645,7 +651,7 @@ jobs:
   test-results:
     name: CI / Summary
     runs-on: ubuntu-latest
-    needs: [backend-unit-coverage, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-upload, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
+    needs: [backend-unit-coverage, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-backend, coverage-frontend, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
     if: always()
 
     steps:
@@ -655,7 +661,8 @@ jobs:
           echo "Backend / Integration Tests: ${{ needs.backend-api-integration.result }}"
           echo "Frontend / Code Quality: ${{ needs.typecheck-lint-format.result }}"
           echo "Frontend / Unit Tests: ${{ needs.frontend-vitest.result }}"
-          echo "Coverage / Codecov: ${{ needs.coverage-upload.result }}"
+          echo "Coverage / Backend: ${{ needs.coverage-backend.result }}"
+          echo "Coverage / Frontend: ${{ needs.coverage-frontend.result }}"
           echo "Frontend / Build: ${{ needs.frontend-build.result }}"
           echo "Smoke / Core: ${{ needs.smoke-borg-core.result }}"
           echo "Smoke / Extended: ${{ needs.smoke-borg-extended.result }}"
@@ -681,8 +688,13 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ needs.coverage-upload.result }}" != "success" ]; then
-            echo "Coverage / Codecov failed"
+          if [ "${{ needs.coverage-backend.result }}" != "success" ]; then
+            echo "Coverage / Backend failed"
+            exit 1
+          fi
+
+          if [ "${{ needs.coverage-frontend.result }}" != "success" ]; then
+            echo "Coverage / Frontend failed"
             exit 1
           fi
 
