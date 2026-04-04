@@ -19,8 +19,8 @@ class TestScheduleList:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert data == []
+        assert data["success"] is True
+        assert data["jobs"] == []
 
     def test_list_schedules_with_data(self, test_client: TestClient, admin_headers, test_db):
         """Test listing schedules returns 200 with schedule data"""
@@ -44,8 +44,9 @@ class TestScheduleList:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
+        assert data["success"] is True
+        assert isinstance(data["jobs"], list)
+        assert any(job["name"] == "Daily Backup" for job in data["jobs"])
 
     def test_list_schedules_unauthorized(self, test_client: TestClient):
         """Test listing schedules without authentication returns 403"""
@@ -394,8 +395,10 @@ class TestScheduleHelpers:
 
         assert response.status_code == 200
         data = response.json()
-        assert "jobs" in data
-        assert isinstance(data["jobs"], list)
+        assert data["success"] is True
+        assert "upcoming_jobs" in data
+        assert isinstance(data["upcoming_jobs"], list)
+        assert data["hours_ahead"] == 24
 
     def test_validate_cron_unauthorized(self, test_client: TestClient):
         """Test validating cron without authentication returns 403"""
