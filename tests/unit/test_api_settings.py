@@ -71,7 +71,8 @@ class TestUserSettings:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, dict)
+        assert "success" in data
+        assert "profile" in data
 
     def test_get_profile_unauthorized(self, test_client: TestClient):
         """Test getting profile without auth returns 403"""
@@ -123,9 +124,10 @@ class TestUserManagement:
         response = test_client.get("/api/settings/users", headers=admin_headers)
 
         assert response.status_code == 200
-        if response.status_code == 200:
-            data = response.json()
-            assert isinstance(data, (list, dict))
+        data = response.json()
+        assert "success" in data
+        assert "users" in data
+        assert isinstance(data["users"], list)
 
     def test_list_users_unauthorized(self, test_client: TestClient):
         """Test listing users without auth returns 403"""

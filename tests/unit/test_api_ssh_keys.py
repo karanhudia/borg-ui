@@ -21,7 +21,7 @@ class TestSSHKeysEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, (list, dict))
+        assert data == {"success": True, "ssh_keys": []}
 
     def test_list_ssh_keys_unauthorized(self, test_client: TestClient):
         """Test listing SSH keys without authentication"""

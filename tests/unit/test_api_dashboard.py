@@ -50,8 +50,11 @@ class TestDashboardStatus:
 
         assert response.status_code == 200
         data = response.json()
-        # Dashboard should return some status information
-        assert isinstance(data, dict)
+        assert "system_metrics" in data
+        assert "scheduled_jobs" in data
+        assert "recent_jobs" in data
+        assert "alerts" in data
+        assert "last_updated" in data
 
     def test_dashboard_status_structure(self, test_client: TestClient, admin_headers):
         """Test dashboard status returns proper structure"""
@@ -60,19 +63,22 @@ class TestDashboardStatus:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, dict)
-        # Should contain some status information
-        assert len(data) > 0
+        assert set(data.keys()) == {
+            "system_metrics",
+            "scheduled_jobs",
+            "recent_jobs",
+            "alerts",
+            "last_updated",
+        }
 
     def test_dashboard_status_contains_repositories(self, test_client: TestClient, admin_headers):
         """Test that dashboard status includes repository count"""
         with self._mock_dashboard_status():
             response = test_client.get("/api/dashboard/status", headers=admin_headers)
 
-        if response.status_code == 200:
-            data = response.json()
-            # Might have repository count or related info
-            assert isinstance(data, dict)
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["scheduled_jobs"], list)
 
     def test_dashboard_status_caching(self, test_client: TestClient, admin_headers):
         """Test that dashboard status can be called multiple times"""
@@ -150,7 +156,13 @@ class TestDashboardMetrics:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, dict)
+        assert set(data.keys()) == {
+            "cpu_usage",
+            "memory_usage",
+            "disk_usage",
+            "network_io",
+            "load_average",
+        }
 
     def test_metrics_basic(self, test_client: TestClient, admin_headers):
         """Test basic metrics endpoint"""
@@ -158,16 +170,17 @@ class TestDashboardMetrics:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, dict)
+        assert "cpu_usage" in data
+        assert "network_io" in data
 
     def test_metrics_backup_statistics(self, test_client: TestClient, admin_headers):
         """Test metrics includes backup statistics"""
         response = test_client.get("/api/dashboard/metrics", headers=admin_headers)
 
-        if response.status_code == 200:
-            data = response.json()
-            # Might include backup counts, sizes, etc.
-            assert isinstance(data, dict)
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data["network_io"], dict)
+        assert isinstance(data["load_average"], list)
 
     def test_metrics_time_range(self, test_client: TestClient, admin_headers):
         """Test metrics with time range parameters"""

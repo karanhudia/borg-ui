@@ -22,7 +22,8 @@ class TestRestoreRepositories:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, (list, dict))
+        assert "repositories" in data
+        assert any(item["path"] == "/test/repo" for item in data["repositories"])
 
     def test_list_restore_repositories_empty(self, test_client: TestClient, admin_headers):
         """Test listing repositories returns 200 when empty"""
@@ -30,7 +31,7 @@ class TestRestoreRepositories:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, (list, dict))
+        assert data == {"repositories": []}
 
     def test_list_restore_repositories_unauthorized(self, test_client: TestClient):
         """Test listing repositories without auth returns 403"""
@@ -386,7 +387,7 @@ class TestRestoreJobs:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, (list, dict))
+        assert data == {"jobs": []}
 
     def test_list_restore_jobs_success(self, test_client: TestClient, admin_headers):
         """Test listing restore jobs returns 200"""
@@ -394,7 +395,8 @@ class TestRestoreJobs:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, (list, dict))
+        assert "jobs" in data
+        assert isinstance(data["jobs"], list)
 
     def test_list_restore_jobs_unauthorized(self, test_client: TestClient):
         """Test listing restore jobs without authentication"""

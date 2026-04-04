@@ -176,8 +176,7 @@ class TestBackupJobs:
 
         assert response.status_code == 200
         data = response.json()
-        # Should return empty list or success response
-        assert isinstance(data, (list, dict))
+        assert data == {"jobs": []}
 
     def test_list_backup_jobs_success(self, test_client: TestClient, admin_headers):
         """Test listing backup jobs returns 200"""
@@ -185,7 +184,8 @@ class TestBackupJobs:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, (list, dict))
+        assert "jobs" in data
+        assert isinstance(data["jobs"], list)
 
     def test_list_backup_jobs_with_data(self, test_client: TestClient, admin_headers, test_db):
         """Test listing backup jobs returns jobs"""
@@ -202,7 +202,8 @@ class TestBackupJobs:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, (list, dict))
+        assert "jobs" in data
+        assert any(job["repository"] == "/test/repo" for job in data["jobs"])
 
     def test_list_backup_jobs_with_filters(self, test_client: TestClient, admin_headers):
         """Test listing backup jobs with filters returns 200"""
