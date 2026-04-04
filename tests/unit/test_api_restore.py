@@ -58,7 +58,7 @@ class TestRestoreArchives:
 
             response = test_client.get(f"/api/restore/archives/{repo.id}", headers=admin_headers)
 
-            assert response.status_code in [200, 500]
+            assert response.status_code == 200
 
     def test_list_archives_nonexistent_repo(self, test_client: TestClient, admin_headers):
         """Test listing archives for non-existent repository returns 404"""
@@ -95,7 +95,7 @@ class TestRestoreContents:
                 headers=admin_headers
             )
 
-            assert response.status_code in [200, 500]
+            assert response.status_code == 200
 
     def test_list_contents_with_path_filter(self, test_client: TestClient, admin_headers, test_db):
         """Test listing archive contents with path filter returns 200"""
@@ -115,7 +115,7 @@ class TestRestoreContents:
                 headers=admin_headers
             )
 
-            assert response.status_code in [200, 500]
+            assert response.status_code == 200
 
     def test_list_contents_uses_repo_ssh_environment(self, test_client: TestClient, admin_headers, test_db):
         repo = Repository(
@@ -145,7 +145,7 @@ class TestRestoreContents:
                 headers=admin_headers
             )
 
-        assert response.status_code in [200, 500]
+        assert response.status_code == 200
         _, kwargs = mock_list.await_args
         assert kwargs["env"]["BORG_RSH"].startswith("ssh -i /tmp/test-ssh.key")
         mock_unlink.assert_called_once_with(fake_key_path)
@@ -166,18 +166,20 @@ class TestRestoreContents:
         assert_auth_required(response)
 
     def test_list_contents_empty_archive_name(self, test_client: TestClient, admin_headers, test_db):
-        """Test listing contents with empty archive name"""
+        """Whitespace archive names are passed through and still return a payload."""
         repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
         test_db.add(repo)
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(
-            f"/api/restore/contents/{repo.id}/ ",  # Empty/whitespace archive name
-            headers=admin_headers
-        )
+        with patch('app.api.restore.archive_cache.get', new_callable=AsyncMock, return_value=[]):
+            response = test_client.get(
+                f"/api/restore/contents/{repo.id}/ ",
+                headers=admin_headers
+            )
 
-        assert response.status_code in [200, 404, 422, 500]
+        assert response.status_code == 200
+        assert response.json()["items"] == []
 
 
 @pytest.mark.unit
@@ -191,18 +193,23 @@ class TestRestorePreview:
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.post(
-            "/api/restore/preview",
-            json={
-                "repository_id": repo.id,
-                "archive_name": "test-archive",
-                "files": ["/file1.txt", "/file2.txt"],
-                "target_directory": "/restore/target"
-            },
-            headers=admin_headers
-        )
+        with patch("app.api.restore.borg.extract_archive", new_callable=AsyncMock) as mock_extract:
+            mock_extract.return_value = {"stdout": "preview output"}
+            response = test_client.post(
+                "/api/restore/preview",
+                json={
+                    "repository": repo.path,
+                    "repository_id": repo.id,
+                    "archive": "test-archive",
+                    "paths": ["/file1.txt", "/file2.txt"],
+                    "destination": "/restore/target"
+                },
+                headers=admin_headers
+            )
 
-        assert response.status_code in [200, 404, 422, 500]
+        assert response.status_code == 200
+        assert response.json()["preview"] == "preview output"
+        mock_extract.assert_awaited_once()
 
     def test_preview_restore_missing_fields(self, test_client: TestClient, admin_headers):
         """Test previewing restore with missing fields returns 422"""
@@ -219,15 +226,16 @@ class TestRestorePreview:
         response = test_client.post(
             "/api/restore/preview",
             json={
+                "repository": "/missing/repo",
                 "repository_id": 99999,
-                "archive_name": "test-archive",
-                "files": ["/file.txt"],
-                "target_directory": "/restore"
+                "archive": "test-archive",
+                "paths": ["/file.txt"],
+                "destination": "/restore"
             },
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 422]
+        assert response.status_code == 404
 
     def test_preview_restore_unauthorized(self, test_client: TestClient):
         """Test previewing restore without auth returns 403"""
@@ -254,14 +262,15 @@ class TestRestorePreview:
             "/api/restore/preview",
             json={
                 "repository_id": repo.id,
-                "archive_name": "test-archive",
-                "files": [],  # Empty list
-                "target_directory": "/restore"
+                "repository": repo.path,
+                "archive": "test-archive",
+                "paths": [],
+                "destination": "/restore"
             },
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 400, 422, 500]
+        assert response.status_code == 200
 
 
 @pytest.mark.unit
@@ -274,13 +283,15 @@ class TestRestoreStart:
             "/api/restore/start",
             json={
                 "repository_id": 99999,
-                "archive_name": "test-archive",
+                "repository": "/missing/repo",
+                "archive": "test-archive",
+                "paths": [],
                 "destination": "/tmp/restore"
             },
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 422]  # May return 200 with error or 422 validation error
+        assert response.status_code == 404
 
     def test_start_restore_missing_fields(self, test_client: TestClient, admin_headers):
         """Test starting restore with missing required fields"""
@@ -298,14 +309,15 @@ class TestRestoreStart:
             "/api/restore/start",
             json={
                 "repository_id": 99999,
-                "archive_name": "test-archive",
-                "files": ["/file.txt"],
-                "target_directory": "/restore"
+                "repository": "/missing/repo",
+                "archive": "test-archive",
+                "paths": ["/file.txt"],
+                "destination": "/restore"
             },
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 422]
+        assert response.status_code == 404
 
     def test_start_restore_invalid_target(self, test_client: TestClient, admin_headers, test_db):
         """Test starting restore with invalid target directory"""
@@ -318,14 +330,15 @@ class TestRestoreStart:
             "/api/restore/start",
             json={
                 "repository_id": repo.id,
-                "archive_name": "test-archive",
-                "files": ["/file.txt"],
-                "target_directory": ""  # Empty target
+                "repository": repo.path,
+                "archive": "test-archive",
+                "paths": ["/file.txt"],
+                "destination": ""
             },
             headers=admin_headers
         )
 
-        assert response.status_code in [400, 422, 500]
+        assert response.status_code == 200
 
     def test_start_restore_unauthorized(self, test_client: TestClient):
         """Test starting restore without auth returns 403"""
@@ -352,14 +365,15 @@ class TestRestoreStart:
             "/api/restore/start",
             json={
                 "repository_id": repo.id,
-                "archive_name": "test-archive",
-                "files": [],
-                "target_directory": "/restore"
+                "repository": repo.path,
+                "archive": "test-archive",
+                "paths": [],
+                "destination": "/restore"
             },
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 400, 422, 500]
+        assert response.status_code == 200
 
 
 @pytest.mark.unit
@@ -386,13 +400,13 @@ class TestRestoreJobs:
         """Test listing restore jobs without authentication"""
         response = test_client.get("/api/restore/jobs")
 
-        assert response.status_code in [401, 403, 404]
+        assert_auth_required(response)
 
     def test_get_restore_job_status_nonexistent(self, test_client: TestClient, admin_headers):
         """Test getting status of non-existent restore job"""
         response = test_client.get("/api/restore/jobs/99999/status", headers=admin_headers)
 
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
     def test_get_restore_job_status_nonexistent_new_endpoint(self, test_client: TestClient, admin_headers):
         """Test getting status for non-existent job returns 404"""
@@ -413,7 +427,7 @@ class TestRestoreJobs:
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
     def test_cancel_restore_running_job_marks_cancelled(
         self,
@@ -487,7 +501,7 @@ class TestRestoreJobs:
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
 @pytest.mark.unit
 class TestRestoreSpeedAndETA:

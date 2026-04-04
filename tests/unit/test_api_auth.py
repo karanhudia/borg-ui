@@ -343,7 +343,7 @@ class TestAuthenticationLogin:
             }
         )
 
-        assert response.status_code in [401, 422]
+        assert response.status_code == 401
 
     def test_login_sql_injection_attempt(self, test_client: TestClient):
         """Test that SQL injection is prevented"""
@@ -432,24 +432,16 @@ class TestProtectedEndpoints:
 
     def test_get_current_user(self, test_client: TestClient, auth_headers, test_user):
         """Test getting current user info"""
-        # Note: This test may fail with validation error if User model has required fields like email
-        # that are not set in the fixture. This is expected and can be ignored for now.
-        try:
-            response = test_client.get("/api/auth/me", headers=auth_headers)
-            # Accept both 200 (success) and 403 (user not in test DB due to fixture isolation)
-            assert response.status_code in [200, 403, 500]  # 500 for validation errors
-            if response.status_code == 200:
-                data = response.json()
-                assert data["username"] == test_user.username
-        except Exception:
-            # Validation errors are acceptable for this test
-            pass
+        response = test_client.get("/api/auth/me", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == test_user.username
 
     def test_get_current_user_unauthorized(self, test_client: TestClient):
         """Test getting current user without authentication"""
         response = test_client.get("/api/auth/me")
 
-        assert response.status_code in [401, 403]  # Accept both unauthorized and forbidden
+        assert response.status_code == 401
 
     def test_get_current_user_invalid_token(self, test_client: TestClient):
         """Test getting current user with invalid token"""
@@ -464,7 +456,7 @@ class TestProtectedEndpoints:
         """Test accessing protected endpoint without token"""
         response = test_client.get("/api/auth/me")
 
-        assert response.status_code in [401, 403]
+        assert response.status_code == 401
 
     def test_access_protected_endpoint_without_token_returns_403(
         self,
@@ -485,7 +477,7 @@ class TestProtectedEndpoints:
             headers={"Authorization": "Bearer malformed_token"}
         )
 
-        assert response.status_code in [401, 403]
+        assert response.status_code == 401
 
     def test_access_protected_endpoint_with_invalid_token_returns_401(
         self,
@@ -512,7 +504,7 @@ class TestProtectedEndpoints:
             headers={"Authorization": f"Bearer {expired_token}"}
         )
 
-        assert response.status_code in [401, 403]
+        assert response.status_code == 401
 
     def test_protected_endpoint_missing_bearer_prefix(self, test_client: TestClient, auth_token):
         """Test accessing protected endpoint without Bearer prefix"""
@@ -521,7 +513,7 @@ class TestProtectedEndpoints:
             headers={"Authorization": auth_token}  # Missing "Bearer" prefix
         )
 
-        assert response.status_code in [401, 403]
+        assert response.status_code == 401
 
     def test_access_protected_endpoint_with_valid_token_succeeds(
         self,
@@ -534,8 +526,7 @@ class TestProtectedEndpoints:
             headers=admin_headers
         )
 
-        # Should succeed (not test exact code since it depends on data)
-        assert response.status_code in [200, 204]
+        assert response.status_code == 200
 
 
 @pytest.mark.unit

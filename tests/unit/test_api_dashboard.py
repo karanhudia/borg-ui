@@ -177,7 +177,7 @@ class TestDashboardMetrics:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 422]
+        assert response.status_code == 200
 
     def test_metrics_repository_specific(self, test_client: TestClient, admin_headers):
         """Test metrics for specific repository"""
@@ -187,7 +187,7 @@ class TestDashboardMetrics:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 404, 422]
+        assert response.status_code == 200
 
     def test_metrics_returns_network_and_load_fields(self, test_client: TestClient, admin_headers):
         """Test metrics contract includes the expected hardware summary fields."""
@@ -221,7 +221,7 @@ class TestDashboardAuthentication:
 
         for endpoint in endpoints:
             response = test_client.get(endpoint)
-            assert response.status_code in [401, 403], f"Expected 401 or 403 for {endpoint}"
+            assert response.status_code == 401, f"Expected 401 for {endpoint}"
 
 
 @pytest.mark.unit
@@ -232,32 +232,25 @@ class TestDashboardSummary:
         """Test getting dashboard summary"""
         response = test_client.get("/api/dashboard/summary", headers=admin_headers)
 
-        # Endpoint might or might not exist
-        assert response.status_code in [200, 404]
+        assert response.status_code == 404
 
     def test_dashboard_activity_feed(self, test_client: TestClient, admin_headers):
         """Test getting recent activity"""
         response = test_client.get("/api/dashboard/activity", headers=admin_headers)
 
-        assert response.status_code in [200, 404]
+        assert response.status_code == 404
 
     def test_dashboard_recent_backups(self, test_client: TestClient, admin_headers):
         """Test getting recent backups"""
         response = test_client.get("/api/dashboard/recent-backups", headers=admin_headers)
 
-        assert response.status_code in [200, 404]
-        if response.status_code == 200:
-            data = response.json()
-            assert isinstance(data, (list, dict))
+        assert response.status_code == 404
 
     def test_dashboard_alerts(self, test_client: TestClient, admin_headers):
         """Test getting dashboard alerts"""
         response = test_client.get("/api/dashboard/alerts", headers=admin_headers)
 
-        assert response.status_code in [200, 404]
-        if response.status_code == 200:
-            data = response.json()
-            assert isinstance(data, (list, dict))
+        assert response.status_code == 404
 
 
 @pytest.mark.unit
@@ -371,19 +364,19 @@ class TestDashboardStatistics:
         """Test storage usage statistics"""
         response = test_client.get("/api/dashboard/storage-stats", headers=admin_headers)
 
-        assert response.status_code in [200, 404]
+        assert response.status_code == 404
 
     def test_backup_success_rate(self, test_client: TestClient, admin_headers):
         """Test backup success rate statistics"""
         response = test_client.get("/api/dashboard/success-rate", headers=admin_headers)
 
-        assert response.status_code in [200, 404]
+        assert response.status_code == 404
 
     def test_repository_health_summary(self, test_client: TestClient, admin_headers):
         """Test repository health summary"""
         response = test_client.get("/api/dashboard/repository-health", headers=admin_headers)
 
-        assert response.status_code in [200, 404]
+        assert response.status_code == 404
 
 
 @pytest.mark.unit
@@ -394,19 +387,19 @@ class TestDashboardCharts:
         """Test getting backup trends over time"""
         response = test_client.get("/api/dashboard/trends", headers=admin_headers)
 
-        assert response.status_code in [200, 404]
+        assert response.status_code == 404
 
     def test_storage_growth(self, test_client: TestClient, admin_headers):
         """Test getting storage growth data"""
         response = test_client.get("/api/dashboard/storage-growth", headers=admin_headers)
 
-        assert response.status_code in [200, 404]
+        assert response.status_code == 404
 
     def test_performance_metrics(self, test_client: TestClient, admin_headers):
         """Test getting performance metrics"""
         response = test_client.get("/api/dashboard/performance", headers=admin_headers)
 
-        assert response.status_code in [200, 404]
+        assert response.status_code == 404
 
 
 @pytest.mark.unit

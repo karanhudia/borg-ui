@@ -192,8 +192,7 @@ class TestDownloadFileEndpoint:
             "/api/archives/download?repository=/test/repo&archive=test-archive&file_path=/test.txt"
         )
 
-        # Should fail without valid token
-        assert response.status_code in [401, 422]
+        assert response.status_code == 401
 
     def test_download_file_invalid_token(self, test_client: TestClient):
         """Test download with invalid/expired token"""

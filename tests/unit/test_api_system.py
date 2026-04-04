@@ -1,11 +1,19 @@
 """
 Unit tests for system API endpoints
 """
+import base64
+
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
 from app.core.features import Plan
+
+from app.config import settings
+from app.services import licensing_service
+from app.services.licensing_service import get_or_create_licensing_state, import_offline_entitlement, utc_now
 
 
 @pytest.mark.unit
@@ -21,11 +29,13 @@ class TestSystemEndpoints:
         assert "app_version" in data
         assert "plan" in data
         assert "features" in data
+        assert "entitlement" in data
+        assert "ui_state" in data["entitlement"]
 
     def test_system_info_unauthorized(self, test_client: TestClient):
         response = test_client.get("/api/system/info")
 
-        assert response.status_code in [200, 401, 403]
+        assert response.status_code == 401
 
     def test_system_info_uses_reported_versions_and_plan(self, test_client: TestClient, admin_headers):
         plan = MagicMock()
@@ -84,4 +94,64 @@ class TestSystemEndpoints:
             "borg2_version": None,
             "plan": "community",
             "features": {},
+            "feature_access": {},
+            "entitlement": {
+                "status": "none",
+                "is_trial": False,
+                "trial_consumed": False,
+                "expires_at": None,
+                "starts_at": None,
+                "refresh_after": None,
+                "instance_id": None,
+                "entitlement_id": None,
+                "license_id": None,
+                "customer_id": None,
+                "ui_state": "community",
+                "last_refresh_at": None,
+                "last_refresh_error": None,
+            },
         }
+
+    def test_system_info_includes_entitlement_summary(self, test_client: TestClient, admin_headers, test_db, monkeypatch):
+        """System info should expose the locally validated entitlement summary."""
+        private_key = Ed25519PrivateKey.generate()
+        public_key = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        monkeypatch.setattr(settings, "activation_public_key", base64.b64encode(public_key).decode("utf-8"))
+        monkeypatch.setattr(settings, "activation_public_key_file", None)
+
+        state = get_or_create_licensing_state(test_db)
+        now = utc_now()
+        payload = {
+            "entitlement_id": "ent_api_01",
+            "instance_id": state.instance_id,
+            "customer_id": "cust_api_01",
+            "license_id": "lic_api_01",
+            "plan": "pro",
+            "status": "active",
+            "is_trial": True,
+            "feature_overrides": [],
+            "max_users": 5,
+            "issued_at": now.isoformat(),
+            "starts_at": now.isoformat(),
+            "expires_at": now.replace(year=now.year + 1).isoformat(),
+            "refresh_after": now.isoformat(),
+            "metadata": {"edition": "official", "channel": "trial"},
+            "signature_version": "v1",
+        }
+        signature = base64.b64encode(
+            private_key.sign(licensing_service._canonical_payload(payload))
+        ).decode("utf-8")
+        import_offline_entitlement(test_db, {"payload": payload, "signature": signature})
+
+        response = test_client.get("/api/system/info", headers=admin_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["plan"] == "pro"
+        assert data["entitlement"]["status"] == "active"
+        assert data["entitlement"]["is_trial"] is True
+        assert data["entitlement"]["instance_id"] == state.instance_id
+        assert isinstance(data["feature_access"], dict)

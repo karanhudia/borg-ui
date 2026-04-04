@@ -8,11 +8,12 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 
 import pytest
 
-from app.database.models import Repository
+if TYPE_CHECKING:
+    from app.database.models import Repository
 
 
 def require_borg_binary() -> str:
@@ -155,8 +156,10 @@ def create_registered_local_repository(
     borg_env: Optional[dict] = None,
     encryption: str = "none",
     passphrase: Optional[str] = None,
-) -> tuple[Repository, Path, Path]:
+) -> tuple["Repository", Path, Path]:
     """Create a Borg repo plus a matching local Repository database record."""
+    from app.database.models import Repository
+
     repo_path = tmp_path / f"{slug}-repo"
     source_path = tmp_path / f"{slug}-data"
     source_path.mkdir(parents=True, exist_ok=True)

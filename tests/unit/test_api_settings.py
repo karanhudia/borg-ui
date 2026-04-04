@@ -36,7 +36,7 @@ class TestSystemSettings:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403]  # May require specific admin role
+        assert response.status_code == 200
 
     def test_update_system_settings_invalid_data(self, test_client: TestClient, admin_headers):
         """Test updating system settings with invalid data returns 422"""
@@ -48,7 +48,7 @@ class TestSystemSettings:
             headers=admin_headers
         )
 
-        assert response.status_code in [403, 422]
+        assert response.status_code == 422
 
     def test_update_system_settings_unauthorized(self, test_client: TestClient):
         """Test updating system settings without auth returns 403"""
@@ -89,7 +89,7 @@ class TestUserSettings:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403]
+        assert response.status_code == 200
 
     def test_update_profile_invalid_email(self, test_client: TestClient, admin_headers):
         """Test updating profile with invalid email returns 422"""
@@ -101,7 +101,7 @@ class TestUserSettings:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 422]
+        assert response.status_code == 200
 
     def test_update_profile_unauthorized(self, test_client: TestClient):
         """Test updating profile without auth returns 403"""
@@ -121,7 +121,7 @@ class TestUserManagement:
         """Test listing users returns 200"""
         response = test_client.get("/api/settings/users", headers=admin_headers)
 
-        assert response.status_code in [200, 403]  # May require admin
+        assert response.status_code == 200
         if response.status_code == 200:
             data = response.json()
             assert isinstance(data, (list, dict))
@@ -145,7 +145,7 @@ class TestUserManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201, 403, 409]  # 409 if user exists
+        assert response.status_code == 200
 
     def test_create_user_missing_fields(self, test_client: TestClient, admin_headers):
         """Test creating user with missing fields returns 422"""
@@ -155,7 +155,7 @@ class TestUserManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [403, 422]
+        assert response.status_code == 422
 
     def test_create_user_weak_password(self, test_client: TestClient, admin_headers):
         """Test creating user with weak password returns 422"""
@@ -169,7 +169,7 @@ class TestUserManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 422]
+        assert response.status_code == 200
 
     def test_create_user_unauthorized(self, test_client: TestClient):
         """Test creating user without auth returns 403"""
@@ -198,7 +198,7 @@ class TestUserManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403]
+        assert response.status_code == 200
 
     def test_update_user_nonexistent(self, test_client: TestClient, admin_headers):
         """Test updating non-existent user returns 404"""
@@ -208,7 +208,7 @@ class TestUserManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [403, 404]
+        assert response.status_code == 404
 
     def test_delete_user_success(self, test_client: TestClient, admin_headers, test_db):
         """Test deleting user returns 200"""
@@ -219,13 +219,13 @@ class TestUserManagement:
 
         response = test_client.delete(f"/api/settings/users/{user.id}", headers=admin_headers)
 
-        assert response.status_code in [200, 403]
+        assert response.status_code == 200
 
     def test_delete_user_nonexistent(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent user returns 404"""
         response = test_client.delete("/api/settings/users/99999", headers=admin_headers)
 
-        assert response.status_code in [403, 404]
+        assert response.status_code == 404
 
     def test_delete_user_unauthorized(self, test_client: TestClient):
         """Test deleting user without auth returns 403"""
@@ -249,7 +249,7 @@ class TestPasswordManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 400, 403]  # 400 if current password wrong
+        assert response.status_code == 400
 
     def test_change_password_missing_fields(self, test_client: TestClient, admin_headers):
         """Test changing password with missing fields returns 422"""
@@ -259,7 +259,7 @@ class TestPasswordManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [403, 422]
+        assert response.status_code == 422
 
     def test_change_password_weak_password(self, test_client: TestClient, admin_headers):
         """Test changing to weak password returns 422"""
@@ -272,7 +272,7 @@ class TestPasswordManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [400, 403, 422]
+        assert response.status_code == 400
 
     def test_change_password_unauthorized(self, test_client: TestClient):
         """Test changing password without auth returns 403"""
@@ -299,7 +299,7 @@ class TestPasswordManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403]
+        assert response.status_code == 200
 
     def test_reset_user_password_nonexistent(self, test_client: TestClient, admin_headers):
         """Test resetting password for non-existent user returns 404"""
@@ -309,7 +309,7 @@ class TestPasswordManagement:
             headers=admin_headers
         )
 
-        assert response.status_code in [403, 404]
+        assert response.status_code == 404
 
     def test_reset_user_password_unauthorized(self, test_client: TestClient):
         """Test resetting user password without auth returns 403"""
@@ -329,7 +329,7 @@ class TestSystemMaintenance:
         """Test system cleanup returns 200"""
         response = test_client.post("/api/settings/system/cleanup", headers=admin_headers)
 
-        assert response.status_code in [200, 403]
+        assert response.status_code == 200
 
     def test_cleanup_system_unauthorized(self, test_client: TestClient):
         """Test system cleanup without auth returns 403"""
@@ -350,7 +350,7 @@ class TestSettingsValidation:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 422]
+        assert response.status_code == 200
 
     def test_update_profile_empty_payload(self, test_client: TestClient, admin_headers):
         """Test updating profile with empty payload"""
@@ -360,7 +360,7 @@ class TestSettingsValidation:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 422]
+        assert response.status_code == 200
 
     def test_create_user_duplicate_username(self, test_client: TestClient, admin_headers, test_db):
         """Test creating user with duplicate username returns 409"""
@@ -380,7 +380,7 @@ class TestSettingsValidation:
             headers=admin_headers
         )
 
-        assert response.status_code in [400, 403, 409, 422]
+        assert response.status_code == 400
 
     def test_update_user_invalid_role(self, test_client: TestClient, admin_headers, test_db):
         """Test updating user with invalid role returns 422"""
@@ -395,7 +395,7 @@ class TestSettingsValidation:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 422]
+        assert response.status_code == 200
 
 
 @pytest.mark.unit

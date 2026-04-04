@@ -110,7 +110,7 @@ class ArchiveContentsTester:
                 timeout=10
             )
 
-            return response.status_code in [200, 204]
+            return response.status_code == 200
         except Exception as e:
             self.log(f"⚠️  Error deleting repository: {e}", "WARNING")
             return False

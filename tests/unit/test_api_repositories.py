@@ -16,8 +16,9 @@ Integration tests (test_api_repositories_integration.py) handle:
 import pytest
 import json
 import os
+from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
-from app.database.models import Repository, ScheduledJob
+from app.database.models import Repository, ScheduledJob, SSHConnection
 
 
 @pytest.mark.unit
@@ -77,7 +78,7 @@ class TestRepositoriesListAndGet:
         """Test listing repositories without authentication"""
         response = test_client.get("/api/repositories/")
 
-        assert response.status_code in [401, 403]  # Accept both unauthorized and forbidden
+        assert response.status_code == 401
 
     def test_list_repositories_no_auth(self, test_client: TestClient):
         """Test listing repositories without authentication returns 403"""
@@ -142,8 +143,7 @@ class TestRepositoriesListAndGet:
 
         response = test_client.get(f"/api/repositories/{repo.id}", headers=admin_headers)
 
-        # Might be 200, 404, or 422 depending on implementation
-        assert response.status_code in [200, 404, 422]
+        assert response.status_code == 200
 
     # NOTE: Repository retrieval with stats is tested in integration tests
     # (test_api_repositories_integration.py) with real borg repositories
@@ -152,7 +152,7 @@ class TestRepositoriesListAndGet:
         """Test getting a repository that doesn't exist"""
         response = test_client.get("/api/repositories/99999", headers=admin_headers)
 
-        assert response.status_code in [404, 422]
+        assert response.status_code == 404
 
     def test_get_repository_not_found(self, test_client: TestClient, admin_headers):
         """Test getting non-existent repository returns 404"""
@@ -165,7 +165,7 @@ class TestRepositoriesListAndGet:
         """Test getting repository with negative ID"""
         response = test_client.get("/api/repositories/-1", headers=admin_headers)
 
-        assert response.status_code in [404, 422]  # Not found or validation error
+        assert response.status_code == 404
 
     def test_get_repository_details(self, test_client: TestClient, admin_headers, test_db):
         """Test getting repository details"""
@@ -187,12 +187,9 @@ class TestRepositoriesListAndGet:
             headers=admin_headers
         )
 
-        # Should succeed or fail gracefully
-        assert response.status_code in [200, 403, 404]  # OK, forbidden, or not found
-        if response.status_code == 200:
-            data = response.json()
-            if "name" in data:
-                assert data["name"] == "Detail Test Repo"
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Detail Test Repo"
 
 
 @pytest.mark.unit
@@ -201,36 +198,48 @@ class TestRepositoriesCreate:
 
     def test_create_local_repository(self, test_client: TestClient, admin_headers, test_db):
         """Test creating local repository"""
-        response = test_client.post(
-            "/api/repositories/",
-            json={
-                "name": "Local Backup Repo",
-                "path": "/tmp/local-repo",
-                "encryption": "none",
-                "compression": "lz4",
-                "repository_type": "local"
-            },
-            headers=admin_headers
-        )
+        with patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
+             patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Local Backup Repo",
+                    "path": "/tmp/local-repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "source_directories": ["/tmp/source"]
+                },
+                headers=admin_headers
+            )
 
-        # Might succeed or fail depending on borg availability
-        assert response.status_code in [200, 201, 400, 403, 422, 500]  # May succeed or fail (borg dependency)
+        assert response.status_code == 200
 
-    def test_create_ssh_repository(self, test_client: TestClient, admin_headers):
+    def test_create_ssh_repository(self, test_client: TestClient, admin_headers, test_db):
         """Test creating SSH repository"""
-        response = test_client.post(
-            "/api/repositories/",
-            json={
-                "name": "Remote SSH Repo",
-                "path": "user@server:/path/to/repo",
-                "encryption": "repokey",
-                "compression": "zstd",
-                "repository_type": "ssh"
-            },
-            headers=admin_headers
-        )
+        connection = SSHConnection(host="server", username="user", port=22)
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
 
-        assert response.status_code in [200, 201, 400, 403, 422, 500]  # May succeed or fail (borg dependency)
+        with patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
+             patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Remote SSH Repo",
+                    "path": "/path/to/repo",
+                    "encryption": "repokey",
+                    "passphrase": "test-passphrase",
+                    "compression": "zstd",
+                    "repository_type": "ssh",
+                    "connection_id": connection.id,
+                    "source_directories": ["/tmp/source"]
+                },
+                headers=admin_headers
+            )
+
+        assert response.status_code == 200
 
     def test_create_repository_missing_name(self, test_client: TestClient, admin_headers):
         """Test creating repository without name"""
@@ -274,24 +283,26 @@ class TestRepositoriesCreate:
             headers=admin_headers
         )
 
-        assert response.status_code in [400, 403, 422]  # Bad request, forbidden, or validation
+        assert response.status_code == 400
 
     def test_create_repository_with_source_directories(self, test_client: TestClient, admin_headers):
         """Test creating repository with source directories"""
-        response = test_client.post(
-            "/api/repositories/",
-            json={
-                "name": "Multi Source Repo",
-                "path": "/tmp/multi-source",
-                "encryption": "none",
-                "compression": "lz4",
-                "repository_type": "local",
-                "source_directories": ["/home/user/docs", "/home/user/photos"]
-            },
-            headers=admin_headers
-        )
+        with patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
+             patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Multi Source Repo",
+                    "path": "/tmp/multi-source",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "source_directories": ["/home/user/docs", "/home/user/photos"]
+                },
+                headers=admin_headers
+            )
 
-        assert response.status_code in [200, 201, 400, 403, 422, 500]  # May succeed or fail (borg dependency)
+        assert response.status_code == 200
 
     def test_create_repository_with_exclude_patterns(self, test_client: TestClient, admin_headers):
         """Test creating repository with exclude patterns"""
@@ -308,7 +319,7 @@ class TestRepositoriesCreate:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201, 400, 403, 422, 500]  # May succeed or fail (borg dependency)
+        assert response.status_code == 400
 
     def test_create_repository_validation_error(self, test_client: TestClient, admin_headers):
         """Test repository creation with missing required fields returns 422"""
@@ -343,13 +354,13 @@ class TestRepositoriesCreate:
                 "name": "Duplicate",
                 "path": "/duplicate/path",
                 "encryption": "none",
-                "repository_type": "local"
+                "repository_type": "local",
+                "source_directories": ["/tmp/source"]
             },
             headers=admin_headers
         )
 
-        # May fail due to permissions (403), validation (422), during creation (500), or duplicate constraint (400)
-        assert response.status_code in [400, 403, 422, 500]
+        assert response.status_code == 400
 
 
 @pytest.mark.unit
@@ -375,7 +386,7 @@ class TestRepositoriesUpdate:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 405]  # Success, auth/notfound/notimpl
+        assert response.status_code == 200
 
     def test_update_repository_compression(self, test_client: TestClient, admin_headers, test_db):
         """Test updating repository compression"""
@@ -396,7 +407,7 @@ class TestRepositoriesUpdate:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404]  # Success, forbidden or not found
+        assert response.status_code == 200
 
     def test_update_nonexistent_repository(self, test_client: TestClient, admin_headers):
         """Test updating non-existent repository"""
@@ -406,7 +417,7 @@ class TestRepositoriesUpdate:
             headers=admin_headers
         )
 
-        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
+        assert response.status_code == 404
 
     def test_update_repository_not_found(self, test_client: TestClient, admin_headers):
         """Test updating non-existent repository returns 404 or 403"""
@@ -416,8 +427,7 @@ class TestRepositoriesUpdate:
             headers=admin_headers
         )
 
-        # May be 403 if not admin, or 404 if admin but repo not found
-        assert response.status_code in [403, 404]
+        assert response.status_code == 404
 
     def test_update_repository_empty_name(self, test_client: TestClient, admin_headers, test_db):
         """Test updating repository with empty name"""
@@ -432,8 +442,7 @@ class TestRepositoriesUpdate:
             headers=admin_headers
         )
 
-        # Should reject empty name or accept it (depending on validation)
-        assert response.status_code in [200, 400, 403, 422]
+        assert response.status_code == 200
 
     def test_update_repository_clear_source_connection_id(self, test_client: TestClient, admin_headers, test_db):
         """Test clearing source_connection_id when switching from remote to local source"""
@@ -464,14 +473,10 @@ class TestRepositoriesUpdate:
             headers=admin_headers
         )
 
-        # Should succeed
-        assert response.status_code in [200, 403, 404]
-
-        if response.status_code == 200:
-            # Refresh from database and verify source_connection_id was cleared
-            test_db.refresh(repo)
-            assert repo.source_ssh_connection_id is None
-            assert json.loads(repo.source_directories) == ["/local/data"]
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.source_ssh_connection_id is None
+        assert json.loads(repo.source_directories) == ["/local/data"]
 
     def test_update_repository_type_local_to_ssh(self, test_client: TestClient, admin_headers, test_db):
         """Test updating repository type from local to SSH"""
@@ -492,35 +497,28 @@ class TestRepositoriesUpdate:
         assert repo.host is None
         assert repo.username is None
 
-        # Update to SSH repository
-        response = test_client.put(
-            f"/api/repositories/{repo.id}",
-            json={
-                "repository_type": "ssh",
-                "host": "backup.example.com",
-                "port": 22,
-                "username": "backupuser",
-                "ssh_key_id": 1,
-                "connection_id": 1,
-                "path": "/home/borg-backup"
-            },
-            headers=admin_headers
-        )
+        ssh_conn = SSHConnection(host="backup.example.com", username="backupuser", port=22)
+        test_db.add(ssh_conn)
+        test_db.commit()
+        test_db.refresh(ssh_conn)
 
-        # Should succeed, or 500 if SSH key doesn't exist (test environment)
-        assert response.status_code in [200, 403, 404, 500]
+        with patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
+             patch("app.api.repositories.BorgInterface.get_repository_info", new=AsyncMock(return_value={"success": False})), \
+             patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={
+                    "connection_id": ssh_conn.id,
+                    "path": "/home/borg-backup"
+                },
+                headers=admin_headers
+            )
 
-        if response.status_code == 200:
-            # Refresh from database and verify repository type was updated
-            test_db.refresh(repo)
-            assert repo.repository_type == "ssh"
-            assert repo.host == "backup.example.com"
-            assert repo.port == 22
-            assert repo.username == "backupuser"
-            assert repo.ssh_key_id == 1
-            assert repo.connection_id == 1
-            # Verify path was reconstructed as SSH URL
-            assert repo.path == "ssh://backupuser@backup.example.com:22/home/borg-backup"
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.repository_type == "ssh"
+        assert repo.connection_id == ssh_conn.id
+        assert repo.path == "ssh://backupuser@backup.example.com:22/home/borg-backup"
 
     def test_update_ssh_repository_path_reconstruction(self, test_client: TestClient, admin_headers, test_db):
         """Test that updating an SSH repository path properly reconstructs the SSH URL"""
@@ -570,14 +568,10 @@ class TestRepositoriesUpdate:
             headers=admin_headers
         )
 
-        # Should succeed
-        assert response.status_code in [200, 403, 404]
-
-        if response.status_code == 200:
-            # Refresh and verify path was reconstructed as SSH URL
-            test_db.refresh(repo)
-            assert repo.path == "ssh://user@host.local:22/home/borg-backup"
-            assert json.loads(repo.source_directories) == ["/data", "/config"]
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.path == "ssh://user@host.local:22/home/borg-backup"
+        assert json.loads(repo.source_directories) == ["/data", "/config"]
 
     def test_update_repository_path_change_initializes_new_repo(self, test_client: TestClient, admin_headers, test_db):
         """Test that changing repository path to a non-existent location initializes a new borg repository"""
@@ -613,25 +607,18 @@ class TestRepositoriesUpdate:
 
             # Update to a NEW path that doesn't exist yet
             new_path = f"{temp_dir}/new-repo"
-            response = test_client.put(
-                f"/api/repositories/{repo.id}",
-                json={
-                    "path": new_path
-                },
-                headers=admin_headers
-            )
+            with patch("app.api.repositories.BorgInterface.get_repository_info", new=AsyncMock(side_effect=RuntimeError("missing repo"))), \
+                 patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
+                 patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+                response = test_client.put(
+                    f"/api/repositories/{repo.id}",
+                    json={"path": new_path},
+                    headers=admin_headers
+                )
 
-            # Response could be 200 (success), 403 (not admin), 404 (not found), or 500 (borg not available)
-            # We accept any of these since we can't guarantee borg is installed in test environment
-            assert response.status_code in [200, 403, 404, 500]
-
-            if response.status_code == 200:
-                # Verify path was updated in database
-                test_db.refresh(repo)
-                assert repo.path == new_path
-
-                # Note: We can't verify borg init was called without mocking
-                # In integration tests, we would verify the new path has borg repo structure
+            assert response.status_code == 200
+            test_db.refresh(repo)
+            assert repo.path == new_path
         finally:
             # Clean up temp directory
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -666,20 +653,17 @@ class TestRepositoriesUpdate:
             test_db.refresh(repo)
 
             # Update to point to the existing borg repository
-            response = test_client.put(
-                f"/api/repositories/{repo.id}",
-                json={
-                    "path": existing_repo_path
-                },
-                headers=admin_headers
-            )
+            with patch("app.api.repositories.BorgInterface.get_repository_info", new=AsyncMock(return_value={"success": True})), \
+                 patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+                response = test_client.put(
+                    f"/api/repositories/{repo.id}",
+                    json={"path": existing_repo_path},
+                    headers=admin_headers
+                )
 
-            # Should accept the path change since it's a valid borg repo
-            assert response.status_code in [200, 403, 404, 500]
-
-            if response.status_code == 200:
-                test_db.refresh(repo)
-                assert repo.path == existing_repo_path
+            assert response.status_code == 200
+            test_db.refresh(repo)
+            assert repo.path == existing_repo_path
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -706,7 +690,7 @@ class TestRepositoriesDelete:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 204, 403]  # Success or forbidden
+        assert response.status_code == 200
 
     def test_delete_nonexistent_repository(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent repository"""
@@ -715,13 +699,13 @@ class TestRepositoriesDelete:
             headers=admin_headers
         )
 
-        assert response.status_code in [403, 404, 405]  # Auth/notfound/notimpl
+        assert response.status_code == 404
 
     def test_delete_repository_not_found(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent repository returns 404 or 403"""
         response = test_client.delete("/api/repositories/99999", headers=admin_headers)
 
-        assert response.status_code in [403, 404]
+        assert response.status_code == 404
 
     def test_delete_repository_no_auth(self, test_client: TestClient):
         """Test deleting repository without authentication returns 403"""
@@ -743,7 +727,7 @@ class TestRepositoriesDelete:
         # If first delete succeeded, second should return 404
         if first_response.status_code == 200:
             second_response = test_client.delete(f"/api/repositories/{repo_id}", headers=admin_headers)
-            assert second_response.status_code in [403, 404]
+            assert second_response.status_code == 404
 
 
 @pytest.mark.unit
@@ -763,12 +747,13 @@ class TestRepositoriesStatistics:
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(
-            f"/api/repositories/{repo.id}/stats",
-            headers=admin_headers
-        )
+        with patch("app.api.repositories.get_repository_stats", new=AsyncMock(return_value={"total_size": "1.00 GB"})):
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/stats",
+                headers=admin_headers
+            )
 
-        assert response.status_code in [200, 403, 404, 500]
+        assert response.status_code == 200
 
     def test_get_repository_info(self, test_client: TestClient, admin_headers, test_db):
         """Test getting repository info"""
@@ -783,12 +768,13 @@ class TestRepositoriesStatistics:
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.get(
-            f"/api/repositories/{repo.id}/info",
-            headers=admin_headers
-        )
+        with patch("app.api.repositories.borg.get_repository_info", new=AsyncMock(return_value={"success": True, "info": {"repository": {"id": "abc"}}})):
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/info",
+                headers=admin_headers
+            )
 
-        assert response.status_code in [200, 403, 404, 500]
+        assert response.status_code == 200
 
     def test_get_repository_stats_not_found(self, test_client: TestClient, admin_headers):
         """Test getting stats for non-existent repository returns 404"""

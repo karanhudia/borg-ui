@@ -38,7 +38,7 @@ class TestRepositoryInitialization:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201]
+        assert response.status_code == 200
         data = response.json()
 
         # Verify repository was created in database
@@ -74,7 +74,7 @@ class TestRepositoryInitialization:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201]
+        assert response.status_code == 200
         data = response.json()
 
         if "repository" in data:
@@ -129,14 +129,10 @@ class TestRepositoryStats:
             headers=admin_headers
         )
 
-        # Empty repo might return 200 with zero stats or 500/404
-        assert response.status_code in [200, 404, 500]
-
-        if response.status_code == 200:
-            data = response.json()
-            stats = data.get("stats", data)
-            # Empty repo should have minimal or zero stats
-            assert isinstance(stats, dict)
+        assert response.status_code == 200
+        data = response.json()
+        stats = data.get("stats", data)
+        assert isinstance(stats, dict)
 
     def test_get_stats_encrypted_repository(
         self,
@@ -391,13 +387,11 @@ class TestImportExistingRepository:
         )
 
         # Should successfully import or return appropriate error
-        assert response.status_code in [200, 201, 400, 409]
-
-        if response.status_code in [200, 201]:
-            data = response.json()
-            repo_data = data.get("repository", data)
-            assert repo_data["name"] == "Imported Repo"
-            assert repo_data["path"] == str(repo_path)
+        assert response.status_code == 200
+        data = response.json()
+        repo_data = data.get("repository", data)
+        assert repo_data["name"] == "Imported Repo"
+        assert repo_data["path"] == str(repo_path)
 
     def test_import_existing_encrypted_repo(
         self,
@@ -421,13 +415,11 @@ class TestImportExistingRepository:
         )
 
         # Should successfully import
-        assert response.status_code in [200, 201, 400, 409]
-
-        if response.status_code in [200, 201]:
-            data = response.json()
-            repo_data = data.get("repository", data)
-            assert repo_data["name"] == "Imported Encrypted Repo"
-            assert repo_data["encryption"] == "repokey"
+        assert response.status_code == 200
+        data = response.json()
+        repo_data = data.get("repository", data)
+        assert repo_data["name"] == "Imported Encrypted Repo"
+        assert repo_data["encryption"] == "repokey"
 
 
 @pytest.mark.integration
@@ -451,7 +443,7 @@ class TestRepositoryDeletion:
         )
 
         # Should successfully delete
-        assert response.status_code in [200, 204]
+        assert response.status_code == 200
 
         # Verify repository is deleted
         get_response = test_client.get(
@@ -493,7 +485,7 @@ class TestRepositoryOperationsWithCompression:
             )
 
             # Should successfully create with any compression
-            assert response.status_code in [200, 201]
+            assert response.status_code == 200
 
 
 @pytest.mark.integration
@@ -522,7 +514,7 @@ class TestRepositoryMaintenanceOperations:
         )
 
         # Check should start successfully
-        assert response.status_code in [200, 201, 202], f"Check failed to start: {response.json()}"
+        assert response.status_code == 200, f"Check failed to start: {response.json()}"
         data = response.json()
 
         # Should return job info
@@ -575,7 +567,7 @@ class TestRepositoryMaintenanceOperations:
         )
 
         # Compact should start
-        assert response.status_code in [200, 201, 202], f"Compact failed: {response.json()}"
+        assert response.status_code == 200, f"Compact failed: {response.json()}"
         data = response.json()
         job_id = data.get("job_id") or data.get("id")
         assert job_id is not None
@@ -682,7 +674,7 @@ class TestRepositoryMaintenanceOperations:
         )
 
         # Break-lock should succeed
-        assert response.status_code in [200, 204], f"Break-lock failed: {response.json()}"
+        assert response.status_code == 200, f"Break-lock failed: {response.json()}"
 
         # Verify lock was removed
         import time
@@ -730,9 +722,7 @@ class TestRepositoryValidation:
             headers=admin_headers
         )
 
-        # Should either reject or fail during initialization
-        # Accept any response that indicates the issue was handled
-        assert response.status_code in [200, 201, 400, 403, 500]
+        assert response.status_code == 400
 
     def test_create_repository_duplicate_path(
         self,
@@ -763,7 +753,7 @@ class TestRepositoryValidation:
         )
 
         # Should reject duplicate path
-        assert response.status_code in [400, 409, 422, 500], \
+        assert response.status_code == 400, \
             "Duplicate repository path should be rejected"
 
 @pytest.mark.integration
@@ -806,7 +796,7 @@ class TestKeyfileEncryption:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201], f"Failed to create keyfile repo: {response.json()}"
+        assert response.status_code == 200, f"Failed to create keyfile repo: {response.json()}"
         data = response.json()
         repo_data = data.get("repository", data)
 
@@ -847,7 +837,7 @@ class TestKeyfileEncryption:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201], f"Import failed: {response.json()}"
+        assert response.status_code == 200, f"Import failed: {response.json()}"
         data = response.json()
         repo_data = data.get("repository", data)
         repo_id = repo_data["id"]
@@ -909,7 +899,7 @@ class TestKeyfileEncryption:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201], f"Import failed: {response.json()}"
+        assert response.status_code == 200, f"Import failed: {response.json()}"
         repo_id = response.json().get("repository", response.json())["id"]
 
         # Upload keyfile
@@ -964,7 +954,7 @@ class TestKeyfileEncryption:
             headers=admin_headers,
         )
 
-        assert import_response.status_code in [200, 201], import_response.json()
+        assert import_response.status_code == 200, import_response.json()
         repo_id = import_response.json().get("repository", import_response.json())["id"]
 
         with open(keyfile_path, "rb") as handle:

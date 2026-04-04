@@ -299,9 +299,7 @@ class TestDeleteArchiveIntegration:
             headers=admin_headers
         )
 
-        # Borg may return success (200) or error (500) depending on version
-        # Some borg versions succeed with no error when archive doesn't exist
-        assert response.status_code in [200, 500]
+        assert response.status_code == 200
 
 
 @pytest.mark.integration

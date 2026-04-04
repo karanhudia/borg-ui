@@ -33,7 +33,7 @@ class TestBrowseEndpoints:
         """Test browsing archive without authentication"""
         response = test_client.get("/api/browse/1/archive-name/")
 
-        assert response.status_code in [401, 403, 404]
+        assert response.status_code == 401
 
     def test_browse_archive_invalid_repository(self, test_client: TestClient, admin_headers):
         """Test browsing archive with invalid repository"""
@@ -42,49 +42,43 @@ class TestBrowseEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
     def test_browse_archive_root(self, test_client: TestClient, admin_headers, test_db):
         """Test browsing archive root directory"""
-        # Create a test repository
-        repo = Repository(
-            name="Browse Test Repo",
-            path="/tmp/test-browse-repo",
-            encryption="none",
-            compression="lz4",
-            repository_type="local"
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
+        repo = _create_repository(test_db)
+        cached_items = [
+            {"path": "docs", "type": "d", "size": None, "mtime": "2024-01-01T00:00:00"},
+            {"path": "docs/readme.md", "type": "f", "size": 12, "mtime": "2024-01-01T00:00:01"},
+        ]
 
-        response = test_client.get(
-            f"/api/browse/{repo.id}/test-archive/",
-            headers=admin_headers
-        )
+        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)):
+            response = test_client.get(
+                f"/api/browse/{repo.id}/test-archive",
+                headers=admin_headers,
+            )
 
-        # Might fail if borg not available or archive doesn't exist
-        assert response.status_code in [200, 403, 404, 500]
+        assert response.status_code == 200
+        assert response.json()["items"][0]["name"] == "docs"
 
     def test_browse_archive_subdirectory(self, test_client: TestClient, admin_headers, test_db):
         """Test browsing archive subdirectory"""
-        repo = Repository(
-            name="Browse Test Repo",
-            path="/tmp/test-browse-repo",
-            encryption="none",
-            compression="lz4",
-            repository_type="local"
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
+        repo = _create_repository(test_db)
+        cached_items = [
+            {"path": "home/user/file.txt", "type": "f", "size": 10, "mtime": "2024-01-01T00:00:01"},
+            {"path": "home/user/docs", "type": "d", "size": None, "mtime": "2024-01-01T00:00:02"},
+            {"path": "home/user/docs/a.txt", "type": "f", "size": 11, "mtime": "2024-01-01T00:00:03"},
+        ]
 
-        response = test_client.get(
-            f"/api/browse/{repo.id}/test-archive/home/user",
-            headers=admin_headers
-        )
+        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)):
+            response = test_client.get(
+                f"/api/browse/{repo.id}/test-archive",
+                params={"path": "home/user"},
+                headers=admin_headers,
+            )
 
-        assert response.status_code in [200, 403, 404, 500]
+        assert response.status_code == 200
+        assert [item["name"] for item in response.json()["items"]] == ["docs", "file.txt"]
 
     def test_get_file_content_invalid(self, test_client: TestClient, admin_headers):
         """Test getting file content from invalid archive"""
@@ -93,7 +87,7 @@ class TestBrowseEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
     def test_search_archive_invalid(self, test_client: TestClient, admin_headers):
         """Test searching in invalid archive"""
@@ -103,7 +97,7 @@ class TestBrowseEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
 
 @pytest.mark.unit
@@ -318,7 +312,7 @@ class TestFilesystemEndpoints:
         """Test listing directory without authentication"""
         response = test_client.get("/api/filesystem/browse")
 
-        assert response.status_code in [401, 403, 404]
+        assert response.status_code == 401
 
     def test_list_directory_root(self, test_client: TestClient, admin_headers):
         """Test listing root directory"""
@@ -328,8 +322,7 @@ class TestFilesystemEndpoints:
             headers=admin_headers
         )
 
-        # Should work or fail gracefully
-        assert response.status_code in [200, 403, 500]
+        assert response.status_code == 200
 
     def test_list_directory_invalid_path(self, test_client: TestClient, admin_headers):
         """Test listing non-existent directory"""
@@ -339,7 +332,7 @@ class TestFilesystemEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 500]
+        assert response.status_code == 404
 
     def test_get_directory_info(self, test_client: TestClient, admin_headers):
         """Test getting directory information"""
@@ -349,37 +342,39 @@ class TestFilesystemEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 500]
+        assert response.status_code == 404
 
     def test_create_directory_missing_path(self, test_client: TestClient, admin_headers):
         """Test creating directory without path"""
         response = test_client.post(
-            "/api/filesystem/mkdir",
+            "/api/filesystem/create-folder",
             json={},
             headers=admin_headers
         )
 
-        assert response.status_code in [405, 422]  # Validation error or method not allowed
+        assert response.status_code == 422
 
     def test_validate_path_empty(self, test_client: TestClient, admin_headers):
         """Test path validation with empty path"""
         response = test_client.post(
-            "/api/filesystem/validate",
-            json={"path": ""},
+            "/api/filesystem/validate-path",
+            params={"path": ""},
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 400, 405, 422]
+        assert response.status_code == 200
+        assert response.json()["exists"] is False
 
     def test_validate_path_valid(self, test_client: TestClient, admin_headers):
         """Test path validation with valid path"""
         response = test_client.post(
-            "/api/filesystem/validate",
-            json={"path": "/tmp"},
+            "/api/filesystem/validate-path",
+            params={"path": "/tmp"},
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 400, 405]
+        assert response.status_code == 200
+        assert response.json()["exists"] is True
 
     def test_get_disk_usage(self, test_client: TestClient, admin_headers):
         """Test getting disk usage for path"""
@@ -389,4 +384,4 @@ class TestFilesystemEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 403, 404, 500]
+        assert response.status_code == 404

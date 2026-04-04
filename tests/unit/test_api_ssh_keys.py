@@ -27,7 +27,7 @@ class TestSSHKeysEndpoints:
         """Test listing SSH keys without authentication"""
         response = test_client.get("/api/ssh-keys/")
 
-        assert response.status_code in [401, 403, 404]
+        assert response.status_code == 401
 
     def test_generate_ssh_key_missing_fields(self, test_client: TestClient, admin_headers):
         """Test generating SSH key with missing fields"""
@@ -50,7 +50,7 @@ class TestSSHKeysEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [400, 403, 422]  # May return forbidden
+        assert response.status_code == 400
 
     def test_upload_ssh_key_missing_fields(self, test_client: TestClient, admin_headers):
         """Test uploading SSH key with missing fields"""
@@ -60,19 +60,19 @@ class TestSSHKeysEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [405, 422]  # Validation error or method not allowed
+        assert response.status_code == 404
 
     def test_get_ssh_key_nonexistent(self, test_client: TestClient, admin_headers):
         """Test getting non-existent SSH key"""
         response = test_client.get("/api/ssh-keys/nonexistent-key", headers=admin_headers)
 
-        assert response.status_code in [404, 422]
+        assert response.status_code == 422
 
     def test_delete_ssh_key_nonexistent(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent SSH key"""
         response = test_client.delete("/api/ssh-keys/nonexistent-key", headers=admin_headers)
 
-        assert response.status_code in [404, 422]
+        assert response.status_code == 422
 
     def test_get_ssh_public_key_nonexistent(self, test_client: TestClient, admin_headers):
         """Test getting public key for non-existent SSH key"""
@@ -81,7 +81,7 @@ class TestSSHKeysEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 422]
+        assert response.status_code == 404
 
     def test_test_ssh_connection_invalid(self, test_client: TestClient, admin_headers):
         """Test SSH connection with invalid parameters"""
@@ -94,7 +94,7 @@ class TestSSHKeysEndpoints:
             headers=admin_headers
         )
 
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
     def test_import_ssh_key_missing_path(self, test_client: TestClient, admin_headers):
         """Test importing SSH key without providing private key path"""
@@ -119,8 +119,7 @@ class TestSSHKeysEndpoints:
             headers=admin_headers
         )
 
-        # Should return 404 or 400 depending on implementation
-        assert response.status_code in [400, 404, 500]
+        assert response.status_code == 404
 
     def test_test_existing_connection_nonexistent(self, test_client: TestClient, admin_headers):
         """Test testing non-existent connection"""
@@ -135,7 +134,7 @@ class TestSSHKeysEndpoints:
         """Test testing connection without authentication"""
         response = test_client.post("/api/ssh-keys/connections/1/test")
 
-        assert response.status_code in [401, 403]
+        assert response.status_code == 401
 
 
 @pytest.mark.unit
@@ -698,7 +697,7 @@ class TestSSHConnectionDelete:
     def test_delete_connection_unauthorized(self, test_client: TestClient):
         """Deleting a connection without authentication is rejected"""
         response = test_client.delete("/api/ssh-keys/connections/1")
-        assert response.status_code in [401, 403]
+        assert response.status_code == 401
 
 
 @pytest.mark.unit

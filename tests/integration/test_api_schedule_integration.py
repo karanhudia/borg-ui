@@ -57,7 +57,7 @@ class TestScheduledJobCreation:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201], f"Failed to create schedule: {response.json()}"
+        assert response.status_code == 200, f"Failed to create schedule: {response.json()}"
         data = response.json()
 
         # Verify schedule was created
@@ -98,15 +98,10 @@ class TestScheduledJobCreation:
             headers=admin_headers
         )
 
-        assert response.status_code in [200, 201, 422]  # 422 if timezone not supported
-
-        if response.status_code in [200, 201]:
-            data = response.json()
-            schedule_data = data.get("schedule", data)
-
-            # Timezone should be stored
-            if "timezone" in schedule_data:
-                assert schedule_data["timezone"] == "America/New_York"
+        assert response.status_code == 200
+        data = response.json()
+        schedule_data = data.get("job", data)
+        assert schedule_data["name"] == "Morning Backup"
 
     def test_create_scheduled_job_invalid_cron_expression(
         self,
@@ -134,7 +129,7 @@ class TestScheduledJobCreation:
         )
 
         # Should reject invalid cron
-        assert response.status_code in [400, 422], "Invalid cron should be rejected"
+        assert response.status_code == 400, "Invalid cron should be rejected"
 
     def test_create_scheduled_job_with_repository_path(
         self,
@@ -162,7 +157,7 @@ class TestScheduledJobCreation:
         )
 
         # Should work with either repository or repository_id
-        assert response.status_code in [200, 201, 422]
+        assert response.status_code == 200
 
 
 @pytest.mark.integration
@@ -196,7 +191,7 @@ class TestScheduledJobManagement:
             headers=admin_headers
         )
 
-        assert create_response.status_code in [200, 201]
+        assert create_response.status_code == 200
 
         # List schedules
         list_response = test_client.get("/api/schedule/", headers=admin_headers)
@@ -254,7 +249,7 @@ class TestScheduledJobManagement:
         )
 
         # Update should succeed
-        assert update_response.status_code in [200, 204], f"Update failed: {update_response.json()}"
+        assert update_response.status_code == 200, f"Update failed: {update_response.json()}"
 
     def test_delete_scheduled_job(
         self,
@@ -289,11 +284,11 @@ class TestScheduledJobManagement:
         )
 
         # Delete should succeed
-        assert delete_response.status_code in [200, 204], f"Delete failed: {delete_response.json()}"
+        assert delete_response.status_code == 200, f"Delete failed: {delete_response.json()}"
 
         # Verify schedule no longer exists
         get_response = test_client.get(f"/api/schedule/{schedule.id}", headers=admin_headers)
-        assert get_response.status_code in [404, 500], "Deleted schedule should not be found"
+        assert get_response.status_code == 404, "Deleted schedule should not be found"
 
     def test_disable_scheduled_job(
         self,
@@ -328,7 +323,7 @@ class TestScheduledJobManagement:
             headers=admin_headers
         )
 
-        assert update_response.status_code in [200, 204]
+        assert update_response.status_code == 200
 
 
 @pytest.mark.integration
@@ -359,7 +354,7 @@ class TestScheduledJobValidation:
         )
 
         # Should reject or warn about missing repository
-        assert response.status_code in [200, 400, 404, 422]
+        assert response.status_code == 404
 
     def test_create_duplicate_schedule_same_repository(
         self,
@@ -387,7 +382,7 @@ class TestScheduledJobValidation:
             headers=admin_headers
         )
 
-        assert response1.status_code in [200, 201]
+        assert response1.status_code == 200
 
         # Create second schedule for same repo
         response2 = test_client.post(
@@ -402,7 +397,7 @@ class TestScheduledJobValidation:
         )
 
         # Should allow multiple schedules
-        assert response2.status_code in [200, 201, 409]  # 409 if duplicates not allowed
+        assert response2.status_code == 200
 
     def test_cron_expression_validation(
         self,
@@ -439,7 +434,7 @@ class TestScheduledJobValidation:
 
             # Each invalid cron should be rejected or cause validation error
             # We're just verifying the API doesn't crash
-            assert response.status_code in [200, 201, 400, 422, 500]
+            assert response.status_code == 400
 
 
 @pytest.mark.integration
@@ -469,7 +464,7 @@ class TestMultiRepositorySchedules:
             headers=admin_headers,
         )
 
-        assert create_response.status_code in [200, 201], create_response.json()
+        assert create_response.status_code == 200, create_response.json()
         schedule_payload = create_response.json()
         schedule_data = (
             schedule_payload.get("schedule")
@@ -515,7 +510,7 @@ class TestMultiRepositorySchedules:
             },
             headers=admin_headers,
         )
-        assert create_response.status_code in [200, 201], create_response.json()
+        assert create_response.status_code == 200, create_response.json()
         schedule_payload = create_response.json()
         schedule_data = (
             schedule_payload.get("schedule")
@@ -573,7 +568,7 @@ class TestMultiRepositorySchedules:
             },
             headers=admin_headers,
         )
-        assert create_response.status_code in [200, 201], create_response.json()
+        assert create_response.status_code == 200, create_response.json()
         schedule_payload = create_response.json()
         schedule_data = (
             schedule_payload.get("schedule")

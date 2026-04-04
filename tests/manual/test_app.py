@@ -69,20 +69,20 @@ class BorgWebUITester:
     def test_api_routes_exist(self) -> bool:
         """Test that API routes exist and return proper responses"""
         api_routes = [
-            ("/api", "GET"),
-            ("/api/docs", "GET"),
-            ("/api/system/info", "GET"),
+            ("/api", "GET", {200}),
+            ("/api/docs", "GET", {200}),
+            ("/api/system/info", "GET", {401}),
         ]
         
         all_passed = True
-        for route, method in api_routes:
+        for route, method, expected_statuses in api_routes:
             try:
                 if method == "GET":
                     response = self.session.get(f"{self.base_url}{route}", timeout=5)
                 else:
                     response = self.session.post(f"{self.base_url}{route}", timeout=5)
                 
-                if response.status_code in [200, 401, 403]:  # 401/403 are expected for protected routes
+                if response.status_code in expected_statuses:
                     self.log_test(f"API Route {route}", True, f"Returns status {response.status_code}")
                 else:
                     self.log_test(f"API Route {route}", False, f"Unexpected status {response.status_code}")

@@ -47,15 +47,15 @@ class TestBackupStart:
             assert response.status_code == 200
 
     def test_start_backup_invalid_repository(self, test_client: TestClient, admin_headers):
-        """Test starting backup with invalid repository ID"""
+        """Unknown extra fields are ignored; request still creates a pending job."""
         response = test_client.post(
             "/api/backup/start",
             json={"repository_id": 99999},
             headers=admin_headers
         )
 
-        # Should fail with appropriate error
-        assert response.status_code in [200, 403, 404]  # May return 200 with error in body
+        assert response.status_code == 200
+        assert response.json()["status"] == "pending"
 
     def test_start_backup_nonexistent_repo(self, test_client: TestClient, admin_headers):
         """Test starting backup for non-existent repository returns 200 (doesn't validate repository exists)"""
@@ -141,7 +141,8 @@ class TestBackupStart:
                 headers=admin_headers
             )
 
-            assert response.status_code in [200, 202, 403, 422, 500]
+            assert response.status_code == 200
+            assert response.json()["status"] == "pending"
 
     def test_start_backup_multiple_sources(self, test_client: TestClient, admin_headers, test_db):
         """Test starting backup with multiple source directories"""
@@ -161,7 +162,8 @@ class TestBackupStart:
                 headers=admin_headers
             )
 
-            assert response.status_code in [200, 202, 403, 422, 500]
+            assert response.status_code == 200
+            assert response.json()["status"] == "pending"
 
 
 @pytest.mark.unit
@@ -215,7 +217,7 @@ class TestBackupJobs:
         """Test listing backup jobs without authentication"""
         response = test_client.get("/api/backup/jobs")
 
-        assert response.status_code in [401, 403, 404]
+        assert_auth_required(response)
 
     def test_list_jobs_pagination(self, test_client: TestClient, admin_headers):
         """Test listing jobs with pagination parameters"""
@@ -253,7 +255,7 @@ class TestBackupStatus:
         response = test_client.get("/api/backup/jobs/99999/status", headers=admin_headers)
 
         # Should return 404 or error response
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
     def test_get_backup_status_nonexistent(self, test_client: TestClient, admin_headers):
         """Test getting status for non-existent job returns 500 (exception wrapped)"""
@@ -284,10 +286,12 @@ class TestBackupCancel:
         test_db.commit()
         test_db.refresh(job)
 
-        with patch('app.api.backup.backup_service.running_processes', {job.id: AsyncMock()}):
+        with patch("app.api.backup.backup_service.cancel_backup", new=AsyncMock(return_value=True)) as mock_cancel:
             response = test_client.post(f"/api/backup/cancel/{job.id}", headers=admin_headers)
 
-            assert response.status_code in [200, 403, 404]
+            assert response.status_code == 200
+            assert response.json()["message"] == "backend.success.backup.backupCancelled"
+            mock_cancel.assert_awaited_once_with(job.id)
 
     def test_cancel_backup_nonexistent(self, test_client: TestClient, admin_headers):
         """Test canceling non-existent backup job"""
@@ -297,7 +301,7 @@ class TestBackupCancel:
         )
 
         # Should return error for non-existent job
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
     def test_cancel_backup_nonexistent_new_endpoint(self, test_client: TestClient, admin_headers):
         """Test cancelling non-existent backup returns 404 (with proper exception handling)"""
@@ -320,7 +324,7 @@ class TestBackupCancel:
 
         response = test_client.post(f"/api/backup/cancel/{job.id}", headers=admin_headers)
 
-        assert response.status_code in [400, 404]
+        assert response.status_code == 400
 
     def test_cancel_backup_unauthorized(self, test_client: TestClient):
         """Test cancelling backup without auth returns 403"""
@@ -341,7 +345,7 @@ class TestBackupLogs:
         )
 
         # Should return 404 or empty logs
-        assert response.status_code in [404, 405]  # Not found or not implemented
+        assert response.status_code == 404
 
     def test_download_backup_logs_success(self, test_client: TestClient, admin_headers, test_db):
         """Test downloading backup logs accepts standard bearer auth."""
@@ -434,7 +438,7 @@ class TestBackupLogs:
 
         response = test_client.get(f"/api/backup/logs/{job.id}/stream", headers=admin_headers)
 
-        assert response.status_code in [200, 403, 404]
+        assert response.status_code == 200
 
     def test_stream_backup_logs_nonexistent(self, test_client: TestClient, admin_headers):
         """Test streaming logs for non-existent job returns 500 (exception wrapped)"""
@@ -474,7 +478,7 @@ class TestBackupHistory:
         )
 
         # Should succeed even with no history
-        assert response.status_code in [200, 403, 404, 500]
+        assert response.status_code == 404
 
 
 @pytest.mark.unit

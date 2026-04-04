@@ -79,8 +79,7 @@ class TestScheduleCreate:
             headers=admin_headers
         )
 
-        # Should fail to find repository or succeed with repository_id being optional
-        assert response.status_code in [200, 404, 422, 500]
+        assert response.status_code == 404
 
     def test_create_schedule_invalid_cron(self, test_client: TestClient, admin_headers, test_db):
         """Test creating schedule with invalid cron expression returns 422"""
@@ -100,8 +99,7 @@ class TestScheduleCreate:
             headers=admin_headers
         )
 
-        # Should validate cron expression
-        assert response.status_code in [400, 422, 500]
+        assert response.status_code == 400
 
     def test_create_schedule_unauthorized(self, test_client: TestClient):
         """Test creating schedule without authentication returns 403"""
@@ -229,7 +227,7 @@ class TestScheduleUpdate:
             headers=admin_headers
         )
 
-        assert response.status_code in [400, 422, 500]
+        assert response.status_code == 400
 
     def test_update_schedule_unauthorized(self, test_client: TestClient):
         """Test updating schedule without authentication returns 403"""
