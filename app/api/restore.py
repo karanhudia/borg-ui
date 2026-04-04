@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 import structlog
 from typing import List, Optional
 import json
+import os
 from datetime import timezone
 import asyncio
 
@@ -18,6 +19,8 @@ from app.core.borg import borg
 from app.services.restore_service import restore_service
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
+from app.api.repositories import get_standard_ssh_opts, setup_borg_env
+from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -27,6 +30,13 @@ def _get_restore_job_repository(db: Session, repository_path: Optional[str]) -> 
     if not repository_path:
         return None
     return db.query(Repository).filter(Repository.path == repository_path).first()
+
+
+def _build_repo_env(repo: Repository, db: Session):
+    temp_key_file = resolve_repo_ssh_key_file(repo, db)
+    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+    env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
+    return env, temp_key_file
 
 class RestoreRequest(BaseModel):
     repository: str
@@ -237,14 +247,24 @@ async def get_archive_contents(
                        items_count=len(all_items))
         else:
             # If not in cache, fetch from borg (fetch ALL items, not just the requested path)
-            result = await borg.list_archive_contents(
-                repository.path,
-                archive_name,
-                path="",  # Always fetch all items for caching
-                remote_path=repository.remote_path,
-                passphrase=repository.passphrase,
-                bypass_lock=repository.bypass_lock
-            )
+            env, temp_key_file = _build_repo_env(repository, db)
+            try:
+                result = await borg.list_archive_contents(
+                    repository.path,
+                    archive_name,
+                    path="",  # Always fetch all items for caching
+                    remote_path=repository.remote_path,
+                    passphrase=repository.passphrase,
+                    bypass_lock=repository.bypass_lock,
+                    env=env,
+                )
+            finally:
+                if temp_key_file:
+                    try:
+                        if os.path.exists(temp_key_file):
+                            os.unlink(temp_key_file)
+                    except Exception:
+                        pass
 
             # Parse all items
             all_items = []

@@ -116,6 +116,39 @@ class TestRestoreContents:
 
             assert response.status_code in [200, 500]
 
+    def test_list_contents_uses_repo_ssh_environment(self, test_client: TestClient, admin_headers, test_db):
+        repo = Repository(
+            name="SSH Repo",
+            path="ssh://borgsmoke@127.0.0.1:2222/home/borgsmoke/remote-repo",
+            encryption="none",
+            repository_type="ssh",
+            connection_id=1,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        fake_key_path = "/tmp/test-ssh.key"
+        with patch("app.api.restore.archive_cache.get", new_callable=AsyncMock, return_value=None), \
+             patch("app.api.restore.resolve_repo_ssh_key_file", return_value=fake_key_path), \
+             patch("app.api.restore.os.path.exists", side_effect=lambda path: path == fake_key_path), \
+             patch("app.api.restore.os.unlink") as mock_unlink, \
+             patch('app.api.restore.borg.list_archive_contents', new_callable=AsyncMock) as mock_list:
+            mock_list.return_value = {
+                "success": True,
+                "stdout": '{"path": "/ssh-remote.txt", "type": "f"}\n'
+            }
+
+            response = test_client.get(
+                f"/api/restore/contents/{repo.id}/test-archive",
+                headers=admin_headers
+            )
+
+        assert response.status_code in [200, 500]
+        _, kwargs = mock_list.await_args
+        assert kwargs["env"]["BORG_RSH"].startswith("ssh -i /tmp/test-ssh.key")
+        mock_unlink.assert_called_once_with(fake_key_path)
+
     def test_list_contents_nonexistent_repo(self, test_client: TestClient, admin_headers):
         """Test listing contents for non-existent repository returns 404"""
         response = test_client.get(
