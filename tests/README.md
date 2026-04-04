@@ -1,6 +1,6 @@
 # Borg UI Testing Suite
 
-Comprehensive testing infrastructure for Borg UI, including unit tests, integration tests, and end-to-end testing with real Borg repositories.
+Comprehensive testing infrastructure for Borg UI, including unit tests, API-driven integration tests, and live-server smoke tests with real Borg repositories.
 
 ## Overview
 
@@ -8,8 +8,9 @@ This testing suite provides:
 
 1. **Automated Test Environment Setup** - Creates real Borg repositories with various structures
 2. **Archive Contents Testing** - Validates archive browsing against actual borg CLI output
-3. **API Testing** - Tests all API endpoints and functionality
-4. **Regression Testing** - Prevents bugs from reoccurring
+3. **API Testing** - Exercises the FastAPI routes the frontend uses
+4. **Smoke Testing** - Runs black-box checks against a built app and real Borg data
+5. **Regression Testing** - Prevents bugs from reoccurring
 
 ## Quick Start
 
@@ -20,17 +21,17 @@ This testing suite provides:
 - Borg UI running (default: `http://localhost:8081`)
 - Required Python packages: `requests`
 
-### Run All Tests
+### Run Smoke Tests
 
 ```bash
 # 1. Set up test environment (creates repos and test data)
 ./tests/setup_test_env.sh
 
-# 2. Run archive contents tests
-python3 tests/test_archive_contents.py
+# 2. Run the fast live-server smoke tier
+python3 tests/smoke/run_core_smoke.py --url http://localhost:8082
 
-# 3. Run API tests
-python3 tests/manual/test_app.py
+# 3. Run the slower browsing-focused smoke tier
+python3 tests/smoke/run_extended_smoke.py --url http://localhost:8082
 ```
 
 ## Test Components
@@ -65,7 +66,7 @@ Creates a comprehensive test environment with:
 - Source data in `/tmp/borg-ui-tests/source_data/`
 - Test info file: `/tmp/borg-ui-tests/TEST_INFO.txt`
 
-### 2. Archive Contents Testing (`test_archive_contents.py`)
+### 2. Archive Contents Testing (`tests/integration/test_archive_contents.py`)
 
 Validates that Borg UI displays archive contents correctly by:
 
@@ -76,13 +77,13 @@ Validates that Borg UI displays archive contents correctly by:
 **Usage:**
 ```bash
 # Test with default settings
-python3 tests/test_archive_contents.py
+python3 tests/integration/test_archive_contents.py
 
 # Specify custom test directory
-python3 tests/test_archive_contents.py /custom/test/dir
+python3 tests/integration/test_archive_contents.py /custom/test/dir
 
 # Test against different Borg UI instance
-python3 tests/test_archive_contents.py --url http://localhost:7879
+python3 tests/integration/test_archive_contents.py --url http://localhost:7879
 ```
 
 **Tests:**
@@ -126,6 +127,11 @@ python3 tests/manual/test_app.py --url http://localhost:7879
 python3 tests/manual/test_app.py --output results.json
 ```
 
+### 4. Smoke Runners (`tests/smoke/`)
+
+- `run_core_smoke.py` runs live app sanity checks plus the multi-source backup regression
+- `run_extended_smoke.py` runs the slower archive-browsing parity checks against Borg CLI
+
 ## Test Scenarios
 
 ### Scenario 1: Archive Root Directory Bug
@@ -135,7 +141,7 @@ python3 tests/manual/test_app.py --output results.json
 **Test:**
 ```bash
 ./tests/setup_test_env.sh
-python3 tests/test_archive_contents.py
+python3 tests/integration/test_archive_contents.py
 ```
 
 **Expected Result:**
@@ -157,7 +163,7 @@ Testing Archive: test-full-backup
 
 **Test:**
 ```bash
-python3 tests/test_archive_contents.py
+python3 tests/integration/test_archive_contents.py
 # Tests paths: "", "Documents", "Photos/2024", "Code"
 ```
 
@@ -172,7 +178,7 @@ python3 tests/test_archive_contents.py
 **Test:**
 ```bash
 # Automatically tests repo2-encrypted with passphrase "test123"
-python3 tests/test_archive_contents.py
+python3 tests/integration/test_archive_contents.py
 ```
 
 **What it tests:**
@@ -262,7 +268,7 @@ borg list --json-lines /tmp/borg-ui-tests/repositories/repo1-unencrypted::test-f
 ### 7. Run Automated Tests
 
 ```bash
-python3 tests/test_archive_contents.py
+python3 tests/integration/test_archive_contents.py
 ```
 
 Expected output: All tests should PASS
@@ -321,7 +327,7 @@ docker logs borg-web-ui
 
 ### Adding Archive Content Tests
 
-Edit `tests/test_archive_contents.py`:
+Edit `tests/integration/test_archive_contents.py`:
 
 ```python
 test_configs = [
@@ -366,40 +372,14 @@ def test_my_feature(self) -> bool:
 
 ## CI/CD Integration
 
-### GitHub Actions Example
+### GitHub Actions Workflows
 
-```yaml
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Install borg
-        run: sudo apt-get install -y borgbackup
-
-      - name: Setup test environment
-        run: ./tests/setup_test_env.sh
-
-      - name: Start Borg UI
-        run: docker-compose up -d
-
-      - name: Wait for service
-        run: sleep 10
-
-      - name: Run tests
-        run: |
-          python3 tests/test_archive_contents.py
-          python3 tests/manual/test_app.py
-```
+- `Tests` runs backend coverage plus frontend quality, tests, and build as separate parallel jobs.
+- `Smoke Tests` runs a built app against live Borg smoke scenarios, split into `core` and `extended` tiers.
 
 ## Test Coverage
 
-Current test coverage:
+Current high-signal coverage:
 
 - ✅ Archive root directory listing
 - ✅ Nested directory navigation
@@ -410,8 +390,10 @@ Current test coverage:
 - ✅ Repository CRUD operations
 - ✅ Config validation
 - ✅ Health checks
-- ⏳ Restore operations (TODO)
-- ⏳ Backup operations (TODO)
+- ✅ Live-server smoke for app boot, auth, protected routes, and multi-source backup
+- ✅ Live-server smoke for archive contents and directory browsing parity
+- ⏳ Restore operations (broader smoke coverage still open)
+- ⏳ Backup operations (broader smoke coverage still open)
 - ⏳ SSH repositories (TODO)
 - ⏳ Schedule management (TODO)
 
