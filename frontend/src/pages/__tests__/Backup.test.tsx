@@ -153,10 +153,14 @@ describe('Backup page', () => {
       expect(backupAPI.startBackup).toHaveBeenCalledWith('/repos/primary')
     })
     expect(toastSuccess).toHaveBeenCalledWith('Backup started successfully!')
-    expect(trackBackup).toHaveBeenCalledWith('Start', undefined, expect.objectContaining({
-      id: 1,
-      path: '/repos/primary',
-    }))
+    expect(trackBackup).toHaveBeenCalledWith(
+      'Start',
+      undefined,
+      expect.objectContaining({
+        id: 1,
+        path: '/repos/primary',
+      })
+    )
   })
 
   it('filters out observe-only repositories from manual backup selection', async () => {
@@ -172,10 +176,14 @@ describe('Backup page', () => {
 
     await user.click(await screen.findByRole('button', { name: /choose primary repo/i }))
 
-    expect(trackBackup).toHaveBeenCalledWith('Filter', undefined, expect.objectContaining({
-      id: 1,
-      path: '/repos/primary',
-    }))
+    expect(trackBackup).toHaveBeenCalledWith(
+      'Filter',
+      undefined,
+      expect.objectContaining({
+        id: 1,
+        path: '/repos/primary',
+      })
+    )
 
     canDoBackup = false
     unmount()

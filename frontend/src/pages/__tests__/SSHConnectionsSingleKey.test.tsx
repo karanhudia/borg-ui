@@ -2,12 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import SSHConnectionsSingleKey from '../SSHConnectionsSingleKey'
 
-const {
-  track,
-  toastSuccess,
-  toastError,
-  mockState,
-} = vi.hoisted(() => ({
+const { track, toastSuccess, toastError, mockState } = vi.hoisted(() => ({
   track: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),

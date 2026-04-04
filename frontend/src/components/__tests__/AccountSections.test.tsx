@@ -151,7 +151,9 @@ describe('AccountPasswordDialog', () => {
 
     expect(screen.getByText('Complete account setup')).toBeInTheDocument()
     expect(
-      screen.getByText(/your password must be changed before you can navigate outside account settings/i)
+      screen.getByText(
+        /your password must be changed before you can navigate outside account settings/i
+      )
     ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
   })
