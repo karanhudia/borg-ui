@@ -4,7 +4,7 @@ Comprehensive unit tests for restore API endpoints
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import Repository
+from app.database.models import Repository, RestoreJob
 
 
 @pytest.mark.unit
@@ -380,6 +380,71 @@ class TestRestoreJobs:
         )
 
         assert response.status_code in [404, 405]  # Not found or not implemented
+
+    def test_cancel_restore_running_job_marks_cancelled(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        repo = Repository(name="Restore Repo", path="/test/repo", encryption="none", repository_type="local")
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        job = RestoreJob(
+            repository=repo.path,
+            archive="test-archive",
+            destination="/restore/target",
+            status="running",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        with patch("app.api.restore.restore_service.cancel_restore", new=AsyncMock(return_value=True)) as mock_cancel:
+            response = test_client.post(
+                f"/api/restore/cancel/{job.id}",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["message"] == "backend.success.restore.restoreCancelled"
+        mock_cancel.assert_awaited_once_with(job.id)
+
+        test_db.expire_all()
+        refreshed = test_db.query(RestoreJob).filter(RestoreJob.id == job.id).first()
+        assert refreshed.status == "cancelled"
+        assert refreshed.completed_at is not None
+
+    def test_cancel_restore_non_running_job_returns_400(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        repo = Repository(name="Restore Repo", path="/test/repo-nonrunning", encryption="none", repository_type="local")
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        job = RestoreJob(
+            repository=repo.path,
+            archive="test-archive",
+            destination="/restore/target",
+            status="completed",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.post(
+            f"/api/restore/cancel/{job.id}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["key"] == "backend.errors.restore.canOnlyCancelRunningJobs"
 
     def test_restore_logs_nonexistent_job(self, test_client: TestClient, admin_headers):
         """Test getting logs for non-existent restore job"""

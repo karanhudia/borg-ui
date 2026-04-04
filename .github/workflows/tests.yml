@@ -149,7 +149,7 @@ jobs:
           mkdir -p data
           mkdir -p logs
 
-      - name: Run Borg API integration suite
+      - name: Run backend integration suite
         run: |
           pytest \
             tests/integration/test_api_archives_integration.py \
@@ -651,58 +651,58 @@ jobs:
     steps:
       - name: Check test results
         run: |
-          echo "Backend unit coverage: ${{ needs.backend-unit-coverage.result }}"
-          echo "Borg API integration: ${{ needs.backend-api-integration.result }}"
-          echo "Typecheck/lint/format: ${{ needs.typecheck-lint-format.result }}"
-          echo "Frontend vitest: ${{ needs.frontend-vitest.result }}"
-          echo "Coverage upload: ${{ needs.coverage-upload.result }}"
-          echo "Frontend build: ${{ needs.frontend-build.result }}"
-          echo "Borg smoke core: ${{ needs.smoke-borg-core.result }}"
-          echo "Borg smoke extended: ${{ needs.smoke-borg-extended.result }}"
-          echo "Borg smoke SSH localhost: ${{ needs.smoke-borg-ssh-localhost.result }}"
+          echo "Backend / Unit Tests: ${{ needs.backend-unit-coverage.result }}"
+          echo "Backend / Integration Tests: ${{ needs.backend-api-integration.result }}"
+          echo "Frontend / Code Quality: ${{ needs.typecheck-lint-format.result }}"
+          echo "Frontend / Unit Tests: ${{ needs.frontend-vitest.result }}"
+          echo "Coverage / Codecov: ${{ needs.coverage-upload.result }}"
+          echo "Frontend / Build: ${{ needs.frontend-build.result }}"
+          echo "Smoke / Core: ${{ needs.smoke-borg-core.result }}"
+          echo "Smoke / Extended: ${{ needs.smoke-borg-extended.result }}"
+          echo "Smoke / SSH: ${{ needs.smoke-borg-ssh-localhost.result }}"
 
           if [ "${{ needs.backend-unit-coverage.result }}" != "success" ]; then
-            echo "Backend unit coverage failed"
+            echo "Backend / Unit Tests failed"
             exit 1
           fi
 
           if [ "${{ needs.backend-api-integration.result }}" != "success" ]; then
-            echo "Borg API integration failed"
+            echo "Backend / Integration Tests failed"
             exit 1
           fi
 
           if [ "${{ needs.typecheck-lint-format.result }}" != "success" ]; then
-            echo "Typecheck/lint/format failed"
+            echo "Frontend / Code Quality failed"
             exit 1
           fi
 
           if [ "${{ needs.frontend-vitest.result }}" != "success" ]; then
-            echo "Frontend vitest failed"
+            echo "Frontend / Unit Tests failed"
             exit 1
           fi
 
           if [ "${{ needs.coverage-upload.result }}" != "success" ]; then
-            echo "Coverage upload failed"
+            echo "Coverage / Codecov failed"
             exit 1
           fi
 
           if [ "${{ needs.frontend-build.result }}" != "success" ]; then
-            echo "Frontend build failed"
+            echo "Frontend / Build failed"
             exit 1
           fi
 
           if [ "${{ needs.smoke-borg-core.result }}" != "success" ] && [ "${{ needs.smoke-borg-core.result }}" != "skipped" ]; then
-            echo "Borg smoke core failed"
+            echo "Smoke / Core failed"
             exit 1
           fi
 
           if [ "${{ needs.smoke-borg-extended.result }}" != "success" ] && [ "${{ needs.smoke-borg-extended.result }}" != "skipped" ]; then
-            echo "Borg smoke extended failed"
+            echo "Smoke / Extended failed"
             exit 1
           fi
 
           if [ "${{ needs.smoke-borg-ssh-localhost.result }}" != "success" ] && [ "${{ needs.smoke-borg-ssh-localhost.result }}" != "skipped" ]; then
-            echo "Borg smoke SSH localhost failed"
+            echo "Smoke / SSH failed"
             exit 1
           fi
 
