@@ -363,7 +363,7 @@ class TestEncryptedArchivesIntegration:
         admin_headers,
         db_encrypted_borg_repo
     ):
-        """Test deleting archive from encrypted repository (now returns background job)"""
+        """Test deleting archive from encrypted repository through background job completion."""
         repo, repo_path, test_data_path, passphrase = db_encrypted_borg_repo
 
         response = test_client.delete(
@@ -380,10 +380,23 @@ class TestEncryptedArchivesIntegration:
         assert "message" in data
         assert data["status"] in ["pending", "running"]
         assert "deletion" in data["message"].lower()
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/archives/delete-jobs",
+            data["job_id"],
+            admin_headers,
+            timeout=45,
+        )
 
-        # Note: Archive deletion now happens in background
-        # We verify the job was created successfully
-        # Actual deletion verification would require polling the job status endpoint
+        assert job_data["status"] in ["completed", "completed_with_warnings"]
+
+        list_response = test_client.get(
+            f"/api/archives/list?repository={repo.path}",
+            headers=admin_headers,
+        )
+        assert list_response.status_code == 200
+        archive_names_after = [archive["name"] for archive in parse_archives_payload(list_response.json())]
+        assert "encrypted-archive" not in archive_names_after
 
 
 @pytest.mark.integration

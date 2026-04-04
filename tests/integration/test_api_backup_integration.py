@@ -1,4 +1,6 @@
 import json
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,44 @@ def _prepare_repository_for_backup(repo, test_db, source_paths):
     repo.source_directories = json.dumps([str(path) for path in source_paths])
     repo.compression = "lz4"
     test_db.commit()
+
+
+def _wait_for_backup_status(
+    test_client: TestClient,
+    job_id: int,
+    headers,
+    expected_status: str,
+    *,
+    timeout: float = 30.0,
+    poll_interval: float = 0.25,
+):
+    start = time.time()
+    last_data = None
+
+    while time.time() - start < timeout:
+        response = test_client.get(f"/api/backup/status/{job_id}", headers=headers)
+        response.raise_for_status()
+        last_data = response.json()
+
+        if last_data.get("status") == expected_status:
+            return last_data
+
+        if last_data.get("status") in {"failed", "cancelled", "completed", "completed_with_warnings"}:
+            break
+
+        time.sleep(poll_interval)
+
+    raise TimeoutError(
+        f"Backup job {job_id} did not reach status {expected_status} within {timeout}s. "
+        f"Last payload: {last_data}"
+    )
+
+
+def _write_incompressible_file(path: Path, *, size_mb: int) -> None:
+    chunk_size = 1024 * 1024
+    with path.open("wb") as handle:
+        for _ in range(size_mb):
+            handle.write(os.urandom(chunk_size))
 
 
 @pytest.mark.integration
@@ -219,3 +259,55 @@ class TestBackupCreationIntegration:
         archive_names = [archive["name"] for archive in parse_archives_payload(list_response.json())]
         assert "encrypted-archive" in archive_names
         assert any(name.startswith("manual-backup-") for name in archive_names)
+
+    def test_cancel_running_backup_via_api(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo,
+        test_db,
+        tmp_path,
+    ):
+        repo, repo_path, _test_data_path = db_borg_repo
+        large_source_dir = tmp_path / "large-source"
+        large_source_dir.mkdir()
+        _write_incompressible_file(large_source_dir / "huge.bin", size_mb=128)
+
+        _prepare_repository_for_backup(repo, test_db, [large_source_dir])
+        repo.compression = "lzma"
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/backup/start",
+            json={"repository": str(repo_path)},
+            headers=admin_headers,
+        )
+
+        assert response.status_code in [200, 201, 202]
+        job_id = response.json()["job_id"]
+
+        _wait_for_backup_status(
+            test_client,
+            job_id,
+            admin_headers,
+            "running",
+            timeout=20,
+        )
+
+        cancel_response = test_client.post(
+            f"/api/backup/cancel/{job_id}",
+            headers=admin_headers,
+        )
+
+        assert cancel_response.status_code == 200
+        cancel_payload = cancel_response.json()
+        assert cancel_payload["message"] == "backend.success.backup.backupCancelled"
+
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/backup/status",
+            job_id,
+            admin_headers,
+            timeout=20,
+        )
+        assert job_data["status"] == "cancelled"
