@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -13,6 +14,45 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tests.smoke.live_helpers import SmokeClient, SmokeFailure
+
+
+def ensure_public_key_authorized(auth_keys_path: Path, public_key: str) -> None:
+    """Append the generated key to authorized_keys, using sudo when needed."""
+    auth_keys_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        existing = auth_keys_path.read_text(encoding="utf-8") if auth_keys_path.exists() else ""
+        if public_key not in existing:
+            with auth_keys_path.open("a", encoding="utf-8") as handle:
+                if existing and not existing.endswith("\n"):
+                    handle.write("\n")
+                handle.write(public_key)
+                handle.write("\n")
+        return
+    except PermissionError:
+        pass
+
+    helper = """
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+public_key = sys.argv[2]
+path.parent.mkdir(parents=True, exist_ok=True)
+existing = path.read_text(encoding="utf-8") if path.exists() else ""
+if public_key not in existing:
+    with path.open("a", encoding="utf-8") as handle:
+        if existing and not existing.endswith("\\n"):
+            handle.write("\\n")
+        handle.write(public_key)
+        handle.write("\\n")
+"""
+    try:
+        subprocess.run(
+            ["sudo", sys.executable, "-c", helper, str(auth_keys_path), public_key],
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise SmokeFailure(f"Unable to update authorized_keys via sudo: {exc}") from exc
 
 
 def main() -> int:
@@ -55,14 +95,7 @@ def main() -> int:
         if not public_key.startswith("ssh-"):
             raise SmokeFailure(f"Unexpected SSH public key payload: {key_payload}")
 
-        auth_keys_path.parent.mkdir(parents=True, exist_ok=True)
-        existing = auth_keys_path.read_text(encoding="utf-8") if auth_keys_path.exists() else ""
-        if public_key not in existing:
-            with auth_keys_path.open("a", encoding="utf-8") as handle:
-                if existing and not existing.endswith("\n"):
-                    handle.write("\n")
-                handle.write(public_key)
-                handle.write("\n")
+        ensure_public_key_authorized(auth_keys_path, public_key)
 
         test_response = client.request_ok(
             "POST",
