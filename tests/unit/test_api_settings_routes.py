@@ -3,11 +3,30 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api import settings as settings_api
 from app.database.models import Repository, SystemSettings, User
 
 
 @pytest.mark.unit
 class TestSystemSettingsContracts:
+    def test_get_effective_timeout_prefers_saved_value_over_env(self):
+        value, source = settings_api.get_effective_timeout(600, 120, 300)
+
+        assert value == 600
+        assert source == "saved"
+
+    def test_get_effective_timeout_uses_env_when_db_matches_default(self):
+        value, source = settings_api.get_effective_timeout(300, 450, 300)
+
+        assert value == 450
+        assert source == "env"
+
+    def test_get_effective_timeout_falls_back_to_default(self):
+        value, source = settings_api.get_effective_timeout(None, 300, 300)
+
+        assert value == 300
+        assert source is None
+
     def test_get_system_settings_creates_defaults_and_reports_timeout_sources(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -22,6 +41,21 @@ class TestSystemSettingsContracts:
         assert settings["timeout_sources"]["backup_timeout"] in (None, "env")
         assert settings["app_version"] == "1.36.1"
         assert test_db.query(SystemSettings).count() == 1
+
+    def test_get_system_settings_falls_back_when_log_storage_lookup_fails(
+        self, test_client: TestClient, admin_headers
+    ):
+        fake_log_manager = Mock()
+        fake_log_manager.calculate_log_storage.side_effect = RuntimeError("boom")
+
+        with patch("app.services.log_manager.log_manager", fake_log_manager):
+            response = test_client.get("/api/settings/system", headers=admin_headers)
+
+        assert response.status_code == 200
+        log_storage = response.json()["log_storage"]
+        assert log_storage["total_size_mb"] == 0
+        assert log_storage["file_count"] == 0
+        assert log_storage["files_by_type"] == {}
 
     def test_update_system_settings_rejects_invalid_log_save_policy(
         self, test_client: TestClient, admin_headers
@@ -154,6 +188,34 @@ class TestSettingsUserContracts:
         assert profile["deployment_type"] == "enterprise"
         assert profile["enterprise_name"] == "Acme Inc"
 
+    def test_get_preferences_returns_user_analytics_flags(self, test_client: TestClient, admin_headers, admin_user):
+        admin_user.analytics_enabled = False
+        admin_user.analytics_consent_given = True
+
+        response = test_client.get("/api/settings/preferences", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "success": True,
+            "preferences": {
+                "analytics_enabled": False,
+                "analytics_consent_given": True,
+            },
+        }
+
+    def test_update_preferences_persists_analytics_flags(self, test_client: TestClient, admin_headers, admin_user, test_db):
+        response = test_client.put(
+            "/api/settings/preferences",
+            json={"analytics_enabled": False, "analytics_consent_given": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(admin_user)
+        assert admin_user.analytics_enabled is False
+        assert admin_user.analytics_consent_given is True
+        assert response.json()["message"] == "backend.success.settings.preferencesUpdated"
+
 
 @pytest.mark.unit
 class TestCacheSettingsContracts:
@@ -208,3 +270,28 @@ class TestCacheSettingsContracts:
         assert settings.cache_ttl_minutes == 90
         assert settings.cache_max_size_mb == 256
         assert settings.redis_url == "disabled"
+
+    def test_get_log_storage_stats_reports_usage_percent(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        test_db.add(SystemSettings(log_max_total_size_mb=200))
+        test_db.commit()
+
+        fake_log_manager = Mock()
+        fake_log_manager.calculate_log_storage.return_value = {
+            "total_size_bytes": 50 * 1024 * 1024,
+            "total_size_mb": 50,
+            "file_count": 4,
+            "oldest_log_date": None,
+            "newest_log_date": None,
+            "files_by_type": {"backup": 2, "restore": 2},
+        }
+
+        with patch("app.services.log_manager.log_manager", fake_log_manager):
+            response = test_client.get("/api/settings/system/logs/storage", headers=admin_headers)
+
+        assert response.status_code == 200
+        log_storage = response.json()["storage"]
+        assert log_storage["usage_percent"] == 25
+        assert log_storage["file_count"] == 4
+        assert log_storage["files_by_type"] == {"backup": 2, "restore": 2}
