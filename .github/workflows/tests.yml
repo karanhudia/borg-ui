@@ -362,7 +362,11 @@ jobs:
       - name: Copy frontend build to static directory
         run: |
           mkdir -p app/static
-          if [ -d "frontend-artifact/frontend/build" ]; then
+          if [ -d "frontend-artifact/build" ]; then
+            cp -r frontend-artifact/build/* app/static/
+          elif [ -d "frontend-artifact/dist" ]; then
+            cp -r frontend-artifact/dist/* app/static/
+          elif [ -d "frontend-artifact/frontend/build" ]; then
             cp -r frontend-artifact/frontend/build/* app/static/
           elif [ -d "frontend-artifact/frontend/dist" ]; then
             cp -r frontend-artifact/frontend/dist/* app/static/
@@ -462,7 +466,11 @@ jobs:
       - name: Copy frontend build to static directory
         run: |
           mkdir -p app/static
-          if [ -d "frontend-artifact/frontend/build" ]; then
+          if [ -d "frontend-artifact/build" ]; then
+            cp -r frontend-artifact/build/* app/static/
+          elif [ -d "frontend-artifact/dist" ]; then
+            cp -r frontend-artifact/dist/* app/static/
+          elif [ -d "frontend-artifact/frontend/build" ]; then
             cp -r frontend-artifact/frontend/build/* app/static/
           elif [ -d "frontend-artifact/frontend/dist" ]; then
             cp -r frontend-artifact/frontend/dist/* app/static/
@@ -577,7 +585,11 @@ jobs:
       - name: Copy frontend build to static directory
         run: |
           mkdir -p app/static
-          if [ -d "frontend-artifact/frontend/build" ]; then
+          if [ -d "frontend-artifact/build" ]; then
+            cp -r frontend-artifact/build/* app/static/
+          elif [ -d "frontend-artifact/dist" ]; then
+            cp -r frontend-artifact/dist/* app/static/
+          elif [ -d "frontend-artifact/frontend/build" ]; then
             cp -r frontend-artifact/frontend/build/* app/static/
           elif [ -d "frontend-artifact/frontend/dist" ]; then
             cp -r frontend-artifact/frontend/dist/* app/static/
