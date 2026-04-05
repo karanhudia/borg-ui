@@ -840,6 +840,6 @@ Restart container: `docker compose down && docker compose up -d`
 ---
 
 **Need Help?**
-- 📖 [Full Documentation](https://karanhudia.github.io/borg-ui)
+- 📖 [Full Documentation](https://docs.borgui.com)
 - 🐛 [Report Issues](https://github.com/karanhudia/borg-ui/issues)
 - 💬 [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)

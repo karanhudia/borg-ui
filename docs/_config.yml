@@ -1,8 +1,8 @@
 title: Borg Web UI
 description: A modern, user-friendly web interface for Borg Backup management
 remote_theme: just-the-docs/just-the-docs
-baseurl: /borg-ui
-url: https://karanhudia.github.io
+baseurl: ""
+url: https://docs.borgui.com
 
 # GitHub metadata
 repository: karanhudia/borg-ui

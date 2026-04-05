@@ -6,7 +6,7 @@
 
 <div align="center">
   <h5>
-      <a href="https://karanhudia.github.io/borg-ui">Documentation</a>
+      <a href="https://docs.borgui.com">Documentation</a>
       <span> | </span>
       <a href="https://hub.docker.com/r/ainullcode/borg-ui">Docker Hub</a>
       <span> | </span>
@@ -141,28 +141,28 @@ docker run -d \
 
 Access at `http://localhost:8081` • Default credentials: `admin` / `admin123`
 
-**📖 [Installation Guide](https://karanhudia.github.io/borg-ui/installation)** - Complete setup with Docker Compose, Redis, Portainer, Unraid
+**📖 [Installation Guide](https://docs.borgui.com/installation)** - Complete setup with Docker Compose, Redis, Portainer, Unraid
 
 ---
 
 ## Documentation
 
-**[📚 Full Documentation](https://karanhudia.github.io/borg-ui)** - Complete guides and tutorials
+**[📚 Full Documentation](https://docs.borgui.com)** - Complete guides and tutorials
 
 Quick links:
-- [Installation Guide](https://karanhudia.github.io/borg-ui/installation) - Detailed setup for all platforms
-- [Configuration Guide](https://karanhudia.github.io/borg-ui/configuration) - Environment variables and customization
-- [Usage Guide](https://karanhudia.github.io/borg-ui/usage-guide) - Creating your first backup
-- [Notifications Setup](https://karanhudia.github.io/borg-ui/notifications) - Email, Slack, Discord alerts
-- [SSH Keys Guide](https://karanhudia.github.io/borg-ui/ssh-keys) - Remote backup setup
-- [Security Guide](https://karanhudia.github.io/borg-ui/security) - Best practices
+- [Installation Guide](https://docs.borgui.com/installation) - Detailed setup for all platforms
+- [Configuration Guide](https://docs.borgui.com/configuration) - Environment variables and customization
+- [Usage Guide](https://docs.borgui.com/usage-guide) - Creating your first backup
+- [Notifications Setup](https://docs.borgui.com/notifications) - Email, Slack, Discord alerts
+- [SSH Keys Guide](https://docs.borgui.com/ssh-keys) - Remote backup setup
+- [Security Guide](https://docs.borgui.com/security) - Best practices
 
 ---
 
 ## Support
 
 - **Discord**: [Join our community](https://discord.gg/5KfVa5QkdQ) - Get help, share your setup, suggest features
-- **Documentation**: [Full Documentation](https://karanhudia.github.io/borg-ui)
+- **Documentation**: [Full Documentation](https://docs.borgui.com)
 - **Bug Reports**: [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
 
@@ -184,7 +184,7 @@ Quick links:
 
 ## Contributing
 
-Want to help improve Borg Web UI? See our [Contributing Guide](.github/CONTRIBUTING.md) and [Development Guide](https://karanhudia.github.io/borg-ui/development) to get started.
+Want to help improve Borg Web UI? See our [Contributing Guide](.github/CONTRIBUTING.md) and [Development Guide](https://docs.borgui.com/development) to get started.
 
 ---
 

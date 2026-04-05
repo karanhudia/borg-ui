@@ -8,7 +8,7 @@ nav_order: 99
 
 The production announcement feed is published from:
 
-`https://karanhudia.github.io/borg-ui/announcements.json`
+`https://docs.borgui.com/announcements.json`
 
 This file is sourced from [docs/announcements.json](/Users/karanhudia/Documents/Redundancy/borg-ui/docs/announcements.json) because GitHub Pages in this repository publishes the `docs/` site.
 
