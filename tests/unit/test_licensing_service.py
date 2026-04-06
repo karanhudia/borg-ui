@@ -64,10 +64,8 @@ def activation_keys(monkeypatch):
         format=serialization.PublicFormat.Raw,
     )
     monkeypatch.setattr(settings, "activation_public_key", base64.b64encode(public_key).decode("utf-8"))
-    monkeypatch.setattr(settings, "activation_public_key_file", None)
     monkeypatch.setattr(settings, "activation_service_url", "https://activation.example.test")
     monkeypatch.setattr(settings, "activation_shared_secret", "shared-secret")
-    monkeypatch.setattr(settings, "activation_service_token", None)
     return private_key
 
 
@@ -79,10 +77,8 @@ def activation_keys_der(monkeypatch):
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
     monkeypatch.setattr(settings, "activation_public_key", base64.b64encode(public_key).decode("utf-8"))
-    monkeypatch.setattr(settings, "activation_public_key_file", None)
     monkeypatch.setattr(settings, "activation_service_url", "https://activation.example.test")
     monkeypatch.setattr(settings, "activation_shared_secret", "shared-secret")
-    monkeypatch.setattr(settings, "activation_service_token", None)
     return private_key
 
 

@@ -48,19 +48,11 @@ def _canonical_payload(payload: dict[str, Any]) -> bytes:
 
 
 def _get_public_key() -> str | None:
-    if settings.activation_public_key:
-        return settings.activation_public_key
-    if settings.activation_public_key_file:
-        try:
-            with open(settings.activation_public_key_file, "r") as f:
-                return f.read().strip()
-        except Exception as exc:
-            logger.warning("Failed to read activation public key file", error=str(exc))
-    return None
+    return settings.activation_public_key
 
 
 def _get_auth_headers() -> dict[str, str]:
-    secret = settings.activation_shared_secret or settings.activation_service_token
+    secret = settings.activation_shared_secret
     if not secret:
         return {}
     return {"Authorization": f"Bearer {secret}"}
