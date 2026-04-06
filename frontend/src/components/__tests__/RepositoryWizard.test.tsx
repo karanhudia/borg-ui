@@ -1446,6 +1446,43 @@ describe('RepositoryWizard', () => {
       expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
     })
 
+    it('does not require a passphrase in import mode', async () => {
+      const user = userEvent.setup()
+      renderWizard('import')
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
+      })
+
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Imported Repo')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/backups/imported')
+
+      const selectButtons = screen.getAllByText('Full Repository')
+      const selectButton =
+        selectButtons.find(
+          (el) => el.closest('[role="combobox"]') || el.closest('.MuiSelect-select')
+        ) || selectButtons[0]
+      await user.click(selectButton)
+
+      const listbox = await screen.findByRole('listbox', {}, { timeout: 3000 })
+      await user.click(within(listbox).getByText('Observability Only'))
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Source Directories & Files')).toBeInTheDocument()
+      })
+
+      const nextButton = screen.getByRole('button', { name: /Next/i })
+      expect(nextButton).not.toBeDisabled()
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Passphrase/i)).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
+    })
+
     it('parses SSH URL format correctly', async () => {
       const existingRepo = {
         name: 'SSH Repo',

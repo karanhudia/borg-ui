@@ -87,7 +87,7 @@ interface WizardState {
   hookFailureMode: 'fail' | 'continue' | 'skip'
 }
 
-const initialState: WizardState = {
+const createInitialState = (): WizardState => ({
   name: '',
   borgVersion: 1,
   repositoryMode: 'full',
@@ -110,13 +110,13 @@ const initialState: WizardState = {
   preHookTimeout: 300,
   postHookTimeout: 300,
   hookFailureMode: 'fail',
-}
+})
 
 const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: RepositoryWizardProps) => {
   const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
-  const [wizardState, setWizardState] = useState<WizardState>(initialState)
+  const [wizardState, setWizardState] = useState<WizardState>(() => createInitialState())
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
 
   // File explorer states
@@ -236,7 +236,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   // Reset form
   const resetForm = () => {
     setActiveStep(0)
-    setWizardState(initialState)
+    setWizardState(createInitialState())
   }
 
   // Handle state changes
@@ -436,6 +436,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
       case 'security':
         if (mode === 'edit') return true
+        if (mode === 'import') return true
         if (wizardState.encryption !== 'none' && !wizardState.passphrase.trim()) return false
         return true
 
