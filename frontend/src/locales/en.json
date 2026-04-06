@@ -1295,7 +1295,7 @@
     "updateFailed": "Failed to update preferences",
     "analyticsTransparencyBold": "Full Transparency:",
     "analyticsTransparencyLink": "View our analytics dashboard publicly",
-    "analyticsTransparencyAfterLink": "to see exactly what we collect. Self-hosted, no third parties."
+    "analyticsTransparencyAfterLink": "to see exactly what we collect. Anonymous and privacy-focused."
   },
   "betaFeatures": {
     "title": "Beta Features",

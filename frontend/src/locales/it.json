@@ -1295,7 +1295,7 @@
     "updateFailed": "Impossibile aggiornare le preferenze",
     "analyticsTransparencyBold": "Trasparenza Totale:",
     "analyticsTransparencyLink": "Visualizza pubblicamente la nostra dashboard di analisi",
-    "analyticsTransparencyAfterLink": "per vedere esattamente cosa raccogliamo. Self-hosted, senza terze parti."
+    "analyticsTransparencyAfterLink": "per vedere esattamente cosa raccogliamo. Anonimo e attento alla privacy."
   },
   "betaFeatures": {
     "title": "Funzionalità Beta",

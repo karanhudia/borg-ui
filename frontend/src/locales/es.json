@@ -1295,7 +1295,7 @@
     "updateFailed": "Error al actualizar las preferencias",
     "analyticsTransparencyBold": "Transparencia total:",
     "analyticsTransparencyLink": "Ver nuestro panel de análisis públicamente",
-    "analyticsTransparencyAfterLink": "para ver exactamente qué recopilamos. Autoalojado, sin terceros."
+    "analyticsTransparencyAfterLink": "para ver exactamente qué recopilamos. Anónimo y centrado en la privacidad."
   },
   "betaFeatures": {
     "title": "Funciones beta",

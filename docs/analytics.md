@@ -124,7 +124,7 @@ You have the right to:
 - Individual installations are not identifiable
 - No tracking between instances (each install is anonymous)
 
-This is different from self-hosted alternatives where each user runs their own analytics. We chose centralized analytics to better understand how the product is used globally while maintaining user privacy through anonymization.
+This is different from per-install analytics setups where each user runs their own analytics. We chose centralized analytics to better understand how the product is used globally while maintaining user privacy through anonymization.
 
 ## Open Source & Transparency
 

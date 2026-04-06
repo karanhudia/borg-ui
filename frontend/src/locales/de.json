@@ -1295,7 +1295,7 @@
     "updateFailed": "Einstellungen konnten nicht aktualisiert werden",
     "analyticsTransparencyBold": "Volle Transparenz:",
     "analyticsTransparencyLink": "Unser Analyse-Dashboard öffentlich einsehen",
-    "analyticsTransparencyAfterLink": "um genau zu sehen, was wir erfassen. Selbst gehostet, keine Drittanbieter."
+    "analyticsTransparencyAfterLink": "um genau zu sehen, was wir erfassen. Anonym und datenschutzorientiert."
   },
   "betaFeatures": {
     "title": "Beta-Funktionen",
