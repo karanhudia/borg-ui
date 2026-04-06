@@ -13,6 +13,7 @@ import { alpha, useTheme as useMuiTheme } from '@mui/material/styles'
 import { ChevronDown, LogOut, Menu, Shield } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { formatRoleLabel } from '../utils/rolePresentation'
 
 const drawerWidth = 240
@@ -46,6 +47,7 @@ function getRoleBadgeStyles(roleLabel: string, isDark: boolean) {
 export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
+  const { trackAuth, trackNavigation, EventAction } = useAnalytics()
   const muiTheme = useMuiTheme()
   const isDark = muiTheme.palette.mode === 'dark'
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
@@ -99,7 +101,10 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
 
         <Box
           component="button"
-          onClick={(e: MouseEvent<HTMLButtonElement>) => setAnchorEl(e.currentTarget)}
+          onClick={(e: MouseEvent<HTMLButtonElement>) => {
+            setAnchorEl(e.currentTarget)
+            trackNavigation(EventAction.VIEW, { surface: 'user_menu' })
+          }}
           aria-label="User menu"
           aria-haspopup="true"
           aria-expanded={open}
@@ -223,6 +228,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
             component="button"
             onClick={() => {
               setAnchorEl(null)
+              trackAuth(EventAction.LOGOUT, { surface: 'user_menu' })
               logout()
             }}
             sx={{

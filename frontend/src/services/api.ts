@@ -374,6 +374,8 @@ export const repositoriesAPI = {
   getCompactJobStatus: (jobId: number) => api.get(`/repositories/compact-jobs/${jobId}`),
   getRepositoryCompactJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),
+  getRepositoryPruneJobs: (id: number, limit?: number) =>
+    api.get(`/repositories/${id}/prune-jobs`, { params: { limit } }),
   getRunningJobs: (id: number) => api.get(`/repositories/${id}/running-jobs`),
   getArchiveInfo: (
     repoId: number,

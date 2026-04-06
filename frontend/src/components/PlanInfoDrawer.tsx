@@ -48,7 +48,7 @@ export default function PlanInfoDrawer({
   entitlement,
 }: PlanInfoDrawerProps) {
   const { t } = useTranslation()
-  const { track, EventCategory } = useAnalytics()
+  const { trackPlan, EventAction } = useAnalytics()
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
     getDefaultSelectedPlan(plan, initialSelectedPlan)
   )
@@ -172,7 +172,11 @@ export default function PlanInfoDrawer({
                 key={p}
                 onClick={() => {
                   setSelectedPlan(p)
-                  track(EventCategory.PLAN, 'ViewPlan', { plan: p })
+                  trackPlan(EventAction.VIEW, {
+                    surface: 'plan_drawer',
+                    operation: 'select_plan',
+                    selected_plan: p,
+                  })
                 }}
                 sx={{
                   p: 1,

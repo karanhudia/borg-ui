@@ -21,7 +21,7 @@ interface SidebarVersionInfoProps {
 export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoProps) {
   const { t } = useTranslation()
   const { plan, features, entitlement, isLoading: isPlanLoading } = usePlan()
-  const { track, EventCategory } = useAnalytics()
+  const { trackPlan, EventAction } = useAnalytics()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const displayedPlan =
     entitlement?.is_full_access && entitlement.status === 'active'
@@ -33,7 +33,11 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
           : 'pro'
 
   const handleBadgeClick = () => {
-    track(EventCategory.PLAN, 'OpenDrawer', { plan: displayedPlan })
+    trackPlan(EventAction.VIEW, {
+      surface: 'plan_badge',
+      operation: 'open_drawer',
+      displayed_plan: displayedPlan,
+    })
     setDrawerOpen(true)
   }
 

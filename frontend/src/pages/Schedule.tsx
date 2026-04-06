@@ -40,6 +40,8 @@ import BackupHistorySection from '../components/BackupHistorySection'
 import RunningBackupsSection from '../components/RunningBackupsSection'
 import ScheduledJobsTable from '../components/ScheduledJobsTable'
 import { Repository } from '../types'
+import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
+import { getJobDurationSeconds } from '../utils/analyticsProperties'
 
 interface ScheduledJob {
   id: number
@@ -357,6 +359,34 @@ const Schedule: React.FC = () => {
   const handleDuplicateJob = (job: ScheduledJob) => {
     duplicateJobMutation.mutate(job)
   }
+
+  useTrackedJobOutcomes<BackupJob>({
+    jobs: backupJobsData?.data?.jobs?.filter((job: BackupJob) => job.scheduled_job_id),
+    onTerminal: (job) => {
+      const scheduledJob = jobsData?.data?.jobs?.find(
+        (candidate: ScheduledJob) => candidate.id === job.scheduled_job_id
+      )
+      const action =
+        job.status === 'completed' || job.status === 'completed_with_warnings'
+          ? EventAction.COMPLETE
+          : EventAction.FAIL
+
+      track(EventCategory.BACKUP, action, {
+        entity: 'schedule',
+        scheduled_job_id: job.scheduled_job_id,
+        schedule_name: scheduledJob?.name ?? null,
+        repository_count:
+          scheduledJob?.repository_ids?.length || (scheduledJob?.repository_id ? 1 : 0),
+        status: job.status,
+        job_id: job.id,
+        trigger: 'scheduled',
+        maintenance_status: job.maintenance_status ?? null,
+        duration_seconds: getJobDurationSeconds(job.started_at, job.completed_at),
+        error_present: !!job.error_message,
+        warning_count: job.status === 'completed_with_warnings' ? 1 : 0,
+      })
+    },
+  })
 
   // Wizard handlers
   const openCreateWizard = () => {

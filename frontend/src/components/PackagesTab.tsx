@@ -77,6 +77,7 @@ export default function PackagesTab() {
   const [editingPackage, setEditingPackage] = useState<PackageType | null>(null)
   const [deleteConfirmPackage, setDeleteConfirmPackage] = useState<PackageType | null>(null)
   const [activeJobId, setActiveJobId] = useState<number | null>(null)
+  const [activeJobOperation, setActiveJobOperation] = useState<'install' | 'reinstall' | null>(null)
   const [jobStatus, setJobStatus] = useState<JobStatusType | null>(null)
   const [showResultDialog, setShowResultDialog] = useState(false)
 
@@ -95,6 +96,7 @@ export default function PackagesTab() {
       return response.data
     },
   })
+  const packages = Array.isArray(packagesData) ? (packagesData as PackageType[]) : []
 
   // Poll job status when activeJobId is set
   useEffect(() => {
@@ -108,7 +110,19 @@ export default function PackagesTab() {
 
         // If job is completed or failed, stop polling and show results
         if (status.status === 'completed' || status.status === 'failed') {
+          const trackedPackage = packages.find((pkg: PackageType) => pkg.id === status.package_id)
+          trackPackage(
+            status.status === 'completed' ? EventAction.COMPLETE : EventAction.FAIL,
+            trackedPackage?.name,
+            {
+              operation: activeJobOperation ?? 'install',
+              job_id: status.id,
+              exit_code: status.exit_code,
+              error_present: !!(status.error_message || status.stderr),
+            }
+          )
           setActiveJobId(null)
+          setActiveJobOperation(null)
           setShowResultDialog(true)
           queryClient.invalidateQueries({ queryKey: ['packages'] })
         }
@@ -116,6 +130,7 @@ export default function PackagesTab() {
         console.error('Failed to fetch job status:', error)
         // Stop polling on error
         setActiveJobId(null)
+        setActiveJobOperation(null)
       }
     }
 
@@ -126,7 +141,7 @@ export default function PackagesTab() {
     const interval = setInterval(pollJobStatus, 2000)
 
     return () => clearInterval(interval)
-  }, [activeJobId, queryClient])
+  }, [activeJobId, activeJobOperation, packages, queryClient, trackPackage, EventAction])
 
   // Create package mutation
   const createPackageMutation = useMutation({
@@ -180,6 +195,7 @@ export default function PackagesTab() {
     onSuccess: (data: InstallJobResponse) => {
       toast.success(translateBackendKey(data.message))
       setActiveJobId(data.job_id)
+      setActiveJobOperation('install')
       setJobStatus(null) // Reset job status
       queryClient.invalidateQueries({ queryKey: ['packages'] })
     },
@@ -220,6 +236,7 @@ export default function PackagesTab() {
     onSuccess: (data: InstallJobResponse) => {
       toast.success(translateBackendKey(data.message))
       setActiveJobId(data.job_id)
+      setActiveJobOperation('reinstall')
       setJobStatus(null) // Reset job status
       queryClient.invalidateQueries({ queryKey: ['packages'] })
     },
@@ -403,7 +420,7 @@ export default function PackagesTab() {
       </Box>
 
       <DataTable
-        data={packagesData || []}
+        data={packages}
         columns={columns}
         actions={actions}
         getRowKey={(pkg) => pkg.id}

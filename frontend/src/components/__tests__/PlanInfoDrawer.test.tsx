@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent } from '../../test/test-utils'
 import PlanInfoDrawer from '../PlanInfoDrawer'
 
-const { track } = vi.hoisted(() => ({
-  track: vi.fn(),
+const { trackPlan } = vi.hoisted(() => ({
+  trackPlan: vi.fn(),
 }))
 
 vi.mock('../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({
-    track,
-    EventCategory: { PLAN: 'plan' },
+    trackPlan,
+    EventAction: { VIEW: 'View' },
   }),
 }))
 
@@ -41,7 +41,11 @@ describe('PlanInfoDrawer', () => {
 
     await user.click(screen.getByText('Enterprise'))
 
-    expect(track).toHaveBeenCalledWith('plan', 'ViewPlan', { plan: 'enterprise' })
+    expect(trackPlan).toHaveBeenCalledWith('View', {
+      surface: 'plan_drawer',
+      operation: 'select_plan',
+      selected_plan: 'enterprise',
+    })
     expect(screen.getByText('Upcoming for Enterprise')).toBeInTheDocument()
   })
 

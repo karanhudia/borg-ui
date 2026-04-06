@@ -80,19 +80,27 @@ export const useAnalytics = () => {
 
   // Repository-specific tracking with anonymous entity hash
   const trackRepository = useCallback(
-    (action: string, entity?: AnalyticsEntity) => {
-      trackEvent(EventCategory.REPOSITORY, action, buildEntityData(entity))
+    (action: string, entity?: AnalyticsEntity, extra?: Record<string, unknown>) => {
+      trackEvent(EventCategory.REPOSITORY, action, buildEntityData(entity, extra))
     },
     [buildEntityData]
   )
 
   // Backup tracking - descriptor for type (e.g., 'logs'), entityName for repo
   const trackBackup = useCallback(
-    (action: string, descriptor?: string, entity?: AnalyticsEntity) => {
+    (
+      action: string,
+      descriptor?: string,
+      entity?: AnalyticsEntity,
+      extra?: Record<string, unknown>
+    ) => {
       trackEvent(
         EventCategory.BACKUP,
         action,
-        buildEntityData(entity, descriptor ? { descriptor } : undefined)
+        buildEntityData(entity, {
+          ...(descriptor ? { descriptor } : {}),
+          ...(extra || {}),
+        })
       )
     },
     [buildEntityData]
@@ -100,8 +108,8 @@ export const useAnalytics = () => {
 
   // Archive tracking with anonymous entity hash
   const trackArchive = useCallback(
-    (action: string, entity?: AnalyticsEntity) => {
-      trackEvent(EventCategory.ARCHIVE, action, buildEntityData(entity))
+    (action: string, entity?: AnalyticsEntity, extra?: Record<string, unknown>) => {
+      trackEvent(EventCategory.ARCHIVE, action, buildEntityData(entity, extra))
     },
     [buildEntityData]
   )
@@ -116,11 +124,16 @@ export const useAnalytics = () => {
 
   // Maintenance tracking - operationType required, entityName for repo hash
   const trackMaintenance = useCallback(
-    (action: string, operationType: string, entity?: AnalyticsEntity) => {
+    (
+      action: string,
+      operationType: string,
+      entity?: AnalyticsEntity,
+      extra?: Record<string, unknown>
+    ) => {
       trackEvent(
         EventCategory.MAINTENANCE,
         action,
-        buildEntityData(entity, { operation_type: operationType })
+        buildEntityData(entity, { operation_type: operationType, ...(extra || {}) })
       )
     },
     [buildEntityData]
@@ -182,8 +195,8 @@ export const useAnalytics = () => {
   }, [])
 
   // Auth tracking
-  const trackAuth = useCallback((action: string) => {
-    trackEvent(EventCategory.AUTH, action)
+  const trackAuth = useCallback((action: string, data?: Record<string, unknown>) => {
+    trackEvent(EventCategory.AUTH, action, data)
   }, [])
 
   return {
@@ -203,6 +216,7 @@ export const useAnalytics = () => {
     trackNavigation,
     trackPlan,
     trackAuth,
+    buildEntityData,
     EventCategory,
     EventAction,
   }

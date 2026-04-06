@@ -143,6 +143,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
       START: 'Start',
       MOUNT: 'Mount',
       DELETE: 'Delete',
+      DOWNLOAD: 'Download',
     },
   }),
 }))
@@ -209,7 +210,9 @@ describe('Archives page actions', () => {
     await user.click(await screen.findByText('Select Repo'))
 
     await waitFor(() => {
-      expect(trackArchive).toHaveBeenCalledWith('Filter', repository)
+      expect(trackArchive).toHaveBeenCalledWith('Filter', repository, {
+        surface: 'archives_page',
+      })
     })
 
     await user.click(screen.getByText('View Archive'))
@@ -220,7 +223,15 @@ describe('Archives page actions', () => {
       'archive-1',
       '/etc/hosts'
     )
-    expect(trackArchive).toHaveBeenCalledWith('View', repository)
+    expect(trackArchive).toHaveBeenCalledWith('View', repository, {
+      surface: 'archive_contents',
+      operation: 'open_archive',
+      archive_age_bucket: expect.any(String),
+    })
+    expect(trackArchive).toHaveBeenCalledWith('Download', repository, {
+      operation: 'download_archive_file',
+      archive_age_bucket: expect.any(String),
+    })
 
     await user.click(screen.getByText('Restore Archive'))
     await user.click(await screen.findByText('Confirm Restore'))
@@ -236,7 +247,18 @@ describe('Archives page actions', () => {
         null
       )
     })
-    expect(trackArchive).toHaveBeenCalledWith('Start', repository)
+    expect(trackArchive).toHaveBeenCalledWith('View', repository, {
+      surface: 'restore_wizard',
+      operation: 'select_archive',
+      archive_age_bucket: expect.any(String),
+    })
+    expect(trackArchive).toHaveBeenCalledWith('Start', repository, {
+      operation: 'restore',
+      destination_type: 'local',
+      restore_path_count: 1,
+      uses_custom_destination: true,
+      archive_age_bucket: expect.any(String),
+    })
 
     await user.click(screen.getByText('Mount Archive'))
     await user.click(await screen.findByText('Confirm Mount'))
@@ -248,7 +270,11 @@ describe('Archives page actions', () => {
         mount_point: 'archive-1',
       })
     })
-    expect(trackArchive).toHaveBeenCalledWith('Mount', repository)
+    expect(trackArchive).toHaveBeenCalledWith('Mount', repository, {
+      operation: 'mount_archive',
+      archive_age_bucket: expect.any(String),
+      uses_custom_mount_point: false,
+    })
   })
 
   it('shows translated backend errors when restore start fails', async () => {

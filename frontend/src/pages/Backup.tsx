@@ -32,6 +32,8 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
+import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
+import { getJobDurationSeconds } from '../utils/analyticsProperties'
 
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
@@ -167,6 +169,30 @@ const Backup: React.FC = () => {
 
   const runningJobs = backupStatus?.filter((job: BackupJob) => job.status === 'running') || []
   const recentJobs = backupStatus || []
+
+  useTrackedJobOutcomes<BackupJob>({
+    jobs: recentJobs,
+    onTerminal: (job) => {
+      const repository = repositoriesData?.data?.repositories?.find(
+        (repo: Repository) => repo.path === job.repository
+      )
+      const action =
+        job.status === 'completed' || job.status === 'completed_with_warnings'
+          ? EventAction.COMPLETE
+          : EventAction.FAIL
+
+      trackBackup(action, 'manual', repository ?? job.repository, {
+        trigger: 'manual',
+        job_id: job.id,
+        status: job.status,
+        has_logs: !!job.has_logs,
+        maintenance_status: job.maintenance_status ?? null,
+        duration_seconds: getJobDurationSeconds(job.started_at, job.completed_at),
+        warning_count: job.status === 'completed_with_warnings' ? 1 : 0,
+        error_present: !!job.error_message,
+      })
+    },
+  })
 
   return (
     <Box>

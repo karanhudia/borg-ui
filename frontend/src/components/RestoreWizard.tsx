@@ -18,7 +18,6 @@ import {
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
 import { sshKeysAPI } from '../services/api'
-import { useAnalytics } from '../hooks/useAnalytics'
 
 interface SSHConnection {
   id: number
@@ -87,7 +86,6 @@ const RestoreWizard = ({
   repositoryType,
   onRestore,
 }: RestoreWizardProps) => {
-  const { track, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
@@ -215,8 +213,6 @@ const RestoreWizard = ({
       restore_strategy: wizardState.restoreStrategy,
       custom_path: wizardState.restoreStrategy === 'custom' ? wizardState.customPath : null,
     }
-
-    track(EventCategory.ARCHIVE, EventAction.DOWNLOAD, { source: 'restore_wizard' })
 
     onRestore(data)
   }

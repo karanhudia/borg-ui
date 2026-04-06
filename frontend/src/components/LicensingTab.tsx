@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Alert, Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material'
 import SettingsCard from './SettingsCard'
@@ -7,25 +7,52 @@ import { useTranslation } from 'react-i18next'
 import { licensingAPI } from '../services/api'
 import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 export default function LicensingTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { plan, entitlement } = usePlan()
+  const { trackPlan, EventAction } = useAnalytics()
   const [licenseKey, setLicenseKey] = useState('')
+
+  const analyticsContext = useMemo(
+    () => ({
+      surface: 'licensing_tab',
+      current_plan: plan,
+      access_level: entitlement?.access_level ?? 'community',
+      ui_state: entitlement?.ui_state ?? 'community',
+      status: entitlement?.status ?? 'none',
+      is_full_access: !!(entitlement?.is_full_access && entitlement.status === 'active'),
+      has_license_id: !!entitlement?.license_id,
+    }),
+    [entitlement, plan]
+  )
 
   const refreshSystemInfo = async () => {
     await queryClient.invalidateQueries({ queryKey: ['system-info'] })
   }
 
+  useEffect(() => {
+    trackPlan(EventAction.VIEW, analyticsContext)
+  }, [analyticsContext, trackPlan, EventAction])
+
   const refreshMutation = useMutation({
     mutationFn: async () => licensingAPI.refresh(),
     onSuccess: async () => {
       await refreshSystemInfo()
+      trackPlan(EventAction.COMPLETE, {
+        ...analyticsContext,
+        operation: 'refresh_license',
+      })
       toast.success(t('plan.licenseRefreshSuccess'))
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      trackPlan(EventAction.FAIL, {
+        ...analyticsContext,
+        operation: 'refresh_license',
+      })
       toast.error(
         translateBackendKey(error.response?.data?.detail) || t('plan.licenseRefreshFailed')
       )
@@ -34,13 +61,22 @@ export default function LicensingTab() {
 
   const activateMutation = useMutation({
     mutationFn: async (nextLicenseKey: string) => licensingAPI.activate(nextLicenseKey),
-    onSuccess: async () => {
+    onSuccess: async (_response, nextLicenseKey) => {
       await refreshSystemInfo()
+      trackPlan(EventAction.COMPLETE, {
+        ...analyticsContext,
+        operation: activePaidLicense ? 'replace_license' : 'activate_license',
+        license_key_length: nextLicenseKey.length,
+      })
       setLicenseKey('')
       toast.success(t('plan.licenseActivationSuccess'))
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      trackPlan(EventAction.FAIL, {
+        ...analyticsContext,
+        operation: activePaidLicense ? 'replace_license' : 'activate_license',
+      })
       toast.error(
         translateBackendKey(error.response?.data?.detail) || t('plan.licenseActivationFailed')
       )
@@ -51,11 +87,19 @@ export default function LicensingTab() {
     mutationFn: async () => licensingAPI.deactivate(),
     onSuccess: async () => {
       await refreshSystemInfo()
+      trackPlan(EventAction.COMPLETE, {
+        ...analyticsContext,
+        operation: 'deactivate_license',
+      })
       setLicenseKey('')
       toast.success(t('plan.licenseDeactivationSuccess'))
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
+      trackPlan(EventAction.FAIL, {
+        ...analyticsContext,
+        operation: 'deactivate_license',
+      })
       toast.error(
         translateBackendKey(error.response?.data?.detail) || t('plan.licenseDeactivationFailed')
       )
@@ -77,13 +121,28 @@ export default function LicensingTab() {
   const handleActivate = () => {
     const trimmedKey = licenseKey.trim()
     if (!trimmedKey) {
+      trackPlan(EventAction.FAIL, {
+        ...analyticsContext,
+        operation: activePaidLicense ? 'replace_license' : 'activate_license',
+        failure_reason: 'missing_license_key',
+        stage: 'validation',
+      })
       toast.error(t('plan.licenseKeyRequired'))
       return
     }
+    trackPlan(EventAction.START, {
+      ...analyticsContext,
+      operation: activePaidLicense ? 'replace_license' : 'activate_license',
+      license_key_length: trimmedKey.length,
+    })
     activateMutation.mutate(trimmedKey)
   }
 
   const handleDeactivate = () => {
+    trackPlan(EventAction.START, {
+      ...analyticsContext,
+      operation: 'deactivate_license',
+    })
     deactivateMutation.mutate()
   }
 
@@ -169,7 +228,13 @@ export default function LicensingTab() {
             </Button>
             <Button
               variant="outlined"
-              onClick={() => refreshMutation.mutate()}
+              onClick={() => {
+                trackPlan(EventAction.START, {
+                  ...analyticsContext,
+                  operation: 'refresh_license',
+                })
+                refreshMutation.mutate()
+              }}
               disabled={isMutating}
               startIcon={
                 refreshMutation.isPending ? <CircularProgress size={14} color="inherit" /> : null

@@ -3046,6 +3046,76 @@ async def get_repository_compact_jobs(
         logger.error("Failed to get compact jobs", error=str(e), repository_id=repo_id)
         raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetCompactJobs"})
 
+
+@router.get("/prune-jobs/{job_id}")
+async def get_prune_job_status(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get status of a prune job"""
+    try:
+        job = db.query(PruneJob).filter(PruneJob.id == job_id).first()
+        if not job:
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.pruneJobNotFound"})
+        repository = db.query(Repository).filter(Repository.id == job.repository_id).first()
+        if not repository:
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
+        _require_repository_access(db, current_user, repository, "viewer")
+
+        return {
+            "id": job.id,
+            "repository_id": job.repository_id,
+            "status": job.status,
+            "started_at": serialize_datetime(job.started_at),
+            "completed_at": serialize_datetime(job.completed_at),
+            "error_message": job.error_message,
+            "logs": job.logs,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get prune job status", error=str(e), job_id=job_id)
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetJobStatus"})
+
+
+@router.get("/{repo_id}/prune-jobs")
+async def get_repository_prune_jobs(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = 10
+):
+    """Get recent prune jobs for a repository"""
+    try:
+        repository = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repository:
+            return {"jobs": []}
+        _require_repository_access(db, current_user, repository, "viewer")
+        jobs = db.query(PruneJob).filter(
+            PruneJob.repository_id == repo_id
+        ).order_by(PruneJob.id.desc()).limit(limit).all()
+
+        return {
+            "jobs": [
+                {
+                    "id": job.id,
+                    "repository_id": job.repository_id,
+                    "status": job.status,
+                    "started_at": serialize_datetime(job.started_at),
+                    "completed_at": serialize_datetime(job.completed_at),
+                    "error_message": job.error_message,
+                    "has_logs": job.has_logs,
+                }
+                for job in jobs
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get prune jobs", error=str(e), repository_id=repo_id)
+        raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetPruneJobs"})
+
 # Helper endpoint to check if repository has running maintenance jobs
 @router.get("/{repo_id}/running-jobs")
 async def get_running_jobs(

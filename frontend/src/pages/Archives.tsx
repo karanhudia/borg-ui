@@ -22,6 +22,22 @@ import { useAnalytics } from '../hooks/useAnalytics'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
 import { getRepoCapabilities, getBorgVersion } from '../utils/repoCapabilities'
 import { usePermissions } from '../hooks/usePermissions'
+import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
+import { getArchiveAgeBucket, getJobDurationSeconds } from '../utils/analyticsProperties'
+
+interface RestoreJob {
+  id: number
+  repository: string
+  archive: string
+  status: string
+  started_at?: string
+  completed_at?: string
+  error_message?: string
+}
+
+function getDefaultMountPoint(archiveName: string): string {
+  return archiveName.replace(/[/:]/g, '_').replace(/\s+/g, '_')
+}
 
 const Archives: React.FC = () => {
   const { t } = useTranslation()
@@ -140,8 +156,10 @@ const Archives: React.FC = () => {
       repository_id: number
       archive_name: string
       mount_point?: string
+      archive_start?: string
+      is_custom_mount_point: boolean
     }) => mountsAPI.mountBorgArchive({ repository_id, archive_name, mount_point }),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       const mountPoint = data.data.mount_point
       const containerName = 'borg-web-ui'
       const accessCommand = `docker exec -it ${containerName} bash -c "cd ${mountPoint} && bash"`
@@ -155,7 +173,11 @@ const Archives: React.FC = () => {
           fontSize: '13px',
         },
       })
-      trackArchive(EventAction.MOUNT, selectedRepository || undefined)
+      trackArchive(EventAction.MOUNT, selectedRepository || undefined, {
+        operation: 'mount_archive',
+        archive_age_bucket: getArchiveAgeBucket(variables.archive_start),
+        uses_custom_mount_point: variables.is_custom_mount_point,
+      })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -203,11 +225,17 @@ const Archives: React.FC = () => {
         destination_type,
         destination_connection_id
       ),
-    onSuccess: () => {
+    onSuccess: (_response, variables) => {
       toast.success(t('archives.restoreStarted'), {
         duration: 6000, // Show longer so user can read it
       })
-      trackArchive(EventAction.START, selectedRepository || undefined)
+      trackArchive(EventAction.START, selectedRepository || undefined, {
+        operation: 'restore',
+        destination_type: variables.destination_type,
+        restore_path_count: variables.paths.length,
+        uses_custom_destination: variables.destination !== '/',
+        archive_age_bucket: getArchiveAgeBucket(restoreArchive?.start),
+      })
 
       setRestoreArchive(null)
       setShowRestoreWizard(false)
@@ -229,7 +257,7 @@ const Archives: React.FC = () => {
     setSelectedRepository(repo || null)
     // Track archive listing (selecting a repo to filter/list its archives)
     if (repo) {
-      trackArchive(EventAction.FILTER, repo)
+      trackArchive(EventAction.FILTER, repo, { surface: 'archives_page' })
     }
   }
 
@@ -243,10 +271,13 @@ const Archives: React.FC = () => {
   // Handle archive mounting
   const handleMountArchive = () => {
     if (selectedRepositoryId && mountDialogArchive) {
+      const defaultMountPoint = getDefaultMountPoint(mountDialogArchive.name)
       mountArchiveMutation.mutate({
         repository_id: selectedRepositoryId,
         archive_name: mountDialogArchive.name,
         mount_point: customMountPoint || undefined,
+        archive_start: mountDialogArchive.start,
+        is_custom_mount_point: !!customMountPoint && customMountPoint !== defaultMountPoint,
       })
       setMountDialogArchive(null)
       setCustomMountPoint('')
@@ -257,8 +288,7 @@ const Archives: React.FC = () => {
   const openMountDialog = (archive: Archive) => {
     setMountDialogArchive(archive)
     // Pre-fill with archive name (sanitized for filesystem)
-    const safeName = archive.name.replace(/[/:]/g, '_').replace(/\s+/g, '_')
-    setCustomMountPoint(safeName)
+    setCustomMountPoint(getDefaultMountPoint(archive.name))
   }
 
   // Open restore wizard directly
@@ -266,7 +296,11 @@ const Archives: React.FC = () => {
     (archive: Archive) => {
       setRestoreArchive(archive)
       setShowRestoreWizard(true)
-      trackArchive(EventAction.VIEW, selectedRepository || undefined)
+      trackArchive(EventAction.VIEW, selectedRepository || undefined, {
+        surface: 'restore_wizard',
+        operation: 'select_archive',
+        archive_age_bucket: getArchiveAgeBucket(archive.start),
+      })
     },
     [selectedRepository, trackArchive, EventAction]
   )
@@ -344,13 +378,39 @@ const Archives: React.FC = () => {
   // Handle viewing archive contents
   const handleViewArchive = (archive: Archive) => {
     setViewArchive(archive)
-    trackArchive(EventAction.VIEW, selectedRepository || undefined)
+    trackArchive(EventAction.VIEW, selectedRepository || undefined, {
+      surface: 'archive_contents',
+      operation: 'open_archive',
+      archive_age_bucket: getArchiveAgeBucket(archive.start),
+    })
   }
 
   const handleRestoreArchive = (archive: Archive) => {
     // Open restore wizard flow instead of navigating to separate page
     handleRestoreArchiveClick(archive)
   }
+
+  useTrackedJobOutcomes<RestoreJob>({
+    jobs: restoreJobsData?.data?.jobs,
+    onTerminal: (job) => {
+      const action =
+        job.status === 'completed' || job.status === 'completed_with_warnings'
+          ? EventAction.COMPLETE
+          : EventAction.FAIL
+      const archiveStart = archivesList.find(
+        (archive: Archive) => archive.name === job.archive
+      )?.start
+
+      trackArchive(action, selectedRepository ?? job.repository, {
+        operation: 'restore',
+        job_id: job.id,
+        status: job.status,
+        archive_age_bucket: getArchiveAgeBucket(archiveStart),
+        duration_seconds: getJobDurationSeconds(job.started_at, job.completed_at),
+        error_present: !!job.error_message,
+      })
+    },
+  })
 
   return (
     <Box>
@@ -447,6 +507,10 @@ const Archives: React.FC = () => {
         onClose={() => setViewArchive(null)}
         onDownloadFile={(archiveName, filePath) => {
           if (selectedRepository) {
+            trackArchive(EventAction.DOWNLOAD, selectedRepository, {
+              operation: 'download_archive_file',
+              archive_age_bucket: getArchiveAgeBucket(viewArchive?.start),
+            })
             archivesAPI.downloadFile(selectedRepository.path, archiveName, filePath)
           }
         }}

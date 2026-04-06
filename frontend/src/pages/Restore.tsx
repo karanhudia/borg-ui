@@ -41,6 +41,8 @@ import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import RestoreJobCard from '../components/RestoreJobCard'
+import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
+import { getArchiveAgeBucket, getJobDurationSeconds } from '../utils/analyticsProperties'
 
 interface RestoreJob {
   id: number
@@ -189,8 +191,13 @@ const Restore: React.FC = () => {
     }) => restoreAPI.startRestore(repository, archive, paths, destination, repository_id),
     onSuccess: () => {
       toast.success(t('restore.toasts.started'))
-      // Track restore started
-      trackArchive(EventAction.START, selectedRepoData || undefined)
+      trackArchive(EventAction.START, selectedRepoData || undefined, {
+        operation: 'restore',
+        destination_type: 'local',
+        restore_path_count: selectedPaths.length,
+        uses_custom_destination: !!destination.trim(),
+        archive_age_bucket: getArchiveAgeBucket(restoreArchive?.start),
+      })
 
       setRestoreArchive(null)
       setDestination('')
@@ -214,7 +221,7 @@ const Restore: React.FC = () => {
     setSelectedRepoData(repo || null)
     // Track archive listing (selecting a repo to filter/list its archives for restore)
     if (repo) {
-      trackArchive(EventAction.FILTER, repo)
+      trackArchive(EventAction.FILTER, repo, { surface: 'restore_page' })
     }
   }
 
@@ -247,8 +254,11 @@ const Restore: React.FC = () => {
       setRestoreArchive(archive)
       setSelectedPaths([]) // Reset paths
       setShowBrowser(true)
-      // Track viewing archive for restore
-      trackArchive(EventAction.VIEW, selectedRepoData || undefined)
+      trackArchive(EventAction.VIEW, selectedRepoData || undefined, {
+        surface: 'restore_archive_dialog',
+        operation: 'select_archive',
+        archive_age_bucket: getArchiveAgeBucket(archive.start),
+      })
     },
     [
       setRestoreArchive,
@@ -347,6 +357,32 @@ const Restore: React.FC = () => {
       (job: RestoreJob) => job.status === 'running' || job.status === 'pending'
     ) || []
   const recentJobs = restoreJobsData?.data?.jobs?.slice(0, 10) || []
+
+  useTrackedJobOutcomes<RestoreJob>({
+    jobs: restoreJobsData?.data?.jobs,
+    onTerminal: (job) => {
+      const repository =
+        repositories.find((repo: Repository) => repo.path === job.repository) ?? job.repository
+      const action =
+        job.status === 'completed' || job.status === 'completed_with_warnings'
+          ? EventAction.COMPLETE
+          : EventAction.FAIL
+
+      trackArchive(action, repository, {
+        operation: 'restore',
+        job_id: job.id,
+        status: job.status,
+        archive_age_bucket: archivesList.find((archive: Archive) => archive.name === job.archive)
+          ?.start
+          ? getArchiveAgeBucket(
+              archivesList.find((archive: Archive) => archive.name === job.archive)?.start
+            )
+          : undefined,
+        duration_seconds: getJobDurationSeconds(job.started_at, job.completed_at),
+        error_present: !!job.error_message,
+      })
+    },
+  })
 
   // Archives table columns
   const archivesColumns: Column<Archive>[] = [

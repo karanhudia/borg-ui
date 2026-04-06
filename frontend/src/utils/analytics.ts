@@ -391,6 +391,8 @@ export const EventAction = {
   VIEW: 'View',
   START: 'Start',
   STOP: 'Stop',
+  COMPLETE: 'Complete',
+  FAIL: 'Fail',
   MOUNT: 'Mount',
   UNMOUNT: 'Unmount',
   DOWNLOAD: 'Download',

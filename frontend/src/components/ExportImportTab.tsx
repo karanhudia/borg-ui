@@ -132,6 +132,10 @@ const ExportImportTab: React.FC = () => {
         merge_strategy: mergeStrategy,
         dry_run: false,
         success: !!result.success,
+        file_extension: importFile?.name.split('.').pop()?.toLowerCase() ?? 'unknown',
+        file_size_bytes: importFile?.size ?? 0,
+        warning_count: result.warnings?.length || 0,
+        error_count: result.errors?.length || 0,
         repositories_created: result.repositories_created || 0,
         repositories_updated: result.repositories_updated || 0,
         schedules_created: result.schedules_created || 0,
@@ -171,6 +175,12 @@ const ExportImportTab: React.FC = () => {
       }
       setImportFile(file)
       setImportResult(null)
+      trackSystem(EventAction.VIEW, {
+        section: 'export_import',
+        operation: 'select_import_file',
+        file_extension: file.name.split('.').pop()?.toLowerCase() ?? 'unknown',
+        file_size_bytes: file.size,
+      })
     }
   }
 
@@ -353,7 +363,15 @@ const ExportImportTab: React.FC = () => {
             <InputLabel>{t('exportImport.conflictResolutionStrategy')}</InputLabel>
             <Select
               value={mergeStrategy}
-              onChange={(e) => setMergeStrategy(e.target.value)}
+              onChange={(e) => {
+                const nextStrategy = e.target.value
+                setMergeStrategy(nextStrategy)
+                trackSystem(EventAction.EDIT, {
+                  section: 'export_import',
+                  setting: 'merge_strategy',
+                  value: nextStrategy,
+                })
+              }}
               label={t('exportImport.conflictResolutionStrategy')}
             >
               <MenuItem value="skip_duplicates">

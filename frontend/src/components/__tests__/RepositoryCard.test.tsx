@@ -71,6 +71,7 @@ describe('RepositoryCard', () => {
     trackNavigation: vi.fn(),
     trackPlan: vi.fn(),
     trackAuth: vi.fn(),
+    buildEntityData: vi.fn(),
     EventCategory: {
       REPOSITORY: 'Repository',
       BACKUP: 'Backup',
@@ -104,6 +105,8 @@ describe('RepositoryCard', () => {
       SEARCH: 'Search',
       FILTER: 'Filter',
       EXPORT: 'Export',
+      COMPLETE: 'Complete',
+      FAIL: 'Fail',
     } as const,
   }
 
@@ -462,7 +465,7 @@ describe('RepositoryCard', () => {
       expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('View', mockRepository)
     })
 
-    it('calls onCheck and tracks event when Check button is clicked', async () => {
+    it('calls onCheck when Check button is clicked', async () => {
       const user = userEvent.setup()
       renderWithProviders(
         <RepositoryCard
@@ -476,14 +479,9 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Check/i }))
       expect(mockCallbacks.onCheck).toHaveBeenCalledTimes(1)
-      expect(mockAnalyticsTracking.trackMaintenance).toHaveBeenCalledWith(
-        'Start',
-        'Check',
-        mockRepository
-      )
     })
 
-    it('calls onCompact and tracks event when Compact button is clicked', async () => {
+    it('calls onCompact when Compact button is clicked', async () => {
       const user = userEvent.setup()
       renderWithProviders(
         <RepositoryCard
@@ -497,14 +495,9 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Compact/i }))
       expect(mockCallbacks.onCompact).toHaveBeenCalledTimes(1)
-      expect(mockAnalyticsTracking.trackMaintenance).toHaveBeenCalledWith(
-        'Start',
-        'Compact',
-        mockRepository
-      )
     })
 
-    it('calls onPrune and tracks event when Prune button is clicked', async () => {
+    it('calls onPrune when Prune button is clicked', async () => {
       const user = userEvent.setup()
       renderWithProviders(
         <RepositoryCard
@@ -518,11 +511,6 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Prune/i }))
       expect(mockCallbacks.onPrune).toHaveBeenCalledTimes(1)
-      expect(mockAnalyticsTracking.trackMaintenance).toHaveBeenCalledWith(
-        'Start',
-        'Prune',
-        mockRepository
-      )
     })
 
     it('calls onBackupNow and tracks event when Backup Now button is clicked', async () => {
@@ -563,7 +551,7 @@ describe('RepositoryCard', () => {
       expect(mockAnalyticsTracking.trackArchive).toHaveBeenCalledWith('View', mockRepository)
     })
 
-    it('calls onDelete and tracks event when Delete button is clicked', async () => {
+    it('calls onDelete when Delete button is clicked', async () => {
       const user = userEvent.setup()
       renderWithProviders(
         <RepositoryCard
@@ -579,7 +567,6 @@ describe('RepositoryCard', () => {
       // The last Delete button is the main delete action (first one is Prune button icon)
       await user.click(deleteButtons[deleteButtons.length - 1])
       expect(mockCallbacks.onDelete).toHaveBeenCalledTimes(1)
-      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('Delete', mockRepository)
     })
   })
 

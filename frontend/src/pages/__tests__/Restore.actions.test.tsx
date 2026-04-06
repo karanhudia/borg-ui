@@ -142,12 +142,18 @@ describe('Restore page actions', () => {
 
     await user.click(await screen.findByText('Choose Repo'))
     await waitFor(() => {
-      expect(trackArchive).toHaveBeenCalledWith('Filter', repository)
+      expect(trackArchive).toHaveBeenCalledWith('Filter', repository, {
+        surface: 'restore_page',
+      })
     })
 
     await user.click(await screen.findByText('Restore'))
     await waitFor(() => {
-      expect(trackArchive).toHaveBeenCalledWith('View', repository)
+      expect(trackArchive).toHaveBeenCalledWith('View', repository, {
+        surface: 'restore_archive_dialog',
+        operation: 'select_archive',
+        archive_age_bucket: expect.any(String),
+      })
     })
 
     const destinationInput = await screen.findByLabelText('Destination Path')
@@ -163,7 +169,13 @@ describe('Restore page actions', () => {
         1
       )
     })
-    expect(trackArchive).toHaveBeenCalledWith('Start', repository)
+    expect(trackArchive).toHaveBeenCalledWith('Start', repository, {
+      operation: 'restore',
+      destination_type: 'local',
+      restore_path_count: 0,
+      uses_custom_destination: true,
+      archive_age_bucket: expect.any(String),
+    })
 
     await user.click(await screen.findByText('Restore'))
     await user.click(screen.getByRole('button', { name: /cancel/i }))

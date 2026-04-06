@@ -867,6 +867,17 @@ class TestRepositoriesJobStatus:
 
         assert response.status_code == 200
 
+    def test_get_repository_prune_jobs(self, test_client: TestClient, admin_headers, test_db):
+        """Test getting repository prune jobs returns 200"""
+        repo = Repository(name="Job Repo", path="/job/repo", encryption="none", repository_type="local")
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.get(f"/api/repositories/{repo.id}/prune-jobs", headers=admin_headers)
+
+        assert response.status_code == 200
+
     def test_get_repository_running_jobs(self, test_client: TestClient, admin_headers, test_db):
         """Test getting repository running jobs returns 200"""
         repo = Repository(name="Job Repo", path="/job/repo", encryption="none", repository_type="local")
@@ -890,6 +901,15 @@ class TestRepositoriesJobStatus:
     def test_get_compact_jobs_repository_not_found(self, test_client: TestClient, admin_headers):
         """Test getting compact jobs for non-existent repository returns 200 with empty list"""
         response = test_client.get("/api/repositories/99999/compact-jobs", headers=admin_headers)
+
+        # Returns 200 with empty list, not 404
+        assert response.status_code == 200
+        data = response.json()
+        assert "jobs" in data or isinstance(data, list)
+
+    def test_get_prune_jobs_repository_not_found(self, test_client: TestClient, admin_headers):
+        """Test getting prune jobs for non-existent repository returns 200 with empty list"""
+        response = test_client.get("/api/repositories/99999/prune-jobs", headers=admin_headers)
 
         # Returns 200 with empty list, not 404
         assert response.status_code == 200
