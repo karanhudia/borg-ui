@@ -98,6 +98,7 @@
       "appearance": "Aspetto",
       "notifications": "Notifiche",
       "preferences": "Preferenze",
+      "licensing": "Licenze",
       "systemLabel": "Sistema",
       "mqtt": "MQTT",
       "cache": "Cache",
@@ -2828,70 +2829,88 @@
   },
   "plan": {
     "currentPlan": "Piano attuale",
+    "fullAccessLabel": "Accesso completo",
     "proFeatures": "Funzionalità Pro",
     "plans": "Piani",
-    "earlyAccessNotice": "Tutti i piani sono gratuiti mentre Borg UI è in accesso anticipato. Come sviluppatore indipendente, introdurrò livelli a pagamento in futuro per sostenere lo sviluppo. Le funzionalità che utilizzi oggi rimarranno disponibili per te.",
+    "earlyAccessNotice": "I diritti commerciali sono applicati lato server. Community resta il piano base quando non è presente una licenza attiva.",
+    "fullAccessActiveNotice": "L'accesso completo è incluso fino al {{date}}. Dopo quella data, questa istanza tornerà automaticamente a Community, a meno che non venga attivato un diritto a pagamento.",
+    "fullAccessExpiredNotice": "L'accesso completo è terminato. Questa istanza ora è in esecuzione su Community finché non viene attivato un diritto a pagamento.",
+    "communityWarning": "Le funzionalità {{plan}} non saranno disponibili nel piano gratuito Community al termine dell'accesso iniziale.",
+    "featureUnavailableInCommunity": "Non disponibile nel piano gratuito Community al termine dell'accesso iniziale.",
     "features": {
       "borg_v2": {
         "label": "Backup Borg v2",
-        "description": "Formato Borg di nuova generazione con deduplicazione e prestazioni migliorate"
+        "description": "Formato Borg di nuova generazione con deduplicazione e prestazioni migliorate",
+        "communityWarning": "I backup Borg v2 non saranno disponibili nel piano gratuito Community."
       },
       "multi_user": {
         "label": "Più account utente",
-        "description": "Invita altri utenti a gestire i backup con il proprio accesso"
+        "description": "Invita altri utenti a gestire i backup con il proprio accesso",
+        "communityWarning": "Più account utente non saranno disponibili nel piano gratuito Community."
       },
       "extra_users": {
         "label": "Posti utente illimitati",
-        "description": "Aggiungi più di 5 utenti per implementazioni di team di grandi dimensioni"
+        "description": "Aggiungi più di 5 utenti per implementazioni di team di grandi dimensioni",
+        "communityWarning": "I posti utente illimitati non saranno disponibili nel piano gratuito Community."
       },
       "rbac": {
         "label": "Controllo degli accessi basato sui ruoli",
-        "description": "Assegna ruoli e permessi granulari a ciascun account utente"
+        "description": "Assegna ruoli e permessi granulari a ciascun account utente",
+        "communityWarning": "Il controllo degli accessi basato sui ruoli non sarà disponibile nel piano gratuito Community."
       },
       "backup_reports": {
-        "label": "Scheduled backup reports",
-        "description": "Generate daily, weekly, and monthly backup summaries with status, size, and job insights"
+        "label": "Report pianificati dei backup",
+        "description": "Genera riepiloghi giornalieri, settimanali e mensili dei backup con informazioni su stato, dimensioni e attività"
       },
       "dashboard_analytics": {
         "label": "Analisi dashboard estese",
         "description": "Aggiunge più grafici e viste dei trend alla dashboard per monitorare stato dei backup, attività e archiviazione"
       },
       "database_discovery": {
-        "label": "Database scanning and setup",
-        "description": "Scan the host for common databases and turn them into backup jobs with guided setup"
+        "label": "Scansione e configurazione dei database",
+        "description": "Analizza l'host alla ricerca di database comuni e trasformali in processi di backup con configurazione guidata"
       },
       "container_backups": {
-        "label": "Container backup setup",
-        "description": "Make it easier to back up Docker containers and volumes, including Borg UI itself"
+        "label": "Configurazione dei backup dei container",
+        "description": "Semplifica il backup di container e volumi Docker, inclusa la stessa Borg UI"
       },
       "alerting_monitoring": {
-        "label": "Advanced alerts and monitoring",
-        "description": "Expand health checks, failure alerts, and monitoring views for production backup workflows"
+        "label": "Avvisi e monitoraggio avanzati",
+        "description": "Espandi controlli di integrità, avvisi di errore e viste di monitoraggio per i flussi di lavoro di backup in produzione"
       },
       "multi_repo_orchestration": {
-        "label": "Multi-repository backups",
-        "description": "Manage and run backups across multiple repositories with less repetitive setup"
+        "label": "Backup multi-repository",
+        "description": "Gestisci ed esegui backup su più repository con una configurazione meno ripetitiva"
       },
       "multi_source_policies": {
-        "label": "Multi-source backups",
-        "description": "Back up multiple source locations in one job with cleaner scheduling and configuration"
+        "label": "Backup multi-sorgente",
+        "description": "Esegui il backup di più posizioni sorgente in un unico processo con pianificazione e configurazione più ordinate"
       },
       "rclone_destinations": {
-        "label": "Rclone destinations",
-        "description": "Connect more cloud and remote storage targets through built-in rclone support"
+        "label": "Destinazioni rclone",
+        "description": "Collega più destinazioni cloud e di archiviazione remota tramite il supporto rclone integrato"
       },
       "compliance_exports": {
-        "label": "Audit and compliance exports",
-        "description": "Export backup history, retention evidence, and operational records for reporting and reviews"
+        "label": "Esportazioni per audit e conformità",
+        "description": "Esporta cronologia dei backup, prove di conservazione e registri operativi per report e revisioni"
       },
       "centralized_management": {
-        "label": "Centralized backup management",
-        "description": "Oversee larger backup environments with stronger controls and a more consolidated workflow"
+        "label": "Gestione centralizzata dei backup",
+        "description": "Supervisiona ambienti di backup più grandi con controlli più rigorosi e un flusso di lavoro più consolidato"
       }
     },
     "comingSoon": "Prossimamente",
     "planFeatures": "Funzionalità {{plan}}",
     "upcomingFeatures": "In arrivo per {{plan}}"
+  },
+  "licensing": {
+    "title": "Licenze",
+    "subtitle": "Gestisci il diritto per questa istanza di Borg UI e attiva l'accesso a pagamento.",
+    "currentState": "Stato attuale",
+    "currentPlanValue": "Accesso attuale: {{plan}}",
+    "instanceIdValue": "ID istanza: {{instanceId}}",
+    "licenseIdValue": "Licenza attiva: {{licenseId}}",
+    "expiresAtValue": "Scade il: {{date}}"
   },
   "upgradePrompt": {
     "featureLabel": "Funzionalità {{plan}}",

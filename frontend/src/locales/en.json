@@ -98,6 +98,7 @@
       "appearance": "Appearance",
       "notifications": "Notifications",
       "preferences": "Preferences",
+      "licensing": "Licensing",
       "systemLabel": "System",
       "mqtt": "MQTT",
       "cache": "Cache",
@@ -2828,25 +2829,53 @@
   },
   "plan": {
     "currentPlan": "Current Plan",
+    "fullAccessLabel": "Full Access",
     "proFeatures": "Pro features",
     "plans": "Plans",
-    "earlyAccessNotice": "All plans are free while Borg UI is in early access. As a solo developer, I'll introduce paid tiers in the future to sustain development. Features you use today will remain available to you.",
+    "earlyAccessNotice": "Commercial entitlements are enforced server-side. Community remains the baseline plan when no active entitlement is present.",
+    "fullAccessActiveNotice": "Full Access is included until {{date}}. After that, this instance will automatically move to Community unless a paid entitlement is activated.",
+    "fullAccessExpiredNotice": "Full Access has ended. This instance is now running on Community until a paid entitlement is activated.",
+    "paidActiveNotice": "A paid entitlement is active on this instance.",
+    "communityWarning": "{{plan}} features will not be available on the free Community plan after initial access ends.",
+    "lastRefreshError": "The last licence sync failed: {{error}}",
+    "licenseManagement": "Licence management",
+    "instanceIdLabel": "Instance ID",
+    "activeLicenseIdLabel": "Active licence",
+    "licenseKeyLabel": "Licence key",
+    "licenseKeyPlaceholder": "BORG-XXXX-XXXX-XXXX",
+    "activateLicenseButton": "Activate licence",
+    "replaceLicenseButton": "Replace licence",
+    "refreshLicenseButton": "Refresh status",
+    "deactivateLicenseButton": "Deactivate",
+    "licenseManagementHelp": "Use the purchased licence key to activate Pro on this Borg UI instance. Refresh checks the current entitlement with the licence service.",
+    "licenseKeyRequired": "Enter a licence key first.",
+    "licenseActivationSuccess": "Licence activated successfully.",
+    "licenseActivationFailed": "Failed to activate licence.",
+    "licenseRefreshSuccess": "Licence status refreshed.",
+    "licenseRefreshFailed": "Failed to refresh licence status.",
+    "licenseDeactivationSuccess": "Licence deactivated successfully.",
+    "licenseDeactivationFailed": "Failed to deactivate licence.",
+    "featureUnavailableInCommunity": "Not available in the free Community plan after initial access ends.",
     "features": {
       "borg_v2": {
         "label": "Borg v2 backups",
-        "description": "Next-generation Borg format with improved deduplication and performance"
+        "description": "Next-generation Borg format with improved deduplication and performance",
+        "communityWarning": "Borg v2 backups will not be available in the free Community plan."
       },
       "multi_user": {
         "label": "Multiple user accounts",
-        "description": "Invite additional users to manage backups with their own login"
+        "description": "Invite additional users to manage backups with their own login",
+        "communityWarning": "Multiple user accounts will not be available in the free Community plan."
       },
       "extra_users": {
         "label": "Unlimited user seats",
-        "description": "Add more than 5 users for large team deployments"
+        "description": "Add more than 5 users for large team deployments",
+        "communityWarning": "Unlimited user seats will not be available in the free Community plan."
       },
       "rbac": {
         "label": "Role-based access control",
-        "description": "Assign roles and granular permissions to each user account"
+        "description": "Assign roles and granular permissions to each user account",
+        "communityWarning": "Role-based access control will not be available in the free Community plan."
       },
       "backup_reports": {
         "label": "Scheduled backup reports",
@@ -2892,6 +2921,15 @@
     "comingSoon": "Coming soon",
     "planFeatures": "{{plan}} features",
     "upcomingFeatures": "Upcoming for {{plan}}"
+  },
+  "licensing": {
+    "title": "Licensing",
+    "subtitle": "Manage the entitlement for this Borg UI instance and activate paid access.",
+    "currentState": "Current state",
+    "currentPlanValue": "Current access: {{plan}}",
+    "instanceIdValue": "Instance ID: {{instanceId}}",
+    "licenseIdValue": "Active licence: {{licenseId}}",
+    "expiresAtValue": "Expires on: {{date}}"
   },
   "upgradePrompt": {
     "featureLabel": "{{plan}} feature",
