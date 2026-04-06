@@ -1,14 +1,19 @@
 import { Box, Typography } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import { Plan, PLAN_COLOR, PLAN_LABEL } from '../core/features'
+import type { EntitlementInfo } from '../hooks/useSystemInfo'
 
 interface PlanBadgeProps {
   plan: Plan
+  entitlement?: EntitlementInfo
   onClick: () => void
 }
 
-export default function PlanBadge({ plan, onClick }: PlanBadgeProps) {
-  const color = PLAN_COLOR[plan]
-  const label = PLAN_LABEL[plan]
+export default function PlanBadge({ plan, entitlement, onClick }: PlanBadgeProps) {
+  const { t } = useTranslation()
+  const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
+  const color = isFullAccess ? PLAN_COLOR.enterprise : PLAN_COLOR[plan]
+  const label = isFullAccess ? t('plan.fullAccessLabel') : PLAN_LABEL[plan]
 
   return (
     <Box

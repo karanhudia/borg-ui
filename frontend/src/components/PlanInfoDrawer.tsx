@@ -1,15 +1,18 @@
-import { useState } from 'react'
-import { Box, Drawer, Typography, Divider, IconButton, Chip } from '@mui/material'
+import { useEffect, useState } from 'react'
+import { Alert, Box, Chip, Divider, Drawer, IconButton, Typography } from '@mui/material'
 import { X, Check, Sparkles, Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Plan, PLAN_COLOR, PLAN_LABEL } from '../core/features'
 import { useAnalytics } from '../hooks/useAnalytics'
+import type { EntitlementInfo } from '../hooks/useSystemInfo'
 
 interface PlanInfoDrawerProps {
   open: boolean
   onClose: () => void
   plan: Plan
+  initialSelectedPlan?: Plan
   features?: Record<string, Plan>
+  entitlement?: EntitlementInfo
 }
 
 const UPGRADE_PLANS: Plan[] = ['pro', 'enterprise']
@@ -28,15 +31,34 @@ const UPCOMING_FEATURES: Record<Plan, string[]> = {
   enterprise: ['compliance_exports', 'centralized_management'],
 }
 
-export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanInfoDrawerProps) {
+function getDefaultSelectedPlan(plan: Plan, initialSelectedPlan?: Plan): Plan {
+  if (initialSelectedPlan && UPGRADE_PLANS.includes(initialSelectedPlan)) {
+    return initialSelectedPlan
+  }
+
+  return UPGRADE_PLANS.includes(plan) ? plan : UPGRADE_PLANS[0]
+}
+
+export default function PlanInfoDrawer({
+  open,
+  onClose,
+  plan,
+  initialSelectedPlan,
+  features,
+  entitlement,
+}: PlanInfoDrawerProps) {
   const { t } = useTranslation()
   const { track, EventCategory } = useAnalytics()
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
-    UPGRADE_PLANS.includes(plan) ? plan : UPGRADE_PLANS[0]
+    getDefaultSelectedPlan(plan, initialSelectedPlan)
   )
+  const fullAccessExpiry = entitlement?.expires_at
+    ? new Date(entitlement.expires_at).toLocaleDateString()
+    : null
+  const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
 
-  const color = PLAN_COLOR[plan]
-  const label = PLAN_LABEL[plan]
+  const color = isFullAccess ? PLAN_COLOR.enterprise : PLAN_COLOR[plan]
+  const label = isFullAccess ? t('plan.fullAccessLabel') : PLAN_LABEL[plan]
 
   const selectedColor = PLAN_COLOR[selectedPlan]
   const visibleFeatures = Object.entries(features ?? {}).filter(
@@ -44,13 +66,19 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
   )
   const upcomingFeatures = UPCOMING_FEATURES[selectedPlan]
 
+  useEffect(() => {
+    if (open) {
+      setSelectedPlan(getDefaultSelectedPlan(plan, initialSelectedPlan))
+    }
+  }, [initialSelectedPlan, open, plan])
+
   return (
     <Drawer
       anchor="right"
       open={open}
       onClose={onClose}
       SlideProps={{
-        onExited: () => setSelectedPlan(UPGRADE_PLANS.includes(plan) ? plan : UPGRADE_PLANS[0]),
+        onExited: () => setSelectedPlan(getDefaultSelectedPlan(plan, initialSelectedPlan)),
       }}
       sx={{ '& .MuiDrawer-paper': { width: 340, boxSizing: 'border-box' } }}
     >
@@ -105,6 +133,24 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
 
         {/* Scrollable content */}
         <Box sx={{ flex: 1, overflowY: 'auto', px: 2.5, py: 2 }}>
+          {entitlement?.is_full_access && entitlement.status === 'active' && (
+            <Alert severity="info" sx={{ mb: 2, fontSize: '0.75rem' }}>
+              {t('plan.fullAccessActiveNotice', {
+                date: fullAccessExpiry ?? t('navigation.loading'),
+              })}
+            </Alert>
+          )}
+          {entitlement?.ui_state === 'full_access_expired' && (
+            <Alert severity="warning" sx={{ mb: 2, fontSize: '0.75rem' }}>
+              {t('plan.fullAccessExpiredNotice')}
+            </Alert>
+          )}
+          {entitlement?.last_refresh_error && (
+            <Alert severity="warning" sx={{ mb: 2, fontSize: '0.75rem' }}>
+              {t('plan.lastRefreshError', { error: entitlement.last_refresh_error })}
+            </Alert>
+          )}
+
           {/* Plan selector */}
           <Typography
             variant="caption"
@@ -312,6 +358,17 @@ export default function PlanInfoDrawer({ open, onClose, plan, features }: PlanIn
                   </Box>
                 </Box>
               ))}
+              <Typography
+                sx={{
+                  fontSize: '0.7rem',
+                  color: selectedColor,
+                  lineHeight: 1.4,
+                  mt: 0.25,
+                  fontWeight: 600,
+                }}
+              >
+                {t('plan.featureUnavailableInCommunity')}
+              </Typography>
             </>
           )}
         </Box>

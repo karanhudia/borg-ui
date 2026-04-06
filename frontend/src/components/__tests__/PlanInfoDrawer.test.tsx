@@ -59,4 +59,19 @@ describe('PlanInfoDrawer', () => {
 
     expect(screen.getByText('Unlimited user seats')).toBeInTheDocument()
   })
+
+  it('uses the provided initial selected plan when opened', () => {
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan="community"
+        initialSelectedPlan="enterprise"
+        features={featureMap}
+      />
+    )
+
+    expect(screen.getByText('Unlimited user seats')).toBeInTheDocument()
+    expect(screen.queryByText('Borg v2 backups')).not.toBeInTheDocument()
+  })
 })

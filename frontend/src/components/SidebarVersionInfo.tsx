@@ -20,12 +20,20 @@ interface SidebarVersionInfoProps {
 
 export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoProps) {
   const { t } = useTranslation()
-  const { plan, features, isLoading: isPlanLoading } = usePlan()
+  const { plan, features, entitlement, isLoading: isPlanLoading } = usePlan()
   const { track, EventCategory } = useAnalytics()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const displayedPlan =
+    entitlement?.is_full_access && entitlement.status === 'active'
+      ? 'enterprise'
+      : entitlement?.access_level === 'pro' || entitlement?.access_level === 'enterprise'
+        ? entitlement.access_level
+        : plan === 'pro' || plan === 'enterprise'
+          ? plan
+          : 'pro'
 
   const handleBadgeClick = () => {
-    track(EventCategory.PLAN, 'OpenDrawer', { plan })
+    track(EventCategory.PLAN, 'OpenDrawer', { plan: displayedPlan })
     setDrawerOpen(true)
   }
 
@@ -52,7 +60,7 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
         {isPlanLoading ? (
           <Skeleton variant="rounded" width={32} height={12} sx={{ borderRadius: '3px' }} />
         ) : (
-          <PlanBadge plan={plan} onClick={handleBadgeClick} />
+          <PlanBadge plan={plan} entitlement={entitlement} onClick={handleBadgeClick} />
         )}
       </Box>
       {systemInfo ? (
@@ -78,7 +86,9 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         plan={plan}
+        initialSelectedPlan={displayedPlan}
         features={features}
+        entitlement={entitlement}
       />
     </Box>
   )

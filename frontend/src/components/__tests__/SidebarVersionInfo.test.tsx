@@ -1,10 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { screen, fireEvent } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import SidebarVersionInfo from '../SidebarVersionInfo'
 
-vi.mock('../../hooks/usePlan', () => ({
-  usePlan: () => ({
+const { usePlanMock } = vi.hoisted(() => ({
+  usePlanMock: vi.fn(() => ({
     plan: 'community',
     features: {
       borg_v2: 'pro',
@@ -12,9 +12,25 @@ vi.mock('../../hooks/usePlan', () => ({
       extra_users: 'enterprise',
       rbac: 'enterprise',
     },
+    entitlement: {
+      status: 'none',
+      access_level: 'community',
+      is_full_access: false,
+      full_access_consumed: false,
+      expires_at: null,
+      starts_at: null,
+      instance_id: null,
+      ui_state: 'community',
+      last_refresh_at: null,
+      last_refresh_error: null,
+    },
     isLoading: false,
     can: () => true,
-  }),
+  })),
+}))
+
+vi.mock('../../hooks/usePlan', () => ({
+  usePlan: () => usePlanMock(),
 }))
 
 const fullSystemInfo = {
@@ -24,6 +40,32 @@ const fullSystemInfo = {
 }
 
 describe('SidebarVersionInfo', () => {
+  beforeEach(() => {
+    usePlanMock.mockReturnValue({
+      plan: 'community',
+      features: {
+        borg_v2: 'pro',
+        multi_user: 'pro',
+        extra_users: 'enterprise',
+        rbac: 'enterprise',
+      },
+      entitlement: {
+        status: 'none',
+        access_level: 'community',
+        is_full_access: false,
+        full_access_consumed: false,
+        expires_at: null,
+        starts_at: null,
+        instance_id: null,
+        ui_state: 'community',
+        last_refresh_at: null,
+        last_refresh_error: null,
+      },
+      isLoading: false,
+      can: () => true,
+    })
+  })
+
   it('shows loading text when systemInfo is null', () => {
     renderWithProviders(<SidebarVersionInfo systemInfo={null} />)
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
@@ -68,5 +110,38 @@ describe('SidebarVersionInfo', () => {
 
     expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
     expect(screen.getByText('Scheduled backup reports')).toBeInTheDocument()
+  })
+
+  it('defaults the drawer to enterprise when the active entitlement is enterprise', () => {
+    usePlanMock.mockReturnValue({
+      plan: 'community',
+      features: {
+        borg_v2: 'pro',
+        multi_user: 'pro',
+        extra_users: 'enterprise',
+        rbac: 'enterprise',
+      },
+      entitlement: {
+        status: 'active',
+        access_level: 'enterprise',
+        is_full_access: false,
+        full_access_consumed: false,
+        expires_at: null,
+        starts_at: null,
+        instance_id: null,
+        ui_state: 'paid_active',
+        last_refresh_at: null,
+        last_refresh_error: null,
+      },
+      isLoading: false,
+      can: () => true,
+    })
+
+    renderWithProviders(<SidebarVersionInfo systemInfo={fullSystemInfo} />)
+
+    fireEvent.click(screen.getByText('Community'))
+
+    expect(screen.getByText('Unlimited user seats')).toBeInTheDocument()
+    expect(screen.queryByText('Borg v2 backups')).not.toBeInTheDocument()
   })
 })
