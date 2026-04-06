@@ -88,9 +88,9 @@ export default function Repositories() {
   const appState = useAppState()
   const navigate = useNavigate()
   const { trackMaintenance, trackRepository, EventAction } = useAnalytics()
-  const maintenanceTrackingRef = useRef<
-    Map<number, { operation: 'Check' | 'Compact' | 'Prune'; startedAt: number }>
-  >(new Map())
+  const maintenanceTrackingRef = useRef<Map<number, { operation: 'Check' | 'Compact' | 'Prune' }>>(
+    new Map()
+  )
 
   // Wizard state
   const [showWizard, setShowWizard] = useState(false)
@@ -186,7 +186,6 @@ export default function Repositories() {
       trackMaintenance(EventAction.START, 'Check', checkingRepository || undefined)
       maintenanceTrackingRef.current.set(variables.repositoryId, {
         operation: 'Check',
-        startedAt: Date.now(),
       })
       setCheckingRepository(null)
       setRepositoriesWithJobs((prev) => new Set(prev).add(variables.repositoryId))
@@ -217,7 +216,6 @@ export default function Repositories() {
       trackMaintenance(EventAction.START, 'Compact', compactingRepository || undefined)
       maintenanceTrackingRef.current.set(repositoryId, {
         operation: 'Compact',
-        startedAt: Date.now(),
       })
       setCompactingRepository(null)
       setRepositoriesWithJobs((prev) => new Set(prev).add(repositoryId))
@@ -258,7 +256,6 @@ export default function Repositories() {
         if (pruningRepository) {
           maintenanceTrackingRef.current.set(pruningRepository.id, {
             operation: 'Prune',
-            startedAt: Date.now(),
           })
         }
         queryClient.invalidateQueries({ queryKey: ['repositories'] })
@@ -322,9 +319,7 @@ export default function Repositories() {
           trackMaintenance(action, tracked.operation, repository, {
             job_id: latestJob.id,
             status: latestJob.status,
-            duration_seconds:
-              getJobDurationSeconds(latestJob.started_at, latestJob.completed_at) ??
-              Math.round((Date.now() - tracked.startedAt) / 1000),
+            duration_seconds: getJobDurationSeconds(latestJob.started_at, latestJob.completed_at),
             error_present: !!latestJob.error_message,
           })
         }

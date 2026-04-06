@@ -22,10 +22,15 @@ vi.mock('../../hooks/useAuthorization', () => ({
   }),
 }))
 
-vi.mock('../../utils/analytics', () => ({
-  hasConsentBeenGiven: () => hasConsentBeenGivenMock(),
-  loadUserPreference: () => loadUserPreferenceMock(),
-}))
+vi.mock('../../utils/analytics', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../utils/analytics')>('../../utils/analytics')
+  return {
+    ...actual,
+    hasConsentBeenGiven: () => hasConsentBeenGivenMock(),
+    loadUserPreference: () => loadUserPreferenceMock(),
+  }
+})
 
 vi.mock('../AnalyticsConsentBanner', () => ({
   default: ({ onConsentGiven }: { onConsentGiven: () => void }) => (

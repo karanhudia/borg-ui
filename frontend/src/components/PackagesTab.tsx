@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -96,7 +96,10 @@ export default function PackagesTab() {
       return response.data
     },
   })
-  const packages = Array.isArray(packagesData) ? (packagesData as PackageType[]) : []
+  const packages = useMemo(
+    () => (Array.isArray(packagesData) ? (packagesData as PackageType[]) : []),
+    [packagesData]
+  )
 
   // Poll job status when activeJobId is set
   useEffect(() => {
