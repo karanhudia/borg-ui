@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Button,
   Stack,
@@ -14,6 +12,7 @@ import {
   CircularProgress,
 } from '@mui/material'
 import { Save, AlertTriangle, Settings, Clock, RefreshCw } from 'lucide-react'
+import SettingsCard from './SettingsCard'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -374,253 +373,242 @@ const SystemSettingsTab: React.FC = () => {
         </Box>
 
         {/* Operation Timeouts Card */}
-        <Card>
-          <CardContent>
-            <Stack spacing={3}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Clock size={24} />
-                <Typography variant="h6">{t('systemSettings.operationTimeoutsTitle')}</Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('systemSettings.operationTimeoutsDescription')}
-              </Typography>
-              <Divider />
+        <SettingsCard>
+          <Stack spacing={3}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Clock size={24} />
+              <Typography variant="h6">{t('systemSettings.operationTimeoutsTitle')}</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              {t('systemSettings.operationTimeoutsDescription')}
+            </Typography>
+            <Divider />
 
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' },
-                  gap: 3,
-                }}
-              >
-                <TextField
-                  label={t('systemSettings.mountTimeoutLabel')}
-                  type="number"
-                  fullWidth
-                  value={mountTimeout}
-                  onChange={(e) => setMountTimeout(Number(e.target.value))}
-                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 }}
-                  error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
-                  helperText={
-                    <>
-                      {t('systemSettings.mountTimeoutHelper')} {formatTimeout(mountTimeout)}
-                      {renderSourceLabel(timeoutSources?.mount_timeout)}
-                    </>
-                  }
-                />
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' },
+                gap: 3,
+              }}
+            >
+              <TextField
+                label={t('systemSettings.mountTimeoutLabel')}
+                type="number"
+                fullWidth
+                value={mountTimeout}
+                onChange={(e) => setMountTimeout(Number(e.target.value))}
+                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 }}
+                error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
+                helperText={
+                  <>
+                    {t('systemSettings.mountTimeoutHelper')} {formatTimeout(mountTimeout)}
+                    {renderSourceLabel(timeoutSources?.mount_timeout)}
+                  </>
+                }
+              />
 
-                <TextField
-                  label={t('systemSettings.infoTimeoutLabel')}
-                  type="number"
-                  fullWidth
-                  value={infoTimeout}
-                  onChange={(e) => setInfoTimeout(Number(e.target.value))}
-                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
-                  error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
-                  helperText={
-                    <>
-                      {t('systemSettings.infoTimeoutHelper')} {formatTimeout(infoTimeout)}
-                      {renderSourceLabel(timeoutSources?.info_timeout)}
-                    </>
-                  }
-                />
+              <TextField
+                label={t('systemSettings.infoTimeoutLabel')}
+                type="number"
+                fullWidth
+                value={infoTimeout}
+                onChange={(e) => setInfoTimeout(Number(e.target.value))}
+                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
+                error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
+                helperText={
+                  <>
+                    {t('systemSettings.infoTimeoutHelper')} {formatTimeout(infoTimeout)}
+                    {renderSourceLabel(timeoutSources?.info_timeout)}
+                  </>
+                }
+              />
 
-                <TextField
-                  label={t('systemSettings.listTimeoutLabel')}
-                  type="number"
-                  fullWidth
-                  value={listTimeout}
-                  onChange={(e) => setListTimeout(Number(e.target.value))}
-                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
-                  error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
-                  helperText={
-                    <>
-                      {t('systemSettings.listTimeoutHelper')} {formatTimeout(listTimeout)}
-                      {renderSourceLabel(timeoutSources?.list_timeout)}
-                    </>
-                  }
-                />
+              <TextField
+                label={t('systemSettings.listTimeoutLabel')}
+                type="number"
+                fullWidth
+                value={listTimeout}
+                onChange={(e) => setListTimeout(Number(e.target.value))}
+                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
+                error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
+                helperText={
+                  <>
+                    {t('systemSettings.listTimeoutHelper')} {formatTimeout(listTimeout)}
+                    {renderSourceLabel(timeoutSources?.list_timeout)}
+                  </>
+                }
+              />
 
-                <TextField
-                  label={t('systemSettings.initTimeoutLabel')}
-                  type="number"
-                  fullWidth
-                  value={initTimeout}
-                  onChange={(e) => setInitTimeout(Number(e.target.value))}
-                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
-                  error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
-                  helperText={
-                    <>
-                      {t('systemSettings.initTimeoutHelper')} {formatTimeout(initTimeout)}
-                      {renderSourceLabel(timeoutSources?.init_timeout)}
-                    </>
-                  }
-                />
+              <TextField
+                label={t('systemSettings.initTimeoutLabel')}
+                type="number"
+                fullWidth
+                value={initTimeout}
+                onChange={(e) => setInitTimeout(Number(e.target.value))}
+                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
+                error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
+                helperText={
+                  <>
+                    {t('systemSettings.initTimeoutHelper')} {formatTimeout(initTimeout)}
+                    {renderSourceLabel(timeoutSources?.init_timeout)}
+                  </>
+                }
+              />
 
-                <TextField
-                  label={t('systemSettings.backupTimeoutLabel')}
-                  type="number"
-                  fullWidth
-                  value={backupTimeout}
-                  onChange={(e) => setBackupTimeout(Number(e.target.value))}
-                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
-                  error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
-                  helperText={
-                    <>
-                      {t('systemSettings.backupTimeoutHelper')} {formatTimeout(backupTimeout)}
-                      {renderSourceLabel(timeoutSources?.backup_timeout)}
-                    </>
-                  }
-                />
+              <TextField
+                label={t('systemSettings.backupTimeoutLabel')}
+                type="number"
+                fullWidth
+                value={backupTimeout}
+                onChange={(e) => setBackupTimeout(Number(e.target.value))}
+                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
+                error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
+                helperText={
+                  <>
+                    {t('systemSettings.backupTimeoutHelper')} {formatTimeout(backupTimeout)}
+                    {renderSourceLabel(timeoutSources?.backup_timeout)}
+                  </>
+                }
+              />
 
-                <TextField
-                  label={t('systemSettings.sourceSizeTimeoutLabel')}
-                  type="number"
-                  fullWidth
-                  value={sourceSizeTimeout}
-                  onChange={(e) => setSourceSizeTimeout(Number(e.target.value))}
-                  inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
-                  error={sourceSizeTimeout < MIN_TIMEOUT || sourceSizeTimeout > MAX_TIMEOUT}
-                  helperText={
-                    <>
-                      {t('systemSettings.sourceSizeTimeoutHelper')}{' '}
-                      {formatTimeout(sourceSizeTimeout)}
-                      {renderSourceLabel(timeoutSources?.source_size_timeout)}
-                    </>
-                  }
-                />
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
+              <TextField
+                label={t('systemSettings.sourceSizeTimeoutLabel')}
+                type="number"
+                fullWidth
+                value={sourceSizeTimeout}
+                onChange={(e) => setSourceSizeTimeout(Number(e.target.value))}
+                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
+                error={sourceSizeTimeout < MIN_TIMEOUT || sourceSizeTimeout > MAX_TIMEOUT}
+                helperText={
+                  <>
+                    {t('systemSettings.sourceSizeTimeoutHelper')} {formatTimeout(sourceSizeTimeout)}
+                    {renderSourceLabel(timeoutSources?.source_size_timeout)}
+                  </>
+                }
+              />
+            </Box>
+          </Stack>
+        </SettingsCard>
 
         {/* Repository Monitoring Card */}
-        <Card>
-          <CardContent>
-            <Stack spacing={3}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <RefreshCw size={24} />
-                <Typography variant="h6">
-                  {t('systemSettings.repositoryMonitoringTitle')}
-                </Typography>
-              </Box>
+        <SettingsCard>
+          <Stack spacing={3}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <RefreshCw size={24} />
+              <Typography variant="h6">{t('systemSettings.repositoryMonitoringTitle')}</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              {t('systemSettings.repositoryMonitoringDescription')}
+            </Typography>
+            <Divider />
+
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+              <TextField
+                label={t('systemSettings.statsRefreshIntervalLabel')}
+                type="number"
+                value={statsRefreshInterval}
+                onChange={(e) => setStatsRefreshInterval(Number(e.target.value))}
+                inputProps={{ min: 0, max: MAX_STATS_REFRESH, step: 15 }}
+                error={statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH}
+                helperText={
+                  statsRefreshInterval === 0
+                    ? t('systemSettings.statsRefreshDisabled')
+                    : statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH
+                      ? t('systemSettings.statsRefreshRangeError', { max: MAX_STATS_REFRESH })
+                      : t('systemSettings.statsRefreshIntervalHelper', {
+                          interval: statsRefreshInterval,
+                        })
+                }
+                sx={{ width: 300 }}
+              />
+              <Button
+                variant="outlined"
+                onClick={handleRefreshStats}
+                disabled={isRefreshingStats}
+                startIcon={
+                  isRefreshingStats ? <CircularProgress size={16} /> : <RefreshCw size={16} />
+                }
+                sx={{ height: 40 }}
+              >
+                {isRefreshingStats
+                  ? t('systemSettings.refreshing')
+                  : t('systemSettings.refreshNow')}
+              </Button>
+            </Box>
+
+            {systemSettings?.last_stats_refresh && (
               <Typography variant="body2" color="text.secondary">
-                {t('systemSettings.repositoryMonitoringDescription')}
+                {t('systemSettings.lastRefreshed')}{' '}
+                {new Date(systemSettings.last_stats_refresh).toLocaleString()}
               </Typography>
-              <Divider />
+            )}
 
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                <TextField
-                  label={t('systemSettings.statsRefreshIntervalLabel')}
-                  type="number"
-                  value={statsRefreshInterval}
-                  onChange={(e) => setStatsRefreshInterval(Number(e.target.value))}
-                  inputProps={{ min: 0, max: MAX_STATS_REFRESH, step: 15 }}
-                  error={statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH}
-                  helperText={
-                    statsRefreshInterval === 0
-                      ? t('systemSettings.statsRefreshDisabled')
-                      : statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH
-                        ? t('systemSettings.statsRefreshRangeError', { max: MAX_STATS_REFRESH })
-                        : t('systemSettings.statsRefreshIntervalHelper', {
-                            interval: statsRefreshInterval,
-                          })
-                  }
-                  sx={{ width: 300 }}
-                />
-                <Button
-                  variant="outlined"
-                  onClick={handleRefreshStats}
-                  disabled={isRefreshingStats}
-                  startIcon={
-                    isRefreshingStats ? <CircularProgress size={16} /> : <RefreshCw size={16} />
-                  }
-                  sx={{ height: 40 }}
-                >
-                  {isRefreshingStats
-                    ? t('systemSettings.refreshing')
-                    : t('systemSettings.refreshNow')}
-                </Button>
-              </Box>
-
-              {systemSettings?.last_stats_refresh && (
-                <Typography variant="body2" color="text.secondary">
-                  {t('systemSettings.lastRefreshed')}{' '}
-                  {new Date(systemSettings.last_stats_refresh).toLocaleString()}
-                </Typography>
-              )}
-
-              <Alert severity="info">{t('systemSettings.manualRefreshAlert')}</Alert>
-            </Stack>
-          </CardContent>
-        </Card>
+            <Alert severity="info">{t('systemSettings.manualRefreshAlert')}</Alert>
+          </Stack>
+        </SettingsCard>
 
         {/* Archive Browsing Limits Card */}
-        <Card>
-          <CardContent>
-            <Stack spacing={3}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Settings size={24} />
-                <Typography variant="h6">
-                  {t('systemSettings.archiveBrowsingLimitsTitle')}
-                </Typography>
-              </Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('systemSettings.archiveBrowsingLimitsDescription')}
-              </Typography>
-              <Divider />
+        <SettingsCard>
+          <Stack spacing={3}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Settings size={24} />
+              <Typography variant="h6">{t('systemSettings.archiveBrowsingLimitsTitle')}</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              {t('systemSettings.archiveBrowsingLimitsDescription')}
+            </Typography>
+            <Divider />
 
-              <Box
-                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
-              >
-                <TextField
-                  label={t('systemSettings.maxFilesToLoadLabel')}
-                  type="number"
-                  fullWidth
-                  value={browseMaxItems}
-                  onChange={(e) => setBrowseMaxItems(Number(e.target.value))}
-                  inputProps={{ min: MIN_FILES, max: MAX_FILES, step: 100_000 }}
-                  error={browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES}
-                  helperText={
-                    browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES
-                      ? t('systemSettings.maxFilesRangeError', {
-                          min: MIN_FILES.toLocaleString(),
-                          max: MAX_FILES.toLocaleString(),
-                        })
-                      : t('systemSettings.maxFilesHelperText', {
-                          current: (browseMaxItems / 1_000_000).toFixed(1),
-                        })
-                  }
-                />
+            <Box
+              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
+            >
+              <TextField
+                label={t('systemSettings.maxFilesToLoadLabel')}
+                type="number"
+                fullWidth
+                value={browseMaxItems}
+                onChange={(e) => setBrowseMaxItems(Number(e.target.value))}
+                inputProps={{ min: MIN_FILES, max: MAX_FILES, step: 100_000 }}
+                error={browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES}
+                helperText={
+                  browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES
+                    ? t('systemSettings.maxFilesRangeError', {
+                        min: MIN_FILES.toLocaleString(),
+                        max: MAX_FILES.toLocaleString(),
+                      })
+                    : t('systemSettings.maxFilesHelperText', {
+                        current: (browseMaxItems / 1_000_000).toFixed(1),
+                      })
+                }
+              />
 
-                <TextField
-                  label={t('systemSettings.maxMemoryLabel')}
-                  type="number"
-                  fullWidth
-                  value={browseMaxMemoryMb}
-                  onChange={(e) => setBrowseMaxMemoryMb(Number(e.target.value))}
-                  inputProps={{ min: MIN_MEMORY, max: MAX_MEMORY, step: 128 }}
-                  error={browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY}
-                  helperText={
-                    browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY
-                      ? t('systemSettings.maxMemoryRangeError', {
-                          min: MIN_MEMORY,
-                          max: MAX_MEMORY,
-                        })
-                      : t('systemSettings.maxMemoryHelperText', {
-                          current: (browseMaxMemoryMb / 1024).toFixed(2),
-                        })
-                  }
-                />
-              </Box>
+              <TextField
+                label={t('systemSettings.maxMemoryLabel')}
+                type="number"
+                fullWidth
+                value={browseMaxMemoryMb}
+                onChange={(e) => setBrowseMaxMemoryMb(Number(e.target.value))}
+                inputProps={{ min: MIN_MEMORY, max: MAX_MEMORY, step: 128 }}
+                error={browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY}
+                helperText={
+                  browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY
+                    ? t('systemSettings.maxMemoryRangeError', {
+                        min: MIN_MEMORY,
+                        max: MAX_MEMORY,
+                      })
+                    : t('systemSettings.maxMemoryHelperText', {
+                        current: (browseMaxMemoryMb / 1024).toFixed(2),
+                      })
+                }
+              />
+            </Box>
 
-              <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                <strong>{t('systemSettings.warningLabel')}</strong>{' '}
-                {t('systemSettings.largeLimitsWarning')}
-              </Alert>
-            </Stack>
-          </CardContent>
-        </Card>
+            <Alert severity="warning" icon={<AlertTriangle size={20} />}>
+              <strong>{t('systemSettings.warningLabel')}</strong>{' '}
+              {t('systemSettings.largeLimitsWarning')}
+            </Alert>
+          </Stack>
+        </SettingsCard>
       </Stack>
     </Box>
   )

@@ -428,7 +428,7 @@ const NotificationsTab: React.FC = () => {
           <CircularProgress />
         </Box>
       ) : notifications.length === 0 ? (
-        <Card sx={{ p: 4, textAlign: 'center' }}>
+        <Card variant="outlined" sx={{ borderRadius: 3, p: 4, textAlign: 'center' }}>
           <Bell size={48} style={{ opacity: 0.3, margin: '0 auto 16px' }} />
           <Typography variant="h6" gutterBottom>
             {t('notifications.noServicesTitle')}
@@ -448,7 +448,7 @@ const NotificationsTab: React.FC = () => {
           </Button>
         </Card>
       ) : (
-        <Card>
+        <Card variant="outlined" sx={{ borderRadius: 3 }}>
           <TableContainer>
             <Table>
               <TableHead>

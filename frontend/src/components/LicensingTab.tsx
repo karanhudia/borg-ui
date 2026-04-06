@@ -1,16 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material'
+import { Alert, Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material'
+import SettingsCard from './SettingsCard'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
 import { licensingAPI } from '../services/api'
@@ -106,110 +97,108 @@ export default function LicensingTab() {
           {t('licensing.subtitle')}
         </Typography>
       </Box>
-      <Card variant="outlined" sx={{ borderRadius: 3 }}>
-        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-          <Stack spacing={2}>
-            <Box>
-              <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                {t('licensing.currentState')}
-              </Typography>
+      <SettingsCard>
+        <Stack spacing={2}>
+          <Box>
+            <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+              {t('licensing.currentState')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('licensing.currentPlanValue', { plan: statusLabel })}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('licensing.instanceIdValue', {
+                instanceId: entitlement?.instance_id ?? t('navigation.loading'),
+              })}
+            </Typography>
+            {entitlement?.license_id && (
               <Typography variant="body2" color="text.secondary">
-                {t('licensing.currentPlanValue', { plan: statusLabel })}
+                {t('licensing.licenseIdValue', { licenseId: entitlement.license_id })}
               </Typography>
+            )}
+            {entitlement?.expires_at && (
               <Typography variant="body2" color="text.secondary">
-                {t('licensing.instanceIdValue', {
-                  instanceId: entitlement?.instance_id ?? t('navigation.loading'),
+                {t('licensing.expiresAtValue', {
+                  date: new Date(entitlement.expires_at).toLocaleDateString(),
                 })}
               </Typography>
-              {entitlement?.license_id && (
-                <Typography variant="body2" color="text.secondary">
-                  {t('licensing.licenseIdValue', { licenseId: entitlement.license_id })}
-                </Typography>
-              )}
-              {entitlement?.expires_at && (
-                <Typography variant="body2" color="text.secondary">
-                  {t('licensing.expiresAtValue', {
-                    date: new Date(entitlement.expires_at).toLocaleDateString(),
-                  })}
-                </Typography>
-              )}
-            </Box>
+            )}
+          </Box>
 
-            {isFullAccess && (
-              <Alert severity="info">
-                {t('plan.fullAccessActiveNotice', {
-                  date: entitlement?.expires_at
-                    ? new Date(entitlement.expires_at).toLocaleDateString()
-                    : t('navigation.loading'),
-                })}
-              </Alert>
-            )}
-            {entitlement?.ui_state === 'full_access_expired' && (
-              <Alert severity="warning">{t('plan.fullAccessExpiredNotice')}</Alert>
-            )}
-            {entitlement?.ui_state === 'paid_active' && (
-              <Alert severity="success">{t('plan.paidActiveNotice')}</Alert>
-            )}
-            {entitlement?.last_refresh_error && (
-              <Alert severity="warning">
-                {t('plan.lastRefreshError', { error: entitlement.last_refresh_error })}
-              </Alert>
-            )}
+          {isFullAccess && (
+            <Alert severity="info">
+              {t('plan.fullAccessActiveNotice', {
+                date: entitlement?.expires_at
+                  ? new Date(entitlement.expires_at).toLocaleDateString()
+                  : t('navigation.loading'),
+              })}
+            </Alert>
+          )}
+          {entitlement?.ui_state === 'full_access_expired' && (
+            <Alert severity="warning">{t('plan.fullAccessExpiredNotice')}</Alert>
+          )}
+          {entitlement?.ui_state === 'paid_active' && (
+            <Alert severity="success">{t('plan.paidActiveNotice')}</Alert>
+          )}
+          {entitlement?.last_refresh_error && (
+            <Alert severity="warning">
+              {t('plan.lastRefreshError', { error: entitlement.last_refresh_error })}
+            </Alert>
+          )}
 
-            <TextField
-              size="small"
-              label={t('plan.licenseKeyLabel')}
-              placeholder={t('plan.licenseKeyPlaceholder')}
-              value={licenseKey}
-              onChange={(event) => setLicenseKey(event.target.value)}
+          <TextField
+            size="small"
+            label={t('plan.licenseKeyLabel')}
+            placeholder={t('plan.licenseKeyPlaceholder')}
+            value={licenseKey}
+            onChange={(event) => setLicenseKey(event.target.value)}
+            disabled={isMutating}
+            fullWidth
+          />
+
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              onClick={handleActivate}
               disabled={isMutating}
-              fullWidth
-            />
-
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-              <Button
-                variant="contained"
-                onClick={handleActivate}
-                disabled={isMutating}
-                startIcon={
-                  activateMutation.isPending ? <CircularProgress size={14} color="inherit" /> : null
-                }
-              >
-                {t(activePaidLicense ? 'plan.replaceLicenseButton' : 'plan.activateLicenseButton')}
-              </Button>
+              startIcon={
+                activateMutation.isPending ? <CircularProgress size={14} color="inherit" /> : null
+              }
+            >
+              {t(activePaidLicense ? 'plan.replaceLicenseButton' : 'plan.activateLicenseButton')}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => refreshMutation.mutate()}
+              disabled={isMutating}
+              startIcon={
+                refreshMutation.isPending ? <CircularProgress size={14} color="inherit" /> : null
+              }
+            >
+              {t('plan.refreshLicenseButton')}
+            </Button>
+            {activePaidLicense && (
               <Button
                 variant="outlined"
-                onClick={() => refreshMutation.mutate()}
+                color="warning"
+                onClick={handleDeactivate}
                 disabled={isMutating}
                 startIcon={
-                  refreshMutation.isPending ? <CircularProgress size={14} color="inherit" /> : null
+                  deactivateMutation.isPending ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : null
                 }
               >
-                {t('plan.refreshLicenseButton')}
+                {t('plan.deactivateLicenseButton')}
               </Button>
-              {activePaidLicense && (
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  onClick={handleDeactivate}
-                  disabled={isMutating}
-                  startIcon={
-                    deactivateMutation.isPending ? (
-                      <CircularProgress size={14} color="inherit" />
-                    ) : null
-                  }
-                >
-                  {t('plan.deactivateLicenseButton')}
-                </Button>
-              )}
-            </Stack>
-
-            <Typography variant="body2" color="text.secondary">
-              {t('plan.licenseManagementHelp')}
-            </Typography>
+            )}
           </Stack>
-        </CardContent>
-      </Card>
+
+          <Typography variant="body2" color="text.secondary">
+            {t('plan.licenseManagementHelp')}
+          </Typography>
+        </Stack>
+      </SettingsCard>
     </Stack>
   )
 }

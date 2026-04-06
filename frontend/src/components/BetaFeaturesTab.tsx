@@ -1,19 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Stack,
-  Switch,
-  FormControlLabel,
-  CircularProgress,
-} from '@mui/material'
+import { Box, Typography, Stack, Switch, FormControlLabel, CircularProgress } from '@mui/material'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import SettingsCard from './SettingsCard'
 
 const BetaFeaturesTab: React.FC = () => {
   const { t } = useTranslation()
@@ -130,120 +122,114 @@ const BetaFeaturesTab: React.FC = () => {
         </Typography>
       </Box>
 
-      <Card sx={{ maxWidth: 800 }}>
-        <CardContent>
-          <Stack spacing={3}>
-            {/* Bypass Lock on Info Commands */}
-            <Box>
-              <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
-                {t('betaFeatures.bypassLocksInfoTitle')}
-              </Typography>
+      <SettingsCard sx={{ maxWidth: 800 }}>
+        <Stack spacing={3}>
+          {/* Bypass Lock on Info Commands */}
+          <Box>
+            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+              {t('betaFeatures.bypassLocksInfoTitle')}
+            </Typography>
 
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={bypassLockOnInfo}
-                    onChange={(e) => handleToggle(e.target.checked)}
-                    disabled={saveSettingsMutation.isPending}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">
-                      {t('betaFeatures.enableBypassLocksInfo')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('betaFeatures.bypassLocksInfoDescription')}
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={bypassLockOnInfo}
+                  onChange={(e) => handleToggle(e.target.checked)}
+                  disabled={saveSettingsMutation.isPending}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">{t('betaFeatures.enableBypassLocksInfo')}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('betaFeatures.bypassLocksInfoDescription')}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
 
-            {/* Bypass Lock on List Commands */}
-            <Box>
-              <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
-                {t('betaFeatures.bypassLocksListTitle')}
-              </Typography>
+          {/* Bypass Lock on List Commands */}
+          <Box>
+            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+              {t('betaFeatures.bypassLocksListTitle')}
+            </Typography>
 
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={bypassLockOnList}
-                    onChange={(e) => handleListToggle(e.target.checked)}
-                    disabled={saveSettingsMutation.isPending}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">
-                      {t('betaFeatures.enableBypassLocksList')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('betaFeatures.bypassLocksListDescription')}
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={bypassLockOnList}
+                  onChange={(e) => handleListToggle(e.target.checked)}
+                  disabled={saveSettingsMutation.isPending}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">{t('betaFeatures.enableBypassLocksList')}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('betaFeatures.bypassLocksListDescription')}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
 
-            {/* Show Restore Tab */}
-            <Box>
-              <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
-                {t('betaFeatures.showLegacyRestoreTabTitle')}
-              </Typography>
+          {/* Show Restore Tab */}
+          <Box>
+            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+              {t('betaFeatures.showLegacyRestoreTabTitle')}
+            </Typography>
 
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={showRestoreTab}
-                    onChange={(e) => handleRestoreTabToggle(e.target.checked)}
-                    disabled={saveSettingsMutation.isPending}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">
-                      {t('betaFeatures.showLegacyRestoreTabLabel')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('betaFeatures.showLegacyRestoreTabDescription')}
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showRestoreTab}
+                  onChange={(e) => handleRestoreTabToggle(e.target.checked)}
+                  disabled={saveSettingsMutation.isPending}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">
+                    {t('betaFeatures.showLegacyRestoreTabLabel')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('betaFeatures.showLegacyRestoreTabDescription')}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
 
-            <Box>
-              <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
-                {t('betaFeatures.mqttIntegrationTitle')}
-              </Typography>
+          <Box>
+            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+              {t('betaFeatures.mqttIntegrationTitle')}
+            </Typography>
 
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={mqttBetaEnabled}
-                    onChange={(e) => handleMQTTBetaToggle(e.target.checked)}
-                    disabled={saveSettingsMutation.isPending}
-                    color="primary"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body1">{t('betaFeatures.enableMqtt')}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('betaFeatures.mqttIntegrationDescription')}
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={mqttBetaEnabled}
+                  onChange={(e) => handleMQTTBetaToggle(e.target.checked)}
+                  disabled={saveSettingsMutation.isPending}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">{t('betaFeatures.enableMqtt')}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('betaFeatures.mqttIntegrationDescription')}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
+        </Stack>
+      </SettingsCard>
     </Box>
   )
 }

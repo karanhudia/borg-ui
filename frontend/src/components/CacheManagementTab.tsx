@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Button,
   Stack,
@@ -21,6 +19,7 @@ import {
   DialogActions,
 } from '@mui/material'
 import { Save, Trash2, AlertTriangle, Server, Zap, Database } from 'lucide-react'
+import SettingsCard from './SettingsCard'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -257,206 +256,202 @@ const CacheManagementTab: React.FC = () => {
         </Box>
 
         {/* Cache Status Card */}
-        <Card>
-          <CardContent>
-            <Stack spacing={2}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Server size={24} />
-                  <Typography variant="h6">{t('cache.cacheStatus')}</Typography>
-                </Box>
-                {stats && (
-                  <Chip
-                    label={stats.backend === 'redis' ? 'Redis' : 'In-Memory'}
-                    color={stats.backend === 'redis' ? 'success' : 'warning'}
-                    size="small"
-                    icon={stats.backend === 'redis' ? <Database size={16} /> : <Zap size={16} />}
-                  />
-                )}
+        <SettingsCard>
+          <Stack spacing={2}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Server size={24} />
+                <Typography variant="h6">{t('cache.cacheStatus')}</Typography>
               </Box>
-
-              {/* Connection Info */}
-              {stats && stats.connection_info && (
-                <Alert severity="info" sx={{ py: 0.5 }}>
-                  <Typography variant="caption">
-                    <strong>Connection:</strong> {stats.connection_info}
-                    {stats.connection_type === 'external_url' && ' (External Redis)'}
-                    {stats.connection_type === 'local' && ' (Local Docker)'}
-                  </Typography>
-                </Alert>
-              )}
-
-              <Divider />
-
-              {/* Status Grid */}
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' },
-                  gap: 2,
-                }}
-              >
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="h4" color="primary">
-                    {stats?.entry_count || 0}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('cache.cachedArchives')}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="h4" color="primary">
-                    {sizeMb.toFixed(1)} MB
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('cache.memoryUsed')}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="h4" color="primary">
-                    {hitRate.toFixed(1)}%
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('cache.hitRate')}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {t('cache.totalRequests', { count: totalRequests })}
-                  </Typography>
-                </Box>
-
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="h4" color="primary">
-                    {stats ? formatTtl(stats.cache_ttl_minutes) : '2 hours'}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('cache.cacheTtl')}
-                  </Typography>
-                </Box>
-              </Box>
-
-              {/* Usage Progress Bar */}
-              <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('cache.cacheUsage')}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('cache.cacheUsageDetail', {
-                      used: sizeMb.toFixed(1),
-                      max: maxSizeFromStats,
-                      percent: usagePercent.toFixed(1),
-                    })}
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.min(usagePercent, 100)}
-                  sx={{
-                    height: 8,
-                    borderRadius: 4,
-                    bgcolor: 'action.hover',
-                    '& .MuiLinearProgress-bar': {
-                      bgcolor: usagePercent >= 80 ? 'error.main' : 'primary.main',
-                    },
-                  }}
+              {stats && (
+                <Chip
+                  label={stats.backend === 'redis' ? 'Redis' : 'In-Memory'}
+                  color={stats.backend === 'redis' ? 'success' : 'warning'}
+                  size="small"
+                  icon={stats.backend === 'redis' ? <Database size={16} /> : <Zap size={16} />}
                 />
+              )}
+            </Box>
+
+            {/* Connection Info */}
+            {stats && stats.connection_info && (
+              <Alert severity="info" sx={{ py: 0.5 }}>
+                <Typography variant="caption">
+                  <strong>Connection:</strong> {stats.connection_info}
+                  {stats.connection_type === 'external_url' && ' (External Redis)'}
+                  {stats.connection_type === 'local' && ' (Local Docker)'}
+                </Typography>
+              </Alert>
+            )}
+
+            <Divider />
+
+            {/* Status Grid */}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr 1fr' },
+                gap: 2,
+              }}
+            >
+              <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="h4" color="primary">
+                  {stats?.entry_count || 0}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('cache.cachedArchives')}
+                </Typography>
               </Box>
 
-              {/* Warning if usage is high */}
-              {usagePercent >= 80 && (
-                <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-                  {t('cache.highUsageWarning', { percent: usagePercent.toFixed(1) })}
-                </Alert>
-              )}
-
-              {/* Backend Info */}
-              {stats?.backend === 'in-memory' && (
-                <Alert severity="info">{t('cache.inMemoryWarning')}</Alert>
-              )}
-
-              {/* Clear Cache Button */}
-              <Box>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<Trash2 size={20} />}
-                  onClick={() => setClearDialogOpen(true)}
-                  disabled={!stats || stats.entry_count === 0 || clearCacheMutation.isPending}
-                >
-                  {t('cache.clearAllCache')}
-                </Button>
+              <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="h4" color="primary">
+                  {sizeMb.toFixed(1)} MB
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('cache.memoryUsed')}
+                </Typography>
               </Box>
-            </Stack>
-          </CardContent>
-        </Card>
+
+              <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="h4" color="primary">
+                  {hitRate.toFixed(1)}%
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('cache.hitRate')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t('cache.totalRequests', { count: totalRequests })}
+                </Typography>
+              </Box>
+
+              <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="h4" color="primary">
+                  {stats ? formatTtl(stats.cache_ttl_minutes) : '2 hours'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('cache.cacheTtl')}
+                </Typography>
+              </Box>
+            </Box>
+
+            {/* Usage Progress Bar */}
+            <Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  {t('cache.cacheUsage')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('cache.cacheUsageDetail', {
+                    used: sizeMb.toFixed(1),
+                    max: maxSizeFromStats,
+                    percent: usagePercent.toFixed(1),
+                  })}
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(usagePercent, 100)}
+                sx={{
+                  height: 8,
+                  borderRadius: 4,
+                  bgcolor: 'action.hover',
+                  '& .MuiLinearProgress-bar': {
+                    bgcolor: usagePercent >= 80 ? 'error.main' : 'primary.main',
+                  },
+                }}
+              />
+            </Box>
+
+            {/* Warning if usage is high */}
+            {usagePercent >= 80 && (
+              <Alert severity="warning" icon={<AlertTriangle size={20} />}>
+                {t('cache.highUsageWarning', { percent: usagePercent.toFixed(1) })}
+              </Alert>
+            )}
+
+            {/* Backend Info */}
+            {stats?.backend === 'in-memory' && (
+              <Alert severity="info">{t('cache.inMemoryWarning')}</Alert>
+            )}
+
+            {/* Clear Cache Button */}
+            <Box>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<Trash2 size={20} />}
+                onClick={() => setClearDialogOpen(true)}
+                disabled={!stats || stats.entry_count === 0 || clearCacheMutation.isPending}
+              >
+                {t('cache.clearAllCache')}
+              </Button>
+            </Box>
+          </Stack>
+        </SettingsCard>
 
         {/* Configuration Card */}
-        <Card>
-          <CardContent>
-            <Stack spacing={3}>
-              <Typography variant="h6">{t('cache.cacheConfiguration')}</Typography>
-              <Divider />
+        <SettingsCard>
+          <Stack spacing={3}>
+            <Typography variant="h6">{t('cache.cacheConfiguration')}</Typography>
+            <Divider />
 
-              <Box
-                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
+            <Box
+              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
+            >
+              <TextField
+                label={t('cache.ttlLabel')}
+                type="number"
+                fullWidth
+                value={ttlMinutes}
+                onChange={(e) => setTtlMinutes(Number(e.target.value))}
+                inputProps={{ min: 1, max: 10080 }}
+                helperText={t('cache.ttlHelperText', { current: formatTtl(ttlMinutes) })}
+              />
+
+              <TextField
+                label={t('cache.maxSizeLabel')}
+                type="number"
+                fullWidth
+                value={maxSizeMb}
+                onChange={(e) => setMaxSizeMb(Number(e.target.value))}
+                inputProps={{ min: 100, max: 10240 }}
+                helperText={t('cache.maxSizeHelperText', {
+                  current: (maxSizeMb / 1024).toFixed(2),
+                })}
+              />
+            </Box>
+
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
+              <TextField
+                label={t('cache.redisUrlLabel')}
+                fullWidth
+                value={redisUrl}
+                onChange={(e) => setRedisUrl(e.target.value)}
+                placeholder="redis://192.168.1.100:6379/0"
+                helperText={t('cache.redisUrlHelperText')}
+                error={
+                  redisUrl.trim() !== '' &&
+                  !redisUrl.startsWith('redis://') &&
+                  !redisUrl.startsWith('rediss://') &&
+                  !redisUrl.startsWith('unix://')
+                }
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={handleTestConnection}
+                disabled={!redisUrl.trim() || testingConnection}
+                sx={{ minWidth: 120, mt: 2.5, flexShrink: 0 }}
               >
-                <TextField
-                  label={t('cache.ttlLabel')}
-                  type="number"
-                  fullWidth
-                  value={ttlMinutes}
-                  onChange={(e) => setTtlMinutes(Number(e.target.value))}
-                  inputProps={{ min: 1, max: 10080 }}
-                  helperText={t('cache.ttlHelperText', { current: formatTtl(ttlMinutes) })}
-                />
-
-                <TextField
-                  label={t('cache.maxSizeLabel')}
-                  type="number"
-                  fullWidth
-                  value={maxSizeMb}
-                  onChange={(e) => setMaxSizeMb(Number(e.target.value))}
-                  inputProps={{ min: 100, max: 10240 }}
-                  helperText={t('cache.maxSizeHelperText', {
-                    current: (maxSizeMb / 1024).toFixed(2),
-                  })}
-                />
-              </Box>
-
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
-                <TextField
-                  label={t('cache.redisUrlLabel')}
-                  fullWidth
-                  value={redisUrl}
-                  onChange={(e) => setRedisUrl(e.target.value)}
-                  placeholder="redis://192.168.1.100:6379/0"
-                  helperText={t('cache.redisUrlHelperText')}
-                  error={
-                    redisUrl.trim() !== '' &&
-                    !redisUrl.startsWith('redis://') &&
-                    !redisUrl.startsWith('rediss://') &&
-                    !redisUrl.startsWith('unix://')
-                  }
-                />
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={handleTestConnection}
-                  disabled={!redisUrl.trim() || testingConnection}
-                  sx={{ minWidth: 120, mt: 2.5, flexShrink: 0 }}
-                >
-                  {testingConnection ? t('cache.testing') : t('cache.testConnection')}
-                </Button>
-              </Stack>
-
-              <Alert severity="info">
-                <strong>{t('cache.noteLabel')}</strong> {t('cache.ttlNoteText')}
-              </Alert>
+                {testingConnection ? t('cache.testing') : t('cache.testConnection')}
+              </Button>
             </Stack>
-          </CardContent>
-        </Card>
+
+            <Alert severity="info">
+              <strong>{t('cache.noteLabel')}</strong> {t('cache.ttlNoteText')}
+            </Alert>
+          </Stack>
+        </SettingsCard>
       </Stack>
 
       {/* Clear Cache Confirmation Dialog */}

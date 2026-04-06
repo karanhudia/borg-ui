@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Switch,
   FormControlLabel,
@@ -17,6 +15,7 @@ import {
   InputLabel,
 } from '@mui/material'
 import { BarChart3, Info, Globe } from 'lucide-react'
+import SettingsCard from './SettingsCard'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -124,80 +123,76 @@ export default function PreferencesTab() {
       </Box>
 
       {/* Language Section */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="flex-start">
-            <Globe size={24} />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                {t('preferences.languageTitle')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {t('preferences.languageDescription')}
-              </Typography>
-              <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel>{t('preferences.languageLabel')}</InputLabel>
-                <Select
-                  value={currentLanguage}
-                  label={t('preferences.languageLabel')}
-                  onChange={(e) => handleLanguageChange(e.target.value)}
-                >
-                  {LANGUAGES.map((lang) => (
-                    <MenuItem key={lang.code} value={lang.code}>
-                      {lang.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+      <SettingsCard sx={{ mb: 3 }}>
+        <Stack direction="row" spacing={2} alignItems="flex-start">
+          <Globe size={24} />
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              {t('preferences.languageTitle')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {t('preferences.languageDescription')}
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel>{t('preferences.languageLabel')}</InputLabel>
+              <Select
+                value={currentLanguage}
+                label={t('preferences.languageLabel')}
+                onChange={(e) => handleLanguageChange(e.target.value)}
+              >
+                {LANGUAGES.map((lang) => (
+                  <MenuItem key={lang.code} value={lang.code}>
+                    {lang.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </Stack>
+      </SettingsCard>
 
       {/* Analytics Section */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="flex-start">
-            <BarChart3 size={24} />
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                {t('preferences.analyticsTitle')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {t('preferences.analyticsDescription')}
-              </Typography>
+      <SettingsCard sx={{ mb: 3 }}>
+        <Stack direction="row" spacing={2} alignItems="flex-start">
+          <BarChart3 size={24} />
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              {t('preferences.analyticsTitle')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {t('preferences.analyticsDescription')}
+            </Typography>
 
-              <>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={analyticsEnabled}
-                      onChange={(e) => handleAnalyticsToggle(e.target.checked)}
-                      disabled={updatePreferencesMutation.isPending}
-                    />
-                  }
-                  label={t('preferences.enableAnalytics')}
-                />
+            <>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={analyticsEnabled}
+                    onChange={(e) => handleAnalyticsToggle(e.target.checked)}
+                    disabled={updatePreferencesMutation.isPending}
+                  />
+                }
+                label={t('preferences.enableAnalytics')}
+              />
 
-                <Alert severity="info" icon={<Info size={20} />} sx={{ mt: 2 }}>
-                  <Typography variant="body2">
-                    <strong>{t('preferences.analyticsTransparencyBold')}</strong>{' '}
-                    <a
-                      href={PUBLIC_ANALYTICS_DASHBOARD_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: 'inherit', textDecoration: 'underline' }}
-                    >
-                      {t('preferences.analyticsTransparencyLink')}
-                    </a>{' '}
-                    {t('preferences.analyticsTransparencyAfterLink')}
-                  </Typography>
-                </Alert>
-              </>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+              <Alert severity="info" icon={<Info size={20} />} sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>{t('preferences.analyticsTransparencyBold')}</strong>{' '}
+                  <a
+                    href={PUBLIC_ANALYTICS_DASHBOARD_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'inherit', textDecoration: 'underline' }}
+                  >
+                    {t('preferences.analyticsTransparencyLink')}
+                  </a>{' '}
+                  {t('preferences.analyticsTransparencyAfterLink')}
+                </Typography>
+              </Alert>
+            </>
+          </Box>
+        </Stack>
+      </SettingsCard>
 
       {/* Future preferences sections can be added here */}
       {/* Example:

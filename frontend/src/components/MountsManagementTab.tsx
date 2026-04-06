@@ -1,16 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Typography,
-  CircularProgress,
-  Stack,
-  Alert,
-  Paper,
-  Card,
-  CardContent,
-} from '@mui/material'
+import { Box, Typography, CircularProgress, Stack, Alert, Paper } from '@mui/material'
 import { HardDrive, XCircle, Trash2, AlertCircle, FolderOpen, Copy } from 'lucide-react'
+import SettingsCard from './SettingsCard'
 import { mountsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -221,19 +213,17 @@ export default function MountsManagementTab() {
 
       {/* No mounts message */}
       {mounts.length === 0 ? (
-        <Card>
-          <CardContent>
-            <Stack alignItems="center" spacing={2} sx={{ py: 4 }}>
-              <FolderOpen size={48} color="#999" />
-              <Typography variant="h6" color="text.secondary">
-                {t('mountsManagement.empty')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" textAlign="center">
-                {t('mounts.emptyDescription')}
-              </Typography>
-            </Stack>
-          </CardContent>
-        </Card>
+        <SettingsCard>
+          <Stack alignItems="center" spacing={2} sx={{ py: 4 }}>
+            <FolderOpen size={48} color="#999" />
+            <Typography variant="h6" color="text.secondary">
+              {t('mountsManagement.empty')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" textAlign="center">
+              {t('mounts.emptyDescription')}
+            </Typography>
+          </Stack>
+        </SettingsCard>
       ) : (
         <>
           {/* Summary */}

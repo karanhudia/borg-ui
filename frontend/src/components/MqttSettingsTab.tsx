@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Button,
   Stack,
@@ -18,6 +16,7 @@ import {
   IconButton,
 } from '@mui/material'
 import { Save, Wifi, Lock, Key, Shield, AlertTriangle, Eye, EyeOff } from 'lucide-react'
+import SettingsCard from './SettingsCard'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -202,15 +201,146 @@ const MqttSettingsTab: React.FC = () => {
         </Box>
 
         {/* MQTT Connection Card */}
-        <Card>
-          <CardContent>
+        <SettingsCard>
+          <Stack spacing={3}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Wifi size={24} />
+              <Typography variant="h6">{t('mqtt.connectionTitle')}</Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              {t('mqtt.connectionDescription')}
+            </Typography>
+            <Divider />
+
+            <FormControlLabel
+              sx={{ ml: -1 }}
+              control={
+                <Checkbox
+                  checked={mqttEnabled}
+                  onChange={(e) => setMqttEnabled(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={t('mqtt.enableMqttPublishing')}
+            />
+
+            {mqttEnabled && (
+              <>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                    gap: 3,
+                  }}
+                >
+                  <TextField
+                    label={t('mqtt.brokerUrlLabel')}
+                    placeholder={t('mqtt.brokerUrlPlaceholder')}
+                    value={mqttBrokerUrl}
+                    onChange={(e) => setMqttBrokerUrl(e.target.value)}
+                    fullWidth
+                    required
+                    helperText={t('mqtt.brokerUrlHelper')}
+                  />
+
+                  <TextField
+                    label={t('mqtt.brokerPortLabel')}
+                    type="number"
+                    value={mqttBrokerPort}
+                    onChange={(e) => setMqttBrokerPort(Number(e.target.value))}
+                    fullWidth
+                    inputProps={{ min: 1, max: 65535, step: 1 }}
+                    helperText={t('mqtt.brokerPortHelper')}
+                  />
+
+                  <TextField
+                    label={t('mqtt.usernameLabel')}
+                    placeholder={t('mqtt.usernamePlaceholder')}
+                    value={mqttUsername}
+                    onChange={(e) => setMqttUsername(e.target.value)}
+                    fullWidth
+                    helperText={t('mqtt.usernameHelper')}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Key size={16} color="#666" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+
+                  <TextField
+                    label={t('mqtt.passwordLabel')}
+                    type={showPassword ? 'text' : 'password'}
+                    value={mqttPassword}
+                    onChange={handlePasswordChange}
+                    fullWidth
+                    helperText={
+                      systemSettings?.mqtt_password_set
+                        ? t('mqtt.passwordIsSet')
+                        : t('mqtt.passwordHelper')
+                    }
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Lock size={16} color="#666" />
+                        </InputAdornment>
+                      ),
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton onClick={togglePasswordVisibility} edge="end" size="small">
+                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+
+                  <TextField
+                    label={t('mqtt.clientIdLabel')}
+                    value={mqttClientId}
+                    onChange={(e) => setMqttClientId(e.target.value)}
+                    fullWidth
+                    helperText={t('mqtt.clientIdHelper')}
+                  />
+
+                  <TextField
+                    label={t('mqtt.qosLevelLabel')}
+                    type="number"
+                    value={mqttQos}
+                    onChange={(e) => setMqttQos(Math.min(Math.max(0, Number(e.target.value)), 2))}
+                    fullWidth
+                    inputProps={{ min: 0, max: 2, step: 1 }}
+                    helperText={t('mqtt.qosLevelHelper')}
+                  />
+                </Box>
+
+                <FormControlLabel
+                  sx={{ ml: -1 }}
+                  control={
+                    <Checkbox
+                      checked={mqttRetain}
+                      onChange={(e) => setMqttRetain(e.target.checked)}
+                      color="primary"
+                    />
+                  }
+                  label={t('mqtt.retainMessages')}
+                />
+              </>
+            )}
+          </Stack>
+        </SettingsCard>
+
+        {/* TLS/SSL Card */}
+        {mqttEnabled && (
+          <SettingsCard>
             <Stack spacing={3}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Wifi size={24} />
-                <Typography variant="h6">{t('mqtt.connectionTitle')}</Typography>
+                <Shield size={24} />
+                <Typography variant="h6">{t('mqtt.tlsConfigTitle')}</Typography>
               </Box>
               <Typography variant="body2" color="text.secondary">
-                {t('mqtt.connectionDescription')}
+                {t('mqtt.tlsConfigDescription')}
               </Typography>
               <Divider />
 
@@ -218,185 +348,50 @@ const MqttSettingsTab: React.FC = () => {
                 sx={{ ml: -1 }}
                 control={
                   <Checkbox
-                    checked={mqttEnabled}
-                    onChange={(e) => setMqttEnabled(e.target.checked)}
+                    checked={mqttTlsEnabled}
+                    onChange={(e) => setMqttTlsEnabled(e.target.checked)}
                     color="primary"
                   />
                 }
-                label={t('mqtt.enableMqttPublishing')}
+                label={t('mqtt.enableTls')}
               />
 
-              {mqttEnabled && (
-                <>
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                      gap: 3,
-                    }}
-                  >
-                    <TextField
-                      label={t('mqtt.brokerUrlLabel')}
-                      placeholder={t('mqtt.brokerUrlPlaceholder')}
-                      value={mqttBrokerUrl}
-                      onChange={(e) => setMqttBrokerUrl(e.target.value)}
-                      fullWidth
-                      required
-                      helperText={t('mqtt.brokerUrlHelper')}
-                    />
-
-                    <TextField
-                      label={t('mqtt.brokerPortLabel')}
-                      type="number"
-                      value={mqttBrokerPort}
-                      onChange={(e) => setMqttBrokerPort(Number(e.target.value))}
-                      fullWidth
-                      inputProps={{ min: 1, max: 65535, step: 1 }}
-                      helperText={t('mqtt.brokerPortHelper')}
-                    />
-
-                    <TextField
-                      label={t('mqtt.usernameLabel')}
-                      placeholder={t('mqtt.usernamePlaceholder')}
-                      value={mqttUsername}
-                      onChange={(e) => setMqttUsername(e.target.value)}
-                      fullWidth
-                      helperText={t('mqtt.usernameHelper')}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <Key size={16} color="#666" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-
-                    <TextField
-                      label={t('mqtt.passwordLabel')}
-                      type={showPassword ? 'text' : 'password'}
-                      value={mqttPassword}
-                      onChange={handlePasswordChange}
-                      fullWidth
-                      helperText={
-                        systemSettings?.mqtt_password_set
-                          ? t('mqtt.passwordIsSet')
-                          : t('mqtt.passwordHelper')
-                      }
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <Lock size={16} color="#666" />
-                          </InputAdornment>
-                        ),
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton onClick={togglePasswordVisibility} edge="end" size="small">
-                              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-
-                    <TextField
-                      label={t('mqtt.clientIdLabel')}
-                      value={mqttClientId}
-                      onChange={(e) => setMqttClientId(e.target.value)}
-                      fullWidth
-                      helperText={t('mqtt.clientIdHelper')}
-                    />
-
-                    <TextField
-                      label={t('mqtt.qosLevelLabel')}
-                      type="number"
-                      value={mqttQos}
-                      onChange={(e) => setMqttQos(Math.min(Math.max(0, Number(e.target.value)), 2))}
-                      fullWidth
-                      inputProps={{ min: 0, max: 2, step: 1 }}
-                      helperText={t('mqtt.qosLevelHelper')}
-                    />
-                  </Box>
-
-                  <FormControlLabel
-                    sx={{ ml: -1 }}
-                    control={
-                      <Checkbox
-                        checked={mqttRetain}
-                        onChange={(e) => setMqttRetain(e.target.checked)}
-                        color="primary"
-                      />
-                    }
-                    label={t('mqtt.retainMessages')}
+              {mqttTlsEnabled && (
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 3 }}>
+                  <TextField
+                    label={t('mqtt.caCertPathLabel')}
+                    placeholder="/path/to/ca.crt"
+                    value={mqttTlsCaCert}
+                    onChange={(e) => setMqttTlsCaCert(e.target.value)}
+                    fullWidth
+                    helperText={t('mqtt.caCertPathHelper')}
                   />
-                </>
+
+                  <TextField
+                    label={t('mqtt.clientCertPathLabel')}
+                    placeholder="/path/to/client.crt"
+                    value={mqttTlsClientCert}
+                    onChange={(e) => setMqttTlsClientCert(e.target.value)}
+                    fullWidth
+                    helperText={t('mqtt.clientCertPathHelper')}
+                  />
+
+                  <TextField
+                    label={t('mqtt.clientKeyPathLabel')}
+                    placeholder="/path/to/client.key"
+                    value={mqttTlsClientKey}
+                    onChange={(e) => setMqttTlsClientKey(e.target.value)}
+                    fullWidth
+                    helperText={t('mqtt.clientKeyPathHelper')}
+                  />
+
+                  <Alert severity="info" icon={<AlertTriangle size={20} />}>
+                    <strong>{t('mqtt.noteLabel')}</strong> {t('mqtt.dockerVolumesWarning')}
+                  </Alert>
+                </Box>
               )}
             </Stack>
-          </CardContent>
-        </Card>
-
-        {/* TLS/SSL Card */}
-        {mqttEnabled && (
-          <Card>
-            <CardContent>
-              <Stack spacing={3}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Shield size={24} />
-                  <Typography variant="h6">{t('mqtt.tlsConfigTitle')}</Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  {t('mqtt.tlsConfigDescription')}
-                </Typography>
-                <Divider />
-
-                <FormControlLabel
-                  sx={{ ml: -1 }}
-                  control={
-                    <Checkbox
-                      checked={mqttTlsEnabled}
-                      onChange={(e) => setMqttTlsEnabled(e.target.checked)}
-                      color="primary"
-                    />
-                  }
-                  label={t('mqtt.enableTls')}
-                />
-
-                {mqttTlsEnabled && (
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 3 }}>
-                    <TextField
-                      label={t('mqtt.caCertPathLabel')}
-                      placeholder="/path/to/ca.crt"
-                      value={mqttTlsCaCert}
-                      onChange={(e) => setMqttTlsCaCert(e.target.value)}
-                      fullWidth
-                      helperText={t('mqtt.caCertPathHelper')}
-                    />
-
-                    <TextField
-                      label={t('mqtt.clientCertPathLabel')}
-                      placeholder="/path/to/client.crt"
-                      value={mqttTlsClientCert}
-                      onChange={(e) => setMqttTlsClientCert(e.target.value)}
-                      fullWidth
-                      helperText={t('mqtt.clientCertPathHelper')}
-                    />
-
-                    <TextField
-                      label={t('mqtt.clientKeyPathLabel')}
-                      placeholder="/path/to/client.key"
-                      value={mqttTlsClientKey}
-                      onChange={(e) => setMqttTlsClientKey(e.target.value)}
-                      fullWidth
-                      helperText={t('mqtt.clientKeyPathHelper')}
-                    />
-
-                    <Alert severity="info" icon={<AlertTriangle size={20} />}>
-                      <strong>{t('mqtt.noteLabel')}</strong> {t('mqtt.dockerVolumesWarning')}
-                    </Alert>
-                  </Box>
-                )}
-              </Stack>
-            </CardContent>
-          </Card>
+          </SettingsCard>
         )}
       </Stack>
     </Box>

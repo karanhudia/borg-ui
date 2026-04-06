@@ -380,7 +380,7 @@ export default function Scripts() {
       )}
 
       {/* Scripts Table */}
-      <TableContainer component={Paper}>
+      <TableContainer component={Paper} sx={{ borderRadius: 3, border: 1, borderColor: 'divider' }}>
         <Table>
           <TableHead>
             <TableRow>
