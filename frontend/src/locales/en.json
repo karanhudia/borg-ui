@@ -599,7 +599,7 @@
         "title": "No users found",
         "description": "Create your first user to get started"
       },
-      "planCaption": "Adding users requires the Pro plan."
+      "planCaption": "Community includes up to 5 users. Upgrade for more seats."
     },
     "toasts": {
       "passwordChanged": "Password changed successfully",
@@ -2865,12 +2865,12 @@
       "multi_user": {
         "label": "Multiple user accounts",
         "description": "Invite additional users to manage backups with their own login",
-        "communityWarning": "Multiple user accounts will not be available in the free Community plan."
+        "communityWarning": "More than 5 user accounts will not be available in the free Community plan."
       },
       "extra_users": {
-        "label": "Unlimited user seats",
-        "description": "Add more than 5 users for large team deployments",
-        "communityWarning": "Unlimited user seats will not be available in the free Community plan."
+        "label": "Expanded user seats",
+        "description": "Add more than 5 users, with up to 10 seats on Pro",
+        "communityWarning": "Expanded user seats beyond 5 users will not be available in the free Community plan."
       },
       "rbac": {
         "label": "Role-based access control",

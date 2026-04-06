@@ -8,8 +8,8 @@ const { usePlanMock } = vi.hoisted(() => ({
     plan: 'community',
     features: {
       borg_v2: 'pro',
-      multi_user: 'pro',
-      extra_users: 'enterprise',
+      multi_user: 'community',
+      extra_users: 'pro',
       rbac: 'enterprise',
     },
     entitlement: {
@@ -45,8 +45,8 @@ describe('SidebarVersionInfo', () => {
       plan: 'community',
       features: {
         borg_v2: 'pro',
-        multi_user: 'pro',
-        extra_users: 'enterprise',
+        multi_user: 'community',
+        extra_users: 'pro',
         rbac: 'enterprise',
       },
       entitlement: {
@@ -117,8 +117,8 @@ describe('SidebarVersionInfo', () => {
       plan: 'community',
       features: {
         borg_v2: 'pro',
-        multi_user: 'pro',
-        extra_users: 'enterprise',
+        multi_user: 'community',
+        extra_users: 'pro',
         rbac: 'enterprise',
       },
       entitlement: {
@@ -141,7 +141,7 @@ describe('SidebarVersionInfo', () => {
 
     fireEvent.click(screen.getByText('Community'))
 
-    expect(screen.getByText('Unlimited user seats')).toBeInTheDocument()
+    expect(screen.queryByText('Expanded user seats')).not.toBeInTheDocument()
     expect(screen.queryByText('Borg v2 backups')).not.toBeInTheDocument()
   })
 })

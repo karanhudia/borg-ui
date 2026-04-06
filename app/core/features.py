@@ -19,15 +19,15 @@ _RANK = {Plan.COMMUNITY: 0, Plan.PRO: 1, Plan.ENTERPRISE: 2}
 # Single source of truth: feature name → minimum plan required
 FEATURES: dict[str, Plan] = {
     "borg_v2":    Plan.PRO,
-    "multi_user": Plan.PRO,        # >1 user (up to 5)
-    "extra_users": Plan.ENTERPRISE, # >5 users
+    "multi_user": Plan.COMMUNITY,   # up to 5 users
+    "extra_users": Plan.PRO,        # >5 users (up to 10 on Pro)
     "rbac":        Plan.ENTERPRISE, # role-based access control
 }
 
 # User limits per plan (None = unlimited)
 USER_LIMITS: dict[Plan, Optional[int]] = {
-    Plan.COMMUNITY:  1,
-    Plan.PRO:        5,
+    Plan.COMMUNITY:  5,
+    Plan.PRO:        10,
     Plan.ENTERPRISE: None,
 }
 

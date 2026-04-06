@@ -599,7 +599,7 @@
         "title": "Keine Benutzer gefunden",
         "description": "Erstelle deinen ersten Benutzer, um zu beginnen"
       },
-      "planCaption": "Das Hinzufügen von Benutzern erfordert den Pro-Plan."
+      "planCaption": "Community umfasst bis zu 5 Benutzer. Für mehr Plätze ist ein Upgrade erforderlich."
     },
     "toasts": {
       "passwordChanged": "Passwort erfolgreich geändert",
@@ -2865,12 +2865,12 @@
       "multi_user": {
         "label": "Mehrere Benutzerkonten",
         "description": "Laden Sie weitere Benutzer ein, Backups mit eigenem Login zu verwalten",
-        "communityWarning": "Mehrere Benutzerkonten sind im kostenlosen Community-Plan nicht verfügbar."
+        "communityWarning": "Mehr als 5 Benutzerkonten sind im kostenlosen Community-Plan nicht verfügbar."
       },
       "extra_users": {
-        "label": "Unbegrenzte Benutzerplätze",
-        "description": "Fügen Sie mehr als 5 Benutzer für große Team-Deployments hinzu",
-        "communityWarning": "Unbegrenzte Benutzerplätze sind im kostenlosen Community-Plan nicht verfügbar."
+        "label": "Erweiterte Benutzerplätze",
+        "description": "Fügen Sie mehr als 5 Benutzer hinzu, mit bis zu 10 Plätzen im Pro-Plan",
+        "communityWarning": "Erweiterte Benutzerplätze über 5 Benutzer hinaus sind im kostenlosen Community-Plan nicht verfügbar."
       },
       "rbac": {
         "label": "Rollenbasierte Zugriffskontrolle",

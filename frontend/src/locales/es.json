@@ -599,7 +599,7 @@
         "title": "No se encontraron usuarios",
         "description": "Crea tu primer usuario para empezar"
       },
-      "planCaption": "Agregar usuarios requiere el plan Pro."
+      "planCaption": "Community incluye hasta 5 usuarios. Actualiza para obtener más plazas."
     },
     "toasts": {
       "passwordChanged": "Contraseña cambiada correctamente",
@@ -2865,12 +2865,12 @@
       "multi_user": {
         "label": "Varias cuentas de usuario",
         "description": "Invita a usuarios adicionales a gestionar copias de seguridad con su propio acceso",
-        "communityWarning": "Las múltiples cuentas de usuario no estarán disponibles en el plan gratuito Community."
+        "communityWarning": "Más de 5 cuentas de usuario no estarán disponibles en el plan gratuito Community."
       },
       "extra_users": {
-        "label": "Puestos de usuario ilimitados",
-        "description": "Añade más de 5 usuarios para implementaciones de equipos grandes",
-        "communityWarning": "Los puestos de usuario ilimitados no estarán disponibles en el plan gratuito Community."
+        "label": "Plazas de usuario ampliadas",
+        "description": "Añade más de 5 usuarios, con hasta 10 plazas en Pro",
+        "communityWarning": "Las plazas de usuario ampliadas por encima de 5 usuarios no estarán disponibles en el plan gratuito Community."
       },
       "rbac": {
         "label": "Control de acceso basado en roles",

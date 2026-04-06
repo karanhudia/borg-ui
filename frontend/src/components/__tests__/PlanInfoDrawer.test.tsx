@@ -21,8 +21,8 @@ vi.mock('../../hooks/useAuth', () => ({
 
 const featureMap = {
   borg_v2: 'pro',
-  multi_user: 'pro',
-  extra_users: 'enterprise',
+  multi_user: 'community',
+  extra_users: 'pro',
 } as const
 
 describe('PlanInfoDrawer', () => {
@@ -53,11 +53,11 @@ describe('PlanInfoDrawer', () => {
     )
 
     expect(screen.getByText('Borg v2 backups')).toBeInTheDocument()
-    expect(screen.queryByText('Unlimited user seats')).not.toBeInTheDocument()
+    expect(screen.getByText('Expanded user seats')).toBeInTheDocument()
 
     await user.click(screen.getByText('Enterprise'))
 
-    expect(screen.getByText('Unlimited user seats')).toBeInTheDocument()
+    expect(screen.queryByText('Expanded user seats')).not.toBeInTheDocument()
   })
 
   it('uses the provided initial selected plan when opened', () => {
@@ -71,7 +71,7 @@ describe('PlanInfoDrawer', () => {
       />
     )
 
-    expect(screen.getByText('Unlimited user seats')).toBeInTheDocument()
+    expect(screen.queryByText('Expanded user seats')).not.toBeInTheDocument()
     expect(screen.queryByText('Borg v2 backups')).not.toBeInTheDocument()
   })
 })
