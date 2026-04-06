@@ -190,19 +190,20 @@ class TestRepositoryHelperContracts:
             "success": True,
             "stdout": '{"archives":[{"name":"old","time":"2024-01-01T10:00:00"},{"name":"new","time":"2024-02-01T12:00:00Z"}]}',
         }
-        process = Mock()
-        process.returncode = 0
-        process.communicate = AsyncMock(
-            return_value=(
-                b'{"cache":{"stats":{"unique_csize": 2097152}}}',
-                b"",
-            )
-        )
-
-        with patch.object(repositories_api.borg, "list_archives", AsyncMock(return_value=list_payload)) as mock_list, patch(
-            "app.api.repositories.asyncio.create_subprocess_exec",
-            AsyncMock(return_value=process),
-        ):
+        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch.object(
+            repositories_api.borg, "list_archives", AsyncMock(return_value=list_payload)
+        ) as mock_list, patch.object(
+            repositories_api.borg,
+            "_execute_command",
+            AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": '{"cache":{"stats":{"unique_csize": 2097152}}}',
+                    "stderr": "",
+                    "return_code": 0,
+                }
+            ),
+        ) as mock_exec:
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is True
@@ -211,6 +212,8 @@ class TestRepositoryHelperContracts:
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
         assert mock_list.await_args.kwargs["bypass_lock"] is True
+        assert mock_list.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
+        assert "--bypass-lock" in mock_exec.await_args.args[0]
 
     @pytest.mark.asyncio
     async def test_update_repository_stats_returns_false_on_unexpected_exception(self, test_db):
@@ -220,3 +223,42 @@ class TestRepositoryHelperContracts:
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is False
+
+    @pytest.mark.asyncio
+    async def test_update_repository_stats_uses_remote_path_and_ssh_key_env(self, test_db):
+        repo = Repository(
+            name="Remote Repo",
+            path="ssh://borg@example.com:22/backups/main",
+            encryption="none",
+            repository_type="ssh",
+            remote_path="/usr/local/bin/borg1",
+            passphrase="remote-secret",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value="/tmp/test.key"), patch.object(
+            repositories_api.borg,
+            "list_archives",
+            AsyncMock(return_value={"success": True, "stdout": '{"archives": []}'}),
+        ) as mock_list, patch.object(
+            repositories_api.borg,
+            "_execute_command",
+            AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": '{"cache":{"stats":{"unique_csize": 1024}}}',
+                    "stderr": "",
+                    "return_code": 0,
+                }
+            ),
+        ) as mock_exec, patch("app.api.repositories.os.path.exists", return_value=False):
+            success = await repositories_api.update_repository_stats(repo, test_db)
+
+        assert success is True
+        assert mock_list.await_args.kwargs["remote_path"] == "/usr/local/bin/borg1"
+        assert mock_list.await_args.kwargs["env"]["BORG_RSH"].startswith("ssh ")
+        cmd = mock_exec.await_args.args[0]
+        assert "--remote-path" in cmd
+        assert "/usr/local/bin/borg1" in cmd

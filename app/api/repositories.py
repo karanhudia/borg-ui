@@ -133,6 +133,21 @@ def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
 
     return env
 
+
+def _prepare_repository_borg_env(repository: Repository, db: Session):
+    """Build Borg execution environment for a stored repository.
+
+    Returns the environment plus any temporary SSH key file that must be
+    cleaned up by the caller.
+    """
+    temp_key_file = resolve_repo_ssh_key_file(repository, db)
+    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+    env = setup_borg_env(
+        passphrase=repository.passphrase,
+        ssh_opts=ssh_opts,
+    )
+    return env, temp_key_file
+
 # Helper function to get operation timeouts from DB settings (with fallback to config)
 def get_operation_timeouts(db: Session = None) -> dict:
     """
@@ -182,18 +197,21 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
     Update the archive count and repository size stats by querying Borg.
     Returns True if successful, False otherwise.
     """
+    temp_key_file = None
     try:
         # Check system-wide bypass_lock_on_list setting
         from app.database.models import SystemSettings
         system_settings = db.query(SystemSettings).first()
         use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
+        env, temp_key_file = _prepare_repository_borg_env(repository, db)
 
         # Get archive list and count
         list_result = await borg.list_archives(
             repository.path,
             remote_path=repository.remote_path,
             passphrase=repository.passphrase,
-            bypass_lock=use_bypass_lock
+            bypass_lock=use_bypass_lock,
+            env=env,
         )
 
         archive_count = 0
@@ -239,29 +257,18 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         cmd = ["borg", "info"]
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
-        if repository.bypass_lock:
+        if use_bypass_lock:
             cmd.append("--bypass-lock")
         cmd.extend([repository.path, "--json"])
-
-        env = setup_borg_env(
-            passphrase=repository.passphrase,
-            ssh_opts=get_standard_ssh_opts()
-        )
 
         # Get timeouts from DB settings (with fallback to config)
         timeouts = get_operation_timeouts(db)
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env
-            )
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["info_timeout"])
+            info_result = await borg._execute_command(cmd, timeout=timeouts["info_timeout"], env=env)
 
-            if process.returncode == 0:
-                info_data = json.loads(stdout.decode())
+            if info_result["success"]:
+                info_data = json.loads(info_result["stdout"])
                 cache = info_data.get("cache", {}).get("stats", {})
                 if cache:
                     unique_csize = cache.get("unique_csize", 0)
@@ -298,6 +305,12 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                    repository=repository.name,
                    error=str(e))
         return False
+    finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+            except Exception:
+                pass
 
 # Helper function to format bytes to human readable format
 def format_bytes(bytes_size: int) -> str:
@@ -1120,7 +1133,7 @@ async def get_repository(
         use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
 
         # Get repository statistics
-        stats = await get_repository_stats(repository.path, bypass_lock=use_bypass_lock)
+        stats = await get_repository_stats(repository, db, bypass_lock=use_bypass_lock)
 
         return {
             "success": True,
@@ -1757,7 +1770,7 @@ async def get_repository_statistics(
         use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
 
         # Get detailed statistics
-        stats = await get_repository_stats(repository.path, bypass_lock=use_bypass_lock)
+        stats = await get_repository_stats(repository, db, bypass_lock=use_bypass_lock)
 
         return {
             "success": True,
@@ -2748,15 +2761,22 @@ async def list_archive_files(
             except Exception:
                 pass
 
-async def get_repository_stats(path: str, bypass_lock: bool = False) -> Dict[str, Any]:
+async def get_repository_stats(
+    repository: Repository, db: Session, bypass_lock: bool = False
+) -> Dict[str, Any]:
     """Get repository statistics"""
+    temp_key_file = None
     try:
+        env, temp_key_file = _prepare_repository_borg_env(repository, db)
+
         # Get repository info
         cmd = ["borg", "info"]
         if bypass_lock:
             cmd.append("--bypass-lock")
-        cmd.append(path)
-        info_result = await borg._execute_command(cmd)
+        if repository.remote_path:
+            cmd.extend(["--remote-path", repository.remote_path])
+        cmd.append(repository.path)
+        info_result = await borg._execute_command(cmd, env=env)
 
         if not info_result["success"]:
             return {
@@ -2776,7 +2796,13 @@ async def get_repository_stats(path: str, bypass_lock: bool = False) -> Dict[str
         }
 
         # Try to get archive count
-        archives_result = await borg.list_archives(path, bypass_lock=bypass_lock)
+        archives_result = await borg.list_archives(
+            repository.path,
+            remote_path=repository.remote_path,
+            passphrase=repository.passphrase,
+            bypass_lock=bypass_lock,
+            env=env,
+        )
         if archives_result["success"]:
             try:
                 archives_data = archives_result["stdout"]
@@ -2791,6 +2817,12 @@ async def get_repository_stats(path: str, bypass_lock: bool = False) -> Dict[str
         return {
             "error": str(e)
         }
+    finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+            except Exception:
+                pass
 
 @router.post("/{repository_id}/break-lock")
 async def break_repository_lock(

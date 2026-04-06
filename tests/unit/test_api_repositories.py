@@ -805,6 +805,148 @@ class TestRepositoriesStatistics:
 
         assert response.status_code == 401
 
+    @pytest.mark.asyncio
+    async def test_get_repository_stats_forwards_passphrase_for_encrypted_local_repo(self, test_db):
+        repo = Repository(
+            name="Encrypted Stats Repo",
+            path="/tmp/encrypted-stats-repo",
+            encryption="repokey",
+            passphrase="secret-passphrase",
+            compression="lz4",
+            repository_type="local",
+        )
+
+        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch(
+            "app.api.repositories.borg._execute_command", new=AsyncMock(
+                return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
+            )
+        ) as mock_exec, patch(
+            "app.api.repositories.borg.list_archives", new=AsyncMock(
+                return_value={"success": True, "stdout": []}
+            )
+        ) as mock_list:
+            from app.api.repositories import get_repository_stats
+
+            stats = await get_repository_stats(repo, test_db)
+
+        assert "error" not in stats
+        _, kwargs = mock_exec.call_args
+        assert kwargs["env"]["BORG_PASSPHRASE"] == "secret-passphrase"
+        _, kwargs = mock_list.call_args
+        assert kwargs["passphrase"] == "secret-passphrase"
+
+    @pytest.mark.asyncio
+    async def test_get_repository_stats_omits_passphrase_for_unencrypted_local_repo(self, test_db):
+        repo = Repository(
+            name="Unencrypted Stats Repo",
+            path="/tmp/unencrypted-stats-repo",
+            encryption="none",
+            passphrase=None,
+            compression="lz4",
+            repository_type="local",
+        )
+
+        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch(
+            "app.api.repositories.borg._execute_command", new=AsyncMock(
+                return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
+            )
+        ) as mock_exec, patch(
+            "app.api.repositories.borg.list_archives", new=AsyncMock(
+                return_value={"success": True, "stdout": []}
+            )
+        ):
+            from app.api.repositories import get_repository_stats
+
+            await get_repository_stats(repo, test_db)
+
+        _, kwargs = mock_exec.call_args
+        assert "BORG_PASSPHRASE" not in kwargs["env"]
+
+    @pytest.mark.asyncio
+    async def test_get_repository_stats_includes_remote_path_and_ssh_key_for_remote_repo(
+        self, test_db
+    ):
+        repo = Repository(
+            name="Remote Stats Repo",
+            path="ssh://backup@example.com:22/backups/repo",
+            encryption="repokey",
+            passphrase="remote-passphrase",
+            compression="lz4",
+            repository_type="ssh",
+            remote_path="/usr/local/bin/borg1",
+            connection_id=7,
+        )
+
+        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value="/tmp/test.key"), patch(
+            "app.api.repositories.borg._execute_command", new=AsyncMock(
+                return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
+            )
+        ) as mock_exec, patch(
+            "app.api.repositories.borg.list_archives", new=AsyncMock(
+                return_value={"success": True, "stdout": []}
+            )
+        ) as mock_list, patch("app.api.repositories.os.path.exists", return_value=False):
+            from app.api.repositories import get_repository_stats
+
+            await get_repository_stats(repo, test_db)
+
+        cmd, = mock_exec.call_args[0]
+        assert "--remote-path" in cmd
+        assert "/usr/local/bin/borg1" in cmd
+        _, kwargs = mock_exec.call_args
+        assert "BORG_RSH" in kwargs["env"]
+        _, kwargs = mock_list.call_args
+        assert kwargs["remote_path"] == "/usr/local/bin/borg1"
+        assert kwargs["env"]["BORG_RSH"].startswith("ssh ")
+
+    @pytest.mark.asyncio
+    async def test_get_repository_stats_supports_bypass_lock_and_borg_info_failure(self, test_db):
+        repo = Repository(
+            name="Locked Stats Repo",
+            path="/tmp/locked-stats-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+
+        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch(
+            "app.api.repositories.borg._execute_command", new=AsyncMock(
+                return_value={"success": False, "stdout": "", "stderr": "stats failed", "return_code": 2}
+            )
+        ) as mock_exec:
+            from app.api.repositories import get_repository_stats
+
+            stats = await get_repository_stats(repo, test_db, bypass_lock=True)
+
+        cmd, = mock_exec.call_args[0]
+        assert "--bypass-lock" in cmd
+        assert stats == {"error": "Failed to get repository info", "details": "stats failed"}
+
+    @pytest.mark.asyncio
+    async def test_get_repository_stats_tolerates_archive_list_failure(self, test_db):
+        repo = Repository(
+            name="Archive List Failure Repo",
+            path="/tmp/archive-list-failure-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+
+        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch(
+            "app.api.repositories.borg._execute_command", new=AsyncMock(
+                return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
+            )
+        ), patch(
+            "app.api.repositories.borg.list_archives", new=AsyncMock(
+                return_value={"success": False, "stdout": "", "stderr": "list failed"}
+            )
+        ):
+            from app.api.repositories import get_repository_stats
+
+            stats = await get_repository_stats(repo, test_db)
+
+        assert stats["archive_count"] == 0
+
 
 @pytest.mark.unit
 class TestRepositoriesImport:
@@ -828,6 +970,46 @@ class TestRepositoriesImport:
         )
 
         assert response.status_code == 401
+
+    def test_import_repository_allows_unencrypted_repo_without_passphrase(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        """Test importing an unencrypted repository does not require a passphrase."""
+        repo_path = tmp_path / "unencrypted-import"
+        repo_path.mkdir()
+        (repo_path / "config").write_text("[repository]\n", encoding="utf-8")
+
+        verify_result = {
+            "success": True,
+            "info": {"encryption": {"mode": "none"}},
+        }
+
+        with patch(
+            "app.api.repositories.verify_existing_repository",
+            new=AsyncMock(return_value=verify_result),
+        ) as mock_verify, patch(
+            "app.core.borg_router.BorgRouter.update_stats",
+            new=AsyncMock(return_value=True),
+        ), patch(
+            "app.api.repositories.mqtt_service.sync_state_with_db",
+            return_value=None,
+        ):
+            response = test_client.post(
+                "/api/repositories/import",
+                json={
+                    "name": "Imported Unencrypted Repo",
+                    "path": str(repo_path),
+                    "compression": "lz4",
+                    "mode": "observe",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is True
+        assert body["repository"]["encryption"] == "none"
+        assert mock_verify.await_args.args[1] is None
 
 
 @pytest.mark.unit
