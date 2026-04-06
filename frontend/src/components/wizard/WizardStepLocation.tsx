@@ -96,48 +96,55 @@ export default function WizardStepLocation({
       {/* Borg Version Selector — only shown on create/import, not edit */}
       {mode !== 'edit' && (
         <PlanGate feature="borg_v2" disabled>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
-              Borg Version
-            </Typography>
-            <Box
-              sx={{
-                display: 'flex',
-                p: '3px',
-                bgcolor: 'action.hover',
-                borderRadius: '10px',
-                gap: '2px',
-              }}
-            >
-              {([1, 2] as const).map((v) => {
-                const selected = (data.borgVersion ?? 1) === v
-                return (
-                  <ButtonBase
-                    key={v}
-                    onClick={() => onChange({ borgVersion: v })}
-                    sx={{
-                      px: 1.75,
-                      py: 0.5,
-                      borderRadius: '8px',
-                      bgcolor: selected ? 'background.paper' : 'transparent',
-                      boxShadow: selected ? 1 : 0,
-                      fontWeight: selected ? 700 : 400,
-                      fontSize: '0.8rem',
-                      color: selected ? 'text.primary' : 'text.secondary',
-                      transition: 'all 0.15s ease',
-                      fontFamily: 'monospace',
-                      letterSpacing: 0.3,
-                    }}
-                  >
-                    v{v}
-                  </ButtonBase>
-                )
-              })}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
+                Borg Version
+              </Typography>
+              <Box
+                sx={{
+                  display: 'flex',
+                  p: '3px',
+                  bgcolor: 'action.hover',
+                  borderRadius: '10px',
+                  gap: '2px',
+                }}
+              >
+                {([1, 2] as const).map((v) => {
+                  const selected = (data.borgVersion ?? 1) === v
+                  return (
+                    <ButtonBase
+                      key={v}
+                      onClick={() => onChange({ borgVersion: v })}
+                      sx={{
+                        px: 1.75,
+                        py: 0.5,
+                        borderRadius: '8px',
+                        bgcolor: selected ? 'background.paper' : 'transparent',
+                        boxShadow: selected ? 1 : 0,
+                        fontWeight: selected ? 700 : 400,
+                        fontSize: '0.8rem',
+                        color: selected ? 'text.primary' : 'text.secondary',
+                        transition: 'all 0.15s ease',
+                        fontFamily: 'monospace',
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      v{v}
+                    </ButtonBase>
+                  )
+                })}
+              </Box>
+              {(data.borgVersion ?? 1) === 2 && (
+                <Tooltip title={t('wizard.location.borgV2Warning')} arrow placement="right">
+                  <InfoOutlinedIcon sx={{ fontSize: 16, color: 'info.main', cursor: 'default' }} />
+                </Tooltip>
+              )}
             </Box>
             {(data.borgVersion ?? 1) === 2 && (
-              <Tooltip title={t('wizard.location.borgV2Warning')} arrow placement="right">
-                <InfoOutlinedIcon sx={{ fontSize: 16, color: 'info.main', cursor: 'default' }} />
-              </Tooltip>
+              <Alert severity="warning" sx={{ py: 0.5 }}>
+                {t('wizard.location.borgV2Warning')}
+              </Alert>
             )}
           </Box>
         </PlanGate>

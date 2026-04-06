@@ -3,45 +3,27 @@
   "generated_at": "2026-04-06T00:00:00Z",
   "announcements": [
     {
-      "id": "release-1.79.0-update",
-      "type": "update_available",
-      "priority": 50,
-      "title": "Borg UI 1.79.0 is available",
-      "message": "This release includes planning improvements, startup hardening, and UI polish.",
-      "highlights": [
-        "Upcoming roadmap is now visible in the plan drawer",
-        "Startup repairs persistent volume ownership automatically",
-        "General stability and interface improvements"
-      ],
-      "cta_label": "View release notes",
-      "cta_url": "https://github.com/karanhudia/borg-ui/releases",
-      "dismissible": true,
-      "snooze_days": 7,
-      "starts_at": "2026-04-01T00:00:00Z",
-      "ends_at": "2027-04-01T00:00:00Z",
-      "min_app_version": "0.0.0",
-      "max_app_version": "1.79.0",
-      "target_plans": ["community", "pro", "enterprise"]
-    },
-    {
-      "id": "release-1.79.0-whats-new",
+      "id": "release-2.0.0-whats-new",
       "type": "release_highlight",
       "priority": 50,
-      "title": "What's new in 1.79.0",
-      "message": "Here's what landed in this release.",
+      "title": "What's new in 2.0.0",
+      "message": "Borg UI 2.0.0 adds built-in plans, Borg 2 support, better access control, and a more polished day-to-day experience. New installs include 60 days of full access before Community plan limits apply.",
       "highlights": [
-        "Upcoming roadmap is now visible in the plan drawer",
-        "Startup repairs persistent volume ownership automatically",
-        "General stability and interface improvements"
+        "Built-in Community, Pro, and Enterprise plans, with licensing managed directly in the app",
+        "Borg 2 support across repository create, import, stats, and archive flows",
+        "A revamped dashboard, cleaner navigation, improved settings, and auto theme mode",
+        "RBAC, repository access controls, personal profiles, and API tokens for multi-user setups",
+        "Announcements, Umami analytics, and better product telemetry",
+        "Stronger SSH, restore, testing, and CI reliability"
       ],
       "cta_label": "View release notes",
-      "cta_url": "https://github.com/karanhudia/borg-ui/releases",
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.0.0",
       "dismissible": true,
       "snooze_days": 7,
-      "starts_at": "2026-04-01T00:00:00Z",
-      "ends_at": "2027-04-01T00:00:00Z",
-      "min_app_version": "1.79.0",
-      "max_app_version": "1.80.0",
+      "starts_at": "2026-04-06T00:00:00Z",
+      "ends_at": "2027-04-06T00:00:00Z",
+      "min_app_version": "1.78.0",
+      "max_app_version": "2.1.0",
       "target_plans": ["community", "pro", "enterprise"]
     }
   ]

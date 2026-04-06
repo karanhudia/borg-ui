@@ -1730,7 +1730,7 @@
       "selectSshConnection": "Seleziona Connessione SSH",
       "repositoryPathLabel": "Percorso Repository",
       "repositoryPathHelper": "Percorso dove verrà archiviato il repository",
-      "borgV2Warning": "I repository Borg 2 non sono compatibili con Borg 1. Richiede il binario borg2 su questo sistema e su tutti gli host remoti.",
+      "borgV2Warning": "Il supporto a Borg 2 è ancora in beta. Non usarlo ancora per dati di produzione. Al momento è pensato per appassionati e test, e richiede il binario borg2 su qualsiasi host remoto.",
       "connected": "Connesso",
       "browseFilesystem": "Sfoglia il filesystem"
     },

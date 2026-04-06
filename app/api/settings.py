@@ -19,7 +19,7 @@ from app.core.permissions import (
 )
 from sqlalchemy import text
 from app.core.borg import BorgInterface
-from app.config import settings as app_settings
+from app.config import get_runtime_app_version, settings as app_settings
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
 
@@ -257,7 +257,7 @@ async def get_system_settings(
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes if settings.stats_refresh_interval_minutes is not None else 60,
                 "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
                 "borg_version": borg.get_version(),
-                "app_version": "1.36.1",
+                "app_version": get_runtime_app_version(),
                 
                 # MQTT settings
                 "mqtt_enabled": settings.mqtt_enabled,

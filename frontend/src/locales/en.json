@@ -1730,7 +1730,7 @@
       "selectSshConnection": "Select SSH Connection",
       "repositoryPathLabel": "Repository Path",
       "repositoryPathHelper": "Path where the repository will be stored",
-      "borgV2Warning": "Borg 2 repositories are not compatible with Borg 1. Requires borg2 binary on this system and any remote hosts.",
+      "borgV2Warning": "Borg 2 support is still in beta. Do not use it for production data yet. It is currently intended for enthusiasts and testing, and requires the borg2 binary on any remote hosts.",
       "connected": "Connected",
       "browseFilesystem": "Browse filesystem"
     },

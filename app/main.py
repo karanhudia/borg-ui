@@ -104,7 +104,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Borg Web UI",
     description="A lightweight web interface for Borg backup management",
-    version="1.64.1",
+    version="2.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     root_path=BASE_PATH if BASE_PATH else None,
@@ -407,7 +407,7 @@ async def api_info():
     """API information endpoint"""
     return {
         "name": "Borg Web UI API",
-        "version": "1.56.0",
+        "version": get_runtime_app_version(),
         "docs": "/api/docs",
         "status": "running"
     }
