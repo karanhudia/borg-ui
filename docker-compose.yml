@@ -123,7 +123,6 @@ services:
 
       # Licensing / activation
       - ACTIVATION_SERVICE_URL=${ACTIVATION_SERVICE_URL:-https://license.borgui.com}
-      - ACTIVATION_SHARED_SECRET=${ACTIVATION_SHARED_SECRET:-}
       - ACTIVATION_TIMEOUT_SECONDS=${ACTIVATION_TIMEOUT_SECONDS:-10}
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:$${PORT:-8081}/"]

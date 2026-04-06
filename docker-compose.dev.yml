@@ -36,7 +36,6 @@ services:
       - CACHE_MAX_SIZE_MB=2048
       # Licensing / activation
       - ACTIVATION_SERVICE_URL=${ACTIVATION_SERVICE_URL:-http://host.docker.internal:8787}
-      - ACTIVATION_SHARED_SECRET=${ACTIVATION_SHARED_SECRET:-}
       - ACTIVATION_TIMEOUT_SECONDS=${ACTIVATION_TIMEOUT_SECONDS:-10}
       # To enable Redis caching in dev, uncomment the two lines below
       # and uncomment the redis service + depends_on section at the bottom

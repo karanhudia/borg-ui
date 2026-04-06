@@ -28,7 +28,6 @@ class Settings(BaseSettings):
 
     # Licensing / activation settings
     activation_service_url: Optional[str] = None
-    activation_shared_secret: Optional[str] = None
     activation_public_key: Optional[str] = "MCowBQYDK2VwAyEA47u7lrJoXKAhcdNKy75+H4y/VpX8cvaqgQGx3ue8w4g="
     activation_timeout_seconds: int = 10
     activation_refresh_interval_hours: int = 24
@@ -173,9 +172,6 @@ settings.environment = os.getenv("ENVIRONMENT", settings.environment)
 settings.log_level = os.getenv("LOG_LEVEL", settings.log_level)
 settings.port = int(os.getenv("PORT", settings.port))
 settings.activation_service_url = os.getenv("ACTIVATION_SERVICE_URL", settings.activation_service_url)
-settings.activation_shared_secret = os.getenv(
-    "ACTIVATION_SHARED_SECRET", settings.activation_shared_secret
-)
 settings.activation_public_key = os.getenv(
     "ACTIVATION_PUBLIC_KEY", settings.activation_public_key
 )

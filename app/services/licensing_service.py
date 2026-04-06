@@ -52,10 +52,7 @@ def _get_public_key() -> str | None:
 
 
 def _get_auth_headers() -> dict[str, str]:
-    secret = settings.activation_shared_secret
-    if not secret:
-        return {}
-    return {"Authorization": f"Bearer {secret}"}
+    return {}
 
 
 def _validate_signature(payload: dict[str, Any], signature: str) -> bool:
