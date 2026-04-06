@@ -159,39 +159,13 @@ export const dashboardAPI = {
   getOverview: () => api.get('/dashboard/overview'),
 }
 
-// Configuration API - DEPRECATED (removed from UI)
-// We now use borg directly with per-repository passphrases
-// Keeping this commented out for reference
-/*
-export const configAPI = {
-  // List all configurations
-  listConfigurations: () => api.get('/config/'),
-  // Get default configuration
-  getDefaultConfig: () => api.get('/config/default'),
-  // Get specific configuration
-  getConfiguration: (id: number) => api.get(`/config/${id}`),
-  // Create new configuration
-  createConfiguration: (data: { name: string; description?: string; content: string }) =>
-    api.post('/config/', data),
-  // Update configuration
-  updateConfiguration: (id: number, data: { name?: string; description?: string; content?: string }) =>
-    api.put(`/config/${id}`, data),
-  // Delete configuration
-  deleteConfiguration: (id: number) => api.delete(`/config/${id}`),
-  // Set as default
-  setDefaultConfiguration: (id: number) => api.post(`/config/${id}/set-default`),
-  // Validate configuration content
-  validateConfig: (config: string) => api.post('/config/validate', { content: config }),
-  // Generate template using borg CLI (recommended)
-  generateTemplate: () => api.post('/config/generate-template'),
-  // Get templates (deprecated - use generateTemplate instead)
-  getTemplates: () => api.get('/config/templates'),
-
-  // Legacy endpoints (keep for backward compatibility)
-  getConfig: () => api.get('/config/current'),
-  updateConfig: (config: string) => api.put('/config/update', { content: config }),
+export const licensingAPI = {
+  refresh: () => api.post('/system/licensing/refresh'),
+  activate: (licenseKey: string) =>
+    api.post('/system/licensing/activate', { license_key: licenseKey }),
+  deactivate: (licenseKey: string) =>
+    api.post('/system/licensing/deactivate', { license_key: licenseKey }),
 }
-*/
 
 export const backupAPI = {
   startBackup: (repository?: string) => api.post('/backup/start', { repository }),
