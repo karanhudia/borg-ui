@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     # Licensing / activation settings
     activation_service_url: Optional[str] = None
     activation_shared_secret: Optional[str] = None
-    activation_public_key: Optional[str] = None
+    activation_public_key: Optional[str] = "MCowBQYDK2VwAyEA47u7lrJoXKAhcdNKy75+H4y/VpX8cvaqgQGx3ue8w4g="
     activation_timeout_seconds: int = 10
     activation_refresh_interval_hours: int = 24
 

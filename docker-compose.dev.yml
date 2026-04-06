@@ -30,16 +30,20 @@ services:
       - DATABASE_URL=sqlite:////data/borg.db
       - SECRET_KEY=dev-secret-key-not-for-production
       - ENVIRONMENT=development
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
       - CACHE_TTL_SECONDS=7200
       - CACHE_MAX_SIZE_MB=2048
+      # Licensing / activation
+      - ACTIVATION_SERVICE_URL=${ACTIVATION_SERVICE_URL:-http://host.docker.internal:8787}
+      - ACTIVATION_SHARED_SECRET=${ACTIVATION_SHARED_SECRET:-}
+      - ACTIVATION_TIMEOUT_SECONDS=${ACTIVATION_TIMEOUT_SECONDS:-10}
       # To enable Redis caching in dev, uncomment the two lines below
       # and uncomment the redis service + depends_on section at the bottom
       # - REDIS_HOST=redis
       # - REDIS_PORT=6379
     entrypoint: ["/bin/sh", "-c"]
-    command: ["python -m uvicorn app.main:app --reload --reload-dir /app/app --host 0.0.0.0 --port ${DEV_PORT:-8083}"]
+    command: ["python -m uvicorn app.main:app --reload --reload-dir /app/app --host 0.0.0.0 --port ${DEV_PORT:-8083} --no-access-log"]
     # Uncomment to require Redis before starting:
     # depends_on:
     #   redis:

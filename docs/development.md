@@ -57,14 +57,13 @@ If `.env` is absent, defaults are `PORT=8082` and `DEV_PORT=8083`.
 
 This script:
 1. Reads `DEV_PORT` from `.env` (default `8083`)
-2. Starts the backend and Redis in Docker (`borg-web-ui-dev`, `borg-redis-dev`) — isolated from any running production containers
+2. Starts the backend in Docker (`borg-web-ui-dev`) — isolated from any running production containers
 3. Mounts your local `./app` source into the container for hot reload — no image rebuild needed on code changes
 4. Starts the Vite frontend dev server locally
 
 **Access:**
 - Frontend (hot reload): [http://localhost:7879](http://localhost:7879)
 - Dev backend API: `http://localhost:DEV_PORT` (default `8083`)
-- Dev Redis: `localhost:6380`
 
 **Stop:** Press `Ctrl+C` — containers are torn down automatically.
 
@@ -85,9 +84,9 @@ Production and dev environments use different container names and ports, so they
 | | Production | Development |
 |---|---|---|
 | Backend container | `borg-web-ui` | `borg-web-ui-dev` |
-| Redis container | `borg-redis` | `borg-redis-dev` |
+| Redis container | `borg-redis` | optional only |
 | Backend port | `PORT` (default `8082`) | `DEV_PORT` (default `8083`) |
-| Redis port | `6379` | `6380` |
+| Redis port | `6379` | optional only |
 | Frontend | built into image | Vite dev server on `7879` |
 | Data | `borg_data` Docker volume | `.local-data/` folder |
 
