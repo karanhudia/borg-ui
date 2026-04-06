@@ -8,6 +8,8 @@ export function getAnnouncementsUrl() {
   const configuredUrl = import.meta.env.VITE_ANNOUNCEMENTS_URL?.trim()
   if (configuredUrl) return configuredUrl
 
+  if (import.meta.env.DEV) return LOCAL_ANNOUNCEMENTS_URL
+
   return DEFAULT_REMOTE_ANNOUNCEMENTS_URL
 }
 

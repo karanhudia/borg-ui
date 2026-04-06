@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generated_at": "2026-04-01T00:00:00Z",
+  "generated_at": "2026-04-06T00:00:00Z",
   "announcements": [
     {
-      "id": "release-1.79.0",
+      "id": "release-1.79.0-update",
       "type": "update_available",
       "priority": 50,
       "title": "Borg UI 1.79.0 is available",
@@ -17,30 +17,31 @@
       "cta_url": "https://github.com/karanhudia/borg-ui/releases",
       "dismissible": true,
       "snooze_days": 7,
-      "starts_at": "2026-03-01T00:00:00Z",
-      "ends_at": "2027-03-01T00:00:00Z",
+      "starts_at": "2026-04-01T00:00:00Z",
+      "ends_at": "2027-04-01T00:00:00Z",
       "min_app_version": "0.0.0",
-      "max_app_version": "1.78.0",
+      "max_app_version": "1.79.0",
       "target_plans": ["community", "pro", "enterprise"]
     },
     {
-      "id": "security-1.78.0-test",
-      "type": "security_notice",
-      "priority": 100,
-      "title": "Important key storage update",
-      "message": "Review the updated SSH key handling guidance before upgrading older installations.",
+      "id": "release-1.79.0-whats-new",
+      "type": "release_highlight",
+      "priority": 50,
+      "title": "What's new in 1.79.0",
+      "message": "Here's what landed in this release.",
       "highlights": [
-        "Applies primarily to older installs",
-        "Review before rolling changes across larger environments"
+        "Upcoming roadmap is now visible in the plan drawer",
+        "Startup repairs persistent volume ownership automatically",
+        "General stability and interface improvements"
       ],
-      "cta_label": "Read guidance",
+      "cta_label": "View release notes",
       "cta_url": "https://github.com/karanhudia/borg-ui/releases",
       "dismissible": true,
-      "snooze_days": 3,
-      "starts_at": "2026-03-01T00:00:00Z",
-      "ends_at": "2026-12-31T00:00:00Z",
-      "min_app_version": "0.0.0",
-      "max_app_version": "1.78.0",
+      "snooze_days": 7,
+      "starts_at": "2026-04-01T00:00:00Z",
+      "ends_at": "2027-04-01T00:00:00Z",
+      "min_app_version": "1.79.0",
+      "max_app_version": "1.80.0",
       "target_plans": ["community", "pro", "enterprise"]
     }
   ]
