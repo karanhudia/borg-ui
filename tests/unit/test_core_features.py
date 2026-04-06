@@ -3,7 +3,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.features import FEATURES, Plan, get_current_plan, plan_includes, require_feature
-from app.database.models import SystemSettings
+from app.database.models import LicensingState
 
 
 @pytest.mark.unit
@@ -28,16 +28,20 @@ class TestCurrentPlan:
         assert get_current_plan(db_session) == Plan.COMMUNITY
 
     def test_get_current_plan_uses_saved_value(self, db_session: Session):
-        db_session.add(SystemSettings(plan="enterprise"))
+        db_session.add(
+            LicensingState(instance_id="test-instance-core-features-enterprise", plan="enterprise", status="active")
+        )
         db_session.commit()
 
         assert get_current_plan(db_session) == Plan.ENTERPRISE
 
-    def test_get_current_plan_defaults_legacy_empty_to_pro(self, db_session: Session):
-        db_session.add(SystemSettings(plan=""))
+    def test_get_current_plan_defaults_inactive_state_to_community(self, db_session: Session):
+        db_session.add(
+            LicensingState(instance_id="test-instance-core-features-inactive", plan="pro", status="none")
+        )
         db_session.commit()
 
-        assert get_current_plan(db_session) == Plan.PRO
+        assert get_current_plan(db_session) == Plan.COMMUNITY
 
 
 @pytest.mark.unit
@@ -49,7 +53,9 @@ class TestRequireFeature:
             dependency(db_session)
 
     def test_require_feature_allows_included_plan(self, db_session: Session):
-        db_session.add(SystemSettings(plan="enterprise"))
+        db_session.add(
+            LicensingState(instance_id="test-instance-core-features-rbac", plan="enterprise", status="active")
+        )
         db_session.commit()
 
         dependency = require_feature("rbac").dependency
@@ -57,7 +63,9 @@ class TestRequireFeature:
         assert dependency(db_session) is None
 
     def test_require_feature_blocks_missing_plan(self, db_session: Session):
-        db_session.add(SystemSettings(plan="community"))
+        db_session.add(
+            LicensingState(instance_id="test-instance-core-features-community", plan="community", status="active")
+        )
         db_session.commit()
 
         dependency = require_feature("borg_v2").dependency

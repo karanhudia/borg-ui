@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import settings as settings_api
-from app.database.models import Repository, SystemSettings, User
+from app.database.models import LicensingState, Repository, SystemSettings, User
 
 
 @pytest.mark.unit
@@ -107,6 +107,13 @@ class TestSystemSettingsContracts:
 class TestSettingsUserContracts:
     def test_create_user_rejects_duplicate_email(self, test_client: TestClient, admin_headers, test_db):
         test_db.add(SystemSettings())
+        state = test_db.query(LicensingState).first()
+        if state is None:
+            state = LicensingState(instance_id="test-instance-settings-users")
+            test_db.add(state)
+        state.plan = "pro"
+        state.status = "active"
+        state.is_trial = False
         existing = User(
             username="existing",
             email="taken@example.com",

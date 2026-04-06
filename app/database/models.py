@@ -456,13 +456,35 @@ class SystemSettings(Base):
     mqtt_tls_client_cert = Column(String, nullable=True)  # Path to client certificate file
     mqtt_tls_client_key = Column(String, nullable=True)  # Path to client key file
 
-    # Plan / feature gating
-    plan = Column(String, default="pro", nullable=False)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Deployment profile
     deployment_type = Column(String, default='individual', nullable=False)
     enterprise_name = Column(String, nullable=True)
 
+
+class LicensingState(Base):
+    __tablename__ = "licensing_state"
+
+    id = Column(Integer, primary_key=True, index=True)
+    instance_id = Column(String, unique=True, nullable=False, index=True)
+    plan = Column(String, default="community", nullable=False)
+    status = Column(String, default="none", nullable=False)  # none, active, expired, invalid
+    is_trial = Column(Boolean, default=False, nullable=False)
+    trial_consumed = Column(Boolean, default=False, nullable=False)
+    entitlement_id = Column(String, nullable=True, unique=True)
+    key_id = Column(String, nullable=True)
+    customer_id = Column(String, nullable=True)
+    license_id = Column(String, nullable=True)
+    max_users = Column(Integer, nullable=True)
+    issued_at = Column(DateTime, nullable=True)
+    starts_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    last_refresh_at = Column(DateTime, nullable=True)
+    last_refresh_error = Column(Text, nullable=True)
+    payload_json = Column(JSON, nullable=True)
+    signature = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 

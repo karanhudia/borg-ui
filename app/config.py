@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     disable_authentication: bool = False  # Disable built-in auth, trust reverse proxy headers
     proxy_auth_header: str = "X-Forwarded-User"  # Header containing authenticated username
 
+    # Licensing / activation settings
+    activation_service_url: Optional[str] = None
+    activation_shared_secret: Optional[str] = None
+    activation_service_token: Optional[str] = None  # Backwards-compatible alias
+    activation_public_key: Optional[str] = None
+    activation_public_key_file: Optional[str] = None
+    activation_timeout_seconds: int = 10
+    activation_refresh_interval_hours: int = 24
+
     # Database settings - auto-derived from data_dir
     database_url: str = ""  # Will be auto-derived from data_dir
 
@@ -165,6 +174,44 @@ else:
 settings.environment = os.getenv("ENVIRONMENT", settings.environment)
 settings.log_level = os.getenv("LOG_LEVEL", settings.log_level)
 settings.port = int(os.getenv("PORT", settings.port))
+settings.activation_service_url = os.getenv("ACTIVATION_SERVICE_URL", settings.activation_service_url)
+settings.activation_shared_secret = os.getenv(
+    "ACTIVATION_SHARED_SECRET", settings.activation_shared_secret
+)
+settings.activation_service_token = os.getenv(
+    "ACTIVATION_SERVICE_TOKEN",
+    settings.activation_service_token or settings.activation_shared_secret,
+)
+settings.activation_public_key = os.getenv(
+    "ACTIVATION_PUBLIC_KEY", settings.activation_public_key
+)
+settings.activation_public_key_file = os.getenv(
+    "ACTIVATION_PUBLIC_KEY_FILE", settings.activation_public_key_file
+)
+settings.activation_timeout_seconds = int(
+    os.getenv("ACTIVATION_TIMEOUT_SECONDS", settings.activation_timeout_seconds)
+)
+settings.activation_refresh_interval_hours = int(
+    os.getenv(
+        "ACTIVATION_REFRESH_INTERVAL_HOURS",
+        settings.activation_refresh_interval_hours,
+    )
+)
+
+
+def get_runtime_app_version() -> str:
+    version_file = Path("/app/VERSION")
+
+    try:
+        file_value = version_file.read_text().strip()
+        if file_value:
+            return file_value
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+    return os.getenv("APP_VERSION", settings.app_version)
 
 # Environment-specific overrides
 if settings.environment == "production":

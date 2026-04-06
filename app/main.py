@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,7 +14,9 @@ from app.api.v2 import router as v2_router
 from app.routers import config
 from app.database.database import engine
 from app.database.models import Base
+from app.config import get_runtime_app_version, settings
 from app.core.security import create_first_user
+from app.services.licensing_service import sync_licensing_state
 
 # Load environment variables
 load_dotenv()
@@ -57,6 +60,14 @@ def _prepare_index_html() -> str | None:
 
 
 _cached_index_html = _prepare_index_html()
+licensing_refresh_task: asyncio.Task | None = None
+
+
+def _spawn_background_task(coro):
+    task = asyncio.create_task(coro)
+    if not isinstance(task, asyncio.Task):
+        coro.close()
+    return task
 
 # Configure structured logging
 import logging
@@ -100,7 +111,6 @@ app = FastAPI(
 )
 
 # Configure CORS
-from app.config import settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -156,12 +166,40 @@ async def startup_event():
         logger.error("Failed to run migrations", error=str(e))
         # Don't fail startup, just log the error
 
+    # Initialize local licensing state and attempt hidden full access activation.
+    from app.database.database import SessionLocal
+    app_version = get_runtime_app_version()
+    try:
+        db = SessionLocal()
+        try:
+            await sync_licensing_state(db, app_version=app_version)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("Failed to initialize licensing state", error=str(e))
+
+    async def licensing_refresh_loop():
+        while True:
+            try:
+                await asyncio.sleep(60 * 60)
+                db = SessionLocal()
+                try:
+                    await sync_licensing_state(db, app_version=app_version)
+                finally:
+                    db.close()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning("Background licensing refresh failed", error=str(e))
+
+    global licensing_refresh_task
+    licensing_refresh_task = _spawn_background_task(licensing_refresh_loop())
+
     # Create first user if no users exist
     await create_first_user()
 
     # Load Redis URL from database and reconfigure cache service
     from app.services.cache_service import archive_cache
-    from app.database.database import SessionLocal
     from app.database.models import SystemSettings
     try:
         db = SessionLocal()
@@ -200,8 +238,8 @@ async def startup_event():
         db = SessionLocal()
         try:
             # Check if log cleanup on startup is enabled
-            settings = db.query(SystemSettings).first()
-            if settings and settings.log_cleanup_on_startup:
+            system_settings = db.query(SystemSettings).first()
+            if system_settings and system_settings.log_cleanup_on_startup:
                 backup_service.rotate_logs(db=db)
                 logger.info("Log rotation completed")
             else:
@@ -231,16 +269,14 @@ async def startup_event():
     # Note: Package auto-installation now handled by entrypoint.sh startup script
     # This runs asynchronously via /app/app/scripts/startup_packages.py
     # Package installation jobs will start in the background after API is ready
-    logger.info("Package auto-installation will be handled by startup script")
 
     # Start scheduled backup checker (background task)
     from app.api.schedule import check_scheduled_jobs
-    import asyncio
-    
+
     # Track background tasks for cleanup
     app.state.background_tasks = []
-    
-    task1 = asyncio.create_task(check_scheduled_jobs())
+
+    task1 = _spawn_background_task(check_scheduled_jobs())
     app.state.background_tasks.append(task1)
     logger.info("Scheduled backup checker started")
 
@@ -294,20 +330,29 @@ async def startup_event():
 
     logger.info("Borg Web UI started successfully")
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on application shutdown"""
     logger.info("Shutting down Borg Web UI")
-    
+
+    global licensing_refresh_task
+    if licensing_refresh_task:
+        licensing_refresh_task.cancel()
+        try:
+            await licensing_refresh_task
+        except asyncio.CancelledError:
+            pass
+        licensing_refresh_task = None
+
     # Cancel background tasks
     tasks = getattr(app.state, "background_tasks", [])
     if tasks:
         logger.info(f"Cancelling {len(tasks)} background tasks")
         for task in tasks:
             task.cancel()
-        
+
         # Wait for tasks to finish cancelling
-        import asyncio
         try:
             await asyncio.gather(*tasks, return_exceptions=True)
             logger.info("Background tasks cancelled")

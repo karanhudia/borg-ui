@@ -4,11 +4,17 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.models import DeleteArchiveJob, Repository, SystemSettings
+from app.database.models import DeleteArchiveJob, LicensingState, Repository
 
 
 def _enable_borg_v2(test_db):
-    test_db.add(SystemSettings(plan="pro"))
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="test-instance-v2-archives")
+        test_db.add(state)
+    state.plan = "pro"
+    state.status = "active"
+    state.is_trial = False
     test_db.commit()
 
 

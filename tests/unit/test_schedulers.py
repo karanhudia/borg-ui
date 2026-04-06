@@ -99,7 +99,7 @@ async def test_stats_refresh_scheduler_updates_repositories_and_settings(db_sess
         compression="lz4",
         repository_type="local",
     )
-    settings = SystemSettings(plan="community")
+    settings = SystemSettings()
     db_session.add_all([repo1, repo2, settings])
     db_session.commit()
 
@@ -129,7 +129,7 @@ async def test_stats_refresh_scheduler_updates_repositories_and_settings(db_sess
 
 @pytest.mark.unit
 def test_stats_refresh_scheduler_reads_interval_from_settings(db_session):
-    db_session.add(SystemSettings(plan="community", stats_refresh_interval_minutes=15))
+    db_session.add(SystemSettings(stats_refresh_interval_minutes=15))
     db_session.commit()
 
     scheduler = StatsRefreshScheduler()

@@ -55,7 +55,7 @@ class TestSystemEndpoints:
         plan = MagicMock()
         plan.value = "community"
 
-        with patch("builtins.open", side_effect=FileNotFoundError):
+        with patch("app.api.system.get_runtime_app_version", return_value="dev"):
             with patch("app.api.system.borg.get_system_info", new=AsyncMock(side_effect=RuntimeError("boom"))):
                 with patch("app.api.system.borg2.get_system_info", new=AsyncMock(side_effect=RuntimeError("boom"))):
                     with patch("app.api.system.get_current_plan", return_value=plan):
@@ -69,7 +69,7 @@ class TestSystemEndpoints:
         assert data["plan"] == "community"
 
     def test_system_info_reads_version_file(self, test_client: TestClient, admin_headers):
-        with patch("app.api.system.open", mock_open(read_data="7.8.9"), create=True):
+        with patch("app.api.system.get_runtime_app_version", return_value="7.8.9"):
             with patch("app.api.system.borg.get_system_info", new=AsyncMock(return_value={"borg_version": "1.4.3"})):
                 with patch("app.api.system.borg2.get_system_info", new=AsyncMock(return_value={"success": False})):
                     plan = MagicMock()
@@ -100,8 +100,9 @@ class TestSystemEndpoints:
             expected["feature_access"] = {}
             expected["entitlement"] = {
                 "status": "none",
-                "is_trial": False,
-                "trial_consumed": False,
+                "access_level": "community",
+                "is_full_access": False,
+                "full_access_consumed": False,
                 "expires_at": None,
                 "starts_at": None,
                 "refresh_after": None,
@@ -165,6 +166,25 @@ class TestSystemEndpoints:
         data = response.json()
         assert data["plan"] == "pro"
         assert data["entitlement"]["status"] == "active"
-        assert data["entitlement"]["is_trial"] is True
+        assert data["entitlement"]["access_level"] == "full_access"
+        assert data["entitlement"]["is_full_access"] is True
         assert data["entitlement"]["instance_id"] == state.instance_id
         assert isinstance(data["feature_access"], dict)
+
+    def test_deactivate_license_uses_admin_auth_without_request_body(
+        self,
+        test_client: TestClient,
+        admin_headers,
+    ):
+        if not LICENSING_AVAILABLE:
+            pytest.skip("licensing service not available in this branch")
+
+        with patch(
+            "app.api.system.deactivate_paid_license",
+            new=AsyncMock(return_value={"result": "deactivated"}),
+        ) as deactivate_paid_license:
+            response = test_client.post("/api/system/licensing/deactivate", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert response.json() == {"result": "deactivated"}
+        deactivate_paid_license.assert_awaited_once()

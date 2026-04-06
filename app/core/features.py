@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database.database import get_db
-from app.database.models import SystemSettings
+from app.services.licensing_service import get_effective_plan_value
 
 
 class Plan(str, Enum):
@@ -37,10 +37,7 @@ def plan_includes(current: Plan, required: Plan) -> bool:
 
 
 def get_current_plan(db: Session) -> Plan:
-    settings = db.query(SystemSettings).first()
-    if not settings:
-        return Plan.COMMUNITY
-    return Plan(settings.plan or "pro")
+    return Plan(get_effective_plan_value(db))
 
 
 def require_feature(feature: str):

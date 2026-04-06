@@ -10,12 +10,26 @@ from sqlalchemy.orm import sessionmaker
 
 from app.core.borg2 import BORG2_ENCRYPTION_MODES
 from app.config import settings
-from app.database.models import Repository, SystemSettings
+from app.database.models import LicensingState, Repository, SystemSettings
 from app.database.models import SSHConnection, SSHKey
 
 
 def _enable_borg_v2(test_db, **settings):
-    test_db.add(SystemSettings(plan="pro", **settings))
+    system_settings = test_db.query(SystemSettings).first()
+    if system_settings is None:
+        system_settings = SystemSettings(**settings)
+        test_db.add(system_settings)
+    else:
+        for key, value in settings.items():
+            setattr(system_settings, key, value)
+
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="test-instance-v2-repositories")
+        test_db.add(state)
+    state.plan = "pro"
+    state.status = "active"
+    state.is_trial = False
     test_db.commit()
 
 
