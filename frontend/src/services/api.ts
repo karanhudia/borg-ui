@@ -163,8 +163,7 @@ export const licensingAPI = {
   refresh: () => api.post('/system/licensing/refresh'),
   activate: (licenseKey: string) =>
     api.post('/system/licensing/activate', { license_key: licenseKey }),
-  deactivate: (licenseKey: string) =>
-    api.post('/system/licensing/deactivate', { license_key: licenseKey }),
+  deactivate: () => api.post('/system/licensing/deactivate'),
 }
 
 export const backupAPI = {

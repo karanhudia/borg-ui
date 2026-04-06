@@ -68,6 +68,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   const location = useLocation()
   const { hasGlobalPermission } = useAuth()
   const canManageUsers = hasGlobalPermission('settings.users.manage')
+  const canManageLicensing = hasGlobalPermission('settings.system.manage')
   const canManageSystemSettings = hasGlobalPermission('settings.system.manage')
   const canManageMqtt = hasGlobalPermission('settings.mqtt.manage')
   const canManagePackages = hasGlobalPermission('settings.packages.manage')
@@ -105,6 +106,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Mounts: t('navigation.settings.mounts'),
       Scripts: t('navigation.settings.scripts'),
       Users: t('navigation.settings.users'),
+      Licensing: t('navigation.settings.licensing'),
       'Export/Import': t('navigation.settings.exportImport'),
       Beta: t('navigation.settings.beta'),
     }
@@ -183,10 +185,10 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             key: 'dashboard' as const,
             subItems: [
               { name: 'Account', href: '/settings/account', icon: User },
+              ...(canManageUsers ? [{ name: 'Users', href: '/settings/users', icon: Users }] : []),
               { name: 'Appearance', href: '/settings/appearance', icon: Palette },
               { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
               { name: 'Notifications', href: '/settings/notifications', icon: Bell },
-              ...(canManageUsers ? [{ name: 'Users', href: '/settings/users', icon: Users }] : []),
             ],
           },
           ...(canManageSystemSettings
@@ -196,6 +198,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                   icon: SettingsIcon,
                   key: 'dashboard' as const,
                   subItems: [
+                    ...(canManageLicensing
+                      ? [{ name: 'Licensing', href: '/settings/licensing', icon: SettingsIcon }]
+                      : []),
                     { name: 'System', href: '/settings/system', icon: SettingsIcon },
                     ...(showMqttNav && canManageMqtt
                       ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }]
@@ -246,6 +251,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     showRestoreTab,
     showMqttNav,
     canManageUsers,
+    canManageLicensing,
     canManageSystemSettings,
     canManageMqtt,
     canManagePackages,

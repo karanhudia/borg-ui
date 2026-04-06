@@ -15,6 +15,7 @@ import LogManagementTab from '../components/LogManagementTab'
 import CacheManagementTab from '../components/CacheManagementTab'
 import MountsManagementTab from '../components/MountsManagementTab'
 import SystemSettingsTab from '../components/SystemSettingsTab'
+import LicensingTab from '../components/LicensingTab'
 import BetaFeaturesTab from '../components/BetaFeaturesTab'
 import MqttSettingsTab from '../components/MqttSettingsTab'
 import UsersTab from '../components/UsersTab'
@@ -31,6 +32,7 @@ const Settings: React.FC = () => {
   const canManageLogs = hasGlobalPermission('settings.logs.manage')
   const canManagePackages = hasGlobalPermission('settings.packages.manage')
   const canManageUsers = hasGlobalPermission('settings.users.manage')
+  const canManageLicensing = hasGlobalPermission('settings.system.manage')
   const canManageMounts = hasGlobalPermission('settings.mounts.manage')
   const canManageScripts = hasGlobalPermission('settings.scripts.manage')
   const canManageExportImport = hasGlobalPermission('settings.export_import.manage')
@@ -48,9 +50,16 @@ const Settings: React.FC = () => {
 
   // Get tab order based on user role
   const getTabOrder = React.useCallback(() => {
-    const baseTabs = ['account', 'appearance', 'preferences', 'notifications']
+    const baseTabs = [
+      'account',
+      ...(canManageUsers ? ['users'] : []),
+      'appearance',
+      'preferences',
+      'notifications',
+    ]
     return [
       ...baseTabs,
+      ...(canManageLicensing ? ['licensing'] : []),
       ...(canManageSystem ? ['system'] : []),
       ...(mqttBetaEnabled && canManageMqtt ? ['mqtt'] : []),
       ...(canManageBeta ? ['beta'] : []),
@@ -60,7 +69,6 @@ const Settings: React.FC = () => {
       ...(canManagePackages ? ['packages'] : []),
       ...(canManageScripts ? ['scripts'] : []),
       ...(canManageExportImport ? ['export'] : []),
-      ...(canManageUsers ? ['users'] : []),
       'activity',
     ]
   }, [
@@ -71,6 +79,7 @@ const Settings: React.FC = () => {
     canManageLogs,
     canManagePackages,
     canManageUsers,
+    canManageLicensing,
     canManageMounts,
     canManageScripts,
     canManageExportImport,
@@ -129,6 +138,13 @@ const Settings: React.FC = () => {
       {currentTabId === 'notifications' && (
         <SettingsTabContent>
           <NotificationsTab />
+        </SettingsTabContent>
+      )}
+
+      {/* Licensing Tab - Admin Only */}
+      {currentTabId === 'licensing' && canManageLicensing && (
+        <SettingsTabContent>
+          <LicensingTab />
         </SettingsTabContent>
       )}
 
