@@ -268,6 +268,7 @@ export default function EntityCard({
                     <span>
                       <IconButton
                         size="small"
+                        aria-label={action.tooltip}
                         onClick={action.onClick}
                         disabled={action.disabled}
                         sx={resolvedSx}

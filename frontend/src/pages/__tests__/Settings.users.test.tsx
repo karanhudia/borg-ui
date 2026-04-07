@@ -261,6 +261,7 @@ describe('Settings users tab', () => {
     )
 
     await screen.findByText('User Management')
+    await screen.findByText('existing')
 
     await user.click(screen.getByRole('button', { name: /edit user/i }))
     const editDialog = await screen.findByRole('dialog', { name: /edit user/i })
@@ -333,6 +334,7 @@ describe('Settings users tab', () => {
     )
 
     await screen.findByText('User Management')
+    await screen.findByText('existing')
     await user.click(screen.getByRole('button', { name: /delete user/i }))
     const deleteDialog = await screen.findByRole('dialog', { name: /delete user/i })
     await user.click(within(deleteDialog).getByRole('button', { name: /^delete$/i }))
