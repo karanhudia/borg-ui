@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Stack, Alert } from '@mui/material'
+import { Stack, Alert, Tooltip, Box } from '@mui/material'
+import { Info } from 'lucide-react'
 import ScriptSelectorSection from '../../ScriptSelectorSection'
 import { Script } from '../../ScheduleWizard'
 
@@ -29,9 +30,32 @@ const WizardStepScripts: React.FC<WizardStepScriptsProps> = ({
 
   return (
     <Stack spacing={2}>
-      <Alert severity="info" sx={{ py: 0.5 }}>
-        {t('wizard.scheduleWizard.scripts.scheduleLevelNote')}
-      </Alert>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Tooltip
+          title={t('wizard.scheduleWizard.scripts.scheduleLevelNote')}
+          arrow
+          placement="left"
+        >
+          <Box
+            component="span"
+            tabIndex={0}
+            aria-label={t('wizard.scheduleWizard.scripts.scheduleLevelNote')}
+            sx={{
+              display: 'inline-flex',
+              cursor: 'help',
+              color: 'text.disabled',
+              '&:hover': { color: 'text.secondary' },
+              '&:focus-visible': {
+                outline: '2px solid',
+                outlineColor: 'primary.main',
+                borderRadius: 0.5,
+              },
+            }}
+          >
+            <Info size={15} />
+          </Box>
+        </Tooltip>
+      </Box>
 
       {repositoryCount > 0 ? (
         <ScriptSelectorSection

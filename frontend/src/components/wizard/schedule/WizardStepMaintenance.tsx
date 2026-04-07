@@ -1,6 +1,16 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Stack, Box, Typography, FormControlLabel, Switch, Alert, Collapse } from '@mui/material'
+import {
+  Stack,
+  Box,
+  Typography,
+  FormControlLabel,
+  Switch,
+  Alert,
+  Collapse,
+  Tooltip,
+} from '@mui/material'
+import { Info } from 'lucide-react'
 import PruneSettingsInput, { PruneSettings } from '../../PruneSettingsInput'
 
 interface WizardStepMaintenanceData {
@@ -36,17 +46,35 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
   return (
     <Stack spacing={2}>
       <Box>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
-          {t('wizard.scheduleWizard.maintenance.title')}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+          <Typography variant="h6" fontWeight={600}>
+            {t('wizard.scheduleWizard.maintenance.title')}
+          </Typography>
+          <Tooltip title={t('wizard.scheduleWizard.maintenance.info')} arrow placement="right">
+            <Box
+              component="span"
+              tabIndex={0}
+              aria-label={t('wizard.scheduleWizard.maintenance.info')}
+              sx={{
+                display: 'inline-flex',
+                cursor: 'help',
+                color: 'text.disabled',
+                '&:hover': { color: 'text.secondary' },
+                '&:focus-visible': {
+                  outline: '2px solid',
+                  outlineColor: 'primary.main',
+                  borderRadius: 0.5,
+                },
+              }}
+            >
+              <Info size={15} />
+            </Box>
+          </Tooltip>
+        </Box>
         <Typography variant="body2" color="text.secondary">
           {t('wizard.scheduleWizard.maintenance.subtitle')}
         </Typography>
       </Box>
-
-      <Alert severity="info" sx={{ py: 0.5 }}>
-        {t('wizard.scheduleWizard.maintenance.info')}
-      </Alert>
 
       <Box>
         <FormControlLabel
@@ -99,22 +127,44 @@ const WizardStepMaintenance: React.FC<WizardStepMaintenanceProps> = ({ data, onC
             />
           }
           label={
-            <Box>
-              <Typography variant="body2" fontWeight={600}>
-                {t('wizard.scheduleWizard.maintenance.compactAfterPrune')}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {t('wizard.scheduleWizard.maintenance.compactAfterPruneDesc')}
-              </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Typography variant="body2" fontWeight={600}>
+                    {t('wizard.scheduleWizard.maintenance.compactAfterPrune')}
+                  </Typography>
+                  <Tooltip
+                    title={t('wizard.scheduleWizard.maintenance.compactInfo')}
+                    arrow
+                    placement="right"
+                  >
+                    <Box
+                      component="span"
+                      tabIndex={0}
+                      aria-label={t('wizard.scheduleWizard.maintenance.compactInfo')}
+                      sx={{
+                        display: 'inline-flex',
+                        cursor: 'help',
+                        color: 'text.disabled',
+                        '&:hover': { color: 'text.secondary' },
+                        '&:focus-visible': {
+                          outline: '2px solid',
+                          outlineColor: 'primary.main',
+                          borderRadius: 0.5,
+                        },
+                      }}
+                    >
+                      <Info size={14} />
+                    </Box>
+                  </Tooltip>
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t('wizard.scheduleWizard.maintenance.compactAfterPruneDesc')}
+                </Typography>
+              </Box>
             </Box>
           }
         />
-
-        {data.runCompactAfter && (
-          <Alert severity="info" sx={{ ml: 4, mt: 1, py: 0.5 }}>
-            {t('wizard.scheduleWizard.maintenance.compactInfo')}
-          </Alert>
-        )}
       </Box>
     </Stack>
   )

@@ -23,11 +23,12 @@ describe('WizardStepScripts', () => {
     onChange: vi.fn(),
   }
 
-  it('renders info alert with script explanations', () => {
+  it('renders info tooltip with script level explanation', () => {
     render(<WizardStepScripts {...defaultProps} />)
 
-    expect(screen.getByText(/runs once per schedule/i)).toBeInTheDocument()
-    expect(screen.getByText(/runs for each repository/i)).toBeInTheDocument()
+    // Hint text is accessible via aria-label on the info icon
+    const tooltip = screen.getByLabelText(/Schedule-level:/i)
+    expect(tooltip).toBeInTheDocument()
   })
 
   it('renders ScriptSelectorSection when repositories are selected', () => {
@@ -175,11 +176,11 @@ describe('WizardStepScripts', () => {
     expect(screen.queryByText(/Select at least one repository/i)).not.toBeInTheDocument()
   })
 
-  it('displays info alert severity', () => {
+  it('displays info tooltip for script level note', () => {
     render(<WizardStepScripts {...defaultProps} />)
 
-    const alert = screen.getByText(/Schedule-level:/i).closest('.MuiAlert-root')
-    expect(alert).toHaveClass('MuiAlert-standardInfo')
+    const tooltip = screen.getByLabelText(/Schedule-level:/i)
+    expect(tooltip).toBeInTheDocument()
   })
 
   it('displays warning alert severity when no repositories', () => {
@@ -191,13 +192,12 @@ describe('WizardStepScripts', () => {
     expect(alert).toHaveClass('MuiAlert-standardWarning')
   })
 
-  it('provides concise script level explanation in info alert', () => {
+  it('provides concise script level explanation in info tooltip', () => {
     render(<WizardStepScripts {...defaultProps} />)
 
-    expect(screen.getByText(/Schedule-level:/i)).toBeInTheDocument()
-    expect(screen.getByText(/runs once per schedule/i)).toBeInTheDocument()
-    expect(screen.getByText(/Repository-level:/i)).toBeInTheDocument()
-    expect(screen.getByText(/runs for each repository/i)).toBeInTheDocument()
+    // Hint text is accessible via aria-label on the info icon
+    const tooltip = screen.getByLabelText(/Schedule-level:/i)
+    expect(tooltip).toBeInTheDocument()
   })
 
   it('handles script parameter changes', () => {

@@ -150,19 +150,22 @@ describe('WizardStepScheduleConfig', () => {
     expect(cronInput).toBeInTheDocument()
   })
 
-  it('displays three run times in the preview list', () => {
+  it('displays first run time inline with next run times label', () => {
     render(<WizardStepScheduleConfig {...defaultProps} />)
 
-    const listItems = screen.getAllByRole('listitem')
-    expect(listItems).toHaveLength(3)
+    // First run time is shown inline as text next to the info icon
+    expect(screen.getByText(/Next 3 Run Times:/i)).toBeInTheDocument()
+    // Info icon tooltip is accessible
+    const tooltip = screen.getByLabelText(/Next 3 Run Times:/i)
+    expect(tooltip).toBeInTheDocument()
   })
 
-  it('formats run times with localeString', () => {
+  it('formats first run time with localeString inline', () => {
     render(<WizardStepScheduleConfig {...defaultProps} />)
 
-    // The mocked date should be formatted
+    // First run time is shown inline
     const dates = screen.getAllByText(/1\/1\/2024/i)
-    expect(dates).toHaveLength(3) // 3 run times displayed
+    expect(dates.length).toBeGreaterThanOrEqual(1)
   })
 
   it('updates preview when cron expression changes', () => {
@@ -202,10 +205,13 @@ describe('WizardStepScheduleConfig', () => {
     expect(cronInput).toBeRequired()
   })
 
-  it('displays info alert for next run times', () => {
+  it('displays next run times inline with info tooltip', () => {
     render(<WizardStepScheduleConfig {...defaultProps} />)
 
-    const alert = screen.getByText(/Next 3 Run Times:/i).closest('.MuiAlert-root')
-    expect(alert).toHaveClass('MuiAlert-standardInfo')
+    // First run time shown inline as text
+    expect(screen.getByText(/Next 3 Run Times:/i)).toBeInTheDocument()
+    // Icon tooltip is accessible via aria-label
+    const tooltip = screen.getByLabelText(/Next 3 Run Times:/i)
+    expect(tooltip).toBeInTheDocument()
   })
 })

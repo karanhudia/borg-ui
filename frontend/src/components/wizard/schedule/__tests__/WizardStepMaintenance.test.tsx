@@ -28,12 +28,12 @@ describe('WizardStepMaintenance', () => {
     ).toBeInTheDocument()
   })
 
-  it('renders info alert explaining prune and compact', () => {
+  it('renders info tooltip explaining prune and compact', () => {
     render(<WizardStepMaintenance {...defaultProps} />)
 
-    // Check for the concise info alert text (text is split across elements with <strong> tags)
-    expect(screen.getByText(/removes old archives/i)).toBeInTheDocument()
-    expect(screen.getByText(/reclaims disk space/i)).toBeInTheDocument()
+    // Hint text is accessible via aria-label on the info icon next to the title
+    const tooltip = screen.getByLabelText(/Prune removes old archives/i)
+    expect(tooltip).toBeInTheDocument()
   })
 
   it('renders prune toggle switch', () => {
@@ -107,21 +107,12 @@ describe('WizardStepMaintenance', () => {
     expect(screen.getByText(/Pruning permanently deletes old backups/i)).toBeInTheDocument()
   })
 
-  it('displays info alert when compact is enabled', () => {
-    const dataWithCompact = {
-      ...defaultData,
-      runCompactAfter: true,
-    }
-
-    render(<WizardStepMaintenance {...defaultProps} data={dataWithCompact} />)
-
-    expect(screen.getByText(/Compact reclaims disk space after prune/i)).toBeInTheDocument()
-  })
-
-  it('does not display compact info alert when compact is disabled', () => {
+  it('displays compact info tooltip accessible via icon aria-label', () => {
     render(<WizardStepMaintenance {...defaultProps} />)
 
-    expect(screen.queryByText(/Compact reclaims disk space after prune/i)).not.toBeInTheDocument()
+    // Compact info icon is always rendered in the toggle label
+    const tooltip = screen.getByLabelText(/Compact reclaims disk space after prune/i)
+    expect(tooltip).toBeInTheDocument()
   })
 
   it('calls onChange with prune settings when values change', () => {
@@ -226,11 +217,12 @@ describe('WizardStepMaintenance', () => {
     expect(alert).toHaveClass('MuiAlert-standardWarning')
   })
 
-  it('renders info alert with correct severity', () => {
+  it('renders info tooltip for maintenance hint', () => {
     render(<WizardStepMaintenance {...defaultProps} />)
 
-    const alert = screen.getByText(/Prune/).closest('.MuiAlert-root')
-    expect(alert).toHaveClass('MuiAlert-standardInfo')
+    // Hint text is accessible via aria-label on the info icon next to the title
+    const tooltip = screen.getByLabelText(/Prune removes old archives/i)
+    expect(tooltip).toBeInTheDocument()
   })
 
   it('collapses prune settings when disabled', () => {

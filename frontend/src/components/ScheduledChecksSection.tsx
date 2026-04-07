@@ -13,9 +13,10 @@ import {
   Button,
   InputAdornment,
   CircularProgress,
+  Tooltip,
 } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
-import { Shield } from 'lucide-react'
+import { Shield, Info } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import RepoSelect from './RepoSelect'
@@ -242,9 +243,33 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
         }
       >
         <DialogTitle>
-          {selectedRepositoryId
-            ? t('scheduledChecks.editCheckSchedule')
-            : t('scheduledChecks.addCheckSchedule')}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>
+              {selectedRepositoryId
+                ? t('scheduledChecks.editCheckSchedule')
+                : t('scheduledChecks.addCheckSchedule')}
+            </span>
+            <Tooltip title={t('scheduledChecks.notificationHint')} arrow placement="left">
+              <Box
+                component="span"
+                tabIndex={0}
+                aria-label={t('scheduledChecks.notificationHint')}
+                sx={{
+                  display: 'inline-flex',
+                  cursor: 'help',
+                  color: 'text.disabled',
+                  '&:hover': { color: 'text.secondary' },
+                  '&:focus-visible': {
+                    outline: '2px solid',
+                    outlineColor: 'primary.main',
+                    borderRadius: 0.5,
+                  },
+                }}
+              >
+                <Info size={16} />
+              </Box>
+            </Tooltip>
+          </Box>
         </DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
@@ -300,10 +325,6 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               fullWidth
               inputProps={{ min: 60 }}
             />
-
-            <Alert severity="info" sx={{ mt: 1 }}>
-              {t('scheduledChecks.notificationHint')}
-            </Alert>
           </Stack>
         </DialogContent>
       </ResponsiveDialog>
