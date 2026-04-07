@@ -1,13 +1,19 @@
 import { useTheme, useMediaQuery, Dialog, SwipeableDrawer, Box, IconButton } from '@mui/material'
 import { Close } from '@mui/icons-material'
 import type { DialogProps } from '@mui/material'
+import type { ReactNode } from 'react'
 
-type ResponsiveDialogProps = DialogProps
+type ResponsiveDialogProps = DialogProps & {
+  /** On mobile: rendered in a sticky bar above the safe-area inset, outside the scroll area.
+   *  On desktop: rendered as a direct child of Dialog (place DialogActions here). */
+  footer?: ReactNode
+}
 
 export default function ResponsiveDialog({
   open,
   onClose,
   children,
+  footer,
   // maxWidth and fullWidth are desktop-only — silently ignored on mobile
   maxWidth,
   fullWidth,
@@ -63,10 +69,26 @@ export default function ResponsiveDialog({
             </IconButton>
           )}
         </Box>
-        {/* Scrollable content */}
-        <Box sx={{ overflowY: 'auto', flex: 1, pb: 'env(safe-area-inset-bottom, 16px)' }}>
+
+        {/* Scrollable content — overscroll-behavior prevents pull-to-refresh */}
+        <Box sx={{ overflowY: 'auto', flex: 1, overscrollBehavior: 'contain' }}>
           {children}
         </Box>
+
+        {/* Sticky footer — always visible above safe area, outside scroll */}
+        {footer && (
+          <Box
+            data-testid="responsive-dialog-footer"
+            sx={{
+              flexShrink: 0,
+              borderTop: 1,
+              borderColor: 'divider',
+              pb: 'env(safe-area-inset-bottom, 8px)',
+            }}
+          >
+            {footer}
+          </Box>
+        )}
       </SwipeableDrawer>
     )
   }
@@ -74,6 +96,7 @@ export default function ResponsiveDialog({
   return (
     <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth={fullWidth} {...rest}>
       {children}
+      {footer}
     </Dialog>
   )
 }

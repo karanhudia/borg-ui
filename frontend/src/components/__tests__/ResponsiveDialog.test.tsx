@@ -83,4 +83,44 @@ describe('ResponsiveDialog', () => {
       expect(screen.queryByText('hidden')).not.toBeInTheDocument()
     })
   })
+
+  describe('footer prop — mobile', () => {
+    beforeEach(() => {
+      mockUseMediaQuery.mockReturnValue(true)
+    })
+
+    it('renders footer outside the scrollable area when provided', () => {
+      render(
+        <ResponsiveDialog open={true} onClose={onClose} footer={<div data-testid="test-footer">Actions</div>}>
+          <div>content</div>
+        </ResponsiveDialog>
+      )
+      expect(screen.getByTestId('test-footer')).toBeInTheDocument()
+      expect(screen.getByTestId('responsive-dialog-footer')).toBeInTheDocument()
+    })
+
+    it('does not render footer container when footer is not provided', () => {
+      render(
+        <ResponsiveDialog open={true} onClose={onClose}>
+          <div>content</div>
+        </ResponsiveDialog>
+      )
+      expect(screen.queryByTestId('responsive-dialog-footer')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('footer prop — desktop', () => {
+    beforeEach(() => {
+      mockUseMediaQuery.mockReturnValue(false)
+    })
+
+    it('renders footer as part of dialog children when provided', () => {
+      render(
+        <ResponsiveDialog open={true} onClose={onClose} footer={<div data-testid="test-footer">Actions</div>}>
+          <div>content</div>
+        </ResponsiveDialog>
+      )
+      expect(screen.getByTestId('test-footer')).toBeInTheDocument()
+    })
+  })
 })
