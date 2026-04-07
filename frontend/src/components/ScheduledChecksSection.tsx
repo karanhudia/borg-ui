@@ -3,35 +3,30 @@ import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
-  Chip,
   Stack,
   Alert,
   Button,
   InputAdornment,
+  CircularProgress,
 } from '@mui/material'
-import { Edit, Trash2, Play, Shield } from 'lucide-react'
+import { Shield } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import RepoSelect from './RepoSelect'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import {
-  formatDate,
-  formatRelativeTime,
   convertCronToUTC,
   convertCronToLocal,
-  formatCronHuman,
 } from '../utils/dateUtils'
-import DataTable, { Column, ActionButton } from '../components/DataTable'
 import CronBuilderDialog from './CronBuilderDialog'
+import ScheduleCheckCard from './ScheduleCheckCard'
 import { usePermissions } from '../hooks/usePermissions'
 
 interface ScheduledCheck {
@@ -190,85 +185,6 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     }
   }
 
-  const columns: Column<ScheduledCheck>[] = [
-    {
-      id: 'repository',
-      label: t('scheduledChecks.repository'),
-      render: (check) => (
-        <Box>
-          <Typography variant="body2" fontWeight={500}>
-            {check.repository_name}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {check.repository_path}
-          </Typography>
-        </Box>
-      ),
-    },
-    {
-      id: 'schedule',
-      label: t('scheduledChecks.schedule'),
-      render: (check) => {
-        // Convert UTC cron expression to local time for display
-        const localCron = check.check_cron_expression
-          ? convertCronToLocal(check.check_cron_expression)
-          : t('scheduledChecks.notConfigured')
-        const label = check.check_cron_expression ? formatCronHuman(localCron) : localCron
-        return <Chip label={label} size="small" color="info" variant="outlined" />
-      },
-    },
-    {
-      id: 'last_check',
-      label: t('scheduledChecks.lastCheck'),
-      render: (check) =>
-        check.last_scheduled_check
-          ? formatDate(check.last_scheduled_check)
-          : t('scheduledChecks.never'),
-    },
-    {
-      id: 'next_check',
-      label: t('scheduledChecks.nextCheck'),
-      render: (check) =>
-        check.next_scheduled_check ? (
-          <Box>
-            <Typography variant="body2">{formatDate(check.next_scheduled_check)}</Typography>
-            <Typography variant="caption" color="primary.main">
-              {formatRelativeTime(check.next_scheduled_check)}
-            </Typography>
-          </Box>
-        ) : (
-          t('scheduledChecks.notScheduled')
-        ),
-    },
-  ]
-
-  const actions: ActionButton<ScheduledCheck>[] = [
-    {
-      icon: <Play size={16} />,
-      label: t('common.buttons.run'),
-      onClick: (check) => runCheckMutation.mutate(check.repository_id),
-      color: 'primary',
-      show: (check) => canDo(check.repository_id, 'maintenance'),
-      tooltip: t('scheduledChecks.tooltips.runNow'),
-    },
-    {
-      icon: <Edit size={16} />,
-      label: t('common.buttons.edit'),
-      onClick: (check) => openEditDialog(check),
-      color: 'default',
-      show: (check) => canDo(check.repository_id, 'maintenance'),
-      tooltip: t('scheduledChecks.tooltips.editSchedule'),
-    },
-    {
-      icon: <Trash2 size={16} />,
-      label: t('common.buttons.delete'),
-      onClick: (check) => handleDelete(check),
-      color: 'error',
-      show: (check) => canDo(check.repository_id, 'maintenance'),
-      tooltip: t('scheduledChecks.tooltips.disableSchedule'),
-    },
-  ]
-
   return (
     <Box>
       {/* No repositories warning */}
@@ -278,24 +194,31 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
         </Alert>
       )}
 
-      {/* Scheduled Checks Table */}
-      <Card>
-        <CardContent>
-          <DataTable
-            data={scheduledChecks || []}
-            columns={columns}
-            actions={actions}
-            getRowKey={(check) => check.repository_id.toString()}
-            loading={isLoading}
-            enableHover={true}
-            emptyState={{
-              icon: <Shield size={48} />,
-              title: t('scheduledChecks.noScheduledChecks'),
-              description: t('scheduledChecks.noScheduledChecksDesc'),
-            }}
-          />
-        </CardContent>
-      </Card>
+      {/* Scheduled Checks */}
+      {isLoading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress />
+        </Box>
+      ) : !scheduledChecks || scheduledChecks.length === 0 ? (
+        <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
+          <Shield size={40} style={{ opacity: 0.25, marginBottom: 12 }} />
+          <Typography variant="body1" gutterBottom>{t('scheduledChecks.noScheduledChecks')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('scheduledChecks.noScheduledChecksDesc')}</Typography>
+        </Box>
+      ) : (
+        <Stack spacing={2}>
+          {scheduledChecks.map((check) => (
+            <ScheduleCheckCard
+              key={check.repository_id}
+              check={check}
+              canManage={canDo(check.repository_id, 'maintenance')}
+              onEdit={() => openEditDialog(check)}
+              onDelete={() => handleDelete(check)}
+              onRunNow={() => runCheckMutation.mutate(check.repository_id)}
+            />
+          ))}
+        </Stack>
+      )}
 
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>

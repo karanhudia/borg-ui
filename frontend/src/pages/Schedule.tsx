@@ -6,33 +6,24 @@ import {
   Box,
   Typography,
   Button,
-  Chip,
-  FormControlLabel,
-  Switch,
-  Tooltip,
   Alert,
   Tabs,
   Tab,
 } from '@mui/material'
-import { Plus, Edit, Trash2, Play, CheckCircle, XCircle, Copy } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI, scriptsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
-import RepositoryCell from '../components/RepositoryCell'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
 import {
-  formatDate,
   formatRelativeTime,
   formatDurationSeconds,
-  convertCronToLocal,
-  formatCronHuman,
 } from '../utils/dateUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import ScheduledChecksSection, {
   ScheduledChecksSectionRef,
 } from '../components/ScheduledChecksSection'
-import { Column, ActionButton } from '../components/DataTable'
 import ScheduleWizard, { ScheduleData } from '../components/ScheduleWizard'
 import DeleteScheduleDialog from '../components/DeleteScheduleDialog'
 import UpcomingJobsTable from '../components/UpcomingJobsTable'
@@ -482,270 +473,6 @@ const Schedule: React.FC = () => {
   )
   const upcomingJobs = upcomingData?.data?.upcoming_jobs || []
 
-  // Scheduled Jobs Table Column Definitions
-  const scheduledJobsColumns: Column<ScheduledJob>[] = [
-    {
-      id: 'status',
-      label: 'Status',
-      width: '5%',
-      render: (job) => (
-        <Tooltip title={job.enabled ? 'Enabled' : 'Disabled'} arrow>
-          <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.disabled' }}>
-            {job.enabled ? <CheckCircle size={18} color="#2e7d32" /> : <XCircle size={18} />}
-          </Box>
-        </Tooltip>
-      ),
-    },
-    {
-      id: 'name',
-      label: 'Job Name',
-      width: '15%',
-      render: (job) => (
-        <>
-          <Typography variant="body2" fontWeight={500}>
-            {job.name}
-          </Typography>
-          {job.description && (
-            <Typography variant="caption" color="text.secondary" display="block">
-              {job.description}
-            </Typography>
-          )}
-          {(job.run_prune_after || job.run_compact_after) && (
-            <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-              {job.run_prune_after && (
-                <Tooltip
-                  title={`Prune: Keep ${job.prune_keep_hourly > 0 ? `${job.prune_keep_hourly}h/` : ''}${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_quarterly > 0 ? `${job.prune_keep_quarterly}q/` : ''}${job.prune_keep_yearly}y`}
-                  arrow
-                >
-                  <Chip
-                    label="Prune"
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                    sx={{ height: 18, fontSize: '0.65rem' }}
-                  />
-                </Tooltip>
-              )}
-              {job.run_compact_after && (
-                <Chip
-                  label="Compact"
-                  size="small"
-                  color="secondary"
-                  variant="outlined"
-                  sx={{ height: 18, fontSize: '0.65rem' }}
-                />
-              )}
-            </Box>
-          )}
-        </>
-      ),
-    },
-    {
-      id: 'repository',
-      label: 'Repository',
-      width: '30%',
-      render: (job) => {
-        // Handle multi-repo schedules
-        if (job.repository_ids && job.repository_ids.length > 0) {
-          const repos =
-            repositories?.filter((r: Repository) => job.repository_ids?.includes(r.id)) || []
-          if (repos.length === 0) {
-            return (
-              <Typography variant="caption" color="text.secondary">
-                {t('common.unknown')}
-              </Typography>
-            )
-          }
-          return (
-            <Box>
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              {repos.slice(0, 2).map((repo: any) => (
-                <RepositoryCell
-                  key={repo.id}
-                  repositoryName={repo.name}
-                  repositoryPath={repo.path}
-                />
-              ))}
-              {repos.length > 2 && (
-                <Typography variant="caption" color="text.secondary">
-                  {t('repositories.moreCount', { count: repos.length - 2 })}
-                </Typography>
-              )}
-            </Box>
-          )
-        }
-        // Handle single-repo schedules (legacy format with repository path)
-        if (job.repository) {
-          return (
-            <RepositoryCell
-              repositoryName={getRepositoryName(job.repository)}
-              repositoryPath={job.repository}
-            />
-          )
-        }
-        // Handle single-repo schedules (new format with repository_id)
-        if (job.repository_id) {
-          const repo = repositories?.find((r: Repository) => r.id === job.repository_id)
-          if (repo) {
-            return <RepositoryCell repositoryName={repo.name} repositoryPath={repo.path} />
-          }
-        }
-        return (
-          <Typography variant="caption" color="text.secondary">
-            {t('common.unknown')}
-          </Typography>
-        )
-      },
-    },
-    {
-      id: 'schedule',
-      label: 'Schedule',
-      width: '12%',
-      render: (job) => {
-        const localCron = convertCronToLocal(job.cron_expression)
-        return (
-          <Chip
-            label={formatCronHuman(localCron)}
-            size="small"
-            variant="outlined"
-            color="primary"
-          />
-        )
-      },
-    },
-    {
-      id: 'last_run',
-      label: 'Last Run',
-      width: '13%',
-      render: (job) => (
-        <>
-          {job.last_run ? (
-            <>
-              <Typography variant="body2">{formatDate(job.last_run)}</Typography>
-              <Typography variant="caption" color="text.secondary" display="block">
-                {formatRelativeTime(job.last_run)}
-              </Typography>
-              {(job.last_prune || job.last_compact) && (
-                <Box sx={{ mt: 0.5, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                  {job.last_prune && (
-                    <Tooltip title={`Last pruned: ${formatDate(job.last_prune)}`} arrow>
-                      <Chip
-                        label="P"
-                        size="small"
-                        color="primary"
-                        sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }}
-                      />
-                    </Tooltip>
-                  )}
-                  {job.last_compact && (
-                    <Tooltip title={`Last compacted: ${formatDate(job.last_compact)}`} arrow>
-                      <Chip
-                        label="C"
-                        size="small"
-                        color="secondary"
-                        sx={{ height: 16, fontSize: '0.6rem', minWidth: 20 }}
-                      />
-                    </Tooltip>
-                  )}
-                </Box>
-              )}
-            </>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              Never
-            </Typography>
-          )}
-        </>
-      ),
-    },
-    {
-      id: 'next_run',
-      label: 'Next Run',
-      width: '13%',
-      render: (job) => (
-        <>
-          {job.next_run ? (
-            <>
-              <Typography variant="body2" fontWeight={500}>
-                {formatDate(job.next_run)}
-              </Typography>
-              <Typography variant="caption" color="primary.main">
-                {formatRelativeTime(job.next_run)}
-              </Typography>
-            </>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              Never
-            </Typography>
-          )}
-        </>
-      ),
-    },
-    {
-      id: 'toggle',
-      label: 'Enabled',
-      width: '7%',
-      align: 'center',
-      render: (job) => (
-        <Tooltip
-          title={!canManageJob(job) ? 'View only' : job.enabled ? 'Disable' : 'Enable'}
-          arrow
-        >
-          <FormControlLabel
-            control={
-              <Switch
-                checked={job.enabled}
-                onChange={() => handleToggleJob(job)}
-                size="small"
-                disabled={!canManageJob(job)}
-                onClick={(e) => e.stopPropagation()}
-              />
-            }
-            label=""
-            sx={{ m: 0 }}
-          />
-        </Tooltip>
-      ),
-    },
-  ]
-
-  const scheduledJobsActions: ActionButton<ScheduledJob>[] = [
-    {
-      icon: <Play size={16} />,
-      label: 'Run Now',
-      onClick: (job) => handleRunJobNow(job),
-      color: 'primary',
-      disabled: (job) => !job.enabled || runJobNowMutation.isPending || !canManageJob(job),
-      show: (job) => canManageJob(job),
-      tooltip: 'Run Now',
-    },
-    {
-      icon: <Edit size={16} />,
-      label: 'Edit',
-      onClick: (job) => openEditWizard(job),
-      color: 'default',
-      show: (job) => canManageJob(job),
-      tooltip: 'Edit',
-    },
-    {
-      icon: <Copy size={16} />,
-      label: 'Duplicate',
-      onClick: (job) => handleDuplicateJob(job),
-      color: 'default',
-      disabled: (job) => duplicateJobMutation.isPending || !canManageJob(job),
-      show: (job) => canManageJob(job),
-      tooltip: 'Duplicate',
-    },
-    {
-      icon: <Trash2 size={16} />,
-      label: 'Delete',
-      onClick: (job) => setDeleteConfirmJob(job),
-      color: 'error',
-      show: (job) => canManageJob(job),
-      tooltip: 'Delete',
-    },
-  ]
-
   return (
     <Box>
       {/* Header */}
@@ -847,9 +574,16 @@ const Schedule: React.FC = () => {
           {/* Scheduled Jobs Table */}
           <ScheduledJobsTable
             jobs={jobs}
-            columns={scheduledJobsColumns}
-            actions={scheduledJobsActions}
+            repositories={repositories}
             isLoading={isLoading}
+            canManageJob={canManageJob}
+            onEdit={openEditWizard}
+            onDelete={setDeleteConfirmJob}
+            onDuplicate={handleDuplicateJob}
+            onRunNow={handleRunJobNow}
+            onToggle={handleToggleJob}
+            isRunNowPending={runJobNowMutation.isPending}
+            isDuplicatePending={duplicateJobMutation.isPending}
           />
 
           {/* Backup History */}
