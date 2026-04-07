@@ -99,11 +99,13 @@ export default function NotificationCard({
       icon: <Bell size={11} />,
       label: t('notifications.card.stats.service'),
       value: getServiceType(notification.service_url),
+      color: 'primary',
     },
     {
       icon: <Zap size={11} />,
       label: t('notifications.card.stats.events'),
       value: `${eventCount} ${t('notifications.card.stats.active')}`,
+      color: 'warning',
     },
     {
       icon: <Database size={11} />,
@@ -111,6 +113,7 @@ export default function NotificationCard({
       value: notification.monitor_all_repositories
         ? t('notifications.card.stats.allRepos')
         : t('notifications.card.stats.repoCount', { count: notification.repositories.length }),
+      color: 'secondary',
     },
     {
       icon: <Clock size={11} />,
@@ -119,6 +122,7 @@ export default function NotificationCard({
         ? formatDateShort(notification.last_used_at)
         : t('common.never'),
       tooltip: notification.last_used_at ? notification.last_used_at : '',
+      color: 'info',
     },
   ]
 
