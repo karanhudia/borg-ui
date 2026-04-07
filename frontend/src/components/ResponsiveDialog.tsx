@@ -14,7 +14,8 @@ export default function ResponsiveDialog({
   onClose,
   children,
   footer,
-  // maxWidth and fullWidth are desktop-only — silently ignored on mobile
+  // The following props are desktop-only (spread into <Dialog> via ...rest) — silently ignored on mobile:
+  // maxWidth, fullWidth, PaperProps, TransitionProps, and other DialogProps
   maxWidth,
   fullWidth,
   ...rest
@@ -83,7 +84,7 @@ export default function ResponsiveDialog({
               flexShrink: 0,
               borderTop: 1,
               borderColor: 'divider',
-              pb: 'env(safe-area-inset-bottom, 8px)',
+              pb: 'env(safe-area-inset-bottom, 0px)',
             }}
           >
             {footer}

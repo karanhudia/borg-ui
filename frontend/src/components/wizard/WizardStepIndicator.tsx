@@ -89,6 +89,8 @@ export default function WizardStepIndicator({
                 key={step.key}
                 onClick={() => onStepClick?.(index)}
                 data-testid={`step-circle-${step.key}`}
+                role="button"
+                aria-label={`Go to step ${index + 1}: ${step.label}`}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -97,11 +99,7 @@ export default function WizardStepIndicator({
                   width: 40,
                   height: 40,
                   borderRadius: '50%',
-                  bgcolor: isActive
-                    ? stepColor
-                    : isDark
-                      ? alpha(stepColor, 0.1)
-                      : alpha(stepColor, 0.1),
+                  bgcolor: isActive ? stepColor : alpha(stepColor, 0.1),
                   color: isActive ? '#fff' : stepColor,
                   cursor: 'pointer',
                   transition: 'all 0.3s ease',
