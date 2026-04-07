@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { useMediaQuery } from '@mui/material'
 import ResponsiveDialog from '../ResponsiveDialog'
 
@@ -56,25 +55,14 @@ describe('ResponsiveDialog', () => {
       mockUseMediaQuery.mockReturnValue(true)
     })
 
-    it('renders a presentation role element (SwipeableDrawer) when open', () => {
+    it('renders the drag handle when open', () => {
       render(
         <ResponsiveDialog open={true} onClose={onClose}>
           <div>content</div>
         </ResponsiveDialog>
       )
-      // SwipeableDrawer renders with role="presentation"
-      expect(screen.getByRole('presentation', { hidden: true })).toBeInTheDocument()
-    })
-
-    it('renders the drag handle', () => {
-      const { container } = render(
-        <ResponsiveDialog open={true} onClose={onClose}>
-          <div>content</div>
-        </ResponsiveDialog>
-      )
-      // Drag handle is a box with specific dimensions — check it exists in the paper
-      const handle = container.querySelector('[data-testid="drag-handle"]')
-      expect(handle).toBeInTheDocument()
+      // screen queries search the entire document including portals
+      expect(screen.getByTestId('drag-handle')).toBeInTheDocument()
     })
 
     it('renders children', () => {

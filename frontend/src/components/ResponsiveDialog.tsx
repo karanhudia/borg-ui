@@ -1,13 +1,13 @@
 import { useTheme, useMediaQuery, Dialog, SwipeableDrawer, Box } from '@mui/material'
 import type { DialogProps } from '@mui/material'
-import type { ReactNode } from 'react'
 
-type ResponsiveDialogProps = DialogProps & { children?: ReactNode }
+type ResponsiveDialogProps = DialogProps
 
 export default function ResponsiveDialog({
   open,
   onClose,
   children,
+  // maxWidth and fullWidth are desktop-only — silently ignored on mobile
   maxWidth,
   fullWidth,
   ...rest
@@ -21,10 +21,14 @@ export default function ResponsiveDialog({
         anchor="bottom"
         open={open}
         onClose={onClose ? (e) => onClose(e, 'backdropClick') : () => {}}
+        // Note: SwipeableDrawer doesn't expose close reason, so 'backdropClick' is used
+        // for all close events (including swipe-to-dismiss). This means dialogs that
+        // distinguish 'escapeKeyDown' to prevent accidental close will behave incorrectly
+        // on mobile.
         onOpen={() => {}}
         disableSwipeToOpen
         disableDiscovery
-        ModalProps={{ disablePortal: true }}
+        ModalProps={{ keepMounted: false }}
         PaperProps={{
           sx: {
             borderRadius: '16px 16px 0 0',
@@ -42,9 +46,7 @@ export default function ResponsiveDialog({
           <Box sx={{ width: 32, height: 4, borderRadius: 2, bgcolor: 'divider' }} />
         </Box>
         {/* Scrollable content */}
-        <Box sx={{ overflowY: 'auto', flex: 1 }}>
-          {open ? children : null}
-        </Box>
+        <Box sx={{ overflowY: 'auto', flex: 1 }}>{children}</Box>
       </SwipeableDrawer>
     )
   }
