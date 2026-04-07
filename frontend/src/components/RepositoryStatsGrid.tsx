@@ -1,4 +1,5 @@
 import { Box, Card, CardContent, Stack, Typography } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { Archive as ArchiveIcon, Database, Gauge, Layers } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes as formatBytesUtil } from '../utils/dateUtils'
@@ -12,6 +13,73 @@ interface RepositoryStats {
 interface RepositoryStatsGridProps {
   stats: RepositoryStats
   archivesCount: number
+}
+
+type ColorKey = 'primary' | 'success' | 'info' | 'secondary' | 'warning'
+
+interface StatCardProps {
+  label: string
+  value: string | number
+  icon: React.ReactNode
+  colorKey: ColorKey
+}
+
+function StatCard({ label, value, icon, colorKey }: StatCardProps) {
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        borderTopWidth: '3px',
+        borderTopColor: `${colorKey}.main`,
+        bgcolor: (theme) =>
+          alpha(
+            (theme.palette[colorKey] as { main: string }).main,
+            theme.palette.mode === 'dark' ? 0.1 : 0.06
+          ),
+        transition: 'box-shadow 0.2s ease',
+        '&:hover': { boxShadow: 3 },
+      }}
+    >
+      <CardContent sx={{ pb: '16px !important' }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+          <Box>
+            <Typography
+              variant="caption"
+              sx={{
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                fontSize: '0.65rem',
+                fontWeight: 700,
+                color: `${colorKey}.main`,
+                display: 'block',
+                mb: 0.75,
+              }}
+            >
+              {label}
+            </Typography>
+            <Typography
+              variant="h5"
+              fontWeight={700}
+              color="text.primary"
+              sx={{ lineHeight: 1.2, fontSize: { xs: '1.4rem', lg: '1.5rem' } }}
+            >
+              {value}
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              color: `${colorKey}.main`,
+              opacity: 0.35,
+              mt: 0.25,
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  )
 }
 
 export default function RepositoryStatsGrid({ stats, archivesCount }: RepositoryStatsGridProps) {
@@ -31,99 +99,36 @@ export default function RepositoryStatsGrid({ stats, archivesCount }: Repository
         mb: 4,
       }}
     >
-      {/* Total Archives */}
-      <Card sx={{ backgroundColor: '#e3f2fd' }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <ArchiveIcon size={32} color="#1565c0" />
-            <Box>
-              <Typography variant="body2" color="primary.dark" fontWeight={500}>
-                {t('repositoryStatsGrid.totalArchives')}
-              </Typography>
-              <Typography variant="h4" fontWeight={700} color="primary.dark">
-                {archivesCount}
-              </Typography>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Space Used on Disk */}
-      <Card sx={{ backgroundColor: '#e8f5e9' }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Database size={32} color="#2e7d32" />
-            <Box>
-              <Typography variant="body2" color="success.dark" fontWeight={500}>
-                {t('repositoryStatsGrid.spaceUsed')}
-              </Typography>
-              <Typography
-                variant="h4"
-                fontWeight={700}
-                color="success.dark"
-                sx={{ fontSize: '1.5rem' }}
-              >
-                {formatBytesUtil(stats.unique_csize)}
-              </Typography>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Space Saved */}
-      <Card sx={{ backgroundColor: '#e1f5fe' }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Database size={32} color="#0277bd" />
-            <Box>
-              <Typography variant="body2" sx={{ color: '#0277bd' }} fontWeight={500}>
-                {t('repositoryStatsGrid.spaceSaved')}
-              </Typography>
-              <Typography
-                variant="h4"
-                fontWeight={700}
-                sx={{ color: '#0277bd', fontSize: '1.5rem' }}
-              >
-                {spaceSaved > 0 ? formatBytesUtil(spaceSaved) : '0 B'}
-              </Typography>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Compression */}
-      <Card sx={{ backgroundColor: '#f3e5f5' }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Gauge size={32} color="#7b1fa2" />
-            <Box>
-              <Typography variant="body2" color="purple" fontWeight={500}>
-                {t('repositoryStatsGrid.compression')}
-              </Typography>
-              <Typography variant="h4" fontWeight={700} color="purple">
-                {compressionRatio}%
-              </Typography>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Deduplication */}
-      <Card sx={{ backgroundColor: '#fff3e0' }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Layers size={32} color="#e65100" />
-            <Box>
-              <Typography variant="body2" sx={{ color: '#e65100' }} fontWeight={500}>
-                {t('repositoryStatsGrid.deduplication')}
-              </Typography>
-              <Typography variant="h4" fontWeight={700} sx={{ color: '#e65100' }}>
-                {deduplicationRatio}%
-              </Typography>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+      <StatCard
+        label={t('repositoryStatsGrid.totalArchives')}
+        value={archivesCount}
+        icon={<ArchiveIcon size={32} />}
+        colorKey="primary"
+      />
+      <StatCard
+        label={t('repositoryStatsGrid.spaceUsed')}
+        value={formatBytesUtil(stats.unique_csize)}
+        icon={<Database size={32} />}
+        colorKey="success"
+      />
+      <StatCard
+        label={t('repositoryStatsGrid.spaceSaved')}
+        value={spaceSaved > 0 ? formatBytesUtil(spaceSaved) : '0 B'}
+        icon={<Database size={32} />}
+        colorKey="info"
+      />
+      <StatCard
+        label={t('repositoryStatsGrid.compression')}
+        value={`${compressionRatio}%`}
+        icon={<Gauge size={32} />}
+        colorKey="secondary"
+      />
+      <StatCard
+        label={t('repositoryStatsGrid.deduplication')}
+        value={`${deduplicationRatio}%`}
+        icon={<Layers size={32} />}
+        colorKey="warning"
+      />
     </Box>
   )
 }

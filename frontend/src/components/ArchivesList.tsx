@@ -251,24 +251,30 @@ export default function ArchivesList({
           sx={{
             display: 'flex',
             flexDirection: { xs: 'column', sm: 'row' },
-            gap: 1.5,
+            gap: 1,
             alignItems: { xs: 'stretch', sm: 'center' },
             width: { xs: '100%', sm: 'auto' },
           }}
         >
           {/* Sort control - only show in flat view */}
           {!groupingEnabled && (
-            <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
-              <InputLabel>{t('archivesList.sortBy')}</InputLabel>
-              <Select value={sortBy} label={t('archivesList.sortBy')} onChange={handleSortChange}>
-                <MenuItem value="date-desc">{t('archivesList.newestFirst')}</MenuItem>
-                <MenuItem value="date-asc">{t('archivesList.oldestFirst')}</MenuItem>
-              </Select>
-            </FormControl>
+            <ToggleButtonGroup
+              value={sortBy}
+              exclusive
+              onChange={(_e, v) => v && handleSortChange({ target: { value: v } })}
+              size="small"
+            >
+              <ToggleButton value="date-desc" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>
+                {t('archivesList.newestFirst')}
+              </ToggleButton>
+              <ToggleButton value="date-asc" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>
+                {t('archivesList.oldestFirst')}
+              </ToggleButton>
+            </ToggleButtonGroup>
           )}
 
           {/* Filter control */}
-          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
+          <FormControl size="small" sx={{ minWidth: 130 }}>
             <InputLabel>{t('archivesList.filter')}</InputLabel>
             <Select value={filter} label={t('archivesList.filter')} onChange={handleFilterChange}>
               <MenuItem value="all">{t('archivesList.allArchives')}</MenuItem>
@@ -283,14 +289,13 @@ export default function ArchivesList({
             exclusive
             onChange={handleViewModeChange}
             size="small"
-            fullWidth
           >
-            <ToggleButton value="grouped">
-              <Layers size={18} style={{ marginRight: 6 }} />
+            <ToggleButton value="grouped" sx={{ px: 1.5 }}>
+              <Layers size={16} style={{ marginRight: 4 }} />
               {t('archivesList.grouped')}
             </ToggleButton>
-            <ToggleButton value="flat">
-              <List size={18} style={{ marginRight: 6 }} />
+            <ToggleButton value="flat" sx={{ px: 1.5 }}>
+              <List size={16} style={{ marginRight: 4 }} />
               {t('archivesList.list')}
             </ToggleButton>
           </ToggleButtonGroup>

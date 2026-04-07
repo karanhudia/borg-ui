@@ -1,8 +1,9 @@
-import { Card, CardContent, Stack, Box, Typography, Button, IconButton } from '@mui/material'
+import { Card, CardContent, Stack, Box, Typography, Button, IconButton, Tooltip } from '@mui/material'
 import { Eye, RotateCcw, HardDrive, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDate } from '../utils/dateUtils'
 import { Archive } from '../types'
+import { getArchiveType } from '../utils/archiveGrouping'
 
 interface ArchiveCardProps {
   archive: Archive
@@ -24,20 +25,22 @@ export default function ArchiveCard({
   canDelete = true,
 }: ArchiveCardProps) {
   const { t } = useTranslation()
+  const isManual = getArchiveType(archive) === 'manual'
+
   return (
     <Card
       variant="outlined"
       sx={{
-        border: 1,
-        borderColor: 'divider',
-        transition: 'all 0.2s',
+        borderLeftWidth: '3px',
+        borderLeftColor: isManual ? 'primary.main' : 'success.main',
+        transition: 'border-left-color 0.2s ease, background-color 0.15s ease',
         '&:hover': {
-          borderColor: 'primary.main',
-          boxShadow: 1,
+          bgcolor: 'action.hover',
+          borderLeftColor: isManual ? 'primary.light' : 'success.light',
         },
       }}
     >
-      <CardContent sx={{ py: 2 }}>
+      <CardContent sx={{ py: 1.25, px: 2, '&:last-child': { pb: 1.25 } }}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           alignItems={{ xs: 'stretch', sm: 'center' }}
@@ -46,102 +49,113 @@ export default function ArchiveCard({
         >
           {/* Archive Info */}
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="flex-start"
-              justifyContent="space-between"
-            >
+            <Box sx={{ mb: 0.5 }}>
               <Typography
-                variant="h6"
-                fontWeight={600}
+                component="span"
                 sx={{
-                  mb: 0.5,
-                  fontSize: { xs: '1rem', sm: '1.25rem' },
-                  overflowWrap: 'anywhere',
-                  wordBreak: 'break-word',
-                  flex: 1,
-                  minWidth: 0,
+                  display: 'inline-block',
+                  fontSize: '0.6rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.07em',
+                  textTransform: 'uppercase',
+                  color: 'white',
+                  bgcolor: isManual ? 'primary.main' : 'success.main',
+                  borderRadius: '3px',
+                  px: 0.75,
+                  py: 0.2,
+                  lineHeight: 1.6,
                 }}
               >
-                {archive.name}
+                {isManual ? t('archivesList.manual') : t('archivesList.scheduled')}
               </Typography>
-              {canDelete && (
-                <IconButton
-                  color="error"
-                  size="small"
-                  onClick={() => onDelete(archive.name)}
-                  sx={{ display: { xs: 'inline-flex', sm: 'none' }, mt: -0.25, mr: -0.5 }}
-                >
-                  <Trash2 size={18} />
-                </IconButton>
-              )}
-            </Stack>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Typography variant="body2" color="text.secondary">
-                {formatDate(archive.start)}
-              </Typography>
-            </Stack>
+            </Box>
+            <Typography
+              variant="body2"
+              fontWeight={500}
+              sx={{
+                fontFamily: '"JetBrains Mono", "Fira Code", Consolas, monospace',
+                fontSize: '0.8rem',
+                overflowWrap: 'anywhere',
+                wordBreak: 'break-all',
+                color: 'text.primary',
+                lineHeight: 1.5,
+              }}
+            >
+              {archive.name}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mt: 0.25, fontSize: '0.72rem' }}
+            >
+              {formatDate(archive.start)}
+            </Typography>
           </Box>
 
           {/* Actions */}
-          <Box
-            sx={{
-              width: { xs: '100%', sm: 'auto' },
-              display: { xs: 'grid', sm: 'flex' },
-              gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))' },
-              gap: 1,
-              alignItems: 'center',
-            }}
+          <Stack
+            direction="row"
+            spacing={0.25}
+            alignItems="center"
+            sx={{ flexShrink: 0, flexWrap: { xs: 'wrap', sm: 'nowrap' }, gap: { xs: 0.5, sm: 0.25 } }}
           >
             <Button
               variant="contained"
               size="small"
-              startIcon={<Eye size={16} />}
+              startIcon={<Eye size={14} />}
               onClick={() => onView(archive)}
-              fullWidth
-              sx={{
-                textTransform: 'none',
-                justifyContent: 'center',
-                gridColumn: { xs: '1 / -1', sm: 'auto' },
-              }}
+              sx={{ textTransform: 'none', fontSize: '0.8rem', py: 0.5, px: 1.5, mr: 0.5 }}
             >
               {t('common.buttons.view')}
             </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              color="success"
-              startIcon={<RotateCcw size={16} />}
-              onClick={() => onRestore(archive)}
-              fullWidth
-              sx={{ textTransform: 'none', justifyContent: 'center' }}
-            >
-              {t('archiveCard.restore')}
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              color="info"
-              startIcon={<HardDrive size={16} />}
-              onClick={() => onMount(archive)}
-              fullWidth
-              sx={{ textTransform: 'none', justifyContent: 'center' }}
-              disabled={mountDisabled}
-            >
-              {t('archiveCard.mount')}
-            </Button>
-            {canDelete && (
+            <Tooltip title={t('archiveCard.restore')} arrow>
               <IconButton
-                color="error"
                 size="small"
-                onClick={() => onDelete(archive.name)}
-                sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+                onClick={() => onRestore(archive)}
+                aria-label={t('archiveCard.restore')}
+                sx={{
+                  color: 'success.main',
+                  transition: 'all 0.15s ease',
+                  '&:hover': { bgcolor: 'success.main', color: 'white' },
+                }}
               >
-                <Trash2 size={18} />
+                <RotateCcw size={15} />
               </IconButton>
+            </Tooltip>
+            <Tooltip title={t('archiveCard.mount')} arrow>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={() => onMount(archive)}
+                  disabled={mountDisabled}
+                  aria-label={t('archiveCard.mount')}
+                  sx={{
+                    color: 'info.main',
+                    transition: 'all 0.15s ease',
+                    '&:hover': { bgcolor: 'info.main', color: 'white' },
+                  }}
+                >
+                  <HardDrive size={15} />
+                </IconButton>
+              </span>
+            </Tooltip>
+            {canDelete && (
+              <Tooltip title={t('archiveCard.delete')} arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => onDelete(archive.name)}
+                  aria-label={t('archiveCard.delete')}
+                  sx={{
+                    color: 'error.main',
+                    transition: 'all 0.15s ease',
+                    '&:hover': { bgcolor: 'error.main', color: 'white' },
+                  }}
+                >
+                  <Trash2 size={15} />
+                </IconButton>
+              </Tooltip>
             )}
-          </Box>
+          </Stack>
         </Stack>
       </CardContent>
     </Card>

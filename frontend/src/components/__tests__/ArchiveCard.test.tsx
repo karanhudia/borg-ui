@@ -36,9 +36,8 @@ describe('ArchiveCard', () => {
     expect(screen.getByRole('button', { name: /view/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /restore/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /mount/i })).toBeInTheDocument()
-    // Delete button is an IconButton without text
-    const deleteButton = screen.getByRole('button', { name: '' })
-    expect(deleteButton).toBeInTheDocument()
+    // Delete button is an IconButton with aria-label
+    expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument()
   })
 
   it('calls onView when View button is clicked', () => {
@@ -123,6 +122,8 @@ describe('ArchiveCard', () => {
     const { container } = render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
 
     const card = container.querySelector('.MuiCard-root')
-    expect(card).toHaveStyle({ transition: 'all 0.2s' })
+    expect(card).toHaveStyle({
+      transition: 'border-left-color 0.2s ease,background-color 0.15s ease',
+    })
   })
 })
