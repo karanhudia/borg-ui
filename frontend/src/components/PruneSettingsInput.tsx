@@ -33,7 +33,13 @@ const PruneSettingsInput: React.FC<PruneSettingsInputProps> = ({
   }
 
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+        gap: 2,
+      }}
+    >
       <TextField
         label={t('pruneSettings.keepHourly')}
         type="number"

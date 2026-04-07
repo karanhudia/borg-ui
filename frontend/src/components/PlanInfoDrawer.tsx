@@ -166,7 +166,14 @@ export default function PlanInfoDrawer({
           >
             {t('plan.plans')}
           </Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 0.75, mb: 2.5 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+              gap: 0.75,
+              mb: 2.5,
+            }}
+          >
             {UPGRADE_PLANS.map((p) => (
               <Box
                 key={p}

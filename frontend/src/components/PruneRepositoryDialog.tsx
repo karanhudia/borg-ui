@@ -108,7 +108,14 @@ export default function PruneRepositoryDialog({
           {t('dialogs.prune.retentionDescription')}
         </Typography>
 
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 3 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+            gap: 2,
+            mb: 3,
+          }}
+        >
           <TextField
             label={t('dialogs.prune.keepHourly')}
             type="number"

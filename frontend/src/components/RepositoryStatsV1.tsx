@@ -23,7 +23,13 @@ export default function RepositoryStatsV1({ stats }: RepositoryStatsV1Props) {
       <Typography variant="h6" fontWeight={600} sx={{ mt: 1 }}>
         {t('dialogs.repositoryInfo.storageStatistics')}
       </Typography>
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' },
+          gap: 2,
+        }}
+      >
         <Card sx={{ backgroundColor: '#e8f5e9' }}>
           <CardContent sx={{ py: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -64,7 +70,13 @@ export default function RepositoryStatsV1({ stats }: RepositoryStatsV1Props) {
           </CardContent>
         </Card>
       </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+          gap: 2,
+        }}
+      >
         <Card variant="outlined">
           <CardContent sx={{ py: 1.5 }}>
             <Typography variant="caption" color="text.secondary" display="block">

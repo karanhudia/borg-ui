@@ -570,9 +570,16 @@ export default function Repositories() {
       {/* Header */}
       <Box sx={{ mb: 3 }}>
         <Box
-          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', md: 'flex-start' },
+            gap: 2,
+            mb: 2,
+          }}
         >
-          <Box sx={{ flex: 1, mr: 2 }}>
+          <Box sx={{ flex: 1, mr: { md: 2 } }}>
             <Typography variant="h4" fontWeight={600} gutterBottom>
               {t('repositories.title')}
             </Typography>
@@ -581,12 +588,12 @@ export default function Repositories() {
             </Typography>
           </Box>
           {canManageRepositoriesGlobally && (
-            <Stack direction="row" spacing={2}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
               <Button
                 variant="contained"
                 startIcon={<Add />}
                 onClick={() => openWizard('create')}
-                sx={{ flexShrink: 0 }}
+                sx={{ width: { xs: '100%', md: 'auto' } }}
               >
                 {t('repositories.createRepository')}
               </Button>
@@ -594,7 +601,7 @@ export default function Repositories() {
                 variant="outlined"
                 startIcon={<FileUpload />}
                 onClick={() => openWizard('import')}
-                sx={{ flexShrink: 0 }}
+                sx={{ width: { xs: '100%', md: 'auto' } }}
               >
                 {t('repositories.importExisting')}
               </Button>
@@ -604,17 +611,17 @@ export default function Repositories() {
       </Box>
 
       {/* Filter, Sort, and Search Bar */}
-      {repositories.length > 0 && (
+      {(isLoading || repositories.length > 0) && (
         <Card sx={{ mb: 3 }}>
           <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
               {/* Search */}
               <TextField
                 size="small"
                 placeholder={t('repositories.search')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{ flex: 1, minWidth: 200 }}
+                sx={{ flex: 1, minWidth: 0 }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -625,7 +632,7 @@ export default function Repositories() {
               />
 
               {/* Sort By */}
-              <FormControl size="small" sx={{ minWidth: 200 }}>
+              <FormControl size="small" sx={{ minWidth: { xs: '100%', md: 160 } }}>
                 <InputLabel id="sort-label">{t('repositories.sort.label')}</InputLabel>
                 <Select
                   labelId="sort-label"
@@ -662,7 +669,7 @@ export default function Repositories() {
               </FormControl>
 
               {/* Group By */}
-              <FormControl size="small" sx={{ minWidth: 200 }}>
+              <FormControl size="small" sx={{ minWidth: { xs: '100%', md: 160 } }}>
                 <InputLabel id="group-label">{t('repositories.group.label')}</InputLabel>
                 <Select
                   labelId="group-label"
@@ -717,11 +724,12 @@ export default function Repositories() {
               {t('repositories.empty.hint')}
             </Typography>
             {canManageRepositoriesGlobally && (
-              <Stack direction="row" spacing={2} justifyContent="center">
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="center">
                 <Button
                   variant="contained"
                   startIcon={<Add />}
                   onClick={() => openWizard('create')}
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
                 >
                   {t('repositories.createRepository')}
                 </Button>
@@ -729,6 +737,7 @@ export default function Repositories() {
                   variant="outlined"
                   startIcon={<FileUpload />}
                   onClick={() => openWizard('import')}
+                  sx={{ width: { xs: '100%', sm: 'auto' } }}
                 >
                   {t('repositories.importExisting')}
                 </Button>
@@ -788,7 +797,7 @@ export default function Repositories() {
               )}
 
               {/* Repository Cards */}
-              <Stack spacing={2}>
+              <Stack spacing={2} sx={{ minWidth: 0, overflow: 'hidden' }}>
                 {group.repositories.map((repository: Repository) => (
                   <RepositoryCard
                     key={repository.id}

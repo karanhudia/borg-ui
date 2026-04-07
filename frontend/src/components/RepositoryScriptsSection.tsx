@@ -40,7 +40,14 @@ export default function RepositoryScriptsSection({
       {/* Pre-Backup Scripts */}
       <Box sx={{ mb: 1.5 }}>
         <Box
-          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1,
+            mb: 0.75,
+          }}
         >
           <Typography variant="body2" fontWeight={600}>
             {t('repositoryScriptsSection.preBackup')}
@@ -66,7 +73,13 @@ export default function RepositoryScriptsSection({
                   }
                 }}
                 disabled={!repositoryId}
-                sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+                sx={{
+                  py: 0.25,
+                  px: 1,
+                  minHeight: 'auto',
+                  fontSize: '0.8rem',
+                  width: { xs: '100%', sm: 'auto' },
+                }}
               >
                 {t('repositoryScriptsSection.add')}
               </Button>
@@ -114,7 +127,14 @@ export default function RepositoryScriptsSection({
       {/* Post-Backup Scripts */}
       <Box>
         <Box
-          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1,
+            mb: 0.75,
+          }}
         >
           <Typography variant="body2" fontWeight={600}>
             {t('repositoryScriptsSection.postBackup')}
@@ -140,7 +160,13 @@ export default function RepositoryScriptsSection({
                   }
                 }}
                 disabled={!repositoryId}
-                sx={{ py: 0.25, px: 1, minHeight: 'auto', fontSize: '0.8rem' }}
+                sx={{
+                  py: 0.25,
+                  px: 1,
+                  minHeight: 'auto',
+                  fontSize: '0.8rem',
+                  width: { xs: '100%', sm: 'auto' },
+                }}
               >
                 {t('repositoryScriptsSection.add')}
               </Button>
