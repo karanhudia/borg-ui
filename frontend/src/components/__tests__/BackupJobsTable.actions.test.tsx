@@ -225,7 +225,7 @@ describe('BackupJobsTable action internals', () => {
       expect(global.fetch).toHaveBeenCalledWith('/api/activity/restore/20/cancel', {
         method: 'POST',
         headers: {
-          Authorization: 'Bearer token-123',
+          'X-Borg-Authorization': 'Bearer token-123',
         },
       })
     })
@@ -335,7 +335,7 @@ describe('BackupJobsTable action internals', () => {
       expect(global.fetch).toHaveBeenCalledWith('/api/activity/backup/40', {
         method: 'DELETE',
         headers: {
-          Authorization: 'Bearer token-123',
+          'X-Borg-Authorization': 'Bearer token-123',
         },
       })
     })
