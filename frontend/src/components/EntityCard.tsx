@@ -6,6 +6,7 @@ export interface StatItem {
   label: string
   value: string
   tooltip?: string
+  color?: 'primary' | 'success' | 'warning' | 'info' | 'secondary'
 }
 
 export interface MetaItem {
@@ -147,6 +148,9 @@ export default function EntityCard({
             const isRightColXs = i % 2 === 1
             const isLastSm = i === stats.length - 1
             const isFirstRowXs = i < 2
+            const statColor = stat.color
+              ? alpha((theme.palette[stat.color] as { main: string }).main, 0.7)
+              : undefined
             return (
               <Tooltip key={stat.label} title={stat.tooltip || ''} arrow>
                 <Box
@@ -163,7 +167,13 @@ export default function EntityCard({
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.35 }}>
-                    <Box sx={{ color: 'text.disabled', display: 'flex', alignItems: 'center' }}>
+                    <Box
+                      sx={{
+                        color: statColor ?? 'text.disabled',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
                       {stat.icon}
                     </Box>
                     <Typography
@@ -172,7 +182,7 @@ export default function EntityCard({
                         fontWeight: 700,
                         textTransform: 'uppercase',
                         letterSpacing: '0.07em',
-                        color: 'text.disabled',
+                        color: statColor ?? 'text.disabled',
                         lineHeight: 1,
                       }}
                     >

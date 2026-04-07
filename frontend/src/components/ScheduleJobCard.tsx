@@ -99,23 +99,27 @@ export default function ScheduleJobCard({
       label: t('schedule.card.stats.schedule'),
       value: formatCronHuman(convertCronToLocal(job.cron_expression)),
       tooltip: job.cron_expression,
+      color: 'info',
     },
     {
       icon: <Database size={11} />,
       label: t('schedule.card.stats.repository'),
       value: getRepoLabel(job, repositories),
+      color: 'secondary',
     },
     {
       icon: <History size={11} />,
       label: t('schedule.card.stats.lastRun'),
       value: job.last_run ? formatDateShort(job.last_run) : t('common.never'),
       tooltip: job.last_run ? formatDateTimeFull(job.last_run) : '',
+      color: 'warning',
     },
     {
       icon: <CalendarCheck size={11} />,
       label: t('schedule.card.stats.nextRun'),
       value: job.next_run ? formatDateShort(job.next_run) : t('common.never'),
       tooltip: job.next_run ? formatDateTimeFull(job.next_run) : '',
+      color: 'success',
     },
   ]
 

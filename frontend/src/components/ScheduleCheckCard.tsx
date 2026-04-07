@@ -47,6 +47,7 @@ export default function ScheduleCheckCard({
         ? formatCronHuman(convertCronToLocal(check.check_cron_expression))
         : t('schedule.checkCard.stats.notSet'),
       tooltip: check.check_cron_expression ?? '',
+      color: 'info',
     },
     {
       icon: <History size={11} />,
@@ -55,6 +56,7 @@ export default function ScheduleCheckCard({
         ? formatDateShort(check.last_scheduled_check)
         : t('common.never'),
       tooltip: check.last_scheduled_check ? formatDateTimeFull(check.last_scheduled_check) : '',
+      color: 'warning',
     },
     {
       icon: <CalendarCheck size={11} />,
@@ -63,6 +65,7 @@ export default function ScheduleCheckCard({
         ? formatDateShort(check.next_scheduled_check)
         : t('common.never'),
       tooltip: check.next_scheduled_check ? formatDateTimeFull(check.next_scheduled_check) : '',
+      color: 'success',
     },
     {
       icon: <Timer size={11} />,
@@ -70,6 +73,7 @@ export default function ScheduleCheckCard({
       value: check.check_max_duration
         ? `${Math.round(check.check_max_duration / 60)}m`
         : t('schedule.checkCard.stats.unlimited'),
+      color: 'secondary',
     },
   ]
 
