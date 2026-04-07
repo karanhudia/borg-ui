@@ -341,44 +341,37 @@ const UsersTab: React.FC = () => {
   return (
     <>
       <Stack spacing={3}>
-        <Card variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
-          <Box
-            sx={{
-              px: { xs: 2.5, md: 3.5 },
-              py: { xs: 2.5, md: 3 },
-              background:
-                'linear-gradient(180deg, rgba(23,23,23,0.03) 0%, rgba(23,23,23,0.00) 100%)',
-            }}
-          >
-            <Stack
-              direction={{ xs: 'column', md: 'row' }}
-              spacing={2}
-              justifyContent="space-between"
-              alignItems={{ xs: 'flex-start', md: 'center' }}
-            >
-              <Box>
-                <Typography variant="h5" fontWeight={700} gutterBottom>
-                  {t('settings.users.title')}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Manage account records and repository-level access from one admin surface.
-                </Typography>
-              </Box>
-              <Tooltip title={!can('multi_user') ? t('settings.users.planCaption') : ''} arrow>
-                <span>
-                  <Button
-                    variant="contained"
-                    startIcon={<Plus size={18} />}
-                    onClick={openCreateUser}
-                    disabled={!can('multi_user')}
-                  >
-                    {t('settings.users.addUser')}
-                  </Button>
-                </span>
-              </Tooltip>
-            </Stack>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1.5,
+          }}
+        >
+          <Box>
+            <Typography variant="h6" fontWeight={600}>
+              {t('settings.users.title')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Manage account records and repository-level access from one admin surface.
+            </Typography>
           </Box>
-        </Card>
+          <Tooltip title={!can('multi_user') ? t('settings.users.planCaption') : ''} arrow>
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<Plus size={18} />}
+                onClick={openCreateUser}
+                disabled={!can('multi_user')}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
+              >
+                {t('settings.users.addUser')}
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
 
         <Box
           sx={{
