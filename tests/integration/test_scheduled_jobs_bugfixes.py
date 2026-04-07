@@ -274,6 +274,7 @@ class TestRepositoryInlineScripts:
             if kwargs.get('script_type') == 'post-backup':
                 post_script_executed = True
                 assert kwargs.get('script_content') == "echo 'Post-backup inline script'"
+                assert kwargs.get('backup_result') == 'success'
             return {"success": True, "logs": "Script executed"}
 
         async def mock_backup(self, job_id, repository_path, db, archive_name=None, **kwargs):

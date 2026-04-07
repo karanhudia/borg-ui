@@ -55,6 +55,16 @@ HookType = Literal["pre-backup", "post-backup"]
 BackupResult = Literal["success", "failure", "warning"]
 
 
+def _validate_script_env(env: Dict[str, str]) -> Dict[str, str]:
+    """Fail fast if any script environment value is not a string."""
+    for key, value in env.items():
+        if not isinstance(value, str):
+            raise TypeError(
+                f"Invalid environment value for {key}: expected str, got {type(value).__name__}"
+            )
+    return env
+
+
 def build_script_env(
     repository: Optional[Repository] = None,
     hook_type: Optional[HookType] = None,
@@ -107,7 +117,7 @@ def build_script_env(
         env['BORG_UI_SOURCE_PORT'] = str(source_connection.port or 22)
         env['BORG_UI_SOURCE_USERNAME'] = source_connection.username or ''
 
-    return env
+    return _validate_script_env(env)
 
 class ScriptLibraryExecutor:
     """Manages script library execution for backup hooks"""

@@ -1492,15 +1492,18 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 try:
                     from app.services.script_library_executor import ScriptLibraryExecutor
 
-                    # Get backup result for post-script context
+                    # Get backup result for post-script context.
+                    # Inline and library script executors expect the normalized
+                    # status token, not a stats dict.
                     db.refresh(backup_job)
-                    backup_result = {
-                        "status": backup_job.status,
-                        "original_size": backup_job.original_size,
-                        "compressed_size": backup_job.compressed_size,
-                        "deduplicated_size": backup_job.deduplicated_size,
-                        "nfiles": backup_job.nfiles
-                    } if backup_job.status in ["completed", "completed_with_warnings"] else None
+                    if backup_job.status == "completed":
+                        result_status = "success"
+                    elif backup_job.status == "completed_with_warnings":
+                        result_status = "warning"
+                    elif backup_job.status == "failed":
+                        result_status = "failure"
+                    else:
+                        result_status = None
 
                     # Check for library scripts first (newer system)
                     library_scripts = db.query(RepositoryScript).filter(
@@ -1510,16 +1513,6 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     ).order_by(RepositoryScript.execution_order).all()
 
                     if library_scripts:
-                        # Map backup status to backup_result
-                        if backup_job.status == "completed":
-                            result_status = "success"
-                        elif backup_job.status == "completed_with_warnings":
-                            result_status = "warning"
-                        elif backup_job.status == "failed":
-                            result_status = "failure"
-                        else:
-                            result_status = None
-
                         # Execute library scripts in order
                         for repo_script in library_scripts:
                             script = db.query(Script).filter_by(id=repo_script.script_id).first()
@@ -1549,7 +1542,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                             timeout=timeout,
                             repository=repo,
                             backup_job_id=backup_job.id,
-                            backup_result=backup_result
+                            backup_result=result_status
                         )
                         if result["success"]:
                             logger.info("Repository inline post-script completed", repo_name=repo.name)
