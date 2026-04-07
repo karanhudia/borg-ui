@@ -1,7 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -11,6 +10,7 @@ import {
   Stack,
   Box,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { AlertCircle, Trash2 } from 'lucide-react'
 
 interface ScheduledJob {
@@ -59,7 +59,7 @@ const DeleteScheduleDialog: React.FC<DeleteScheduleDialogProps> = ({
 }) => {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>
         <Stack direction="row" spacing={2} alignItems="center">
           <Box
@@ -100,7 +100,7 @@ const DeleteScheduleDialog: React.FC<DeleteScheduleDialogProps> = ({
           {isDeleting ? t('dialogs.deleteSchedule.deleting') : t('dialogs.deleteSchedule.confirm')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }
 

@@ -1,4 +1,5 @@
-import { Dialog, DialogContent, DialogActions, Button, Typography, Alert, Box } from '@mui/material'
+import { DialogContent, DialogActions, Button, Typography, Alert, Box } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -19,7 +20,7 @@ export default function DeleteJobDialog({
 }: DeleteJobDialogProps) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogContent sx={{ pt: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
           <Box sx={{ color: 'error.main' }}>
@@ -61,6 +62,6 @@ export default function DeleteJobDialog({
           {t('dialogs.deleteJob.confirm')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

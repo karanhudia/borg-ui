@@ -1,5 +1,4 @@
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -13,6 +12,7 @@ import {
   TextField,
   CircularProgress,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { Warning, CheckCircle, Lock } from '@mui/icons-material'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -35,7 +35,7 @@ export default function CheckWarningDialog({
   const { t } = useTranslation()
   const [maxDuration, setMaxDuration] = useState<number>(3600)
   return (
-    <Dialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
+    <ResponsiveDialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Warning color="warning" />
         {t('dialogs.checkWarning.title')}
@@ -106,6 +106,6 @@ export default function CheckWarningDialog({
           {isLoading ? t('status.running') : t('dialogs.checkWarning.confirm')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

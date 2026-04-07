@@ -1,5 +1,4 @@
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -12,6 +11,7 @@ import {
   ListItemText,
   CircularProgress,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { Warning, Compress, Lock } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
 
@@ -32,7 +32,7 @@ export default function CompactWarningDialog({
 }: CompactWarningDialogProps) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
+    <ResponsiveDialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Warning color="warning" />
         {t('dialogs.compactWarning.title')}
@@ -90,6 +90,6 @@ export default function CompactWarningDialog({
           {isLoading ? t('status.running') : t('dialogs.compactWarning.confirm')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

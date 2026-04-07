@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -13,6 +12,7 @@ import {
   IconButton,
   alpha,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { FolderOpen, Folder, AlertCircle } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { BorgApiClient, type Repository } from '../services/borgApi/client'
@@ -126,7 +126,7 @@ export default function ArchiveContentsDialog({
   const { folders, files } = getFilesInCurrentPath()
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onClose={onClose}
       maxWidth="md"
@@ -359,9 +359,9 @@ export default function ArchiveContentsDialog({
           </Box>
         )}
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ display: { xs: 'none', md: 'flex' } }}>
         <Button onClick={onClose}>{t('common.buttons.close')}</Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

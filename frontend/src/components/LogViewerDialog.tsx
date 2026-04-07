@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  Typography,
-  Box,
-} from '@mui/material'
+import { DialogTitle, DialogContent, DialogActions, Button, Typography, Box } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import StatusBadge from './StatusBadge'
 import { TerminalLogViewer } from './TerminalLogViewer'
 import { BASE_PATH } from '@/utils/basePath'
@@ -95,7 +88,7 @@ export default function LogViewerDialog<T extends JobWithLogs>({
   if (!job) return null
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Typography variant="h6">
@@ -113,10 +106,10 @@ export default function LogViewerDialog<T extends JobWithLogs>({
           onFetchLogs={handleFetchLogs}
         />
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ display: { xs: 'none', md: 'flex' } }}>
         <Button onClick={onClose}>{t('dialogs.logViewer.close')}</Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }
 

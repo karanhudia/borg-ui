@@ -1,7 +1,6 @@
 import {
   Button,
   CircularProgress,
-  Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -9,6 +8,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 
 interface AccountPasswordDialogProps {
   open: boolean
@@ -42,7 +42,7 @@ export default function AccountPasswordDialog({
   const passwordsMismatch = confirmPassword !== '' && newPassword !== confirmPassword
 
   return (
-    <Dialog
+    <ResponsiveDialog
       open={open}
       onClose={(_, reason) => onClose(reason)}
       maxWidth="sm"
@@ -106,6 +106,6 @@ export default function AccountPasswordDialog({
           </Button>
         </DialogActions>
       </form>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

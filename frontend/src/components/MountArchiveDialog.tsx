@@ -1,5 +1,4 @@
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -10,6 +9,7 @@ import {
   Alert,
   TextField,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { useTranslation } from 'react-i18next'
 import { HardDrive } from 'lucide-react'
 import { Archive } from '../types'
@@ -35,7 +35,7 @@ export default function MountArchiveDialog({
 }: MountArchiveDialogProps) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Stack direction="row" spacing={2} alignItems="center">
           <HardDrive size={24} />
@@ -76,6 +76,6 @@ export default function MountArchiveDialog({
           {mounting ? t('dialogs.mountArchive.mounting') : t('dialogs.mountArchive.mount')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

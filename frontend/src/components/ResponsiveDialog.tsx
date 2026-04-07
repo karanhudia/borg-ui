@@ -1,4 +1,5 @@
-import { useTheme, useMediaQuery, Dialog, SwipeableDrawer, Box } from '@mui/material'
+import { useTheme, useMediaQuery, Dialog, SwipeableDrawer, Box, IconButton } from '@mui/material'
+import { Close } from '@mui/icons-material'
 import type { DialogProps } from '@mui/material'
 
 type ResponsiveDialogProps = DialogProps
@@ -38,12 +39,29 @@ export default function ResponsiveDialog({
           },
         }}
       >
-        {/* Drag handle */}
+        {/* Drag handle row with X close button */}
         <Box
           data-testid="drag-handle"
-          sx={{ display: 'flex', justifyContent: 'center', pt: 1, pb: 0.5, flexShrink: 0 }}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: 44,
+            flexShrink: 0,
+            position: 'relative',
+          }}
         >
           <Box sx={{ width: 32, height: 4, borderRadius: 2, bgcolor: 'divider' }} />
+          {onClose && (
+            <IconButton
+              size="small"
+              onClick={(e) => onClose(e, 'backdropClick')}
+              aria-label="close"
+              sx={{ position: 'absolute', right: 8, color: 'text.secondary' }}
+            >
+              <Close fontSize="small" />
+            </IconButton>
+          )}
         </Box>
         {/* Scrollable content */}
         <Box sx={{ overflowY: 'auto', flex: 1 }}>{children}</Box>

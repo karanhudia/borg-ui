@@ -1,5 +1,4 @@
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -9,6 +8,7 @@ import {
   Box,
   CircularProgress,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { AlertCircle, Unlock } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -63,7 +63,7 @@ export default function LockErrorDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <AlertCircle size={24} color="#f57c00" />
@@ -135,6 +135,6 @@ export default function LockErrorDialog({
           {breaking ? t('status.running') : t('dialogs.lockError.breakLock')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

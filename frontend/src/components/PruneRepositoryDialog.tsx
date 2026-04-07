@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -14,6 +13,7 @@ import {
   CardContent,
   CircularProgress,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { Delete, Info } from '@mui/icons-material'
 import { Repository } from '../types'
 
@@ -79,7 +79,7 @@ export default function PruneRepositoryDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Delete color="secondary" />
@@ -313,6 +313,6 @@ export default function PruneRepositoryDialog({
           {isLoading ? t('status.running') : t('dialogs.pruneRepository.confirm')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

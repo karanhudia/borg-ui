@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { Dialog, DialogContent, DialogActions, Button, Typography } from '@mui/material'
+import { DialogContent, DialogActions, Button, Typography } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 
 interface CancelJobDialogProps {
   open: boolean
@@ -11,7 +12,7 @@ interface CancelJobDialogProps {
 export default function CancelJobDialog({ open, onClose, onConfirm }: CancelJobDialogProps) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogContent sx={{ pt: 3 }}>
         <Typography variant="h6" gutterBottom>
           {t('dialogs.cancelJob.title')}
@@ -26,6 +27,6 @@ export default function CancelJobDialog({ open, onClose, onConfirm }: CancelJobD
           {t('dialogs.cancelJob.confirm')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

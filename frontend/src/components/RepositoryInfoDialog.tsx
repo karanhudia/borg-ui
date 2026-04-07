@@ -1,5 +1,4 @@
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -12,6 +11,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { useEffect, useState } from 'react'
 import { Storage, Info, Lock, CalendarMonth, FileDownload } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
@@ -118,7 +118,7 @@ export default function RepositoryInfoDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Storage color="primary" />
@@ -265,11 +265,11 @@ export default function RepositoryInfoDialog({
           </PlanGate>
         )}
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ display: { xs: 'none', md: 'flex' } }}>
         <Button onClick={onClose} variant="contained">
           {t('dialogs.repositoryInfo.close')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

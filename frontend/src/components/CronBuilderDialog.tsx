@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -9,6 +8,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { Clock } from 'lucide-react'
 import CronBuilder from './CronBuilder'
 import { useTranslation } from 'react-i18next'
@@ -65,7 +65,7 @@ export const CronBuilderDialog: React.FC<CronBuilderDialogProps> = ({
       </Tooltip>
 
       {/* Dialog with CronBuilder */}
-      <Dialog open={open} onClose={handleCancel} maxWidth="sm" fullWidth>
+      <ResponsiveDialog open={open} onClose={handleCancel} maxWidth="sm" fullWidth>
         <DialogTitle>{dialogTitle || t('cronBuilder.configureSchedule')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
@@ -83,7 +83,7 @@ export const CronBuilderDialog: React.FC<CronBuilderDialogProps> = ({
             {buttonLabel || t('cronBuilder.applySchedule')}
           </Button>
         </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
     </>
   )
 }

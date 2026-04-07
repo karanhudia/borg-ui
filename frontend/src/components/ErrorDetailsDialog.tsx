@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -10,6 +9,7 @@ import {
   Typography,
   Box,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import StatusBadge from './StatusBadge'
 
 interface JobWithError {
@@ -33,7 +33,7 @@ export default function ErrorDetailsDialog<T extends JobWithError>({
 }: ErrorDetailsDialogProps<T>) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
         {job && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -61,7 +61,9 @@ export default function ErrorDetailsDialog<T extends JobWithError>({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{t('dialogs.errorDetails.close')}</Button>
+        <Button onClick={onClose} sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
+          {t('dialogs.errorDetails.close')}
+        </Button>
         {job && onViewLogs && (
           <Button
             onClick={() => {
@@ -74,6 +76,6 @@ export default function ErrorDetailsDialog<T extends JobWithError>({
           </Button>
         )}
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }

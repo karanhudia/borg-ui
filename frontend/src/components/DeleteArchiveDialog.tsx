@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
 import {
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -11,6 +10,7 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { AlertCircle, Trash2 } from 'lucide-react'
 
 interface DeleteArchiveDialogProps {
@@ -30,7 +30,7 @@ export default function DeleteArchiveDialog({
 }: DeleteArchiveDialogProps) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <ResponsiveDialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>
         <Stack direction="row" spacing={2} alignItems="center">
           <Box
@@ -76,6 +76,6 @@ export default function DeleteArchiveDialog({
           {deleting ? t('dialogs.deleteArchive.deleting') : t('dialogs.deleteArchive.confirm')}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   )
 }
