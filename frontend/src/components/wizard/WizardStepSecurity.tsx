@@ -29,27 +29,27 @@ const BORG1_ENCRYPTION_OPTIONS = [
   { value: 'repokey-blake2', label: 'Repository Key (BLAKE2)', desc: 'Faster hashing variant' },
   { value: 'keyfile', label: 'Key File', desc: 'Key stored in a separate file' },
   { value: 'keyfile-blake2', label: 'Key File (BLAKE2)', desc: 'Key file with faster hashing' },
-  { value: 'none', label: 'None', desc: 'No encryption — not recommended' },
+  { value: 'none', label: 'None', desc: 'No encryption (not recommended)' },
 ]
 
 const BORG2_ENCRYPTION_OPTIONS = [
   {
     value: 'repokey-aes-ocb',
-    label: 'Repository Key — AES-OCB',
+    label: 'Repository Key (AES-OCB)',
     desc: 'Default for Borg 2 · recommended',
   },
   {
     value: 'repokey-chacha20-poly1305',
-    label: 'Repository Key — ChaCha20',
+    label: 'Repository Key (ChaCha20)',
     desc: 'Alternative AEAD cipher',
   },
-  { value: 'keyfile-aes-ocb', label: 'Key File — AES-OCB', desc: 'Key stored in a separate file' },
+  { value: 'keyfile-aes-ocb', label: 'Key File (AES-OCB)', desc: 'Key stored in a separate file' },
   {
     value: 'keyfile-chacha20-poly1305',
-    label: 'Key File — ChaCha20',
+    label: 'Key File (ChaCha20)',
     desc: 'Key file with ChaCha20',
   },
-  { value: 'none', label: 'None', desc: 'No encryption — not recommended' },
+  { value: 'none', label: 'None', desc: 'No encryption (not recommended)' },
 ]
 
 interface WizardStepSecurityProps {

@@ -64,7 +64,9 @@ export default function ResponsiveDialog({
           )}
         </Box>
         {/* Scrollable content */}
-        <Box sx={{ overflowY: 'auto', flex: 1 }}>{children}</Box>
+        <Box sx={{ overflowY: 'auto', flex: 1, pb: 'env(safe-area-inset-bottom, 16px)' }}>
+          {children}
+        </Box>
       </SwipeableDrawer>
     )
   }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
@@ -67,6 +68,7 @@ export default function UserPermissionsPanel({
   title,
   subtitle,
 }: UserPermissionsPanelProps) {
+  const { t } = useTranslation()
   const { assignableRepositoryRolesFor } = useAuthorization()
   const { user: currentUser, refreshUser } = useAuth()
   const availableRoles = assignableRepositoryRolesFor(targetUserRole)
@@ -111,7 +113,7 @@ export default function UserPermissionsPanel({
       setAddRepoId('')
       setAddRole('viewer')
       await syncCurrentUserPermissions()
-      toast.success('Permission assigned')
+      toast.success(t('settings.permissions.toasts.assigned'))
       trackSettings(EventAction.EDIT, {
         section: 'users',
         operation: 'assign_repository_permission',
@@ -120,7 +122,7 @@ export default function UserPermissionsPanel({
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to assign permission')
+      toast.error(error.response?.data?.detail || t('settings.permissions.toasts.failedToAssign'))
     },
   })
 
@@ -129,7 +131,7 @@ export default function UserPermissionsPanel({
     onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey })
       await syncCurrentUserPermissions()
-      toast.success('Permission removed')
+      toast.success(t('settings.permissions.toasts.removed'))
       trackSettings(EventAction.DELETE, {
         section: 'users',
         operation: 'remove_repository_permission',
@@ -137,7 +139,7 @@ export default function UserPermissionsPanel({
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to remove permission')
+      toast.error(error.response?.data?.detail || t('settings.permissions.toasts.failedToRemove'))
     },
   })
 
@@ -147,7 +149,7 @@ export default function UserPermissionsPanel({
     onSuccess: async (_, variables) => {
       queryClient.invalidateQueries({ queryKey })
       await syncCurrentUserPermissions()
-      toast.success('Permission updated')
+      toast.success(t('settings.permissions.toasts.updated'))
       trackSettings(EventAction.EDIT, {
         section: 'users',
         operation: 'update_repository_permission',
@@ -156,7 +158,7 @@ export default function UserPermissionsPanel({
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update permission')
+      toast.error(error.response?.data?.detail || t('settings.permissions.toasts.failedToUpdate'))
     },
   })
 
@@ -166,7 +168,11 @@ export default function UserPermissionsPanel({
       queryClient.invalidateQueries({ queryKey: scopeQueryKey })
       setWildcardRole(nextRole ?? '')
       await syncCurrentUserPermissions()
-      toast.success(nextRole ? 'Automatic access updated' : 'Automatic access cleared')
+      toast.success(
+        nextRole
+          ? t('settings.permissions.toasts.automaticUpdated')
+          : t('settings.permissions.toasts.automaticCleared')
+      )
       trackSettings(EventAction.EDIT, {
         section: 'users',
         operation: 'update_repository_scope',
@@ -175,7 +181,9 @@ export default function UserPermissionsPanel({
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Failed to update automatic access')
+      toast.error(
+        error.response?.data?.detail || t('settings.permissions.toasts.failedToUpdateAutomatic')
+      )
     },
   })
 
@@ -247,69 +255,38 @@ export default function UserPermissionsPanel({
             mb: 1.25,
           }}
         >
-          Repository scope
+          {t('settings.permissions.scope.title')}
         </Typography>
         {canManageAssignments ? (
           <Stack spacing={1.25}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={1}
-              alignItems={{ xs: 'stretch', sm: 'center' }}
-              justifyContent="space-between"
-            >
-              <ToggleButtonGroup
-                size="small"
-                exclusive
-                value={scopeMode}
-                onChange={(_, nextValue) => {
-                  if (nextValue) {
-                    setScopeMode(nextValue)
-                    if (nextValue === 'all' && !wildcardRole) {
-                      setWildcardRole(defaultRoleForScope)
-                    }
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={scopeMode}
+              onChange={(_, nextValue) => {
+                if (nextValue) {
+                  setScopeMode(nextValue)
+                  if (nextValue === 'all' && !wildcardRole) {
+                    setWildcardRole(defaultRoleForScope)
                   }
-                }}
-                sx={{ flexWrap: 'wrap' }}
-              >
-                <ToggleButton value="all">All repositories</ToggleButton>
-                <ToggleButton value="selected">Selected repositories only</ToggleButton>
-              </ToggleButtonGroup>
-              <Button
-                size="small"
-                variant="contained"
-                disabled={
-                  updateScopeMutation.isPending ||
-                  (scopeMode === 'all' ? effectiveWildcardRole : null) === wildcardValue
                 }
-                onClick={() => updateScopeMutation.mutate(scopeRoleToSave)}
-                sx={{
-                  alignSelf: { xs: 'flex-end', sm: 'center' },
-                  minWidth: 0,
-                  px: 1.3,
-                  py: 0.65,
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  textTransform: 'none',
-                  borderRadius: 999,
-                  boxShadow: 'none',
-                  bgcolor: 'success.main',
-                  color: 'success.contrastText',
-                  '&:hover': {
-                    boxShadow: 'none',
-                    bgcolor: 'success.dark',
-                  },
-                  '&.Mui-disabled': {
-                    bgcolor: 'action.disabledBackground',
-                    color: 'text.disabled',
-                  },
-                }}
-              >
-                Save changes
-              </Button>
-            </Stack>
+              }}
+              sx={{ width: '100%' }}
+            >
+              <ToggleButton value="all" sx={{ flex: 1 }}>
+                {t('settings.permissions.scope.allRepositories')}
+              </ToggleButton>
+              <ToggleButton value="selected" sx={{ flex: 1 }}>
+                {t('settings.permissions.scope.selectedOnly')}
+              </ToggleButton>
+            </ToggleButtonGroup>
             {scopeMode === 'all' ? (
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                <FormControl size="small" sx={{ minWidth: 170 }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                alignItems={{ xs: 'flex-start', sm: 'center' }}
+              >
+                <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 170 } }}>
                   <Select
                     value={effectiveWildcardRole}
                     onChange={(e) => setWildcardRole(e.target.value)}
@@ -322,247 +299,285 @@ export default function UserPermissionsPanel({
                   </Select>
                 </FormControl>
                 <Typography variant="caption" color="text.secondary">
-                  New repositories inherit this automatically.
+                  {t('settings.permissions.scope.autoInheritHint')}
                 </Typography>
               </Stack>
             ) : (
               <Typography variant="caption" color="text.secondary">
-                Use this when you want to limit access to a few repositories only.
+                {t('settings.permissions.scope.restrictedHint')}
               </Typography>
             )}
           </Stack>
         ) : hasAutomaticAccess ? (
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
             <Chip
-              label={`Automatic ${formatRoleLabel(wildcardValue)} access`}
+              label={t('settings.permissions.scope.automaticAccess', {
+                role: formatRoleLabel(wildcardValue),
+              })}
               color={ROLE_COLOR[wildcardValue ?? 'viewer'] ?? 'default'}
               size="small"
             />
             <Typography variant="caption" color="text.secondary">
-              Future repositories inherit this access automatically.
+              {t('settings.permissions.scope.futureInheritHint')}
             </Typography>
           </Stack>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            Restricted access. This user only sees repositories assigned below.
+            {t('settings.permissions.scope.restrictedAccess')}
           </Typography>
         )}
       </Box>
 
-      {/* Assigned permissions */}
-      {scopeMode === 'all' ? (
-        <Box sx={{ px: 2.5, py: 2.5 }}>
-          {canManageAssignments ? (
-            <Alert severity="info" variant="outlined">
-              This user currently has access to all repositories as{' '}
-              <strong>{effectiveWildcardRole}</strong>. Switch to selected repositories only if you
-              want to restrict them.
-            </Alert>
-          ) : (
-            <Alert severity="info" variant="outlined">
-              This account currently has automatic access to all repositories as{' '}
-              <strong>{formatRoleLabel(wildcardValue)}</strong>.
-            </Alert>
-          )}
-        </Box>
-      ) : permissions.length === 0 ? (
-        <Box sx={{ px: 2.5, py: 2.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <ShieldOff size={15} style={{ opacity: 0.35, flexShrink: 0 }} />
-          <Typography variant="body2" color="text.secondary">
-            {hasAutomaticAccess
-              ? 'No repository-specific assignments. Automatic access covers current and future repositories.'
-              : 'No repository permissions assigned yet.'}
-          </Typography>
-        </Box>
-      ) : (
-        <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
-          <Box component="thead">
-            <Box component="tr" sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
-              {(['Repository', 'Role', canManageAssignments ? '' : null] as (string | null)[])
-                .filter(Boolean)
-                .map((h) => (
-                  <Box
-                    key={String(h)}
-                    component="th"
-                    sx={{
-                      px: 1.5,
-                      py: 1,
-                      textAlign: 'left',
-                      typography: 'caption',
-                      fontWeight: 700,
-                      color: 'text.secondary',
-                      letterSpacing: '0.04em',
-                    }}
-                  >
-                    {h}
-                  </Box>
-                ))}
-            </Box>
+      {/* Assigned permissions — min-height prevents jarky dialog resize when switching tabs */}
+      <Box sx={{ minHeight: 160 }}>
+        {scopeMode === 'all' ? (
+          <Box sx={{ px: 2.5, py: 2.5 }}>
+            {canManageAssignments ? (
+              <Alert severity="info" variant="outlined">
+                {t('settings.permissions.alert.allAccessPrefix')}{' '}
+                <strong>{effectiveWildcardRole}</strong>
+                {t('settings.permissions.alert.allAccessSuffix')}
+              </Alert>
+            ) : (
+              <Alert severity="info" variant="outlined">
+                {t('settings.permissions.alert.automaticAccessPrefix')}{' '}
+                <strong>{formatRoleLabel(wildcardValue)}</strong>.
+              </Alert>
+            )}
           </Box>
-          <Box component="tbody">
+        ) : permissions.length === 0 ? (
+          <Box sx={{ px: 2.5, py: 2.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <ShieldOff size={15} style={{ opacity: 0.35, flexShrink: 0 }} />
+            <Typography variant="body2" color="text.secondary">
+              {hasAutomaticAccess
+                ? t('settings.permissions.empty.automaticCoverage')
+                : t('settings.permissions.empty.noPermissions')}
+            </Typography>
+          </Box>
+        ) : (
+          <Stack>
             {permissions.map((perm) => (
               <Box
                 key={perm.id}
-                component="tr"
-                sx={{ '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' } }}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  px: 1.5,
+                  py: 1.25,
+                  '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' },
+                }}
               >
-                <Box component="td" sx={{ px: 1.5, py: 1.25 }}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Database size={13} style={{ opacity: 0.4, flexShrink: 0 }} />
-                    <Typography variant="body2">{perm.repository_name}</Typography>
-                  </Stack>
-                </Box>
-                <Box component="td" sx={{ px: 1.5, py: 1.25 }}>
-                  {canManageAssignments ? (
-                    <FormControl size="small" sx={{ minWidth: 130 }}>
-                      <Select
-                        value={perm.role}
-                        onChange={(e) =>
-                          updateMutation.mutate({
-                            repoId: perm.repository_id,
-                            role: e.target.value,
-                          })
-                        }
-                        disabled={updateMutation.isPending}
-                      >
-                        {availableRoles.map((r) => (
-                          <MenuItem key={r} value={r}>
-                            {formatRoleLabel(r)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  ) : (
-                    <Chip
-                      label={formatRoleLabel(perm.role)}
-                      color={ROLE_COLOR[perm.role] ?? 'default'}
-                      size="small"
-                    />
-                  )}
-                </Box>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  sx={{ flex: 1, minWidth: 0 }}
+                >
+                  <Database size={13} style={{ opacity: 0.4, flexShrink: 0 }} />
+                  <Typography variant="body2" noWrap>
+                    {perm.repository_name}
+                  </Typography>
+                </Stack>
+                {canManageAssignments ? (
+                  <FormControl size="small" sx={{ minWidth: { xs: 96, sm: 120 }, flexShrink: 0 }}>
+                    <Select
+                      value={perm.role}
+                      onChange={(e) =>
+                        updateMutation.mutate({
+                          repoId: perm.repository_id,
+                          role: e.target.value,
+                        })
+                      }
+                      disabled={updateMutation.isPending}
+                    >
+                      {availableRoles.map((r) => (
+                        <MenuItem key={r} value={r}>
+                          {formatRoleLabel(r)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : (
+                  <Chip
+                    label={formatRoleLabel(perm.role)}
+                    color={ROLE_COLOR[perm.role] ?? 'default'}
+                    size="small"
+                  />
+                )}
                 {canManageAssignments && (
-                  <Box component="td" sx={{ px: 1.5, py: 1.25, textAlign: 'right' }}>
-                    <Tooltip title="Remove access">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => removeMutation.mutate(perm.repository_id)}
-                        disabled={removeMutation.isPending}
-                        sx={{
-                          borderRadius: 1,
-                          opacity: 0.45,
-                          transition: 'opacity 140ms ease, background-color 140ms ease',
-                          '&:hover': { opacity: 1, bgcolor: 'rgba(239,68,68,0.12)' },
-                        }}
-                      >
-                        <Trash2 size={14} />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
+                  <Tooltip title={t('settings.permissions.actions.removeAccess')}>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => removeMutation.mutate(perm.repository_id)}
+                      disabled={removeMutation.isPending}
+                      sx={{
+                        borderRadius: 1,
+                        opacity: 0.45,
+                        flexShrink: 0,
+                        transition: 'opacity 140ms ease, background-color 140ms ease',
+                        '&:hover': { opacity: 1, bgcolor: 'rgba(239,68,68,0.12)' },
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </IconButton>
+                  </Tooltip>
                 )}
               </Box>
             ))}
-          </Box>
-        </Box>
-      )}
+          </Stack>
+        )}
 
-      {/* Grant access section — admin only */}
-      {canManageAssignments && scopeMode === 'selected' && (
-        <Box sx={{ px: 2.5, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-          <Typography
-            variant="caption"
-            fontWeight={700}
-            color="text.secondary"
-            sx={{
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              fontSize: '0.68rem',
-              display: 'block',
-              mb: 1.25,
-            }}
-          >
-            Grant access
-          </Typography>
-
-          {noReposConfigured ? (
-            <Box
+        {/* Grant access section — admin only */}
+        {canManageAssignments && scopeMode === 'selected' && (
+          <Box sx={{ px: 2.5, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+            <Typography
+              variant="caption"
+              fontWeight={700}
+              color="text.secondary"
               sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                px: 2,
-                py: 1.75,
-                borderRadius: 2,
-                border: '1px dashed',
-                borderColor: 'divider',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                fontSize: '0.68rem',
+                display: 'block',
+                mb: 1.25,
               }}
             >
-              <Database size={15} style={{ opacity: 0.35, flexShrink: 0 }} />
-              <Typography variant="body2" color="text.secondary">
-                No repositories configured. Add a repository first.
-              </Typography>
-            </Box>
-          ) : allAssigned ? (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.5,
-                px: 2,
-                py: 1.75,
-                borderRadius: 2,
-                border: '1px dashed',
-                borderColor: 'divider',
-              }}
-            >
-              <ShieldOff size={15} style={{ opacity: 0.35, flexShrink: 0 }} />
-              <Typography variant="body2" color="text.secondary">
-                All repositories are already assigned to this user.
-              </Typography>
-            </Box>
-          ) : (
-            <Stack direction="row" spacing={1} alignItems="center">
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <Select
-                  value={addRepoId}
-                  onChange={(e) => setAddRepoId(e.target.value as number)}
-                  displayEmpty
-                >
-                  <MenuItem value="" disabled>
-                    Select repository
-                  </MenuItem>
-                  {availableRepos.map((r) => (
-                    <MenuItem key={r.id} value={r.id}>
-                      {r.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 110 }}>
-                <Select value={addRole} onChange={(e) => setAddRole(e.target.value)}>
-                  {availableRoles.map((r) => (
-                    <MenuItem key={r} value={r}>
-                      {formatRoleLabel(r)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={
-                  assignMutation.isPending ? <CircularProgress size={12} /> : <Plus size={14} />
-                }
-                disabled={!addRepoId || assignMutation.isPending}
-                onClick={() => {
-                  if (addRepoId)
-                    assignMutation.mutate({ repoId: addRepoId as number, role: addRole })
+              {t('settings.permissions.grantAccess.title')}
+            </Typography>
+
+            {noReposConfigured ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  px: 2,
+                  py: 1.75,
+                  borderRadius: 2,
+                  border: '1px dashed',
+                  borderColor: 'divider',
                 }}
               >
-                Assign
-              </Button>
-            </Stack>
-          )}
+                <Database size={15} style={{ opacity: 0.35, flexShrink: 0 }} />
+                <Typography variant="body2" color="text.secondary">
+                  {t('settings.permissions.grantAccess.noRepositories')}
+                </Typography>
+              </Box>
+            ) : allAssigned ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  px: 2,
+                  py: 1.75,
+                  borderRadius: 2,
+                  border: '1px dashed',
+                  borderColor: 'divider',
+                }}
+              >
+                <ShieldOff size={15} style={{ opacity: 0.35, flexShrink: 0 }} />
+                <Typography variant="body2" color="text.secondary">
+                  {t('settings.permissions.grantAccess.allAssigned')}
+                </Typography>
+              </Box>
+            ) : (
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                alignItems={{ xs: 'stretch', sm: 'center' }}
+              >
+                <FormControl size="small" sx={{ flex: 1, minWidth: { sm: 160 } }}>
+                  <Select
+                    value={addRepoId}
+                    onChange={(e) => setAddRepoId(e.target.value as number)}
+                    displayEmpty
+                  >
+                    <MenuItem value="" disabled>
+                      {t('settings.permissions.grantAccess.selectRepository')}
+                    </MenuItem>
+                    {availableRepos.map((r) => (
+                      <MenuItem key={r.id} value={r.id}>
+                        {r.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <FormControl size="small" sx={{ minWidth: 110, flex: { xs: 1, sm: 'none' } }}>
+                    <Select value={addRole} onChange={(e) => setAddRole(e.target.value)}>
+                      {availableRoles.map((r) => (
+                        <MenuItem key={r} value={r}>
+                          {formatRoleLabel(r)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={
+                      assignMutation.isPending ? <CircularProgress size={12} /> : <Plus size={14} />
+                    }
+                    disabled={!addRepoId || assignMutation.isPending}
+                    onClick={() => {
+                      if (addRepoId)
+                        assignMutation.mutate({ repoId: addRepoId as number, role: addRole })
+                    }}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    {t('settings.permissions.grantAccess.assign')}
+                  </Button>
+                </Stack>
+              </Stack>
+            )}
+          </Box>
+        )}
+      </Box>
+
+      {/* Shared save footer — scope changes only, hidden when up to date */}
+      {canManageAssignments && (
+        <Box
+          sx={{
+            px: 2.5,
+            py: 1.5,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            display: 'flex',
+            justifyContent: { xs: 'stretch', sm: 'flex-end' },
+          }}
+        >
+          <Button
+            size="small"
+            variant="contained"
+            disabled={
+              updateScopeMutation.isPending ||
+              (scopeMode === 'all' ? effectiveWildcardRole : null) === wildcardValue
+            }
+            onClick={() => updateScopeMutation.mutate(scopeRoleToSave)}
+            sx={{
+              flex: { xs: 1, sm: 'none' },
+              minWidth: 0,
+              px: 2,
+              py: 0.65,
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              textTransform: 'none',
+              borderRadius: 999,
+              boxShadow: 'none',
+              bgcolor: 'success.main',
+              color: 'success.contrastText',
+              '&:hover': { boxShadow: 'none', bgcolor: 'success.dark' },
+              '&.Mui-disabled': {
+                bgcolor: 'action.disabledBackground',
+                color: 'text.disabled',
+              },
+            }}
+          >
+            {t('settings.permissions.saveChanges')}
+          </Button>
         </Box>
       )}
     </Box>

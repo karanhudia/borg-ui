@@ -69,12 +69,14 @@ const UsersTab: React.FC = () => {
 
   const getRepositoryAccessSummary = (user: UserType) => {
     if (getRolePresentation(user.role).isAdminRole) {
-      return 'Admin role grants full access to all repositories.'
+      return t('settings.users.accessSummary.adminRole')
     }
     if (user.all_repositories_role) {
-      return `Default access is all repositories as ${formatRoleLabel(user.all_repositories_role)}. Switch to selected repositories only if you want to limit them.`
+      return t('settings.users.accessSummary.defaultAccess', {
+        role: formatRoleLabel(user.all_repositories_role),
+      })
     }
-    return 'This user is currently restricted to selected repositories only.'
+    return t('settings.users.accessSummary.restricted')
   }
 
   const [showCreateUser, setShowCreateUser] = useState(false)
@@ -277,7 +279,7 @@ const UsersTab: React.FC = () => {
               {t('settings.users.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Manage account records and repository-level access from one admin surface.
+              {t('settings.users.subtitle')}
             </Typography>
           </Box>
           <Tooltip title={!can('multi_user') ? t('settings.users.planCaption') : ''} arrow>
@@ -298,11 +300,23 @@ const UsersTab: React.FC = () => {
         {/* Compact stat strip */}
         <Box sx={{ display: 'flex', gap: { xs: 3, sm: 4 }, flexWrap: 'wrap' }}>
           {[
-            { label: 'Total', value: totalUsers, color: 'text.primary' },
-            { label: 'Active', value: activeUsers, color: 'success.main' },
-            { label: 'Admins', value: adminUsers, color: 'secondary.main' },
-            { label: 'Operators', value: operatorUsers, color: 'info.main' },
-            { label: 'Viewers', value: viewerUsers, color: 'text.secondary' },
+            { label: t('settings.users.stats.total'), value: totalUsers, color: 'text.primary' },
+            { label: t('settings.users.stats.active'), value: activeUsers, color: 'success.main' },
+            {
+              label: t('settings.users.stats.admins'),
+              value: adminUsers,
+              color: 'secondary.main',
+            },
+            {
+              label: t('settings.users.stats.operators'),
+              value: operatorUsers,
+              color: 'info.main',
+            },
+            {
+              label: t('settings.users.stats.viewers'),
+              value: viewerUsers,
+              color: 'text.secondary',
+            },
           ].map((stat) => (
             <Box key={stat.label}>
               <Typography
@@ -354,20 +368,20 @@ const UsersTab: React.FC = () => {
                         }}
                       />
                     ),
-                    label: 'Status',
+                    label: t('settings.users.statLabels.status'),
                     value: user.is_active
                       ? t('settings.users.status.active')
                       : t('settings.users.status.inactive'),
                   },
                   {
                     icon: null,
-                    label: 'Joined',
+                    label: t('settings.users.statLabels.joined'),
                     value: formatDateShort(user.created_at),
                   },
                   {
                     icon: null,
-                    label: 'Last login',
-                    value: user.last_login ? formatDateShort(user.last_login) : 'Never',
+                    label: t('settings.users.statLabels.lastLogin'),
+                    value: user.last_login ? formatDateShort(user.last_login) : t('common.never'),
                   },
                 ]
 
@@ -414,7 +428,7 @@ const UsersTab: React.FC = () => {
                     primaryAction={
                       canManageUsers
                         ? {
-                            label: 'Manage Access',
+                            label: t('settings.users.actions.manageAccess'),
                             icon: <UserCheck size={13} />,
                             onClick: () => setAccessUser(user),
                             color: '#6366f1',
@@ -437,14 +451,19 @@ const UsersTab: React.FC = () => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>
-          {accessUser
-            ? `${accessUser.full_name || accessUser.username} — Repository Access`
-            : 'Repository Access'}
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography variant="h6" fontWeight={600} lineHeight={1.2}>
+            {t('settings.users.repositoryAccess.title')}
+          </Typography>
+          {accessUser && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {accessUser.full_name || accessUser.username}
+            </Typography>
+          )}
         </DialogTitle>
         <DialogContent>
           {accessUser && (
-            <Stack spacing={2.5} sx={{ pt: 1 }}>
+            <Stack spacing={2.5} sx={{ pt: 1, pb: 1 }}>
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
                   <ShieldCheck size={14} style={{ opacity: 0.6 }} />
@@ -467,18 +486,17 @@ const UsersTab: React.FC = () => {
                     py: 1.75,
                     borderRadius: 2,
                     border: '1px solid',
-                    borderColor: 'rgba(248,113,113,0.2)',
-                    bgcolor: 'rgba(239,68,68,0.05)',
+                    borderColor: 'rgba(124,58,237,0.2)',
+                    bgcolor: 'rgba(124,58,237,0.05)',
                   }}
                 >
-                  <ShieldCheck size={15} style={{ color: '#f87171', flexShrink: 0 }} />
+                  <ShieldCheck size={15} style={{ color: '#7c3aed', flexShrink: 0 }} />
                   <Box>
                     <Typography variant="body2" fontWeight={600}>
-                      Global access
+                      {t('settings.users.repositoryAccess.globalAccess')}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Admin accounts inherit full access to all repositories — no per-repository
-                      grants needed.
+                      {t('settings.users.repositoryAccess.globalAccessDesc')}
                     </Typography>
                   </Box>
                 </Box>
@@ -542,7 +560,7 @@ const UsersTab: React.FC = () => {
               )}
 
               <TextField
-                label="Full name"
+                label={t('settings.users.fields.fullName')}
                 value={userForm.full_name}
                 onChange={(e) => setUserForm({ ...userForm, full_name: e.target.value })}
                 fullWidth
@@ -550,21 +568,18 @@ const UsersTab: React.FC = () => {
 
               <FormControl fullWidth>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                  Role
+                  {t('settings.users.fields.role')}
                 </Typography>
                 <Select
                   value={userForm.role}
                   onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
                   size="small"
                 >
-                  <MenuItem value="admin">
-                    Admin — Full access to all features and settings
-                  </MenuItem>
+                  <MenuItem value="admin">{t('settings.users.roles.adminDescription')}</MenuItem>
                   <MenuItem value="operator">
-                    Operator — Can run backups, manage schedules. Cannot manage users or system
-                    settings
+                    {t('settings.users.roles.operatorDescription')}
                   </MenuItem>
-                  <MenuItem value="viewer">Viewer — Read-only access</MenuItem>
+                  <MenuItem value="viewer">{t('settings.users.roles.viewerDescription')}</MenuItem>
                 </Select>
               </FormControl>
             </Stack>
