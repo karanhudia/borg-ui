@@ -70,10 +70,7 @@ describe('ArchiveCard', () => {
   it('calls onDelete with archive name when delete button is clicked', () => {
     render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
 
-    // Find the delete icon button (IconButton with Trash2 icon)
-    const buttons = screen.getAllByRole('button')
-    const deleteButton = buttons[buttons.length - 1] // Last button is delete
-
+    const deleteButton = screen.getByRole('button', { name: /delete/i })
     fireEvent.click(deleteButton)
 
     expect(mockHandlers.onDelete).toHaveBeenCalledWith('backup-2024-01-15')
@@ -121,9 +118,8 @@ describe('ArchiveCard', () => {
   it('has hover effect styling', () => {
     const { container } = render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
 
-    const card = container.querySelector('.MuiCard-root')
-    expect(card).toHaveStyle({
-      transition: 'border-left-color 0.2s ease,background-color 0.15s ease',
-    })
+    // Card is now a Box — check the outermost element has a transition
+    const card = container.firstChild as HTMLElement
+    expect(card).toHaveStyle({ transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)' })
   })
 })
