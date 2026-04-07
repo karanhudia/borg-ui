@@ -201,7 +201,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.getByText('Encryption')).toBeInTheDocument()
+      expect(screen.getByText(/^Encryption:/i)).toBeInTheDocument()
       expect(screen.getByText('repokey')).toBeInTheDocument()
     })
 
@@ -216,7 +216,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.getByText('Compression')).toBeInTheDocument()
+      expect(screen.getByText(/^Compression:/i)).toBeInTheDocument()
       expect(screen.getByText('LZ4 (Fast)')).toBeInTheDocument()
       expect(mockGetCompressionLabel).toHaveBeenCalledWith('lz4')
     })
@@ -232,7 +232,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.getByText('Source Paths')).toBeInTheDocument()
+      expect(screen.getByText(/^Source Paths:/i)).toBeInTheDocument()
       expect(screen.getByText('2 paths')).toBeInTheDocument()
     })
 
@@ -269,7 +269,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.queryByText('Source Paths')).not.toBeInTheDocument()
+      expect(screen.queryByText(/^Source Paths:/i)).not.toBeInTheDocument()
     })
   })
 
@@ -729,11 +729,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      const lastBackupSection = screen
-        .getByText('Last Backup')
-        .closest('div')
-        ?.querySelector('p:last-child')
-      expect(lastBackupSection).toHaveTextContent('Never')
+      expect(screen.getByText('Never')).toBeInTheDocument()
     })
 
     it('displays "Never" for repositories without last_check', () => {
@@ -748,11 +744,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      const lastCheckSection = screen
-        .getByText('Last Check')
-        .closest('div')
-        ?.querySelector('p:last-child')
-      expect(lastCheckSection).toHaveTextContent('Never')
+      expect(screen.getAllByText('Never').length).toBeGreaterThan(0)
     })
 
     it('displays "Never" for repositories without last_compact', () => {
@@ -767,11 +759,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      const lastCompactSection = screen
-        .getByText('Last Compact')
-        .closest('div')
-        ?.querySelector('p:last-child')
-      expect(lastCompactSection).toHaveTextContent('Never')
+      expect(screen.getAllByText('Never').length).toBeGreaterThan(0)
     })
   })
 

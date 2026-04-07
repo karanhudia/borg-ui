@@ -308,6 +308,7 @@ export default function RepositoryCard({
               <IconButton
                 size="small"
                 onClick={onEdit}
+                aria-label={t('repositoryCard.edit')}
                 sx={{
                   width: 28,
                   height: 28,
@@ -449,6 +450,7 @@ export default function RepositoryCard({
                       trackRepository(EventAction.VIEW, repository)
                       onViewInfo()
                     }}
+                    aria-label={t('repositoryCard.buttons.info')}
                     disabled={isMaintenanceRunning}
                     sx={iconBtnSx}
                   >
@@ -464,6 +466,7 @@ export default function RepositoryCard({
                   <IconButton
                     size="small"
                     onClick={onCheck}
+                    aria-label={t('repositoryCard.buttons.check')}
                     disabled={isMaintenanceRunning}
                     sx={checkJob ? activeIconBtnSx : iconBtnSx}
                   >
@@ -483,6 +486,7 @@ export default function RepositoryCard({
                   <IconButton
                     size="small"
                     onClick={onCompact}
+                    aria-label={t('repositoryCard.buttons.compact')}
                     disabled={isMaintenanceRunning}
                     sx={compactJob ? activeIconBtnSx : iconBtnSx}
                   >
@@ -502,6 +506,7 @@ export default function RepositoryCard({
                   <IconButton
                     size="small"
                     onClick={onPrune}
+                    aria-label={t('repositoryCard.buttons.prune')}
                     disabled={isMaintenanceRunning}
                     sx={pruneJob ? activeIconBtnSx : iconBtnSx}
                   >
@@ -524,6 +529,7 @@ export default function RepositoryCard({
                       trackArchive(EventAction.VIEW, repository)
                       onViewArchives()
                     }}
+                    aria-label={t('repositoryCard.buttons.viewArchives')}
                     disabled={isMaintenanceRunning}
                     sx={iconBtnSx}
                   >
@@ -549,6 +555,7 @@ export default function RepositoryCard({
                   <IconButton
                     size="small"
                     onClick={onDelete}
+                    aria-label={t('repositoryCard.buttons.delete')}
                     sx={{
                       ...iconBtnSx,
                       color: alpha(theme.palette.error.main, 0.6),
