@@ -1,3 +1,4 @@
+import React from 'react'
 import { Box, Stack, Typography, useTheme, alpha } from '@mui/material'
 import { Archive as ArchiveIcon, Database, Gauge, Layers } from 'lucide-react'
 import { useTranslation } from 'react-i18next'

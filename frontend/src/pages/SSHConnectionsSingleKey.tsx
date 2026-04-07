@@ -583,7 +583,10 @@ export default function SSHConnectionsSingleKey() {
             }
             arrow
           >
-            <Info size={16} style={{ color: 'inherit', opacity: 0.45, cursor: 'help', flexShrink: 0 }} />
+            <Info
+              size={16}
+              style={{ color: 'inherit', opacity: 0.45, cursor: 'help', flexShrink: 0 }}
+            />
           </Tooltip>
         </Box>
         <Typography variant="body2" color="text.secondary">
