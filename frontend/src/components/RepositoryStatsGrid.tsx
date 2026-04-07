@@ -1,5 +1,4 @@
-import { Box, Card, CardContent, Stack, Typography } from '@mui/material'
-import { alpha } from '@mui/material/styles'
+import { Box, Stack, Typography, useTheme, alpha } from '@mui/material'
 import { Archive as ArchiveIcon, Database, Gauge, Layers } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes as formatBytesUtil } from '../utils/dateUtils'
@@ -25,60 +24,59 @@ interface StatCardProps {
 }
 
 function StatCard({ label, value, icon, colorKey }: StatCardProps) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const color = (theme.palette[colorKey] as { main: string }).main
+
   return (
-    <Card
-      variant="outlined"
+    <Box
       sx={{
-        borderTopWidth: '3px',
-        borderTopColor: `${colorKey}.main`,
-        bgcolor: (theme) =>
-          alpha(
-            (theme.palette[colorKey] as { main: string }).main,
-            theme.palette.mode === 'dark' ? 0.1 : 0.06
-          ),
-        transition: 'box-shadow 0.2s ease',
-        '&:hover': { boxShadow: 3 },
+        borderRadius: 2,
+        bgcolor: 'background.paper',
+        px: 2,
+        py: 1.75,
+        boxShadow: isDark
+          ? `0 0 0 1px ${alpha('#fff', 0.08)}, 0 2px 8px ${alpha('#000', 0.2)}`
+          : `0 0 0 1px ${alpha('#000', 0.08)}, 0 2px 6px ${alpha('#000', 0.06)}`,
+        transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)',
+        '&:hover': {
+          transform: 'translateY(-1px)',
+          boxShadow: isDark
+            ? `0 0 0 1px ${alpha(color, 0.35)}, 0 6px 20px ${alpha('#000', 0.28)}`
+            : `0 0 0 1px ${alpha(color, 0.25)}, 0 6px 20px ${alpha('#000', 0.1)}`,
+        },
       }}
     >
-      <CardContent sx={{ pb: '16px !important' }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-          <Box>
-            <Typography
-              variant="caption"
-              sx={{
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                color: `${colorKey}.main`,
-                display: 'block',
-                mb: 0.75,
-              }}
-            >
-              {label}
-            </Typography>
-            <Typography
-              variant="h5"
-              fontWeight={700}
-              color="text.primary"
-              sx={{ lineHeight: 1.2, fontSize: { xs: '1.4rem', lg: '1.5rem' } }}
-            >
-              {value}
-            </Typography>
-          </Box>
-          <Box
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+        <Box>
+          <Typography
+            variant="caption"
             sx={{
-              color: `${colorKey}.main`,
-              opacity: 0.35,
-              mt: 0.25,
-              flexShrink: 0,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              color: 'text.disabled',
+              display: 'block',
+              mb: 0.75,
             }}
           >
-            {icon}
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
+            {label}
+          </Typography>
+          <Typography
+            variant="h5"
+            fontWeight={700}
+            color="text.primary"
+            sx={{ lineHeight: 1.2, fontSize: { xs: '1.4rem', lg: '1.5rem' } }}
+          >
+            {value}
+          </Typography>
+        </Box>
+        <Box sx={{ color, opacity: 0.35, mt: 0.25, flexShrink: 0 }}>
+          {icon}
+        </Box>
+      </Stack>
+    </Box>
   )
 }
 
