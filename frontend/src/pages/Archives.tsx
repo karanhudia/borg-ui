@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Box, Typography, CircularProgress } from '@mui/material'
 import { Folder } from 'lucide-react'
@@ -41,7 +41,11 @@ function getDefaultMountPoint(archiveName: string): string {
 
 const Archives: React.FC = () => {
   const { t } = useTranslation()
-  const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(() => {
+    const repoParam = searchParams.get('repo')
+    return repoParam ? parseInt(repoParam, 10) : null
+  })
   const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
@@ -255,6 +259,7 @@ const Archives: React.FC = () => {
     setSelectedRepositoryId(repositoryId)
     const repo = repositories.find((r: Repository) => r.id === repositoryId)
     setSelectedRepository(repo || null)
+    setSearchParams({ repo: String(repositoryId) }, { replace: true })
     // Track archive listing (selecting a repo to filter/list its archives)
     if (repo) {
       trackArchive(EventAction.FILTER, repo, { surface: 'archives_page' })
@@ -341,19 +346,28 @@ const Archives: React.FC = () => {
     [repositoriesData]
   )
 
-  // Handle incoming navigation state (from "View Archives" button)
+  // Resolve selectedRepository object once repositories are loaded
   useEffect(() => {
+    if (repositories.length === 0) return
+
+    // Handle incoming navigation state (from "View Archives" button)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (location.state && (location.state as any).repositoryId && repositories.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const repositoryId = (location.state as any).repositoryId
-      setSelectedRepositoryId(repositoryId)
-      const repo = repositories.find((r: Repository) => r.id === repositoryId)
-      setSelectedRepository(repo || null)
-      // Reset scroll position to top
+    const stateRepoId = location.state && (location.state as any).repositoryId
+    if (stateRepoId) {
+      setSelectedRepositoryId(stateRepoId)
+      setSelectedRepository(repositories.find((r: Repository) => r.id === stateRepoId) || null)
+      setSearchParams({ repo: String(stateRepoId) }, { replace: true })
       window.scrollTo(0, 0)
+      return
     }
-  }, [location.state, repositories])
+
+    // Restore selection from URL param (e.g. on page refresh)
+    if (selectedRepositoryId) {
+      setSelectedRepository(
+        repositories.find((r: Repository) => r.id === selectedRepositoryId) || null
+      )
+    }
+  }, [location.state, repositories]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const archivesList = (archives?.data?.archives || []).sort((a: Archive, b: Archive) => {
     // Sort by start date, latest first
