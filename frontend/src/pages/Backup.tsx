@@ -10,8 +10,10 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  IconButton,
   Paper,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { Clock, Eye, Info, Play, RefreshCw, Square } from 'lucide-react'
@@ -226,6 +228,24 @@ const Backup: React.FC = () => {
             <Typography variant="h6" fontWeight={600}>
               {t('backup.manualBackup.title')}
             </Typography>
+            {repositoriesData?.data?.repositories?.some(
+              (repo: Repository) => !getRepoCapabilities(repo).canBackup
+            ) && !loadingRepositories && (
+              <Tooltip
+                title={t('backup.manualBackup.observeOnlyHidden')}
+                arrow
+                enterTouchDelay={0}
+                leaveTouchDelay={4000}
+              >
+                <IconButton
+                  size="small"
+                  aria-label={t('backup.manualBackup.observeOnlyHidden')}
+                  sx={{ color: 'text.disabled', '&:hover': { color: 'text.secondary' }, p: 0.25 }}
+                >
+                  <Info size={14} />
+                </IconButton>
+              </Tooltip>
+            )}
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             {t('backup.manualBackup.subtitle')}
@@ -273,17 +293,6 @@ const Backup: React.FC = () => {
             </Button>
           </Stack>
 
-          {repositoriesData?.data?.repositories?.some(
-            (repo: Repository) => !getRepoCapabilities(repo).canBackup
-          ) &&
-            !loadingRepositories && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                <Typography variant="body2">
-                  {t('backup.manualBackup.observeOnlyHidden')}
-                  To create backups, switch them to full mode in Repository settings.
-                </Typography>
-              </Alert>
-            )}
 
           {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
             <Alert severity="warning" sx={{ mt: 2 }}>
