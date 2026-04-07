@@ -88,7 +88,6 @@ export default function ScheduleCheckCard({
 
   return (
     <EntityCard
-      initials={check.repository_name.slice(0, 2).toUpperCase()}
       title={check.repository_name}
       subtitle={check.repository_path}
       badge={badge}

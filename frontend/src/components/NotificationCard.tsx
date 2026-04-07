@@ -64,8 +64,6 @@ export default function NotificationCard({
   onDelete,
   isTesting = false,
 }: NotificationCardProps) {
-  const initials = notification.name.slice(0, 2).toUpperCase()
-
   const eventCount = [
     notification.notify_on_backup_start,
     notification.notify_on_backup_success,
@@ -153,7 +151,6 @@ export default function NotificationCard({
 
   return (
     <EntityCard
-      initials={initials}
       title={notification.name}
       subtitle={
         notification.service_url.length > 60

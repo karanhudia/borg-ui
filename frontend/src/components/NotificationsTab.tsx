@@ -6,6 +6,7 @@ import {
   Card,
   Typography,
   Button,
+  IconButton,
   TextField,
   CircularProgress,
   Stack,
@@ -16,8 +17,8 @@ import {
   FormControlLabel,
   Switch,
   Alert,
-  Collapse,
   Link,
+  Tooltip,
   FormControl,
   FormLabel,
   RadioGroup,
@@ -26,8 +27,7 @@ import {
 import {
   Plus,
   Bell,
-  ChevronDown,
-  ChevronUp,
+  Info,
   ExternalLink,
   Archive,
   RotateCcw,
@@ -71,7 +71,7 @@ const NotificationsTab: React.FC = () => {
   const [editingNotification, setEditingNotification] = useState<NotificationSetting | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<NotificationSetting | null>(null)
   const [testing, setTesting] = useState<number | null>(null)
-  const [showExamples, setShowExamples] = useState(false)
+  const [showInfoModal, setShowInfoModal] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -300,13 +300,24 @@ const NotificationsTab: React.FC = () => {
           mb: 3,
         }}
       >
-        <Box>
-          <Typography variant="h6" fontWeight={600}>
-            {t('notifications.title')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t('notifications.subtitle')}
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+          <Box>
+            <Typography variant="h6" fontWeight={600}>
+              {t('notifications.title')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('notifications.subtitle')}
+            </Typography>
+          </Box>
+          <Tooltip title={t('notifications.serviceUrlExamples')} arrow>
+            <IconButton
+              size="small"
+              onClick={() => setShowInfoModal(true)}
+              sx={{ mt: 0.25, color: 'text.disabled', '&:hover': { color: 'text.secondary' } }}
+            >
+              <Info size={16} />
+            </IconButton>
+          </Tooltip>
         </Box>
         <Button
           variant="contained"
@@ -322,103 +333,6 @@ const NotificationsTab: React.FC = () => {
           {t('notifications.addService')}
         </Button>
       </Box>
-
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <Typography variant="body2" gutterBottom>
-          {t('notifications.alertDescription')}
-        </Typography>
-        <Link
-          href="#"
-          onClick={(e) => {
-            e.preventDefault()
-            setShowExamples(!showExamples)
-            trackNotifications(EventAction.VIEW, {
-              source: 'examples',
-              expanded: !showExamples,
-            })
-          }}
-          sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}
-        >
-          {showExamples ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          {showExamples ? t('notifications.hide') : t('notifications.show')}{' '}
-          {t('notifications.serviceUrlExamples')}
-        </Link>
-      </Alert>
-
-      <Collapse in={showExamples}>
-        <Card
-          sx={{ mb: 3, p: 2, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}
-        >
-          <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-            {t('notifications.appriseUrlExamplesTitle')}
-          </Typography>
-          <Box
-            sx={{
-              fontFamily: 'monospace',
-              fontSize: '0.75rem',
-              bgcolor: 'grey.900',
-              color: 'grey.100',
-              p: 1.5,
-              borderRadius: 1,
-              border: '1px solid',
-              borderColor: 'grey.700',
-              overflow: 'auto',
-              lineHeight: 1.4,
-            }}
-          >
-            <Box component="span" sx={{ color: 'grey.400' }}>
-              {t('notifications.exampleEmailGmail')}{' '}
-            </Box>
-            <Box component="span">
-              mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls
-            </Box>
-            <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>
-              {t('notifications.exampleSlack')}{' '}
-            </Box>
-            <Box component="span">slack://TokenA/TokenB/TokenC/</Box>
-            <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>
-              {t('notifications.exampleDiscord')}{' '}
-            </Box>
-            <Box component="span">discord://webhook_id/webhook_token</Box>
-            <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>
-              {t('notifications.exampleTelegram')}{' '}
-            </Box>
-            <Box component="span">tgram://bot_token/chat_id</Box>
-            <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>
-              {t('notifications.exampleMicrosoftTeams')}{' '}
-            </Box>
-            <Box component="span">msteams://TokenA/TokenB/TokenC/</Box>
-            <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>
-              {t('notifications.examplePushover')}{' '}
-            </Box>
-            <Box component="span">pover://user@token</Box>
-            <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>
-              {t('notifications.exampleNtfy')}{' '}
-            </Box>
-            <Box component="span">ntfy://topic/</Box>
-            <br />
-            <Box component="span" sx={{ color: 'grey.400' }}>
-              {t('notifications.exampleCustomWebhook')}{' '}
-            </Box>
-            <Box component="span">json://hostname/path/to/endpoint</Box>
-          </Box>
-          <Link
-            href="https://github.com/caronc/apprise/wiki"
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.5 }}
-          >
-            <ExternalLink size={14} />
-            {t('notifications.fullAppriseDocumentation')}
-          </Link>
-        </Card>
-      </Collapse>
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -459,6 +373,58 @@ const NotificationsTab: React.FC = () => {
           ))}
         </Stack>
       )}
+
+      {/* Service URL Info Modal */}
+      <Dialog open={showInfoModal} onClose={() => setShowInfoModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{t('notifications.appriseUrlExamplesTitle')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t('notifications.alertDescription')}
+          </Typography>
+          <Box
+            sx={{
+              fontFamily: 'monospace',
+              fontSize: '0.75rem',
+              bgcolor: 'grey.900',
+              color: 'grey.100',
+              p: 1.5,
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: 'grey.700',
+              overflow: 'auto',
+              lineHeight: 1.8,
+            }}
+          >
+            {[
+              { label: t('notifications.exampleEmailGmail'), value: 'mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls' },
+              { label: t('notifications.exampleSlack'), value: 'slack://TokenA/TokenB/TokenC/' },
+              { label: t('notifications.exampleDiscord'), value: 'discord://webhook_id/webhook_token' },
+              { label: t('notifications.exampleTelegram'), value: 'tgram://bot_token/chat_id' },
+              { label: t('notifications.exampleMicrosoftTeams'), value: 'msteams://TokenA/TokenB/TokenC/' },
+              { label: t('notifications.examplePushover'), value: 'pover://user@token' },
+              { label: t('notifications.exampleNtfy'), value: 'ntfy://topic/' },
+              { label: t('notifications.exampleCustomWebhook'), value: 'json://hostname/path/to/endpoint' },
+            ].map(({ label, value }) => (
+              <Box key={value}>
+                <Box component="span" sx={{ color: 'grey.500' }}>{label} </Box>
+                <Box component="span">{value}</Box>
+              </Box>
+            ))}
+          </Box>
+          <Link
+            href="https://github.com/caronc/apprise/wiki"
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.5 }}
+          >
+            <ExternalLink size={14} />
+            {t('notifications.fullAppriseDocumentation')}
+          </Link>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowInfoModal(false)}>{t('notifications.cancel')}</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>

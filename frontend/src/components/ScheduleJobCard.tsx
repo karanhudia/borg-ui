@@ -45,12 +45,6 @@ interface ScheduleJobCardProps {
   isDuplicatePending?: boolean
 }
 
-function getJobInitials(name: string): string {
-  const words = name.trim().split(/\s+/)
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
-  return (words[0][0] + words[1][0]).toUpperCase()
-}
-
 function getRepoLabel(job: ScheduledJob, repositories: Repository[]): string {
   if (job.repository_ids?.length) {
     if (job.repository_ids.length === 1) {
@@ -192,7 +186,6 @@ export default function ScheduleJobCard({
 
   return (
     <EntityCard
-      initials={getJobInitials(job.name)}
       title={job.name}
       subtitle={job.description ?? undefined}
       badge={badge}

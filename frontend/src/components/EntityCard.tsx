@@ -33,7 +33,6 @@ export interface PrimaryAction {
 }
 
 export interface EntityCardProps {
-  initials: string
   title: string
   subtitle?: string
   badge?: ReactNode
@@ -50,7 +49,6 @@ const DEFAULT_ACCENT = '#059669'
 const HIGHLIGHT_ACCENT = '#f59e0b'
 
 export default function EntityCard({
-  initials,
   title,
   subtitle,
   badge,
@@ -115,30 +113,6 @@ export default function EntityCard({
             mb: 1.5,
           }}
         >
-          <Box
-            sx={{
-              width: 38,
-              height: 38,
-              borderRadius: 1.5,
-              bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.06),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <Typography
-              sx={{
-                fontWeight: 700,
-                fontSize: '0.8rem',
-                letterSpacing: '0.03em',
-                color: 'text.primary',
-              }}
-            >
-              {initials}
-            </Typography>
-          </Box>
-
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ lineHeight: 1.3 }}>
               {title}

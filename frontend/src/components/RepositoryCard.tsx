@@ -45,12 +45,6 @@ interface RepositoryCardProps {
 const ACCENT_IDLE = '#059669'
 const ACCENT_RUNNING = '#f59e0b'
 
-function getRepoInitials(name: string): string {
-  const words = name.trim().split(/\s+/)
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
-  return (words[0][0] + words[1][0]).toUpperCase()
-}
-
 const STAT_ICONS = [
   <Archive size={11} />,
   <HardDrive size={11} />,
@@ -106,8 +100,6 @@ export default function RepositoryCard({
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
     }
   }, [hasRunningJobs, isInJobsSet, repository.id, onJobCompleted, queryClient])
-
-  const repoInitials = getRepoInitials(repository.name)
 
   const keyStats = [
     {
@@ -238,34 +230,6 @@ export default function RepositoryCard({
             mb: 1.5,
           }}
         >
-          {/* Letter avatar — initials, neutral tone */}
-          <Box
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: 1.5,
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              bgcolor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.06),
-              border: '1px solid',
-              borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.1),
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                color: 'text.secondary',
-                lineHeight: 1,
-                letterSpacing: '0.01em',
-              }}
-            >
-              {repoInitials}
-            </Typography>
-          </Box>
-
           <Box sx={{ minWidth: 0, flex: 1 }}>
             {/* Name row */}
             <Box
