@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Box,
-  Button,
-  Typography,
-} from '@mui/material'
+import { DialogTitle, DialogContent, DialogActions, Box, Button, Typography } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
 import { FolderOpen, Database, Shield, Settings, CheckCircle } from 'lucide-react'
 import {

@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Box,
-  Button,
-  Typography,
-} from '@mui/material'
+import { DialogTitle, DialogContent, DialogActions, Box, Button, Typography } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
 import { FileText, Clock, Code, Wrench, CheckCircle } from 'lucide-react'
 import { WizardStepIndicator } from './wizard'

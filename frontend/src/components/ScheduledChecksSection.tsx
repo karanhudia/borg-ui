@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
   Typography,
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -15,6 +14,7 @@ import {
   InputAdornment,
   CircularProgress,
 } from '@mui/material'
+import ResponsiveDialog from './ResponsiveDialog'
 import { Shield } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
@@ -222,7 +222,25 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       )}
 
       {/* Add/Edit Dialog */}
-      <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>
+      <ResponsiveDialog
+        open={showDialog}
+        onClose={() => setShowDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        footer={
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setShowDialog(false)}>{t('common.buttons.cancel')}</Button>
+            <Box sx={{ flex: 1 }} />
+            <Button
+              onClick={handleSubmit}
+              variant="contained"
+              disabled={!selectedRepositoryId || updateMutation.isPending}
+            >
+              {selectedRepositoryId ? t('scheduledChecks.update') : t('scheduledChecks.create')}
+            </Button>
+          </DialogActions>
+        }
+      >
         <DialogTitle>
           {selectedRepositoryId
             ? t('scheduledChecks.editCheckSchedule')
@@ -288,17 +306,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
             </Alert>
           </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowDialog(false)}>{t('common.buttons.cancel')}</Button>
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            disabled={!selectedRepositoryId || updateMutation.isPending}
-          >
-            {selectedRepositoryId ? t('scheduledChecks.update') : t('scheduledChecks.create')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
     </Box>
   )
 })

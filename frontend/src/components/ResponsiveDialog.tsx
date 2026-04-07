@@ -72,9 +72,7 @@ export default function ResponsiveDialog({
         </Box>
 
         {/* Scrollable content — overscroll-behavior prevents pull-to-refresh */}
-        <Box sx={{ overflowY: 'auto', flex: 1, overscrollBehavior: 'contain' }}>
-          {children}
-        </Box>
+        <Box sx={{ overflowY: 'auto', flex: 1, overscrollBehavior: 'contain' }}>{children}</Box>
 
         {/* Sticky footer — always visible above safe area, outside scroll */}
         {footer && (

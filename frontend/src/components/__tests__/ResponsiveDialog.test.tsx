@@ -91,7 +91,11 @@ describe('ResponsiveDialog', () => {
 
     it('renders footer outside the scrollable area when provided', () => {
       render(
-        <ResponsiveDialog open={true} onClose={onClose} footer={<div data-testid="test-footer">Actions</div>}>
+        <ResponsiveDialog
+          open={true}
+          onClose={onClose}
+          footer={<div data-testid="test-footer">Actions</div>}
+        >
           <div>content</div>
         </ResponsiveDialog>
       )
@@ -116,7 +120,11 @@ describe('ResponsiveDialog', () => {
 
     it('renders footer as part of dialog children when provided', () => {
       render(
-        <ResponsiveDialog open={true} onClose={onClose} footer={<div data-testid="test-footer">Actions</div>}>
+        <ResponsiveDialog
+          open={true}
+          onClose={onClose}
+          footer={<div data-testid="test-footer">Actions</div>}
+        >
           <div>content</div>
         </ResponsiveDialog>
       )
