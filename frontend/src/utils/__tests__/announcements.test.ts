@@ -6,6 +6,7 @@ import {
   getAnnouncementAckKey,
   getAnnouncementSnoozeKey,
   isAnnouncementEligible,
+  resolveAnnouncementLocale,
   selectAnnouncement,
   snoozeAnnouncement,
 } from '../announcements'
@@ -178,5 +179,48 @@ describe('announcements utils', () => {
         }
       )
     ).toBe(false)
+  })
+
+  it('resolves localized manifest content for the active language', () => {
+    const localized = resolveAnnouncementLocale(
+      {
+        ...baseAnnouncement,
+        title_localized: {
+          es: 'Borg UI 1.70.0 ya esta disponible',
+        },
+        message_localized: {
+          es: 'Hay una nueva version disponible.',
+        },
+        highlights: ['English highlight'],
+        highlights_localized: {
+          es: ['Punto destacado en espanol'],
+        },
+        cta_label: 'View details',
+        cta_label_localized: {
+          es: 'Ver detalles',
+        },
+      },
+      'es-ES'
+    )
+
+    expect(localized.title).toBe('Borg UI 1.70.0 ya esta disponible')
+    expect(localized.message).toBe('Hay una nueva version disponible.')
+    expect(localized.highlights).toEqual(['Punto destacado en espanol'])
+    expect(localized.cta_label).toBe('Ver detalles')
+  })
+
+  it('falls back to the base manifest text when a locale override is missing', () => {
+    const localized = resolveAnnouncementLocale(
+      {
+        ...baseAnnouncement,
+        title_localized: {
+          de: 'Borg UI 1.70.0 ist verfugbar',
+        },
+      },
+      'it'
+    )
+
+    expect(localized.title).toBe(baseAnnouncement.title)
+    expect(localized.message).toBe(baseAnnouncement.message)
   })
 })

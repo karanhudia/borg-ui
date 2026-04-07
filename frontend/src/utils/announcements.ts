@@ -29,6 +29,25 @@ function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string'
 }
 
+function isLocalizedStringMap(value: unknown): value is Record<string, string> | undefined {
+  return (
+    value === undefined ||
+    (typeof value === 'object' && value !== null && Object.values(value).every(isNonEmptyString))
+  )
+}
+
+function isLocalizedHighlightsMap(value: unknown): value is Record<string, string[]> | undefined {
+  return (
+    value === undefined ||
+    (typeof value === 'object' &&
+      value !== null &&
+      Object.values(value).every(
+        (highlights) =>
+          Array.isArray(highlights) && highlights.length > 0 && highlights.every(isNonEmptyString)
+      ))
+  )
+}
+
 function isValidDateString(value: string | undefined) {
   if (!value) return true
   return !Number.isNaN(new Date(value).getTime())
@@ -39,12 +58,16 @@ function isValidAnnouncementShape(announcement: Announcement) {
     isNonEmptyString(announcement.id) &&
     ANNOUNCEMENT_TYPES.has(announcement.type) &&
     isNonEmptyString(announcement.title) &&
+    isLocalizedStringMap(announcement.title_localized) &&
     isNonEmptyString(announcement.message) &&
+    isLocalizedStringMap(announcement.message_localized) &&
     (announcement.priority === undefined || Number.isFinite(announcement.priority)) &&
     (announcement.highlights === undefined ||
       (Array.isArray(announcement.highlights) &&
         announcement.highlights.every(isNonEmptyString))) &&
+    isLocalizedHighlightsMap(announcement.highlights_localized) &&
     isOptionalString(announcement.cta_label) &&
+    isLocalizedStringMap(announcement.cta_label_localized) &&
     isOptionalString(announcement.cta_url) &&
     (announcement.dismissible === undefined || typeof announcement.dismissible === 'boolean') &&
     (announcement.snooze_days === undefined ||
@@ -105,6 +128,68 @@ export function isAnnouncementSnoozed(id: string, now: Date) {
 
 export function getAnnouncementSnoozeDays(announcement: Announcement) {
   return Math.max(announcement.snooze_days ?? 7, 1)
+}
+
+function getLocaleCandidates(locale?: string): string[] {
+  if (!locale) return ['default']
+
+  const trimmed = locale.trim()
+  if (!trimmed) return ['default']
+
+  const baseLanguage = trimmed.split('-')[0]
+  return Array.from(new Set([trimmed, baseLanguage, 'default']))
+}
+
+function resolveLocalizedString(
+  fallback: string,
+  localized: Record<string, string> | undefined,
+  locale?: string
+) {
+  if (!localized) return fallback
+
+  for (const candidate of getLocaleCandidates(locale)) {
+    const value = localized[candidate]
+    if (isNonEmptyString(value)) return value
+  }
+
+  return fallback
+}
+
+function resolveLocalizedHighlights(
+  fallback: string[] | undefined,
+  localized: Record<string, string[]> | undefined,
+  locale?: string
+) {
+  if (!localized) return fallback
+
+  for (const candidate of getLocaleCandidates(locale)) {
+    const value = localized[candidate]
+    if (Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString)) {
+      return value
+    }
+  }
+
+  return fallback
+}
+
+export function resolveAnnouncementLocale(
+  announcement: Announcement,
+  locale?: string
+): Announcement {
+  return {
+    ...announcement,
+    title: resolveLocalizedString(announcement.title, announcement.title_localized, locale),
+    message: resolveLocalizedString(announcement.message, announcement.message_localized, locale),
+    highlights: resolveLocalizedHighlights(
+      announcement.highlights,
+      announcement.highlights_localized,
+      locale
+    ),
+    cta_label: announcement.cta_label
+      ? resolveLocalizedString(announcement.cta_label, announcement.cta_label_localized, locale)
+      : resolveLocalizedString('', announcement.cta_label_localized, locale) ||
+        announcement.cta_label,
+  }
 }
 
 function isWithinVersionRange(announcement: Announcement, appVersion: string) {

@@ -8,14 +8,21 @@ export type AnnouncementType =
   | 'migration_notice'
   | 'custom_announcement'
 
+export type AnnouncementLocalizedText = Record<string, string>
+export type AnnouncementLocalizedHighlights = Record<string, string[]>
+
 export interface Announcement {
   id: string
   type: AnnouncementType
   priority?: number
   title: string
+  title_localized?: AnnouncementLocalizedText
   message: string
+  message_localized?: AnnouncementLocalizedText
   highlights?: string[]
+  highlights_localized?: AnnouncementLocalizedHighlights
   cta_label?: string
+  cta_label_localized?: AnnouncementLocalizedText
   cta_url?: string
   dismissible?: boolean
   snooze_days?: number

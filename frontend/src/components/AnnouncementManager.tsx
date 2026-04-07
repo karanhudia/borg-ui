@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import AnnouncementModal from './AnnouncementModal'
 import { useSystemInfo } from '../hooks/useSystemInfo'
 import { fetchAnnouncementsManifest, getAnnouncementsUrl } from '../services/announcements'
 import {
   acknowledgeAnnouncement,
   getAnnouncementSnoozeDays,
+  resolveAnnouncementLocale,
   selectAnnouncement,
   snoozeAnnouncement,
 } from '../utils/announcements'
 
 export default function AnnouncementManager() {
   const [hiddenAnnouncementIds, setHiddenAnnouncementIds] = useState<string[]>([])
+  const { i18n } = useTranslation()
   const { data: systemInfo } = useSystemInfo()
   const announcementsUrl = getAnnouncementsUrl()
 
@@ -25,7 +28,7 @@ export default function AnnouncementManager() {
   const selectedAnnouncement = useMemo(() => {
     if (!systemInfo || !manifest) return null
 
-    return selectAnnouncement(
+    const announcement = selectAnnouncement(
       manifest.announcements.filter(
         (announcement) => !hiddenAnnouncementIds.includes(announcement.id)
       ),
@@ -35,7 +38,9 @@ export default function AnnouncementManager() {
         now: new Date(),
       }
     )
-  }, [hiddenAnnouncementIds, manifest, systemInfo])
+
+    return announcement ? resolveAnnouncementLocale(announcement, i18n.resolvedLanguage) : null
+  }, [hiddenAnnouncementIds, i18n.resolvedLanguage, manifest, systemInfo])
 
   const hideAnnouncement = (id: string) => {
     setHiddenAnnouncementIds((current) => [...current, id])
