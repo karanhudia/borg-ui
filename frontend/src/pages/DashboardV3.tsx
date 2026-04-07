@@ -915,7 +915,7 @@ function ActivityTimeline({ activities }: { activities: DashboardOverview['activ
       </svg>
 
       {/* Legend */}
-      <Stack direction="row" spacing={2} flexWrap="wrap" sx={{ mt: 0.5 }}>
+      <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
         {Object.entries(JOB_COLOR).map(([type, color]) => (
           <Stack key={type} direction="row" spacing={0.5} alignItems="center">
             <Box
@@ -1087,7 +1087,7 @@ export default function DashboardV3() {
           </Stack>
 
           {/* Quick stats */}
-          <Stack direction="row" spacing={3} flexWrap="wrap">
+          <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
             {[
               {
                 label: t('dashboard.stats.repositories'),
