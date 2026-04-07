@@ -18,6 +18,7 @@ export default function AccountTabHeader({
   roleLabel,
   roleColor,
   createdAt,
+  deploymentLabel,
 }: AccountTabHeaderProps) {
   return (
     <Box
@@ -36,6 +37,11 @@ export default function AccountTabHeader({
         <Typography variant="body2" color="text.secondary">
           {subtitle}
         </Typography>
+        {deploymentLabel && (
+          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+            {deploymentLabel}
+          </Typography>
+        )}
       </Box>
       <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
         <Chip label={roleLabel} color={roleColor} size="small" />

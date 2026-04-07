@@ -46,7 +46,7 @@ describe('AccountProfileSection', () => {
     fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'backup-admin' } })
     expect(onProfileFormChange).toHaveBeenCalledWith({ username: 'backup-admin' })
 
-    await user.click(screen.getByRole('button', { name: /save personal profile/i }))
+    await user.click(screen.getByRole('button', { name: /save profile/i }))
     expect(onSaveProfile).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('Deployment profile')).not.toBeInTheDocument()
   })
@@ -72,7 +72,7 @@ describe('AccountProfileSection', () => {
     )
 
     expect(screen.getByText('Deployment profile')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /save deployment profile/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /save deployment/i })).toBeDisabled()
 
     await user.click(screen.getByText('Individual'))
     expect(onDeploymentFormChange).toHaveBeenCalledWith({ deployment_type: 'individual' })
@@ -99,7 +99,7 @@ describe('AccountProfileSection', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: /save deployment profile/i }))
+    await user.click(screen.getByRole('button', { name: /save deployment/i }))
     expect(onSaveDeployment).toHaveBeenCalledTimes(1)
   })
 })
@@ -214,8 +214,7 @@ describe('AccountTabHeader', () => {
     expect(screen.getByText('Admin User')).toBeInTheDocument()
     expect(screen.getByText('Administrator')).toBeInTheDocument()
     expect(screen.getByText('Enterprise deployment')).toBeInTheDocument()
-    expect(screen.getByText('@admin')).toBeInTheDocument()
-    expect(screen.getByText(/member since/i)).toBeInTheDocument()
+    expect(screen.getByText(/@admin · since/i)).toBeInTheDocument()
   })
 })
 
