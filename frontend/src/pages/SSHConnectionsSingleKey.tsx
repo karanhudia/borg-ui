@@ -773,12 +773,14 @@ export default function SSHConnectionsSingleKey() {
                 </Box>
 
                 {/* Action Buttons */}
-                <Stack direction="row" spacing={2} flexWrap="wrap">
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
                   <Tooltip title="Automatically deploy SSH key using password authentication">
                     <Button
                       variant="contained"
                       startIcon={<Plus size={18} />}
                       onClick={() => setDeployDialogOpen(true)}
+                      fullWidth={false}
+                      sx={{ width: { xs: '100%', sm: 'auto' } }}
                     >
                       {t('sshConnections.systemKey.actions.deploy')}
                     </Button>
@@ -788,6 +790,7 @@ export default function SSHConnectionsSingleKey() {
                       variant="outlined"
                       startIcon={<Wifi size={18} />}
                       onClick={() => setTestConnectionDialogOpen(true)}
+                      sx={{ width: { xs: '100%', sm: 'auto' } }}
                     >
                       {t('sshConnections.systemKey.actions.addManual')}
                     </Button>
@@ -797,6 +800,7 @@ export default function SSHConnectionsSingleKey() {
                       variant="outlined"
                       startIcon={<Copy size={18} />}
                       onClick={handleCopyPublicKey}
+                      sx={{ width: { xs: '100%', sm: 'auto' } }}
                     >
                       {t('sshConnections.systemKey.actions.copy')}
                     </Button>
@@ -807,6 +811,7 @@ export default function SSHConnectionsSingleKey() {
                       color="error"
                       startIcon={<Trash2 size={18} />}
                       onClick={() => setDeleteKeyDialogOpen(true)}
+                      sx={{ width: { xs: '100%', sm: 'auto' } }}
                     >
                       {t('sshConnections.systemKey.actions.delete')}
                     </Button>
