@@ -38,6 +38,7 @@ import {
   AlertTriangle,
   Plus,
   Trash2,
+  Info,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -565,21 +566,30 @@ export default function SSHConnectionsSingleKey() {
     <Box>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" fontWeight={600} gutterBottom>
-          {t('sshConnections.title')}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+          <Typography variant="h4" fontWeight={600}>
+            {t('sshConnections.title')}
+          </Typography>
+          <Tooltip
+            title={
+              <Box>
+                <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
+                  {t('sshConnections.singleKeySystem.title')}
+                </Typography>
+                <Typography variant="body2">
+                  {t('sshConnections.singleKeySystem.description')}
+                </Typography>
+              </Box>
+            }
+            arrow
+          >
+            <Info size={16} style={{ color: 'inherit', opacity: 0.45, cursor: 'help', flexShrink: 0 }} />
+          </Tooltip>
+        </Box>
         <Typography variant="body2" color="text.secondary">
           {t('sshConnections.subtitle')}
         </Typography>
       </Box>
-
-      {/* Info Alert */}
-      <Alert severity="info" sx={{ mb: 3 }}>
-        <Typography variant="body2" fontWeight={500}>
-          {t('sshConnections.singleKeySystem.title')}
-        </Typography>
-        <Typography variant="caption">{t('sshConnections.singleKeySystem.description')}</Typography>
-      </Alert>
 
       {/* Statistics Cards */}
       {keyExists && (
