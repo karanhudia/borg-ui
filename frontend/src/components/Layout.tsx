@@ -31,14 +31,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          minWidth: 0,
+          px: { xs: 1.5, sm: 2.5, md: 3 },
+          py: { xs: 2, sm: 3 },
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           minHeight: '100vh',
           backgroundColor: 'background.default',
         }}
       >
         <Toolbar />
-        <Container maxWidth="xl" sx={{ mt: 2 }}>
+        <Container maxWidth="xl" sx={{ mt: { xs: 1, sm: 2 }, px: { xs: 0, sm: 1 } }}>
           {children}
         </Container>
       </Box>

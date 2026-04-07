@@ -362,6 +362,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       label: t('backupJobsTable.columns.repository'),
       align: 'left',
       width: '250px',
+      mobileFullWidth: true,
       render: (job: T) => {
         // Handle Activity items with different repository field names
         if (job.type && job.type === 'package') {
@@ -404,6 +405,7 @@ export const BackupJobsTable = <T extends Job = Job>({
                 label={getTypeLabel(job.type || '', t)}
                 color={getTypeColor(job.type || '')}
                 size="small"
+                sx={{ maxWidth: '100%', '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
               />
             ),
           },
@@ -429,7 +431,7 @@ export const BackupJobsTable = <T extends Job = Job>({
                   placement="top"
                   arrow
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
                     {isScheduled ? (
                       <Calendar size={18} color="#1976d2" />
                     ) : (

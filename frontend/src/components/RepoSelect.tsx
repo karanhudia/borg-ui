@@ -44,7 +44,11 @@ export default function RepoSelect({
   const selectSx = size === 'medium' ? { height: { xs: 48, sm: 56 }, ...sx } : sx
 
   return (
-    <FormControl fullWidth={fullWidth} size={size} sx={{ minWidth: { xs: '100%', sm: 300 } }}>
+    <FormControl
+      fullWidth={fullWidth}
+      size={size}
+      sx={{ minWidth: { xs: '100%', sm: 300 }, ...sx }}
+    >
       <InputLabel>{label}</InputLabel>
       <Select
         value={value}

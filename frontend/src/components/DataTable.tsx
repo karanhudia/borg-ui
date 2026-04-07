@@ -16,6 +16,10 @@ import {
   CircularProgress,
   SxProps,
   Theme,
+  Stack,
+  Divider,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material'
 
 export interface Column<T> {
@@ -27,6 +31,8 @@ export interface Column<T> {
   fontWeight?: number
   render?: (row: T) => React.ReactNode
   sortable?: boolean
+  /** Span both columns in the mobile 2-col grid */
+  mobileFullWidth?: boolean
 }
 
 export interface ActionButton<T> {
@@ -77,6 +83,9 @@ export interface DataTableProps<T> {
 
   // Additional features
   sx?: SxProps<Theme>
+
+  // Mobile rendering
+  mobileBreakpoint?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 }
 
 const ACTION_HOVER_BG_BY_COLOR: Record<string, string> = {
@@ -107,6 +116,7 @@ export default function DataTable<T>({
   rowsPerPageOptions = [5, 10, 25, 50, 100],
   tableId,
   sx,
+  mobileBreakpoint = 'sm',
 }: DataTableProps<T>) {
   // Load saved rows per page from localStorage if available
   const getInitialRowsPerPage = () => {
@@ -126,6 +136,8 @@ export default function DataTable<T>({
   const [page, setPage] = useState(0)
   const { t } = useTranslation()
   const [rowsPerPage, setRowsPerPage] = useState(getInitialRowsPerPage)
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down(mobileBreakpoint))
 
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage)
@@ -180,6 +192,182 @@ export default function DataTable<T>({
             </Typography>
           )}
         </Box>
+      </Paper>
+    )
+  }
+
+  const renderActions = (row: T, iconOpacity = 0.45, justify: 'flex-start' | 'flex-end' = 'flex-end') => (
+    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: justify, flexWrap: 'wrap' }}>
+      {actions?.map((action, idx) => {
+        const shouldShow = action.show ? action.show(row) : true
+        if (!shouldShow) return null
+
+        const isDisabled = action.disabled ? action.disabled(row) : false
+        const tooltipText =
+          typeof action.tooltip === 'function' ? action.tooltip(row) : action.tooltip || action.label
+
+        const hoverBg = ACTION_HOVER_BG_BY_COLOR[action.color || 'default']
+
+        return (
+          <Tooltip key={idx} title={tooltipText} arrow>
+            <span>
+              <IconButton
+                size="small"
+                color={action.color || 'default'}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  action.onClick(row)
+                }}
+                disabled={isDisabled}
+                aria-label={tooltipText}
+                sx={{
+                  borderRadius: 1,
+                  opacity: iconOpacity,
+                  transition: 'opacity 140ms ease, background-color 140ms ease',
+                  '&:hover': {
+                    opacity: 1,
+                    bgcolor: hoverBg,
+                  },
+                  '&.Mui-disabled': { opacity: 0.2 },
+                }}
+              >
+                {action.icon}
+              </IconButton>
+            </span>
+          </Tooltip>
+        )
+      })}
+    </Box>
+  )
+
+  if (isMobile) {
+    return (
+      <Paper variant={variant} sx={{ borderRadius, overflow: 'hidden', ...sx }}>
+        <Stack divider={<Divider sx={{ borderColor: 'divider' }} />}>
+          {paginatedData.map((row) => (
+            <Box
+              key={getRowKey(row)}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+              sx={{
+                p: 1.5,
+                ...(enableHover && {
+                  '&:hover': {
+                    bgcolor: 'rgba(255,255,255,0.02)',
+                  },
+                }),
+                ...(enablePointer &&
+                  onRowClick && {
+                    cursor: 'pointer',
+                  }),
+                transition: 'background-color 180ms ease',
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 1.25,
+                }}
+              >
+                {columns.map((column) => (
+                  <Box
+                    key={column.id}
+                    sx={{
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      ...(column.mobileFullWidth && { gridColumn: 'span 2' }),
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: 'block',
+                        mb: 0.25,
+                        color: 'text.secondary',
+                        fontWeight: 700,
+                        letterSpacing: '0.03em',
+                        textTransform: 'uppercase',
+                        fontSize: '0.6rem',
+                      }}
+                    >
+                      {column.label}
+                    </Typography>
+                    <Box sx={{ minWidth: 0, overflow: 'hidden' }}>
+                      {column.render
+                        ? column.render(row)
+                        : ((row as Record<string, unknown>)[column.id] as React.ReactNode)}
+                    </Box>
+                  </Box>
+                ))}
+                {actions && actions.length > 0 && (
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: 'block',
+                        mb: 0.25,
+                        color: 'text.secondary',
+                        fontWeight: 700,
+                        letterSpacing: '0.03em',
+                        textTransform: 'uppercase',
+                        fontSize: '0.6rem',
+                      }}
+                    >
+                      {t('dataTable.actions')}
+                    </Typography>
+                    {renderActions(row, 0.7, 'flex-start')}
+                  </Box>
+                )}
+              </Box>
+            </Box>
+          ))}
+        </Stack>
+        {data.length > 0 && (
+          <TablePagination
+            component="div"
+            count={data.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            rowsPerPageOptions={rowsPerPageOptions}
+            labelRowsPerPage={t('dataTable.rowsPerPage')}
+            labelDisplayedRows={({ from, to, count }) =>
+              `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`
+            }
+            sx={{
+              borderTop: 1,
+              borderColor: 'divider',
+              '.MuiTablePagination-toolbar': {
+                minHeight: '64px',
+                paddingLeft: 2,
+                paddingRight: 1,
+                flexWrap: 'wrap',
+                rowGap: 1,
+              },
+              '.MuiTablePagination-spacer': {
+                display: 'none',
+              },
+              '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                marginTop: 0,
+                marginBottom: 0,
+                display: 'flex',
+                alignItems: 'center',
+              },
+              '.MuiTablePagination-select': {
+                paddingTop: 1,
+                paddingBottom: 1,
+                paddingLeft: 1,
+                paddingRight: 4,
+                display: 'flex',
+                alignItems: 'center',
+              },
+              '.MuiTablePagination-actions': {
+                marginLeft: 'auto',
+              },
+            }}
+          />
+        )}
       </Paper>
     )
   }
@@ -276,49 +464,7 @@ export default function DataTable<T>({
                   align="right"
                   sx={{ width: '130px', minWidth: '130px', maxWidth: '130px' }}
                 >
-                  <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                    {actions.map((action, idx) => {
-                      const shouldShow = action.show ? action.show(row) : true
-                      if (!shouldShow) return null
-
-                      const isDisabled = action.disabled ? action.disabled(row) : false
-                      const tooltipText =
-                        typeof action.tooltip === 'function'
-                          ? action.tooltip(row)
-                          : action.tooltip || action.label
-
-                      const hoverBg = ACTION_HOVER_BG_BY_COLOR[action.color || 'default']
-
-                      return (
-                        <Tooltip key={idx} title={tooltipText} arrow>
-                          <span>
-                            <IconButton
-                              size="small"
-                              color={action.color || 'default'}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                action.onClick(row)
-                              }}
-                              disabled={isDisabled}
-                              aria-label={tooltipText}
-                              sx={{
-                                borderRadius: 1,
-                                opacity: 0.45,
-                                transition: 'opacity 140ms ease, background-color 140ms ease',
-                                '&:hover': {
-                                  opacity: 1,
-                                  bgcolor: hoverBg,
-                                },
-                                '&.Mui-disabled': { opacity: 0.2 },
-                              }}
-                            >
-                              {action.icon}
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      )
-                    })}
-                  </Box>
+                  {renderActions(row)}
                 </TableCell>
               )}
             </TableRow>
