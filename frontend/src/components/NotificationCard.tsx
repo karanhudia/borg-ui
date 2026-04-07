@@ -1,4 +1,18 @@
-import { Bell, BellOff, Clock, Copy, Database, Pencil, TestTube, Trash2, Zap, Archive, RotateCcw, ShieldCheck, AlertCircle } from 'lucide-react'
+import {
+  Bell,
+  BellOff,
+  Clock,
+  Copy,
+  Database,
+  Pencil,
+  TestTube,
+  Trash2,
+  Zap,
+  Archive,
+  RotateCcw,
+  ShieldCheck,
+  AlertCircle,
+} from 'lucide-react'
 import EntityCard, { ActionItem, StatItem } from './EntityCard'
 import { Box, CircularProgress, Tooltip, useTheme, alpha } from '@mui/material'
 import { formatDateShort } from '../utils/dateUtils'
@@ -111,7 +125,9 @@ export default function NotificationCard({
         display: 'flex',
         color: notification.enabled
           ? theme.palette.success.main
-          : isDark ? alpha('#fff', 0.2) : alpha('#000', 0.2),
+          : isDark
+            ? alpha('#fff', 0.2)
+            : alpha('#000', 0.2),
       }}
     >
       {notification.enabled ? <Bell size={16} /> : <BellOff size={16} />}
@@ -123,30 +139,42 @@ export default function NotificationCard({
     {
       icon: <Archive size={10} />,
       label: 'Backup',
-      active: notification.notify_on_backup_start || notification.notify_on_backup_success || notification.notify_on_backup_failure,
-      tooltip: [
-        notification.notify_on_backup_start && 'Start',
-        notification.notify_on_backup_success && 'Success',
-        notification.notify_on_backup_failure && 'Failure',
-      ].filter(Boolean).join(' · ') || 'Off',
+      active:
+        notification.notify_on_backup_start ||
+        notification.notify_on_backup_success ||
+        notification.notify_on_backup_failure,
+      tooltip:
+        [
+          notification.notify_on_backup_start && 'Start',
+          notification.notify_on_backup_success && 'Success',
+          notification.notify_on_backup_failure && 'Failure',
+        ]
+          .filter(Boolean)
+          .join(' · ') || 'Off',
     },
     {
       icon: <RotateCcw size={10} />,
       label: 'Restore',
       active: notification.notify_on_restore_success || notification.notify_on_restore_failure,
-      tooltip: [
-        notification.notify_on_restore_success && 'Success',
-        notification.notify_on_restore_failure && 'Failure',
-      ].filter(Boolean).join(' · ') || 'Off',
+      tooltip:
+        [
+          notification.notify_on_restore_success && 'Success',
+          notification.notify_on_restore_failure && 'Failure',
+        ]
+          .filter(Boolean)
+          .join(' · ') || 'Off',
     },
     {
       icon: <ShieldCheck size={10} />,
       label: 'Check',
       active: notification.notify_on_check_success || notification.notify_on_check_failure,
-      tooltip: [
-        notification.notify_on_check_success && 'Success',
-        notification.notify_on_check_failure && 'Failure',
-      ].filter(Boolean).join(' · ') || 'Off',
+      tooltip:
+        [
+          notification.notify_on_check_success && 'Success',
+          notification.notify_on_check_failure && 'Failure',
+        ]
+          .filter(Boolean)
+          .join(' · ') || 'Off',
     },
     {
       icon: <AlertCircle size={10} />,

@@ -195,7 +195,13 @@ export default function EntityCard({
 
         {meta && meta.length > 0 && (
           <Box
-            sx={{ display: 'flex', gap: { xs: 1.25, sm: 1.75 }, flexWrap: 'wrap', mb: 1.5, px: 0.25 }}
+            sx={{
+              display: 'flex',
+              gap: { xs: 1.25, sm: 1.75 },
+              flexWrap: 'wrap',
+              mb: 1.5,
+              px: 0.25,
+            }}
           >
             {meta.map((m) => (
               <Tooltip key={m.label} title={m.tooltip || ''} arrow>
@@ -211,7 +217,12 @@ export default function EntityCard({
                     {m.label}:
                   </Typography>
                   <Typography
-                    sx={{ fontSize: '0.68rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1 }}
+                    sx={{
+                      fontSize: '0.68rem',
+                      fontWeight: 600,
+                      color: 'text.secondary',
+                      lineHeight: 1,
+                    }}
                   >
                     {m.value}
                   </Typography>
@@ -238,9 +249,7 @@ export default function EntityCard({
               .filter((a) => !a.hidden)
               .map((action, i) => {
                 const actionColor =
-                  action.color && action.color !== 'default'
-                    ? colorMap[action.color]
-                    : undefined
+                  action.color && action.color !== 'default' ? colorMap[action.color] : undefined
 
                 const resolvedSx = actionColor
                   ? {

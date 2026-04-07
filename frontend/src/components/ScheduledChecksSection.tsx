@@ -21,10 +21,7 @@ import { BorgApiClient } from '../services/borgApi'
 import RepoSelect from './RepoSelect'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import {
-  convertCronToUTC,
-  convertCronToLocal,
-} from '../utils/dateUtils'
+import { convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
 import CronBuilderDialog from './CronBuilderDialog'
 import ScheduleCheckCard from './ScheduleCheckCard'
 import { usePermissions } from '../hooks/usePermissions'
@@ -202,8 +199,12 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       ) : !scheduledChecks || scheduledChecks.length === 0 ? (
         <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
           <Shield size={40} style={{ opacity: 0.25, marginBottom: 12 }} />
-          <Typography variant="body1" gutterBottom>{t('scheduledChecks.noScheduledChecks')}</Typography>
-          <Typography variant="body2" color="text.secondary">{t('scheduledChecks.noScheduledChecksDesc')}</Typography>
+          <Typography variant="body1" gutterBottom>
+            {t('scheduledChecks.noScheduledChecks')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t('scheduledChecks.noScheduledChecksDesc')}
+          </Typography>
         </Box>
       ) : (
         <Stack spacing={2}>

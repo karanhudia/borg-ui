@@ -1,7 +1,12 @@
 import { Chip } from '@mui/material'
 import { CalendarClock, History, CalendarCheck, Timer, Play, Pencil, Trash2 } from 'lucide-react'
 import EntityCard, { StatItem, ActionItem } from './EntityCard'
-import { formatDateShort, formatDateTimeFull, formatCronHuman, convertCronToLocal } from '../utils/dateUtils'
+import {
+  formatDateShort,
+  formatDateTimeFull,
+  formatCronHuman,
+  convertCronToLocal,
+} from '../utils/dateUtils'
 
 interface ScheduledCheck {
   repository_id: number
@@ -55,7 +60,9 @@ export default function ScheduleCheckCard({
     {
       icon: <Timer size={11} />,
       label: 'Max Duration',
-      value: check.check_max_duration ? `${Math.round(check.check_max_duration / 60)}m` : 'Unlimited',
+      value: check.check_max_duration
+        ? `${Math.round(check.check_max_duration / 60)}m`
+        : 'Unlimited',
     },
   ]
 

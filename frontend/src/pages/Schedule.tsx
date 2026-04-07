@@ -2,24 +2,14 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import {
-  Box,
-  Typography,
-  Button,
-  Alert,
-  Tabs,
-  Tab,
-} from '@mui/material'
+import { Box, Typography, Button, Alert, Tabs, Tab } from '@mui/material'
 import { Plus } from 'lucide-react'
 import { scheduleAPI, repositoriesAPI, backupAPI, scriptsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
-import {
-  formatRelativeTime,
-  formatDurationSeconds,
-} from '../utils/dateUtils'
+import { formatRelativeTime, formatDurationSeconds } from '../utils/dateUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import ScheduledChecksSection, {
   ScheduledChecksSectionRef,

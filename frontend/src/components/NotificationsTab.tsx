@@ -24,15 +24,7 @@ import {
   RadioGroup,
   Radio,
 } from '@mui/material'
-import {
-  Plus,
-  Bell,
-  Info,
-  ExternalLink,
-  Archive,
-  RotateCcw,
-  Settings,
-} from 'lucide-react'
+import { Plus, Bell, Info, ExternalLink, Archive, RotateCcw, Settings } from 'lucide-react'
 import { notificationsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -376,7 +368,12 @@ const NotificationsTab: React.FC = () => {
       )}
 
       {/* Service URL Info Modal */}
-      <ResponsiveDialog open={showInfoModal} onClose={() => setShowInfoModal(false)} maxWidth="sm" fullWidth>
+      <ResponsiveDialog
+        open={showInfoModal}
+        onClose={() => setShowInfoModal(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>{t('notifications.appriseUrlExamplesTitle')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -397,17 +394,31 @@ const NotificationsTab: React.FC = () => {
             }}
           >
             {[
-              { label: t('notifications.exampleEmailGmail'), value: 'mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls' },
+              {
+                label: t('notifications.exampleEmailGmail'),
+                value: 'mailto://user:app_password@gmail.com?smtp=smtp.gmail.com&mode=starttls',
+              },
               { label: t('notifications.exampleSlack'), value: 'slack://TokenA/TokenB/TokenC/' },
-              { label: t('notifications.exampleDiscord'), value: 'discord://webhook_id/webhook_token' },
+              {
+                label: t('notifications.exampleDiscord'),
+                value: 'discord://webhook_id/webhook_token',
+              },
               { label: t('notifications.exampleTelegram'), value: 'tgram://bot_token/chat_id' },
-              { label: t('notifications.exampleMicrosoftTeams'), value: 'msteams://TokenA/TokenB/TokenC/' },
+              {
+                label: t('notifications.exampleMicrosoftTeams'),
+                value: 'msteams://TokenA/TokenB/TokenC/',
+              },
               { label: t('notifications.examplePushover'), value: 'pover://user@token' },
               { label: t('notifications.exampleNtfy'), value: 'ntfy://topic/' },
-              { label: t('notifications.exampleCustomWebhook'), value: 'json://hostname/path/to/endpoint' },
+              {
+                label: t('notifications.exampleCustomWebhook'),
+                value: 'json://hostname/path/to/endpoint',
+              },
             ].map(({ label, value }) => (
               <Box key={value}>
-                <Box component="span" sx={{ color: 'grey.500' }}>{label} </Box>
+                <Box component="span" sx={{ color: 'grey.500' }}>
+                  {label}{' '}
+                </Box>
                 <Box component="span">{value}</Box>
               </Box>
             ))}

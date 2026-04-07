@@ -1,7 +1,21 @@
 import { Box, Switch, Tooltip, Typography } from '@mui/material'
-import { CalendarClock, Database, History, CalendarCheck, Play, Copy, Pencil, Trash2 } from 'lucide-react'
+import {
+  CalendarClock,
+  Database,
+  History,
+  CalendarCheck,
+  Play,
+  Copy,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 import EntityCard, { StatItem, MetaItem, ActionItem } from './EntityCard'
-import { formatDateShort, formatDateTimeFull, formatCronHuman, convertCronToLocal } from '../utils/dateUtils'
+import {
+  formatDateShort,
+  formatDateTimeFull,
+  formatCronHuman,
+  convertCronToLocal,
+} from '../utils/dateUtils'
 
 interface Repository {
   id: number
@@ -48,17 +62,17 @@ interface ScheduleJobCardProps {
 function getRepoLabel(job: ScheduledJob, repositories: Repository[]): string {
   if (job.repository_ids?.length) {
     if (job.repository_ids.length === 1) {
-      const repo = repositories.find(r => r.id === job.repository_ids![0])
+      const repo = repositories.find((r) => r.id === job.repository_ids![0])
       return repo?.name ?? '1 repo'
     }
     return `${job.repository_ids.length} repos`
   }
   if (job.repository_id) {
-    const repo = repositories.find(r => r.id === job.repository_id)
+    const repo = repositories.find((r) => r.id === job.repository_id)
     return repo?.name ?? '1 repo'
   }
   if (job.repository) {
-    const repo = repositories.find(r => r.path === job.repository)
+    const repo = repositories.find((r) => r.path === job.repository)
     return repo?.name ?? job.repository
   }
   return 'Unknown'
@@ -165,7 +179,7 @@ export default function ScheduleJobCard({
           size="small"
           color="success"
           disabled={!canManage}
-          onChange={() => {}}  // controlled by parent Box onClick
+          onChange={() => {}} // controlled by parent Box onClick
           sx={{ pointerEvents: 'none' }}
         />
         <Typography

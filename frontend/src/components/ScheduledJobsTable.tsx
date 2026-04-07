@@ -80,8 +80,12 @@ const ScheduledJobsTable = ({
       return (
         <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
           <Clock size={40} style={{ opacity: 0.25, marginBottom: 12 }} />
-          <Typography variant="body1" gutterBottom>{t('scheduledJobsTableSection.noJobsFound')}</Typography>
-          <Typography variant="body2" color="text.secondary">{t('scheduledJobsTableSection.noJobsDesc')}</Typography>
+          <Typography variant="body1" gutterBottom>
+            {t('scheduledJobsTableSection.noJobsFound')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t('scheduledJobsTableSection.noJobsDesc')}
+          </Typography>
         </Box>
       )
     }
