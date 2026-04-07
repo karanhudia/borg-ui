@@ -70,13 +70,16 @@ const AccountTab: React.FC = () => {
       })
     },
     onSuccess: async () => {
-      toast.success('Personal profile updated')
+      toast.success(t('settings.account.toasts.profileUpdated'))
       await refreshUser()
       trackSettings(EventAction.EDIT, { section: 'account', operation: 'update_personal_profile' })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
-      toast.error(translateBackendKey(error.response?.data?.detail) || 'Failed to update profile')
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('settings.account.toasts.failedToUpdateProfile')
+      )
     },
   })
 
@@ -88,7 +91,7 @@ const AccountTab: React.FC = () => {
       } as Parameters<typeof settingsAPI.updateSystemSettings>[0])
     },
     onSuccess: async () => {
-      toast.success('Deployment profile updated')
+      toast.success(t('settings.account.toasts.deploymentUpdated'))
       await refreshUser()
       trackSettings(EventAction.EDIT, {
         section: 'account',
@@ -98,7 +101,8 @@ const AccountTab: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
       toast.error(
-        translateBackendKey(error.response?.data?.detail) || 'Failed to update deployment profile'
+        translateBackendKey(error.response?.data?.detail) ||
+          t('settings.account.toasts.failedToUpdateDeployment')
       )
     },
   })
@@ -151,8 +155,8 @@ const AccountTab: React.FC = () => {
             displayName={accountDisplayName}
             subtitle={
               user?.deployment_type === 'enterprise'
-                ? 'Your personal profile is separate from the system-wide deployment identity.'
-                : 'Your personal account settings, security, and access are managed here.'
+                ? t('settings.account.subtitle.enterprise')
+                : t('settings.account.subtitle.individual')
             }
             roleLabel={currentUserRolePresentation.label}
             roleColor={currentUserRolePresentation.color}

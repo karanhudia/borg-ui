@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   AlertCircle,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import EntityCard, { ActionItem, StatItem } from './EntityCard'
 import { Box, CircularProgress, Tooltip, useTheme, alpha } from '@mui/material'
 import { formatDateShort } from '../utils/dateUtils'
@@ -78,6 +79,7 @@ export default function NotificationCard({
   onDelete,
   isTesting = false,
 }: NotificationCardProps) {
+  const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -95,25 +97,27 @@ export default function NotificationCard({
   const stats: StatItem[] = [
     {
       icon: <Bell size={11} />,
-      label: 'Service',
+      label: t('notifications.card.stats.service'),
       value: getServiceType(notification.service_url),
     },
     {
       icon: <Zap size={11} />,
-      label: 'Events',
-      value: `${eventCount} active`,
+      label: t('notifications.card.stats.events'),
+      value: `${eventCount} ${t('notifications.card.stats.active')}`,
     },
     {
       icon: <Database size={11} />,
-      label: 'Scope',
+      label: t('notifications.card.stats.scope'),
       value: notification.monitor_all_repositories
-        ? 'All repos'
-        : `${notification.repositories.length} repo${notification.repositories.length !== 1 ? 's' : ''}`,
+        ? t('notifications.card.stats.allRepos')
+        : t('notifications.card.stats.repoCount', { count: notification.repositories.length }),
     },
     {
       icon: <Clock size={11} />,
-      label: 'Last Used',
-      value: notification.last_used_at ? formatDateShort(notification.last_used_at) : 'Never',
+      label: t('notifications.card.stats.lastUsed'),
+      value: notification.last_used_at
+        ? formatDateShort(notification.last_used_at)
+        : t('common.never'),
       tooltip: notification.last_used_at ? notification.last_used_at : '',
     },
   ]
@@ -138,49 +142,51 @@ export default function NotificationCard({
   const categories = [
     {
       icon: <Archive size={10} />,
-      label: 'Backup',
+      label: t('notifications.card.categories.backup'),
       active:
         notification.notify_on_backup_start ||
         notification.notify_on_backup_success ||
         notification.notify_on_backup_failure,
       tooltip:
         [
-          notification.notify_on_backup_start && 'Start',
-          notification.notify_on_backup_success && 'Success',
-          notification.notify_on_backup_failure && 'Failure',
+          notification.notify_on_backup_start && t('notifications.card.events.start'),
+          notification.notify_on_backup_success && t('notifications.card.events.success'),
+          notification.notify_on_backup_failure && t('notifications.card.events.failure'),
         ]
           .filter(Boolean)
-          .join(' · ') || 'Off',
+          .join(' · ') || t('notifications.card.events.off'),
     },
     {
       icon: <RotateCcw size={10} />,
-      label: 'Restore',
+      label: t('notifications.card.categories.restore'),
       active: notification.notify_on_restore_success || notification.notify_on_restore_failure,
       tooltip:
         [
-          notification.notify_on_restore_success && 'Success',
-          notification.notify_on_restore_failure && 'Failure',
+          notification.notify_on_restore_success && t('notifications.card.events.success'),
+          notification.notify_on_restore_failure && t('notifications.card.events.failure'),
         ]
           .filter(Boolean)
-          .join(' · ') || 'Off',
+          .join(' · ') || t('notifications.card.events.off'),
     },
     {
       icon: <ShieldCheck size={10} />,
-      label: 'Check',
+      label: t('notifications.card.categories.check'),
       active: notification.notify_on_check_success || notification.notify_on_check_failure,
       tooltip:
         [
-          notification.notify_on_check_success && 'Success',
-          notification.notify_on_check_failure && 'Failure',
+          notification.notify_on_check_success && t('notifications.card.events.success'),
+          notification.notify_on_check_failure && t('notifications.card.events.failure'),
         ]
           .filter(Boolean)
-          .join(' · ') || 'Off',
+          .join(' · ') || t('notifications.card.events.off'),
     },
     {
       icon: <AlertCircle size={10} />,
-      label: 'Schedule',
+      label: t('notifications.card.categories.schedule'),
       active: notification.notify_on_schedule_failure,
-      tooltip: notification.notify_on_schedule_failure ? 'Errors' : 'Off',
+      tooltip: notification.notify_on_schedule_failure
+        ? t('notifications.card.events.errors')
+        : t('notifications.card.events.off'),
     },
   ]
 
@@ -236,24 +242,24 @@ export default function NotificationCard({
   const actions: ActionItem[] = [
     {
       icon: isTesting ? <CircularProgress size={16} /> : <TestTube size={16} />,
-      tooltip: 'Send test notification',
+      tooltip: t('notifications.card.actions.sendTest'),
       onClick: onTest,
       disabled: isTesting,
     },
     {
       icon: <Copy size={16} />,
-      tooltip: 'Duplicate',
+      tooltip: t('notifications.card.actions.duplicate'),
       onClick: onDuplicate,
     },
     {
       icon: <Pencil size={16} />,
-      tooltip: 'Edit',
+      tooltip: t('common.buttons.edit'),
       onClick: onEdit,
       color: 'primary',
     },
     {
       icon: <Trash2 size={16} />,
-      tooltip: 'Delete',
+      tooltip: t('common.buttons.delete'),
       onClick: onDelete,
       color: 'error',
     },

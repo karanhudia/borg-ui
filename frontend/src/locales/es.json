@@ -173,7 +173,7 @@
       "emptyRecorded": "Aún no se ha registrado actividad",
       "viewAll": "Ver toda la actividad",
       "fullLog": "Registro completo",
-      "last14Days": "Actividad — últimos 14 días"
+      "last14Days": "Actividad, últimos 14 días"
     },
     "storageDonut": {
       "archivesCount": "{{count}} archivos",
@@ -193,7 +193,7 @@
       "now": "ahora",
       "pausedTitle": "Pausado: {{name}}",
       "pausedTitleGeneric": "Programación pausada",
-      "nextRunTitle": "{{name}} — próxima ejecución {{label}}",
+      "nextRunTitle": "{{name}}: próxima ejecución {{label}}",
       "nextRunTitleGeneric": "Próxima ejecución en {{label}}"
     },
     "activityTimeline": {
@@ -381,6 +381,49 @@
       "compactFailed": "Error en la compactación",
       "completed": "Mantenimiento completado"
     },
+    "card": {
+      "stats": {
+        "schedule": "Schedule",
+        "repository": "Repository",
+        "lastRun": "Last Run",
+        "nextRun": "Next Run"
+      },
+      "meta": {
+        "note": "Note",
+        "prune": "Prune",
+        "lastPruned": "Last Pruned",
+        "compact": "Compact",
+        "lastCompact": "Last Compact",
+        "afterBackup": "After backup"
+      },
+      "actions": {
+        "duplicate": "Duplicate",
+        "runNow": "Run Now"
+      },
+      "badge": {
+        "clickToDisable": "Click to disable",
+        "clickToEnable": "Click to enable",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      }
+    },
+    "checkCard": {
+      "stats": {
+        "lastCheck": "Last Check",
+        "nextCheck": "Next Check",
+        "notSet": "Not set",
+        "maxDuration": "Max Duration",
+        "unlimited": "Unlimited"
+      },
+      "actions": {
+        "editSchedule": "Edit schedule",
+        "removeSchedule": "Remove schedule",
+        "runCheck": "Run Check"
+      },
+      "badge": {
+        "healthCheck": "Health Check"
+      }
+    },
     "table": {
       "status": "Estado",
       "jobName": "Nombre del trabajo",
@@ -547,7 +590,36 @@
     },
     "users": {
       "title": "Gestión de usuarios",
+      "subtitle": "Manage account records and repository-level access from one admin surface.",
       "addUser": "Agregar usuario",
+      "stats": {
+        "total": "Total",
+        "active": "Active",
+        "admins": "Admins",
+        "operators": "Operators",
+        "viewers": "Viewers"
+      },
+      "statLabels": {
+        "joined": "Joined",
+        "lastLogin": "Last login",
+        "status": "Status"
+      },
+      "actions": {
+        "edit": "Editar usuario",
+        "resetPassword": "Restablecer contraseña",
+        "delete": "Eliminar usuario",
+        "manageAccess": "Manage Access"
+      },
+      "repositoryAccess": {
+        "title": "Repository Access",
+        "globalAccess": "Global access",
+        "globalAccessDesc": "Admin accounts inherit full access to all repositories. No per-repository grants needed."
+      },
+      "accessSummary": {
+        "adminRole": "Admin role grants full access to all repositories.",
+        "defaultAccess": "Default access is all repositories as {{role}}. Switch to selected repositories only if you want to limit them.",
+        "restricted": "This user is currently restricted to selected repositories only."
+      },
       "table": {
         "user": "Usuario",
         "status": "Estado",
@@ -558,16 +630,14 @@
       "roles": {
         "admin": "Administrador",
         "operator": "Operador",
-        "viewer": "Visualizador"
+        "viewer": "Visualizador",
+        "adminDescription": "Admin: Full access to all features and settings",
+        "operatorDescription": "Operator: Can run backups, manage schedules. Cannot manage users or system settings",
+        "viewerDescription": "Viewer: Read-only access"
       },
       "status": {
         "active": "Activo",
         "inactive": "Inactivo"
-      },
-      "actions": {
-        "edit": "Editar usuario",
-        "resetPassword": "Restablecer contraseña",
-        "delete": "Eliminar usuario"
       },
       "createDialog": {
         "title": "Crear usuario"
@@ -578,7 +648,9 @@
       "fields": {
         "username": "Usuario",
         "email": "Correo electrónico",
-        "password": "Contraseña"
+        "password": "Contraseña",
+        "fullName": "Full name",
+        "role": "Role"
       },
       "buttons": {
         "cancel": "Cancelar",
@@ -613,6 +685,100 @@
       "passwordReset": "Contraseña restablecida correctamente",
       "failedToResetPassword": "Error al restablecer la contraseña",
       "passwordsDoNotMatch": "Las nuevas contraseñas no coinciden"
+    },
+    "permissions": {
+      "scope": {
+        "title": "Repository scope",
+        "allRepositories": "All repositories",
+        "selectedOnly": "Selected only",
+        "autoInheritHint": "New repositories inherit this automatically.",
+        "restrictedHint": "Use this when you want to limit access to a few repositories only.",
+        "automaticAccess": "Automatic {{role}} access",
+        "futureInheritHint": "Future repositories inherit this access automatically.",
+        "restrictedAccess": "Restricted access. This user only sees repositories assigned below."
+      },
+      "alert": {
+        "allAccessPrefix": "This user currently has access to all repositories as",
+        "allAccessSuffix": ". Switch to selected repositories only if you want to restrict them.",
+        "automaticAccessPrefix": "This account currently has automatic access to all repositories as"
+      },
+      "empty": {
+        "automaticCoverage": "No repository-specific assignments. Automatic access covers current and future repositories.",
+        "noPermissions": "No repository permissions assigned yet."
+      },
+      "actions": {
+        "removeAccess": "Remove access"
+      },
+      "grantAccess": {
+        "title": "Grant access",
+        "noRepositories": "No repositories configured. Add a repository first.",
+        "allAssigned": "All repositories are already assigned to this user.",
+        "selectRepository": "Select repository",
+        "assign": "Assign"
+      },
+      "toasts": {
+        "assigned": "Permission assigned",
+        "failedToAssign": "Failed to assign permission",
+        "removed": "Permission removed",
+        "failedToRemove": "Failed to remove permission",
+        "updated": "Permission updated",
+        "failedToUpdate": "Failed to update permission",
+        "automaticUpdated": "Automatic access updated",
+        "automaticCleared": "Automatic access cleared",
+        "failedToUpdateAutomatic": "Failed to update automatic access"
+      },
+      "saveChanges": "Save changes"
+    },
+    "account": {
+      "subtitle": {
+        "individual": "Your personal account settings, security, and access are managed here.",
+        "enterprise": "Personal profile is separate from the system-wide deployment identity."
+      },
+      "toasts": {
+        "profileUpdated": "Personal profile updated",
+        "failedToUpdateProfile": "Failed to update profile",
+        "deploymentUpdated": "Deployment profile updated",
+        "failedToUpdateDeployment": "Failed to update deployment profile"
+      },
+      "profile": {
+        "title": "Personal profile",
+        "description": "Your own identity. Changes here do not affect the system-wide deployment identity.",
+        "saving": "Saving…",
+        "saveButton": "Save profile",
+        "setup": {
+          "title": "Finish account setup",
+          "description": "Change your password first, then update your personal profile details below."
+        },
+        "deployment": {
+          "title": "Deployment profile",
+          "description": "System-wide setting. Controls how this deployment presents itself to all users.",
+          "individual": "Individual",
+          "individualDesc": "Show admin full name as the account identity.",
+          "enterprise": "Enterprise",
+          "enterpriseDesc": "Show an organization name as the deployment identity.",
+          "orgName": "Organization name",
+          "saveButton": "Save deployment"
+        }
+      },
+      "security": {
+        "passwordUpdateRequired": "Password update required",
+        "accountPassword": "Account password",
+        "passwordUpdateHint": "Action required: update your password before continuing.",
+        "changeCredentialsHint": "Click to change your login credentials",
+        "updateLink": "Update"
+      },
+      "access": {
+        "title": "Access",
+        "description": "Tokens and repository access live under the same account umbrella.",
+        "permissions": {
+          "title": "Repository permissions",
+          "subtitle": "Your current repository-level access."
+        },
+        "globalAccess": {
+          "title": "Global access",
+          "description": "Admin accounts inherit full access to all repositories and settings."
+        }
+      }
     }
   },
   "sshConnections": {
@@ -1275,6 +1441,43 @@
       "restoreEvents": "Eventos de restauración",
       "checkJobs": "Trabajos de verificación",
       "systemEvents": "Eventos del sistema"
+    },
+    "card": {
+      "stats": {
+        "service": "Service",
+        "events": "Events",
+        "active": "active",
+        "scope": "Scope",
+        "allRepos": "All repos",
+        "repoCount_one": "{{count}} repo",
+        "repoCount_other": "{{count}} repos",
+        "lastUsed": "Last Used"
+      },
+      "categories": {
+        "backup": "Backup",
+        "restore": "Restore",
+        "check": "Check",
+        "schedule": "Schedule"
+      },
+      "events": {
+        "start": "Start",
+        "success": "Success",
+        "failure": "Failure",
+        "off": "Off",
+        "errors": "Errors"
+      },
+      "actions": {
+        "sendTest": "Send test notification",
+        "duplicate": "Duplicate"
+      },
+      "confirmDelete": {
+        "messagePrefix": "Are you sure you want to delete",
+        "messageSuffix": "? You will no longer receive notifications from this service."
+      }
+    },
+    "confirmDelete": {
+      "messagePrefix": "Are you sure you want to delete",
+      "messageSuffix": "? You will no longer receive notifications from this service."
     }
   },
   "preferences": {

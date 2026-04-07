@@ -1,4 +1,5 @@
 import { Chip } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import { CalendarClock, History, CalendarCheck, Timer, Play, Pencil, Trash2 } from 'lucide-react'
 import EntityCard, { StatItem, ActionItem } from './EntityCard'
 import {
@@ -36,47 +37,53 @@ export default function ScheduleCheckCard({
   onDelete,
   onRunNow,
 }: ScheduleCheckCardProps) {
+  const { t } = useTranslation()
+
   const stats: StatItem[] = [
     {
       icon: <CalendarClock size={11} />,
-      label: 'Schedule',
+      label: t('common.schedule'),
       value: check.check_cron_expression
         ? formatCronHuman(convertCronToLocal(check.check_cron_expression))
-        : 'Not set',
+        : t('schedule.checkCard.stats.notSet'),
       tooltip: check.check_cron_expression ?? '',
     },
     {
       icon: <History size={11} />,
-      label: 'Last Check',
-      value: check.last_scheduled_check ? formatDateShort(check.last_scheduled_check) : 'Never',
+      label: t('schedule.checkCard.stats.lastCheck'),
+      value: check.last_scheduled_check
+        ? formatDateShort(check.last_scheduled_check)
+        : t('common.never'),
       tooltip: check.last_scheduled_check ? formatDateTimeFull(check.last_scheduled_check) : '',
     },
     {
       icon: <CalendarCheck size={11} />,
-      label: 'Next Check',
-      value: check.next_scheduled_check ? formatDateShort(check.next_scheduled_check) : 'Never',
+      label: t('schedule.checkCard.stats.nextCheck'),
+      value: check.next_scheduled_check
+        ? formatDateShort(check.next_scheduled_check)
+        : t('common.never'),
       tooltip: check.next_scheduled_check ? formatDateTimeFull(check.next_scheduled_check) : '',
     },
     {
       icon: <Timer size={11} />,
-      label: 'Max Duration',
+      label: t('schedule.checkCard.stats.maxDuration'),
       value: check.check_max_duration
         ? `${Math.round(check.check_max_duration / 60)}m`
-        : 'Unlimited',
+        : t('schedule.checkCard.stats.unlimited'),
     },
   ]
 
   const actions: ActionItem[] = [
     {
       icon: <Pencil size={16} />,
-      tooltip: 'Edit schedule',
+      tooltip: t('schedule.checkCard.actions.editSchedule'),
       onClick: onEdit,
       color: 'primary',
       hidden: !canManage,
     },
     {
       icon: <Trash2 size={16} />,
-      tooltip: 'Remove schedule',
+      tooltip: t('schedule.checkCard.actions.removeSchedule'),
       onClick: onDelete,
       color: 'error',
       hidden: !canManage,
@@ -85,7 +92,7 @@ export default function ScheduleCheckCard({
 
   const badge = (
     <Chip
-      label="Health Check"
+      label={t('schedule.checkCard.badge.healthCheck')}
       size="small"
       variant="outlined"
       color="info"
@@ -103,7 +110,7 @@ export default function ScheduleCheckCard({
       primaryAction={
         canManage
           ? {
-              label: 'Run Check',
+              label: t('schedule.checkCard.actions.runCheck'),
               icon: <Play size={13} />,
               onClick: onRunNow,
             }

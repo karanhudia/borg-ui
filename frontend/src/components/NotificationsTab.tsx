@@ -720,8 +720,8 @@ const NotificationsTab: React.FC = () => {
         <DialogTitle>{t('notifications.deleteServiceTitle')}</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete <strong>{deleteConfirm?.name}</strong>? You will no
-            longer receive notifications from this service.
+            {t('notifications.confirmDelete.messagePrefix')} <strong>{deleteConfirm?.name}</strong>
+            {t('notifications.confirmDelete.messageSuffix')}
           </Typography>
         </DialogContent>
         <DialogActions>

@@ -1,4 +1,5 @@
 import { Box, Stack, Typography } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import { Lock } from 'lucide-react'
 
 interface AccountSecuritySectionProps {
@@ -10,6 +11,8 @@ export default function AccountSecuritySection({
   mustChangePassword,
   onOpenChangePassword,
 }: AccountSecuritySectionProps) {
+  const { t } = useTranslation()
+
   return (
     <Box
       onClick={onOpenChangePassword}
@@ -63,12 +66,14 @@ export default function AccountSecuritySection({
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="body2" fontWeight={600} noWrap>
-            {mustChangePassword ? 'Password update required' : 'Account password'}
+            {mustChangePassword
+              ? t('settings.account.security.passwordUpdateRequired')
+              : t('settings.account.security.accountPassword')}
           </Typography>
           <Typography variant="caption" color="text.secondary" noWrap>
             {mustChangePassword
-              ? 'Action required — you must update before continuing.'
-              : 'Click to change your login credentials'}
+              ? t('settings.account.security.passwordUpdateHint')
+              : t('settings.account.security.changeCredentialsHint')}
           </Typography>
         </Box>
       </Stack>
@@ -82,7 +87,7 @@ export default function AccountSecuritySection({
           letterSpacing: '0.02em',
         }}
       >
-        {mustChangePassword ? 'Update →' : '→'}
+        {mustChangePassword ? `${t('settings.account.security.updateLink')} →` : '→'}
       </Box>
     </Box>
   )

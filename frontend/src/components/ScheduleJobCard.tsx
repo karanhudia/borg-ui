@@ -1,4 +1,5 @@
 import { Box, Switch, Tooltip, Typography } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 import {
   CalendarClock,
   Database,
@@ -90,50 +91,56 @@ export default function ScheduleJobCard({
   isRunNowPending,
   isDuplicatePending,
 }: ScheduleJobCardProps) {
+  const { t } = useTranslation()
+
   const stats: StatItem[] = [
     {
       icon: <CalendarClock size={11} />,
-      label: 'Schedule',
+      label: t('schedule.card.stats.schedule'),
       value: formatCronHuman(convertCronToLocal(job.cron_expression)),
       tooltip: job.cron_expression,
     },
     {
       icon: <Database size={11} />,
-      label: 'Repository',
+      label: t('schedule.card.stats.repository'),
       value: getRepoLabel(job, repositories),
     },
     {
       icon: <History size={11} />,
-      label: 'Last Run',
-      value: job.last_run ? formatDateShort(job.last_run) : 'Never',
+      label: t('schedule.card.stats.lastRun'),
+      value: job.last_run ? formatDateShort(job.last_run) : t('common.never'),
       tooltip: job.last_run ? formatDateTimeFull(job.last_run) : '',
     },
     {
       icon: <CalendarCheck size={11} />,
-      label: 'Next Run',
-      value: job.next_run ? formatDateShort(job.next_run) : 'Never',
+      label: t('schedule.card.stats.nextRun'),
+      value: job.next_run ? formatDateShort(job.next_run) : t('common.never'),
       tooltip: job.next_run ? formatDateTimeFull(job.next_run) : '',
     },
   ]
 
   const meta: MetaItem[] = []
-  if (job.description) meta.push({ label: 'Note', value: job.description })
+  if (job.description) meta.push({ label: t('schedule.card.meta.note'), value: job.description })
   if (job.run_prune_after)
     meta.push({
-      label: 'Prune',
+      label: t('schedule.card.meta.prune'),
       value: `${job.prune_keep_daily}d/${job.prune_keep_weekly}w/${job.prune_keep_monthly}m/${job.prune_keep_yearly}y`,
       tooltip: `Keep: daily=${job.prune_keep_daily} weekly=${job.prune_keep_weekly} monthly=${job.prune_keep_monthly} yearly=${job.prune_keep_yearly}`,
     })
   if (job.last_prune)
     meta.push({
-      label: 'Last Pruned',
+      label: t('schedule.card.meta.lastPruned'),
       value: formatDateShort(job.last_prune),
       tooltip: formatDateTimeFull(job.last_prune),
     })
-  if (job.run_compact_after) meta.push({ label: 'Compact', value: 'After backup' })
+  if (job.run_compact_after)
+    meta.push({
+      label: t('schedule.card.meta.compact'),
+      value: t('schedule.card.meta.afterBackup'),
+    })
   if (job.last_compact)
     meta.push({
-      label: 'Last Compact',
+      label: t('schedule.card.meta.lastCompact'),
       value: formatDateShort(job.last_compact),
       tooltip: formatDateTimeFull(job.last_compact),
     })
@@ -141,21 +148,21 @@ export default function ScheduleJobCard({
   const actions: ActionItem[] = [
     {
       icon: <Copy size={16} />,
-      tooltip: 'Duplicate',
+      tooltip: t('schedule.card.actions.duplicate'),
       onClick: onDuplicate,
       disabled: isDuplicatePending || !canManage,
       hidden: !canManage,
     },
     {
       icon: <Pencil size={16} />,
-      tooltip: 'Edit',
+      tooltip: t('common.buttons.edit'),
       onClick: onEdit,
       color: 'primary',
       hidden: !canManage,
     },
     {
       icon: <Trash2 size={16} />,
-      tooltip: 'Delete',
+      tooltip: t('common.buttons.delete'),
       onClick: onDelete,
       color: 'error',
       hidden: !canManage,
@@ -163,7 +170,16 @@ export default function ScheduleJobCard({
   ]
 
   const badge = (
-    <Tooltip title={canManage ? (job.enabled ? 'Click to disable' : 'Click to enable') : ''} arrow>
+    <Tooltip
+      title={
+        canManage
+          ? job.enabled
+            ? t('schedule.card.badge.clickToDisable')
+            : t('schedule.card.badge.clickToEnable')
+          : ''
+      }
+      arrow
+    >
       <Box
         sx={{
           display: 'flex',
@@ -192,7 +208,7 @@ export default function ScheduleJobCard({
             mr: 0.5,
           }}
         >
-          {job.enabled ? 'Enabled' : 'Disabled'}
+          {job.enabled ? t('schedule.card.badge.enabled') : t('schedule.card.badge.disabled')}
         </Typography>
       </Box>
     </Tooltip>
@@ -209,7 +225,7 @@ export default function ScheduleJobCard({
       primaryAction={
         canManage
           ? {
-              label: 'Run Now',
+              label: t('schedule.card.actions.runNow'),
               icon: <Play size={13} />,
               onClick: onRunNow,
               disabled: !job.enabled || isRunNowPending,

@@ -1,4 +1,5 @@
 import { Box, Button, CircularProgress, Divider, Stack, TextField, Typography } from '@mui/material'
+import { useTranslation } from 'react-i18next'
 
 export interface AccountProfileFormData {
   username: string
@@ -36,6 +37,8 @@ export default function AccountProfileSection({
   onSaveProfile,
   onSaveDeployment,
 }: AccountProfileSectionProps) {
+  const { t } = useTranslation()
+
   return (
     <Stack spacing={3}>
       {showSetupBanner && (
@@ -50,10 +53,10 @@ export default function AccountProfileSection({
           }}
         >
           <Typography variant="body2" fontWeight={700}>
-            Finish account setup
+            {t('settings.account.profile.setup.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Change your password first, then update your personal profile details below.
+            {t('settings.account.profile.setup.description')}
           </Typography>
         </Box>
       )}
@@ -61,10 +64,10 @@ export default function AccountProfileSection({
       {/* Personal profile */}
       <Box>
         <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-          Personal profile
+          {t('settings.account.profile.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Your own identity. Changes here do not affect the system-wide deployment identity.
+          {t('settings.account.profile.description')}
         </Typography>
         <form
           onSubmit={(e) => {
@@ -74,7 +77,7 @@ export default function AccountProfileSection({
         >
           <Stack spacing={2}>
             <TextField
-              label="Username"
+              label={t('settings.users.fields.username')}
               value={profileForm.username}
               onChange={(e) => onProfileFormChange({ username: e.target.value })}
               required
@@ -82,7 +85,7 @@ export default function AccountProfileSection({
               size="small"
             />
             <TextField
-              label="Email"
+              label={t('settings.users.fields.email')}
               type="email"
               value={profileForm.email}
               onChange={(e) => onProfileFormChange({ email: e.target.value })}
@@ -91,7 +94,7 @@ export default function AccountProfileSection({
               size="small"
             />
             <TextField
-              label="Full name"
+              label={t('settings.users.fields.fullName')}
               value={profileForm.full_name}
               onChange={(e) => onProfileFormChange({ full_name: e.target.value })}
               fullWidth
@@ -104,7 +107,9 @@ export default function AccountProfileSection({
                 disabled={isSavingProfile}
                 startIcon={isSavingProfile ? <CircularProgress size={14} /> : null}
               >
-                {isSavingProfile ? 'Saving…' : 'Save profile'}
+                {isSavingProfile
+                  ? t('settings.account.profile.saving')
+                  : t('settings.account.profile.saveButton')}
               </Button>
             </Box>
           </Stack>
@@ -118,10 +123,10 @@ export default function AccountProfileSection({
           {/* Deployment profile */}
           <Box>
             <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-              Deployment profile
+              {t('settings.account.profile.deployment.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              System-wide setting. Controls how this deployment presents itself to all users.
+              {t('settings.account.profile.deployment.description')}
             </Typography>
             <Box
               sx={{
@@ -135,13 +140,13 @@ export default function AccountProfileSection({
                 [
                   {
                     key: 'individual',
-                    title: 'Individual',
-                    body: 'Show admin full name as the account identity.',
+                    title: t('settings.account.profile.deployment.individual'),
+                    body: t('settings.account.profile.deployment.individualDesc'),
                   },
                   {
                     key: 'enterprise',
-                    title: 'Enterprise',
-                    body: 'Show an organization name as the deployment identity.',
+                    title: t('settings.account.profile.deployment.enterprise'),
+                    body: t('settings.account.profile.deployment.enterpriseDesc'),
                   },
                 ] as const
               ).map((option) => (
@@ -173,7 +178,7 @@ export default function AccountProfileSection({
             </Box>
             {deploymentForm.deployment_type === 'enterprise' && (
               <TextField
-                label="Organization name"
+                label={t('settings.account.profile.deployment.orgName')}
                 value={deploymentForm.enterprise_name}
                 onChange={(e) => onDeploymentFormChange({ enterprise_name: e.target.value })}
                 fullWidth
@@ -191,7 +196,9 @@ export default function AccountProfileSection({
               startIcon={isSavingDeployment ? <CircularProgress size={14} /> : null}
               onClick={onSaveDeployment}
             >
-              {isSavingDeployment ? 'Saving…' : 'Save deployment'}
+              {isSavingDeployment
+                ? t('settings.account.profile.saving')
+                : t('settings.account.profile.deployment.saveButton')}
             </Button>
           </Box>
         </>
