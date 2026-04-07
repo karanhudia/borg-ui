@@ -52,6 +52,8 @@ const STAT_ICONS = [
   <ScanSearch size={11} />,
 ]
 
+const STAT_COLORS = ['primary', 'success', 'warning', 'info'] as const
+
 export default function RepositoryCard({
   repository,
   isInJobsSet,
@@ -170,6 +172,19 @@ export default function RepositoryCard({
       bgcolor: alpha(theme.palette.primary.main, 0.18),
       color: theme.palette.primary.main,
     },
+  }
+
+  const coloredIconBtnSx = (colorKey: 'primary' | 'success' | 'secondary' | 'warning' | 'info') => {
+    const color = (theme.palette[colorKey] as { main: string }).main
+    return {
+      ...iconBtnSx,
+      color: alpha(color, isDark ? 0.65 : 0.55),
+      '&:hover': {
+        bgcolor: alpha(color, isDark ? 0.12 : 0.09),
+        color: color,
+      },
+      '&.Mui-disabled': { opacity: 0.28 },
+    }
   }
 
   return (
@@ -308,6 +323,8 @@ export default function RepositoryCard({
             const isRightColXs = i % 2 === 1
             const isLastSm = i === keyStats.length - 1
             const isFirstRowXs = i < 2
+            const colorKey = STAT_COLORS[i]
+            const statColor = (theme.palette[colorKey] as { main: string }).main
             return (
               <Tooltip key={stat.label} title={stat.tooltip} arrow>
                 <Box
@@ -324,7 +341,13 @@ export default function RepositoryCard({
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.35 }}>
-                    <Box sx={{ color: 'text.disabled', display: 'flex', alignItems: 'center' }}>
+                    <Box
+                      sx={{
+                        color: alpha(statColor, 0.7),
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
+                    >
                       {STAT_ICONS[i]}
                     </Box>
                     <Typography
@@ -333,7 +356,7 @@ export default function RepositoryCard({
                         fontWeight: 700,
                         textTransform: 'uppercase',
                         letterSpacing: '0.07em',
-                        color: 'text.disabled',
+                        color: alpha(statColor, 0.7),
                         lineHeight: 1,
                       }}
                     >
@@ -416,7 +439,7 @@ export default function RepositoryCard({
                     }}
                     aria-label={t('repositoryCard.buttons.info')}
                     disabled={isMaintenanceRunning}
-                    sx={iconBtnSx}
+                    sx={coloredIconBtnSx('primary')}
                   >
                     <Info size={16} />
                   </IconButton>
@@ -432,7 +455,7 @@ export default function RepositoryCard({
                     onClick={onCheck}
                     aria-label={t('repositoryCard.buttons.check')}
                     disabled={isMaintenanceRunning}
-                    sx={checkJob ? activeIconBtnSx : iconBtnSx}
+                    sx={checkJob ? activeIconBtnSx : coloredIconBtnSx('success')}
                   >
                     {checkJob ? (
                       <RefreshCw size={16} className="animate-spin" />
@@ -452,7 +475,7 @@ export default function RepositoryCard({
                     onClick={onCompact}
                     aria-label={t('repositoryCard.buttons.compact')}
                     disabled={isMaintenanceRunning}
-                    sx={compactJob ? activeIconBtnSx : iconBtnSx}
+                    sx={compactJob ? activeIconBtnSx : coloredIconBtnSx('secondary')}
                   >
                     {compactJob ? (
                       <RefreshCw size={16} className="animate-spin" />
@@ -472,7 +495,7 @@ export default function RepositoryCard({
                     onClick={onPrune}
                     aria-label={t('repositoryCard.buttons.prune')}
                     disabled={isMaintenanceRunning}
-                    sx={pruneJob ? activeIconBtnSx : iconBtnSx}
+                    sx={pruneJob ? activeIconBtnSx : coloredIconBtnSx('warning')}
                   >
                     {pruneJob ? (
                       <RefreshCw size={16} className="animate-spin" />
@@ -495,7 +518,7 @@ export default function RepositoryCard({
                     }}
                     aria-label={t('repositoryCard.buttons.viewArchives')}
                     disabled={isMaintenanceRunning}
-                    sx={iconBtnSx}
+                    sx={coloredIconBtnSx('info')}
                   >
                     <FolderOpen size={16} />
                   </IconButton>
