@@ -264,10 +264,16 @@ export default function ArchivesList({
               onChange={(_e, v) => v && handleSortChange({ target: { value: v } })}
               size="small"
             >
-              <ToggleButton value="date-desc" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>
+              <ToggleButton
+                value="date-desc"
+                sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}
+              >
                 {t('archivesList.newestFirst')}
               </ToggleButton>
-              <ToggleButton value="date-asc" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>
+              <ToggleButton
+                value="date-asc"
+                sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}
+              >
                 {t('archivesList.oldestFirst')}
               </ToggleButton>
             </ToggleButtonGroup>
