@@ -103,8 +103,10 @@ export default function ApiTokensSection() {
             borderColor: 'divider',
             bgcolor: 'action.hover',
             display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
             justifyContent: 'space-between',
-            alignItems: 'center',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            gap: { xs: 1.5, sm: 0 },
           }}
         >
           <Box>
@@ -120,6 +122,7 @@ export default function ApiTokensSection() {
             size="small"
             startIcon={<Plus size={14} />}
             onClick={() => setGenerateOpen(true)}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Generate
           </Button>
