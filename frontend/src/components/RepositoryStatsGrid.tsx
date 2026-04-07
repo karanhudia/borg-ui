@@ -32,7 +32,7 @@ function StatCard({ label, value, icon, colorKey }: StatCardProps) {
     <Box
       sx={{
         borderRadius: 2,
-        bgcolor: 'background.paper',
+        bgcolor: alpha(color, isDark ? 0.1 : 0.07),
         px: 2,
         py: 1.75,
         boxShadow: isDark
@@ -56,7 +56,7 @@ function StatCard({ label, value, icon, colorKey }: StatCardProps) {
               letterSpacing: '0.06em',
               fontSize: '0.6rem',
               fontWeight: 700,
-              color: 'text.disabled',
+              color,
               display: 'block',
               mb: 0.75,
             }}
@@ -66,13 +66,12 @@ function StatCard({ label, value, icon, colorKey }: StatCardProps) {
           <Typography
             variant="h5"
             fontWeight={700}
-            color="text.primary"
-            sx={{ lineHeight: 1.2, fontSize: { xs: '1.4rem', lg: '1.5rem' } }}
+            sx={{ lineHeight: 1.2, fontSize: { xs: '1.4rem', lg: '1.5rem' }, color }}
           >
             {value}
           </Typography>
         </Box>
-        <Box sx={{ color, opacity: 0.35, mt: 0.25, flexShrink: 0 }}>
+        <Box sx={{ color, opacity: 0.4, mt: 0.25, flexShrink: 0 }}>
           {icon}
         </Box>
       </Stack>
