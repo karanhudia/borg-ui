@@ -520,12 +520,7 @@ const Schedule: React.FC = () => {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs
-          value={currentTab}
-          onChange={(_, newValue) => setCurrentTab(newValue)}
-          variant="scrollable"
-          allowScrollButtonsMobile
-        >
+        <Tabs value={currentTab} onChange={(_, newValue) => setCurrentTab(newValue)}>
           <Tab label={t('schedule.tabs.backupJobs')} />
           <Tab label={t('schedule.tabs.repositoryChecks')} />
         </Tabs>

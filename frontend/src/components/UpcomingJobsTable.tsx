@@ -1,9 +1,11 @@
 import React from 'react'
-import { Card, CardContent, Typography, Stack, Box } from '@mui/material'
-import { Calendar } from 'lucide-react'
+import { Box, Typography, Stack, useTheme, alpha, Tooltip } from '@mui/material'
+import { Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDate, formatRelativeTime } from '../utils/dateUtils'
 import { Repository } from '../types'
+
+const ACCENT = '#059669'
 
 interface UpcomingJob {
   id: number
@@ -29,57 +31,136 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
   getRepositoryName,
 }) => {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
   if (upcomingJobs.length === 0) {
     return null
   }
 
+  const getRepoLabel = (job: UpcomingJob): string => {
+    if (job.repository_ids && job.repository_ids.length > 0) {
+      return t('upcomingJobs.repositories', { count: job.repository_ids.length })
+    }
+    if (job.repository_id) {
+      return repositories.find((r) => r.id === job.repository_id)?.name || 'Unknown'
+    }
+    return getRepositoryName(job.repository || '')
+  }
+
   return (
-    <Card sx={{ mb: 3 }}>
-      <CardContent>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-          <Calendar size={20} color="#1976d2" />
-          <Typography variant="h6" fontWeight={600}>
-            {t('upcomingJobs.title')}
-          </Typography>
-        </Stack>
-        <Stack spacing={1.5}>
-          {upcomingJobs.slice(0, 5).map((job) => (
+    <Box sx={{ mb: 3 }}>
+      {/* Section label */}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+        <Box
+          sx={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            bgcolor: ACCENT,
+            boxShadow: `0 0 6px ${alpha(ACCENT, 0.7)}`,
+            flexShrink: 0,
+          }}
+        />
+        <Typography
+          variant="caption"
+          sx={{
+            fontWeight: 700,
+            fontSize: '0.68rem',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'text.secondary',
+          }}
+        >
+          {t('upcomingJobs.title')}
+        </Typography>
+      </Box>
+
+      {/* Job rows */}
+      <Stack spacing={1}>
+        {upcomingJobs.slice(0, 5).map((job) => (
+          <Tooltip key={job.id} title={formatDate(job.next_run)} placement="top" arrow>
             <Box
-              key={job.id}
               sx={{
-                p: 2,
-                backgroundColor: 'action.hover',
-                borderRadius: 1,
                 display: 'flex',
-                justifyContent: 'space-between',
                 alignItems: 'center',
+                gap: 2,
+                px: 2,
+                py: 1.5,
+                borderRadius: 2,
+                border: '1px solid',
+                borderColor: alpha(ACCENT, isDark ? 0.2 : 0.15),
+                bgcolor: alpha(ACCENT, isDark ? 0.06 : 0.03),
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+                '&:hover': {
+                  borderColor: alpha(ACCENT, isDark ? 0.38 : 0.28),
+                  boxShadow: `0 2px 14px ${alpha(ACCENT, 0.1)}`,
+                },
               }}
             >
-              <Box>
-                <Typography variant="body2" fontWeight={500}>
+              {/* Left accent bar */}
+              <Box
+                sx={{
+                  width: 3,
+                  height: 32,
+                  borderRadius: 4,
+                  bgcolor: ACCENT,
+                  flexShrink: 0,
+                  boxShadow: `0 0 8px ${alpha(ACCENT, 0.5)}`,
+                }}
+              />
+
+              {/* Job name + repo — single line */}
+              <Box
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  overflow: 'hidden',
+                }}
+              >
+                <Typography variant="body2" fontWeight={600} noWrap sx={{ flexShrink: 0 }}>
                   {job.name}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {job.repository_ids && job.repository_ids.length > 0
-                    ? t('upcomingJobs.repositories', { count: job.repository_ids.length })
-                    : job.repository_id
-                      ? repositories.find((r) => r.id === job.repository_id)?.name || 'Unknown'
-                      : getRepositoryName(job.repository || '')}
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  noWrap
+                  sx={{ fontSize: '0.8rem', minWidth: 0 }}
+                >
+                  {getRepoLabel(job)}
                 </Typography>
               </Box>
-              <Box sx={{ textAlign: 'right' }}>
-                <Typography variant="body2" fontWeight={500}>
-                  {formatDate(job.next_run)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
+
+              {/* Countdown */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  px: 1.25,
+                  py: 0.5,
+                  borderRadius: 1.5,
+                  bgcolor: alpha(ACCENT, isDark ? 0.15 : 0.1),
+                  flexShrink: 0,
+                }}
+              >
+                <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Clock size={11} color={ACCENT} />
+                </Box>
+                <Typography
+                  sx={{ fontSize: '0.75rem', fontWeight: 700, color: ACCENT, lineHeight: 1 }}
+                >
                   {formatRelativeTime(job.next_run)}
                 </Typography>
               </Box>
             </Box>
-          ))}
-        </Stack>
-      </CardContent>
-    </Card>
+          </Tooltip>
+        ))}
+      </Stack>
+    </Box>
   )
 }
 
