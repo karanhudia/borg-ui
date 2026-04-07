@@ -381,17 +381,19 @@ export default function PlanInfoDrawer({
                   </Box>
                 </Box>
               ))}
-              <Typography
-                sx={{
-                  fontSize: '0.7rem',
-                  color: selectedColor,
-                  lineHeight: 1.4,
-                  mt: 0.25,
-                  fontWeight: 600,
-                }}
-              >
-                {t('plan.featureUnavailableInCommunity')}
-              </Typography>
+              {isFullAccess && (
+                <Typography
+                  sx={{
+                    fontSize: '0.7rem',
+                    color: selectedColor,
+                    lineHeight: 1.4,
+                    mt: 0.25,
+                    fontWeight: 600,
+                  }}
+                >
+                  {t('plan.featureUnavailableInCommunity')}
+                </Typography>
+              )}
             </>
           )}
         </Box>
