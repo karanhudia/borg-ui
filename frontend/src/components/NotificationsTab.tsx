@@ -300,24 +300,24 @@ const NotificationsTab: React.FC = () => {
           mb: 3,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-          <Box>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Typography variant="h6" fontWeight={600}>
               {t('notifications.title')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('notifications.subtitle')}
-            </Typography>
+            <Tooltip title={t('notifications.serviceUrlExamples')} arrow>
+              <IconButton
+                size="small"
+                onClick={() => setShowInfoModal(true)}
+                sx={{ color: 'text.disabled', '&:hover': { color: 'text.secondary' }, p: 0.25 }}
+              >
+                <Info size={14} />
+              </IconButton>
+            </Tooltip>
           </Box>
-          <Tooltip title={t('notifications.serviceUrlExamples')} arrow>
-            <IconButton
-              size="small"
-              onClick={() => setShowInfoModal(true)}
-              sx={{ mt: 0.25, color: 'text.disabled', '&:hover': { color: 'text.secondary' } }}
-            >
-              <Info size={16} />
-            </IconButton>
-          </Tooltip>
+          <Typography variant="body2" color="text.secondary">
+            {t('notifications.subtitle')}
+          </Typography>
         </Box>
         <Button
           variant="contained"
