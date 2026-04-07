@@ -114,7 +114,7 @@ class MultipleSourceDirTester:
         """
         try:
             headers = {
-                "Authorization": f"Bearer {self.auth_token}",
+                "X-Borg-Authorization": f"Bearer {self.auth_token}",
                 "Content-Type": "application/json"
             }
 
@@ -162,7 +162,7 @@ class MultipleSourceDirTester:
     def verify_repository_config(self, repo_id):
         """Verify repository has both source directories stored"""
         try:
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
 
             response = self.session.get(
                 f"{self.base_url}/api/repositories/",
@@ -210,7 +210,7 @@ class MultipleSourceDirTester:
         """
         try:
             headers = {
-                "Authorization": f"Bearer {self.auth_token}",
+                "X-Borg-Authorization": f"Bearer {self.auth_token}",
                 "Content-Type": "application/json"
             }
 
@@ -239,7 +239,7 @@ class MultipleSourceDirTester:
         """Wait for backup to complete"""
         import time
 
-        headers = {"Authorization": f"Bearer {self.auth_token}"}
+        headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
         start_time = time.time()
 
         while time.time() - start_time < timeout:

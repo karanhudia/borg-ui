@@ -134,7 +134,7 @@ class ArchiveBrowsingTester:
         Returns set of directory names
         """
         try:
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
             params = {"path": path}
 
             response = self.session.get(
@@ -219,7 +219,7 @@ class ArchiveBrowsingTester:
         Test that response size is reasonable (not fetching all files)
         """
         try:
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
             params = {"path": path}
 
             response = self.session.get(
@@ -313,7 +313,7 @@ class ArchiveBrowsingTester:
         """Add repository to Borg UI and return repo ID"""
         try:
             headers = {
-                "Authorization": f"Bearer {self.auth_token}",
+                "X-Borg-Authorization": f"Bearer {self.auth_token}",
                 "Content-Type": "application/json"
             }
 
@@ -351,7 +351,7 @@ class ArchiveBrowsingTester:
     def delete_repository_from_ui(self, repo_id: int):
         """Delete repository from UI"""
         try:
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
+            headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
             self.session.delete(
                 f"{self.base_url}/api/repositories/{repo_id}",
                 headers=headers,

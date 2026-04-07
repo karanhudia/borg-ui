@@ -259,7 +259,7 @@ TIMEOUT="${TIMEOUT:-10}"
 
 response=$(curl -s -w "%{http_code}" -o /dev/null \
   --max-time "$TIMEOUT" \
-  -H "Authorization: Bearer $API_TOKEN" \
+  -H "X-Borg-Authorization: Bearer $API_TOKEN" \
   "$API_URL/health")
 
 if [ "$response" = "200" ]; then
@@ -270,6 +270,8 @@ else
   exit 1
 fi
 ```
+
+> **Note:** The `X-Borg-Authorization` header is recommended for API requests because it avoids conflicts with reverse proxies that use HTTP Basic Auth. The legacy `Authorization` header is still accepted for backward compatibility, but `X-Borg-Authorization` takes precedence when both are present.
 
 ### File Sync to S3
 
