@@ -196,7 +196,11 @@ export default function DataTable<T>({
     )
   }
 
-  const renderActions = (row: T, iconOpacity = 0.45, justify: 'flex-start' | 'flex-end' = 'flex-end') => (
+  const renderActions = (
+    row: T,
+    iconOpacity = 0.45,
+    justify: 'flex-start' | 'flex-end' = 'flex-end'
+  ) => (
     <Box sx={{ display: 'flex', gap: 0.5, justifyContent: justify, flexWrap: 'wrap' }}>
       {actions?.map((action, idx) => {
         const shouldShow = action.show ? action.show(row) : true
@@ -204,7 +208,9 @@ export default function DataTable<T>({
 
         const isDisabled = action.disabled ? action.disabled(row) : false
         const tooltipText =
-          typeof action.tooltip === 'function' ? action.tooltip(row) : action.tooltip || action.label
+          typeof action.tooltip === 'function'
+            ? action.tooltip(row)
+            : action.tooltip || action.label
 
         const hoverBg = ACTION_HOVER_BG_BY_COLOR[action.color || 'default']
 

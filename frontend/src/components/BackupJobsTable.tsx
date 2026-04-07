@@ -405,7 +405,10 @@ export const BackupJobsTable = <T extends Job = Job>({
                 label={getTypeLabel(job.type || '', t)}
                 color={getTypeColor(job.type || '')}
                 size="small"
-                sx={{ maxWidth: '100%', '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
+                sx={{
+                  maxWidth: '100%',
+                  '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
+                }}
               />
             ),
           },
