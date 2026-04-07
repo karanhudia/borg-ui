@@ -27,67 +27,57 @@ export default function AppearanceTab() {
       </Box>
       <SettingsCard sx={{ maxWidth: 600 }}>
         <Stack spacing={2.5}>
-          <Box
-            sx={{
-              p: 2.25,
-              borderRadius: 3,
-              background: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? `linear-gradient(135deg, ${alpha(appearanceAccent, 0.2)}, rgba(255,255,255,0.02))`
-                  : `linear-gradient(135deg, ${alpha(appearanceAccent, 0.12)}, rgba(255,255,255,0.9))`,
-              border: `1px solid ${alpha(appearanceAccent, 0.2)}`,
-            }}
-          >
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1.5 }}>
-              <Box
-                sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: alpha(appearanceAccent, 0.14),
-                  color: appearanceAccent,
-                }}
-              >
-                {mode === 'auto' ? (
-                  <Monitor size={22} />
-                ) : effectiveMode === 'dark' ? (
-                  <Moon size={22} />
-                ) : (
-                  <Sun size={22} />
-                )}
-              </Box>
-              <Box>
-                <Typography variant="subtitle1" fontWeight={700}>
-                  {t('settings.appearance.theme')}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {t('settings.appearance.chooseTheme')}
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Chip
-              size="small"
-              label={
-                mode === 'auto'
-                  ? t('settings.appearance.autoStatus', {
-                      theme: t(`settings.appearance.themeOptions.${effectiveMode}`),
-                    })
-                  : t('settings.appearance.activeTheme', {
-                      theme: t(`settings.appearance.themeOptions.${mode}`),
-                    })
-              }
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Box
               sx={{
-                bgcolor: alpha(appearanceAccent, 0.12),
+                width: 42,
+                height: 42,
+                borderRadius: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                bgcolor: alpha(appearanceAccent, 0.14),
                 color: appearanceAccent,
-                border: `1px solid ${alpha(appearanceAccent, 0.24)}`,
-                fontWeight: 600,
+                flexShrink: 0,
               }}
-            />
-          </Box>
+            >
+              {mode === 'auto' ? (
+                <Monitor size={22} />
+              ) : effectiveMode === 'dark' ? (
+                <Moon size={22} />
+              ) : (
+                <Sun size={22} />
+              )}
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700}>
+                {t('settings.appearance.theme')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t('settings.appearance.chooseTheme')}
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Chip
+            size="small"
+            label={
+              mode === 'auto'
+                ? t('settings.appearance.autoStatus', {
+                    theme: t(`settings.appearance.themeOptions.${effectiveMode}`),
+                  })
+                : t('settings.appearance.activeTheme', {
+                    theme: t(`settings.appearance.themeOptions.${mode}`),
+                  })
+            }
+            sx={{
+              alignSelf: 'flex-start',
+              bgcolor: alpha(appearanceAccent, 0.12),
+              color: appearanceAccent,
+              border: `1px solid ${alpha(appearanceAccent, 0.24)}`,
+              fontWeight: 600,
+            }}
+          />
 
           <Box
             sx={{

@@ -215,11 +215,17 @@ export default function LicensingTab() {
             fullWidth
           />
 
-          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+          >
             <Button
               variant="contained"
               onClick={handleActivate}
               disabled={isMutating}
+              fullWidth
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
               startIcon={
                 activateMutation.isPending ? <CircularProgress size={14} color="inherit" /> : null
               }
@@ -236,6 +242,8 @@ export default function LicensingTab() {
                 refreshMutation.mutate()
               }}
               disabled={isMutating}
+              fullWidth
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
               startIcon={
                 refreshMutation.isPending ? <CircularProgress size={14} color="inherit" /> : null
               }
@@ -248,6 +256,8 @@ export default function LicensingTab() {
                 color="warning"
                 onClick={handleDeactivate}
                 disabled={isMutating}
+                fullWidth
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
                 startIcon={
                   deactivateMutation.isPending ? (
                     <CircularProgress size={14} color="inherit" />

@@ -38,12 +38,45 @@ export default function ArchiveCard({
       }}
     >
       <CardContent sx={{ py: 2 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+          justifyContent="space-between"
+          spacing={1.5}
+        >
           {/* Archive Info */}
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" fontWeight={600} sx={{ mb: 0.5 }}>
-              {archive.name}
-            </Typography>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="flex-start"
+              justifyContent="space-between"
+            >
+              <Typography
+                variant="h6"
+                fontWeight={600}
+                sx={{
+                  mb: 0.5,
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                  overflowWrap: 'anywhere',
+                  wordBreak: 'break-word',
+                  flex: 1,
+                  minWidth: 0,
+                }}
+              >
+                {archive.name}
+              </Typography>
+              {canDelete && (
+                <IconButton
+                  color="error"
+                  size="small"
+                  onClick={() => onDelete(archive.name)}
+                  sx={{ display: { xs: 'inline-flex', sm: 'none' }, mt: -0.25, mr: -0.5 }}
+                >
+                  <Trash2 size={18} />
+                </IconButton>
+              )}
+            </Stack>
             <Stack direction="row" spacing={2} alignItems="center">
               <Typography variant="body2" color="text.secondary">
                 {formatDate(archive.start)}
@@ -52,13 +85,26 @@ export default function ArchiveCard({
           </Box>
 
           {/* Actions */}
-          <Stack direction="row" spacing={1}>
+          <Box
+            sx={{
+              width: { xs: '100%', sm: 'auto' },
+              display: { xs: 'grid', sm: 'flex' },
+              gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))' },
+              gap: 1,
+              alignItems: 'center',
+            }}
+          >
             <Button
               variant="contained"
               size="small"
               startIcon={<Eye size={16} />}
               onClick={() => onView(archive)}
-              sx={{ textTransform: 'none' }}
+              fullWidth
+              sx={{
+                textTransform: 'none',
+                justifyContent: 'center',
+                gridColumn: { xs: '1 / -1', sm: 'auto' },
+              }}
             >
               {t('common.buttons.view')}
             </Button>
@@ -68,7 +114,8 @@ export default function ArchiveCard({
               color="success"
               startIcon={<RotateCcw size={16} />}
               onClick={() => onRestore(archive)}
-              sx={{ textTransform: 'none' }}
+              fullWidth
+              sx={{ textTransform: 'none', justifyContent: 'center' }}
             >
               {t('archiveCard.restore')}
             </Button>
@@ -78,17 +125,23 @@ export default function ArchiveCard({
               color="info"
               startIcon={<HardDrive size={16} />}
               onClick={() => onMount(archive)}
-              sx={{ textTransform: 'none' }}
+              fullWidth
+              sx={{ textTransform: 'none', justifyContent: 'center' }}
               disabled={mountDisabled}
             >
               {t('archiveCard.mount')}
             </Button>
             {canDelete && (
-              <IconButton color="error" size="small" onClick={() => onDelete(archive.name)}>
+              <IconButton
+                color="error"
+                size="small"
+                onClick={() => onDelete(archive.name)}
+                sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+              >
                 <Trash2 size={18} />
               </IconButton>
             )}
-          </Stack>
+          </Box>
         </Stack>
       </CardContent>
     </Card>
