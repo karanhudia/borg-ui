@@ -1,6 +1,6 @@
-import { Bell, BellOff, Clock, Copy, Database, Pencil, TestTube, Trash2, Zap } from 'lucide-react'
+import { Bell, BellOff, Clock, Copy, Database, Pencil, TestTube, Trash2, Zap, Archive, RotateCcw, ShieldCheck, AlertCircle } from 'lucide-react'
 import EntityCard, { ActionItem, StatItem } from './EntityCard'
-import { Chip, CircularProgress } from '@mui/material'
+import { Box, CircularProgress, Tooltip, useTheme, alpha } from '@mui/material'
 import { formatDateShort } from '../utils/dateUtils'
 
 interface NotificationSetting {
@@ -64,6 +64,9 @@ export default function NotificationCard({
   onDelete,
   isTesting = false,
 }: NotificationCardProps) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
   const eventCount = [
     notification.notify_on_backup_start,
     notification.notify_on_backup_success,
@@ -85,18 +88,6 @@ export default function NotificationCard({
       icon: <Zap size={11} />,
       label: 'Events',
       value: `${eventCount} active`,
-      tooltip: (() => {
-        const eventLabels: string[] = []
-        if (notification.notify_on_backup_start) eventLabels.push('Backup start')
-        if (notification.notify_on_backup_success) eventLabels.push('Backup success')
-        if (notification.notify_on_backup_failure) eventLabels.push('Backup failure')
-        if (notification.notify_on_restore_success) eventLabels.push('Restore success')
-        if (notification.notify_on_restore_failure) eventLabels.push('Restore failure')
-        if (notification.notify_on_check_success) eventLabels.push('Check success')
-        if (notification.notify_on_check_failure) eventLabels.push('Check failure')
-        if (notification.notify_on_schedule_failure) eventLabels.push('Schedule errors')
-        return eventLabels.length > 0 ? eventLabels.join(' · ') : 'No events configured'
-      })(),
     },
     {
       icon: <Database size={11} />,
@@ -113,14 +104,105 @@ export default function NotificationCard({
     },
   ]
 
+  // Badge: plain icon only, no text, no border
   const badge = (
-    <Chip
-      icon={notification.enabled ? <Bell size={14} /> : <BellOff size={14} />}
-      label={notification.enabled ? 'Active' : 'Muted'}
-      color={notification.enabled ? 'success' : 'default'}
-      size="small"
-      variant="outlined"
-    />
+    <Box
+      sx={{
+        display: 'flex',
+        color: notification.enabled
+          ? theme.palette.success.main
+          : isDark ? alpha('#fff', 0.2) : alpha('#000', 0.2),
+      }}
+    >
+      {notification.enabled ? <Bell size={16} /> : <BellOff size={16} />}
+    </Box>
+  )
+
+  // Event categories strip — 4 groups, each lit when any event in that category is on
+  const categories = [
+    {
+      icon: <Archive size={10} />,
+      label: 'Backup',
+      active: notification.notify_on_backup_start || notification.notify_on_backup_success || notification.notify_on_backup_failure,
+      tooltip: [
+        notification.notify_on_backup_start && 'Start',
+        notification.notify_on_backup_success && 'Success',
+        notification.notify_on_backup_failure && 'Failure',
+      ].filter(Boolean).join(' · ') || 'Off',
+    },
+    {
+      icon: <RotateCcw size={10} />,
+      label: 'Restore',
+      active: notification.notify_on_restore_success || notification.notify_on_restore_failure,
+      tooltip: [
+        notification.notify_on_restore_success && 'Success',
+        notification.notify_on_restore_failure && 'Failure',
+      ].filter(Boolean).join(' · ') || 'Off',
+    },
+    {
+      icon: <ShieldCheck size={10} />,
+      label: 'Check',
+      active: notification.notify_on_check_success || notification.notify_on_check_failure,
+      tooltip: [
+        notification.notify_on_check_success && 'Success',
+        notification.notify_on_check_failure && 'Failure',
+      ].filter(Boolean).join(' · ') || 'Off',
+    },
+    {
+      icon: <AlertCircle size={10} />,
+      label: 'Schedule',
+      active: notification.notify_on_schedule_failure,
+      tooltip: notification.notify_on_schedule_failure ? 'Errors' : 'Off',
+    },
+  ]
+
+  const ACTIVE_COLOR = '#059669'
+
+  const eventTags = (
+    <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+      {categories.map((cat) => (
+        <Tooltip key={cat.label} title={`${cat.label}: ${cat.tooltip}`} arrow>
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.4,
+              px: 0.75,
+              py: 0.3,
+              borderRadius: 1,
+              border: '1px solid',
+              cursor: 'default',
+              transition: 'all 150ms',
+              ...(cat.active
+                ? {
+                    borderColor: alpha(ACTIVE_COLOR, isDark ? 0.4 : 0.35),
+                    bgcolor: alpha(ACTIVE_COLOR, isDark ? 0.12 : 0.07),
+                    color: ACTIVE_COLOR,
+                  }
+                : {
+                    borderColor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08),
+                    bgcolor: 'transparent',
+                    color: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.2),
+                  }),
+            }}
+          >
+            {cat.icon}
+            <Box
+              component="span"
+              sx={{
+                fontSize: '0.62rem',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                lineHeight: 1,
+                textTransform: 'uppercase',
+              }}
+            >
+              {cat.label}
+            </Box>
+          </Box>
+        </Tooltip>
+      ))}
+    </Box>
   )
 
   const actions: ActionItem[] = [
@@ -159,6 +241,7 @@ export default function NotificationCard({
       }
       badge={badge}
       stats={stats}
+      tags={eventTags}
       actions={actions}
     />
   )
