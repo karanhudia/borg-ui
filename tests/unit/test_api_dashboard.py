@@ -477,6 +477,7 @@ class TestDashboardScheduleAndOverview:
             mode="observe",
             archive_count=5,
             total_size="2 GB",
+            last_backup=datetime.utcnow() - timedelta(hours=12),
         )
         test_db.add_all([full_repo, observe_repo])
         test_db.commit()
@@ -571,10 +572,16 @@ class TestDashboardScheduleAndOverview:
 
         assert data["storage"]["total_archives"] == 7
         assert data["storage"]["total_size"] == "1.5 TB"
-        assert data["repository_health"][0]["name"] == "Full Repo"
-        assert data["repository_health"][0]["health_status"] == "critical"
-        assert data["repository_health"][0]["schedule_name"] == "Nightly Full Repo"
-        assert len(data["repository_health"]) == 1
+        repo_health = {item["name"]: item for item in data["repository_health"]}
+        assert repo_health["Full Repo"]["health_status"] == "critical"
+        assert repo_health["Full Repo"]["schedule_name"] == "Nightly Full Repo"
+        assert repo_health["Observe Repo"]["mode"] == "observe"
+        assert repo_health["Observe Repo"]["dimension_health"] == {
+            "backup": "healthy",
+            "check": "unknown",
+            "compact": "healthy",
+        }
+        assert len(data["repository_health"]) == 2
         assert [item["type"] for item in data["activity_feed"]][:3] == ["backup", "backup", "check"]
         assert data["activity_feed"][0]["repository"] == "Full Repo"
         assert data["system_metrics"]["cpu_usage"] == 12.5

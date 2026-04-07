@@ -60,6 +60,114 @@ class ScheduleResponse(BaseModel):
     next_execution: str = None
 
 
+def build_full_repository_health(repo: Repository, now: datetime) -> Dict[str, Any]:
+    """Build health signals for repositories managed directly by Borg UI."""
+    health_status = "healthy"
+    health_color = "success"
+    warnings = []
+
+    if repo.last_backup:
+        days_since_backup = (now - repo.last_backup).days
+        if days_since_backup > 7:
+            health_status = "critical"
+            health_color = "error"
+            warnings.append(f"No backup in {days_since_backup} days")
+            backup_dim = "critical"
+        elif days_since_backup > 3:
+            health_status = "warning"
+            health_color = "warning"
+            warnings.append(f"Last backup {days_since_backup} days ago")
+            backup_dim = "warning"
+        else:
+            backup_dim = "healthy"
+    else:
+        health_status = "critical"
+        health_color = "error"
+        warnings.append("Never backed up")
+        backup_dim = "critical"
+
+    if repo.last_check:
+        days_since_check = (now - repo.last_check).days
+        check_dim = "critical" if days_since_check > 30 else "warning" if days_since_check > 7 else "healthy"
+    else:
+        check_dim = "critical"
+
+    if repo.last_compact:
+        days_since_compact = (now - repo.last_compact).days
+        compact_dim = "critical" if days_since_compact > 60 else "warning" if days_since_compact > 30 else "healthy"
+    else:
+        compact_dim = "critical"
+
+    return {
+        "health_status": health_status,
+        "health_color": health_color,
+        "warnings": warnings,
+        "dimension_health": {
+            "backup": backup_dim,
+            "check": check_dim,
+            "compact": compact_dim,
+        },
+    }
+
+
+def build_observe_repository_health(repo: Repository, now: datetime) -> Dict[str, Any]:
+    """Build monitoring-oriented health signals for observe-only repositories."""
+    freshness_dim = "healthy"
+    check_dim = "unknown"
+    archives_dim = "healthy"
+    health_status = "healthy"
+    health_color = "success"
+    warnings = []
+
+    if repo.archive_count and repo.archive_count > 0:
+        archives_dim = "healthy"
+    else:
+        archives_dim = "critical"
+        health_status = "critical"
+        health_color = "error"
+        warnings.append("No archives detected")
+
+    if repo.last_backup:
+        days_since_archive = (now - repo.last_backup).days
+        if days_since_archive > 7:
+            freshness_dim = "critical"
+            health_status = "critical"
+            health_color = "error"
+            warnings.append(f"No new archives in {days_since_archive} days")
+        elif days_since_archive > 2:
+            freshness_dim = "warning"
+            if health_status != "critical":
+                health_status = "warning"
+                health_color = "warning"
+            warnings.append(f"Latest archive {days_since_archive} days old")
+        else:
+            freshness_dim = "healthy"
+    else:
+        freshness_dim = "critical"
+        health_status = "critical"
+        health_color = "error"
+        warnings.append("No archive freshness data available")
+
+    if repo.last_check:
+        days_since_check = (now - repo.last_check).days
+        check_dim = "critical" if days_since_check > 30 else "warning" if days_since_check > 7 else "healthy"
+        if check_dim in ("critical", "warning") and health_status != "critical":
+            health_status = "warning"
+            health_color = "warning"
+
+    return {
+        "health_status": health_status,
+        "health_color": health_color,
+        "warnings": warnings,
+        "dimension_health": {
+            # Reused as Freshness / Check / Archives on the frontend for observe-only repos.
+            "backup": freshness_dim,
+            "check": check_dim,
+            "compact": archives_dim,
+        },
+    }
+
+
 def get_system_metrics() -> SystemMetrics:
     """Get system resource metrics"""
     try:
@@ -287,50 +395,11 @@ async def get_dashboard_overview(
             total_size_bytes += size_bytes
             total_archives += repo.archive_count or 0
 
-        # But only show health status for full-mode repos (observe-only repos don't do backups)
+        # Show health for both repo modes, but with mode-specific semantics.
         for repo in full_mode_repos:
             # Parse size for this repo
             size_bytes = parse_size_to_bytes(repo.total_size)
-
-            # Determine health status
-            health_status = "healthy"
-            health_color = "success"
-            warnings = []
-
-            # Backup dimension health
-            if repo.last_backup:
-                days_since_backup = (now - repo.last_backup).days
-                if days_since_backup > 7:
-                    health_status = "critical"
-                    health_color = "error"
-                    warnings.append(f"No backup in {days_since_backup} days")
-                    backup_dim = "critical"
-                elif days_since_backup > 3:
-                    health_status = "warning"
-                    health_color = "warning"
-                    warnings.append(f"Last backup {days_since_backup} days ago")
-                    backup_dim = "warning"
-                else:
-                    backup_dim = "healthy"
-            else:
-                health_status = "critical"
-                health_color = "error"
-                warnings.append("Never backed up")
-                backup_dim = "critical"
-
-            # Check dimension health
-            if repo.last_check:
-                days_since_check = (now - repo.last_check).days
-                check_dim = "critical" if days_since_check > 30 else "warning" if days_since_check > 7 else "healthy"
-            else:
-                check_dim = "critical"
-
-            # Compact dimension health
-            if repo.last_compact:
-                days_since_compact = (now - repo.last_compact).days
-                compact_dim = "critical" if days_since_compact > 60 else "warning" if days_since_compact > 30 else "healthy"
-            else:
-                compact_dim = "critical"
+            health = build_full_repository_health(repo, now)
 
             # Get associated schedule — prefer enabled over disabled when multiple match
             repo_schedule = None
@@ -366,25 +435,49 @@ async def get_dashboard_overview(
                 "name": repo.name,
                 "path": repo.path,
                 "type": repo.repository_type or "local",
+                "mode": repo.mode or "full",
                 "last_backup": serialize_datetime(repo.last_backup),
                 "last_check": serialize_datetime(repo.last_check),
                 "last_compact": serialize_datetime(repo.last_compact),
                 "archive_count": repo.archive_count or 0,
                 "total_size": repo.total_size,
                 "size_bytes": size_bytes,
-                "health_status": health_status,
-                "health_color": health_color,
-                "warnings": warnings,
+                "health_status": health["health_status"],
+                "health_color": health["health_color"],
+                "warnings": health["warnings"],
                 "dedup_ratio": dedup_ratio,
                 "has_schedule": repo_schedule is not None,
                 "schedule_enabled": repo_schedule.enabled if repo_schedule else False,
                 "schedule_name": repo_schedule.name if repo_schedule else None,
                 "next_run": serialize_datetime(repo_schedule.next_run) if (repo_schedule and repo_schedule.enabled and repo_schedule.next_run) else None,
-                "dimension_health": {
-                    "backup": backup_dim,
-                    "check": check_dim,
-                    "compact": compact_dim,
-                },
+                "dimension_health": health["dimension_health"],
+            })
+
+        for repo in observe_only_repos:
+            size_bytes = parse_size_to_bytes(repo.total_size)
+            health = build_observe_repository_health(repo, now)
+
+            repo_health.append({
+                "id": repo.id,
+                "name": repo.name,
+                "path": repo.path,
+                "type": repo.repository_type or "local",
+                "mode": repo.mode or "observe",
+                "last_backup": serialize_datetime(repo.last_backup),
+                "last_check": serialize_datetime(repo.last_check),
+                "last_compact": serialize_datetime(repo.last_compact),
+                "archive_count": repo.archive_count or 0,
+                "total_size": repo.total_size,
+                "size_bytes": size_bytes,
+                "health_status": health["health_status"],
+                "health_color": health["health_color"],
+                "warnings": health["warnings"],
+                "dedup_ratio": None,
+                "has_schedule": False,
+                "schedule_enabled": False,
+                "schedule_name": None,
+                "next_run": None,
+                "dimension_health": health["dimension_health"],
             })
 
         # Calculate backup success rate (last 30 days)

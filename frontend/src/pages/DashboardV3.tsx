@@ -60,6 +60,7 @@ interface DashboardOverview {
     id: number
     name: string
     type: string
+    mode: 'full' | 'observe'
     last_backup: string | null
     last_check: string | null
     last_compact: string | null
@@ -478,6 +479,10 @@ function dimSince(dt: string | null, t: (key: string) => string): string {
   return `${Math.round(d / 30)}mo ago`
 }
 
+function dimValue(value: string | null | undefined, t: (key: string) => string): string {
+  return value ?? t('common.unknown')
+}
+
 function DimIcon({ status, size = 11 }: { status: string; size?: number }) {
   const { color } = DIM_STATUS[status] ?? DIM_STATUS.unknown
   if (status === 'healthy') return <CheckCircle2 size={size} color={color} />
@@ -491,11 +496,13 @@ function DimIcon({ status, size = 11 }: { status: string; size?: number }) {
  * Shows icon + label + time-since for each operation dimension.
  */
 function DimStatusGrid({
+  mode,
   dim,
   lastBackup,
   lastCheck,
   lastCompact,
 }: {
+  mode: 'full' | 'observe'
   dim: DimHealth | undefined
   lastBackup: string | null
   lastCheck: string | null
@@ -504,23 +511,47 @@ function DimStatusGrid({
   const T = useT()
   const { t } = useTranslation()
 
-  const items = [
-    {
-      label: t('dashboard.repositoryHealth.dimensionLabels.backup'),
-      status: dim?.backup ?? 'unknown',
-      since: lastBackup,
-    },
-    {
-      label: t('dashboard.repositoryHealth.dimensionLabels.check'),
-      status: dim?.check ?? 'unknown',
-      since: lastCheck,
-    },
-    {
-      label: t('dashboard.repositoryHealth.dimensionLabels.compact'),
-      status: dim?.compact ?? 'unknown',
-      since: lastCompact,
-    },
-  ]
+  const items =
+    mode === 'observe'
+      ? [
+          {
+            label: t('dashboard.repositoryHealth.dimensionLabels.freshness'),
+            status: dim?.backup ?? 'unknown',
+            value: dimSince(lastBackup, t),
+          },
+          {
+            label: t('dashboard.repositoryHealth.dimensionLabels.archives'),
+            status: dim?.compact ?? 'unknown',
+            value: t('dashboard.repositoryHealth.archiveCountShort', {
+              count: Number(lastCompact ?? 0),
+            }),
+          },
+          {
+            label: t('dashboard.repositoryHealth.dimensionLabels.check'),
+            status: dim?.check ?? 'unknown',
+            value:
+              dim?.check === 'unknown'
+                ? t('scheduledChecks.notConfigured')
+                : dimSince(lastCheck, t),
+          },
+        ]
+      : [
+          {
+            label: t('dashboard.repositoryHealth.dimensionLabels.backup'),
+            status: dim?.backup ?? 'unknown',
+            value: dimSince(lastBackup, t),
+          },
+          {
+            label: t('dashboard.repositoryHealth.dimensionLabels.check'),
+            status: dim?.check ?? 'unknown',
+            value: dimSince(lastCheck, t),
+          },
+          {
+            label: t('dashboard.repositoryHealth.dimensionLabels.compact'),
+            status: dim?.compact ?? 'unknown',
+            value: dimSince(lastCompact, t),
+          },
+        ]
 
   return (
     <Stack direction="row" sx={{ width: '100%', gap: 0 }}>
@@ -560,7 +591,7 @@ function DimStatusGrid({
                 lineHeight: 1,
               }}
             >
-              {dimSince(item.since, t)}
+              {dimValue(item.value, t)}
             </Typography>
           </Box>
         )
@@ -1364,23 +1395,12 @@ export default function DashboardV3() {
                   //   critical (red)  → backup is overdue/never
                   //   warning (amber) → backup slightly stale OR check/compact need attention
                   //   healthy (green) → everything fine
-                  const { backup, check, compact } = repo.dimension_health ?? {
-                    backup: 'unknown',
-                    check: 'unknown',
-                    compact: 'unknown',
-                  }
-                  const backupCritical = backup === 'critical'
-                  const hasWarning =
-                    backup === 'warning' ||
-                    check === 'critical' ||
-                    check === 'warning' ||
-                    compact === 'critical' ||
-                    compact === 'warning'
-                  const cardStatus: keyof typeof STATUS = backupCritical
-                    ? 'critical'
-                    : hasWarning
-                      ? 'warning'
-                      : 'healthy'
+                  const cardStatus: keyof typeof STATUS =
+                    repo.health_status === 'critical'
+                      ? 'critical'
+                      : repo.health_status === 'warning'
+                        ? 'warning'
+                        : 'healthy'
                   const cs = STATUS[cardStatus]
 
                   return (
@@ -1430,6 +1450,21 @@ export default function DashboardV3() {
                               px: 0,
                             }}
                           />
+                          {repo.mode === 'observe' && (
+                            <Chip
+                              label={t('repositories.observeOnly')}
+                              size="small"
+                              sx={{
+                                height: 15,
+                                fontSize: '0.52rem',
+                                bgcolor: T.indigoDim,
+                                color: T.indigo,
+                                border: `1px solid ${T.indigo}30`,
+                                fontFamily: T.mono,
+                                px: 0,
+                              }}
+                            />
+                          )}
                         </Stack>
                         <ScheduleBadge
                           nextRun={repo.next_run}
@@ -1474,10 +1509,13 @@ export default function DashboardV3() {
 
                       {/* ── Dimension status grid: BACKUP · CHECK · COMPACT ── */}
                       <DimStatusGrid
+                        mode={repo.mode}
                         dim={repo.dimension_health}
                         lastBackup={repo.last_backup}
                         lastCheck={repo.last_check}
-                        lastCompact={repo.last_compact}
+                        lastCompact={
+                          repo.mode === 'observe' ? String(repo.archive_count) : repo.last_compact
+                        }
                       />
                     </Box>
                   )

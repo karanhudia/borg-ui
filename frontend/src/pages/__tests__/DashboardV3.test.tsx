@@ -58,6 +58,7 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         id: 1,
         name: 'my-server',
         type: 'local',
+        mode: 'full' as const,
         last_backup: '2026-03-30T10:00:00+00:00',
         last_check: '2026-03-29T10:00:00+00:00',
         last_compact: null,
@@ -79,13 +80,14 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         id: 2,
         name: 'backup-nas',
         type: 'ssh',
+        mode: 'observe' as const,
         last_backup: null,
         last_check: null,
         last_compact: null,
         archive_count: 0,
         total_size: '0 B',
         health_status: 'critical' as const,
-        warnings: ['No backups found'],
+        warnings: ['No archives detected'],
         next_run: null,
         has_schedule: false,
         schedule_enabled: false,
@@ -93,7 +95,7 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         dimension_health: {
           backup: 'critical' as const,
           check: 'unknown' as const,
-          compact: 'unknown' as const,
+          compact: 'critical' as const,
         },
       },
     ],
@@ -339,6 +341,14 @@ describe('DashboardV3', () => {
       mockFetchSuccess(data)
       renderDashboard()
       await waitFor(() => expect(screen.getByText('paused')).toBeInTheDocument())
+    })
+
+    it('shows observe-only badge and monitoring dimensions for observe repositories', async () => {
+      mockFetchSuccess(makeOverview())
+      renderDashboard()
+      await waitFor(() => expect(screen.getAllByText('Observe Only').length).toBeGreaterThan(0))
+      expect(screen.getByText('FRESH')).toBeInTheDocument()
+      expect(screen.getByText('ARCHIVES')).toBeInTheDocument()
     })
   })
 

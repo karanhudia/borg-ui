@@ -155,7 +155,9 @@
       "dimensionLabels": {
         "backup": "BACKUP",
         "check": "CHECK",
-        "compact": "COMPACT"
+        "compact": "COMPACT",
+        "freshness": "FRESH",
+        "archives": "ARCHIVES"
       },
       "archiveCountShort": "{{count}} arx"
     },
