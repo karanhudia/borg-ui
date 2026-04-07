@@ -136,7 +136,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
 
         {/* Filters */}
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
+          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
             <InputLabel>Schedule</InputLabel>
             <Select
               value={filterSchedule}
@@ -176,11 +176,11 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
             label="Repository"
             hidePath
             prefixItems={<MenuItem value="all">{t('backupHistory.allRepositories')}</MenuItem>}
-            sx={{ minWidth: 200 }}
-            fullWidth={false}
+            sx={{ minWidth: 0 }}
+            fullWidth
           />
 
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
             <InputLabel>Status</InputLabel>
             <Select
               value={filterStatus}

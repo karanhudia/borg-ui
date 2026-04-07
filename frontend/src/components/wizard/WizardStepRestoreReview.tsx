@@ -41,11 +41,22 @@ interface WizardStepRestoreReviewProps {
 // SummaryRow component
 function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.75 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
+        justifyContent: 'space-between',
+        alignItems: { xs: 'flex-start', sm: 'center' },
+        gap: 0.5,
+        py: 0.75,
+      }}
+    >
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Box sx={{ textAlign: 'right' }}>{children}</Box>
+      <Box sx={{ textAlign: { xs: 'left', sm: 'right' }, width: { xs: '100%', sm: 'auto' } }}>
+        {children}
+      </Box>
     </Box>
   )
 }

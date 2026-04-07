@@ -256,7 +256,16 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
     <Box>
       {/* Header */}
       {showHeader && (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1,
+            mb: 2,
+          }}
+        >
           <Box>
             <Typography variant="h6" fontWeight={600}>
               {t('terminalLogViewer.title')}
@@ -272,7 +281,7 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
               </Typography>
             )}
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, flexDirection: { xs: 'column', sm: 'row' } }}>
             <Button
               size="small"
               startIcon={<ContentCopy sx={{ fontSize: 16 }} />}
@@ -295,7 +304,16 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
 
       {/* Status indicator above terminal */}
       {status === 'running' ? (
-        <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box
+          sx={{
+            mb: 1,
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            gap: 0.75,
+          }}
+        >
           <Chip
             icon={<PlayCircle size={16} />}
             label={t('terminalLogViewer.liveStreaming')}
@@ -310,7 +328,16 @@ export const TerminalLogViewer: React.FC<TerminalLogViewerProps> = ({
           )}
         </Box>
       ) : showingTail && totalLines > 500 ? (
-        <Box sx={{ mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box
+          sx={{
+            mb: 1,
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            gap: 0.75,
+          }}
+        >
           <Chip
             label={t('terminalLogViewer.showingLast', { total: totalLines.toLocaleString() })}
             color="warning"

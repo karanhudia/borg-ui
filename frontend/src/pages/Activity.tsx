@@ -86,7 +86,16 @@ const Activity: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <History size={32} />
           <Box>
@@ -96,15 +105,19 @@ const Activity: React.FC = () => {
             </Typography>
           </Box>
         </Box>
-        <IconButton onClick={() => refetch()} title="Refresh">
+        <IconButton
+          onClick={() => refetch()}
+          title="Refresh"
+          sx={{ alignSelf: { xs: 'flex-end', sm: 'auto' } }}
+        >
           <RefreshCw size={20} />
         </IconButton>
       </Box>
 
       {/* Filters */}
       <Card sx={{ mb: 3, p: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
             <InputLabel>{t('activity.filters.type')}</InputLabel>
             <Select
               value={typeFilter}
@@ -121,7 +134,7 @@ const Activity: React.FC = () => {
             </Select>
           </FormControl>
 
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
             <InputLabel>{t('activity.filters.status')}</InputLabel>
             <Select
               value={statusFilter}

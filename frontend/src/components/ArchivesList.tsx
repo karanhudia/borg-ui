@@ -247,10 +247,18 @@ export default function ArchivesList({
         </Box>
 
         {/* View controls */}
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1.5,
+            alignItems: { xs: 'stretch', sm: 'center' },
+            width: { xs: '100%', sm: 'auto' },
+          }}
+        >
           {/* Sort control - only show in flat view */}
           {!groupingEnabled && (
-            <FormControl size="small" sx={{ minWidth: 180 }}>
+            <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
               <InputLabel>{t('archivesList.sortBy')}</InputLabel>
               <Select value={sortBy} label={t('archivesList.sortBy')} onChange={handleSortChange}>
                 <MenuItem value="date-desc">{t('archivesList.newestFirst')}</MenuItem>
@@ -260,7 +268,7 @@ export default function ArchivesList({
           )}
 
           {/* Filter control */}
-          <FormControl size="small" sx={{ minWidth: 150 }}>
+          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
             <InputLabel>{t('archivesList.filter')}</InputLabel>
             <Select value={filter} label={t('archivesList.filter')} onChange={handleFilterChange}>
               <MenuItem value="all">{t('archivesList.allArchives')}</MenuItem>
@@ -275,6 +283,7 @@ export default function ArchivesList({
             exclusive
             onChange={handleViewModeChange}
             size="small"
+            fullWidth
           >
             <ToggleButton value="grouped">
               <Layers size={18} style={{ marginRight: 6 }} />
@@ -408,6 +417,11 @@ export default function ArchivesList({
                     minHeight: '64px',
                     paddingLeft: 2,
                     paddingRight: 1,
+                    flexWrap: 'wrap',
+                    rowGap: 1,
+                  },
+                  '.MuiTablePagination-spacer': {
+                    display: 'none',
                   },
                   '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
                     marginTop: 0,

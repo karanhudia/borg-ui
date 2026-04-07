@@ -749,7 +749,16 @@ const Schedule: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box
+        sx={{
+          mb: 3,
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: 2,
+        }}
+      >
         <Box>
           <Typography variant="h4" fontWeight={600} gutterBottom>
             {t('schedule.title')}
@@ -767,6 +776,11 @@ const Schedule: React.FC = () => {
               startIcon={<Plus size={18} />}
               onClick={openCreateWizard}
               disabled={!canCreateSchedule}
+              fullWidth
+              sx={{
+                width: { xs: '100%', sm: 'auto' },
+                alignSelf: { xs: 'stretch', sm: 'auto' },
+              }}
             >
               {t('schedule.createBackup')}
             </Button>
@@ -776,6 +790,11 @@ const Schedule: React.FC = () => {
               startIcon={<Plus size={18} />}
               onClick={() => scheduledChecksSectionRef.current?.openAddDialog()}
               disabled={!canCreateSchedule}
+              fullWidth
+              sx={{
+                width: { xs: '100%', sm: 'auto' },
+                alignSelf: { xs: 'stretch', sm: 'auto' },
+              }}
             >
               {t('schedule.addCheck')}
             </Button>
@@ -784,7 +803,12 @@ const Schedule: React.FC = () => {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={currentTab} onChange={(_, newValue) => setCurrentTab(newValue)}>
+        <Tabs
+          value={currentTab}
+          onChange={(_, newValue) => setCurrentTab(newValue)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+        >
           <Tab label={t('schedule.tabs.backupJobs')} />
           <Tab label={t('schedule.tabs.repositoryChecks')} />
         </Tabs>
