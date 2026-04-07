@@ -797,7 +797,7 @@ export default function Repositories() {
               )}
 
               {/* Repository Cards */}
-              <Stack spacing={2} sx={{ minWidth: 0, overflow: 'hidden' }}>
+              <Stack spacing={2} sx={{ minWidth: 0 }}>
                 {group.repositories.map((repository: Repository) => (
                   <RepositoryCard
                     key={repository.id}
