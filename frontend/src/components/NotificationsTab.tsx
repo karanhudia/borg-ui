@@ -40,6 +40,7 @@ import { Repository } from '../types'
 import MultiRepositorySelector from './MultiRepositorySelector'
 import { useAnalytics } from '../hooks/useAnalytics'
 import NotificationCard from './NotificationCard'
+import ResponsiveDialog from './ResponsiveDialog'
 
 interface NotificationSetting {
   id: number
@@ -375,7 +376,7 @@ const NotificationsTab: React.FC = () => {
       )}
 
       {/* Service URL Info Modal */}
-      <Dialog open={showInfoModal} onClose={() => setShowInfoModal(false)} maxWidth="sm" fullWidth>
+      <ResponsiveDialog open={showInfoModal} onClose={() => setShowInfoModal(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{t('notifications.appriseUrlExamplesTitle')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -424,7 +425,7 @@ const NotificationsTab: React.FC = () => {
         <DialogActions>
           <Button onClick={() => setShowInfoModal(false)}>{t('notifications.cancel')}</Button>
         </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
 
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>
