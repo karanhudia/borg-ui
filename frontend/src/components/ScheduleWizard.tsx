@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DialogTitle, DialogContent, DialogActions, Box, Button, Typography } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
@@ -142,6 +142,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(initialState)
+  const prevOpenRef = useRef(false)
 
   // Step definitions
   const steps = useMemo(
@@ -212,9 +213,12 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
     setWizardState((prev) => ({ ...prev, ...updates }))
   }
 
-  // Initialize on dialog open
+  // Initialize on dialog open (only on false → true transition)
   useEffect(() => {
-    if (open) {
+    const wasOpen = prevOpenRef.current
+    prevOpenRef.current = open
+
+    if (open && !wasOpen) {
       setActiveStep(0)
       if (mode === 'edit' && scheduledJob) {
         populateEditData()
