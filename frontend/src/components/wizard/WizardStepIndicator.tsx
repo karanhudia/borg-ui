@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, alpha, useTheme } from '@mui/material'
+import { Box, Typography, alpha, useTheme, useMediaQuery } from '@mui/material'
 
 interface WizardStep {
   key: string
@@ -36,12 +36,105 @@ export default function WizardStepIndicator({
 }: WizardStepIndicatorProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
 
   const getStepColor = (stepKey: string) => {
     const colors = stepColors[stepKey as keyof typeof stepColors] || stepColors.location
     return isDark ? colors.dark : colors.light
   }
 
+  // ── Mobile: compact icon-circles row + current step label ──
+  if (isMobile) {
+    const activeStep = steps[currentStep]
+    const activeColor = getStepColor(activeStep?.key ?? '')
+
+    return (
+      <Box
+        sx={{
+          bgcolor: isDark ? alpha(theme.palette.background.paper, 0.4) : 'rgba(0,0,0,0.04)',
+          mx: -3,
+          mt: -2,
+          mb: 2,
+          borderBottom: 1,
+          borderColor: 'divider',
+        }}
+      >
+        {/* Label row: "Step X / N"  ···  "Active Step Name" */}
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            px: 2,
+            pt: 1.5,
+            pb: 0.5,
+          }}
+        >
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+            {`Step ${currentStep + 1} / ${steps.length}`}
+          </Typography>
+          <Typography variant="caption" sx={{ color: activeColor, fontWeight: 600 }}>
+            {activeStep?.label}
+          </Typography>
+        </Box>
+
+        {/* Icon circles row — labels hidden, circles only */}
+        <Box sx={{ display: 'flex', px: 2, pb: 1.5, gap: 1.5, justifyContent: 'center' }}>
+          {steps.map((step, index) => {
+            const isActive = currentStep === index
+            const stepColor = getStepColor(step.key)
+
+            return (
+              <Box
+                key={step.key}
+                onClick={() => onStepClick?.(index)}
+                data-testid={`step-circle-${step.key}`}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  // 40×40 meets the 44pt touch target when combined with gap spacing
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  bgcolor: isActive
+                    ? stepColor
+                    : isDark
+                      ? alpha(stepColor, 0.1)
+                      : alpha(stepColor, 0.1),
+                  color: isActive ? '#fff' : stepColor,
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  transform: isActive ? 'scale(1.1)' : 'scale(1)',
+                  boxShadow: isActive ? `0 2px 8px ${alpha(stepColor, 0.4)}` : 'none',
+                  position: 'relative',
+                  // Small underline dot on active circle
+                  '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    bottom: -6,
+                    left: '50%',
+                    transform: isActive
+                      ? 'translateX(-50%) scaleX(1)'
+                      : 'translateX(-50%) scaleX(0)',
+                    width: 16,
+                    height: 2,
+                    borderRadius: 1,
+                    bgcolor: stepColor,
+                    transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  },
+                }}
+              >
+                {step.icon}
+              </Box>
+            )
+          })}
+        </Box>
+      </Box>
+    )
+  }
+
+  // ── Desktop: full tab row with icon + label ──
   return (
     <Box
       sx={{
@@ -75,8 +168,7 @@ export default function WizardStepIndicator({
               cursor: 'pointer',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               position: 'relative',
-              bgcolor: isActive ? alpha(stepColor, isDark ? 0.08 : 0.08) : 'transparent',
-              // Active indicator line at bottom
+              bgcolor: isActive ? alpha(stepColor, 0.08) : 'transparent',
               '&::after': {
                 content: '""',
                 position: 'absolute',
