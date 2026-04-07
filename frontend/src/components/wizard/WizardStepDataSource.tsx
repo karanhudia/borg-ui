@@ -99,7 +99,7 @@ export default function WizardStepDataSource({
         {t('wizard.dataSource.title')}
       </Typography>
 
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch' }}>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'stretch', flexDirection: { xs: 'column', sm: 'row' } }}>
         {/* Local Data Source Card */}
         <Card
           variant="outlined"
