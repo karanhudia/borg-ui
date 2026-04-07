@@ -422,9 +422,6 @@ const NotificationsTab: React.FC = () => {
             {t('notifications.fullAppriseDocumentation')}
           </Link>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowInfoModal(false)}>{t('notifications.cancel')}</Button>
-        </DialogActions>
       </ResponsiveDialog>
 
       {/* Add/Edit Dialog */}
