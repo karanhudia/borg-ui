@@ -10,7 +10,6 @@ import {
   TextField,
   CircularProgress,
   Stack,
-  Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -436,7 +435,31 @@ const NotificationsTab: React.FC = () => {
       </ResponsiveDialog>
 
       {/* Add/Edit Dialog */}
-      <Dialog open={showDialog} onClose={() => setShowDialog(false)} maxWidth="sm" fullWidth>
+      <ResponsiveDialog
+        open={showDialog}
+        onClose={() => setShowDialog(false)}
+        maxWidth="sm"
+        fullWidth
+        footer={
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setShowDialog(false)}>{t('notifications.cancel')}</Button>
+            <Box sx={{ flex: 1 }} />
+            <Button
+              variant="contained"
+              onClick={handleSubmit}
+              disabled={createMutation.isPending || updateMutation.isPending}
+            >
+              {createMutation.isPending || updateMutation.isPending ? (
+                <CircularProgress size={20} />
+              ) : editingNotification ? (
+                t('notifications.update')
+              ) : (
+                t('notifications.add')
+              )}
+            </Button>
+          </DialogActions>
+        }
+      >
         <DialogTitle>
           {editingNotification ? t('notifications.editService') : t('notifications.addService')}
         </DialogTitle>
@@ -697,26 +720,33 @@ const NotificationsTab: React.FC = () => {
             </Box>
           </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowDialog(false)}>{t('notifications.cancel')}</Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={createMutation.isPending || updateMutation.isPending}
-          >
-            {createMutation.isPending || updateMutation.isPending ? (
-              <CircularProgress size={20} />
-            ) : editingNotification ? (
-              t('notifications.update')
-            ) : (
-              t('notifications.add')
-            )}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)}>
+      <ResponsiveDialog
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        maxWidth="xs"
+        fullWidth
+        footer={
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setDeleteConfirm(null)}>{t('notifications.cancel')}</Button>
+            <Box sx={{ flex: 1 }} />
+            <Button
+              color="error"
+              variant="contained"
+              onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm.id)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <CircularProgress size={20} />
+              ) : (
+                t('notifications.delete')
+              )}
+            </Button>
+          </DialogActions>
+        }
+      >
         <DialogTitle>{t('notifications.deleteServiceTitle')}</DialogTitle>
         <DialogContent>
           <Typography>
@@ -724,18 +754,7 @@ const NotificationsTab: React.FC = () => {
             {t('notifications.confirmDelete.messageSuffix')}
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteConfirm(null)}>{t('notifications.cancel')}</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm.id)}
-            disabled={deleteMutation.isPending}
-          >
-            {deleteMutation.isPending ? <CircularProgress size={20} /> : t('notifications.delete')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
     </Box>
   )
 }
