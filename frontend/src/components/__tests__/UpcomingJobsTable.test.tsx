@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import UpcomingJobsTable from '../UpcomingJobsTable'
 
 // Mock date utils
@@ -174,9 +175,37 @@ describe('UpcomingJobsTable', () => {
       />
     )
 
-    // The formatDate mock returns toLocaleDateString()
+    const jobRow =
+      screen.getByText('Daily Backup').closest('[role="tooltip"]') ??
+      screen.getByText('Daily Backup').closest('div')
+    expect(jobRow).toBeTruthy()
+  })
+
+  it('uses formatDate for the tooltip title', async () => {
+    const user = userEvent.setup()
+    const mockJobs = [
+      {
+        id: 1,
+        name: 'Daily Backup',
+        repository_id: 1,
+        next_run: '2024-01-01T14:00:00Z',
+        cron_expression: '0 14 * * *',
+      },
+    ]
+
+    render(
+      <UpcomingJobsTable
+        upcomingJobs={mockJobs}
+        repositories={mockRepositories}
+        isLoading={false}
+        getRepositoryName={mockGetRepositoryName}
+      />
+    )
+
+    await user.hover(screen.getByText('Daily Backup'))
+
     const formattedDate = new Date('2024-01-01T14:00:00Z').toLocaleDateString()
-    expect(screen.getByText(formattedDate)).toBeInTheDocument()
+    expect(await screen.findByText(formattedDate)).toBeInTheDocument()
   })
 
   it('displays relative time using formatRelativeTime', () => {

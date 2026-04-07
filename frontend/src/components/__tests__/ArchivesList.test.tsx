@@ -294,10 +294,9 @@ describe('ArchivesList', () => {
         />
       )
 
-      // Sort dropdown should be visible with default value
+      // Sort toggle buttons should be visible in flat view
       expect(screen.getByText('Newest first')).toBeInTheDocument()
-      // Verify the label is present (there may be multiple)
-      expect(screen.getAllByText('Sort by').length).toBeGreaterThan(0)
+      expect(screen.getByText('Oldest first')).toBeInTheDocument()
     })
 
     it('changes sort order to oldest first', async () => {
@@ -311,11 +310,7 @@ describe('ArchivesList', () => {
         />
       )
 
-      // Find the sort select by text content
-      const sortSelect = screen.getByText('Newest first')
-      await user.click(sortSelect)
-
-      const oldestOption = screen.getByRole('option', { name: 'Oldest first' })
+      const oldestOption = screen.getByRole('button', { name: 'Oldest first' })
       await user.click(oldestOption)
 
       // LocalStorage should be updated
