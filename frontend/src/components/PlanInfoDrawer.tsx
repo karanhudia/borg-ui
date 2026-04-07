@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Plan, PLAN_COLOR, PLAN_LABEL } from '../core/features'
 import { useAnalytics } from '../hooks/useAnalytics'
 import type { EntitlementInfo } from '../hooks/useSystemInfo'
+import { usePlanContent } from '../hooks/usePlanContent'
 
 interface PlanInfoDrawerProps {
   open: boolean
@@ -16,20 +17,6 @@ interface PlanInfoDrawerProps {
 }
 
 const UPGRADE_PLANS: Plan[] = ['pro', 'enterprise']
-const UPCOMING_FEATURES: Record<Plan, string[]> = {
-  community: [],
-  pro: [
-    'backup_reports',
-    'dashboard_analytics',
-    'database_discovery',
-    'container_backups',
-    'alerting_monitoring',
-    'multi_repo_orchestration',
-    'multi_source_policies',
-    'rclone_destinations',
-  ],
-  enterprise: ['compliance_exports', 'centralized_management'],
-}
 
 function getDefaultSelectedPlan(plan: Plan, initialSelectedPlan?: Plan): Plan {
   if (initialSelectedPlan && UPGRADE_PLANS.includes(initialSelectedPlan)) {
@@ -49,6 +36,7 @@ export default function PlanInfoDrawer({
 }: PlanInfoDrawerProps) {
   const { t } = useTranslation()
   const { trackPlan, EventAction } = useAnalytics()
+  const { features: planContentFeatures } = usePlanContent()
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
     getDefaultSelectedPlan(plan, initialSelectedPlan)
   )
@@ -61,10 +49,21 @@ export default function PlanInfoDrawer({
   const label = isFullAccess ? t('plan.fullAccessLabel') : PLAN_LABEL[plan]
 
   const selectedColor = PLAN_COLOR[selectedPlan]
-  const visibleFeatures = Object.entries(features ?? {}).filter(
+  const visibleFeatureIds = Object.entries(features ?? {}).filter(
     ([, required]) => required === selectedPlan
   )
-  const upcomingFeatures = UPCOMING_FEATURES[selectedPlan]
+  const visibleFeatureIdSet = new Set(visibleFeatureIds.map(([key]) => key))
+  const visibleFeatures = visibleFeatureIds.map(([key]) => {
+    const content = planContentFeatures.find((feature) => feature.id === key)
+    return {
+      id: key,
+      label: content?.label ?? key,
+      description: content?.description ?? '',
+    }
+  })
+  const upcomingFeatures = planContentFeatures.filter(
+    (feature) => feature.plan === selectedPlan && !visibleFeatureIdSet.has(feature.id)
+  )
 
   useEffect(() => {
     if (open) {
@@ -240,8 +239,8 @@ export default function PlanInfoDrawer({
                   {t('plan.planFeatures', { plan: PLAN_LABEL[selectedPlan] })}
                 </Typography>
               </Box>
-              {visibleFeatures.map(([key]) => (
-                <Box key={key} sx={{ display: 'flex', gap: 1.25, mb: 1.5 }}>
+              {visibleFeatures.map((feature) => (
+                <Box key={feature.id} sx={{ display: 'flex', gap: 1.25, mb: 1.5 }}>
                   <Box
                     sx={{
                       width: 16,
@@ -268,7 +267,7 @@ export default function PlanInfoDrawer({
                         lineHeight: 1.3,
                       }}
                     >
-                      {t(`plan.features.${key}.label`)}
+                      {feature.label}
                     </Typography>
                     <Typography
                       sx={{
@@ -278,7 +277,7 @@ export default function PlanInfoDrawer({
                         mt: 0.25,
                       }}
                     >
-                      {t(`plan.features.${key}.description`)}
+                      {feature.description}
                     </Typography>
                   </Box>
                 </Box>
@@ -326,8 +325,8 @@ export default function PlanInfoDrawer({
                   }}
                 />
               </Box>
-              {upcomingFeatures.map((key) => (
-                <Box key={key} sx={{ display: 'flex', gap: 1.25, mb: 1.5 }}>
+              {upcomingFeatures.map((feature) => (
+                <Box key={feature.id} sx={{ display: 'flex', gap: 1.25, mb: 1.5 }}>
                   <Box
                     sx={{
                       width: 16,
@@ -354,7 +353,7 @@ export default function PlanInfoDrawer({
                         lineHeight: 1.3,
                       }}
                     >
-                      {t(`plan.features.${key}.label`)}
+                      {feature.label}
                     </Typography>
                     <Typography
                       sx={{
@@ -364,8 +363,21 @@ export default function PlanInfoDrawer({
                         mt: 0.25,
                       }}
                     >
-                      {t(`plan.features.${key}.description`)}
+                      {feature.description}
                     </Typography>
+                    {feature.available_in ? (
+                      <Typography
+                        sx={{
+                          fontSize: '0.68rem',
+                          color: selectedColor,
+                          lineHeight: 1.4,
+                          mt: 0.35,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {t('plan.availableIn', { version: feature.available_in })}
+                      </Typography>
+                    ) : null}
                   </Box>
                 </Box>
               ))}

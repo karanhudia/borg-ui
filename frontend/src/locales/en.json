@@ -3061,71 +3061,10 @@
     "licenseDeactivationSuccess": "Licence deactivated successfully.",
     "licenseDeactivationFailed": "Failed to deactivate licence.",
     "featureUnavailableInCommunity": "Not available in the free Community plan after initial access ends.",
-    "features": {
-      "borg_v2": {
-        "label": "Borg v2 backups",
-        "description": "Next-generation Borg format with improved deduplication and performance",
-        "communityWarning": "Borg v2 backups will not be available in the free Community plan."
-      },
-      "multi_user": {
-        "label": "Multiple user accounts",
-        "description": "Invite additional users to manage backups with their own login",
-        "communityWarning": "More than 5 user accounts will not be available in the free Community plan."
-      },
-      "extra_users": {
-        "label": "Expanded user seats",
-        "description": "Add more than 5 users, with up to 10 seats on Pro",
-        "communityWarning": "Expanded user seats beyond 5 users will not be available in the free Community plan."
-      },
-      "rbac": {
-        "label": "Role-based access control",
-        "description": "Assign roles and granular permissions to each user account",
-        "communityWarning": "Role-based access control will not be available in the free Community plan."
-      },
-      "backup_reports": {
-        "label": "Scheduled backup reports",
-        "description": "Generate daily, weekly, and monthly backup summaries with status, size, and job insights"
-      },
-      "dashboard_analytics": {
-        "label": "Expanded dashboard analytics",
-        "description": "Add more charts and trend views to the dashboard for backup health, activity, and storage monitoring"
-      },
-      "database_discovery": {
-        "label": "Database scanning and setup",
-        "description": "Scan the host for common databases and turn them into backup jobs with guided setup"
-      },
-      "container_backups": {
-        "label": "Container backup setup",
-        "description": "Make it easier to back up Docker containers and volumes, including Borg UI itself"
-      },
-      "alerting_monitoring": {
-        "label": "Advanced alerts and monitoring",
-        "description": "Expand health checks, failure alerts, and monitoring views for production backup workflows"
-      },
-      "multi_repo_orchestration": {
-        "label": "Multi-repository backups",
-        "description": "Manage and run backups across multiple repositories with less repetitive setup"
-      },
-      "multi_source_policies": {
-        "label": "Multi-source backups",
-        "description": "Back up multiple source locations in one job with cleaner scheduling and configuration"
-      },
-      "rclone_destinations": {
-        "label": "Rclone destinations",
-        "description": "Connect more cloud and remote storage targets through built-in rclone support"
-      },
-      "compliance_exports": {
-        "label": "Audit and compliance exports",
-        "description": "Export backup history, retention evidence, and operational records for reporting and reviews"
-      },
-      "centralized_management": {
-        "label": "Centralized backup management",
-        "description": "Oversee larger backup environments with stronger controls and a more consolidated workflow"
-      }
-    },
     "comingSoon": "Coming soon",
     "planFeatures": "{{plan}} features",
-    "upcomingFeatures": "Upcoming for {{plan}}"
+    "upcomingFeatures": "Upcoming for {{plan}}",
+    "availableIn": "Available in {{version}}"
   },
   "licensing": {
     "title": "Licensing",

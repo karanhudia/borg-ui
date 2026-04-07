@@ -3061,71 +3061,10 @@
     "licenseDeactivationFailed": "Lizenz konnte nicht deaktiviert werden.",
     "communityWarning": "{{plan}}-Funktionen sind nach Ablauf des anfänglichen Zugangs im kostenlosen Community-Plan nicht verfügbar.",
     "featureUnavailableInCommunity": "Nach Ablauf des anfänglichen Zugangs im kostenlosen Community-Plan nicht verfügbar.",
-    "features": {
-      "borg_v2": {
-        "label": "Borg v2-Backups",
-        "description": "Borg-Format der nächsten Generation mit verbesserter Deduplizierung und Leistung",
-        "communityWarning": "Borg v2-Backups sind im kostenlosen Community-Plan nicht verfügbar."
-      },
-      "multi_user": {
-        "label": "Mehrere Benutzerkonten",
-        "description": "Laden Sie weitere Benutzer ein, Backups mit eigenem Login zu verwalten",
-        "communityWarning": "Mehr als 5 Benutzerkonten sind im kostenlosen Community-Plan nicht verfügbar."
-      },
-      "extra_users": {
-        "label": "Erweiterte Benutzerplätze",
-        "description": "Fügen Sie mehr als 5 Benutzer hinzu, mit bis zu 10 Plätzen im Pro-Plan",
-        "communityWarning": "Erweiterte Benutzerplätze über 5 Benutzer hinaus sind im kostenlosen Community-Plan nicht verfügbar."
-      },
-      "rbac": {
-        "label": "Rollenbasierte Zugriffskontrolle",
-        "description": "Weisen Sie jedem Benutzerkonto Rollen und granulare Berechtigungen zu",
-        "communityWarning": "Rollenbasierte Zugriffskontrolle ist im kostenlosen Community-Plan nicht verfügbar."
-      },
-      "backup_reports": {
-        "label": "Geplante Backup-Berichte",
-        "description": "Erstellen Sie tägliche, wöchentliche und monatliche Backup-Zusammenfassungen mit Status-, Größen- und Job-Einblicken"
-      },
-      "dashboard_analytics": {
-        "label": "Erweiterte Dashboard-Analysen",
-        "description": "Mehr Diagramme und Trendansichten im Dashboard für Backup-Zustand, Aktivität und Speicherüberwachung"
-      },
-      "database_discovery": {
-        "label": "Datenbank-Scan und Einrichtung",
-        "description": "Scannen Sie den Host nach gängigen Datenbanken und wandeln Sie sie mit geführter Einrichtung in Backup-Jobs um"
-      },
-      "container_backups": {
-        "label": "Container-Backup-Einrichtung",
-        "description": "Erleichtern Sie das Sichern von Docker-Containern und Volumes, einschließlich Borg UI selbst"
-      },
-      "alerting_monitoring": {
-        "label": "Erweiterte Warnmeldungen und Überwachung",
-        "description": "Erweitern Sie Health Checks, Fehlerwarnungen und Überwachungsansichten für produktive Backup-Workflows"
-      },
-      "multi_repo_orchestration": {
-        "label": "Backups über mehrere Repositories",
-        "description": "Verwalten und starten Sie Backups über mehrere Repositories mit weniger repetitiver Einrichtung"
-      },
-      "multi_source_policies": {
-        "label": "Backups aus mehreren Quellen",
-        "description": "Sichern Sie mehrere Quellpfade in einem Auftrag mit übersichtlicherer Planung und Konfiguration"
-      },
-      "rclone_destinations": {
-        "label": "Rclone-Ziele",
-        "description": "Verbinden Sie mehr Cloud- und Remote-Speicherziele über die integrierte rclone-Unterstützung"
-      },
-      "compliance_exports": {
-        "label": "Audit- und Compliance-Exporte",
-        "description": "Exportieren Sie Backup-Verlauf, Aufbewahrungsnachweise und Betriebsdaten für Berichte und Prüfungen"
-      },
-      "centralized_management": {
-        "label": "Zentrale Backup-Verwaltung",
-        "description": "Überwachen Sie größere Backup-Umgebungen mit stärkeren Kontrollen und einem stärker gebündelten Workflow"
-      }
-    },
     "comingSoon": "Demnächst",
     "planFeatures": "{{plan}}-Funktionen",
-    "upcomingFeatures": "Demnächst für {{plan}}"
+    "upcomingFeatures": "Demnächst für {{plan}}",
+    "availableIn": "Verfügbar in {{version}}"
   },
   "licensing": {
     "title": "Lizenzierung",

@@ -3061,71 +3061,10 @@
     "licenseDeactivationFailed": "Disattivazione della licenza non riuscita.",
     "communityWarning": "Le funzionalità {{plan}} non saranno disponibili nel piano gratuito Community al termine dell'accesso iniziale.",
     "featureUnavailableInCommunity": "Non disponibile nel piano gratuito Community al termine dell'accesso iniziale.",
-    "features": {
-      "borg_v2": {
-        "label": "Backup Borg v2",
-        "description": "Formato Borg di nuova generazione con deduplicazione e prestazioni migliorate",
-        "communityWarning": "I backup Borg v2 non saranno disponibili nel piano gratuito Community."
-      },
-      "multi_user": {
-        "label": "Più account utente",
-        "description": "Invita altri utenti a gestire i backup con il proprio accesso",
-        "communityWarning": "Più di 5 account utente non saranno disponibili nel piano gratuito Community."
-      },
-      "extra_users": {
-        "label": "Posti utente ampliati",
-        "description": "Aggiungi più di 5 utenti, con fino a 10 posti nel piano Pro",
-        "communityWarning": "I posti utente ampliati oltre 5 utenti non saranno disponibili nel piano gratuito Community."
-      },
-      "rbac": {
-        "label": "Controllo degli accessi basato sui ruoli",
-        "description": "Assegna ruoli e permessi granulari a ciascun account utente",
-        "communityWarning": "Il controllo degli accessi basato sui ruoli non sarà disponibile nel piano gratuito Community."
-      },
-      "backup_reports": {
-        "label": "Report pianificati dei backup",
-        "description": "Genera riepiloghi giornalieri, settimanali e mensili dei backup con informazioni su stato, dimensioni e attività"
-      },
-      "dashboard_analytics": {
-        "label": "Analisi dashboard estese",
-        "description": "Aggiunge più grafici e viste dei trend alla dashboard per monitorare stato dei backup, attività e archiviazione"
-      },
-      "database_discovery": {
-        "label": "Scansione e configurazione dei database",
-        "description": "Analizza l'host alla ricerca di database comuni e trasformali in processi di backup con configurazione guidata"
-      },
-      "container_backups": {
-        "label": "Configurazione dei backup dei container",
-        "description": "Semplifica il backup di container e volumi Docker, inclusa la stessa Borg UI"
-      },
-      "alerting_monitoring": {
-        "label": "Avvisi e monitoraggio avanzati",
-        "description": "Espandi controlli di integrità, avvisi di errore e viste di monitoraggio per i flussi di lavoro di backup in produzione"
-      },
-      "multi_repo_orchestration": {
-        "label": "Backup multi-repository",
-        "description": "Gestisci ed esegui backup su più repository con una configurazione meno ripetitiva"
-      },
-      "multi_source_policies": {
-        "label": "Backup multi-sorgente",
-        "description": "Esegui il backup di più posizioni sorgente in un unico processo con pianificazione e configurazione più ordinate"
-      },
-      "rclone_destinations": {
-        "label": "Destinazioni rclone",
-        "description": "Collega più destinazioni cloud e di archiviazione remota tramite il supporto rclone integrato"
-      },
-      "compliance_exports": {
-        "label": "Esportazioni per audit e conformità",
-        "description": "Esporta cronologia dei backup, prove di conservazione e registri operativi per report e revisioni"
-      },
-      "centralized_management": {
-        "label": "Gestione centralizzata dei backup",
-        "description": "Supervisiona ambienti di backup più grandi con controlli più rigorosi e un flusso di lavoro più consolidato"
-      }
-    },
     "comingSoon": "Prossimamente",
     "planFeatures": "Funzionalità {{plan}}",
-    "upcomingFeatures": "In arrivo per {{plan}}"
+    "upcomingFeatures": "In arrivo per {{plan}}",
+    "availableIn": "Disponibile in {{version}}"
   },
   "licensing": {
     "title": "Licenze",
