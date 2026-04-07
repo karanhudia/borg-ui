@@ -230,22 +230,29 @@ const Backup: React.FC = () => {
             </Typography>
             {repositoriesData?.data?.repositories?.some(
               (repo: Repository) => !getRepoCapabilities(repo).canBackup
-            ) && !loadingRepositories && (
-              <Tooltip
-                title={t('backup.manualBackup.observeOnlyHidden')}
-                arrow
-                enterTouchDelay={0}
-                leaveTouchDelay={4000}
-              >
-                <IconButton
-                  size="small"
-                  aria-label={t('backup.manualBackup.observeOnlyHidden')}
-                  sx={{ color: 'text.disabled', '&:hover': { color: 'text.secondary' }, p: 0.25 }}
+            ) &&
+              !loadingRepositories && (
+                <Tooltip
+                  title={t('backup.manualBackup.observeOnlyHidden')}
+                  arrow
+                  enterTouchDelay={0}
+                  leaveTouchDelay={4000}
                 >
-                  <Info size={14} />
-                </IconButton>
-              </Tooltip>
-            )}
+                  <IconButton
+                    size="small"
+                    aria-label={t('backup.manualBackup.observeOnlyHidden')}
+                    sx={{
+                      color: 'text.disabled',
+                      '&:hover': { color: 'text.secondary' },
+                      p: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Info size={16} />
+                  </IconButton>
+                </Tooltip>
+              )}
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             {t('backup.manualBackup.subtitle')}
@@ -292,7 +299,6 @@ const Backup: React.FC = () => {
                 : t('backup.manualBackup.startBackup')}
             </Button>
           </Stack>
-
 
           {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
             <Alert severity="warning" sx={{ mt: 2 }}>
