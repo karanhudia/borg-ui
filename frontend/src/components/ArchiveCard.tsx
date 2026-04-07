@@ -110,9 +110,7 @@ export default function ArchiveCard({
                   '& .MuiChip-label': { px: 0.75 },
                 }}
               />
-              <Typography
-                sx={{ fontSize: '0.72rem', color: 'text.disabled', lineHeight: 1 }}
-              >
+              <Typography sx={{ fontSize: '0.72rem', color: 'text.disabled', lineHeight: 1 }}>
                 {formatDate(archive.start)}
               </Typography>
             </Box>

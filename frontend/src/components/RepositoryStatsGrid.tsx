@@ -71,9 +71,7 @@ function StatCard({ label, value, icon, colorKey }: StatCardProps) {
             {value}
           </Typography>
         </Box>
-        <Box sx={{ color, opacity: 0.4, mt: 0.25, flexShrink: 0 }}>
-          {icon}
-        </Box>
+        <Box sx={{ color, opacity: 0.4, mt: 0.25, flexShrink: 0 }}>{icon}</Box>
       </Stack>
     </Box>
   )
