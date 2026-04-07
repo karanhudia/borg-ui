@@ -9,14 +9,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
   Select,
@@ -25,7 +18,6 @@ import {
   InputLabel,
   Alert,
   CircularProgress,
-  Tooltip,
 } from '@mui/material'
 import { Plus, Edit, Trash2, Play, FileCode, Clock, CheckCircle, XCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -34,6 +26,7 @@ import CodeEditor from '../components/CodeEditor'
 import ScriptParameterInputs, { ScriptParameter } from '../components/ScriptParameterInputs'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
+import DataTable, { ActionButton, Column } from '../components/DataTable'
 
 interface Script {
   id: number
@@ -338,6 +331,122 @@ export default function Scripts() {
     return null
   }
 
+  const columns: Column<Script>[] = [
+    {
+      id: 'name',
+      label: t('scripts.table.name'),
+      render: (script) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+          <FileCode size={18} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {script.name}
+            </Typography>
+            {script.description && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: { xs: 'block', md: 'none' } }}
+              >
+                {script.description}
+              </Typography>
+            )}
+          </Box>
+          {script.parameters && script.parameters.length > 0 && (
+            <Chip
+              label={`${script.parameters.length} param${script.parameters.length > 1 ? 's' : ''}`}
+              size="small"
+              color="info"
+              variant="outlined"
+              sx={{ fontSize: '0.7rem', flexShrink: 0 }}
+            />
+          )}
+        </Box>
+      ),
+    },
+    {
+      id: 'description',
+      label: t('scripts.table.description'),
+      render: (script) => (
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300 }}>
+          {script.description || '-'}
+        </Typography>
+      ),
+    },
+    {
+      id: 'category',
+      label: t('scripts.table.category'),
+      render: (script) => (
+        <Chip
+          label={script.category}
+          size="small"
+          color={getCategoryColor(script.category) as 'default' | 'secondary'}
+        />
+      ),
+    },
+    {
+      id: 'run_on',
+      label: t('scripts.table.runOn'),
+      render: (script) => (
+        <Chip
+          label={script.run_on}
+          size="small"
+          color={
+            getRunOnColor(script.run_on) as 'default' | 'success' | 'error' | 'warning' | 'info'
+          }
+        />
+      ),
+    },
+    {
+      id: 'timeout',
+      label: t('scripts.table.timeout'),
+      render: (script) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Clock size={14} />
+          <Typography variant="body2">{script.timeout}s</Typography>
+        </Box>
+      ),
+    },
+    {
+      id: 'usage_count',
+      label: t('scripts.table.usage'),
+      render: (script) => (
+        <Typography variant="body2">
+          {t('scripts.usedInCount', { count: script.usage_count })}
+        </Typography>
+      ),
+    },
+  ]
+
+  const actions: ActionButton<Script>[] = [
+    {
+      label: t('scripts.actions.test'),
+      icon: <Play size={18} />,
+      onClick: handleTest,
+      tooltip: t('scripts.actions.test'),
+    },
+    {
+      label: t('scripts.actions.edit'),
+      icon: <Edit size={18} />,
+      onClick: handleEdit,
+      disabled: (script) => script.is_template,
+      tooltip: t('scripts.actions.edit'),
+    },
+    {
+      label: t('scripts.actions.delete'),
+      icon: <Trash2 size={18} />,
+      onClick: handleDelete,
+      disabled: (script) => script.is_template,
+      color: 'error',
+      tooltip: (script) =>
+        script.is_template
+          ? t('scripts.actions.cannotDeleteTemplates')
+          : script.usage_count > 0
+            ? t('scripts.usedInCount', { count: script.usage_count })
+            : t('scripts.actions.delete'),
+    },
+  ]
+
   if (loading) {
     return (
       <Box sx={{ mt: 4, mb: 4 }}>
@@ -353,7 +462,16 @@ export default function Scripts() {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: 1.5,
+          mb: 3,
+        }}
+      >
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 600 }}>
             {t('scripts.title')}
@@ -366,7 +484,7 @@ export default function Scripts() {
           variant="contained"
           startIcon={<Plus size={20} />}
           onClick={handleCreate}
-          sx={{ minWidth: 140 }}
+          sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: 140 }}
         >
           {t('scripts.newScript')}
         </Button>
@@ -379,116 +497,17 @@ export default function Scripts() {
         </Alert>
       )}
 
-      {/* Scripts Table */}
-      <TableContainer component={Paper} sx={{ borderRadius: 3, border: 1, borderColor: 'divider' }}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.name')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.description')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.category')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.runOn')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.timeout')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{t('scripts.table.usage')}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }} align="right">
-                {t('scripts.table.actions')}
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {scripts.map((script) => (
-              <TableRow key={script.id} hover>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <FileCode size={18} />
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {script.name}
-                    </Typography>
-                    {script.parameters && script.parameters.length > 0 && (
-                      <Chip
-                        label={`${script.parameters.length} param${script.parameters.length > 1 ? 's' : ''}`}
-                        size="small"
-                        color="info"
-                        variant="outlined"
-                        sx={{ fontSize: '0.7rem' }}
-                      />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300 }}>
-                    {script.description || '-'}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={script.category}
-                    size="small"
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    color={getCategoryColor(script.category) as any}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={script.run_on}
-                    size="small"
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    color={getRunOnColor(script.run_on) as any}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Clock size={14} />
-                    <Typography variant="body2">{script.timeout}s</Typography>
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">
-                    {t('scripts.usedInCount', { count: script.usage_count })}
-                  </Typography>
-                </TableCell>
-                <TableCell align="right">
-                  <Tooltip title={t('scripts.actions.test')}>
-                    <IconButton size="small" onClick={() => handleTest(script)} sx={{ mr: 0.5 }}>
-                      <Play size={18} />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('scripts.actions.edit')}>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleEdit(script)}
-                      disabled={script.is_template}
-                      sx={{ mr: 0.5 }}
-                    >
-                      <Edit size={18} />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip
-                    title={
-                      script.is_template
-                        ? t('scripts.actions.cannotDeleteTemplates')
-                        : script.usage_count > 0
-                          ? t('scripts.usedInCount', { count: script.usage_count })
-                          : t('scripts.actions.delete')
-                    }
-                  >
-                    <span>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(script)}
-                        disabled={script.is_template}
-                        color="error"
-                      >
-                        <Trash2 size={18} />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <DataTable
+        data={scripts}
+        columns={columns}
+        actions={actions}
+        getRowKey={(script) => script.id}
+        variant="outlined"
+        emptyState={{
+          icon: <FileCode size={48} />,
+          title: t('scripts.empty'),
+        }}
+      />
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>

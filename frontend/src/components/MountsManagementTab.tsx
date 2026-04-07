@@ -195,7 +195,13 @@ export default function MountsManagementTab() {
   return (
     <Box>
       {/* Header */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'flex-start', sm: 'center' }}
+        sx={{ mb: 3 }}
+        spacing={1.5}
+      >
         <Box>
           <Typography variant="h5" fontWeight={700} gutterBottom>
             {t('mountsManagement.title')}

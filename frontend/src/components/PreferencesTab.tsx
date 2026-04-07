@@ -124,7 +124,7 @@ export default function PreferencesTab() {
 
       {/* Language Section */}
       <SettingsCard sx={{ mb: 3 }}>
-        <Stack direction="row" spacing={2} alignItems="flex-start">
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
           <Globe size={24} />
           <Box sx={{ flex: 1 }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
@@ -133,7 +133,7 @@ export default function PreferencesTab() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {t('preferences.languageDescription')}
             </Typography>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
+            <FormControl size="small" sx={{ width: { xs: '100%', sm: 200 } }}>
               <InputLabel>{t('preferences.languageLabel')}</InputLabel>
               <Select
                 value={currentLanguage}
@@ -153,7 +153,7 @@ export default function PreferencesTab() {
 
       {/* Analytics Section */}
       <SettingsCard sx={{ mb: 3 }}>
-        <Stack direction="row" spacing={2} alignItems="flex-start">
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
           <BarChart3 size={24} />
           <Box sx={{ flex: 1 }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>

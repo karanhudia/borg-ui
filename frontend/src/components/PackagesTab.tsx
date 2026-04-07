@@ -406,7 +406,16 @@ export default function PackagesTab() {
         {t('packages.hint')}
       </Alert>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: 1.5,
+          mb: 3,
+        }}
+      >
         <Typography variant="h6" fontWeight={600}>
           {t('packages.installedPackages')}
         </Typography>
@@ -417,6 +426,7 @@ export default function PackagesTab() {
             setShowCreateDialog(true)
             trackPackage(EventAction.VIEW, undefined, { source: 'create_dialog' })
           }}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
           {t('packages.addPackage')}
         </Button>

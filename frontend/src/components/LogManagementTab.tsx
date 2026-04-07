@@ -194,7 +194,16 @@ const LogManagementTab: React.FC = () => {
   return (
     <Box>
       {/* Header Section */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: 1.5,
+          mb: 3,
+        }}
+      >
         <Box>
           <Typography variant="h6" fontWeight={600}>
             {t('logManagement.title')}
@@ -210,6 +219,7 @@ const LogManagementTab: React.FC = () => {
           }
           onClick={handleSaveSettings}
           disabled={!hasChanges || saveSettingsMutation.isPending}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
           {saveSettingsMutation.isPending ? t('logManagement.saving') : t('logManagement.save')}
         </Button>

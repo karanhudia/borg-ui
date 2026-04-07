@@ -13,13 +13,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
   Chip,
   FormControlLabel,
   Switch,
@@ -53,6 +46,7 @@ import { formatDate } from '../utils/dateUtils'
 import { Repository } from '../types'
 import MultiRepositorySelector from './MultiRepositorySelector'
 import { useAnalytics } from '../hooks/useAnalytics'
+import DataTable, { ActionButton, Column } from './DataTable'
 
 interface NotificationSetting {
   id: number
@@ -301,9 +295,185 @@ const NotificationsTab: React.FC = () => {
 
   const notifications = notificationsData || []
 
+  const renderEventChips = (notification: NotificationSetting) => (
+    <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
+      {notification.notify_on_backup_start && (
+        <Chip
+          label={t('notifications.chip.backupStart')}
+          size="small"
+          color="info"
+          variant="outlined"
+        />
+      )}
+      {notification.notify_on_backup_failure && (
+        <Chip
+          label={t('notifications.chip.backupFail')}
+          size="small"
+          color="error"
+          variant="outlined"
+        />
+      )}
+      {notification.notify_on_backup_success && (
+        <Chip
+          label={t('notifications.chip.backupOk')}
+          size="small"
+          color="success"
+          variant="outlined"
+        />
+      )}
+      {notification.notify_on_restore_failure && (
+        <Chip
+          label={t('notifications.chip.restoreFail')}
+          size="small"
+          color="error"
+          variant="outlined"
+        />
+      )}
+      {notification.notify_on_restore_success && (
+        <Chip
+          label={t('notifications.chip.restoreOk')}
+          size="small"
+          color="success"
+          variant="outlined"
+        />
+      )}
+      {notification.notify_on_check_failure && (
+        <Chip
+          label={t('notifications.chip.checkFail')}
+          size="small"
+          color="error"
+          variant="outlined"
+        />
+      )}
+      {notification.notify_on_check_success && (
+        <Chip
+          label={t('notifications.chip.checkOk')}
+          size="small"
+          color="success"
+          variant="outlined"
+        />
+      )}
+      {notification.notify_on_schedule_failure && (
+        <Chip
+          label={t('notifications.chip.schedulerError')}
+          size="small"
+          color="warning"
+          variant="outlined"
+        />
+      )}
+    </Stack>
+  )
+
+  const columns: Column<NotificationSetting>[] = [
+    {
+      id: 'service',
+      label: t('notifications.table.service'),
+      render: (notification) => (
+        <Box>
+          <Typography variant="body2" fontWeight={500}>
+            {notification.name}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+            {notification.service_url.substring(0, 40)}
+            {notification.service_url.length > 40 && '...'}
+          </Typography>
+        </Box>
+      ),
+    },
+    {
+      id: 'status',
+      label: t('notifications.table.status'),
+      render: (notification) => (
+        <Chip
+          icon={notification.enabled ? <Bell size={14} /> : <BellOff size={14} />}
+          label={notification.enabled ? t('notifications.enabled') : t('notifications.disabled')}
+          color={notification.enabled ? 'success' : 'default'}
+          size="small"
+        />
+      ),
+    },
+    {
+      id: 'events',
+      label: t('notifications.table.events'),
+      render: renderEventChips,
+    },
+    {
+      id: 'repositories',
+      label: t('notifications.table.repositories'),
+      render: (notification) =>
+        notification.monitor_all_repositories ? (
+          <Chip label={t('notifications.chip.allRepositories')} size="small" variant="outlined" />
+        ) : notification.repositories.length > 0 ? (
+          <Chip
+            label={t('notifications.chip.repositoryCount', {
+              count: notification.repositories.length,
+            })}
+            size="small"
+            color="primary"
+            variant="outlined"
+          />
+        ) : (
+          <Chip
+            label={t('notifications.chip.noneSelected')}
+            size="small"
+            color="warning"
+            variant="outlined"
+          />
+        ),
+    },
+    {
+      id: 'last_used_at',
+      label: t('notifications.table.lastUsed'),
+      render: (notification) => (
+        <Typography variant="body2" color="text.secondary">
+          {formatDate(notification.last_used_at)}
+        </Typography>
+      ),
+    },
+  ]
+
+  const actions: ActionButton<NotificationSetting>[] = [
+    {
+      label: t('notifications.tooltip.sendTest'),
+      icon: testing !== null ? <TestTube size={16} /> : <TestTube size={16} />,
+      onClick: handleTest,
+      disabled: (notification) => testing === notification.id,
+      tooltip: t('notifications.tooltip.sendTest'),
+    },
+    {
+      label: t('notifications.tooltip.duplicate'),
+      icon: <Copy size={16} />,
+      onClick: handleDuplicate,
+      tooltip: t('notifications.tooltip.duplicate'),
+    },
+    {
+      label: t('notifications.tooltip.edit'),
+      icon: <Edit size={16} />,
+      onClick: openEditDialog,
+      color: 'primary',
+      tooltip: t('notifications.tooltip.edit'),
+    },
+    {
+      label: t('notifications.tooltip.delete'),
+      icon: <Trash2 size={16} />,
+      onClick: setDeleteConfirm,
+      color: 'error',
+      tooltip: t('notifications.tooltip.delete'),
+    },
+  ]
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: 1.5,
+          mb: 3,
+        }}
+      >
         <Box>
           <Typography variant="h6" fontWeight={600}>
             {t('notifications.title')}
@@ -321,6 +491,7 @@ const NotificationsTab: React.FC = () => {
             setShowDialog(true)
             trackNotifications(EventAction.VIEW, { source: 'create_dialog' })
           }}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
         >
           {t('notifications.addService')}
         </Button>
@@ -448,193 +619,13 @@ const NotificationsTab: React.FC = () => {
           </Button>
         </Card>
       ) : (
-        <Card variant="outlined" sx={{ borderRadius: 3 }}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t('notifications.table.service')}</TableCell>
-                  <TableCell>{t('notifications.table.status')}</TableCell>
-                  <TableCell>{t('notifications.table.events')}</TableCell>
-                  <TableCell>{t('notifications.table.repositories')}</TableCell>
-                  <TableCell>{t('notifications.table.lastUsed')}</TableCell>
-                  <TableCell align="right">{t('common.actions')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {notifications.map((notification: NotificationSetting) => (
-                  <TableRow key={notification.id}>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>
-                          {notification.name}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ fontFamily: 'monospace' }}
-                        >
-                          {notification.service_url.substring(0, 40)}
-                          {notification.service_url.length > 40 && '...'}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={notification.enabled ? <Bell size={14} /> : <BellOff size={14} />}
-                        label={
-                          notification.enabled
-                            ? t('notifications.enabled')
-                            : t('notifications.disabled')
-                        }
-                        color={notification.enabled ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Stack direction="row" spacing={0.5} flexWrap="wrap" gap={0.5}>
-                        {notification.notify_on_backup_start && (
-                          <Chip
-                            label={t('notifications.chip.backupStart')}
-                            size="small"
-                            color="info"
-                            variant="outlined"
-                          />
-                        )}
-                        {notification.notify_on_backup_failure && (
-                          <Chip
-                            label={t('notifications.chip.backupFail')}
-                            size="small"
-                            color="error"
-                            variant="outlined"
-                          />
-                        )}
-                        {notification.notify_on_backup_success && (
-                          <Chip
-                            label={t('notifications.chip.backupOk')}
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                          />
-                        )}
-                        {notification.notify_on_restore_failure && (
-                          <Chip
-                            label={t('notifications.chip.restoreFail')}
-                            size="small"
-                            color="error"
-                            variant="outlined"
-                          />
-                        )}
-                        {notification.notify_on_restore_success && (
-                          <Chip
-                            label={t('notifications.chip.restoreOk')}
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                          />
-                        )}
-                        {notification.notify_on_check_failure && (
-                          <Chip
-                            label={t('notifications.chip.checkFail')}
-                            size="small"
-                            color="error"
-                            variant="outlined"
-                          />
-                        )}
-                        {notification.notify_on_check_success && (
-                          <Chip
-                            label={t('notifications.chip.checkOk')}
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                          />
-                        )}
-                        {notification.notify_on_schedule_failure && (
-                          <Chip
-                            label={t('notifications.chip.schedulerError')}
-                            size="small"
-                            color="warning"
-                            variant="outlined"
-                          />
-                        )}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>
-                      {notification.monitor_all_repositories ? (
-                        <Chip
-                          label={t('notifications.chip.allRepositories')}
-                          size="small"
-                          variant="outlined"
-                        />
-                      ) : notification.repositories.length > 0 ? (
-                        <Chip
-                          label={t('notifications.chip.repositoryCount', {
-                            count: notification.repositories.length,
-                          })}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                        />
-                      ) : (
-                        <Chip
-                          label={t('notifications.chip.noneSelected')}
-                          size="small"
-                          color="warning"
-                          variant="outlined"
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {formatDate(notification.last_used_at)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleTest(notification)}
-                          disabled={testing === notification.id}
-                          title={t('notifications.tooltip.sendTest')}
-                        >
-                          {testing === notification.id ? (
-                            <CircularProgress size={16} />
-                          ) : (
-                            <TestTube size={16} />
-                          )}
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDuplicate(notification)}
-                          color="default"
-                          title={t('notifications.tooltip.duplicate')}
-                        >
-                          <Copy size={16} />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => openEditDialog(notification)}
-                          color="primary"
-                          title={t('notifications.tooltip.edit')}
-                        >
-                          <Edit size={16} />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => setDeleteConfirm(notification)}
-                          color="error"
-                          title={t('notifications.tooltip.delete')}
-                        >
-                          <Trash2 size={16} />
-                        </IconButton>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Card>
+        <DataTable
+          data={notifications}
+          columns={columns}
+          actions={actions}
+          getRowKey={(notification) => notification.id}
+          variant="outlined"
+        />
       )}
 
       {/* Add/Edit Dialog */}

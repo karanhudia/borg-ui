@@ -353,7 +353,16 @@ const SystemSettingsTab: React.FC = () => {
     <Box>
       <Stack spacing={3}>
         {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1.5,
+            mb: 1,
+          }}
+        >
           <Box>
             <Typography variant="h5" fontWeight={700} gutterBottom>
               {t('systemSettings.title')}
@@ -367,6 +376,7 @@ const SystemSettingsTab: React.FC = () => {
             startIcon={isSaving ? <CircularProgress size={16} /> : <Save size={16} />}
             onClick={handleSaveSettings}
             disabled={!hasChanges || isSaving || !!validationError}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             {isSaving ? t('systemSettings.saving') : t('systemSettings.save')}
           </Button>
