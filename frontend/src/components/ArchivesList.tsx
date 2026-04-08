@@ -248,9 +248,10 @@ export default function ArchivesList({
         <Box
           sx={{
             display: 'flex',
-            flexDirection: { xs: 'column', sm: 'row' },
+            flexDirection: 'row',
+            flexWrap: 'wrap',
             gap: 1,
-            alignItems: { xs: 'stretch', sm: 'center' },
+            alignItems: 'center',
             width: { xs: '100%', sm: 'auto' },
           }}
         >
@@ -580,29 +581,33 @@ export default function ArchivesList({
                 }
                 sx={{
                   '.MuiTablePagination-toolbar': {
-                    minHeight: '64px',
+                    minHeight: '52px',
                     paddingLeft: 2,
                     paddingRight: 1,
-                    flexWrap: 'wrap',
-                    rowGap: 1,
                   },
                   '.MuiTablePagination-spacer': {
                     display: 'none',
                   },
-                  '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                  '.MuiTablePagination-selectLabel': {
                     marginTop: 0,
                     marginBottom: 0,
-                    display: 'flex',
-                    alignItems: 'center',
+                  },
+                  '.MuiTablePagination-displayedRows': {
+                    marginTop: 0,
+                    marginBottom: 0,
+                    marginLeft: 'auto',
                   },
                   '.MuiTablePagination-select': {
                     paddingTop: 1,
                     paddingBottom: 1,
-                    width: '70px',
-                    textAlign: 'left',
                   },
                   '.MuiTablePagination-actions': {
-                    marginLeft: 2,
+                    marginLeft: 1,
+                  },
+                  '@media (max-width: 600px)': {
+                    '.MuiTablePagination-selectLabel': {
+                      display: 'none',
+                    },
                   },
                 }}
               />
