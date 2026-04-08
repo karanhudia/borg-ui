@@ -5,8 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sshKeysAPI } from '../services/api'
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Button,
   Stack,
@@ -27,6 +25,8 @@ import {
   InputAdornment,
   Checkbox,
   FormControlLabel,
+  useTheme,
+  alpha,
 } from '@mui/material'
 import {
   Key,
@@ -137,6 +137,8 @@ export default function SSHConnectionsSingleKey() {
   const { track, EventCategory, EventAction } = useAnalytics()
   const { hasGlobalPermission } = useAuth()
   const canManageSsh = hasGlobalPermission('settings.ssh.manage')
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
 
   // State
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
@@ -594,91 +596,124 @@ export default function SSHConnectionsSingleKey() {
         </Typography>
       </Box>
 
-      {/* Statistics Cards */}
+      {/* Statistics Band */}
       {keyExists && (
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
-          <Card sx={{ flex: 1 }}>
-            <CardContent>
-              <Stack direction="row" alignItems="center" spacing={2}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+            overflow: 'hidden',
+            mb: 3,
+            bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
+            boxShadow: isDark
+              ? `0 0 0 1px ${alpha('#fff', 0.04)}, 0 2px 8px ${alpha('#000', 0.2)}`
+              : `0 0 0 1px ${alpha('#000', 0.06)}, 0 2px 6px ${alpha('#000', 0.05)}`,
+          }}
+        >
+          {[
+            {
+              label: t('sshConnections.stats.totalConnections'),
+              value: stats.totalConnections,
+              icon: <Wifi size={13} />,
+              color: theme.palette.primary.main,
+            },
+            {
+              label: t('sshConnections.stats.active'),
+              value: stats.activeConnections,
+              icon: <CheckCircle size={13} />,
+              color: theme.palette.success.main,
+            },
+            {
+              label: t('sshConnections.stats.failed'),
+              value: stats.failedConnections,
+              icon: <XCircle size={13} />,
+              color: theme.palette.error.main,
+            },
+          ].map((stat, i) => (
+            <Box
+              key={stat.label}
+              sx={{
+                px: { xs: 1.25, sm: 2 },
+                py: { xs: 1.5, sm: 1.75 },
+                borderRight: i < 2 ? '1px solid' : 0,
+                borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+              }}
+            >
+              <Box
+                sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: { xs: 0.75, sm: 0.5 } }}
+              >
                 <Box
                   sx={{
-                    bgcolor: 'primary.light',
-                    borderRadius: 2,
-                    p: 1.5,
+                    color: alpha(stat.color, 0.75),
                     display: 'flex',
+                    alignItems: 'center',
+                    flexShrink: 0,
                   }}
                 >
-                  <Wifi size={24} color="#ffffff" strokeWidth={1.5} />
+                  {stat.icon}
                 </Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('sshConnections.stats.totalConnections')}
-                  </Typography>
-                  <Typography variant="h6" fontWeight={600}>
-                    {stats.totalConnections}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-
-          <Card sx={{ flex: 1 }}>
-            <CardContent>
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Box
+                <Typography
                   sx={{
-                    bgcolor: 'success.light',
-                    borderRadius: 2,
-                    p: 1.5,
-                    display: 'flex',
+                    fontSize: { xs: '0.62rem', sm: '0.6rem' },
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: alpha(stat.color, 0.75),
+                    lineHeight: 1.2,
                   }}
                 >
-                  <CheckCircle size={24} color="#ffffff" strokeWidth={1.5} />
-                </Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('sshConnections.stats.active')}
-                  </Typography>
-                  <Typography variant="h6" fontWeight={600}>
-                    {stats.activeConnections}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-
-          <Card sx={{ flex: 1 }}>
-            <CardContent>
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Box
-                  sx={{
-                    bgcolor: 'error.light',
-                    borderRadius: 2,
-                    p: 1.5,
-                    display: 'flex',
-                  }}
-                >
-                  <XCircle size={24} color="#ffffff" strokeWidth={1.5} />
-                </Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('sshConnections.stats.failed')}
-                  </Typography>
-                  <Typography variant="h6" fontWeight={600}>
-                    {stats.failedConnections}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Stack>
+                  {stat.label}
+                </Typography>
+              </Box>
+              <Typography
+                sx={{
+                  fontSize: { xs: '1.75rem', sm: '1.5rem' },
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {stat.value}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
       )}
 
       {/* System SSH Key Card */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
-            <Key size={24} />
+      <Box
+        sx={{
+          borderRadius: 2,
+          bgcolor: 'background.paper',
+          overflow: 'hidden',
+          mb: 3,
+          boxShadow: isDark
+            ? `0 0 0 1px ${alpha('#fff', 0.08)}, 0 4px 16px ${alpha('#000', 0.25)}`
+            : `0 0 0 1px ${alpha('#000', 0.08)}, 0 2px 8px ${alpha('#000', 0.07)}`,
+        }}
+      >
+        <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: { xs: 2, sm: 2.5 }, pb: { xs: 2, sm: 2.5 } }}>
+          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2 }}>
+            <Box
+              sx={{
+                width: 34,
+                height: 34,
+                borderRadius: 1.5,
+                bgcolor: isDark
+                  ? alpha(theme.palette.primary.main, 0.15)
+                  : alpha(theme.palette.primary.main, 0.1),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: theme.palette.primary.main,
+                flexShrink: 0,
+              }}
+            >
+              <Key size={18} />
+            </Box>
             <Typography variant="h6" fontWeight={600} sx={{ flex: 1 }}>
               {t('sshConnections.systemKey.title')}
             </Typography>
@@ -833,53 +868,116 @@ export default function SSHConnectionsSingleKey() {
               </Stack>
             </Box>
           )}
-        </CardContent>
-      </Card>
+        </Box>
+      </Box>
 
-      {/* Connections Table */}
-      <Card>
-        <CardContent>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-            <Typography variant="h6" fontWeight={600}>
+      {/* Remote Connections */}
+      <Box>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            mb: 2,
+          }}
+        >
+          <Box>
+            <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
               Remote Connections
             </Typography>
-            <Tooltip title="Refresh connections">
-              <IconButton
-                size="small"
-                onClick={() => queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })}
-              >
-                <RefreshCw size={18} />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-
-          {!keyExists && connections.length > 0 && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              No SSH key configured. Generate or import a key to test these connections.
-            </Alert>
-          )}
-
-          {connections.length === 0 ? (
-            <Alert severity="info">
-              {keyExists
-                ? 'No connections yet. Deploy your SSH key to a remote server to get started.'
-                : 'No connections yet. Generate or import an SSH key first, then deploy it to remote servers.'}
-            </Alert>
-          ) : (
-            <Box
+            {connections.length > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                {connections.length} machine{connections.length !== 1 ? 's' : ''} configured
+              </Typography>
+            )}
+          </Box>
+          <Tooltip title="Refresh connections" arrow>
+            <IconButton
+              size="small"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['ssh-connections'] })}
               sx={{
-                display: 'grid',
-                gridTemplateColumns: {
-                  xs: '1fr',
-                  sm: 'repeat(2, 1fr)',
-                  md: 'repeat(3, 1fr)',
+                width: 32,
+                height: 32,
+                borderRadius: 1.5,
+                color: 'text.secondary',
+                '&:hover': {
+                  bgcolor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.06),
+                  color: 'text.primary',
                 },
-                gap: 3,
               }}
             >
-              {connections.map((connection) => (
+              <RefreshCw size={16} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {!keyExists && connections.length > 0 && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            No SSH key configured. Generate or import a key to test these connections.
+          </Alert>
+        )}
+
+        {connections.length === 0 ? (
+          <Box
+            sx={{
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+              bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
+              px: 3,
+              py: 4,
+              textAlign: 'center',
+            }}
+          >
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: 2,
+                bgcolor: isDark
+                  ? alpha(theme.palette.primary.main, 0.12)
+                  : alpha(theme.palette.primary.main, 0.08),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: theme.palette.primary.main,
+                mx: 'auto',
+                mb: 1.5,
+              }}
+            >
+              <Wifi size={22} />
+            </Box>
+            <Typography variant="body1" fontWeight={600} sx={{ mb: 0.5 }}>
+              No remote machines yet
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.82rem' }}>
+              {keyExists
+                ? 'Deploy your SSH key to a remote server to get started.'
+                : 'Generate or import an SSH key first, then deploy it to remote servers.'}
+            </Typography>
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: { xs: 2, sm: 2.5 },
+            }}
+          >
+            {connections.map((connection) => (
+              <Box
+                key={connection.id}
+                sx={{
+                  flex: {
+                    xs: '0 0 100%',
+                    sm: '0 0 calc(50% - 10px)',
+                    md: '0 0 calc(33.333% - 14px)',
+                  },
+                  minWidth: 0,
+                  display: 'flex',
+                }}
+              >
                 <RemoteMachineCard
-                  key={connection.id}
                   machine={connection}
                   onEdit={handleEditConnection}
                   onDelete={handleDeleteConnection}
@@ -888,11 +986,11 @@ export default function SSHConnectionsSingleKey() {
                   onDeployKey={handleDeployKeyToConnection}
                   canManageConnections={canManageSsh}
                 />
-              ))}
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Box>
 
       {/* Generate Key Dialog */}
       <Dialog

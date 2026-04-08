@@ -1,26 +1,17 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Card,
-  CardContent,
-  Typography,
   Box,
-  Stack,
-  Chip,
+  Typography,
   IconButton,
   Tooltip,
   LinearProgress,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
+  useTheme,
+  alpha,
 } from '@mui/material'
 import {
-  Computer,
   CheckCircle,
   XCircle,
   AlertTriangle,
-  MoreVertical,
   Edit,
   Trash2,
   RefreshCw,
@@ -28,7 +19,6 @@ import {
   Network,
   Key,
 } from 'lucide-react'
-import React from 'react'
 
 interface StorageInfo {
   total: number
@@ -70,6 +60,32 @@ interface RemoteMachineCardProps {
   canManageConnections?: boolean
 }
 
+const STATUS_ACCENT: Record<string, string> = {
+  connected: '#059669',
+  failed: '#ef4444',
+  testing: '#f59e0b',
+}
+
+const getStatusAccent = (status: string) => STATUS_ACCENT[status] ?? '#6b7280'
+
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'connected':
+      return <CheckCircle size={13} />
+    case 'failed':
+      return <XCircle size={13} />
+    default:
+      return <AlertTriangle size={13} />
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getStorageBarColor = (pct: number, theme: any) => {
+  if (pct > 90) return theme.palette.error.main
+  if (pct > 75) return theme.palette.warning.main
+  return theme.palette.success.main
+}
+
 export default function RemoteMachineCard({
   machine,
   onEdit,
@@ -80,288 +96,446 @@ export default function RemoteMachineCard({
   canManageConnections = true,
 }: RemoteMachineCardProps) {
   const { t } = useTranslation()
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const accent = getStatusAccent(machine.status)
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget)
+  const iconBtnSx = {
+    width: { xs: 40, sm: 34 },
+    height: { xs: 40, sm: 34 },
+    borderRadius: 1.5,
+    color: 'text.secondary',
+    '&:hover': {
+      bgcolor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.06),
+      color: 'text.primary',
+    },
+    '&.Mui-disabled': { opacity: 0.28 },
   }
 
-  const handleMenuClose = () => {
-    setAnchorEl(null)
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'connected':
-        return 'success'
-      case 'failed':
-        return 'error'
-      case 'testing':
-        return 'warning'
-      default:
-        return 'default'
+  const coloredIconBtnSx = (colorKey: 'primary' | 'success' | 'error' | 'warning' | 'info') => {
+    const color = theme.palette[colorKey].main
+    return {
+      ...iconBtnSx,
+      color: alpha(color, isDark ? 0.65 : 0.55),
+      '&:hover': {
+        bgcolor: alpha(color, isDark ? 0.12 : 0.09),
+        color,
+      },
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'connected':
-        return <CheckCircle size={16} />
-      case 'failed':
-        return <XCircle size={16} />
-      case 'testing':
-        return <AlertTriangle size={16} />
-      default:
-        return <AlertTriangle size={16} />
-    }
-  }
-
-  const getStorageColor = (percentUsed: number) => {
-    if (percentUsed > 90) return 'error.main'
-    if (percentUsed > 75) return 'warning.main'
-    return 'success.main'
-  }
+  const hasMeta =
+    machine.default_path || (machine.mount_point && machine.mount_point !== machine.host)
 
   return (
-    <Card
+    <Box
       sx={{
-        height: '100%',
+        width: '100%',
         display: 'flex',
         flexDirection: 'column',
-        border: '1px solid',
-        borderColor: 'divider',
-        boxShadow: 2,
+        borderRadius: 2,
+        bgcolor: 'background.paper',
+        boxShadow: isDark
+          ? `0 0 0 1px ${alpha('#fff', 0.08)}, 0 4px 16px ${alpha('#000', 0.25)}`
+          : `0 0 0 1px ${alpha('#000', 0.08)}, 0 2px 8px ${alpha('#000', 0.07)}`,
+        transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)',
+        '&:hover': {
+          transform: 'translateY(-2px)',
+          boxShadow: isDark
+            ? `0 0 0 1px ${alpha(accent, 0.4)}, 0 8px 24px ${alpha('#000', 0.3)}, 0 2px 8px ${alpha(accent, 0.1)}`
+            : `0 0 0 1px ${alpha(accent, 0.3)}, 0 8px 24px ${alpha('#000', 0.12)}, 0 2px 8px ${alpha(accent, 0.08)}`,
+        },
       }}
     >
-      <CardContent sx={{ flex: 1 }}>
-        {/* Header */}
-        <Stack direction="row" alignItems="flex-start" spacing={2} sx={{ mb: 2 }}>
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          px: { xs: 1.75, sm: 2 },
+          pt: { xs: 1.75, sm: 2 },
+          pb: { xs: 1.5, sm: 1.75 },
+        }}
+      >
+        {/* ── Header ── */}
+        <Box sx={{ mb: 1.5 }}>
+          {/* Status label row */}
           <Box
+            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box sx={{ color: accent, display: 'flex', alignItems: 'center' }}>
+                {getStatusIcon(machine.status)}
+              </Box>
+              <Typography
+                sx={{
+                  fontSize: '0.6rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: alpha(accent, 0.9),
+                  lineHeight: 1,
+                }}
+              >
+                {machine.status}
+              </Typography>
+            </Box>
+
+            {/* SSH key badge — right of status row, small */}
+            <Typography
+              sx={{
+                fontSize: '0.58rem',
+                fontWeight: 500,
+                color: 'text.disabled',
+                letterSpacing: '0.02em',
+                flexShrink: 0,
+              }}
+            >
+              {machine.ssh_key_name}
+            </Typography>
+          </Box>
+
+          {/* Machine name — full width, no competing badge */}
+          <Typography
+            variant="subtitle1"
+            fontWeight={700}
+            noWrap
+            title={machine.mount_point || machine.host}
+            sx={{ lineHeight: 1.3, mb: 0.25 }}
+          >
+            {machine.mount_point || machine.host}
+          </Typography>
+
+          {/* Connection string */}
+          <Typography
+            noWrap
+            title={`${machine.username}@${machine.host}:${machine.port}`}
             sx={{
-              bgcolor: machine.status === 'connected' ? 'success.light' : 'grey.200',
-              borderRadius: 2,
-              p: 1.5,
-              display: 'flex',
+              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+              fontSize: '0.7rem',
+              color: 'text.disabled',
             }}
           >
-            <Computer size={24} color={machine.status === 'connected' ? '#ffffff' : '#666666'} />
-          </Box>
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="h6" fontWeight={600} noWrap>
-              {machine.mount_point || machine.host}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" noWrap>
-              {machine.username}@{machine.host}:{machine.port}
-            </Typography>
-          </Box>
-          <IconButton size="small" onClick={handleMenuOpen}>
-            <MoreVertical size={18} />
-          </IconButton>
-        </Stack>
+            {machine.username}@{machine.host}:{machine.port}
+          </Typography>
+        </Box>
 
-        {/* Status */}
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-          {getStatusIcon(machine.status)}
-          <Chip
-            label={machine.status}
-            size="small"
-            color={getStatusColor(machine.status)}
-            sx={{ height: 24 }}
-          />
-        </Stack>
-
-        {/* Storage Info */}
+        {/* ── Storage Stats Band ── */}
         {machine.storage ? (
-          <Box sx={{ mt: 2 }}>
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-              <HardDrive size={16} />
-              <Typography variant="body2" fontWeight={500}>
-                {t('remoteMachineCard.storage')}
-              </Typography>
-            </Stack>
-
-            {/* Storage Bar */}
-            <Box sx={{ mb: 1 }}>
-              <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">
-                  {machine.storage.used_formatted} {t('remoteMachine.used')}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {machine.storage.available_formatted} {t('remoteMachine.free')}
-                </Typography>
-              </Stack>
-              <Box sx={{ position: 'relative' }}>
-                <LinearProgress
-                  variant="determinate"
-                  value={machine.storage.percent_used}
+          <Box
+            sx={{
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+              overflow: 'hidden',
+              mb: 1.5,
+              bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
+            }}
+          >
+            {/* Two-column stats: Used + Free (Total shown inline with bar) */}
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)' }}>
+              {[
+                {
+                  label: t('remoteMachine.used'),
+                  value: machine.storage.used_formatted,
+                  color: theme.palette.warning.main,
+                },
+                {
+                  label: t('remoteMachine.free'),
+                  value: machine.storage.available_formatted,
+                  color: theme.palette.success.main,
+                },
+              ].map((col, i) => (
+                <Box
+                  key={col.label}
                   sx={{
-                    height: 8,
-                    borderRadius: 1,
-                    backgroundColor: 'grey.200',
-                    '& .MuiLinearProgress-bar': {
-                      backgroundColor: getStorageColor(machine.storage.percent_used),
-                      borderRadius: 1,
-                    },
+                    px: { xs: 1.25, sm: 1.5 },
+                    py: { xs: 1.25, sm: 1 },
+                    borderRight: i === 0 ? '1px solid' : 0,
+                    borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+                    minWidth: 0,
                   }}
-                />
-              </Box>
-              <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.5 }}>
-                <Typography variant="caption" fontWeight={500}>
-                  {machine.storage.percent_used.toFixed(1)}
-                  {t('remoteMachine.percentUsed')}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
+                >
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: '0.6rem',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                      color: alpha(col.color, 0.75),
+                      lineHeight: 1,
+                      mb: 0.5,
+                    }}
+                  >
+                    {col.label}
+                  </Typography>
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: { xs: '0.9rem', sm: '0.85rem' },
+                      fontWeight: 600,
+                      fontVariantNumeric: 'tabular-nums',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {col.value}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+
+            {/* Usage bar with total inline */}
+            <Box
+              sx={{
+                px: { xs: 1.25, sm: 1.5 },
+                pb: 1,
+                borderTop: '1px solid',
+                borderColor: isDark ? alpha('#fff', 0.05) : alpha('#000', 0.06),
+                pt: 0.75,
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  mb: 0.5,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Typography sx={{ fontSize: '0.58rem', color: 'text.disabled', lineHeight: 1 }}>
+                    {machine.storage.percent_used.toFixed(1)}% used
+                  </Typography>
+                </Box>
+                <Typography
+                  sx={{
+                    fontSize: '0.58rem',
+                    color: 'text.disabled',
+                    lineHeight: 1,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
                   {machine.storage.total_formatted} total
                 </Typography>
-              </Stack>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={machine.storage.percent_used}
+                sx={{
+                  height: 5,
+                  borderRadius: 1,
+                  bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08),
+                  '& .MuiLinearProgress-bar': {
+                    bgcolor: getStorageBarColor(machine.storage.percent_used, theme),
+                    borderRadius: 1,
+                  },
+                }}
+              />
             </Box>
           </Box>
         ) : (
-          <Box sx={{ mt: 2 }}>
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <HardDrive size={16} />
-              <Typography variant="body2" color="text.secondary">
-                {t('remoteMachine.noStorageInfo')}
-              </Typography>
-              <Tooltip title={t('remoteMachine.refreshStorage')}>
-                <IconButton size="small" onClick={() => onRefreshStorage(machine)}>
-                  <RefreshCw size={14} />
-                </IconButton>
-              </Tooltip>
-            </Stack>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              px: 1.25,
+              py: 0.875,
+              mb: 1.5,
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+              bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
+            }}
+          >
+            <HardDrive size={14} style={{ opacity: 0.4, flexShrink: 0 }} />
+            <Typography noWrap sx={{ fontSize: '0.75rem', color: 'text.disabled', flex: 1 }}>
+              {t('remoteMachine.noStorageInfo')}
+            </Typography>
+            <Tooltip title={t('remoteMachine.refreshStorage')} arrow>
+              <IconButton
+                onClick={() => onRefreshStorage(machine)}
+                sx={{
+                  width: { xs: 36, sm: 30 },
+                  height: { xs: 36, sm: 30 },
+                  flexShrink: 0,
+                  color: 'text.disabled',
+                  '&:hover': { color: 'text.secondary' },
+                }}
+              >
+                <RefreshCw size={14} />
+              </IconButton>
+            </Tooltip>
           </Box>
         )}
 
-        {/* Default Path */}
-        {machine.default_path && (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="caption" color="text.secondary">
-              {t('remoteMachine.defaultPath')}
-            </Typography>
-            <Typography
-              variant="body2"
-              fontFamily="monospace"
-              sx={{
-                bgcolor: 'background.default',
-                px: 1,
-                py: 0.5,
-                borderRadius: 0.5,
-                fontSize: '0.75rem',
-                border: '1px solid',
-                borderColor: 'divider',
-              }}
-            >
-              {machine.default_path}
-            </Typography>
+        {/* ── Secondary Metadata ── */}
+        {hasMeta && (
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.4,
+              mb: 1.5,
+              px: 0.25,
+            }}
+          >
+            {machine.default_path && (
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, minWidth: 0 }}>
+                <Typography
+                  sx={{ fontSize: '0.68rem', color: 'text.disabled', lineHeight: 1, flexShrink: 0 }}
+                >
+                  {t('remoteMachine.defaultPath')}:
+                </Typography>
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    color: 'text.secondary',
+                    fontFamily: 'monospace',
+                    lineHeight: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  {machine.default_path}
+                </Typography>
+              </Box>
+            )}
+            {machine.mount_point && machine.mount_point !== machine.host && (
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, minWidth: 0 }}>
+                <Typography
+                  sx={{ fontSize: '0.68rem', color: 'text.disabled', lineHeight: 1, flexShrink: 0 }}
+                >
+                  {t('remoteMachineCard.mountPoint')}:
+                </Typography>
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: '0.68rem',
+                    fontWeight: 600,
+                    color: 'primary.main',
+                    fontFamily: 'monospace',
+                    lineHeight: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  {machine.mount_point}
+                </Typography>
+              </Box>
+            )}
           </Box>
         )}
 
-        {/* Mount Point */}
-        {machine.mount_point && machine.mount_point !== machine.host && (
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="caption" color="text.secondary">
-              {t('remoteMachineCard.mountPoint')}
-            </Typography>
-            <Typography
-              variant="body2"
-              fontFamily="monospace"
-              sx={{
-                bgcolor: 'primary.50',
-                px: 1,
-                py: 0.5,
-                borderRadius: 0.5,
-                fontSize: '0.75rem',
-                color: 'primary.main',
-              }}
-            >
-              {machine.mount_point}
-            </Typography>
-          </Box>
-        )}
-
-        {/* Error Message */}
+        {/* ── Error Message ── */}
         {machine.error_message && (
           <Box
             sx={{
-              mt: 2,
-              p: 1,
-              bgcolor: 'error.50',
-              borderRadius: 1,
+              mb: 1.5,
+              px: 1.25,
+              py: 0.875,
+              bgcolor: alpha(theme.palette.error.main, isDark ? 0.1 : 0.06),
+              borderRadius: 1.5,
               border: '1px solid',
-              borderColor: 'error.200',
+              borderColor: alpha(theme.palette.error.main, 0.25),
             }}
           >
-            <Typography variant="caption" color="error.main" sx={{ wordBreak: 'break-word' }}>
+            <Typography
+              sx={{
+                fontSize: '0.7rem',
+                color: 'error.main',
+                wordBreak: 'break-word',
+                lineHeight: 1.4,
+              }}
+            >
               {machine.error_message}
             </Typography>
           </Box>
         )}
-      </CardContent>
 
-      {/* Context Menu */}
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-        <MenuItem
-          onClick={() => {
-            handleMenuClose()
-            onTestConnection(machine)
+        {/* ── Action Bar ── */}
+        <Box
+          sx={{
+            mt: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: { xs: 0.75, sm: 0.5 },
+            pt: { xs: 1.5, sm: 1.25 },
+            borderTop: '1px solid',
+            borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
           }}
         >
-          <ListItemIcon>
-            <Network size={18} />
-          </ListItemIcon>
-          <ListItemText>{t('remoteMachine.actions.testConnection')}</ListItemText>
-        </MenuItem>
-        {canManageConnections && (
-          <MenuItem
-            onClick={() => {
-              handleMenuClose()
-              onDeployKey(machine)
-            }}
-          >
-            <ListItemIcon>
-              <Key size={18} />
-            </ListItemIcon>
-            <ListItemText>{t('remoteMachineCard.actions.deploy')}</ListItemText>
-          </MenuItem>
-        )}
-        <MenuItem
-          onClick={() => {
-            handleMenuClose()
-            onRefreshStorage(machine)
-          }}
-        >
-          <ListItemIcon>
-            <RefreshCw size={18} />
-          </ListItemIcon>
-          <ListItemText>{t('remoteMachine.actions.refreshStorage')}</ListItemText>
-        </MenuItem>
-        {canManageConnections && (
-          <MenuItem
-            onClick={() => {
-              handleMenuClose()
-              onEdit(machine)
-            }}
-          >
-            <ListItemIcon>
-              <Edit size={18} />
-            </ListItemIcon>
-            <ListItemText>{t('remoteMachineCard.actions.edit')}</ListItemText>
-          </MenuItem>
-        )}
-        {canManageConnections && (
-          <MenuItem
-            onClick={() => {
-              handleMenuClose()
-              onDelete(machine)
-            }}
-          >
-            <ListItemIcon>
-              <Trash2 size={18} />
-            </ListItemIcon>
-            <ListItemText>{t('remoteMachineCard.actions.delete')}</ListItemText>
-          </MenuItem>
-        )}
-      </Menu>
-    </Card>
+          {/* Left cluster */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 0.25 }, flex: 1 }}>
+            <Tooltip title={t('remoteMachine.actions.testConnection')} arrow>
+              <IconButton
+                size="small"
+                onClick={() => onTestConnection(machine)}
+                sx={coloredIconBtnSx('primary')}
+              >
+                <Network size={16} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={t('remoteMachine.actions.refreshStorage')} arrow>
+              <IconButton
+                size="small"
+                onClick={() => onRefreshStorage(machine)}
+                sx={coloredIconBtnSx('info')}
+              >
+                <RefreshCw size={16} />
+              </IconButton>
+            </Tooltip>
+            {canManageConnections && (
+              <Tooltip title={t('remoteMachineCard.actions.deploy')} arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => onDeployKey(machine)}
+                  sx={coloredIconBtnSx('success')}
+                >
+                  <Key size={16} />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+
+          {/* Right cluster — edit / delete */}
+          {canManageConnections && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 0.25 } }}>
+              <Box
+                sx={{
+                  width: '1px',
+                  height: 18,
+                  bgcolor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.1),
+                  mx: 0.25,
+                  flexShrink: 0,
+                }}
+              />
+              <Tooltip title={t('remoteMachineCard.actions.edit')} arrow>
+                <IconButton size="small" onClick={() => onEdit(machine)} sx={iconBtnSx}>
+                  <Edit size={16} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={t('remoteMachineCard.actions.delete')} arrow>
+                <IconButton
+                  size="small"
+                  onClick={() => onDelete(machine)}
+                  sx={{
+                    ...iconBtnSx,
+                    color: alpha(theme.palette.error.main, 0.6),
+                    '&:hover': {
+                      color: theme.palette.error.main,
+                      bgcolor: alpha(theme.palette.error.main, isDark ? 0.15 : 0.1),
+                    },
+                  }}
+                >
+                  <Trash2 size={16} />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )}
+        </Box>
+      </Box>
+    </Box>
   )
 }
