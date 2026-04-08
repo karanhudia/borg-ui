@@ -516,7 +516,12 @@ export default function RemoteMachineCard({
                 }}
               />
               <Tooltip title={t('remoteMachineCard.actions.edit')} arrow>
-                <IconButton size="small" aria-label={t('remoteMachineCard.actions.edit')} onClick={() => onEdit(machine)} sx={iconBtnSx}>
+                <IconButton
+                  size="small"
+                  aria-label={t('remoteMachineCard.actions.edit')}
+                  onClick={() => onEdit(machine)}
+                  sx={iconBtnSx}
+                >
                   <Edit size={16} />
                 </IconButton>
               </Tooltip>
