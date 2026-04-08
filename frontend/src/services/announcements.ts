@@ -5,7 +5,7 @@ import localAnnouncementsUrl from '../data/announcements.json?url'
 
 export const LOCAL_ANNOUNCEMENTS_URL =
   BASE_PATH === '/' ? localAnnouncementsUrl : `${BASE_PATH}${localAnnouncementsUrl}`
-const DEFAULT_REMOTE_ANNOUNCEMENTS_URL = 'https://karanhudia.github.io/borg-ui/announcements.json'
+const DEFAULT_REMOTE_ANNOUNCEMENTS_URL = 'https://updates.borgui.com/announcements.json'
 export const DEFAULT_ANNOUNCEMENTS_MANIFEST = announcementsManifestData as AnnouncementManifest
 
 export function getAnnouncementsUrl() {
@@ -23,11 +23,16 @@ export async function fetchAnnouncementsManifest(url = getAnnouncementsUrl()) {
   let lastStatus: number | null = null
 
   for (const candidateUrl of candidateUrls) {
-    const response = await fetch(candidateUrl, {
-      headers: {
-        Accept: 'application/json',
-      },
-    })
+    let response: Response
+    try {
+      response = await fetch(candidateUrl, {
+        headers: {
+          Accept: 'application/json',
+        },
+      })
+    } catch {
+      continue
+    }
 
     if (!response.ok) {
       lastStatus = response.status

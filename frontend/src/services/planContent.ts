@@ -5,7 +5,7 @@ import localPlanContentUrl from '../data/plan-content.json?url'
 
 export const LOCAL_PLAN_CONTENT_URL =
   BASE_PATH === '/' ? localPlanContentUrl : `${BASE_PATH}${localPlanContentUrl}`
-const DEFAULT_REMOTE_PLAN_CONTENT_URL = 'https://karanhudia.github.io/borg-ui/plan-content.json'
+const DEFAULT_REMOTE_PLAN_CONTENT_URL = 'https://updates.borgui.com/plan-content.json'
 
 export const DEFAULT_PLAN_CONTENT_MANIFEST = planContentManifestData as PlanContentManifest
 
@@ -60,11 +60,16 @@ export async function fetchPlanContentManifest(url = getPlanContentUrl()) {
   let lastStatus: number | null = null
 
   for (const candidateUrl of candidateUrls) {
-    const response = await fetch(candidateUrl, {
-      headers: {
-        Accept: 'application/json',
-      },
-    })
+    let response: Response
+    try {
+      response = await fetch(candidateUrl, {
+        headers: {
+          Accept: 'application/json',
+        },
+      })
+    } catch {
+      continue
+    }
 
     if (!response.ok) {
       lastStatus = response.status

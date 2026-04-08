@@ -1,0 +1,11 @@
+name = "borg-ui-updates"
+main = "src/index.ts"
+compatibility_date = "2026-04-08"
+workers_dev = false
+
+[observability]
+enabled = true
+
+[[routes]]
+pattern = "updates.borgui.com"
+custom_domain = true

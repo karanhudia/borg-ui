@@ -2,6 +2,8 @@
 /frontend/node_modules
 /frontend/build
 /frontend/dist
+/updates-worker/node_modules
+/updates-worker/.wrangler
 
 # Root node_modules (should not exist)
 /node_modules
