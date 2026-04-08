@@ -221,97 +221,95 @@ const Backup: React.FC = () => {
       </Box>
 
       {/* Manual Backup Control */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-            <Play size={20} color="#2e7d32" />
-            <Typography variant="h6" fontWeight={600}>
-              {t('backup.manualBackup.title')}
-            </Typography>
-            {repositoriesData?.data?.repositories?.some(
-              (repo: Repository) => !getRepoCapabilities(repo).canBackup
-            ) &&
-              !loadingRepositories && (
-                <Tooltip
-                  title={t('backup.manualBackup.observeOnlyHidden')}
-                  arrow
-                  enterTouchDelay={0}
-                  leaveTouchDelay={4000}
-                >
-                  <IconButton
-                    size="small"
-                    aria-label={t('backup.manualBackup.observeOnlyHidden')}
-                    sx={{
-                      color: 'text.disabled',
-                      '&:hover': { color: 'text.secondary' },
-                      p: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Info size={16} />
-                  </IconButton>
-                </Tooltip>
-              )}
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            {t('backup.manualBackup.subtitle')}
+      <Box sx={{ mb: 4 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 0.5 }}>
+          <Play size={20} color="#2e7d32" />
+          <Typography variant="h6" fontWeight={600}>
+            {t('backup.manualBackup.title')}
           </Typography>
+          {repositoriesData?.data?.repositories?.some(
+            (repo: Repository) => !getRepoCapabilities(repo).canBackup
+          ) &&
+            !loadingRepositories && (
+              <Tooltip
+                title={t('backup.manualBackup.observeOnlyHidden')}
+                arrow
+                enterTouchDelay={0}
+                leaveTouchDelay={4000}
+              >
+                <IconButton
+                  size="small"
+                  aria-label={t('backup.manualBackup.observeOnlyHidden')}
+                  sx={{
+                    color: 'text.disabled',
+                    '&:hover': { color: 'text.secondary' },
+                    p: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Info size={16} />
+                </IconButton>
+              </Tooltip>
+            )}
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          {t('backup.manualBackup.subtitle')}
+        </Typography>
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
-            <RepoSelect
-              repositories={(repositoriesData?.data?.repositories ?? []).filter(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (repo: any) =>
-                  getRepoCapabilities(repo).canBackup && permissions.canDo(repo.id, 'backup')
-              )}
-              value={selectedRepository}
-              onChange={(v) => handleRepositoryChange(v as string)}
-              loading={loadingRepositories}
-              valueKey="path"
-              label={t('backup.manualBackup.repository')}
-              loadingLabel={t('backup.manualBackup.loadingRepositories')}
-              placeholderLabel={t('backup.manualBackup.selectRepository')}
-              maintenanceLabel={t('backup.manualBackup.maintenanceRunning')}
-            />
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
+          <RepoSelect
+            repositories={(repositoriesData?.data?.repositories ?? []).filter(
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (repo: any) =>
+                getRepoCapabilities(repo).canBackup && permissions.canDo(repo.id, 'backup')
+            )}
+            value={selectedRepository}
+            onChange={(v) => handleRepositoryChange(v as string)}
+            loading={loadingRepositories}
+            valueKey="path"
+            label={t('backup.manualBackup.repository')}
+            loadingLabel={t('backup.manualBackup.loadingRepositories')}
+            placeholderLabel={t('backup.manualBackup.selectRepository')}
+            maintenanceLabel={t('backup.manualBackup.maintenanceRunning')}
+          />
 
-            <Button
-              variant="contained"
-              color="success"
-              size="large"
-              startIcon={
-                startBackupMutation.isPending ? (
-                  <CircularProgress size={16} color="inherit" />
-                ) : (
-                  <Play size={18} />
-                )
-              }
-              onClick={handleStartBackup}
-              disabled={startBackupMutation.isPending || !selectedRepository || !canStartBackup}
-              sx={{
-                minWidth: { xs: '100%', sm: 180 },
-                height: { xs: 48, sm: 56 },
-                fontWeight: 600,
-              }}
-            >
-              {startBackupMutation.isPending
-                ? t('backup.manualBackup.starting')
-                : t('backup.manualBackup.startBackup')}
-            </Button>
-          </Stack>
+          <Button
+            variant="contained"
+            color="success"
+            size="large"
+            startIcon={
+              startBackupMutation.isPending ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <Play size={18} />
+              )
+            }
+            onClick={handleStartBackup}
+            disabled={startBackupMutation.isPending || !selectedRepository || !canStartBackup}
+            sx={{
+              minWidth: { xs: '100%', sm: 180 },
+              height: { xs: 48, sm: 58 },
+              fontWeight: 600,
+            }}
+          >
+            {startBackupMutation.isPending
+              ? t('backup.manualBackup.starting')
+              : t('backup.manualBackup.startBackup')}
+          </Button>
+        </Stack>
 
-          {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
-            <Alert severity="warning" sx={{ mt: 2 }}>
-              <Typography variant="body2" fontWeight={500} gutterBottom>
-                {t('backup.manualBackup.noRepositories.title')}
-              </Typography>
-              <Typography variant="body2">
-                {t('backup.manualBackup.noRepositories.subtitle')}
-              </Typography>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+        {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <Typography variant="body2" fontWeight={500} gutterBottom>
+              {t('backup.manualBackup.noRepositories.title')}
+            </Typography>
+            <Typography variant="body2">
+              {t('backup.manualBackup.noRepositories.subtitle')}
+            </Typography>
+          </Alert>
+        )}
+      </Box>
 
       {/* Command Preview Card */}
       {selectedRepoData && (

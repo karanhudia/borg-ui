@@ -49,7 +49,13 @@ export default function RepoMenuItem({
           )}
         </Stack>
         {!hidePath && (
-          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{
+              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,SFMono-Regular,monospace',
+            }}
+          >
             {path}
           </Typography>
         )}

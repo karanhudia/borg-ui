@@ -1,8 +1,20 @@
 import React from 'react'
-import { FormControl, InputLabel, MenuItem, Select } from '@mui/material'
+import {
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Box,
+  Typography,
+  Stack,
+  useTheme,
+  alpha,
+} from '@mui/material'
 import type { SxProps, Theme } from '@mui/material'
+import { Database } from 'lucide-react'
 import { Repository } from '../types'
 import RepoMenuItem from './RepoMenuItem'
+import BorgVersionChip from './BorgVersionChip'
 
 interface RepoSelectProps {
   repositories: Repository[]
@@ -41,7 +53,31 @@ export default function RepoSelect({
   fullWidth = true,
   sx,
 }: RepoSelectProps) {
-  const selectSx = size === 'medium' ? { height: { xs: 48, sm: 56 }, ...sx } : sx
+  const theme = useTheme()
+
+  // Find selected repo for rich renderValue
+  const selectedRepo =
+    value && value !== ''
+      ? repositories.find((r) => (valueKey === 'id' ? r.id === value : r.path === value))
+      : null
+
+  const selectSx: SxProps<Theme> =
+    size === 'medium'
+      ? {
+          minHeight: { xs: 52, sm: 58 },
+          '& .MuiSelect-select': {
+            display: 'flex',
+            alignItems: 'center',
+          },
+          ...sx,
+        }
+      : {
+          '& .MuiSelect-select': {
+            display: 'flex',
+            alignItems: 'center',
+          },
+          ...sx,
+        }
 
   return (
     <FormControl
@@ -56,6 +92,64 @@ export default function RepoSelect({
         label={label}
         disabled={disabled || loading}
         sx={selectSx}
+        renderValue={(val) => {
+          if (loading) {
+            return (
+              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                {loadingLabel}
+              </Typography>
+            )
+          }
+          if (!val || val === '' || !selectedRepo) {
+            return (
+              <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+                {placeholderLabel}
+              </Typography>
+            )
+          }
+
+          if (size === 'small') {
+            // Compact: icon + name only
+            return (
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <Database size={13} />
+                <Typography variant="body2" fontWeight={500} noWrap>
+                  {selectedRepo.name}
+                </Typography>
+                <BorgVersionChip borgVersion={selectedRepo.borg_version} compact />
+              </Stack>
+            )
+          }
+
+          // Medium: icon + name + monospace path
+          return (
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
+              <Database size={16} style={{ flexShrink: 0 }} />
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <Typography variant="body2" fontWeight={600} noWrap sx={{ lineHeight: 1.3 }}>
+                    {selectedRepo.name}
+                  </Typography>
+                  <BorgVersionChip borgVersion={selectedRepo.borg_version} compact />
+                </Stack>
+                <Typography
+                  sx={{
+                    fontFamily:
+                      '"JetBrains Mono","Fira Code",ui-monospace,SFMono-Regular,monospace',
+                    fontSize: '0.62rem',
+                    color: 'text.disabled',
+                    lineHeight: 1.4,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {selectedRepo.path}
+                </Typography>
+              </Box>
+            </Stack>
+          )
+        }}
       >
         {prefixItems}
         {!prefixItems && (
@@ -68,6 +162,14 @@ export default function RepoSelect({
             key={repo.id}
             value={valueKey === 'id' ? repo.id : repo.path}
             disabled={repo.has_running_maintenance}
+            sx={{
+              '&.Mui-selected': {
+                bgcolor: alpha(
+                  theme.palette.primary.main,
+                  theme.palette.mode === 'dark' ? 0.14 : 0.08
+                ),
+              },
+            }}
           >
             <RepoMenuItem
               name={repo.name}

@@ -1,6 +1,4 @@
 import { useTranslation } from 'react-i18next'
-import { Card, CardContent, Stack, Typography } from '@mui/material'
-import { Database } from 'lucide-react'
 import { Repository } from '../types'
 import RepoSelect from './RepoSelect'
 
@@ -14,7 +12,6 @@ interface RepositorySelectorCardProps {
 }
 
 export default function RepositorySelectorCard({
-  title,
   repositories,
   value,
   onChange,
@@ -23,26 +20,17 @@ export default function RepositorySelectorCard({
 }: RepositorySelectorCardProps) {
   const { t } = useTranslation()
   return (
-    <Card sx={{ mb: 3 }}>
-      <CardContent>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-          <Database size={20} color="#2e7d32" />
-          <Typography variant="h6" fontWeight={600}>
-            {title ?? t('repositorySelectorCard.title')}
-          </Typography>
-        </Stack>
-        <RepoSelect
-          repositories={repositories}
-          value={value ?? ''}
-          onChange={onChange}
-          loading={loading}
-          valueKey={valueKey}
-          label={t('common.repository')}
-          loadingLabel={t('repositorySelectorCard.loading')}
-          placeholderLabel={t('repositorySelectorCard.placeholder')}
-          maintenanceLabel={t('repositorySelectorCard.maintenanceRunning')}
-        />
-      </CardContent>
-    </Card>
+    <RepoSelect
+      repositories={repositories}
+      value={value ?? ''}
+      onChange={onChange}
+      loading={loading}
+      valueKey={valueKey}
+      label={t('common.repository')}
+      loadingLabel={t('repositorySelectorCard.loading')}
+      placeholderLabel={t('repositorySelectorCard.placeholder')}
+      maintenanceLabel={t('repositorySelectorCard.maintenanceRunning')}
+      sx={{ mb: 3 }}
+    />
   )
 }
