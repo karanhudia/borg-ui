@@ -1,6 +1,6 @@
 {
   "name": "borg-web-ui-frontend",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0-alpha.2",
   "type": "module",
   "description": "React frontend for Borg Web UI",
   "license": "AGPL-3.0",
