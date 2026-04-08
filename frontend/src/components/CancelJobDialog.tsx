@@ -23,7 +23,12 @@ export default function CancelJobDialog({ open, onClose, onConfirm }: CancelJobD
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
-        <Button onClick={onConfirm} color="error" variant="contained">
+        <Button
+          onClick={onConfirm}
+          color="error"
+          variant="contained"
+          sx={{ boxShadow: '0 2px 8px rgba(220,38,38,0.35)' }}
+        >
           {t('dialogs.cancelJob.confirm')}
         </Button>
       </DialogActions>

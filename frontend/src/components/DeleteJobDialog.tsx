@@ -58,6 +58,7 @@ export default function DeleteJobDialog({
           color="error"
           variant="contained"
           startIcon={<AlertTriangle size={18} />}
+          sx={{ boxShadow: '0 2px 8px rgba(220,38,38,0.35)' }}
         >
           {t('dialogs.deleteJob.confirm')}
         </Button>

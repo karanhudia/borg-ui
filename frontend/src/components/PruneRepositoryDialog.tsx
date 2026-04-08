@@ -309,6 +309,7 @@ export default function PruneRepositoryDialog({
           color="error"
           disabled={isLoading}
           startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : <Delete />}
+          sx={{ boxShadow: '0 2px 8px rgba(220,38,38,0.35)' }}
         >
           {isLoading ? t('status.running') : t('dialogs.pruneRepository.confirm')}
         </Button>

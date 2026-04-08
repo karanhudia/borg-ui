@@ -377,7 +377,12 @@ const ArchiveBrowserDialog: React.FC<ArchiveBrowserDialogProps> = ({
 
       <DialogActions>
         <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
-        <Button variant="contained" color="primary" onClick={handleConfirm}>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleConfirm}
+          sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+        >
           {selectedPaths.size > 0
             ? t('archiveBrowser.continueWithSelected', { count: selectedPaths.size })
             : t('archiveBrowser.continueRestoreAll')}

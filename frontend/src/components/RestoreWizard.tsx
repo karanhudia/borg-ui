@@ -348,11 +348,21 @@ const RestoreWizard = ({
             {t('common.buttons.back')}
           </Button>
           {activeStep < steps.length - 1 ? (
-            <Button variant="contained" onClick={handleNext} disabled={!canProceed()}>
+            <Button
+              variant="contained"
+              onClick={handleNext}
+              disabled={!canProceed()}
+              sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+            >
               {t('common.buttons.next')}
             </Button>
           ) : (
-            <Button variant="contained" onClick={handleSubmit} disabled={!canProceed()}>
+            <Button
+              variant="contained"
+              onClick={handleSubmit}
+              disabled={!canProceed()}
+              sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+            >
               {t('restoreWizard.buttons.restore')}
             </Button>
           )}

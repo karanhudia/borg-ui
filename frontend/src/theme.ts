@@ -109,10 +109,11 @@ export const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 6,
+          borderRadius: 12,
           padding: '8px 16px',
           fontSize: '0.875rem',
-          fontWeight: 500,
+          fontWeight: 600,
+          textTransform: 'none',
           boxShadow: 'none',
           '&:hover': {
             boxShadow: 'none',

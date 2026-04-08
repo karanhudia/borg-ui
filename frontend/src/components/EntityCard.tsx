@@ -303,12 +303,9 @@ export default function EntityCard({
                   sx={{
                     bgcolor: primaryAction.color ?? effectiveAccent,
                     color: '#fff',
-                    textTransform: 'none',
-                    fontWeight: 600,
                     fontSize: '0.78rem',
                     height: 30,
                     flexShrink: 0,
-                    borderRadius: 1.5,
                     px: { xs: 0.85, sm: 1.5 },
                     minWidth: 'unset',
                     boxShadow: `0 2px 10px ${alpha(primaryAction.color ?? effectiveAccent, 0.38)}`,
