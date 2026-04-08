@@ -81,6 +81,11 @@ class CronExpression(BaseModel):
     day_of_week: str = "*"
 
 
+def _calculate_next_schedule_run(cron_expression: str) -> datetime:
+    cron = croniter.croniter(cron_expression, datetime.now(timezone.utc))
+    return cron.get_next(datetime)
+
+
 def _dedupe_repository_ids(repository_ids: Optional[List[int]]) -> List[int]:
     if not repository_ids:
         return []
@@ -377,8 +382,7 @@ async def create_scheduled_job(
 
         # Validate cron expression
         try:
-            cron = croniter.croniter(job_data.cron_expression, datetime.now(timezone.utc))
-            next_run = cron.get_next(datetime)
+            next_run = _calculate_next_schedule_run(job_data.cron_expression)
         except Exception as e:
             raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.invalidCronExpression", "params": {"error": str(e)}})
 
@@ -761,17 +765,26 @@ async def update_scheduled_job(
         if job_data.cron_expression is not None:
             # Validate cron expression
             try:
-                cron = croniter.croniter(job_data.cron_expression, datetime.now(timezone.utc))
                 job.cron_expression = job_data.cron_expression
-                job.next_run = cron.get_next(datetime)
+                job.next_run = _calculate_next_schedule_run(job_data.cron_expression)
             except Exception as e:
                 raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.invalidCronExpression", "params": {"error": str(e)}})
 
         if job_data.repository is not None:
             job.repository = job_data.repository
 
+        was_enabled = job.enabled
+
         if job_data.enabled is not None:
             job.enabled = job_data.enabled
+            if job.enabled and not was_enabled:
+                try:
+                    job.next_run = _calculate_next_schedule_run(job.cron_expression)
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.schedule.invalidCronExpression", "params": {"error": str(e)}},
+                    )
         
         if job_data.description is not None:
             job.description = job_data.description
@@ -919,6 +932,14 @@ async def toggle_scheduled_job(
         _require_schedule_access(db, current_user, job, "operator")
 
         job.enabled = not job.enabled
+        if job.enabled:
+            try:
+                job.next_run = _calculate_next_schedule_run(job.cron_expression)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.schedule.invalidCronExpression", "params": {"error": str(e)}},
+                )
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
 
@@ -961,8 +982,7 @@ async def duplicate_scheduled_job(
 
         # Calculate next run time from cron expression
         try:
-            cron = croniter.croniter(original_job.cron_expression, datetime.now(timezone.utc))
-            next_run = cron.get_next(datetime)
+            next_run = _calculate_next_schedule_run(original_job.cron_expression)
         except Exception as e:
             raise HTTPException(status_code=400, detail={"key": "backend.errors.schedule.invalidCronExpression", "params": {"error": str(e)}})
 
@@ -1954,8 +1974,7 @@ async def check_scheduled_jobs():
                     job.last_run = datetime.now(timezone.utc)
 
                     # Calculate next run time
-                    cron = croniter.croniter(job.cron_expression, datetime.now(timezone.utc))
-                    job.next_run = cron.get_next(datetime)
+                    job.next_run = _calculate_next_schedule_run(job.cron_expression)
 
                     db.commit()
 

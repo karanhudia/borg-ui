@@ -76,6 +76,52 @@ class TestScheduleRouteContracts:
         assert response.status_code == 400
         assert response.json()["detail"]["key"] == "backend.errors.schedule.jobNameExists"
 
+    def test_toggle_schedule_enable_recomputes_stale_next_run(self, test_client: TestClient, admin_headers, test_db):
+        schedule = _create_schedule(test_db, "Re-enable Me", repository="/repos/re-enable")
+        schedule.enabled = False
+        schedule.next_run = datetime.now(timezone.utc) - timedelta(hours=12)
+        test_db.commit()
+        stale_next_run = schedule.next_run
+
+        response = test_client.post(f"/api/schedule/{schedule.id}/toggle", headers=admin_headers)
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.enabled is True
+        assert schedule.next_run is not None
+        assert schedule.next_run > stale_next_run
+
+        due_jobs = test_db.query(ScheduledJob).filter(
+            ScheduledJob.enabled == True,
+            ScheduledJob.next_run <= datetime.now(timezone.utc)
+        ).all()
+        assert schedule.id not in {job.id for job in due_jobs}
+
+    def test_update_schedule_enable_recomputes_stale_next_run(self, test_client: TestClient, admin_headers, test_db):
+        schedule = _create_schedule(test_db, "Enable Via Update", repository="/repos/update-enable")
+        schedule.enabled = False
+        schedule.next_run = datetime.now(timezone.utc) - timedelta(hours=6)
+        test_db.commit()
+        stale_next_run = schedule.next_run
+
+        response = test_client.put(
+            f"/api/schedule/{schedule.id}",
+            json={"enabled": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(schedule)
+        assert schedule.enabled is True
+        assert schedule.next_run is not None
+        assert schedule.next_run > stale_next_run
+
+        due_jobs = test_db.query(ScheduledJob).filter(
+            ScheduledJob.enabled == True,
+            ScheduledJob.next_run <= datetime.now(timezone.utc)
+        ).all()
+        assert schedule.id not in {job.id for job in due_jobs}
+
     def test_delete_schedule_nulls_backup_job_links(self, test_client: TestClient, admin_headers, test_db):
         schedule = _create_schedule(test_db, "Delete Me", repository="/repos/delete-me")
         backup_job = BackupJob(repository="/repos/delete-me", status="completed", scheduled_job_id=schedule.id)
