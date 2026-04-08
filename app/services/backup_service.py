@@ -1737,6 +1737,28 @@ class BackupService:
             if job.status == "cancelled":
                 logger.info("Backup job was cancelled", job_id=job_id)
                 job.completed_at = datetime.utcnow()
+                if repo_record and not skip_hooks:
+                    logger.info("Executing post-backup hooks (cancelled case)", job_id=job_id, repository=repository)
+                    hook_result = await self._execute_hooks(
+                        db=db,
+                        repo_record=repo_record,
+                        hook_type="post-backup",
+                        backup_result="failure",
+                        job_id=job_id
+                    )
+
+                    if hook_result["execution_logs"]:
+                        hook_logs.extend(hook_result["execution_logs"])
+
+                    logger.info("Post-backup hooks completed (cancelled case)",
+                               scripts_executed=hook_result["scripts_executed"],
+                               scripts_failed=hook_result["scripts_failed"],
+                               using_library=hook_result["using_library"])
+
+                    if not hook_result["success"]:
+                        logger.warning("Post-backup hooks failed after cancellation",
+                                     job_id=job_id,
+                                     scripts_failed=hook_result["scripts_failed"])
             elif actual_returncode == 0:
                 job.status = "completed"
                 job.progress = 100

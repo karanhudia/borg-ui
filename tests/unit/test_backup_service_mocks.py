@@ -160,6 +160,58 @@ async def test_execute_backup_hooks(backup_service_fixture, mock_db_session):
                     call2 = instance.execute_inline_script.call_args_list[1]
                     assert call2.kwargs['script_type'] == "post-backup"
 
+
+@pytest.mark.asyncio
+async def test_execute_backup_runs_post_hook_on_cancel_as_failure(backup_service_fixture, mock_db_session):
+    """Cancelled backups should still execute post-backup hooks with failure semantics."""
+    job_id = 1001
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        source_directories='["/data"]',
+        post_backup_script="echo post"
+    )
+    job = BackupJob(id=job_id, status="cancelled")
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == BackupJob:
+            m.filter.return_value.first.return_value = job
+        elif model == Repository:
+            m.filter.return_value.first.return_value = repo
+        elif model == SystemSettings:
+            m.first.return_value = SystemSettings()
+        elif model == RepositoryScript:
+            m.filter.return_value.count.return_value = 0
+        return m
+
+    mock_db_session.query.side_effect = query_side_effect
+
+    hook_result = {
+        "success": True,
+        "execution_logs": [],
+        "scripts_executed": 1,
+        "scripts_failed": 0,
+        "using_library": False,
+    }
+
+    mock_process = AsyncMock()
+    mock_process.returncode = 2
+    mock_process.stdout = AsyncMock()
+    mock_process.stdout.__aiter__.return_value = iter([])
+
+    with patch("app.services.backup_service.asyncio.create_subprocess_exec", return_value=mock_process):
+        with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
+            with patch("app.services.backup_service.notification_service"):
+                with patch.object(backup_service_fixture, "_execute_hooks", new=AsyncMock(return_value=hook_result)) as mock_hooks:
+                    await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
+
+    post_hook_calls = [
+        call for call in mock_hooks.await_args_list if call.kwargs.get("hook_type") == "post-backup"
+    ]
+    assert len(post_hook_calls) == 1
+    assert post_hook_calls[0].kwargs["backup_result"] == "failure"
+
 @pytest.mark.asyncio
 async def test_calculate_source_size_local(backup_service_fixture):
     """Test local directory size calculation"""

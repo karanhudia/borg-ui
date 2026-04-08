@@ -1,7 +1,9 @@
+from unittest.mock import patch
+
 import pytest
 
-from app.database.models import Repository, SSHConnection
-from app.services.script_library_executor import build_script_env
+from app.database.models import Repository, RepositoryScript, SSHConnection, Script
+from app.services.script_library_executor import ScriptLibraryExecutor, build_script_env
 
 
 @pytest.mark.unit
@@ -40,3 +42,106 @@ def test_build_script_env_rejects_non_string_environment_values():
             backup_result={"status": "completed"},
             backup_job_id=42,
         )
+
+
+def _create_post_backup_script_matrix(db_session) -> tuple[Repository, dict[str, Script]]:
+    repository = Repository(
+        name="Matrix Repo",
+        path="/backups/matrix",
+        encryption="none",
+        repository_type="local",
+    )
+    db_session.add(repository)
+    db_session.commit()
+    db_session.refresh(repository)
+
+    scripts = {
+        run_on: Script(
+            name=f"{run_on.title()} Script",
+            file_path=f"{run_on}.sh",
+            category="custom",
+            run_on=run_on,
+        )
+        for run_on in ("always", "success", "warning", "failure")
+    }
+    db_session.add_all(scripts.values())
+    db_session.commit()
+
+    for order, run_on in enumerate(("always", "success", "warning", "failure"), start=1):
+        db_session.add(
+            RepositoryScript(
+                repository_id=repository.id,
+                script_id=scripts[run_on].id,
+                hook_type="post-backup",
+                execution_order=order,
+                enabled=True,
+            )
+        )
+    db_session.commit()
+    return repository, scripts
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("backup_result", "expected_run_on"),
+    [
+        ("success", {"always", "success"}),
+        ("warning", {"always", "warning"}),
+        ("failure", {"always", "failure"}),
+    ],
+)
+async def test_execute_hooks_filters_post_backup_scripts_by_status(db_session, backup_result, expected_run_on):
+    repository, scripts = _create_post_backup_script_matrix(db_session)
+    executor = ScriptLibraryExecutor(db_session)
+    executed_script_ids: list[int] = []
+
+    async def fake_execute_script_and_record(self, repo_script, repository, backup_job_id, hook_type, backup_result=None):
+        executed_script_ids.append(repo_script.script_id)
+        return {"success": True, "logs": [], "exit_code": 0}
+
+    with patch.object(
+        ScriptLibraryExecutor,
+        "_execute_script_and_record",
+        new=fake_execute_script_and_record,
+    ):
+        result = await executor.execute_hooks(
+            repository_id=repository.id,
+            hook_type="post-backup",
+            backup_result=backup_result,
+            backup_job_id=42,
+        )
+
+    expected_ids = {scripts[run_on].id for run_on in expected_run_on}
+    assert set(executed_script_ids) == expected_ids
+    assert result["scripts_executed"] == len(expected_ids)
+    assert result["scripts_failed"] == 0
+    assert result["success"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_hooks_treats_cancelled_as_failure_for_run_on_filtering(db_session):
+    repository, scripts = _create_post_backup_script_matrix(db_session)
+    executor = ScriptLibraryExecutor(db_session)
+    executed_script_ids: list[int] = []
+
+    async def fake_execute_script_and_record(self, repo_script, repository, backup_job_id, hook_type, backup_result=None):
+        executed_script_ids.append(repo_script.script_id)
+        return {"success": True, "logs": [], "exit_code": 0}
+
+    with patch.object(
+        ScriptLibraryExecutor,
+        "_execute_script_and_record",
+        new=fake_execute_script_and_record,
+    ):
+        result = await executor.execute_hooks(
+            repository_id=repository.id,
+            hook_type="post-backup",
+            backup_result="failure",
+            backup_job_id=99,
+        )
+
+    assert set(executed_script_ids) == {scripts["always"].id, scripts["failure"].id}
+    assert result["scripts_executed"] == 2
+    assert result["success"] is True
