@@ -408,6 +408,7 @@ jobs:
           DATABASE_URL: sqlite:///${{ github.workspace }}/data/test.db
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+          ACTIVATION_SERVICE_URL: ""
 
       - name: Wait for service to be ready
         run: |
@@ -513,6 +514,7 @@ jobs:
           DATABASE_URL: sqlite:///${{ github.workspace }}/data/test.db
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+          ACTIVATION_SERVICE_URL: ""
 
       - name: Wait for service to be ready
         run: |
@@ -630,6 +632,7 @@ jobs:
           DATABASE_URL: sqlite:///${{ github.workspace }}/data/test.db
           REDIS_HOST: localhost
           REDIS_PORT: 6379
+          ACTIVATION_SERVICE_URL: ""
 
       - name: Wait for service to be ready
         run: |
