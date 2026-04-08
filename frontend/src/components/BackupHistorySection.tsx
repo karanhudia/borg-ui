@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, Card, CardContent, Typography, Select, MenuItem } from '@mui/material'
+import { Box, Typography, Select, MenuItem, Button, alpha, useTheme } from '@mui/material'
 import { Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import BackupJobsTable from './BackupJobsTable'
@@ -90,7 +90,9 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
   onFilterStatusChange,
 }) => {
   const { trackNavigation, EventAction } = useAnalytics()
-  // Apply filters
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
   const filteredBackupJobs = backupJobs.filter((job: BackupJob) => {
     if (filterSchedule !== 'all' && job.scheduled_job_id !== filterSchedule) return false
     if (filterRepository !== 'all' && job.repository !== filterRepository) return false
@@ -107,111 +109,170 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
 
   const { t } = useTranslation()
 
+  const filterSelectSx = {
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    borderRadius: 1.5,
+    '& .MuiOutlinedInput-notchedOutline': {
+      borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
+    },
+    '&:hover .MuiOutlinedInput-notchedOutline': {
+      borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
+    },
+  } as const
+
   return (
-    <Card sx={{ mt: 3 }}>
-      <CardContent>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
-          {t('backupHistory.title')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {hasFilters
-            ? t('backupHistory.showingFiltered', {
-                filtered: filteredBackupJobs.length,
-                total: backupJobs.length,
-              })
-            : t('backupHistory.showing', {
-                filtered: filteredBackupJobs.length,
-                total: backupJobs.length,
-              })}
-        </Typography>
-
-        {/* Filters */}
-        <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
-          <Select
-            size="small"
-            value={filterSchedule}
-            onChange={(e) => {
-              const value = e.target.value as number | 'all'
-              onFilterScheduleChange(value)
-              trackNavigation(EventAction.FILTER, {
-                section: 'backup_history',
-                filter_kind: 'schedule',
-                filter_value: value,
-              })
-            }}
-            sx={{ minWidth: 160, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
-          >
-            <MenuItem value="all">{t('backupHistory.allSchedules')}</MenuItem>
-            {scheduledJobs.map((job: ScheduledJob) => (
-              <MenuItem key={job.id} value={job.id}>
-                {job.name}
-              </MenuItem>
-            ))}
-          </Select>
-
-          <RepoSelect
-            repositories={repositories}
-            value={filterRepository}
-            onChange={(v) => {
-              onFilterRepositoryChange(v as string)
-              trackNavigation(EventAction.FILTER, {
-                section: 'backup_history',
-                filter_kind: 'repository',
-                filter_value: v as string,
-              })
-            }}
-            valueKey="path"
-            size="small"
-            hidePath
-            prefixItems={<MenuItem value="all">{t('backupHistory.allRepositories')}</MenuItem>}
-            sx={{ minWidth: 180, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
-          />
-
-          <Select
-            size="small"
-            value={filterStatus}
-            onChange={(e) => {
-              const value = e.target.value
-              onFilterStatusChange(value)
-              trackNavigation(EventAction.FILTER, {
-                section: 'backup_history',
-                filter_kind: 'status',
-                filter_value: value,
-              })
-            }}
-            sx={{ minWidth: 140, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
-          >
-            <MenuItem value="all">{t('backupHistory.allStatus')}</MenuItem>
-            <MenuItem value="completed">{t('backupHistory.completed')}</MenuItem>
-            <MenuItem value="failed">{t('backupHistory.failed')}</MenuItem>
-            <MenuItem value="warning">{t('backupHistory.warning')}</MenuItem>
-          </Select>
+    <Box sx={{ mt: 3 }}>
+      {/* Section header */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          mb: 2,
+          gap: 1,
+        }}
+      >
+        <Box>
+          <Typography variant="h6" fontWeight={600}>
+            {t('backupHistory.title')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {hasFilters
+              ? t('backupHistory.showingFiltered', {
+                  filtered: filteredBackupJobs.length,
+                  total: backupJobs.length,
+                })
+              : t('backupHistory.showing', {
+                  filtered: filteredBackupJobs.length,
+                  total: backupJobs.length,
+                })}
+          </Typography>
         </Box>
 
-        <BackupJobsTable
-          jobs={filteredBackupJobs}
-          repositories={repositories || []}
-          loading={isLoading}
-          actions={{
-            viewLogs: true,
-            cancel: true,
-            downloadLogs: true,
-            errorInfo: true,
-            delete: true,
+        {hasFilters && (
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => {
+              onFilterScheduleChange('all')
+              onFilterRepositoryChange('all')
+              onFilterStatusChange('all')
+              trackNavigation(EventAction.FILTER, {
+                section: 'backup_history',
+                filter_kind: 'reset',
+              })
+            }}
+            sx={{ px: 1, minWidth: 'auto', fontWeight: 700, borderRadius: 2, flexShrink: 0 }}
+          >
+            {t('common.clearFilters', { defaultValue: 'Clear filters' })}
+          </Button>
+        )}
+      </Box>
+
+      {/* Flat filter row */}
+      <Box sx={{ mb: 2.5, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+        <Select
+          size="small"
+          value={filterSchedule}
+          displayEmpty
+          onChange={(e) => {
+            const value = e.target.value as number | 'all'
+            onFilterScheduleChange(value)
+            trackNavigation(EventAction.FILTER, {
+              section: 'backup_history',
+              filter_kind: 'schedule',
+              filter_value: value,
+            })
           }}
-          canBreakLocks={canBreakLocks}
-          canDeleteJobs={canDeleteJobs}
-          getRowKey={(job) => String(job.id)}
-          headerBgColor="background.default"
-          enableHover={true}
-          tableId="schedule"
-          emptyState={{
-            icon: <Clock size={48} />,
-            title: t('backupHistory.noJobsFound'),
+          sx={{
+            flex: 1,
+            minWidth: { xs: '100%', sm: 150 },
+            ...filterSelectSx,
+          }}
+        >
+          <MenuItem value="all">{t('backupHistory.allSchedules')}</MenuItem>
+          {scheduledJobs.map((job: ScheduledJob) => (
+            <MenuItem key={job.id} value={job.id}>
+              {job.name}
+            </MenuItem>
+          ))}
+        </Select>
+
+        <RepoSelect
+          repositories={repositories}
+          value={filterRepository}
+          onChange={(v) => {
+            onFilterRepositoryChange(v as string)
+            trackNavigation(EventAction.FILTER, {
+              section: 'backup_history',
+              filter_kind: 'repository',
+              filter_value: v as string,
+            })
+          }}
+          valueKey="path"
+          size="small"
+          hidePath
+          label=""
+          placeholderLabel={t('backupHistory.allRepositories')}
+          fallbackDisplayValue={t('backupHistory.allRepositories')}
+          prefixItems={<MenuItem value="all">{t('backupHistory.allRepositories')}</MenuItem>}
+          sx={{
+            flex: 2,
+            minWidth: { xs: '100%', sm: 200 },
+            ...filterSelectSx,
           }}
         />
-      </CardContent>
-    </Card>
+
+        <Select
+          size="small"
+          value={filterStatus}
+          displayEmpty
+          onChange={(e) => {
+            const value = e.target.value
+            onFilterStatusChange(value)
+            trackNavigation(EventAction.FILTER, {
+              section: 'backup_history',
+              filter_kind: 'status',
+              filter_value: value,
+            })
+          }}
+          sx={{
+            flex: 1,
+            minWidth: { xs: '100%', sm: 140 },
+            ...filterSelectSx,
+          }}
+        >
+          <MenuItem value="all">{t('backupHistory.allStatus')}</MenuItem>
+          <MenuItem value="completed">{t('backupHistory.completed')}</MenuItem>
+          <MenuItem value="failed">{t('backupHistory.failed')}</MenuItem>
+          <MenuItem value="warning">{t('backupHistory.warning')}</MenuItem>
+        </Select>
+      </Box>
+
+      <BackupJobsTable
+        jobs={filteredBackupJobs}
+        repositories={repositories || []}
+        loading={isLoading}
+        actions={{
+          viewLogs: true,
+          cancel: true,
+          downloadLogs: true,
+          errorInfo: true,
+          delete: true,
+        }}
+        canBreakLocks={canBreakLocks}
+        canDeleteJobs={canDeleteJobs}
+        getRowKey={(job) => String(job.id)}
+        headerBgColor="background.default"
+        enableHover={true}
+        tableId="schedule"
+        emptyState={{
+          icon: <Clock size={48} />,
+          title: t('backupHistory.noJobsFound'),
+        }}
+      />
+    </Box>
   )
 }
 

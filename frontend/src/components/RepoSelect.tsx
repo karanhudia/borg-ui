@@ -26,6 +26,7 @@ interface RepoSelectProps {
   label?: string
   loadingLabel?: string
   placeholderLabel?: string
+  fallbackDisplayValue?: string
   maintenanceLabel?: string
   size?: 'small' | 'medium'
   disabled?: boolean
@@ -45,6 +46,7 @@ export default function RepoSelect({
   label = 'Repository',
   loadingLabel = 'Loading…',
   placeholderLabel = 'Select a repository',
+  fallbackDisplayValue,
   maintenanceLabel,
   size = 'medium',
   disabled = false,
@@ -85,11 +87,11 @@ export default function RepoSelect({
       size={size}
       sx={{ minWidth: { xs: '100%', sm: 300 }, ...sx }}
     >
-      <InputLabel>{label}</InputLabel>
+      {label && <InputLabel>{label}</InputLabel>}
       <Select
         value={value}
         onChange={(e) => onChange(e.target.value as number | string)}
-        label={label}
+        label={label || undefined}
         disabled={disabled || loading}
         sx={selectSx}
         renderValue={(val) => {
@@ -101,6 +103,13 @@ export default function RepoSelect({
             )
           }
           if (!val || val === '' || !selectedRepo) {
+            if (val && val !== '' && fallbackDisplayValue) {
+              return (
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                  {fallbackDisplayValue}
+                </Typography>
+              )
+            }
             return (
               <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
                 {placeholderLabel}
