@@ -310,7 +310,7 @@ describe('ArchivesList', () => {
         />
       )
 
-      const oldestOption = screen.getByRole('button', { name: 'Oldest first' })
+      const oldestOption = screen.getByText('Oldest first')
       await user.click(oldestOption)
 
       // LocalStorage should be updated
@@ -329,11 +329,11 @@ describe('ArchivesList', () => {
       )
 
       // Switch to grouped view
-      const groupedButton = screen.getByRole('button', { name: /grouped/i })
+      const groupedButton = screen.getByText('Grouped')
       await user.click(groupedButton)
 
-      // Sort dropdown should not be visible in grouped view
-      expect(screen.queryByLabelText('Sort by')).not.toBeInTheDocument()
+      // Sort pills should not be visible in grouped view
+      expect(screen.queryByText('Newest first')).not.toBeInTheDocument()
     })
   })
 
@@ -374,10 +374,10 @@ describe('ArchivesList', () => {
         />
       )
 
-      // Filter dropdown should be visible with default value
+      // Filter pills should be visible with all options
       expect(screen.getByText('All Archives')).toBeInTheDocument()
-      // Verify the label is present (there may be multiple)
-      expect(screen.getAllByText('Filter').length).toBeGreaterThan(0)
+      expect(screen.getByText('Scheduled')).toBeInTheDocument()
+      expect(screen.getByText('Manual')).toBeInTheDocument()
     })
 
     it('filters to show only scheduled archives', async () => {
@@ -391,12 +391,9 @@ describe('ArchivesList', () => {
         />
       )
 
-      // Find the filter select by text content
-      const filterSelect = screen.getByText('All Archives')
-      await user.click(filterSelect)
-
-      const scheduledOption = screen.getByRole('option', { name: 'Scheduled' })
-      await user.click(scheduledOption)
+      // Click the Scheduled pill directly
+      const scheduledPill = screen.getByText('Scheduled')
+      await user.click(scheduledPill)
 
       // LocalStorage should be updated
       expect(localStorage.getItem('archives-list-filter')).toBe('scheduled')
@@ -413,12 +410,9 @@ describe('ArchivesList', () => {
         />
       )
 
-      // Find the filter select by text content
-      const filterSelect = screen.getByText('All Archives')
-      await user.click(filterSelect)
-
-      const manualOption = screen.getByRole('option', { name: 'Manual' })
-      await user.click(manualOption)
+      // Click the Manual pill directly
+      const manualPill = screen.getByText('Manual')
+      await user.click(manualPill)
 
       // LocalStorage should be updated
       expect(localStorage.getItem('archives-list-filter')).toBe('manual')
@@ -451,12 +445,9 @@ describe('ArchivesList', () => {
         />
       )
 
-      // Find the filter select by text content
-      const filterSelect = screen.getByText('All Archives')
-      await user.click(filterSelect)
-
-      const manualOption = screen.getByRole('option', { name: 'Manual' })
-      await user.click(manualOption)
+      // Click the Manual pill directly
+      const manualPill = screen.getByText('Manual')
+      await user.click(manualPill)
 
       expect(screen.getByText('No manual archives found')).toBeInTheDocument()
       expect(screen.getByText('Try selecting a different filter')).toBeInTheDocument()
@@ -491,8 +482,8 @@ describe('ArchivesList', () => {
         />
       )
 
-      expect(screen.getByRole('button', { name: /grouped/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /list/i })).toBeInTheDocument()
+      expect(screen.getByText('Grouped')).toBeInTheDocument()
+      expect(screen.getByText('List')).toBeInTheDocument()
     })
 
     it('switches to grouped view', async () => {
@@ -506,7 +497,7 @@ describe('ArchivesList', () => {
         />
       )
 
-      const groupedButton = screen.getByRole('button', { name: /grouped/i })
+      const groupedButton = screen.getByText('Grouped')
       await user.click(groupedButton)
 
       // LocalStorage should be updated
@@ -526,7 +517,7 @@ describe('ArchivesList', () => {
         />
       )
 
-      const flatButton = screen.getByRole('button', { name: /list/i })
+      const flatButton = screen.getByText('List')
       await user.click(flatButton)
 
       // LocalStorage should be updated
@@ -544,7 +535,7 @@ describe('ArchivesList', () => {
         />
       )
 
-      const flatButton = screen.getByRole('button', { name: /list/i })
+      const flatButton = screen.getByText('List')
       await user.click(flatButton)
 
       // Should remain in flat view (null means no change was made)

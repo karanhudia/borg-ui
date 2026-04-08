@@ -14,7 +14,7 @@ describe('RepositorySelectorCard', () => {
       <RepositorySelectorCard repositories={mockRepositories} value={null} onChange={vi.fn()} />
     )
 
-    expect(screen.getByText('Select Repository')).toBeInTheDocument()
+    expect(screen.getAllByText('Repository').length).toBeGreaterThan(0)
     expect(screen.getByRole('combobox')).toBeInTheDocument()
   })
 

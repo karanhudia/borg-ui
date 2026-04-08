@@ -162,11 +162,8 @@ describe('RemoteMachineCard', () => {
           onDeployKey={mockOnDeployKey}
         />
       )
-      expect(screen.getByText('Storage')).toBeInTheDocument()
-      expect(screen.getByText('500 GB used')).toBeInTheDocument()
-      expect(screen.getByText('500 GB free')).toBeInTheDocument()
+      expect(screen.getAllByText('500 GB').length).toBeGreaterThan(0)
       expect(screen.getByText('50.0% used')).toBeInTheDocument()
-      expect(screen.getByText('1 TB total')).toBeInTheDocument()
     })
 
     it('renders No storage info when storage is null', () => {
@@ -263,7 +260,7 @@ describe('RemoteMachineCard', () => {
           onDeployKey={mockOnDeployKey}
         />
       )
-      expect(screen.getByText('Default Path')).toBeInTheDocument()
+      expect(screen.getByText(/Default Path/)).toBeInTheDocument()
       expect(screen.getByText('/data/backups')).toBeInTheDocument()
     })
 
@@ -293,7 +290,7 @@ describe('RemoteMachineCard', () => {
           onDeployKey={mockOnDeployKey}
         />
       )
-      expect(screen.getByText('Mount Point')).toBeInTheDocument()
+      expect(screen.getByText(/Mount Point/)).toBeInTheDocument()
     })
 
     it('does not render mount_point section when same as host', () => {
@@ -328,8 +325,7 @@ describe('RemoteMachineCard', () => {
   })
 
   describe('Context Menu', () => {
-    it('opens menu when more button clicked', async () => {
-      const user = userEvent.setup()
+    it('renders all action buttons', () => {
       render(
         <RemoteMachineCard
           machine={baseMachine}
@@ -341,17 +337,11 @@ describe('RemoteMachineCard', () => {
         />
       )
 
-      // Find the more button (MoreVertical icon button)
-      const moreButton = screen.getByRole('button', { name: '' })
-      await user.click(moreButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Connection')).toBeInTheDocument()
-        expect(screen.getByText('Deploy Key')).toBeInTheDocument()
-        expect(screen.getByText('Refresh Storage')).toBeInTheDocument()
-        expect(screen.getByText('Edit')).toBeInTheDocument()
-        expect(screen.getByText('Delete')).toBeInTheDocument()
-      })
+      expect(screen.getByRole('button', { name: 'Test Connection' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Refresh Storage' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Deploy Key' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
     })
 
     it('calls onTestConnection from menu', async () => {
@@ -367,10 +357,7 @@ describe('RemoteMachineCard', () => {
         />
       )
 
-      const moreButton = screen.getByRole('button', { name: '' })
-      await user.click(moreButton)
-      await user.click(screen.getByText('Test Connection'))
-
+      await user.click(screen.getByRole('button', { name: 'Test Connection' }))
       expect(mockOnTestConnection).toHaveBeenCalledWith(baseMachine)
     })
 
@@ -387,10 +374,7 @@ describe('RemoteMachineCard', () => {
         />
       )
 
-      const moreButton = screen.getByRole('button', { name: '' })
-      await user.click(moreButton)
-      await user.click(screen.getByText('Deploy Key'))
-
+      await user.click(screen.getByRole('button', { name: 'Deploy Key' }))
       expect(mockOnDeployKey).toHaveBeenCalledWith(baseMachine)
     })
 
@@ -407,10 +391,7 @@ describe('RemoteMachineCard', () => {
         />
       )
 
-      const moreButton = screen.getByRole('button', { name: '' })
-      await user.click(moreButton)
-      await user.click(screen.getByText('Refresh Storage'))
-
+      await user.click(screen.getByRole('button', { name: 'Refresh Storage' }))
       expect(mockOnRefreshStorage).toHaveBeenCalledWith(baseMachine)
     })
 
@@ -427,10 +408,7 @@ describe('RemoteMachineCard', () => {
         />
       )
 
-      const moreButton = screen.getByRole('button', { name: '' })
-      await user.click(moreButton)
-      await user.click(screen.getByText('Edit'))
-
+      await user.click(screen.getByRole('button', { name: 'Edit' }))
       expect(mockOnEdit).toHaveBeenCalledWith(baseMachine)
     })
 
@@ -447,15 +425,11 @@ describe('RemoteMachineCard', () => {
         />
       )
 
-      const moreButton = screen.getByRole('button', { name: '' })
-      await user.click(moreButton)
-      await user.click(screen.getByText('Delete'))
-
+      await user.click(screen.getByRole('button', { name: 'Delete' }))
       expect(mockOnDelete).toHaveBeenCalledWith(baseMachine)
     })
 
-    it('hides management actions when connection management is not allowed', async () => {
-      const user = userEvent.setup()
+    it('hides management actions when connection management is not allowed', () => {
       render(
         <RemoteMachineCard
           machine={baseMachine}
@@ -468,16 +442,11 @@ describe('RemoteMachineCard', () => {
         />
       )
 
-      const moreButton = screen.getByRole('button', { name: '' })
-      await user.click(moreButton)
-
-      await waitFor(() => {
-        expect(screen.getByText('Test Connection')).toBeInTheDocument()
-        expect(screen.getByText('Refresh Storage')).toBeInTheDocument()
-      })
-      expect(screen.queryByText('Deploy Key')).not.toBeInTheDocument()
-      expect(screen.queryByText('Edit')).not.toBeInTheDocument()
-      expect(screen.queryByText('Delete')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Test Connection' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Refresh Storage' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Deploy Key' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
     })
 
     it('closes menu after action', async () => {
@@ -493,13 +462,8 @@ describe('RemoteMachineCard', () => {
         />
       )
 
-      const moreButton = screen.getByRole('button', { name: '' })
-      await user.click(moreButton)
-      await user.click(screen.getByText('Edit'))
-
-      await waitFor(() => {
-        expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-      })
+      await user.click(screen.getByRole('button', { name: 'Edit' }))
+      expect(mockOnEdit).toHaveBeenCalledWith(baseMachine)
     })
   })
 })

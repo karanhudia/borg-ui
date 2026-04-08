@@ -355,6 +355,7 @@ export default function RemoteMachineCard({
             </Typography>
             <Tooltip title={t('remoteMachine.refreshStorage')} arrow>
               <IconButton
+                aria-label={t('remoteMachine.refreshStorage')}
                 onClick={() => onRefreshStorage(machine)}
                 sx={{
                   width: { xs: 36, sm: 30 },
@@ -471,6 +472,7 @@ export default function RemoteMachineCard({
             <Tooltip title={t('remoteMachine.actions.testConnection')} arrow>
               <IconButton
                 size="small"
+                aria-label={t('remoteMachine.actions.testConnection')}
                 onClick={() => onTestConnection(machine)}
                 sx={coloredIconBtnSx('primary')}
               >
@@ -480,6 +482,7 @@ export default function RemoteMachineCard({
             <Tooltip title={t('remoteMachine.actions.refreshStorage')} arrow>
               <IconButton
                 size="small"
+                aria-label={t('remoteMachine.actions.refreshStorage')}
                 onClick={() => onRefreshStorage(machine)}
                 sx={coloredIconBtnSx('info')}
               >
@@ -490,6 +493,7 @@ export default function RemoteMachineCard({
               <Tooltip title={t('remoteMachineCard.actions.deploy')} arrow>
                 <IconButton
                   size="small"
+                  aria-label={t('remoteMachineCard.actions.deploy')}
                   onClick={() => onDeployKey(machine)}
                   sx={coloredIconBtnSx('success')}
                 >
@@ -512,13 +516,14 @@ export default function RemoteMachineCard({
                 }}
               />
               <Tooltip title={t('remoteMachineCard.actions.edit')} arrow>
-                <IconButton size="small" onClick={() => onEdit(machine)} sx={iconBtnSx}>
+                <IconButton size="small" aria-label={t('remoteMachineCard.actions.edit')} onClick={() => onEdit(machine)} sx={iconBtnSx}>
                   <Edit size={16} />
                 </IconButton>
               </Tooltip>
               <Tooltip title={t('remoteMachineCard.actions.delete')} arrow>
                 <IconButton
                   size="small"
+                  aria-label={t('remoteMachineCard.actions.delete')}
                   onClick={() => onDelete(machine)}
                   sx={{
                     ...iconBtnSx,

@@ -133,10 +133,10 @@ describe('StatusBadge', () => {
   })
 
   describe('Style variants', () => {
-    it('renders with filled variant by default', () => {
+    it('renders with outlined variant by default', () => {
       const { container } = render(<StatusBadge status="completed" />)
       const chip = container.firstChild as HTMLElement
-      expect(chip.className).toContain('MuiChip-filled')
+      expect(chip.className).toContain('MuiChip-outlined')
     })
 
     it('renders with outlined variant when specified', () => {

@@ -129,9 +129,10 @@ describe('BackupHistorySection', () => {
   it('renders three filter dropdowns', () => {
     render(<BackupHistorySection {...defaultProps} />)
 
-    expect(screen.getAllByText('Schedule').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Repository').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Status').length).toBeGreaterThan(0)
+    // Three comboboxes should be present: schedule, repository, status
+    expect(screen.getAllByRole('combobox').length).toBeGreaterThanOrEqual(3)
+    expect(screen.getByText('All Schedules')).toBeInTheDocument()
+    expect(screen.getByText('All Status')).toBeInTheDocument()
   })
 
   it('renders BackupJobsTable with all jobs', () => {
@@ -221,8 +222,9 @@ describe('BackupHistorySection', () => {
       <BackupHistorySection {...defaultProps} onFilterRepositoryChange={onFilterRepositoryChange} />
     )
 
-    const repoSelect = screen.getByText('All Repositories')
-    fireEvent.mouseDown(repoSelect)
+    // Repository is the second combobox (schedule, repository, status order)
+    const repoCombobox = screen.getAllByRole('combobox')[1]
+    fireEvent.mouseDown(repoCombobox)
 
     const listbox = within(screen.getByRole('listbox'))
     const repoOption = listbox.getByText('Repo A')
@@ -260,8 +262,9 @@ describe('BackupHistorySection', () => {
   it('renders all repository options in dropdown', () => {
     render(<BackupHistorySection {...defaultProps} />)
 
-    const repoSelect = screen.getByText('All Repositories')
-    fireEvent.mouseDown(repoSelect)
+    // Repository is the second combobox (schedule, repository, status order)
+    const repoCombobox = screen.getAllByRole('combobox')[1]
+    fireEvent.mouseDown(repoCombobox)
 
     const listbox = within(screen.getByRole('listbox'))
     expect(listbox.getByText('All Repositories')).toBeInTheDocument()
