@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # Licensing / activation settings
     activation_service_url: Optional[str] = "https://license.borgui.com"
-    activation_public_key: Optional[str] = "MCowBQYDK2VwAyEA47u7lrJoXKAhcdNKy75+H4y/VpX8cvaqgQGx3ue8w4g="
+    activation_public_key: Optional[str] = "MCowBQYDK2VwAyEATF7UOvYKrNF6M8hZCrGwTRQjj7nhygMUr84AOYE7Zf8="
     activation_timeout_seconds: int = 10
     activation_refresh_interval_hours: int = 24
 
