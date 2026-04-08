@@ -1,14 +1,5 @@
 import React from 'react'
-import {
-  Card,
-  CardContent,
-  Typography,
-  Stack,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-} from '@mui/material'
+import { Box, Card, CardContent, Typography, Select, MenuItem } from '@mui/material'
 import { Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import BackupJobsTable from './BackupJobsTable'
@@ -135,30 +126,28 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
         </Typography>
 
         {/* Filters */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
-          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
-            <InputLabel>Schedule</InputLabel>
-            <Select
-              value={filterSchedule}
-              label="Schedule"
-              onChange={(e) => {
-                const value = e.target.value as number | 'all'
-                onFilterScheduleChange(value)
-                trackNavigation(EventAction.FILTER, {
-                  section: 'backup_history',
-                  filter_kind: 'schedule',
-                  filter_value: value,
-                })
-              }}
-            >
-              <MenuItem value="all">{t('backupHistory.allSchedules')}</MenuItem>
-              {scheduledJobs.map((job: ScheduledJob) => (
-                <MenuItem key={job.id} value={job.id}>
-                  {job.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+        <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+          <Select
+            size="small"
+            value={filterSchedule}
+            onChange={(e) => {
+              const value = e.target.value as number | 'all'
+              onFilterScheduleChange(value)
+              trackNavigation(EventAction.FILTER, {
+                section: 'backup_history',
+                filter_kind: 'schedule',
+                filter_value: value,
+              })
+            }}
+            sx={{ minWidth: 160, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
+          >
+            <MenuItem value="all">{t('backupHistory.allSchedules')}</MenuItem>
+            {scheduledJobs.map((job: ScheduledJob) => (
+              <MenuItem key={job.id} value={job.id}>
+                {job.name}
+              </MenuItem>
+            ))}
+          </Select>
 
           <RepoSelect
             repositories={repositories}
@@ -173,35 +162,31 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
             }}
             valueKey="path"
             size="small"
-            label="Repository"
             hidePath
             prefixItems={<MenuItem value="all">{t('backupHistory.allRepositories')}</MenuItem>}
-            sx={{ minWidth: 0 }}
-            fullWidth
+            sx={{ minWidth: 180, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
           />
 
-          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
-            <InputLabel>Status</InputLabel>
-            <Select
-              value={filterStatus}
-              label="Status"
-              onChange={(e) => {
-                const value = e.target.value
-                onFilterStatusChange(value)
-                trackNavigation(EventAction.FILTER, {
-                  section: 'backup_history',
-                  filter_kind: 'status',
-                  filter_value: value,
-                })
-              }}
-            >
-              <MenuItem value="all">{t('backupHistory.allStatus')}</MenuItem>
-              <MenuItem value="completed">{t('backupHistory.completed')}</MenuItem>
-              <MenuItem value="failed">{t('backupHistory.failed')}</MenuItem>
-              <MenuItem value="warning">{t('backupHistory.warning')}</MenuItem>
-            </Select>
-          </FormControl>
-        </Stack>
+          <Select
+            size="small"
+            value={filterStatus}
+            onChange={(e) => {
+              const value = e.target.value
+              onFilterStatusChange(value)
+              trackNavigation(EventAction.FILTER, {
+                section: 'backup_history',
+                filter_kind: 'status',
+                filter_value: value,
+              })
+            }}
+            sx={{ minWidth: 140, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
+          >
+            <MenuItem value="all">{t('backupHistory.allStatus')}</MenuItem>
+            <MenuItem value="completed">{t('backupHistory.completed')}</MenuItem>
+            <MenuItem value="failed">{t('backupHistory.failed')}</MenuItem>
+            <MenuItem value="warning">{t('backupHistory.warning')}</MenuItem>
+          </Select>
+        </Box>
 
         <BackupJobsTable
           jobs={filteredBackupJobs}

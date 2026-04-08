@@ -15,7 +15,7 @@ interface StatusBadgeProps {
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
   status,
   size = 'small',
-  variant = 'filled',
+  variant = 'outlined',
 }) => {
   const { t } = useTranslation()
 

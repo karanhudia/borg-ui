@@ -1,16 +1,7 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Box,
-  Card,
-  FormControl,
-  IconButton,
-  InputLabel,
-  MenuItem,
-  Select,
-  Typography,
-} from '@mui/material'
+import { Box, IconButton, MenuItem, Select, Typography } from '@mui/material'
 import { History, Info, RefreshCw } from 'lucide-react'
 import { activityAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -115,41 +106,35 @@ const Activity: React.FC = () => {
       </Box>
 
       {/* Filters */}
-      <Card sx={{ mb: 3, p: 2 }}>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
-          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
-            <InputLabel>{t('activity.filters.type')}</InputLabel>
-            <Select
-              value={typeFilter}
-              label={t('activity.filters.type')}
-              onChange={(e) => handleTypeFilterChange(e.target.value)}
-            >
-              <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
-              <MenuItem value="backup">{t('activity.filters.types.backup')}</MenuItem>
-              <MenuItem value="restore">{t('activity.filters.types.restore')}</MenuItem>
-              <MenuItem value="check">{t('activity.filters.types.check')}</MenuItem>
-              <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
-              <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
-              <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
-            </Select>
-          </FormControl>
+      <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+        <Select
+          size="small"
+          value={typeFilter}
+          onChange={(e) => handleTypeFilterChange(e.target.value)}
+          sx={{ minWidth: 160, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
+        >
+          <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
+          <MenuItem value="backup">{t('activity.filters.types.backup')}</MenuItem>
+          <MenuItem value="restore">{t('activity.filters.types.restore')}</MenuItem>
+          <MenuItem value="check">{t('activity.filters.types.check')}</MenuItem>
+          <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
+          <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
+          <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
+        </Select>
 
-          <FormControl size="small" fullWidth sx={{ minWidth: 0 }}>
-            <InputLabel>{t('activity.filters.status')}</InputLabel>
-            <Select
-              value={statusFilter}
-              label={t('activity.filters.status')}
-              onChange={(e) => handleStatusFilterChange(e.target.value)}
-            >
-              <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>
-              <MenuItem value="completed">{t('activity.filters.statuses.completed')}</MenuItem>
-              <MenuItem value="failed">{t('activity.filters.statuses.failed')}</MenuItem>
-              <MenuItem value="running">{t('activity.filters.statuses.running')}</MenuItem>
-              <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
-            </Select>
-          </FormControl>
-        </Box>
-      </Card>
+        <Select
+          size="small"
+          value={statusFilter}
+          onChange={(e) => handleStatusFilterChange(e.target.value)}
+          sx={{ minWidth: 140, fontSize: '0.8rem', fontWeight: 600, borderRadius: 1.5 }}
+        >
+          <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>
+          <MenuItem value="completed">{t('activity.filters.statuses.completed')}</MenuItem>
+          <MenuItem value="failed">{t('activity.filters.statuses.failed')}</MenuItem>
+          <MenuItem value="running">{t('activity.filters.statuses.running')}</MenuItem>
+          <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
+        </Select>
+      </Box>
 
       {/* Activity List */}
       {isLoading ? (

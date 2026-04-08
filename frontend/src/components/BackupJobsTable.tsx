@@ -350,7 +350,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'id',
       label: t('backupJobsTable.columns.jobId'),
       align: 'left',
-      width: '60px',
+      width: '80px',
       render: (job: T) => (
         <Typography variant="body2" fontWeight={600} color="primary">
           #{job.id}
@@ -405,6 +405,7 @@ export const BackupJobsTable = <T extends Job = Job>({
                 label={getTypeLabel(job.type || '', t)}
                 color={getTypeColor(job.type || '')}
                 size="small"
+                variant="outlined"
                 sx={{
                   maxWidth: '100%',
                   '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' },
@@ -469,7 +470,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       id: 'duration',
       label: t('backupJobsTable.columns.duration'),
       align: 'left',
-      width: '80px',
+      width: '110px',
       render: (job: T) => (
         <Typography variant="body2" color="text.secondary">
           {formatTimeRange(job.started_at, job.completed_at, job.status)}

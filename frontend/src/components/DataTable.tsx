@@ -397,8 +397,12 @@ export default function DataTable<T>({
                 align={column.align || 'left'}
                 sx={{
                   bgcolor: headerBgColor,
-                  fontWeight: column.fontWeight || 600,
-                  color: 'text.secondary',
+                  fontWeight: 700,
+                  color: 'text.disabled',
+                  fontSize: '0.7rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  whiteSpace: 'nowrap',
                   width: column.width,
                   minWidth: column.minWidth,
                   maxWidth: column.width,
@@ -412,8 +416,12 @@ export default function DataTable<T>({
                 align="right"
                 sx={{
                   bgcolor: headerBgColor,
-                  fontWeight: 600,
-                  color: 'text.secondary',
+                  fontWeight: 700,
+                  color: 'text.disabled',
+                  fontSize: '0.7rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  whiteSpace: 'nowrap',
                   width: '130px',
                   minWidth: '130px',
                   maxWidth: '130px',
