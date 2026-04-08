@@ -11,13 +11,12 @@ import {
   Typography,
   Button,
   Stack,
-  TextField,
   Select,
   MenuItem,
-  FormControl,
-  InputLabel,
-  InputAdornment,
+  InputBase,
   Divider,
+  alpha,
+  useTheme,
 } from '@mui/material'
 import { Add, Storage, FileUpload, Search, FilterList } from '@mui/icons-material'
 import { repositoriesAPI, RepositoryData } from '../services/api'
@@ -81,6 +80,8 @@ interface PruneForm {
 
 export default function Repositories() {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const { hasGlobalPermission } = useAuth()
   const canManageRepositoriesGlobally = hasGlobalPermission('repositories.manage_all')
   const permissions = usePermissions()
@@ -612,95 +613,120 @@ export default function Repositories() {
 
       {/* Filter, Sort, and Search Bar */}
       {(isLoading || repositories.length > 0) && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent sx={{ '&:last-child': { pb: 2 } }}>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="stretch">
-              {/* Search */}
-              <TextField
-                size="small"
-                placeholder={t('repositories.search')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{ flex: 1, minWidth: 0 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
+        <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+          {/* Search */}
+          <Box
+            sx={{
+              flex: '1 1 100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1.5,
+              height: 40,
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
+              bgcolor: isDark ? alpha('#fff', 0.04) : alpha('#000', 0.02),
+              '&:focus-within': {
+                borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
+              },
+            }}
+          >
+            <Search sx={{ fontSize: 16, color: 'text.disabled', flexShrink: 0 }} />
+            <InputBase
+              placeholder={t('repositories.search')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              sx={{ flex: 1, fontSize: '0.875rem', minWidth: 0 }}
+            />
+          </Box>
 
-              {/* Sort By */}
-              <FormControl size="small" sx={{ minWidth: { xs: '100%', md: 160 } }}>
-                <InputLabel id="sort-label">{t('repositories.sort.label')}</InputLabel>
-                <Select
-                  labelId="sort-label"
-                  value={sortBy}
-                  onChange={(e) => {
-                    const nextSort = e.target.value
-                    setSortBy(nextSort)
-                    const resultCount = processedRepositories.groups.reduce(
-                      (total, group) => total + group.repositories.length,
-                      0
-                    )
-                    trackRepository(EventAction.FILTER, undefined, {
-                      section: 'repositories',
-                      filter_kind: 'sort',
-                      sort_by: nextSort,
-                      group_by: groupBy,
-                      query_length: searchQuery.trim().length,
-                      result_count: resultCount,
-                    })
-                  }}
-                  label={t('repositories.sort.label')}
-                >
-                  <MenuItem value="name-asc">{t('repositories.sort.nameAZ')}</MenuItem>
-                  <MenuItem value="name-desc">{t('repositories.sort.nameZA')}</MenuItem>
-                  <MenuItem value="last-backup-recent">
-                    {t('repositories.sort.lastBackupRecent')}
-                  </MenuItem>
-                  <MenuItem value="last-backup-oldest">
-                    {t('repositories.sort.lastBackupOldest')}
-                  </MenuItem>
-                  <MenuItem value="created-newest">{t('repositories.sort.createdNewest')}</MenuItem>
-                  <MenuItem value="created-oldest">{t('repositories.sort.createdOldest')}</MenuItem>
-                </Select>
-              </FormControl>
+          {/* Sort By */}
+          <Select
+            size="small"
+            value={sortBy}
+            onChange={(e) => {
+              const nextSort = e.target.value
+              setSortBy(nextSort)
+              const resultCount = processedRepositories.groups.reduce(
+                (total, group) => total + group.repositories.length,
+                0
+              )
+              trackRepository(EventAction.FILTER, undefined, {
+                section: 'repositories',
+                filter_kind: 'sort',
+                sort_by: nextSort,
+                group_by: groupBy,
+                query_length: searchQuery.trim().length,
+                result_count: resultCount,
+              })
+            }}
+            sx={{
+              flex: 1,
+              minWidth: 160,
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              borderRadius: 1.5,
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
+              },
+              '&:hover .MuiOutlinedInput-notchedOutline': {
+                borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
+              },
+            }}
+          >
+            <MenuItem value="name-asc">{t('repositories.sort.nameAZ')}</MenuItem>
+            <MenuItem value="name-desc">{t('repositories.sort.nameZA')}</MenuItem>
+            <MenuItem value="last-backup-recent">
+              {t('repositories.sort.lastBackupRecent')}
+            </MenuItem>
+            <MenuItem value="last-backup-oldest">
+              {t('repositories.sort.lastBackupOldest')}
+            </MenuItem>
+            <MenuItem value="created-newest">{t('repositories.sort.createdNewest')}</MenuItem>
+            <MenuItem value="created-oldest">{t('repositories.sort.createdOldest')}</MenuItem>
+          </Select>
 
-              {/* Group By */}
-              <FormControl size="small" sx={{ minWidth: { xs: '100%', md: 160 } }}>
-                <InputLabel id="group-label">{t('repositories.group.label')}</InputLabel>
-                <Select
-                  labelId="group-label"
-                  value={groupBy}
-                  onChange={(e) => {
-                    const nextGroup = e.target.value
-                    setGroupBy(nextGroup)
-                    const resultCount = processedRepositories.groups.reduce(
-                      (total, group) => total + group.repositories.length,
-                      0
-                    )
-                    trackRepository(EventAction.FILTER, undefined, {
-                      section: 'repositories',
-                      filter_kind: 'group',
-                      sort_by: sortBy,
-                      group_by: nextGroup,
-                      query_length: searchQuery.trim().length,
-                      result_count: resultCount,
-                    })
-                  }}
-                  label={t('repositories.group.label')}
-                >
-                  <MenuItem value="none">{t('repositories.group.none')}</MenuItem>
-                  <MenuItem value="location">{t('repositories.group.hostname')}</MenuItem>
-                  <MenuItem value="type">{t('repositories.group.type')}</MenuItem>
-                  <MenuItem value="mode">{t('repositories.group.mode')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-          </CardContent>
-        </Card>
+          {/* Group By */}
+          <Select
+            size="small"
+            value={groupBy}
+            onChange={(e) => {
+              const nextGroup = e.target.value
+              setGroupBy(nextGroup)
+              const resultCount = processedRepositories.groups.reduce(
+                (total, group) => total + group.repositories.length,
+                0
+              )
+              trackRepository(EventAction.FILTER, undefined, {
+                section: 'repositories',
+                filter_kind: 'group',
+                sort_by: sortBy,
+                group_by: nextGroup,
+                query_length: searchQuery.trim().length,
+                result_count: resultCount,
+              })
+            }}
+            sx={{
+              flex: 1,
+              minWidth: 120,
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              borderRadius: 1.5,
+              '& .MuiOutlinedInput-notchedOutline': {
+                borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
+              },
+              '&:hover .MuiOutlinedInput-notchedOutline': {
+                borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
+              },
+            }}
+          >
+            <MenuItem value="none">{t('repositories.group.none')}</MenuItem>
+            <MenuItem value="location">{t('repositories.group.hostname')}</MenuItem>
+            <MenuItem value="type">{t('repositories.group.type')}</MenuItem>
+            <MenuItem value="mode">{t('repositories.group.mode')}</MenuItem>
+          </Select>
+        </Box>
       )}
 
       {/* Repositories Grid */}

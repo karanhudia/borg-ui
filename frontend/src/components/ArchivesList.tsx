@@ -10,13 +10,9 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Chip,
-  ToggleButtonGroup,
-  ToggleButton,
+  alpha,
+  useTheme,
 } from '@mui/material'
 import {
   FolderOpen,
@@ -115,6 +111,8 @@ export default function ArchivesList({
   }
 
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
 
   // State
   const [page, setPage] = useState(0)
@@ -256,55 +254,212 @@ export default function ArchivesList({
             width: { xs: '100%', sm: 'auto' },
           }}
         >
-          {/* Sort control - only show in flat view */}
+          {/* Sort group — flat view only */}
           {!groupingEnabled && (
-            <ToggleButtonGroup
-              value={sortBy}
-              exclusive
-              onChange={(_e, v) => v && handleSortChange({ target: { value: v } })}
-              size="small"
-            >
-              <ToggleButton
-                value="date-desc"
-                sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}
+            <>
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: 0.5,
+                  alignItems: 'center',
+                }}
               >
-                {t('archivesList.newestFirst')}
-              </ToggleButton>
-              <ToggleButton
-                value="date-asc"
-                sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}
-              >
-                {t('archivesList.oldestFirst')}
-              </ToggleButton>
-            </ToggleButtonGroup>
+                {(['date-desc', 'date-asc'] as SortOption[]).map((opt) => {
+                  const active = sortBy === opt
+                  return (
+                    <Box
+                      key={opt}
+                      onClick={() => handleSortChange({ target: { value: opt } })}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                        px: 1.25,
+                        py: 0.5,
+                        borderRadius: 1.5,
+                        border: '1px solid',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        transition: 'all 150ms',
+                        borderColor: active
+                          ? alpha(theme.palette.primary.main, isDark ? 0.45 : 0.35)
+                          : isDark
+                            ? alpha('#fff', 0.1)
+                            : alpha('#000', 0.1),
+                        bgcolor: active
+                          ? alpha(theme.palette.primary.main, isDark ? 0.14 : 0.08)
+                          : 'transparent',
+                        color: active ? 'primary.main' : 'text.secondary',
+                        '&:hover': {
+                          borderColor: alpha(theme.palette.primary.main, 0.35),
+                          color: 'primary.main',
+                        },
+                      }}
+                    >
+                      {opt === 'date-desc'
+                        ? t('archivesList.newestFirst')
+                        : t('archivesList.oldestFirst')}
+                    </Box>
+                  )
+                })}
+              </Box>
+              {/* Group divider */}
+              <Box
+                sx={{
+                  width: '1px',
+                  alignSelf: 'stretch',
+                  bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08),
+                  flexShrink: 0,
+                  display: { xs: 'none', sm: 'block' },
+                }}
+              />
+            </>
           )}
 
-          {/* Filter control */}
-          <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel>{t('archivesList.filter')}</InputLabel>
-            <Select value={filter} label={t('archivesList.filter')} onChange={handleFilterChange}>
-              <MenuItem value="all">{t('archivesList.allArchives')}</MenuItem>
-              <MenuItem value="scheduled">{t('archivesList.scheduled')}</MenuItem>
-              <MenuItem value="manual">{t('archivesList.manual')}</MenuItem>
-            </Select>
-          </FormControl>
-
-          {/* View mode toggle */}
-          <ToggleButtonGroup
-            value={groupingEnabled ? 'grouped' : 'flat'}
-            exclusive
-            onChange={handleViewModeChange}
-            size="small"
+          {/* Filter group */}
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              alignItems: 'center',
+            }}
           >
-            <ToggleButton value="grouped" sx={{ px: 1.5 }}>
-              <Layers size={16} style={{ marginRight: 4 }} />
-              {t('archivesList.grouped')}
-            </ToggleButton>
-            <ToggleButton value="flat" sx={{ px: 1.5 }}>
-              <List size={16} style={{ marginRight: 4 }} />
-              {t('archivesList.list')}
-            </ToggleButton>
-          </ToggleButtonGroup>
+            {(['all', 'scheduled', 'manual'] as FilterType[]).map((opt) => {
+              const active = filter === opt
+              const label =
+                opt === 'all'
+                  ? t('archivesList.allArchives')
+                  : opt === 'scheduled'
+                    ? t('archivesList.scheduled')
+                    : t('archivesList.manual')
+              const color =
+                opt === 'scheduled'
+                  ? theme.palette.success.main
+                  : opt === 'manual'
+                    ? theme.palette.primary.main
+                    : undefined
+              return (
+                <Box
+                  key={opt}
+                  onClick={() =>
+                    handleFilterChange({
+                      target: { value: opt },
+                    } as React.ChangeEvent<HTMLSelectElement>)
+                  }
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    px: 1.25,
+                    py: 0.5,
+                    borderRadius: 1.5,
+                    border: '1px solid',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    transition: 'all 150ms',
+                    borderColor:
+                      active && color
+                        ? alpha(color, isDark ? 0.45 : 0.35)
+                        : active
+                          ? isDark
+                            ? alpha('#fff', 0.2)
+                            : alpha('#000', 0.15)
+                          : isDark
+                            ? alpha('#fff', 0.1)
+                            : alpha('#000', 0.1),
+                    bgcolor:
+                      active && color
+                        ? alpha(color, isDark ? 0.14 : 0.08)
+                        : active
+                          ? isDark
+                            ? alpha('#fff', 0.06)
+                            : alpha('#000', 0.05)
+                          : 'transparent',
+                    color: active && color ? color : active ? 'text.primary' : 'text.secondary',
+                    '&:hover': {
+                      borderColor: color
+                        ? alpha(color, 0.35)
+                        : isDark
+                          ? alpha('#fff', 0.2)
+                          : alpha('#000', 0.15),
+                      color: color ?? 'text.primary',
+                    },
+                  }}
+                >
+                  {label}
+                </Box>
+              )
+            })}
+          </Box>
+
+          {/* Group divider */}
+          <Box
+            sx={{
+              width: '1px',
+              alignSelf: 'stretch',
+              bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08),
+              flexShrink: 0,
+              display: { xs: 'none', sm: 'block' },
+            }}
+          />
+
+          {/* View mode group */}
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              alignItems: 'center',
+            }}
+          >
+            {(['grouped', 'flat'] as const).map((mode) => {
+              const active = (groupingEnabled ? 'grouped' : 'flat') === mode
+              return (
+                <Box
+                  key={mode}
+                  onClick={(e) =>
+                    handleViewModeChange(e as unknown as React.MouseEvent<HTMLElement>, mode)
+                  }
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    px: 1.25,
+                    py: 0.5,
+                    borderRadius: 1.5,
+                    border: '1px solid',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    transition: 'all 150ms',
+                    borderColor: active
+                      ? isDark
+                        ? alpha('#fff', 0.2)
+                        : alpha('#000', 0.15)
+                      : isDark
+                        ? alpha('#fff', 0.1)
+                        : alpha('#000', 0.1),
+                    bgcolor: active
+                      ? isDark
+                        ? alpha('#fff', 0.06)
+                        : alpha('#000', 0.05)
+                      : 'transparent',
+                    color: active ? 'text.primary' : 'text.secondary',
+                    '&:hover': {
+                      borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.15),
+                      color: 'text.primary',
+                    },
+                  }}
+                >
+                  {mode === 'grouped' ? <Layers size={13} /> : <List size={13} />}
+                  {mode === 'grouped' ? t('archivesList.grouped') : t('archivesList.list')}
+                </Box>
+              )
+            })}
+          </Box>
         </Box>
       </Box>
 
