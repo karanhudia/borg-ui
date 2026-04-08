@@ -176,6 +176,7 @@ ENV DATABASE_URL=sqlite:////data/borg.db
 ENV BORG_BACKUP_PATH=/backups
 ENV ENABLE_CRON_BACKUPS=false
 ENV PORT=8081
+ENV ACTIVATION_SERVICE_URL=https://license.borgui.com
 
 # Expose port
 EXPOSE 8081
