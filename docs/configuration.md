@@ -285,7 +285,6 @@ volumes:
 Supported repository types:
 - **Local paths**: `/local/backups/my-repo`, `/backups/my-repo`
 - **SSH/SFTP**: `user@host:/path/to/repo`
-- **Cloud storage**: Via rclone (S3, Azure, Google Cloud)
 
 No need for a separate `borg_backups` volume!
 
