@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     activation_public_key: Optional[str] = "MCowBQYDK2VwAyEATF7UOvYKrNF6M8hZCrGwTRQjj7nhygMUr84AOYE7Zf8="
     activation_timeout_seconds: int = 10
     activation_refresh_interval_hours: int = 24
+    enable_startup_license_sync: bool = False
 
     # Database settings - auto-derived from data_dir
     database_url: str = ""  # Will be auto-derived from data_dir
@@ -178,6 +179,10 @@ settings.activation_public_key = os.getenv(
 settings.activation_timeout_seconds = int(
     os.getenv("ACTIVATION_TIMEOUT_SECONDS", settings.activation_timeout_seconds)
 )
+settings.enable_startup_license_sync = os.getenv(
+    "ENABLE_STARTUP_LICENSE_SYNC",
+    "true" if settings.environment == "production" else "false",
+).strip().lower() in {"1", "true", "yes", "on"}
 
 def get_runtime_app_version() -> str:
     version_file = Path("/app/VERSION")

@@ -22,6 +22,8 @@ os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="borg-test-data-")
 os.environ["DATABASE_URL"] = f"sqlite:///{os.environ['DATA_DIR']}/test.db"
 os.environ["SECRET_KEY"] = "test-secret-key-for-testing-only"
 os.environ["ENVIRONMENT"] = "test"
+os.environ["ACTIVATION_SERVICE_URL"] = ""
+os.environ["ENABLE_STARTUP_LICENSE_SYNC"] = "false"
 os.environ["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
 os.environ["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
 os.environ["HOME"] = os.path.join(os.environ["DATA_DIR"], "home")

@@ -37,6 +37,7 @@ services:
       # Licensing / activation
       - ACTIVATION_SERVICE_URL=${ACTIVATION_SERVICE_URL:-http://host.docker.internal:8787}
       - ACTIVATION_TIMEOUT_SECONDS=${ACTIVATION_TIMEOUT_SECONDS:-10}
+      - ENABLE_STARTUP_LICENSE_SYNC=${ENABLE_STARTUP_LICENSE_SYNC:-false}
       # To enable Redis caching in dev, uncomment the two lines below
       # and uncomment the redis service + depends_on section at the bottom
       # - REDIS_HOST=redis

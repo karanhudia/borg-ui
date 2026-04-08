@@ -124,6 +124,7 @@ services:
       # Licensing / activation
       - ACTIVATION_SERVICE_URL=${ACTIVATION_SERVICE_URL:-https://license.borgui.com}
       - ACTIVATION_TIMEOUT_SECONDS=${ACTIVATION_TIMEOUT_SECONDS:-10}
+      - ENABLE_STARTUP_LICENSE_SYNC=${ENABLE_STARTUP_LICENSE_SYNC:-true}
     healthcheck:
       test: ["CMD", "sh", "-c", "curl -f http://localhost:$${PORT:-8081}/"]
       interval: 30s

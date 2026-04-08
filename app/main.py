@@ -166,17 +166,21 @@ async def startup_event():
         logger.error("Failed to run migrations", error=str(e))
         # Don't fail startup, just log the error
 
-    # Initialize local licensing state and attempt hidden full access activation.
-    from app.database.database import SessionLocal
-    app_version = get_runtime_app_version()
-    try:
-        db = SessionLocal()
+    # Initialize local licensing state and attempt hidden full access activation
+    # only when explicitly enabled for this runtime.
+    if settings.enable_startup_license_sync:
+        from app.database.database import SessionLocal
+        app_version = get_runtime_app_version()
         try:
-            await sync_licensing_state(db, app_version=app_version)
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("Failed to initialize licensing state", error=str(e))
+            db = SessionLocal()
+            try:
+                await sync_licensing_state(db, app_version=app_version)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning("Failed to initialize licensing state", error=str(e))
+    else:
+        logger.info("Startup licensing sync disabled", environment=settings.environment)
 
     async def licensing_refresh_loop():
         while True:
