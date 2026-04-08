@@ -174,13 +174,6 @@ export default function PlanInfoDrawer({
 
         {/* Scrollable content */}
         <Box sx={{ flex: 1, overflowY: 'auto', px: 2.5, py: 2 }}>
-          {entitlement?.is_full_access && entitlement.status === 'active' && (
-            <Alert severity="info" sx={{ mb: 2, fontSize: '0.75rem' }}>
-              {t('plan.fullAccessActiveNotice', {
-                date: fullAccessExpiry ?? t('navigation.loading'),
-              })}
-            </Alert>
-          )}
           {entitlement?.ui_state === 'full_access_expired' && (
             <Alert severity="warning" sx={{ mb: 2, fontSize: '0.75rem' }}>
               {t('plan.fullAccessExpiredNotice')}
@@ -509,6 +502,27 @@ export default function PlanInfoDrawer({
             </>
           )}
         </Box>
+
+        {/* Sticky footer — full access expiry notice */}
+        {isFullAccess && fullAccessExpiry && (
+          <>
+            <Divider />
+            <Box
+              sx={{
+                px: 2.5,
+                py: 1.5,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 1,
+              }}
+            >
+              <Clock size={13} style={{ color, flexShrink: 0, marginTop: 2 }} />
+              <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', lineHeight: 1.5 }}>
+                {t('plan.fullAccessActiveNotice', { date: fullAccessExpiry })}
+              </Typography>
+            </Box>
+          </>
+        )}
       </Box>
     </Drawer>
   )
