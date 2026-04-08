@@ -46,6 +46,11 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             VERSION="${{ github.ref_name }}"
             VERSION="${VERSION#v}"  # Remove 'v' prefix
+            if [[ "$VERSION" == *-* ]]; then
+              echo "is_stable=false" >> $GITHUB_OUTPUT
+            else
+              echo "is_stable=true" >> $GITHUB_OUTPUT
+            fi
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "Building version from tag: $VERSION"
           else
@@ -59,14 +64,12 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            # Tag with 'latest' on version tags
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            # Tag with full version (v1.2.3 -> 1.2.3)
-            type=semver,pattern={{version}}
-            # Tag with major.minor (v1.2.3 -> 1.2)
-            type=semver,pattern={{major}}.{{minor}}
-            # Tag with major version (v1.2.3 -> 1)
-            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            # Always publish the exact version tag, including prereleases
+            type=raw,value=${{ steps.version.outputs.version }}
+            # Only stable releases should publish moving tags
+            type=raw,value=latest,enable=${{ steps.version.outputs.is_stable == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ steps.version.outputs.is_stable == 'true' }}
+            type=semver,pattern={{major}},enable=${{ steps.version.outputs.is_stable == 'true' && !startsWith(github.ref, 'refs/tags/v0.') }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7

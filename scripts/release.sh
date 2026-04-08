@@ -11,13 +11,13 @@ VERSION=$1
 # Validate version argument
 if [ -z "$VERSION" ]; then
   echo "Error: Version argument required"
-  echo "Usage: npm run release -- vX.Y.Z"
+  echo "Usage: npm run release -- vX.Y.Z[-alpha.N|-beta.N|-rc.N]"
   exit 1
 fi
 
-# Validate version format (vX.Y.Z)
-if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "Error: Invalid version format. Must be vX.Y.Z (e.g., v1.51.0)"
+# Validate version format (vX.Y.Z or prerelease variants)
+if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-((alpha|beta|rc)\.[0-9]+))?$ ]]; then
+  echo "Error: Invalid version format. Must be vX.Y.Z or vX.Y.Z-alpha.N / beta.N / rc.N"
   exit 1
 fi
 
@@ -30,6 +30,10 @@ echo "Releasing version $VERSION..."
 echo "$VERSION_NUMBER" > VERSION
 echo "Updated VERSION file to $VERSION_NUMBER"
 
+# Update frontend package metadata
+npm --prefix frontend version "$VERSION_NUMBER" --no-git-tag-version
+echo "Updated frontend/package.json to $VERSION_NUMBER"
+
 # Run tests and checks
 echo "Running checks..."
 cd frontend
@@ -38,7 +42,7 @@ npm run format:check
 cd ..
 
 # Commit and tag
-git add VERSION
+git add VERSION frontend/package.json frontend/package-lock.json
 git commit -m "chore: bump version to $VERSION_NUMBER
 
 Co-Authored-By: Claude <noreply@anthropic.com>"

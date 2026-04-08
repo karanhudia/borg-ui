@@ -16,9 +16,45 @@ const CRITICAL_ANNOUNCEMENT_TYPES = new Set<Announcement['type']>([
   'migration_notice',
 ])
 
-function toNumericParts(version: string): number[] {
-  const matches = version.match(/\d+/g)
-  return matches ? matches.map((part) => Number.parseInt(part, 10)) : [0]
+interface ParsedVersion {
+  core: number[]
+  prerelease: Array<string | number> | null
+}
+
+function parseVersion(version: string): ParsedVersion {
+  const trimmed = version.trim().replace(/^v/i, '')
+  const [corePart = '0.0.0', prereleasePart] = trimmed.split('-', 2)
+  const core = corePart
+    .split('.')
+    .map((part) => Number.parseInt(part, 10))
+    .filter((part) => Number.isFinite(part))
+
+  const prerelease = prereleasePart
+    ? prereleasePart
+        .split('.')
+        .filter((part) => part.length > 0)
+        .map((part) => {
+          const numeric = Number.parseInt(part, 10)
+          return /^\d+$/.test(part) && Number.isFinite(numeric) ? numeric : part
+        })
+    : null
+
+  return {
+    core: core.length > 0 ? core : [0],
+    prerelease: prerelease && prerelease.length > 0 ? prerelease : null,
+  }
+}
+
+function comparePrereleasePart(a: string | number, b: string | number): number {
+  if (typeof a === 'number' && typeof b === 'number') {
+    if (a > b) return 1
+    if (a < b) return -1
+    return 0
+  }
+
+  if (typeof a === 'number') return -1
+  if (typeof b === 'number') return 1
+  return a.localeCompare(b)
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -83,15 +119,31 @@ function isValidAnnouncementShape(announcement: Announcement) {
 }
 
 export function compareVersions(a: string, b: string): number {
-  const aParts = toNumericParts(a)
-  const bParts = toNumericParts(b)
-  const maxLength = Math.max(aParts.length, bParts.length)
+  const parsedA = parseVersion(a)
+  const parsedB = parseVersion(b)
+  const maxLength = Math.max(parsedA.core.length, parsedB.core.length)
 
   for (let i = 0; i < maxLength; i += 1) {
-    const aPart = aParts[i] ?? 0
-    const bPart = bParts[i] ?? 0
+    const aPart = parsedA.core[i] ?? 0
+    const bPart = parsedB.core[i] ?? 0
     if (aPart > bPart) return 1
     if (aPart < bPart) return -1
+  }
+
+  if (!parsedA.prerelease && !parsedB.prerelease) return 0
+  if (!parsedA.prerelease) return 1
+  if (!parsedB.prerelease) return -1
+
+  const prereleaseLength = Math.max(parsedA.prerelease.length, parsedB.prerelease.length)
+  for (let i = 0; i < prereleaseLength; i += 1) {
+    const aPart = parsedA.prerelease[i]
+    const bPart = parsedB.prerelease[i]
+
+    if (aPart === undefined) return -1
+    if (bPart === undefined) return 1
+
+    const partComparison = comparePrereleasePart(aPart, bPart)
+    if (partComparison !== 0) return partComparison
   }
 
   return 0

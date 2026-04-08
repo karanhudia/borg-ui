@@ -38,6 +38,9 @@ describe('announcements utils', () => {
     expect(compareVersions('1.10.0', '1.9.9')).toBe(1)
     expect(compareVersions('1.2.0', '1.2.0')).toBe(0)
     expect(compareVersions('v1.2.3', '1.3.0')).toBe(-1)
+    expect(compareVersions('2.0.0-alpha.1', '2.0.0-alpha.2')).toBe(-1)
+    expect(compareVersions('2.0.0-beta.1', '2.0.0-alpha.9')).toBe(1)
+    expect(compareVersions('2.0.0', '2.0.0-beta.4')).toBe(1)
   })
 
   it('filters out acknowledged announcements', () => {
