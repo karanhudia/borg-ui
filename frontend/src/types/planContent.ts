@@ -1,6 +1,7 @@
 import type { Plan } from '../core/features'
 
 export type PlanContentLocalizedText = Record<string, string>
+export type PlanContentAvailability = 'included' | 'coming_soon'
 
 export interface PlanContentFeature {
   id: string
@@ -9,6 +10,7 @@ export interface PlanContentFeature {
   label_localized?: PlanContentLocalizedText
   description: string
   description_localized?: PlanContentLocalizedText
+  availability?: PlanContentAvailability
   available_in?: string
 }
 

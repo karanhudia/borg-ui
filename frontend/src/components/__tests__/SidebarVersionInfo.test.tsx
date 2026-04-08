@@ -29,8 +29,49 @@ const { usePlanMock } = vi.hoisted(() => ({
   })),
 }))
 
+const { usePlanContentMock } = vi.hoisted(() => ({
+  usePlanContentMock: vi.fn(() => ({
+    features: [
+      {
+        id: 'borg_v2',
+        plan: 'pro',
+        label: 'Borg v2 beta testing',
+        description:
+          'Early access to Borg v2 while it is still in beta. Official stable Borg v2 support will move into Community once released.',
+        availability: 'included',
+      },
+      {
+        id: 'extra_users',
+        plan: 'pro',
+        label: 'Up to 10 users',
+        description: 'Increase the user limit from 5 in Community to up to 10 users on Pro.',
+        availability: 'included',
+      },
+      {
+        id: 'backup_reports',
+        plan: 'pro',
+        label: 'Backup reports',
+        description: 'Generate daily, weekly, monthly, or custom backup reports.',
+        availability: 'coming_soon',
+      },
+      {
+        id: 'rbac',
+        plan: 'enterprise',
+        label: 'RBAC',
+        description: 'Assign roles and granular permissions to each user account.',
+        availability: 'included',
+      },
+    ],
+    isLoading: false,
+  })),
+}))
+
 vi.mock('../../hooks/usePlan', () => ({
   usePlan: () => usePlanMock(),
+}))
+
+vi.mock('../../hooks/usePlanContent', () => ({
+  usePlanContent: () => usePlanContentMock(),
 }))
 
 const fullSystemInfo = {
@@ -109,7 +150,8 @@ describe('SidebarVersionInfo', () => {
     fireEvent.click(screen.getByText('Community'))
 
     expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
-    expect(screen.getByText('Scheduled backup reports')).toBeInTheDocument()
+    expect(screen.getByText('Backup reports')).toBeInTheDocument()
+    expect(screen.queryByText('Included in upcoming releases for Pro')).not.toBeInTheDocument()
   })
 
   it('defaults the drawer to enterprise when the active entitlement is enterprise', () => {
@@ -141,7 +183,8 @@ describe('SidebarVersionInfo', () => {
 
     fireEvent.click(screen.getByText('Community'))
 
-    expect(screen.queryByText('Expanded user seats')).not.toBeInTheDocument()
-    expect(screen.queryByText('Borg v2 backups')).not.toBeInTheDocument()
+    expect(screen.queryByText('Up to 10 users')).not.toBeInTheDocument()
+    expect(screen.queryByText('Borg v2 beta testing')).not.toBeInTheDocument()
+    expect(screen.getByText('RBAC')).toBeInTheDocument()
   })
 })

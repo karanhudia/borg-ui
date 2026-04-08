@@ -18,6 +18,14 @@ interface PlanInfoDrawerProps {
 
 const UPGRADE_PLANS: Plan[] = ['pro', 'enterprise']
 
+function isVersionedUpcomingFeature(feature: { available_in?: string }) {
+  return Boolean(feature.available_in)
+}
+
+function isComingSoonFeature(feature: { availability?: string }) {
+  return feature.availability === 'coming_soon'
+}
+
 function getDefaultSelectedPlan(plan: Plan, initialSelectedPlan?: Plan): Plan {
   if (initialSelectedPlan && UPGRADE_PLANS.includes(initialSelectedPlan)) {
     return initialSelectedPlan
@@ -53,16 +61,50 @@ export default function PlanInfoDrawer({
     ([, required]) => required === selectedPlan
   )
   const visibleFeatureIdSet = new Set(visibleFeatureIds.map(([key]) => key))
-  const visibleFeatures = visibleFeatureIds.map(([key]) => {
-    const content = planContentFeatures.find((feature) => feature.id === key)
-    return {
-      id: key,
-      label: content?.label ?? key,
-      description: content?.description ?? '',
-    }
-  })
-  const upcomingFeatures = planContentFeatures.filter(
-    (feature) => feature.plan === selectedPlan && !visibleFeatureIdSet.has(feature.id)
+  const manifestFeaturesForPlan = planContentFeatures.filter(
+    (feature) => feature.plan === selectedPlan
+  )
+  const visibleFeatures = manifestFeaturesForPlan
+    .filter((feature) => feature.availability === 'included')
+    .map((feature) => ({
+      id: feature.id,
+      label: feature.label,
+      description: feature.description,
+    }))
+
+  const backendOnlyVisibleFeatures = visibleFeatureIds
+    .filter(([key]) => !manifestFeaturesForPlan.some((feature) => feature.id === key))
+    .map(([key]) => {
+      const content = planContentFeatures.find((feature) => feature.id === key)
+      return {
+        id: key,
+        label: content?.label ?? key,
+        description: content?.description ?? '',
+      }
+    })
+
+  const currentFeatures =
+    visibleFeatures.length > 0 || backendOnlyVisibleFeatures.length > 0
+      ? [...visibleFeatures, ...backendOnlyVisibleFeatures]
+      : manifestFeaturesForPlan
+          .filter(
+            (feature) => feature.availability === 'included' && !isVersionedUpcomingFeature(feature)
+          )
+          .map((feature) => ({
+            id: feature.id,
+            label: feature.label,
+            description: feature.description,
+          }))
+
+  const upcomingVersionedFeatures = manifestFeaturesForPlan.filter(
+    (feature) => isVersionedUpcomingFeature(feature) && !visibleFeatureIdSet.has(feature.id)
+  )
+
+  const comingSoonFeatures = manifestFeaturesForPlan.filter(
+    (feature) =>
+      !isVersionedUpcomingFeature(feature) &&
+      (isComingSoonFeature(feature) ||
+        (feature.availability === undefined && !visibleFeatureIdSet.has(feature.id)))
   )
 
   useEffect(() => {
@@ -217,7 +259,7 @@ export default function PlanInfoDrawer({
           <Divider sx={{ mb: 2 }} />
 
           {/* Feature list for selected plan */}
-          {visibleFeatures.length > 0 && (
+          {currentFeatures.length > 0 && (
             <>
               <Box
                 sx={{
@@ -239,7 +281,7 @@ export default function PlanInfoDrawer({
                   {t('plan.planFeatures', { plan: PLAN_LABEL[selectedPlan] })}
                 </Typography>
               </Box>
-              {visibleFeatures.map((feature) => (
+              {currentFeatures.map((feature) => (
                 <Box key={feature.id} sx={{ display: 'flex', gap: 1.25, mb: 1.5 }}>
                   <Box
                     sx={{
@@ -285,9 +327,9 @@ export default function PlanInfoDrawer({
             </>
           )}
 
-          {upcomingFeatures.length > 0 && (
+          {upcomingVersionedFeatures.length > 0 && (
             <>
-              {visibleFeatures.length > 0 && <Divider sx={{ my: 2 }} />}
+              {currentFeatures.length > 0 && <Divider sx={{ my: 2 }} />}
               <Box
                 sx={{
                   display: 'flex',
@@ -306,26 +348,10 @@ export default function PlanInfoDrawer({
                     color: 'text.disabled',
                   }}
                 >
-                  {t('plan.upcomingFeatures', { plan: PLAN_LABEL[selectedPlan] })}
+                  {t('plan.plannedReleases', { plan: PLAN_LABEL[selectedPlan] })}
                 </Typography>
-                <Chip
-                  icon={<Clock size={10} />}
-                  label={t('plan.comingSoon')}
-                  size="small"
-                  sx={{
-                    height: 18,
-                    fontSize: '0.6rem',
-                    fontWeight: 600,
-                    bgcolor: `${selectedColor}14`,
-                    color: selectedColor,
-                    border: '1px solid',
-                    borderColor: `${selectedColor}30`,
-                    '& .MuiChip-icon': { color: selectedColor, ml: 0.5 },
-                    '& .MuiChip-label': { px: 0.75 },
-                  }}
-                />
               </Box>
-              {upcomingFeatures.map((feature) => (
+              {upcomingVersionedFeatures.map((feature) => (
                 <Box key={feature.id} sx={{ display: 'flex', gap: 1.25, mb: 1.5 }}>
                   <Box
                     sx={{
@@ -365,19 +391,105 @@ export default function PlanInfoDrawer({
                     >
                       {feature.description}
                     </Typography>
-                    {feature.available_in ? (
-                      <Typography
-                        sx={{
-                          fontSize: '0.68rem',
-                          color: selectedColor,
-                          lineHeight: 1.4,
-                          mt: 0.35,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {t('plan.availableIn', { version: feature.available_in })}
-                      </Typography>
-                    ) : null}
+                    <Typography
+                      sx={{
+                        fontSize: '0.68rem',
+                        color: selectedColor,
+                        lineHeight: 1.4,
+                        mt: 0.35,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {t('plan.availableIn', { version: feature.available_in })}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+            </>
+          )}
+
+          {comingSoonFeatures.length > 0 && (
+            <>
+              {(currentFeatures.length > 0 || upcomingVersionedFeatures.length > 0) && (
+                <Divider sx={{ my: 2 }} />
+              )}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 1.25,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '0.6rem',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: 'text.disabled',
+                  }}
+                >
+                  {t('plan.upcomingFeatures', { plan: PLAN_LABEL[selectedPlan] })}
+                </Typography>
+                <Chip
+                  icon={<Clock size={10} />}
+                  label={t('plan.comingSoon')}
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: '0.6rem',
+                    fontWeight: 600,
+                    bgcolor: `${selectedColor}14`,
+                    color: selectedColor,
+                    border: '1px solid',
+                    borderColor: `${selectedColor}30`,
+                    '& .MuiChip-icon': { color: selectedColor, ml: 0.5 },
+                    '& .MuiChip-label': { px: 0.75 },
+                  }}
+                />
+              </Box>
+              {comingSoonFeatures.map((feature) => (
+                <Box key={feature.id} sx={{ display: 'flex', gap: 1.25, mb: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: '4px',
+                      bgcolor: `${selectedColor}14`,
+                      border: '1px dashed',
+                      borderColor: `${selectedColor}45`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      mt: 0.125,
+                    }}
+                  >
+                    <Clock size={9} style={{ color: selectedColor }} strokeWidth={2.5} />
+                  </Box>
+                  <Box>
+                    <Typography
+                      sx={{
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        color: 'text.primary',
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {feature.label}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: '0.7rem',
+                        color: 'text.secondary',
+                        lineHeight: 1.4,
+                        mt: 0.25,
+                      }}
+                    >
+                      {feature.description}
+                    </Typography>
                   </Box>
                 </Box>
               ))}
@@ -396,16 +508,6 @@ export default function PlanInfoDrawer({
               )}
             </>
           )}
-        </Box>
-
-        {/* Early access notice — pinned to bottom */}
-        <Box sx={{ px: 2.5, py: 2, borderTop: 1, borderColor: 'divider' }}>
-          <Typography
-            variant="caption"
-            sx={{ fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.6 }}
-          >
-            {t('plan.earlyAccessNotice')}
-          </Typography>
         </Box>
       </Box>
     </Drawer>

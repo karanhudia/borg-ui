@@ -3,7 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import AnnouncementModal from './AnnouncementModal'
 import { useSystemInfo } from '../hooks/useSystemInfo'
-import { fetchAnnouncementsManifest, getAnnouncementsUrl } from '../services/announcements'
+import {
+  DEFAULT_ANNOUNCEMENTS_MANIFEST,
+  fetchAnnouncementsManifest,
+  getAnnouncementsUrl,
+} from '../services/announcements'
 import {
   acknowledgeAnnouncement,
   getAnnouncementSnoozeDays,
@@ -21,6 +25,8 @@ export default function AnnouncementManager() {
   const { data: manifest } = useQuery({
     queryKey: ['announcements-manifest', announcementsUrl],
     queryFn: () => fetchAnnouncementsManifest(announcementsUrl),
+    initialData: DEFAULT_ANNOUNCEMENTS_MANIFEST,
+    initialDataUpdatedAt: 0,
     staleTime: 60 * 60 * 1000,
     retry: false,
   })

@@ -3037,7 +3037,6 @@
     "fullAccessLabel": "Voller Zugriff",
     "proFeatures": "Pro-Funktionen",
     "plans": "Pläne",
-    "earlyAccessNotice": "Kommerzielle Berechtigungen werden serverseitig erzwungen. Community bleibt der Basisplan, wenn keine aktive Lizenz vorhanden ist.",
     "fullAccessActiveNotice": "Voller Zugriff ist bis {{date}} inbegriffen. Danach wechselt diese Instanz automatisch zu Community, sofern keine kostenpflichtige Berechtigung aktiviert wird.",
     "fullAccessExpiredNotice": "Voller Zugriff ist beendet. Diese Instanz läuft nun auf Community, bis eine kostenpflichtige Berechtigung aktiviert wird.",
     "paidActiveNotice": "Auf dieser Instanz ist eine kostenpflichtige Berechtigung aktiv.",
@@ -3063,6 +3062,7 @@
     "featureUnavailableInCommunity": "Nach Ablauf des anfänglichen Zugangs im kostenlosen Community-Plan nicht verfügbar.",
     "comingSoon": "Demnächst",
     "planFeatures": "{{plan}}-Funktionen",
+    "plannedReleases": "In kommenden Releases für {{plan}} enthalten",
     "upcomingFeatures": "Demnächst für {{plan}}",
     "availableIn": "Verfügbar in {{version}}"
   },

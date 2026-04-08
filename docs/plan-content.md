@@ -31,11 +31,17 @@ Each entry describes one feature:
 {
   "id": "backup_reports",
   "plan": "pro",
-  "label": "Scheduled backup reports",
-  "description": "Generate daily, weekly, and monthly backup summaries with status, size, and job insights",
+  "label": "Backup reports",
+  "description": "Generate daily, weekly, monthly, or custom backup reports.",
   "available_in": "2.0.1"
 }
 ```
+
+Use either `availability` or `available_in`, not both.
+
+- `availability: "included"` means the feature is part of the plan now.
+- `availability: "coming_soon"` means it is planned but not tied to a version yet.
+- `available_in: "2.0.1"` means it should appear in a separate versioned roadmap section, not in the generic coming-soon section.
 
 Optional localization fields can be provided directly in the manifest:
 

@@ -49,6 +49,7 @@ export function usePlanContent() {
     queryKey: ['plan-content-manifest', planContentUrl],
     queryFn: () => fetchPlanContentManifest(planContentUrl),
     initialData: DEFAULT_PLAN_CONTENT_MANIFEST,
+    initialDataUpdatedAt: 0,
     staleTime: 60 * 60 * 1000,
     retry: false,
   })

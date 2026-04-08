@@ -3037,7 +3037,6 @@
     "fullAccessLabel": "Full Access",
     "proFeatures": "Pro features",
     "plans": "Plans",
-    "earlyAccessNotice": "Commercial entitlements are enforced server-side. Community remains the baseline plan when no active entitlement is present.",
     "fullAccessActiveNotice": "Full Access is included until {{date}}. After that, this instance will automatically move to Community unless a paid entitlement is activated.",
     "fullAccessExpiredNotice": "Full Access has ended. This instance is now running on Community until a paid entitlement is activated.",
     "paidActiveNotice": "A paid entitlement is active on this instance.",
@@ -3063,6 +3062,7 @@
     "featureUnavailableInCommunity": "Not available in the free Community plan after initial access ends.",
     "comingSoon": "Coming soon",
     "planFeatures": "{{plan}} features",
+    "plannedReleases": "Included in upcoming releases for {{plan}}",
     "upcomingFeatures": "Upcoming for {{plan}}",
     "availableIn": "Available in {{version}}"
   },

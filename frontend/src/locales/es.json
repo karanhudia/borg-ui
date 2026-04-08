@@ -3037,7 +3037,6 @@
     "fullAccessLabel": "Acceso completo",
     "proFeatures": "Funciones Pro",
     "plans": "Planes",
-    "earlyAccessNotice": "Los derechos comerciales se aplican desde el servidor. Community sigue siendo el plan base cuando no hay una licencia activa.",
     "fullAccessActiveNotice": "El acceso completo está incluido hasta {{date}}. Después de eso, esta instancia volverá automáticamente a Community, a menos que se active una licencia de pago.",
     "fullAccessExpiredNotice": "El acceso completo ha terminado. Esta instancia ahora funciona con Community hasta que se active una licencia de pago.",
     "paidActiveNotice": "Hay un derecho de pago activo en esta instancia.",
@@ -3063,6 +3062,7 @@
     "featureUnavailableInCommunity": "No disponible en el plan gratuito Community cuando termine el acceso inicial.",
     "comingSoon": "Próximamente",
     "planFeatures": "Funciones de {{plan}}",
+    "plannedReleases": "Incluido en próximas versiones para {{plan}}",
     "upcomingFeatures": "Próximamente para {{plan}}",
     "availableIn": "Disponible en {{version}}"
   },

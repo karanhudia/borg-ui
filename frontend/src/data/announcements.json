@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "generated_at": "2026-04-06T00:00:00Z",
+  "announcements": [
+    {
+      "id": "release-2.0.0-whats-new",
+      "type": "release_highlight",
+      "priority": 50,
+      "title": "What's new in 2.0.0",
+      "title_localized": {
+        "es": "Novedades de la version 2.0.0",
+        "de": "Neu in 2.0.0",
+        "it": "Novita della versione 2.0.0"
+      },
+      "message": "Borg UI 2.0.0 adds built-in plans, Borg 2 support, better access control, and a more polished day-to-day experience. New installs include 60 days of full access before Community plan limits apply.",
+      "message_localized": {
+        "es": "Borg UI 2.0.0 agrega planes integrados, soporte para Borg 2, mejor control de acceso y una experiencia diaria mas pulida. Las instalaciones nuevas incluyen 60 dias de acceso completo antes de que se apliquen los limites del plan Community.",
+        "de": "Borg UI 2.0.0 bringt integrierte Plane, Borg-2-Unterstutzung, bessere Zugriffskontrollen und ein reiferes Nutzungserlebnis. Neue Installationen enthalten 60 Tage vollen Zugriff, bevor die Grenzen des Community-Plans gelten.",
+        "it": "Borg UI 2.0.0 aggiunge piani integrati, supporto a Borg 2, un controllo degli accessi migliore e un'esperienza d'uso piu rifinita. Le nuove installazioni includono 60 giorni di accesso completo prima che si applichino i limiti del piano Community."
+      },
+      "highlights": [
+        "Built-in Community, Pro, and Enterprise plans, with licensing managed directly in the app",
+        "Borg 2 support across repository create, import, stats, and archive flows",
+        "A revamped dashboard, cleaner navigation, improved settings, and auto theme mode",
+        "RBAC, repository access controls, personal profiles, and API tokens for multi-user setups",
+        "Announcements, Umami analytics, and better product telemetry",
+        "Stronger SSH, restore, testing, and CI reliability"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Planes Community, Pro y Enterprise integrados, con licencias gestionadas directamente en la app",
+          "Soporte para Borg 2 en creacion, importacion, estadisticas y archivos",
+          "Panel renovado, navegacion mas limpia, mejor configuracion y modo de tema automatico",
+          "RBAC, controles de acceso por repositorio, perfiles personales y tokens API para entornos multiusuario",
+          "Announcements, analitica Umami y mejor telemetria del producto",
+          "Mayor fiabilidad en SSH, restauracion, pruebas y CI"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.0.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-04-06T00:00:00Z",
+      "ends_at": "2027-04-06T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.1.0",
+      "target_plans": ["community", "pro", "enterprise"]
+    }
+  ]
+}

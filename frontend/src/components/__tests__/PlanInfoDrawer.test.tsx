@@ -12,36 +12,61 @@ const { usePlanContentMock } = vi.hoisted(() => ({
       {
         id: 'borg_v2',
         plan: 'pro',
-        label: 'Borg v2 backups',
-        description: 'Next-generation Borg format with improved deduplication and performance',
+        label: 'Borg v2 beta testing',
+        description:
+          'Early access to Borg v2 while it is still in beta. Official stable Borg v2 support will move into Community once released.',
+        availability: 'included',
       },
       {
         id: 'extra_users',
         plan: 'pro',
-        label: 'Expanded user seats',
-        description: 'Add more than 5 users, with up to 10 seats on Pro',
+        label: 'Up to 10 users',
+        description: 'Increase the user limit from 5 in Community to up to 10 users on Pro.',
+        availability: 'included',
+      },
+      {
+        id: 'pro_server_seats',
+        plan: 'pro',
+        label: 'Deployment on 3 servers',
+        description: 'Use the same license key on up to 3 Borg UI servers.',
+        availability: 'included',
       },
       {
         id: 'backup_reports',
         plan: 'pro',
-        label: 'Scheduled backup reports',
-        description:
-          'Generate daily, weekly, and monthly backup summaries with status, size, and job insights',
-        available_in: '2.0.1',
+        label: 'Backup reports',
+        description: 'Generate daily, weekly, monthly, or custom backup reports.',
+        availability: 'coming_soon',
       },
       {
-        id: 'compliance_exports',
-        plan: 'enterprise',
-        label: 'Audit and compliance exports',
+        id: 'alerting_monitoring',
+        plan: 'pro',
+        label: 'Alerts and monitoring',
         description:
-          'Export backup history, retention evidence, and operational records for reporting and reviews',
+          'Create backup alerts and rules, for example when Downloads has not been backed up for 3 days.',
+        availability: 'coming_soon',
+      },
+      {
+        id: 'rbac',
+        plan: 'enterprise',
+        label: 'RBAC',
+        description: 'Assign roles and granular permissions to each user account.',
+        availability: 'included',
+      },
+      {
+        id: 'enterprise_unlimited_users',
+        plan: 'enterprise',
+        label: 'Unlimited users',
+        description: 'Remove the user-count ceiling for larger teams and segregated operations.',
+        availability: 'included',
       },
       {
         id: 'centralized_management',
         plan: 'enterprise',
         label: 'Centralized backup management',
         description:
-          'Oversee larger backup environments with stronger controls and a more consolidated workflow',
+          'Monitor, control, and run backups across multiple Borg UI instances from one web interface without storing repository passphrases on backup servers.',
+        availability: 'coming_soon',
       },
     ],
     isLoading: false,
@@ -95,12 +120,14 @@ describe('PlanInfoDrawer', () => {
     expect(screen.getByText('Upcoming for Enterprise')).toBeInTheDocument()
   })
 
-  it('shows roadmap version badges from the manifest', () => {
+  it('shows upcoming features without a separate versioned section by default', () => {
     renderWithProviders(
       <PlanInfoDrawer open={true} onClose={vi.fn()} plan="community" features={featureMap} />
     )
 
-    expect(screen.getByText('Available in 2.0.1')).toBeInTheDocument()
+    expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
+    expect(screen.queryByText('Included in upcoming releases for Pro')).not.toBeInTheDocument()
+    expect(screen.queryByText('Available in 2.0.1')).not.toBeInTheDocument()
   })
 
   it('shows features for the selected plan tier', async () => {
@@ -110,12 +137,15 @@ describe('PlanInfoDrawer', () => {
       <PlanInfoDrawer open={true} onClose={vi.fn()} plan="community" features={featureMap} />
     )
 
-    expect(screen.getByText('Borg v2 backups')).toBeInTheDocument()
-    expect(screen.getByText('Expanded user seats')).toBeInTheDocument()
+    expect(screen.getByText('Borg v2 beta testing')).toBeInTheDocument()
+    expect(screen.getByText('Up to 10 users')).toBeInTheDocument()
+    expect(screen.getByText('Deployment on 3 servers')).toBeInTheDocument()
 
     await user.click(screen.getByText('Enterprise'))
 
-    expect(screen.queryByText('Expanded user seats')).not.toBeInTheDocument()
+    expect(screen.getByText('RBAC')).toBeInTheDocument()
+    expect(screen.getByText('Unlimited users')).toBeInTheDocument()
+    expect(screen.queryByText('Up to 10 users')).not.toBeInTheDocument()
   })
 
   it('uses the provided initial selected plan when opened', () => {
@@ -129,7 +159,8 @@ describe('PlanInfoDrawer', () => {
       />
     )
 
-    expect(screen.queryByText('Expanded user seats')).not.toBeInTheDocument()
-    expect(screen.queryByText('Borg v2 backups')).not.toBeInTheDocument()
+    expect(screen.queryByText('Up to 10 users')).not.toBeInTheDocument()
+    expect(screen.queryByText('Borg v2 beta testing')).not.toBeInTheDocument()
+    expect(screen.getByText('RBAC')).toBeInTheDocument()
   })
 })

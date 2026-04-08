@@ -15,6 +15,10 @@ vi.mock('../../hooks/useSystemInfo', () => ({
 }))
 
 vi.mock('../../services/announcements', () => ({
+  DEFAULT_ANNOUNCEMENTS_MANIFEST: {
+    version: 1,
+    announcements: [],
+  },
   fetchAnnouncementsManifest: fetchAnnouncementsManifestMock,
   getAnnouncementsUrl: getAnnouncementsUrlMock,
 }))
