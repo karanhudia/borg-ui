@@ -59,7 +59,7 @@
   },
   "login": {
     "title": "Borg Web UI",
-    "subtitle": "Melde dich an, um deine Sicherungen zu verwalten",
+    "subtitle": "Zugangsdaten eingeben, um fortzufahren",
     "username": "Benutzername",
     "password": "Passwort",
     "submit": "Anmelden",
@@ -70,7 +70,11 @@
     },
     "success": "Anmeldung erfolgreich!",
     "successChangePassword": "Anmeldung erfolgreich! Bitte ändere dein Passwort.",
-    "failed": "Anmeldung fehlgeschlagen"
+    "failed": "Anmeldung fehlgeschlagen",
+    "tagline": "Sichere, deduplizierte Backups - verwaltet in einer eleganten Oberfläche.",
+    "featureDedup": "Deduplizierte, verschlüsselte Backups",
+    "featureArchive": "Archive durchsuchen und wiederherstellen",
+    "featureSSH": "SSH-gesicherter Repository-Zugriff"
   },
   "navigation": {
     "appName": "Borg UI",

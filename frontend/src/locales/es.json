@@ -59,7 +59,7 @@
   },
   "login": {
     "title": "Borg Web UI",
-    "subtitle": "Inicia sesión para gestionar tus copias de seguridad",
+    "subtitle": "Introduce tus credenciales para continuar",
     "username": "Usuario",
     "password": "Contraseña",
     "submit": "Iniciar sesión",
@@ -70,7 +70,11 @@
     },
     "success": "¡Inicio de sesión exitoso!",
     "successChangePassword": "¡Inicio de sesión exitoso! Por favor cambia tu contraseña.",
-    "failed": "Error al iniciar sesión"
+    "failed": "Error al iniciar sesión",
+    "tagline": "Copias de seguridad seguras y deduplicadas - gestionadas en una interfaz elegante.",
+    "featureDedup": "Copias de seguridad deduplicadas y cifradas",
+    "featureArchive": "Navegar y restaurar cualquier archivo",
+    "featureSSH": "Acceso al repositorio protegido por SSH"
   },
   "navigation": {
     "appName": "Borg UI",

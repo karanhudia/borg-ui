@@ -59,7 +59,7 @@
   },
   "login": {
     "title": "Borg Web UI",
-    "subtitle": "Accedi per gestire i tuoi backup",
+    "subtitle": "Inserisci le credenziali per continuare",
     "username": "Nome utente",
     "password": "Password",
     "submit": "Accedi",
@@ -70,7 +70,11 @@
     },
     "success": "Accesso riuscito!",
     "successChangePassword": "Accesso riuscito! Modifica la tua password.",
-    "failed": "Accesso fallito"
+    "failed": "Accesso fallito",
+    "tagline": "Backup sicuri e deduplicati - gestiti da un'interfaccia elegante.",
+    "featureDedup": "Backup deduplicati e crittografati",
+    "featureArchive": "Sfoglia e ripristina qualsiasi archivio",
+    "featureSSH": "Accesso al repository protetto da SSH"
   },
   "navigation": {
     "appName": "Borg UI",
