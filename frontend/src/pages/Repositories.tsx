@@ -30,6 +30,7 @@ import LockErrorDialog from '../components/LockErrorDialog'
 import CheckWarningDialog from '../components/CheckWarningDialog'
 import CompactWarningDialog from '../components/CompactWarningDialog'
 import RepositoryCard from '../components/RepositoryCard'
+import RepositoryCardSkeleton from '../components/RepositoryCardSkeleton'
 import RepositoryWizard from '../components/RepositoryWizard'
 import PruneRepositoryDialog from '../components/PruneRepositoryDialog'
 import RepositoryInfoDialog from '../components/RepositoryInfoDialog'
@@ -734,11 +735,11 @@ export default function Repositories() {
 
       {/* Repositories Grid */}
       {isLoading ? (
-        <Box sx={{ textAlign: 'center', py: 8 }}>
-          <Typography variant="body2" color="text.secondary">
-            {t('repositories.loading')}
-          </Typography>
-        </Box>
+        <Stack spacing={2}>
+          {[0, 1, 2].map((i) => (
+            <RepositoryCardSkeleton key={i} index={i} />
+          ))}
+        </Stack>
       ) : repositories.length === 0 ? (
         <Card>
           <CardContent sx={{ textAlign: 'center', py: 8 }}>
