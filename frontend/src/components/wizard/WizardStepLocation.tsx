@@ -19,7 +19,7 @@ import {
   Tooltip,
   Chip,
 } from '@mui/material'
-import { Server, Cloud, TriangleAlert } from 'lucide-react'
+import { Server, Cloud } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../PlanGate'
@@ -136,28 +136,15 @@ export default function WizardStepLocation({
                 })}
               </Box>
               {(data.borgVersion ?? 1) === 2 && (
-                <>
+                <Tooltip title={t('wizard.location.borgV2Warning')} arrow placement="right">
                   <Chip
                     label="Beta"
                     size="small"
                     color="warning"
                     variant="outlined"
-                    sx={{ height: 22, fontWeight: 600 }}
+                    sx={{ height: 22, fontWeight: 600, cursor: 'help' }}
                   />
-                  <Tooltip title={t('wizard.location.borgV2Warning')} arrow placement="right">
-                    <Box
-                      component="span"
-                      sx={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        color: 'warning.main',
-                        cursor: 'help',
-                      }}
-                    >
-                      <TriangleAlert size={16} />
-                    </Box>
-                  </Tooltip>
-                </>
+                </Tooltip>
               )}
             </Box>
           </Box>
