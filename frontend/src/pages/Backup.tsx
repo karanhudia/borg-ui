@@ -260,7 +260,7 @@ const Backup: React.FC = () => {
           <Button
             variant="contained"
             color="success"
-            size="large"
+            size="medium"
             startIcon={
               startBackupMutation.isPending ? (
                 <CircularProgress size={16} color="inherit" />
@@ -271,9 +271,9 @@ const Backup: React.FC = () => {
             onClick={handleStartBackup}
             disabled={startBackupMutation.isPending || !selectedRepository || !canStartBackup}
             sx={{
-              minWidth: { xs: '100%', sm: 180 },
-              height: { xs: 48, sm: 58 },
+              minWidth: { xs: '100%', sm: 160 },
               fontWeight: 600,
+              flexShrink: 0,
             }}
           >
             {startBackupMutation.isPending
