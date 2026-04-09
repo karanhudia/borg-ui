@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import json
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -82,6 +83,9 @@ class SmokeClient:
         self.log(f"Authenticated as {username}")
         return token
 
+    def system_info(self) -> dict:
+        return self.request_ok("GET", "/api/system/info").json()
+
     def prepare_source_tree(self, name: str, files: dict[str, str]) -> Path:
         root = self.temp_dir / name
         for relative_path, content in files.items():
@@ -135,6 +139,41 @@ class SmokeClient:
         self.log(f"Created repository {repo_id} ({name})")
         return repo_id, repo_path_value
 
+    def create_repository_v2(
+        self,
+        *,
+        name: str,
+        repo_path: Path,
+        source_dirs: list[Path],
+        encryption: str = "none",
+        passphrase: Optional[str] = None,
+        extra: Optional[dict] = None,
+    ) -> tuple[int, str]:
+        payload = {
+            "name": name,
+            "path": self.container_path(repo_path),
+            "borg_version": 2,
+            "encryption": encryption,
+            "compression": "lz4",
+            "source_directories": [self.container_path(path) for path in source_dirs],
+            "exclude_patterns": [],
+        }
+        if passphrase:
+            payload["passphrase"] = passphrase
+        if extra:
+            payload.update(extra)
+        response = self.request_ok(
+            "POST",
+            "/api/v2/repositories/",
+            headers=self._headers(json_body=True),
+            json=payload,
+            expected=(200, 201),
+        )
+        data = response.json()
+        repo_id = data["id"]
+        self.log(f"Created Borg 2 repository {repo_id} ({name})")
+        return repo_id, payload["path"]
+
     def import_repository(
         self,
         *,
@@ -165,6 +204,39 @@ class SmokeClient:
         data = response.json().get("repository", response.json())
         repo_id = data["id"]
         self.log(f"Imported repository {repo_id} ({name})")
+        return repo_id, payload["path"]
+
+    def import_repository_v2(
+        self,
+        *,
+        name: str,
+        repo_path: Path,
+        encryption: str,
+        source_dirs: list[Path],
+        passphrase: Optional[str] = None,
+        keyfile_content: Optional[str] = None,
+    ) -> tuple[int, str]:
+        payload = {
+            "name": name,
+            "path": self.container_path(repo_path),
+            "borg_version": 2,
+            "encryption": encryption,
+            "source_directories": [self.container_path(path) for path in source_dirs],
+        }
+        if passphrase:
+            payload["passphrase"] = passphrase
+        if keyfile_content:
+            payload["keyfile_content"] = keyfile_content
+        response = self.request_ok(
+            "POST",
+            "/api/v2/repositories/import",
+            headers=self._headers(json_body=True),
+            json=payload,
+            expected=(200, 201),
+        )
+        data = response.json()
+        repo_id = data["id"]
+        self.log(f"Imported Borg 2 repository {repo_id} ({name})")
         return repo_id, payload["path"]
 
     def create_user(self, *, username: str, password: str, role: str = "viewer", full_name: Optional[str] = None) -> int:
@@ -212,6 +284,19 @@ class SmokeClient:
         self.log(f"Started backup job {job_id}")
         return job_id
 
+    def start_backup_v2(self, repository_id: int, *, token: Optional[str] = None) -> int:
+        response = self.request_ok(
+            "POST",
+            "/api/v2/backup/run",
+            token=token,
+            headers=self._headers(token=token, json_body=True),
+            json={"repository_id": repository_id},
+            expected=(200, 201, 202),
+        )
+        job_id = response.json()["job_id"]
+        self.log(f"Started Borg 2 backup job {job_id}")
+        return job_id
+
     def create_repository_and_backup(
         self,
         *,
@@ -233,6 +318,36 @@ class SmokeClient:
             extra=extra,
         )
         job_id = self.start_backup(repository_path, token=token)
+        job_data = self.wait_for_job(
+            "/api/backup/status",
+            job_id,
+            expected={"completed", "completed_with_warnings"},
+            token=token,
+            timeout=timeout,
+        )
+        return repo_id, repository_path, job_id, job_data
+
+    def create_repository_and_backup_v2(
+        self,
+        *,
+        name: str,
+        repo_path: Path,
+        source_dirs: list[Path],
+        token: Optional[str] = None,
+        timeout: float = 90.0,
+        encryption: str = "none",
+        passphrase: Optional[str] = None,
+        extra: Optional[dict] = None,
+    ) -> tuple[int, str, int, dict]:
+        repo_id, repository_path = self.create_repository_v2(
+            name=name,
+            repo_path=repo_path,
+            source_dirs=source_dirs,
+            encryption=encryption,
+            passphrase=passphrase,
+            extra=extra,
+        )
+        job_id = self.start_backup_v2(repo_id, token=token)
         job_data = self.wait_for_job(
             "/api/backup/status",
             job_id,

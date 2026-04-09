@@ -24,6 +24,26 @@ describe('CommandPreview', () => {
       expect(screen.getByText(/borg create/)).toBeInTheDocument()
     })
 
+    it('renders borg2 init and backup commands for Borg 2 repositories', () => {
+      render(
+        <CommandPreview
+          mode="create"
+          borgVersion={2}
+          repositoryPath="/backups/repo"
+          encryption="repokey-aes-ocb"
+          compression="lz4"
+          sourceDirs={['/home/user/data']}
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+
+      expect(
+        screen.getByText(/borg2 -r \/backups\/repo repo-create --encryption repokey-aes-ocb/)
+      ).toBeInTheDocument()
+      expect(screen.getByText(/borg2 create/)).toBeInTheDocument()
+    })
+
     it('renders only backup step for import mode (no step number)', () => {
       render(
         <CommandPreview
@@ -207,6 +227,24 @@ describe('CommandPreview', () => {
   })
 
   describe('Edge cases', () => {
+    it('renders backup-only mode without workflow steps', () => {
+      render(
+        <CommandPreview
+          mode="import"
+          displayMode="backup-only"
+          borgVersion={2}
+          repositoryPath="/backups/repo"
+          sourceDirs={['/data']}
+          repositoryMode="full"
+          dataSource="local"
+        />
+      )
+
+      expect(screen.getByText('Command Preview')).toBeInTheDocument()
+      expect(screen.getByText(/borg2 create/)).toBeInTheDocument()
+      expect(screen.queryByText(/Step 1:/)).not.toBeInTheDocument()
+    })
+
     it('uses default source path when none provided', () => {
       render(
         <CommandPreview

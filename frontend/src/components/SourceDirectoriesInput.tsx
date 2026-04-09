@@ -6,13 +6,14 @@ import {
   Typography,
   TextField,
   Button,
-  Alert,
   Stack,
   IconButton,
   InputAdornment,
+  Tooltip,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 
 interface SourceDirectoriesInputProps {
   directories: string[]
@@ -52,27 +53,34 @@ export default function SourceDirectoriesInput({
 
   return (
     <Box>
-      <Typography variant="subtitle2" gutterBottom>
-        {t('sourceDirectories.title')}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
+        <Typography variant="subtitle2">
+          {t('sourceDirectories.title')}
+          {required && (
+            <Box component="span" sx={{ color: 'error.main' }}>
+              {' '}
+              *
+            </Box>
+          )}
+        </Typography>
         {required && (
-          <Box component="span" sx={{ color: 'error.main' }}>
-            {' '}
-            *
-          </Box>
+          <Tooltip title={t('sourceDirectories.warning')} arrow placement="right">
+            <IconButton
+              size="small"
+              aria-label={t('sourceDirectories.titleHelp')}
+              sx={{ p: 0.25, color: 'text.secondary' }}
+            >
+              <InfoOutlinedIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
         )}
-      </Typography>
+      </Box>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
         {t('sourceDirectories.subtitle')}
         {required
           ? t('sourceDirectories.atLeastOneRequired')
           : t('sourceDirectories.optionalSuffix')}
       </Typography>
-
-      {required && directories.length === 0 && (
-        <Alert severity="warning" sx={{ mb: 1.5 }}>
-          {t('sourceDirectories.warning')}
-        </Alert>
-      )}
 
       {directories.length > 0 && (
         <Stack spacing={0.5} sx={{ mb: 1.5 }}>

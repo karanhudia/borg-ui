@@ -4,7 +4,6 @@ import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
-  alpha,
   Box,
   Button,
   Card,
@@ -24,12 +23,12 @@ import {
   formatDurationSeconds,
   formatTimeRange,
 } from '../utils/dateUtils'
-import { generateBorgCreateCommand } from '../utils/borgUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { BackupJob, Repository } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
 import RepoSelect from '../components/RepoSelect'
 import LogViewerDialog from '../components/LogViewerDialog'
+import CommandPreview from '../components/CommandPreview'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
@@ -151,22 +150,6 @@ const Backup: React.FC = () => {
   const formatFileSize = (size?: string) => {
     if (!size) return 'Unknown'
     return size
-  }
-
-  // Generate borg create command preview
-  const getBorgBackupCommand = () => {
-    if (!selectedRepoData) return 'Select a repository to see the command'
-
-    return generateBorgCreateCommand({
-      repositoryPath: selectedRepoData.path,
-      compression: selectedRepoData.compression,
-      excludePatterns: selectedRepoData.exclude_patterns,
-      sourceDirs: selectedRepoData.source_directories,
-      customFlags: selectedRepoData.custom_flags,
-      remotePathFlag: selectedRepoData.remote_path
-        ? `--remote-path ${selectedRepoData.remote_path} `
-        : '',
-    })
   }
 
   const runningJobs = backupStatus?.filter((job: BackupJob) => job.status === 'running') || []
@@ -313,31 +296,19 @@ const Backup: React.FC = () => {
 
       {/* Command Preview Card */}
       {selectedRepoData && (
-        <Card sx={{ mb: 3, bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04) }}>
-          <CardContent>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-              <Info size={20} color="#1976d2" />
-              <Typography variant="h6" fontWeight={600}>
-                {t('backup.commandPreview')}
-              </Typography>
-            </Stack>
-            <Box
-              sx={{
-                bgcolor: 'grey.900',
-                color: 'grey.100',
-                p: 1.5,
-                borderRadius: 1,
-                fontFamily: 'monospace',
-                fontSize: '0.875rem',
-                overflow: 'auto',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-all',
-              }}
-            >
-              {getBorgBackupCommand()}
-            </Box>
-          </CardContent>
-        </Card>
+        <CommandPreview
+          mode="import"
+          displayMode="backup-only"
+          borgVersion={selectedRepoData.borg_version}
+          repositoryPath={selectedRepoData.path}
+          compression={selectedRepoData.compression}
+          excludePatterns={selectedRepoData.exclude_patterns}
+          sourceDirs={selectedRepoData.source_directories}
+          customFlags={selectedRepoData.custom_flags ?? ''}
+          remotePath={selectedRepoData.remote_path ?? ''}
+          repositoryMode="full"
+          dataSource="local"
+        />
       )}
 
       {/* Running Jobs */}

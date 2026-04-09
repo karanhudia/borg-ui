@@ -18,7 +18,24 @@ import json
 import os
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
-from app.database.models import Repository, ScheduledJob, SSHConnection
+from app.database.models import LicensingState, Repository, ScheduledJob, SSHConnection, SystemSettings
+
+
+def _enable_borg_v2(test_db):
+    settings_row = test_db.query(SystemSettings).first()
+    if settings_row is None:
+        settings_row = SystemSettings()
+        test_db.add(settings_row)
+
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="test-instance-v2-repository-api")
+        test_db.add(state)
+
+    state.plan = "pro"
+    state.status = "active"
+    state.is_trial = False
+    test_db.commit()
 
 
 @pytest.mark.unit
@@ -340,6 +357,34 @@ class TestRepositoriesCreate:
         )
 
         assert response.status_code == 401
+
+    def test_create_repository_delegates_borg2_payloads_to_v2_api(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+
+        with patch(
+            "app.api.v2.repositories._rcreate",
+            new=AsyncMock(return_value={"success": True, "already_existed": False, "stdout": "", "stderr": ""}),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Delegated Borg2 Repo",
+                    "path": "/tmp/delegated-borg2-repo",
+                    "borg_version": 2,
+                    "encryption": "repokey-aes-ocb",
+                    "compression": "lz4",
+                    "source_directories": ["/data/source"],
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = test_db.query(Repository).filter(Repository.name == "Delegated Borg2 Repo").first()
+        assert repo is not None
+        assert repo.borg_version == 2
+        assert repo.encryption == "repokey-aes-ocb"
 
     def test_create_repository_duplicate_path(self, test_client: TestClient, admin_headers, test_db):
         """Test creating repository with duplicate path"""
@@ -667,6 +712,44 @@ class TestRepositoriesUpdate:
             assert repo.path == existing_repo_path
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_update_v2_repository_path_uses_borg2_reinit(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="V2 Path Change Repo",
+            path="/tmp/v2-initial",
+            encryption="repokey-aes-ocb",
+            compression="lz4",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.v2.repositories._rinfo",
+            new=AsyncMock(return_value={"success": False, "stderr": "missing"}),
+        ) as mock_rinfo, patch(
+            "app.api.v2.repositories._rcreate",
+            new=AsyncMock(return_value={"success": True, "stderr": ""}),
+        ) as mock_rcreate, patch(
+            "app.api.repositories.initialize_borg_repository",
+            new=AsyncMock(return_value={"success": True}),
+        ) as mock_v1_init, patch(
+            "app.api.repositories.mqtt_service.sync_state_with_db"
+        ):
+            response = test_client.put(
+                f"/api/repositories/{repo.id}",
+                json={"path": "/tmp/v2-new-path"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        mock_rinfo.assert_awaited_once()
+        mock_rcreate.assert_awaited_once()
+        mock_v1_init.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -1010,6 +1093,32 @@ class TestRepositoriesImport:
         assert body["success"] is True
         assert body["repository"]["encryption"] == "none"
         assert mock_verify.await_args.args[1] is None
+
+    def test_import_repository_delegates_borg2_payloads_to_v2_api(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+
+        with patch(
+            "app.api.v2.repositories._rinfo",
+            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({"repository": {"id": 1}}), "stderr": ""}),
+        ):
+            response = test_client.post(
+                "/api/repositories/import",
+                json={
+                    "name": "Delegated Borg2 Import",
+                    "path": "/tmp/delegated-borg2-import",
+                    "borg_version": 2,
+                    "encryption": "none",
+                    "source_directories": ["/data/source"],
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = test_db.query(Repository).filter(Repository.name == "Delegated Borg2 Import").first()
+        assert repo is not None
+        assert repo.borg_version == 2
 
 
 @pytest.mark.unit

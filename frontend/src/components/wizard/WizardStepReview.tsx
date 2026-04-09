@@ -15,6 +15,7 @@ interface SSHConnection {
 
 export interface WizardReviewData {
   name: string
+  borgVersion?: 1 | 2
   repositoryMode: 'full' | 'observe'
   repositoryLocation: 'local' | 'ssh'
   path: string
@@ -128,6 +129,7 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
         data.repositoryMode === 'full' && (
           <CommandPreview
             mode={mode === 'create' ? 'create' : 'import'}
+            borgVersion={data.borgVersion}
             repositoryPath={data.path}
             repositoryLocation={data.repositoryLocation}
             host={repoDetails.host}

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
 import structlog
 import os
@@ -15,6 +15,7 @@ from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access, decrypt_secret
 from app.core.borg import BorgInterface
 from app.core.borg_errors import is_lock_error
+from app.core.features import FEATURES, get_current_plan, plan_includes
 from app.config import settings
 from app.services.check_service import check_service
 from app.services.compact_service import compact_service
@@ -24,6 +25,13 @@ from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"], dependencies=[Depends(authorize_request)])
+
+V2_ONLY_ENCRYPTION_MODES = {
+    "repokey-aes-ocb",
+    "repokey-chacha20-poly1305",
+    "keyfile-aes-ocb",
+    "keyfile-chacha20-poly1305",
+}
 
 # Initialize Borg interface
 borg = BorgInterface()
@@ -331,6 +339,7 @@ from pydantic import BaseModel
 
 class RepositoryCreate(BaseModel):
     name: str
+    borg_version: Optional[int] = 1
     path: str
     encryption: str = "repokey"  # repokey, keyfile, none
     compression: str = "lz4"  # lz4, zstd, zlib, none
@@ -353,7 +362,9 @@ class RepositoryCreate(BaseModel):
 
 class RepositoryImport(BaseModel):
     name: str
+    borg_version: Optional[int] = 1
     path: str
+    encryption: str = "none"
     passphrase: Optional[str] = None  # Required if repository is encrypted
     compression: str = "lz4"  # Default compression for future backups
     source_directories: Optional[List[str]] = None  # List of directories to backup
@@ -406,6 +417,26 @@ class RepositoryInfo(BaseModel):
     is_active: bool
     created_at: str
     updated_at: Optional[str]
+
+
+def _uses_borg2_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
+    requested_version = getattr(data, "borg_version", 1) or 1
+    return requested_version == 2 or data.encryption in V2_ONLY_ENCRYPTION_MODES
+
+
+def _require_borg2_feature(db: Session) -> None:
+    current_plan = get_current_plan(db)
+    required = FEATURES["borg_v2"]
+    if not plan_includes(current_plan, required):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "key": "backend.errors.plan.featureNotAvailable",
+                "feature": "borg_v2",
+                "required": required.value,
+                "current": current_plan.value,
+            },
+        )
 
 @router.get("/")
 async def get_repositories(
@@ -496,6 +527,13 @@ async def create_repository(
 ):
     """Create a new repository"""
     try:
+        if _uses_borg2_payload(repo_data):
+            _require_borg2_feature(db)
+            from app.api.v2.repositories import RepositoryV2Create, create_repository as create_repository_v2
+
+            v2_payload = RepositoryV2Create(**repo_data.model_dump(exclude_none=True))
+            return await create_repository_v2(v2_payload, current_user, db)
+
         # Validate source directories are provided (only for full mode repositories)
         if repo_data.mode == "full":
             if not repo_data.source_directories or len(repo_data.source_directories) == 0:
@@ -744,6 +782,13 @@ async def import_repository(
 ):
     """Import an existing Borg repository"""
     try:
+        if _uses_borg2_payload(repo_data):
+            _require_borg2_feature(db)
+            from app.api.v2.repositories import RepositoryV2Import, import_repository as import_repository_v2
+
+            v2_payload = RepositoryV2Import(**repo_data.model_dump(exclude_none=True))
+            return await import_repository_v2(v2_payload, current_user, db)
+
         # Validate source directories are provided (only for full mode repositories)
         if repo_data.mode == "full":
             if not repo_data.source_directories or len(repo_data.source_directories) == 0:
@@ -1278,32 +1323,52 @@ async def update_repository(
                     connection_details = get_connection_details(repository.connection_id, db)
                     ssh_key_id_for_init = connection_details["ssh_key_id"]
 
-                # Check if the new path is already a borg repository
-                borg_interface = BorgInterface()
                 try:
-                    # Try to get repo info - if it succeeds, it's a valid borg repo
-                    info_result = await borg_interface.get_repository_info(
-                        repository.path,
-                        repository.passphrase,
-                        ssh_key_id_for_init,
-                        repository.remote_path
-                    )
-                    if info_result.get("success"):
-                        logger.info("New path is already a valid borg repository - no initialization needed",
-                                  new_path=repository.path)
-                    else:
-                        # Path is not a valid borg repo - initialize it
-                        logger.warning("New path is not a valid borg repository - initializing",
-                                     new_path=repository.path,
-                                     old_path=old_path)
+                    if (repository.borg_version or 1) == 2:
+                        from app.api.v2.repositories import _rcreate, _rinfo, _get_init_timeout
 
-                        init_result = await initialize_borg_repository(
+                        info_result = await _rinfo(
+                            path=repository.path,
+                            passphrase=repository.passphrase,
+                            ssh_key_id=ssh_key_id_for_init,
+                            remote_path=repository.remote_path,
+                            timeout=get_operation_timeouts(db)["info_timeout"],
+                        )
+                    else:
+                        borg_interface = BorgInterface()
+                        info_result = await borg_interface.get_repository_info(
                             repository.path,
-                            repository.encryption,
                             repository.passphrase,
                             ssh_key_id_for_init,
                             repository.remote_path
                         )
+
+                    if info_result.get("success"):
+                        logger.info("New path is already a valid borg repository - no initialization needed",
+                                  new_path=repository.path)
+                    else:
+                        logger.warning("New path is not a valid borg repository - initializing",
+                                     new_path=repository.path,
+                                     old_path=old_path,
+                                     borg_version=repository.borg_version or 1)
+
+                        if (repository.borg_version or 1) == 2:
+                            init_result = await _rcreate(
+                                path=repository.path,
+                                encryption=repository.encryption,
+                                passphrase=repository.passphrase,
+                                ssh_key_id=ssh_key_id_for_init,
+                                remote_path=repository.remote_path,
+                                init_timeout=_get_init_timeout(db),
+                            )
+                        else:
+                            init_result = await initialize_borg_repository(
+                                repository.path,
+                                repository.encryption,
+                                repository.passphrase,
+                                ssh_key_id_for_init,
+                                repository.remote_path
+                            )
 
                         if not init_result["success"]:
                             raise HTTPException(
@@ -1312,20 +1377,33 @@ async def update_repository(
                             )
 
                         logger.info("Successfully initialized borg repository at new path",
-                                  new_path=repository.path)
+                                  new_path=repository.path,
+                                  borg_version=repository.borg_version or 1)
                 except Exception as e:
-                    # If borg info fails, assume repo doesn't exist and initialize
                     logger.info("Could not verify borg repository - attempting initialization",
                               new_path=repository.path,
-                              error=str(e))
+                              error=str(e),
+                              borg_version=repository.borg_version or 1)
 
-                    init_result = await initialize_borg_repository(
-                        repository.path,
-                        repository.encryption,
-                        repository.passphrase,
-                        ssh_key_id_for_init,
-                        repository.remote_path
-                    )
+                    if (repository.borg_version or 1) == 2:
+                        from app.api.v2.repositories import _rcreate, _get_init_timeout
+
+                        init_result = await _rcreate(
+                            path=repository.path,
+                            encryption=repository.encryption,
+                            passphrase=repository.passphrase,
+                            ssh_key_id=ssh_key_id_for_init,
+                            remote_path=repository.remote_path,
+                            init_timeout=_get_init_timeout(db),
+                        )
+                    else:
+                        init_result = await initialize_borg_repository(
+                            repository.path,
+                            repository.encryption,
+                            repository.passphrase,
+                            ssh_key_id_for_init,
+                            repository.remote_path
+                        )
 
                     if not init_result["success"]:
                         raise HTTPException(
@@ -1334,7 +1412,8 @@ async def update_repository(
                         )
 
                     logger.info("Successfully initialized borg repository at new path after verification failure",
-                              new_path=repository.path)
+                              new_path=repository.path,
+                              borg_version=repository.borg_version or 1)
 
         if repo_data.compression is not None:
             repository.compression = repo_data.compression

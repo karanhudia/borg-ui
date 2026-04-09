@@ -8,6 +8,7 @@ import asyncio
 import json
 import os
 import tempfile
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from pydantic import BaseModel
@@ -48,6 +49,7 @@ class RepositoryV2Create(BaseModel):
     post_hook_timeout: int = 300
     continue_on_hook_failure: bool = False
     skip_on_hook_failure: bool = False
+    source_connection_id: Optional[int] = None
 
 
 class RepositoryV2Import(BaseModel):
@@ -62,6 +64,15 @@ class RepositoryV2Import(BaseModel):
     exclude_patterns: Optional[list[str]] = None
     mode: str = "full"
     bypass_lock: bool = False
+    custom_flags: Optional[str] = None
+    pre_backup_script: Optional[str] = None
+    post_backup_script: Optional[str] = None
+    pre_hook_timeout: int = 300
+    post_hook_timeout: int = 300
+    continue_on_hook_failure: bool = False
+    skip_on_hook_failure: bool = False
+    source_connection_id: Optional[int] = None
+    keyfile_content: Optional[str] = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -78,6 +89,12 @@ def _get_info_timeout(db: Session) -> int:
     if sys_settings and sys_settings.info_timeout:
         return sys_settings.info_timeout
     return 600
+
+
+def _borg_keyfile_name(repo_path: str) -> str:
+    """Derive a stable keyfile filename from the repository path."""
+    path = repo_path[len("ssh://"):] if repo_path.startswith("ssh://") else repo_path.lstrip("/")
+    return re.sub(r"[^a-zA-Z0-9]", "_", path)
 
 
 def _get_ssh_key_rsh(ssh_key_id: int, path: str) -> Optional[str]:
@@ -155,6 +172,29 @@ async def _rcreate(path: str, encryption: str, passphrase: Optional[str],
             "stderr": stderr.decode() if stderr else "",
             "already_existed": return_code == 2,
         }
+    finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            os.unlink(temp_key_file)
+
+
+async def _rinfo(path: str, passphrase: Optional[str], ssh_key_id: Optional[int],
+                 remote_path: Optional[str], timeout: int) -> dict:
+    """Run borg2 repo-info with proper SSH env if needed."""
+    borg_rsh, temp_key_file = _get_ssh_key_rsh(ssh_key_id, path)
+    try:
+        env = {}
+        if passphrase:
+            env["BORG_PASSPHRASE"] = passphrase
+        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+        if borg_rsh:
+            env["BORG_RSH"] = borg_rsh
+
+        cmd = [borg2.borg_cmd, "-r", path, "repo-info", "--json"]
+        if remote_path:
+            cmd.extend(["--remote-path", remote_path])
+
+        return await borg2._run(cmd, timeout=timeout, env=env or None)
     finally:
         if temp_key_file and os.path.exists(temp_key_file):
             os.unlink(temp_key_file)
@@ -241,6 +281,7 @@ async def create_repository(
         post_hook_timeout=data.post_hook_timeout,
         continue_on_hook_failure=data.continue_on_hook_failure,
         skip_on_hook_failure=data.skip_on_hook_failure,
+        source_ssh_connection_id=data.source_connection_id,
         borg_version=2,
         repository_type="ssh" if data.connection_id else "local",
     )
@@ -276,14 +317,36 @@ async def import_repository(
     if db.query(Repository).filter(Repository.path == data.path).first():
         raise HTTPException(status_code=409, detail={"key": "backend.errors.repo.pathExists"})
 
+    # Resolve SSH connection details if given
+    ssh_key_id = None
+    if data.connection_id:
+        from app.database.models import SSHConnection
+        conn = db.query(SSHConnection).filter(SSHConnection.id == data.connection_id).first()
+        if not conn:
+            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.sshConnectionNotFound"})
+        ssh_key_id = conn.ssh_key_id
+
+    keyfile_path = None
+    if data.keyfile_content:
+        keyfile_dir = os.path.join(os.path.expanduser("~"), ".config", "borg", "keys")
+        os.makedirs(keyfile_dir, exist_ok=True)
+        keyfile_path = os.path.join(keyfile_dir, _borg_keyfile_name(data.path))
+        with open(keyfile_path, "w", encoding="utf-8") as f:
+            f.write(data.keyfile_content)
+        os.chmod(keyfile_path, 0o600)
+
     # Verify the repo is accessible with borg2 rinfo
     logger.info("Verifying borg2 repository exists", path=data.path)
-    result = await borg2.rinfo(
-        repository=data.path,
+    result = await _rinfo(
+        path=data.path,
         passphrase=data.passphrase,
+        ssh_key_id=ssh_key_id,
         remote_path=data.remote_path,
+        timeout=_get_info_timeout(db),
     )
     if not result["success"]:
+        if keyfile_path and os.path.exists(keyfile_path):
+            os.unlink(keyfile_path)
         logger.error("borg2 rinfo verification failed", stderr=result["stderr"])
         raise HTTPException(
             status_code=400,
@@ -306,6 +369,15 @@ async def import_repository(
         remote_path=data.remote_path,
         mode=data.mode,
         bypass_lock=data.bypass_lock,
+        custom_flags=data.custom_flags,
+        pre_backup_script=data.pre_backup_script,
+        post_backup_script=data.post_backup_script,
+        pre_hook_timeout=data.pre_hook_timeout,
+        post_hook_timeout=data.post_hook_timeout,
+        continue_on_hook_failure=data.continue_on_hook_failure,
+        skip_on_hook_failure=data.skip_on_hook_failure,
+        source_ssh_connection_id=data.source_connection_id,
+        has_keyfile=bool(keyfile_path),
         borg_version=2,
         repository_type="ssh" if data.connection_id else "local",
     )

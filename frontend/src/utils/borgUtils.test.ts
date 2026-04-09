@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { generateBorgCreateCommand, BorgCommandOptions } from './borgUtils'
+import { generateBorgCreateCommand, generateBorgInitCommand, BorgCommandOptions } from './borgUtils'
 
 describe('generateBorgCreateCommand', () => {
   it('generates valid command with all options', () => {
@@ -29,6 +29,17 @@ describe('generateBorgCreateCommand', () => {
     expect(cmd).toContain('/data /home')
     expect(cmd).toContain('--stats --json')
     expect(cmd).toContain('--progress')
+  })
+
+  it('uses borg2 binary when borgVersion is 2', () => {
+    const cmd = generateBorgCreateCommand({
+      repositoryPath: '/backups/repo',
+      borgVersion: 2,
+      sourceDirs: ['/data'],
+    })
+
+    expect(cmd).toContain('borg2 create')
+    expect(cmd).not.toContain('borg create')
   })
 
   it('generates minimal command with defaults', () => {
@@ -249,5 +260,27 @@ describe('generateBorgCreateCommand', () => {
 
     expect(cmd).toBeTruthy()
     expect(cmd).toContain('borg create')
+  })
+})
+
+describe('generateBorgInitCommand', () => {
+  it('generates borg init for Borg 1', () => {
+    const cmd = generateBorgInitCommand({
+      repositoryPath: '/backups/repo',
+      borgVersion: 1,
+      encryption: 'repokey',
+    })
+
+    expect(cmd).toBe('borg init --encryption repokey /backups/repo')
+  })
+
+  it('generates borg2 repo-create for Borg 2', () => {
+    const cmd = generateBorgInitCommand({
+      repositoryPath: '/backups/repo',
+      borgVersion: 2,
+      encryption: 'repokey-aes-ocb',
+    })
+
+    expect(cmd).toBe('borg2 -r /backups/repo repo-create --encryption repokey-aes-ocb')
   })
 })

@@ -5,8 +5,32 @@ These tests use actual borg repositories to verify end-to-end functionality.
 """
 import pytest
 import json
+import shutil
+import subprocess
 from fastapi.testclient import TestClient
 from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
+from tests.utils.borg import make_borg_test_env
+
+
+def _require_borg2_binary() -> str:
+    borg2_path = shutil.which("borg2")
+    if not borg2_path:
+        pytest.skip("Borg 2 binary not found. Install borg2 to run this integration test.")
+    return borg2_path
+
+
+def _enable_borg_v2(test_db) -> None:
+    from app.database.models import LicensingState
+
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="integration-borg-v2")
+        test_db.add(state)
+
+    state.plan = "pro"
+    state.status = "active"
+    state.is_trial = False
+    test_db.commit()
 
 
 @pytest.mark.integration
@@ -84,6 +108,108 @@ class TestRepositoryInitialization:
 
         assert repo_data["name"] == "Encrypted Init Repo"
         assert repo_data["encryption"] == "repokey"
+
+
+@pytest.mark.integration
+class TestRepositoryInitializationV2:
+    """Test Borg 2 repository create/import delegation with real borg2 operations."""
+
+    def test_create_repository_v2_via_legacy_route(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        borg2_binary = _require_borg2_binary()
+        _enable_borg_v2(test_db)
+
+        repo_path = tmp_path / "borg2-create-repo"
+        source_path = tmp_path / "borg2-create-source"
+        source_path.mkdir()
+        (source_path / "hello.txt").write_text("borg2 integration create\n", encoding="utf-8")
+
+        response = test_client.post(
+            "/api/repositories/",
+            json={
+                "name": "Borg2 Create Repo",
+                "path": str(repo_path),
+                "borg_version": 2,
+                "encryption": "none",
+                "compression": "lz4",
+                "source_directories": [str(source_path)],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        repo_data = response.json().get("repository", response.json())
+        assert repo_data["borg_version"] == 2
+        assert repo_data["encryption"] == "none"
+
+        info_response = test_client.get(
+            f"/api/v2/repositories/{repo_data['id']}/info",
+            headers=admin_headers,
+        )
+        assert info_response.status_code == 200, info_response.json()
+        info_payload = info_response.json()
+        assert info_payload["borg_version"] == 2
+
+        result = subprocess.run(
+            [borg2_binary, "-r", str(repo_path), "repo-info", "--json"],
+            capture_output=True,
+            text=True,
+            env=make_borg_test_env(str(tmp_path)),
+        )
+        assert result.returncode == 0, result.stderr
+
+    def test_import_repository_v2_via_legacy_route(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        borg2_binary = _require_borg2_binary()
+        _enable_borg_v2(test_db)
+
+        repo_path = tmp_path / "borg2-import-repo"
+        source_path = tmp_path / "borg2-import-source"
+        source_path.mkdir()
+        (source_path / "notes.txt").write_text("borg2 integration import\n", encoding="utf-8")
+
+        create_result = subprocess.run(
+            [borg2_binary, "-r", str(repo_path), "repo-create", "--encryption", "none"],
+            capture_output=True,
+            text=True,
+            env=make_borg_test_env(str(tmp_path)),
+        )
+        assert create_result.returncode == 0, create_result.stderr
+
+        response = test_client.post(
+            "/api/repositories/import",
+            json={
+                "name": "Borg2 Imported Repo",
+                "path": str(repo_path),
+                "borg_version": 2,
+                "encryption": "none",
+                "compression": "lz4",
+                "source_directories": [str(source_path)],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        repo_data = response.json().get("repository", response.json())
+        assert repo_data["borg_version"] == 2
+
+        info_response = test_client.get(
+            f"/api/v2/repositories/{repo_data['id']}/info",
+            headers=admin_headers,
+        )
+        assert info_response.status_code == 200, info_response.json()
+        info_payload = info_response.json()
+        assert info_payload["borg_version"] == 2
 
 
 @pytest.mark.integration

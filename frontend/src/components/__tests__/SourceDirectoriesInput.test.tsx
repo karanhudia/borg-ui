@@ -31,21 +31,19 @@ describe('SourceDirectoriesInput', () => {
       expect(screen.getByText(/optional/)).toBeInTheDocument()
     })
 
-    it('shows warning alert when required and no directories', () => {
+    it('shows tooltip helper icon when required and no directories', () => {
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} required={true} />)
-      expect(
-        screen.getByText(/At least one source directory or file is required/)
-      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /source directories.*help/i })).toBeInTheDocument()
     })
 
-    it('does not show warning alert when required=false and no directories', () => {
+    it('does not show tooltip helper icon when required=false and no directories', () => {
       render(<SourceDirectoriesInput directories={[]} onChange={mockOnChange} required={false} />)
       expect(
-        screen.queryByText(/At least one source directory or file is required/)
+        screen.queryByRole('button', { name: /source directories.*help/i })
       ).not.toBeInTheDocument()
     })
 
-    it('does not show warning alert when directories exist', () => {
+    it('still keeps the helper icon available when directories exist', () => {
       render(
         <SourceDirectoriesInput
           directories={['/home/user/docs']}
@@ -53,9 +51,7 @@ describe('SourceDirectoriesInput', () => {
           required={true}
         />
       )
-      expect(
-        screen.queryByText(/At least one source directory is required/)
-      ).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /source directories.*help/i })).toBeInTheDocument()
     })
 
     it('renders existing directories', () => {

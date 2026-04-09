@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Typography, Paper } from '@mui/material'
-import { generateBorgCreateCommand } from '../utils/borgUtils'
+import { generateBorgCreateCommand, generateBorgInitCommand } from '../utils/borgUtils'
 import { useTranslation } from 'react-i18next'
 
 interface SourceSshConnection {
@@ -11,7 +11,9 @@ interface SourceSshConnection {
 
 interface CommandPreviewProps {
   mode: 'create' | 'import'
+  displayMode?: 'detailed' | 'backup-only'
   repositoryPath: string
+  borgVersion?: 1 | 2
   repositoryLocation?: 'local' | 'ssh'
   host?: string
   username?: string
@@ -48,7 +50,9 @@ const CommandBox = ({ children }: { children: React.ReactNode }) => (
 
 export default function CommandPreview({
   mode,
+  displayMode = 'detailed',
   repositoryPath,
+  borgVersion = 1,
   repositoryLocation = 'local',
   host,
   username,
@@ -75,7 +79,12 @@ export default function CommandPreview({
   const remotePathFlag = remotePath ? `--remote-path ${remotePath} ` : ''
 
   // Generate init command
-  const initCommand = `borg init --encryption ${encryption} ${remotePathFlag}${fullRepoPath}`
+  const initCommand = generateBorgInitCommand({
+    repositoryPath: fullRepoPath,
+    borgVersion,
+    encryption,
+    remotePathFlag,
+  })
 
   // For remote source, show the preserved path structure (strips leading slash)
   // Example: /var/snap/docker/.../portainer/_data -> var/snap/docker/.../portainer/_data
@@ -93,12 +102,24 @@ export default function CommandPreview({
   // Note: Exclude patterns now work for remote sources since paths are preserved
   const createCommand = generateBorgCreateCommand({
     repositoryPath: fullRepoPath,
+    borgVersion,
     compression,
     excludePatterns: excludePatterns,
     sourceDirs: effectiveSourceDirs,
     customFlags,
     remotePathFlag,
   })
+
+  if (displayMode === 'backup-only') {
+    return (
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+        <Typography variant="subtitle2" gutterBottom sx={{ mb: 1.5 }}>
+          {t('backup.commandPreview')}
+        </Typography>
+        <CommandBox>{createCommand}</CommandBox>
+      </Paper>
+    )
+  }
 
   // For remote source backup flow
   if (isRemoteSource && repositoryMode === 'full') {

@@ -82,6 +82,7 @@ class TestV2RepositoryRoutes:
             "encryption": "repokey-aes-ocb",
             "compression": "lz4",
             "source_directories": ["/data/source-a", "/data/source-b"],
+            "source_connection_id": 44,
         }
 
         with patch(
@@ -102,6 +103,7 @@ class TestV2RepositoryRoutes:
         assert repo is not None
         assert repo.borg_version == 2
         assert json.loads(repo.source_directories) == payload["source_directories"]
+        assert repo.source_ssh_connection_id == 44
         mock_rcreate.assert_awaited_once()
 
     def test_create_repository_rejects_invalid_encryption(self, test_client: TestClient, admin_headers, test_db):
@@ -240,7 +242,7 @@ class TestV2RepositoryRoutes:
         _enable_borg_v2(test_db)
 
         with patch(
-            "app.api.v2.repositories.borg2.rinfo",
+            "app.api.v2.repositories._rinfo",
             new=AsyncMock(return_value={"success": False, "stderr": "repo missing"}),
         ):
             response = test_client.post(
@@ -260,7 +262,7 @@ class TestV2RepositoryRoutes:
         _enable_borg_v2(test_db)
 
         with patch(
-            "app.api.v2.repositories.borg2.rinfo",
+            "app.api.v2.repositories._rinfo",
             new=AsyncMock(return_value={"success": True, "stdout": json.dumps({"repository": {"id": 1}}), "stderr": ""}),
         ):
             response = test_client.post(
@@ -270,6 +272,10 @@ class TestV2RepositoryRoutes:
                     "path": "/tmp/v2-import-success",
                     "encryption": "none",
                     "source_directories": ["/data/source"],
+                    "source_connection_id": 55,
+                    "custom_flags": "--stats",
+                    "pre_backup_script": "echo pre",
+                    "post_backup_script": "echo post",
                 },
                 headers=admin_headers,
             )
@@ -278,6 +284,43 @@ class TestV2RepositoryRoutes:
         body = response.json()
         assert body["name"] == "Imported Repo"
         assert body["borg_version"] == 2
+        repo = test_db.query(Repository).filter(Repository.name == "Imported Repo").first()
+        assert repo is not None
+        assert repo.source_ssh_connection_id == 55
+        assert repo.custom_flags == "--stats"
+        assert repo.pre_backup_script == "echo pre"
+        assert repo.post_backup_script == "echo post"
+
+    def test_import_repository_writes_keyfile_content_for_verification(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
+        _enable_borg_v2(test_db)
+
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+
+        with patch("app.api.v2.repositories.os.path.expanduser", return_value=str(fake_home)), patch(
+            "app.api.v2.repositories._rinfo",
+            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({"repository": {"id": 1}}), "stderr": ""}),
+        ):
+            response = test_client.post(
+                "/api/v2/repositories/import",
+                json={
+                    "name": "Imported Keyfile Repo",
+                    "path": "/tmp/v2-import-keyfile",
+                    "encryption": "keyfile-aes-ocb",
+                    "keyfile_content": "BORG_KEY sample-key",
+                    "source_directories": ["/data/source"],
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 201
+        repo = test_db.query(Repository).filter(Repository.name == "Imported Keyfile Repo").first()
+        assert repo is not None
+        assert repo.has_keyfile is True
+        keyfile_name = "tmp_v2_import_keyfile"
+        assert (fake_home / ".config" / "borg" / "keys" / keyfile_name).exists()
 
     def test_import_repository_rejects_duplicate_path(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)

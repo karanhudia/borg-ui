@@ -620,6 +620,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             mode={mode}
             data={{
               name: wizardState.name,
+              borgVersion: wizardState.borgVersion,
               repositoryMode: wizardState.repositoryMode,
               repositoryLocation: wizardState.repositoryLocation,
               path: wizardState.path,

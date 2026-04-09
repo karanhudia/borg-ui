@@ -155,6 +155,21 @@ describe('WizardStepLocation', () => {
 
       expect(onBrowsePath).toHaveBeenCalled()
     })
+
+    it('shows Borg 2 beta as tooltip affordance without inline alert', () => {
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={{ ...defaultData, borgVersion: 2 }}
+          sshConnections={[]}
+          onChange={vi.fn()}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Beta')).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
   })
 
   describe('Import Mode', () => {
