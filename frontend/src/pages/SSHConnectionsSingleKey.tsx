@@ -28,7 +28,19 @@ import {
   useTheme,
   alpha,
 } from '@mui/material'
-import { Key, Copy, RefreshCw, Wifi, CheckCircle, XCircle, Plus, Trash2, Info } from 'lucide-react'
+import {
+  Key,
+  Copy,
+  RefreshCw,
+  Wifi,
+  CheckCircle,
+  XCircle,
+  Plus,
+  Trash2,
+  Info,
+  Eye,
+  EyeOff,
+} from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RemoteMachineCard from '../components/RemoteMachineCard'
@@ -130,6 +142,7 @@ export default function SSHConnectionsSingleKey() {
   const isDark = theme.palette.mode === 'dark'
 
   // State
+  const [keyVisible, setKeyVisible] = useState(false)
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [deployDialogOpen, setDeployDialogOpen] = useState(false)
@@ -646,12 +659,13 @@ export default function SSHConnectionsSingleKey() {
                 </Box>
                 <Typography
                   sx={{
-                    fontSize: { xs: '0.62rem', sm: '0.6rem' },
+                    fontSize: { xs: '0.58rem', sm: '0.6rem' },
                     fontWeight: 700,
                     textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
+                    letterSpacing: '0.04em',
                     color: alpha(stat.color, 0.75),
                     lineHeight: 1.2,
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {stat.label}
@@ -770,25 +784,19 @@ export default function SSHConnectionsSingleKey() {
 
                 {/* Public Key */}
                 <Box>
-                  <Stack
-                    direction="row"
-                    alignItems="center"
-                    justifyContent="space-between"
-                    sx={{ mb: 0.5 }}
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ mb: 0.5, display: 'block' }}
                   >
-                    <Typography variant="caption" color="text.secondary">
-                      {t('sshConnections.systemKey.publicKey')}
-                    </Typography>
-                    <Tooltip title="Copy to clipboard">
-                      <IconButton size="small" onClick={handleCopyPublicKey} sx={{ ml: 1 }}>
-                        <Copy size={16} />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
+                    {t('sshConnections.systemKey.publicKey')}
+                  </Typography>
                   <Box
                     sx={{
+                      position: 'relative',
                       bgcolor: 'background.default',
                       p: 1.5,
+                      pr: 8,
                       borderRadius: 1,
                       border: '1px solid',
                       borderColor: 'divider',
@@ -802,10 +810,29 @@ export default function SSHConnectionsSingleKey() {
                         wordBreak: 'break-all',
                         maxHeight: '100px',
                         overflow: 'auto',
+                        filter: keyVisible ? 'none' : 'blur(4px)',
+                        userSelect: keyVisible ? 'auto' : 'none',
+                        transition: 'filter 0.2s ease',
                       }}
                     >
                       {systemKey?.public_key || 'N/A'}
                     </Typography>
+                    <Stack
+                      direction="row"
+                      spacing={0.25}
+                      sx={{ position: 'absolute', top: 6, right: 6 }}
+                    >
+                      <Tooltip title={keyVisible ? 'Hide key' : 'Reveal key'}>
+                        <IconButton size="small" onClick={() => setKeyVisible((v) => !v)}>
+                          {keyVisible ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Copy to clipboard">
+                        <IconButton size="small" onClick={handleCopyPublicKey}>
+                          <Copy size={15} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
                   </Box>
                 </Box>
 
@@ -830,16 +857,6 @@ export default function SSHConnectionsSingleKey() {
                       sx={{ width: { xs: '100%', sm: 'auto' } }}
                     >
                       {t('sshConnections.systemKey.actions.addManual')}
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="Copy public key to clipboard">
-                    <Button
-                      variant="outlined"
-                      startIcon={<Copy size={18} />}
-                      onClick={handleCopyPublicKey}
-                      sx={{ width: { xs: '100%', sm: 'auto' } }}
-                    >
-                      {t('sshConnections.systemKey.actions.copy')}
                     </Button>
                   </Tooltip>
                   <Tooltip title="Delete system SSH key (connections will be preserved)">
