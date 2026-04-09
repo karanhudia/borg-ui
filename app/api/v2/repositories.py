@@ -7,7 +7,6 @@ The borg2 core wrapper is the ONLY borg binary interaction here — never borg.p
 import asyncio
 import json
 import os
-import tempfile
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
@@ -16,12 +15,13 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import structlog
 
-from app.database.database import get_db, SessionLocal
+from app.database.database import get_db
 from app.database.models import User, Repository, SystemSettings
-from app.core.security import get_current_user, decrypt_secret
+from app.core.security import get_current_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2, BORG2_ENCRYPTION_MODES
 from app.config import settings
+from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
 
 logger = structlog.get_logger()
@@ -95,109 +95,32 @@ def _borg_keyfile_name(repo_path: str) -> str:
     """Derive a stable keyfile filename from the repository path."""
     path = repo_path[len("ssh://"):] if repo_path.startswith("ssh://") else repo_path.lstrip("/")
     return re.sub(r"[^a-zA-Z0-9]", "_", path)
-
-
-def _get_ssh_key_rsh(ssh_key_id: int, path: str) -> Optional[str]:
-    """Decrypt and write SSH key to a temp file; return (BORG_RSH value, temp_path).
-
-    Returns None if no key is needed (local repo or no key ID).
-    Caller is responsible for deleting the temp file.
-    """
-    if not ssh_key_id or not path.startswith("ssh://"):
-        return None, None
-
-    from app.database.models import SSHKey
-
-    db = SessionLocal()
-    try:
-        ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-        if not ssh_key:
-            raise ValueError(f"SSH key {ssh_key_id} not found")
-
-        private_key = decrypt_secret(ssh_key.private_key)
-    finally:
-        db.close()
-
-    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
-        f.write(private_key)
-        temp_path = f.name
-    os.chmod(temp_path, 0o600)
-
-    ssh_opts = [
-        "-i", temp_path,
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "UserKnownHostsFile=/dev/null",
-        "-o", "LogLevel=ERROR",
-        "-o", "RequestTTY=no",
-        "-o", "PermitLocalCommand=no",
-    ]
-    return f"ssh {' '.join(ssh_opts)}", temp_path
-
-
 async def _rcreate(path: str, encryption: str, passphrase: Optional[str],
                    ssh_key_id: Optional[int], remote_path: Optional[str],
                    init_timeout: int) -> dict:
     """Run borg2 rcreate with proper SSH env if needed."""
-    borg_rsh, temp_key_file = _get_ssh_key_rsh(ssh_key_id, path)
-    try:
-        env = {}
-        if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
-        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-        if borg_rsh:
-            env["BORG_RSH"] = borg_rsh
-
-        cmd = [borg2.borg_cmd, "-r", path, "repo-create", "--encryption", encryption]
-        if remote_path:
-            cmd.extend(["--remote-path", remote_path])
-
-        exec_env = os.environ.copy()
-        exec_env.update(env)
-        exec_env["BORG_LOCK_WAIT"] = "20"
-        exec_env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=exec_env,
-        )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=init_timeout)
-        return_code = process.returncode
-        return {
-            "success": return_code == 0,
-            "return_code": return_code,
-            "stdout": stdout.decode() if stdout else "",
-            "stderr": stderr.decode() if stderr else "",
-            "already_existed": return_code == 2,
-        }
-    finally:
-        if temp_key_file and os.path.exists(temp_key_file):
-            os.unlink(temp_key_file)
+    result = await repository_v2_service.initialize_repository(
+        path=path,
+        encryption=encryption,
+        passphrase=passphrase,
+        ssh_key_id=ssh_key_id,
+        remote_path=remote_path,
+        init_timeout=init_timeout,
+    )
+    result["already_existed"] = result.get("return_code") == 2
+    return result
 
 
 async def _rinfo(path: str, passphrase: Optional[str], ssh_key_id: Optional[int],
                  remote_path: Optional[str], timeout: int) -> dict:
     """Run borg2 repo-info with proper SSH env if needed."""
-    borg_rsh, temp_key_file = _get_ssh_key_rsh(ssh_key_id, path)
-    try:
-        env = {}
-        if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
-        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-        if borg_rsh:
-            env["BORG_RSH"] = borg_rsh
-
-        cmd = [borg2.borg_cmd, "-r", path, "repo-info", "--json"]
-        if remote_path:
-            cmd.extend(["--remote-path", remote_path])
-
-        return await borg2._run(cmd, timeout=timeout, env=env or None)
-    finally:
-        if temp_key_file and os.path.exists(temp_key_file):
-            os.unlink(temp_key_file)
+    return await repository_v2_service.verify_repository(
+        path=path,
+        passphrase=passphrase,
+        ssh_key_id=ssh_key_id,
+        remote_path=remote_path,
+        timeout=timeout,
+    )
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────

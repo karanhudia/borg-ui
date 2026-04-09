@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
+from types import SimpleNamespace
 import structlog
 import os
 import subprocess
@@ -11,14 +12,24 @@ import json
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob, SystemSettings, UserRepositoryPermission
+from app.api.maintenance_jobs import (
+    create_maintenance_job,
+    get_job_with_repository,
+    get_repository_jobs,
+    get_repository_with_access,
+    read_job_logs,
+    schedule_background_job,
+    serialize_job_status,
+    serialize_job_summary,
+    ensure_no_running_job,
+)
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user, check_repo_access, decrypt_secret
 from app.core.borg import BorgInterface
+from app.core.borg_router import BorgRouter
 from app.core.borg_errors import is_lock_error
 from app.core.features import FEATURES, get_current_plan, plan_includes
 from app.config import settings
-from app.services.check_service import check_service
-from app.services.compact_service import compact_service
 from app.services.mqtt_service import mqtt_service
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.ssh_utils import resolve_repo_ssh_key_file
@@ -156,6 +167,169 @@ def _prepare_repository_borg_env(repository: Repository, db: Session):
     )
     return env, temp_key_file
 
+
+def _load_repository_with_access(
+    repo_id: int,
+    current_user: User,
+    db: Session,
+    required_role: str = "viewer",
+) -> Repository:
+    return get_repository_with_access(db, current_user, repo_id, required_role=required_role)
+
+
+def _lock_source(repository_enabled: bool, system_enabled: bool) -> str:
+    if repository_enabled:
+        return "repo_setting"
+    if system_enabled:
+        return "system_setting"
+    return "none"
+
+
+def _resolve_bypass_lock(repository: Repository, db: Session, setting_name: str) -> tuple[bool, str]:
+    system_settings = db.query(SystemSettings).first()
+    system_enabled = bool(system_settings and getattr(system_settings, setting_name, False))
+    use_bypass_lock = bool(repository.bypass_lock or system_enabled)
+    return use_bypass_lock, _lock_source(repository.bypass_lock, system_enabled)
+
+
+async def _run_repository_command(
+    repository: Repository,
+    db: Session,
+    cmd: List[str],
+    timeout: int,
+    *,
+    log_message: Optional[str] = None,
+    log_fields: Optional[Dict[str, Any]] = None,
+):
+    """Execute a repository-scoped Borg command with common SSH/env handling."""
+    env, temp_key_file = _prepare_repository_borg_env(repository, db)
+    try:
+        if temp_key_file and log_message:
+            logger.info(log_message, **(log_fields or {}))
+
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        return process.returncode, stdout, stderr
+    finally:
+        if temp_key_file and os.path.exists(temp_key_file):
+            try:
+                os.unlink(temp_key_file)
+            except Exception:
+                pass
+
+
+async def _run_repository_command_with_retries(
+    repository: Repository,
+    db: Session,
+    *,
+    repo_id: int,
+    cmd: List[str],
+    timeout: int,
+    bypass_lock: bool,
+    source: str,
+    command_label: str,
+    ssh_log_message: str,
+    failure_key: str,
+):
+    max_retries = 3
+    retry_delay = 1
+
+    for attempt in range(max_retries):
+        try:
+            logger.info(
+                command_label,
+                repo_id=repo_id,
+                command=" ".join(cmd),
+                bypass_lock=bypass_lock,
+                source=source,
+            )
+
+            returncode, stdout, stderr = await _run_repository_command(
+                repository,
+                db,
+                cmd,
+                timeout,
+                log_message=ssh_log_message,
+                log_fields={"repo_id": repo_id},
+            )
+
+            if returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                if is_lock_error(exit_code=returncode):
+                    logger.warning(
+                        f"Lock error detected on attempt {attempt + 1}/{max_retries}",
+                        repo_id=repo_id,
+                        borg_exit_code=returncode,
+                        error=error_msg,
+                    )
+                    raise HTTPException(
+                        status_code=423,
+                        detail={
+                            "error": "repository_locked",
+                            "message": "backend.errors.repo.repositoryLocked",
+                            "suggestion": "If no backup is currently running, this is likely a stale lock. You can break the lock to continue.",
+                            "repository_id": repo_id,
+                            "can_break_lock": True,
+                        },
+                    )
+
+                logger.error(failure_key, repo_id=repo_id, error=error_msg)
+                raise HTTPException(status_code=500, detail={"key": failure_key})
+
+            return stdout
+        except HTTPException:
+            raise
+        except asyncio.TimeoutError:
+            error_msg = "Operation timed out after 200 seconds. This can happen with slow SSH connections or large repositories."
+            if attempt < max_retries - 1:
+                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id)
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            logger.error("Repository command timed out after retries", repo_id=repo_id, failure_key=failure_key)
+            raise HTTPException(status_code=504, detail=error_msg)
+        except Exception as exc:
+            error_msg = str(exc) if str(exc) else f"Unknown error: {type(exc).__name__}"
+            if attempt < max_retries - 1:
+                logger.warning(f"Error on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id, error=error_msg)
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2
+                continue
+            logger.error("Repository command failed after retries", repo_id=repo_id, error=error_msg, failure_key=failure_key)
+            raise HTTPException(status_code=500, detail={"key": failure_key})
+
+
+def _parse_archive_files_output(stdout: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    files = []
+    for line in stdout.strip().split("\n"):
+        if not line:
+            continue
+        try:
+            file_obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        files.append(
+            {
+                "path": file_obj.get("path"),
+                "type": file_obj.get("type"),
+                "mode": file_obj.get("mode"),
+                "user": file_obj.get("user"),
+                "group": file_obj.get("group"),
+                "size": file_obj.get("size"),
+                "mtime": file_obj.get("mtime"),
+                "healthy": file_obj.get("healthy", True),
+            }
+        )
+        if limit and len(files) >= limit:
+            break
+    return files
+
 # Helper function to get operation timeouts from DB settings (with fallback to config)
 def get_operation_timeouts(db: Session = None) -> dict:
     """
@@ -213,14 +387,11 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
         env, temp_key_file = _prepare_repository_borg_env(repository, db)
 
+        router = BorgRouter(repository)
+
         # Get archive list and count
-        list_result = await borg.list_archives(
-            repository.path,
-            remote_path=repository.remote_path,
-            passphrase=repository.passphrase,
-            bypass_lock=use_bypass_lock,
-            env=env,
-        )
+        archives = await router.list_archives()
+        list_result = {"success": True, "stdout": archives}
 
         archive_count = 0
         total_size = None
@@ -262,12 +433,11 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
 
         # Get repository size from borg info (includes cache stats)
         # Use direct command execution with proper passphrase handling
-        cmd = ["borg", "info"]
+        cmd = router.build_repo_info_command(repository.path)
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
         if use_bypass_lock:
             cmd.append("--bypass-lock")
-        cmd.extend([repository.path, "--json"])
 
         # Get timeouts from DB settings (with fallback to config)
         timeouts = get_operation_timeouts(db)
@@ -830,9 +1000,11 @@ async def import_repository(
                     detail={"key": "backend.errors.repo.repositoryDirNotExist", "params": {"path": repo_path}}
                 )
 
-            # Check if it's a valid Borg repository by looking for config file
+            # Check if it's a valid Borg repository by looking for Borg's config file.
+            # A normal data directory can also contain a "config" subdirectory, which
+            # Borg will later reject with IsADirectoryError during backup.
             config_path = os.path.join(repo_path, "config")
-            if not os.path.exists(config_path):
+            if not os.path.isfile(config_path):
                 raise HTTPException(
                     status_code=400,
                     detail={"key": "backend.errors.repo.notValidBorgRepository", "params": {"path": repo_path}}
@@ -1116,25 +1288,12 @@ async def download_keyfile(
     try:
         import tempfile
 
-        env = os.environ.copy()
-        if repository.passphrase:
-            env["BORG_PASSPHRASE"] = repository.passphrase
-        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-
         with tempfile.NamedTemporaryFile(delete=False, suffix=".key") as tmp:
             tmp_path = tmp.name
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                "borg", "key", "export", repository.path, tmp_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env
-            )
-            _, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
-
-            if process.returncode != 0:
+            result = await BorgRouter(repository).export_keyfile(tmp_path)
+            if not result["success"]:
                 raise HTTPException(
                     status_code=500,
                     detail={"key": "backend.errors.repo.failedToExportKeyfile"}
@@ -1232,7 +1391,7 @@ async def update_repository(
         # Store raw path first (will be reconstructed for SSH below)
         raw_path = None
         if repo_data.path is not None:
-            raw_path = repo_data.path
+            raw_path = repo_data.path.strip()
 
         # Handle connection_id - allow null to clear (switch to local)
         if 'connection_id' in repo_data.model_dump(exclude_unset=True):
@@ -1324,24 +1483,11 @@ async def update_repository(
                     ssh_key_id_for_init = connection_details["ssh_key_id"]
 
                 try:
-                    if (repository.borg_version or 1) == 2:
-                        from app.api.v2.repositories import _rcreate, _rinfo, _get_init_timeout
-
-                        info_result = await _rinfo(
-                            path=repository.path,
-                            passphrase=repository.passphrase,
-                            ssh_key_id=ssh_key_id_for_init,
-                            remote_path=repository.remote_path,
-                            timeout=get_operation_timeouts(db)["info_timeout"],
-                        )
-                    else:
-                        borg_interface = BorgInterface()
-                        info_result = await borg_interface.get_repository_info(
-                            repository.path,
-                            repository.passphrase,
-                            ssh_key_id_for_init,
-                            repository.remote_path
-                        )
+                    router = BorgRouter(repository)
+                    info_result = await router.verify_repository(
+                        ssh_key_id=ssh_key_id_for_init,
+                        timeout=get_operation_timeouts(db)["info_timeout"],
+                    )
 
                     if info_result.get("success"):
                         logger.info("New path is already a valid borg repository - no initialization needed",
@@ -1352,23 +1498,10 @@ async def update_repository(
                                      old_path=old_path,
                                      borg_version=repository.borg_version or 1)
 
-                        if (repository.borg_version or 1) == 2:
-                            init_result = await _rcreate(
-                                path=repository.path,
-                                encryption=repository.encryption,
-                                passphrase=repository.passphrase,
-                                ssh_key_id=ssh_key_id_for_init,
-                                remote_path=repository.remote_path,
-                                init_timeout=_get_init_timeout(db),
-                            )
-                        else:
-                            init_result = await initialize_borg_repository(
-                                repository.path,
-                                repository.encryption,
-                                repository.passphrase,
-                                ssh_key_id_for_init,
-                                repository.remote_path
-                            )
+                        init_result = await router.initialize_repository(
+                            ssh_key_id=ssh_key_id_for_init,
+                            init_timeout=get_operation_timeouts(db)["init_timeout"],
+                        )
 
                         if not init_result["success"]:
                             raise HTTPException(
@@ -1385,25 +1518,10 @@ async def update_repository(
                               error=str(e),
                               borg_version=repository.borg_version or 1)
 
-                    if (repository.borg_version or 1) == 2:
-                        from app.api.v2.repositories import _rcreate, _get_init_timeout
-
-                        init_result = await _rcreate(
-                            path=repository.path,
-                            encryption=repository.encryption,
-                            passphrase=repository.passphrase,
-                            ssh_key_id=ssh_key_id_for_init,
-                            remote_path=repository.remote_path,
-                            init_timeout=_get_init_timeout(db),
-                        )
-                    else:
-                        init_result = await initialize_borg_repository(
-                            repository.path,
-                            repository.encryption,
-                            repository.passphrase,
-                            ssh_key_id_for_init,
-                            repository.remote_path
-                        )
+                    init_result = await BorgRouter(repository).initialize_repository(
+                        ssh_key_id=ssh_key_id_for_init,
+                        init_timeout=get_operation_timeouts(db)["init_timeout"],
+                    )
 
                     if not init_result["success"]:
                         raise HTTPException(
@@ -1617,44 +1735,27 @@ async def check_repository(
 ):
     """Start a background check job for repository integrity"""
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-        _require_repository_access(db, current_user, repository, "operator")
-
-        # Check if there's already a running check job for this repository
-        running_job = db.query(CheckJob).filter(
-            CheckJob.repository_id == repo_id,
-            CheckJob.status == "running"
-        ).first()
-
-        if running_job:
-            raise HTTPException(
-                status_code=409,
-                detail={"key": "backend.errors.repo.checkAlreadyRunning"}
-            )
+        repository = get_repository_with_access(db, current_user, repo_id, required_role="operator")
+        ensure_no_running_job(
+            db,
+            CheckJob,
+            repo_id,
+            error_key="backend.errors.repo.checkAlreadyRunning",
+        )
 
         # Extract max_duration from request body (default to 3600)
         max_duration = request.get("max_duration", 3600) if request else 3600
 
-        # Create check job record
-        check_job = CheckJob(
-            repository_id=repo_id,
-            status="pending",
-            max_duration=max_duration
+        check_job = create_maintenance_job(
+            db,
+            CheckJob,
+            repository,
+            extra_fields={
+                "max_duration": max_duration,
+            },
         )
-        db.add(check_job)
-        db.commit()
-        db.refresh(check_job)
 
-        # Execute check asynchronously (non-blocking)
-        asyncio.create_task(
-            check_service.execute_check(
-                check_job.id,
-                repo_id,
-                None  # Create new session for background task
-            )
-        )
+        schedule_background_job(BorgRouter(repository).check(check_job.id))
 
         logger.info("Check job created", job_id=check_job.id, repository_id=repo_id, user=current_user.username)
 
@@ -1677,42 +1778,24 @@ async def compact_repository(
 ):
     """Start a background compact job to free space"""
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-        _require_repository_access(db, current_user, repository, "operator")
-
-        # Check if there's already a running compact job for this repository
-        running_job = db.query(CompactJob).filter(
-            CompactJob.repository_id == repo_id,
-            CompactJob.status == "running"
-        ).first()
-
-        if running_job:
-            raise HTTPException(
-                status_code=409,
-                detail={"key": "backend.errors.repo.compactAlreadyRunning"}
-            )
-
-        # Create compact job record
-        compact_job = CompactJob(
-            repository_id=repo_id,
-            repository_path=repository.path,  # Capture path for display
-            status="pending",
-            scheduled_compact=False  # Manual trigger
+        repository = get_repository_with_access(db, current_user, repo_id, required_role="operator")
+        ensure_no_running_job(
+            db,
+            CompactJob,
+            repo_id,
+            error_key="backend.errors.repo.compactAlreadyRunning",
         )
-        db.add(compact_job)
-        db.commit()
-        db.refresh(compact_job)
 
-        # Execute compact asynchronously (non-blocking)
-        asyncio.create_task(
-            compact_service.execute_compact(
-                compact_job.id,
-                repo_id,
-                None  # Create new session for background task
-            )
+        compact_job = create_maintenance_job(
+            db,
+            CompactJob,
+            repository,
+            extra_fields={
+                "scheduled_compact": False,
+            },
         )
+
+        schedule_background_job(BorgRouter(repository).compact(compact_job.id))
 
         logger.info("Compact job created", job_id=compact_job.id, repository_id=repo_id, user=current_user.username)
 
@@ -1736,22 +1819,13 @@ async def prune_repository(
 ):
     """Start a background prune job to remove old archives based on retention policy"""
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-        _require_repository_access(db, current_user, repository, "operator")
-
-        # Check if there's already a running prune job for this repository
-        running_job = db.query(PruneJob).filter(
-            PruneJob.repository_id == repo_id,
-            PruneJob.status == "running"
-        ).first()
-
-        if running_job:
-            raise HTTPException(
-                status_code=409,
-                detail={"key": "backend.errors.repo.pruneAlreadyRunning"}
-            )
+        repository = get_repository_with_access(db, current_user, repo_id, required_role="operator")
+        ensure_no_running_job(
+            db,
+            PruneJob,
+            repo_id,
+            error_key="backend.errors.repo.pruneAlreadyRunning",
+        )
 
         # Extract retention policy from request
         keep_hourly = request.get("keep_hourly", 0)
@@ -1762,20 +1836,14 @@ async def prune_repository(
         keep_yearly = request.get("keep_yearly", 1)
         dry_run = request.get("dry_run", False)
 
-        # Create prune job record
-        prune_job = PruneJob(
-            repository_id=repo_id,
-            repository_path=repository.path,  # Capture path for display
-            status="pending",
-            scheduled_prune=False  # Manual trigger
+        prune_job = create_maintenance_job(
+            db,
+            PruneJob,
+            repository,
+            extra_fields={
+                "scheduled_prune": False,
+            },
         )
-        db.add(prune_job)
-        db.commit()
-        db.refresh(prune_job)
-
-        # Execute prune synchronously and return results
-        # (Prune operations are fast enough to wait for completion)
-        from app.services.prune_service import prune_service
 
         logger.info("Starting prune job",
                    job_id=prune_job.id,
@@ -1784,9 +1852,8 @@ async def prune_repository(
                    user=current_user.username)
 
         # Wait for prune to complete and get logs
-        await prune_service.execute_prune(
+        await BorgRouter(repository).prune(
             prune_job.id,
-            repo_id,
             keep_hourly,
             keep_daily,
             keep_weekly,
@@ -1794,24 +1861,14 @@ async def prune_repository(
             keep_quarterly,
             keep_yearly,
             dry_run,
-            db
         )
 
         # Refresh job to get updated status and logs
         db.refresh(prune_job)
 
         # Read log file if it exists
-        stdout_output = ""
+        stdout_output = read_job_logs(prune_job, fallback_to_logs=True)
         stderr_output = ""
-        if prune_job.log_file_path and os.path.exists(prune_job.log_file_path):
-            try:
-                with open(prune_job.log_file_path, 'r') as f:
-                    log_content = f.read()
-                    # All output goes to stdout for prune
-                    stdout_output = log_content
-            except Exception as e:
-                logger.warning("Failed to read prune log file", error=str(e))
-                stderr_output = f"Failed to read log file: {str(e)}"
 
         # Return results in format expected by frontend
         return {
@@ -1946,290 +2003,57 @@ async def check_remote_borg_installation(host: str, username: str, port: int, ss
             except Exception as e:
                 logger.warning("Failed to clean up temp SSH key", error=str(e))
 
-async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None, bypass_lock: bool = False) -> Dict[str, Any]:
+async def verify_existing_repository(path: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None, bypass_lock: bool = False, borg_version: int = 1) -> Dict[str, Any]:
     """Verify an existing Borg repository by running borg info"""
-    temp_key_file = None
     try:
         logger.info("Verifying existing repository", path=path, has_passphrase=bool(passphrase), bypass_lock=bypass_lock)
-
-        # Build borg info command
-        cmd = ["borg", "info", "--json"]
-
-        # Add bypass-lock if specified (for read-only repositories)
-        if bypass_lock:
-            cmd.append("--bypass-lock")
-
-        # Add remote-path if specified
-        if remote_path:
-            cmd.extend(["--remote-path", remote_path])
-
-        # Set up environment
-        env = os.environ.copy()
-        if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
-        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-
-        # Handle SSH key for remote repositories
-        if ssh_key_id and path.startswith("ssh://"):
-            logger.info("Repository is SSH type, loading SSH key", ssh_key_id=ssh_key_id)
-
-            # Get SSH key from database
-            from app.database.models import SSHKey
-            from app.database.database import get_db
-            from cryptography.fernet import Fernet
-            import base64
-            import tempfile
-
-            db = next(get_db())
-            ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-            if not ssh_key:
-                return {
-                    "success": False,
-                    "error": "SSH key not found"
-                }
-
-            # Decrypt private key
-            private_key = decrypt_secret(ssh_key.private_key)
-
-            # Create temporary key file
-            with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
-                f.write(private_key)
-                temp_key_file = f.name
-
-            os.chmod(temp_key_file, 0o600)
-
-            # Set SSH key environment variable
-            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
-            env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
-
-        # Add repository path
-        cmd.append(path)
-
-        # Get timeouts from DB settings (with fallback to config)
-        timeouts = get_operation_timeouts()
-
-        # Execute command
-        logger.info("Executing borg info command", command=" ".join(cmd), timeout=timeouts["info_timeout"])
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
+        repo_for_routing = SimpleNamespace(
+            path=path,
+            passphrase=passphrase,
+            remote_path=remote_path,
+            borg_version=borg_version,
+            bypass_lock=bypass_lock,
         )
-
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["info_timeout"])
-        stdout_str = stdout.decode() if stdout else ""
-        stderr_str = stderr.decode() if stderr else ""
-
-        if process.returncode == 0:
-            # Parse JSON output
-            try:
-                repo_info = json.loads(stdout_str)
-                logger.info("Repository verification successful",
-                           path=path,
-                           encryption=repo_info.get("encryption", {}).get("mode"),
-                           archive_count=len(repo_info.get("archives", [])))
-                return {
-                    "success": True,
-                    "info": repo_info
-                }
-            except json.JSONDecodeError as e:
-                logger.error("Failed to parse borg info output", error=str(e))
-                return {
-                    "success": False,
-                    "error": f"Failed to parse repository info: {str(e)}"
-                }
-        else:
-            logger.error("Repository verification failed",
-                        returncode=process.returncode,
-                        stderr=stderr_str)
-            return {
-                "success": False,
-                "error": stderr_str if stderr_str else "Repository verification failed"
-            }
-
-    except asyncio.TimeoutError:
-        logger.error("Repository verification timed out", path=path)
-        return {
-            "success": False,
-            "error": "Repository verification timed out"
-        }
+        return await BorgRouter(repo_for_routing).verify_repository(
+            ssh_key_id=ssh_key_id,
+            timeout=get_operation_timeouts()["info_timeout"],
+        )
     except Exception as e:
         logger.error("Failed to verify repository", path=path, error=str(e))
         return {
             "success": False,
             "error": str(e)
         }
-    finally:
-        # Clean up temporary SSH key file
-        if temp_key_file and os.path.exists(temp_key_file):
-            try:
-                os.unlink(temp_key_file)
-            except Exception as e:
-                logger.warning("Failed to clean up temp SSH key", error=str(e))
 
 async def initialize_borg_repository(path: str, encryption: str, passphrase: str = None, ssh_key_id: int = None, remote_path: str = None) -> Dict[str, Any]:
     """Initialize a new Borg repository"""
-    temp_key_file = None
-    try:
-        logger.info("Starting repository initialization",
-                   path=path,
-                   encryption=encryption,
-                   has_passphrase=bool(passphrase),
-                   ssh_key_id=ssh_key_id,
-                   remote_path=remote_path)
-
-        # Check if borg is available locally
-        try:
-            # Test if borg command exists
-            test_process = await asyncio.create_subprocess_exec(
-                "borg", "--version",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            borg_stdout, borg_stderr = await test_process.communicate()
-            if test_process.returncode != 0:
-                raise FileNotFoundError("borg command not found")
-            logger.info("Borg version check passed", version=borg_stdout.decode().strip())
-        except (FileNotFoundError, OSError) as e:
-            logger.error("Borg not available", error=str(e))
-            return {
-                "success": False,
-                "error": f"Borg not available on this system: {str(e)}"
-            }
-
-        # Build borg init command
-        cmd = ["borg", "init", "--encryption", encryption]
-
-        # Add remote-path argument if specified
-        if remote_path:
-            cmd.extend(["--remote-path", remote_path])
-            logger.info("Added remote-path to borg init command", remote_path=remote_path)
-
-        logger.info("Built borg init command", command=" ".join(cmd))
-
-        # Set up environment
-        env = os.environ.copy()
-        if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
-            logger.info("Passphrase added to environment")
-        # Allow non-interactive access to unencrypted repositories
-        env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-        env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-
-        # Handle SSH key for remote repositories
-        if ssh_key_id and path.startswith("ssh://"):
-            logger.info("Repository is SSH type, loading SSH key", ssh_key_id=ssh_key_id, path=path)
-
-            # Get SSH key from database
-            from app.database.models import SSHKey
-            from app.database.database import get_db
-            from cryptography.fernet import Fernet
-            import base64
-
-            db = next(get_db())
-            ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-            if not ssh_key:
-                logger.error("SSH key not found in database", ssh_key_id=ssh_key_id)
-                return {
-                    "success": False,
-                    "error": "SSH key not found"
-                }
-
-            logger.info("SSH key found", name=ssh_key.name, fingerprint=ssh_key.fingerprint[:20] + "...")
-
-            # Decrypt private key
-            private_key = decrypt_secret(ssh_key.private_key)
-            logger.info("SSH private key decrypted successfully")
-
-            # Create temporary key file
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
-                f.write(private_key)
-                temp_key_file = f.name
-
-            logger.info("Created temporary SSH key file", path=temp_key_file)
-
-            # Set restrictive permissions on private key file (required by SSH)
-            os.chmod(temp_key_file, 0o600)
-            logger.info("Set SSH key file permissions to 600")
-
-            # Set SSH key environment variable
-            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
-            borg_rsh = f"ssh {' '.join(ssh_opts)}"
-            env["BORG_RSH"] = borg_rsh
-            logger.info("Set BORG_RSH environment variable", borg_rsh=borg_rsh)
-
-        # Add repository path
-        cmd.append(path)
-        logger.info("Full borg init command prepared", command=" ".join(cmd), path=path)
-
-        # Get timeouts from DB settings (with fallback to config)
-        timeouts = get_operation_timeouts()
-
-        # Execute command
-        logger.info("Executing borg init command...", timeout=timeouts["init_timeout"])
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
-        )
-
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["init_timeout"])
-        stdout_str = stdout.decode() if stdout else ""
-        stderr_str = stderr.decode() if stderr else ""
-
-        logger.info("Borg init command completed",
-                   returncode=process.returncode,
-                   stdout=stdout_str[:500] if stdout_str else "(empty)",
-                   stderr=stderr_str[:500] if stderr_str else "(empty)")
-
-        if process.returncode == 0:
-            logger.info("Repository initialized successfully", path=path)
-            return {
-                "success": True,
-                "message": "backend.success.repo.repositoryInitialized",
-                "already_existed": False
-            }
-        else:
-            # Check if repository already exists (borg returns exit code 2)
-            if process.returncode == 2 and "repository already exists" in stderr_str.lower():
-                logger.info("Repository already exists at path, treating as success", path=path)
-                return {
-                    "success": True,
-                    "message": "backend.success.repo.repositoryAlreadyExists",
-                    "already_existed": True
-                }
-
-            logger.error("Repository initialization failed",
-                        returncode=process.returncode,
-                        stderr=stderr_str,
-                        stdout=stdout_str)
-            return {
-                "success": False,
-                "error": stderr_str if stderr_str else "Unknown error"
-            }
-    except Exception as e:
-        logger.error("Failed to initialize repository",
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    path=path)
+    logger.info("Starting repository initialization",
+               path=path,
+               encryption=encryption,
+               has_passphrase=bool(passphrase),
+               ssh_key_id=ssh_key_id,
+               remote_path=remote_path)
+    repo_for_routing = SimpleNamespace(
+        path=path,
+        encryption=encryption,
+        passphrase=passphrase,
+        remote_path=remote_path,
+        borg_version=1,
+    )
+    result = await BorgRouter(repo_for_routing).initialize_repository(
+        ssh_key_id=ssh_key_id,
+        init_timeout=get_operation_timeouts()["init_timeout"],
+    )
+    if result.get("success"):
+        result.setdefault("message", "backend.success.repo.repositoryInitialized")
+        result.setdefault("already_existed", False)
+    elif result.get("return_code") == 2 and "repository already exists" in (result.get("stderr") or "").lower():
         return {
-            "success": False,
-            "error": str(e)
+            "success": True,
+            "message": "backend.success.repo.repositoryAlreadyExists",
+            "already_existed": True,
         }
-    finally:
-        # Clean up temporary SSH key file
-        if temp_key_file and os.path.exists(temp_key_file):
-            try:
-                os.unlink(temp_key_file)
-                logger.info("Cleaned up temporary SSH key file", path=temp_key_file)
-            except Exception as e:
-                logger.warning("Failed to clean up temporary SSH key file",
-                             path=temp_key_file,
-                             error=str(e))
+    return result
 
 @router.get("/{repo_id}/archives")
 async def list_repository_archives(
@@ -2238,121 +2062,27 @@ async def list_repository_archives(
     db: Session = Depends(get_db)
 ):
     """List all archives in a repository using borg list"""
-    max_retries = 3
-    retry_delay = 1  # seconds - quick retry after breaking lock
-    temp_key_file = None
+    repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+    use_bypass_lock, source = _resolve_bypass_lock(repository, db, "bypass_lock_on_list")
+    router = BorgRouter(repository)
+    cmd = router.build_repo_list_command(repository.path)
+    if repository.remote_path:
+        cmd.extend(["--remote-path", repository.remote_path])
+    if use_bypass_lock:
+        cmd.append("--bypass-lock")
 
-    for attempt in range(max_retries):
-        try:
-            repository = db.query(Repository).filter(Repository.id == repo_id).first()
-            if not repository:
-                raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-            _require_repository_access(db, current_user, repository, "viewer")
-
-            # Get system settings for global bypass_lock_on_list setting
-            from app.database.models import SystemSettings
-            system_settings = db.query(SystemSettings).first()
-            use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
-
-            # Build borg list command
-            cmd = ["borg", "list"]
-
-            # Add remote-path if specified
-            if repository.remote_path:
-                cmd.extend(["--remote-path", repository.remote_path])
-
-            # Add --bypass-lock for read-only storage access (repo-specific or system-wide)
-            if use_bypass_lock:
-                cmd.append("--bypass-lock")
-
-            cmd.extend(["--json", repository.path])
-
-            # Set up environment — inject SSH key if repository uses key-based auth
-            temp_key_file = resolve_repo_ssh_key_file(repository, db)
-            if temp_key_file:
-                logger.info("Using SSH key for archive list", repo_id=repo_id)
-            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
-            env = setup_borg_env(
-                passphrase=repository.passphrase,
-                ssh_opts=ssh_opts
-            )
-
-            # Get timeouts from DB settings (with fallback to config)
-            timeouts = get_operation_timeouts(db)
-
-            # Log the command being executed (including bypass-lock status)
-            logger.info(
-                "Executing borg list command",
-                repo_id=repo_id,
-                command=" ".join(cmd),
-                bypass_lock=use_bypass_lock,
-                source="repo_setting" if repository.bypass_lock else ("system_setting" if (system_settings and system_settings.bypass_lock_on_list) else "none")
-            )
-
-            # Execute command with increased timeout to match BORG_LOCK_WAIT
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env
-            )
-
-            # Use configurable timeout to allow for large repositories and slow SSH connections
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["list_timeout"])
-
-            if process.returncode != 0:
-                error_msg = stderr.decode() if stderr else "Unknown error"
-
-                # Check if it's a lock error (exit codes 70-75) - return special error for user prompt
-                if is_lock_error(exit_code=process.returncode):
-                    logger.warning(f"Lock error detected on attempt {attempt + 1}/{max_retries}",
-                                 repo_id=repo_id,
-                                 borg_exit_code=process.returncode,
-                                 error=error_msg)
-                    raise HTTPException(
-                        status_code=423,  # 423 Locked status code
-                        detail={
-                            "error": "repository_locked",
-                            "message": "backend.errors.repo.repositoryLocked",
-                            "suggestion": "If no backup is currently running, this is likely a stale lock. You can break the lock to continue.",
-                            "repository_id": repo_id,
-                            "can_break_lock": True
-                        }
-                    )
-
-                logger.error("Failed to list archives", error=error_msg)
-                raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchives"})
-
-            # Success - break out of retry loop
-            break
-
-        except HTTPException:
-            raise
-        except asyncio.TimeoutError:
-            error_msg = f"Operation timed out after 200 seconds. This can happen with slow SSH connections or large repositories."
-            if attempt < max_retries - 1:
-                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id)
-                await asyncio.sleep(retry_delay)
-                retry_delay *= 2
-                continue
-            logger.error("Failed to list archives after retries: timeout", repo_id=repo_id)
-            raise HTTPException(status_code=504, detail=error_msg)
-        except Exception as e:
-            error_msg = str(e) if str(e) else f"Unknown error: {type(e).__name__}"
-            if attempt < max_retries - 1:
-                logger.warning(f"Error on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id, error=error_msg)
-                await asyncio.sleep(retry_delay)
-                retry_delay *= 2
-                continue
-            logger.error("Failed to list archives after retries", error=error_msg, repo_id=repo_id)
-            raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchives"})
-        finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                try:
-                    os.unlink(temp_key_file)
-                except Exception:
-                    pass
-
+    stdout = await _run_repository_command_with_retries(
+        repository,
+        db,
+        repo_id=repo_id,
+        cmd=cmd,
+        timeout=get_operation_timeouts(db)["list_timeout"],
+        bypass_lock=use_bypass_lock,
+        source=source,
+        command_label="Executing borg list command",
+        ssh_log_message="Using SSH key for archive list",
+        failure_key="backend.errors.repo.failedToListArchives",
+    )
     # Parse JSON output
     try:
         archives_data = json.loads(stdout.decode())
@@ -2380,121 +2110,27 @@ async def get_repository_info(
     db: Session = Depends(get_db)
 ):
     """Get detailed repository information using borg info"""
-    max_retries = 3
-    retry_delay = 1  # seconds - quick retry after breaking lock
-    temp_key_file = None
+    repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+    use_bypass_lock, source = _resolve_bypass_lock(repository, db, "bypass_lock_on_info")
+    router = BorgRouter(repository)
+    cmd = router.build_repo_info_command(repository.path)
+    if repository.remote_path:
+        cmd.extend(["--remote-path", repository.remote_path])
+    if use_bypass_lock:
+        cmd.append("--bypass-lock")
 
-    for attempt in range(max_retries):
-        try:
-            repository = db.query(Repository).filter(Repository.id == repo_id).first()
-            if not repository:
-                raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-            _require_repository_access(db, current_user, repository, "viewer")
-
-            # Get system settings for global bypass_lock_on_info setting
-            from app.database.models import SystemSettings
-            system_settings = db.query(SystemSettings).first()
-            use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_info)
-
-            # Build borg info command
-            cmd = ["borg", "info"]
-
-            # Add remote-path if specified
-            if repository.remote_path:
-                cmd.extend(["--remote-path", repository.remote_path])
-
-            # Add --bypass-lock for read-only storage access (repo-specific or system-wide)
-            if use_bypass_lock:
-                cmd.append("--bypass-lock")
-
-            cmd.extend(["--json", repository.path])
-
-            # Set up environment — inject SSH key if repository uses key-based auth
-            temp_key_file = resolve_repo_ssh_key_file(repository, db)
-            if temp_key_file:
-                logger.info("Using SSH key for repository info", repo_id=repo_id)
-            ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
-            env = setup_borg_env(
-                passphrase=repository.passphrase,
-                ssh_opts=ssh_opts
-            )
-
-            # Get timeouts from DB settings (with fallback to config)
-            timeouts = get_operation_timeouts(db)
-
-            # Log the command being executed (including bypass-lock status)
-            logger.info(
-                "Executing borg info command",
-                repo_id=repo_id,
-                command=" ".join(cmd),
-                bypass_lock=use_bypass_lock,
-                source="repo_setting" if repository.bypass_lock else ("system_setting" if (system_settings and system_settings.bypass_lock_on_info) else "none")
-            )
-
-            # Execute command with increased timeout to match BORG_LOCK_WAIT
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env
-            )
-
-            # Use configurable timeout to allow for large repositories and slow SSH connections
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["info_timeout"])
-
-            if process.returncode != 0:
-                error_msg = stderr.decode() if stderr else "Unknown error"
-
-                # Check if it's a lock error (exit codes 70-75) - return special error for user prompt
-                if is_lock_error(exit_code=process.returncode):
-                    logger.warning(f"Lock error detected on attempt {attempt + 1}/{max_retries}",
-                                 repo_id=repo_id,
-                                 borg_exit_code=process.returncode,
-                                 error=error_msg)
-                    raise HTTPException(
-                        status_code=423,  # 423 Locked status code
-                        detail={
-                            "error": "repository_locked",
-                            "message": "backend.errors.repo.repositoryLocked",
-                            "suggestion": "If no backup is currently running, this is likely a stale lock. You can break the lock to continue.",
-                            "repository_id": repo_id,
-                            "can_break_lock": True
-                        }
-                    )
-
-                logger.error("Failed to get repository info", error=error_msg)
-                raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetRepositoryInfo"})
-
-            # Success - break out of retry loop
-            break
-
-        except HTTPException:
-            raise
-        except asyncio.TimeoutError:
-            error_msg = f"Operation timed out after 200 seconds. This can happen with slow SSH connections or large repositories."
-            if attempt < max_retries - 1:
-                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id)
-                await asyncio.sleep(retry_delay)
-                retry_delay *= 2
-                continue
-            logger.error("Failed to get repository info after retries: timeout", repo_id=repo_id)
-            raise HTTPException(status_code=504, detail=error_msg)
-        except Exception as e:
-            error_msg = str(e) if str(e) else f"Unknown error: {type(e).__name__}"
-            if attempt < max_retries - 1:
-                logger.warning(f"Error on attempt {attempt + 1}/{max_retries}, retrying", repo_id=repo_id, error=error_msg)
-                await asyncio.sleep(retry_delay)
-                retry_delay *= 2
-                continue
-            logger.error("Failed to get repository info after retries", error=error_msg, repo_id=repo_id)
-            raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetRepositoryInfo"})
-        finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                try:
-                    os.unlink(temp_key_file)
-                except Exception:
-                    pass
-
+    stdout = await _run_repository_command_with_retries(
+        repository,
+        db,
+        repo_id=repo_id,
+        cmd=cmd,
+        timeout=get_operation_timeouts(db)["info_timeout"],
+        bypass_lock=use_bypass_lock,
+        source=source,
+        command_label="Executing borg info command",
+        ssh_log_message="Using SSH key for repository info",
+        failure_key="backend.errors.repo.failedToGetRepositoryInfo",
+    )
     # Parse JSON output
     try:
         info_data = json.loads(stdout.decode())
@@ -2539,11 +2175,7 @@ async def break_repository_lock(
         logger.warning("User requested lock break", repo_id=repo_id, user=current_user.username)
 
         # Break the lock using borg break-lock
-        result = await borg.break_lock(
-            repository.path,
-            remote_path=repository.remote_path,
-            passphrase=repository.passphrase
-        )
+        result = await BorgRouter(repository).break_lock()
 
         if result.get("success"):
             logger.info("Successfully broke repository lock", repo_id=repo_id, user=current_user.username)
@@ -2572,50 +2204,30 @@ async def get_archive_info(
     db: Session = Depends(get_db)
 ):
     """Get detailed archive information using borg info repo::archive with optional file listing"""
+    temp_key_file = None
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-        _require_repository_access(db, current_user, repository, "viewer")
+        repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
 
-        # Build borg info command with repo::archive format
-        archive_path = f"{repository.path}::{archive_name}"
-        cmd = ["borg", "info"]
-
-        # Add remote-path if specified
+        router = BorgRouter(repository)
+        cmd = router.build_archive_info_command(repository.path, archive_name)
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
-
-        # Add --bypass-lock for read-only storage access
         if repository.bypass_lock:
             cmd.append("--bypass-lock")
-
-        cmd.extend(["--json", archive_path])
-
-        # Set up environment — inject SSH key if repository uses key-based auth
-        temp_key_file = resolve_repo_ssh_key_file(repository, db)
-        if temp_key_file:
-            logger.info("Using SSH key for archive info", repo_id=repo_id, archive_name=archive_name)
-        ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
-        env = setup_borg_env(
-            passphrase=repository.passphrase,
-            ssh_opts=ssh_opts
-        )
 
         # Get timeouts from DB settings (with fallback to config)
         timeouts = get_operation_timeouts(db)
 
-        # Execute command with increased timeout to match BORG_LOCK_WAIT
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
+        returncode, stdout, stderr = await _run_repository_command(
+            repository,
+            db,
+            cmd,
+            timeouts["info_timeout"],
+            log_message="Using SSH key for archive info",
+            log_fields={"repo_id": repo_id, "archive_name": archive_name},
         )
 
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["info_timeout"])
-
-        if process.returncode != 0:
+        if returncode != 0:
             error_msg = stderr.decode() if stderr else "Unknown error"
             logger.error("Failed to get archive info", archive_name=archive_name, error=error_msg)
             raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToGetArchiveInfo"})
@@ -2639,52 +2251,17 @@ async def get_archive_info(
             system_settings = db.query(SystemSettings).first()
             use_bypass_lock_for_list = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
 
-            list_cmd = ["borg", "list"]
-            if repository.remote_path:
-                list_cmd.extend(["--remote-path", repository.remote_path])
-            if use_bypass_lock_for_list:
-                list_cmd.append("--bypass-lock")
-            list_cmd.extend(["--json-lines", archive_path])
-
-            # Use same environment setup
-            list_env = os.environ.copy()
-            if repository.passphrase:
-                list_env["BORG_PASSPHRASE"] = repository.passphrase
-            list_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-            list_env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-
-            # Add SSH options — reuse the same key file already resolved above
-            list_ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
-            list_env['BORG_RSH'] = f"ssh {' '.join(list_ssh_opts)}"
-
+            temp_key_file = None
             try:
-                list_process = await asyncio.create_subprocess_exec(
-                    *list_cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=list_env
+                env, temp_key_file = _prepare_repository_borg_env(repository, db)
+                list_result = await router.list_archive_contents(
+                    archive=archive_name,
+                    max_lines=file_limit,
+                    env=env,
                 )
-                list_stdout, list_stderr = await asyncio.wait_for(list_process.communicate(), timeout=timeouts["list_timeout"])
 
-                if list_process.returncode == 0:
-                    # Parse JSON-lines output
-                    files = []
-                    for line in list_stdout.decode().strip().split('\n'):
-                        if line and len(files) < file_limit:
-                            try:
-                                file_obj = json.loads(line)
-                                files.append({
-                                    "path": file_obj.get("path"),
-                                    "type": file_obj.get("type"),
-                                    "mode": file_obj.get("mode"),
-                                    "user": file_obj.get("user"),
-                                    "group": file_obj.get("group"),
-                                    "size": file_obj.get("size"),
-                                    "mtime": file_obj.get("mtime"),
-                                    "healthy": file_obj.get("healthy", True)
-                                })
-                            except json.JSONDecodeError:
-                                continue
+                if list_result.get("success") or list_result.get("line_count_exceeded"):
+                    files = _parse_archive_files_output(list_result.get("stdout", ""), file_limit)
                     archive_info["files"] = files
                     archive_info["file_count"] = len(files)
                     logger.info("Fetched file listing for archive",
@@ -2693,7 +2270,7 @@ async def get_archive_info(
                 else:
                     logger.warning("Failed to fetch file listing",
                                  archive_name=archive_name,
-                                 error=list_stderr.decode())
+                                 error=list_result.get("stderr", ""))
                     archive_info["files"] = []
                     archive_info["file_count"] = 0
             except Exception as e:
@@ -2702,6 +2279,12 @@ async def get_archive_info(
                              error=str(e))
                 archive_info["files"] = []
                 archive_info["file_count"] = 0
+            finally:
+                if temp_key_file and os.path.exists(temp_key_file):
+                    try:
+                        os.unlink(temp_key_file)
+                    except Exception:
+                        pass
 
         logger.info("Archive info retrieved successfully",
                    repo_id=repo_id,
@@ -2740,82 +2323,31 @@ async def list_archive_files(
     limit: Optional[int] = Query(None, description="Limit number of files returned")
 ):
     """List files in an archive using borg list repo::archive"""
+    temp_key_file = None
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-        _require_repository_access(db, current_user, repository, "viewer")
+        repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
 
         # Get system settings for global bypass_lock_on_list setting
         from app.database.models import SystemSettings
         system_settings = db.query(SystemSettings).first()
         use_bypass_lock = repository.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
 
-        # Build borg list command with repo::archive format
-        archive_path = f"{repository.path}::{archive_name}"
-        cmd = ["borg", "list"]
+        router = BorgRouter(repository)
 
-        # Add remote-path if specified
-        if repository.remote_path:
-            cmd.extend(["--remote-path", repository.remote_path])
+        env, temp_key_file = _prepare_repository_borg_env(repository, db)
 
-        # Add --bypass-lock for read-only storage access (repo-specific or system-wide)
-        if use_bypass_lock:
-            cmd.append("--bypass-lock")
-
-        # Use --json-lines for file listing
-        cmd.extend(["--json-lines", archive_path])
-
-        # Set up environment — inject SSH key if repository uses key-based auth
-        temp_key_file = resolve_repo_ssh_key_file(repository, db)
-        if temp_key_file:
-            logger.info("Using SSH key for archive file list", repo_id=repo_id, archive_name=archive_name)
-        ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
-        env = setup_borg_env(
-            passphrase=repository.passphrase,
-            ssh_opts=ssh_opts
+        result = await router.list_archive_contents(
+            archive=archive_name,
+            max_lines=limit or 1_000_000,
+            env=env,
         )
 
-        # Get timeouts from DB settings (with fallback to config)
-        timeouts = get_operation_timeouts(db)
-
-        # Execute command
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
-        )
-
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeouts["list_timeout"])
-
-        if process.returncode != 0:
-            error_msg = stderr.decode() if stderr else "Unknown error"
+        if not result.get("success") and not result.get("line_count_exceeded"):
+            error_msg = result.get("stderr", "Unknown error")
             logger.error("Failed to list archive files", archive_name=archive_name, error=error_msg)
             raise HTTPException(status_code=500, detail={"key": "backend.errors.repo.failedToListArchiveFiles"})
 
-        # Parse JSON-lines output (one JSON object per line)
-        files = []
-        for line in stdout.decode().strip().split('\n'):
-            if line:
-                try:
-                    file_obj = json.loads(line)
-                    files.append({
-                        "path": file_obj.get("path"),
-                        "type": file_obj.get("type"),  # 'd' for directory, '-' for file
-                        "mode": file_obj.get("mode"),
-                        "user": file_obj.get("user"),
-                        "group": file_obj.get("group"),
-                        "size": file_obj.get("size"),
-                        "mtime": file_obj.get("mtime"),
-                        "healthy": file_obj.get("healthy", True)
-                    })
-                except json.JSONDecodeError:
-                    continue
-
-        # Apply limit if specified
-        if limit and limit > 0:
-            files = files[:limit]
+        files = _parse_archive_files_output(result.get("stdout", ""), limit)
 
         logger.info("Archive files listed successfully",
                    repo_id=repo_id,
@@ -2848,13 +2380,12 @@ async def get_repository_stats(
     try:
         env, temp_key_file = _prepare_repository_borg_env(repository, db)
 
-        # Get repository info
-        cmd = ["borg", "info"]
+        router = BorgRouter(repository)
+        cmd = router.build_repo_info_command(repository.path)
         if bypass_lock:
             cmd.append("--bypass-lock")
         if repository.remote_path:
             cmd.extend(["--remote-path", repository.remote_path])
-        cmd.append(repository.path)
         info_result = await borg._execute_command(cmd, env=env)
 
         if not info_result["success"]:
@@ -2875,16 +2406,9 @@ async def get_repository_stats(
         }
 
         # Try to get archive count
-        archives_result = await borg.list_archives(
-            repository.path,
-            remote_path=repository.remote_path,
-            passphrase=repository.passphrase,
-            bypass_lock=bypass_lock,
-            env=env,
-        )
-        if archives_result["success"]:
+        archives_data = await router.list_archives()
+        if archives_data is not None:
             try:
-                archives_data = archives_result["stdout"]
                 if archives_data:
                     stats["archive_count"] = len(archives_data)
             except:
@@ -2929,40 +2453,24 @@ async def break_repository_lock(
                    user=current_user.username,
                    repository_id=repository_id)
 
-        # Set up environment — inject SSH key if repository uses key-based auth
-        temp_key_file = resolve_repo_ssh_key_file(repository, db)
-        if temp_key_file:
-            logger.info("Using SSH key for break-lock", repository_id=repository_id)
-        ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
-        env = setup_borg_env(
-            passphrase=repository.passphrase,
-            ssh_opts=ssh_opts
+        cmd = BorgRouter(repository).build_break_lock_command(
+            repository_path=repository.path,
+            remote_path=repository.remote_path,
         )
 
-        # Build borg break-lock command
-        cmd = ["borg", "break-lock", repository.path]
-
-        try:
-            # Execute command
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env
-            )
-
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
-        finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                try:
-                    os.unlink(temp_key_file)
-                except Exception:
-                    pass
+        returncode, stdout, stderr = await _run_repository_command(
+            repository,
+            db,
+            cmd,
+            30,
+            log_message="Using SSH key for break-lock",
+            log_fields={"repository_id": repository_id},
+        )
 
         stdout_str = stdout.decode('utf-8', errors='replace') if stdout else ""
         stderr_str = stderr.decode('utf-8', errors='replace') if stderr else ""
 
-        if process.returncode == 0:
+        if returncode == 0:
             logger.info("Successfully broke repository lock",
                        repository=repository.path,
                        user=current_user.username)
@@ -2975,7 +2483,7 @@ async def break_repository_lock(
         else:
             logger.error("Failed to break repository lock",
                         repository=repository.path,
-                        returncode=process.returncode,
+                        returncode=returncode,
                         stderr=stderr_str)
             raise HTTPException(
                 status_code=500,
@@ -3008,38 +2516,14 @@ async def get_check_job_status(
 ):
     """Get status of a check job"""
     try:
-        job = db.query(CheckJob).filter(CheckJob.id == job_id).first()
-        if not job:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.checkJobNotFound"})
-        repository = db.query(Repository).filter(Repository.id == job.repository_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-        _require_repository_access(db, current_user, repository, "viewer")
-
-        # Read log file if it exists (like prune/compact jobs)
-        log_content = ""
-        if job.log_file_path and os.path.exists(job.log_file_path):
-            try:
-                with open(job.log_file_path, 'r') as f:
-                    log_content = f.read()
-            except Exception as e:
-                logger.warning("Failed to read check log file", error=str(e))
-                log_content = f"Failed to read log file: {str(e)}"
-        elif job.logs:
-            # Fallback to old logs field for backwards compatibility
-            log_content = job.logs
-
-        return {
-            "id": job.id,
-            "repository_id": job.repository_id,
-            "status": job.status,
-            "started_at": serialize_datetime(job.started_at),
-            "completed_at": serialize_datetime(job.completed_at),
-            "progress": job.progress,
-            "progress_message": job.progress_message,
-            "error_message": job.error_message,
-            "logs": log_content
-        }
+        job, _ = get_job_with_repository(
+            db,
+            current_user,
+            CheckJob,
+            job_id,
+            not_found_key="backend.errors.repo.checkJobNotFound",
+        )
+        return serialize_job_status(job, include_progress=True, include_logs=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -3055,30 +2539,8 @@ async def get_repository_check_jobs(
 ):
     """Get recent check jobs for a repository"""
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            return {"jobs": []}
-        _require_repository_access(db, current_user, repository, "viewer")
-        jobs = db.query(CheckJob).filter(
-            CheckJob.repository_id == repo_id
-        ).order_by(CheckJob.id.desc()).limit(limit).all()
-
-        return {
-            "jobs": [
-                {
-                    "id": job.id,
-                    "repository_id": job.repository_id,
-                    "status": job.status,
-                    "started_at": serialize_datetime(job.started_at),
-                    "completed_at": serialize_datetime(job.completed_at),
-                    "progress": job.progress,
-                    "progress_message": job.progress_message,
-                    "error_message": job.error_message,
-                    "has_logs": job.has_logs,
-                }
-                for job in jobs
-            ]
-        }
+        jobs = get_repository_jobs(db, current_user, repo_id, CheckJob, limit=limit)
+        return {"jobs": [serialize_job_summary(job, include_progress=True, include_has_logs=True) for job in jobs]}
     except HTTPException:
         raise
     except Exception as e:
@@ -3094,25 +2556,14 @@ async def get_compact_job_status(
 ):
     """Get status of a compact job"""
     try:
-        job = db.query(CompactJob).filter(CompactJob.id == job_id).first()
-        if not job:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.compactJobNotFound"})
-        repository = db.query(Repository).filter(Repository.id == job.repository_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-        _require_repository_access(db, current_user, repository, "viewer")
-
-        return {
-            "id": job.id,
-            "repository_id": job.repository_id,
-            "status": job.status,
-            "started_at": serialize_datetime(job.started_at),
-            "completed_at": serialize_datetime(job.completed_at),
-            "progress": job.progress,
-            "progress_message": job.progress_message,
-            "error_message": job.error_message,
-            "logs": job.logs
-        }
+        job, _ = get_job_with_repository(
+            db,
+            current_user,
+            CompactJob,
+            job_id,
+            not_found_key="backend.errors.repo.compactJobNotFound",
+        )
+        return serialize_job_status(job, include_progress=True, include_logs=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -3128,29 +2579,8 @@ async def get_repository_compact_jobs(
 ):
     """Get recent compact jobs for a repository"""
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            return {"jobs": []}
-        _require_repository_access(db, current_user, repository, "viewer")
-        jobs = db.query(CompactJob).filter(
-            CompactJob.repository_id == repo_id
-        ).order_by(CompactJob.id.desc()).limit(limit).all()
-
-        return {
-            "jobs": [
-                {
-                    "id": job.id,
-                    "repository_id": job.repository_id,
-                    "status": job.status,
-                    "started_at": serialize_datetime(job.started_at),
-                    "completed_at": serialize_datetime(job.completed_at),
-                    "progress": job.progress,
-                    "progress_message": job.progress_message,
-                    "error_message": job.error_message,
-                }
-                for job in jobs
-            ]
-        }
+        jobs = get_repository_jobs(db, current_user, repo_id, CompactJob, limit=limit)
+        return {"jobs": [serialize_job_summary(job, include_progress=True) for job in jobs]}
     except HTTPException:
         raise
     except Exception as e:
@@ -3166,23 +2596,14 @@ async def get_prune_job_status(
 ):
     """Get status of a prune job"""
     try:
-        job = db.query(PruneJob).filter(PruneJob.id == job_id).first()
-        if not job:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.pruneJobNotFound"})
-        repository = db.query(Repository).filter(Repository.id == job.repository_id).first()
-        if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
-        _require_repository_access(db, current_user, repository, "viewer")
-
-        return {
-            "id": job.id,
-            "repository_id": job.repository_id,
-            "status": job.status,
-            "started_at": serialize_datetime(job.started_at),
-            "completed_at": serialize_datetime(job.completed_at),
-            "error_message": job.error_message,
-            "logs": job.logs,
-        }
+        job, _ = get_job_with_repository(
+            db,
+            current_user,
+            PruneJob,
+            job_id,
+            not_found_key="backend.errors.repo.pruneJobNotFound",
+        )
+        return serialize_job_status(job, include_logs=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -3199,28 +2620,8 @@ async def get_repository_prune_jobs(
 ):
     """Get recent prune jobs for a repository"""
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            return {"jobs": []}
-        _require_repository_access(db, current_user, repository, "viewer")
-        jobs = db.query(PruneJob).filter(
-            PruneJob.repository_id == repo_id
-        ).order_by(PruneJob.id.desc()).limit(limit).all()
-
-        return {
-            "jobs": [
-                {
-                    "id": job.id,
-                    "repository_id": job.repository_id,
-                    "status": job.status,
-                    "started_at": serialize_datetime(job.started_at),
-                    "completed_at": serialize_datetime(job.completed_at),
-                    "error_message": job.error_message,
-                    "has_logs": job.has_logs,
-                }
-                for job in jobs
-            ]
-        }
+        jobs = get_repository_jobs(db, current_user, repo_id, PruneJob, limit=limit)
+        return {"jobs": [serialize_job_summary(job, include_has_logs=True) for job in jobs]}
     except HTTPException:
         raise
     except Exception as e:

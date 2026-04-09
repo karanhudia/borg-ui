@@ -6,8 +6,6 @@ freed automatically after delete or prune).
 """
 
 import json
-import asyncio
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -15,13 +13,20 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import structlog
 
-from app.database.database import get_db, SessionLocal
+from app.database.database import get_db
 from app.database.models import User, Repository, CheckJob, CompactJob
+from app.api.maintenance_jobs import (
+    create_running_maintenance_job,
+    ensure_no_running_job,
+    get_repository_with_access,
+    schedule_background_job,
+)
 from app.core.security import get_current_user
 from app.core.features import require_feature
-from app.core.borg2 import borg2
 from app.services.v2.check_service import check_v2_service
 from app.services.v2.compact_service import compact_v2_service
+from app.services.v2.backup_service import backup_v2_service
+from app.services.v2.prune_service import prune_v2_service
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Backup v2"], dependencies=[require_feature("borg_v2")])
@@ -55,11 +60,9 @@ class CheckV2Request(BaseModel):
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _get_v2_repo_by_id(repo_id: int, db: Session) -> Repository:
-    repo = db.query(Repository).filter(
-        Repository.id == repo_id, Repository.borg_version == 2
-    ).first()
-    if not repo:
+def _get_v2_repo_by_id(repo_id: int, db: Session, current_user: User) -> Repository:
+    repo = get_repository_with_access(db, current_user, repo_id, required_role="operator")
+    if repo.borg_version != 2:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"key": "backend.errors.restore.repositoryNotFound"},
@@ -85,7 +88,7 @@ async def run_backup(
     db: Session = Depends(get_db),
 ):
     """Create a new Borg 2 archive (borg2 create)."""
-    repo = _get_v2_repo_by_id(data.repository_id, db)
+    repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
     source_dirs = _source_dirs(repo)
     if not source_dirs:
         raise HTTPException(
@@ -93,13 +96,10 @@ async def run_backup(
             detail={"key": "backend.errors.backup.noSourceDirectories"},
         )
 
-    result = await borg2.create(
-        repository=repo.path,
+    result = await backup_v2_service.run_backup(
+        repo=repo,
         source_paths=source_dirs,
-        compression=repo.compression or "lz4",
         archive_name=data.archive_name,
-        passphrase=repo.passphrase,
-        remote_path=repo.remote_path,
     )
 
     if not result["success"]:
@@ -130,9 +130,9 @@ async def prune_archives(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
-    repo = _get_v2_repo_by_id(data.repository_id, db)
-    result = await borg2.prune_archives(
-        repository=repo.path,
+    repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
+    result = await prune_v2_service.run_prune(
+        repo=repo,
         keep_hourly=data.keep_hourly,
         keep_daily=data.keep_daily,
         keep_weekly=data.keep_weekly,
@@ -140,8 +140,6 @@ async def prune_archives(
         keep_quarterly=data.keep_quarterly,
         keep_yearly=data.keep_yearly,
         dry_run=data.dry_run,
-        passphrase=repo.passphrase,
-        remote_path=repo.remote_path,
     )
 
     if not result["success"]:
@@ -172,32 +170,18 @@ async def compact_repository(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
-    repo = _get_v2_repo_by_id(data.repository_id, db)
+    repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
 
-    running = db.query(CompactJob).filter(
-        CompactJob.repository_id == repo.id,
-        CompactJob.status == "running",
-    ).first()
-    if running:
-        raise HTTPException(
-            status_code=409,
-            detail={"key": "backend.errors.compact.alreadyRunning"},
-        )
-
-    compact_job = CompactJob(
-        repository_id=repo.id,
-        repository_path=repo.path,
-        status="running",
-        started_at=datetime.utcnow(),
-        progress=0,
+    ensure_no_running_job(
+        db,
+        CompactJob,
+        repo.id,
+        error_key="backend.errors.compact.alreadyRunning",
     )
-    db.add(compact_job)
-    db.commit()
-    db.refresh(compact_job)
 
-    asyncio.create_task(
-        compact_v2_service.execute_compact(compact_job.id, repo.id)
-    )
+    compact_job = create_running_maintenance_job(db, CompactJob, repo)
+
+    schedule_background_job(compact_v2_service.execute_compact(compact_job.id, repo.id))
 
     logger.info("Borg2 compact job created", job_id=compact_job.id, repository_id=repo.id,
                 user=current_user.username)
@@ -224,33 +208,18 @@ async def check_repository(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
 
-    repo = _get_v2_repo_by_id(data.repository_id, db)
+    repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
 
-    # Reject if a check is already running for this repository
-    running = db.query(CheckJob).filter(
-        CheckJob.repository_id == repo.id,
-        CheckJob.status == "running",
-    ).first()
-    if running:
-        raise HTTPException(
-            status_code=409,
-            detail={"key": "backend.errors.repo.checkAlreadyRunning"},
-        )
-
-    check_job = CheckJob(
-        repository_id=repo.id,
-        repository_path=repo.path,
-        status="running",
-        started_at=datetime.utcnow(),
-        progress=0,
+    ensure_no_running_job(
+        db,
+        CheckJob,
+        repo.id,
+        error_key="backend.errors.repo.checkAlreadyRunning",
     )
-    db.add(check_job)
-    db.commit()
-    db.refresh(check_job)
 
-    asyncio.create_task(
-        check_v2_service.execute_check(check_job.id, repo.id)
-    )
+    check_job = create_running_maintenance_job(db, CheckJob, repo)
+
+    schedule_background_job(check_v2_service.execute_check(check_job.id, repo.id))
 
     logger.info("Borg2 check job created", job_id=check_job.id, repository_id=repo.id,
                 user=current_user.username)

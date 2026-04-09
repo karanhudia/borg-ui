@@ -38,6 +38,18 @@ def _enable_borg_v2(test_db):
     test_db.commit()
 
 
+def _base_repository_payload(**overrides):
+    payload = {
+        "name": "Test Repo",
+        "path": "/tmp/test-repo",
+        "encryption": "none",
+        "compression": "lz4",
+        "repository_type": "local",
+    }
+    payload.update(overrides)
+    return payload
+
+
 @pytest.mark.unit
 class TestRepositoriesListAndGet:
     """Test repository listing and retrieval"""
@@ -386,6 +398,25 @@ class TestRepositoriesCreate:
         assert repo.borg_version == 2
         assert repo.encryption == "repokey-aes-ocb"
 
+    def test_legacy_prune_route_dispatches_v2_repo_via_router(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = Repository(**_base_repository_payload(name="Legacy Prune V2", borg_version=2))
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch("app.api.repositories.BorgRouter.prune", new_callable=AsyncMock) as mock_prune:
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/prune",
+                json={"keep_daily": 7},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        mock_prune.assert_awaited_once()
+
     def test_create_repository_duplicate_path(self, test_client: TestClient, admin_headers, test_db):
         """Test creating repository with duplicate path"""
         # Create first repository
@@ -548,8 +579,8 @@ class TestRepositoriesUpdate:
         test_db.commit()
         test_db.refresh(ssh_conn)
 
-        with patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
-             patch("app.api.repositories.BorgInterface.get_repository_info", new=AsyncMock(return_value={"success": False})), \
+        with patch("app.api.repositories.BorgRouter.verify_repository", new=AsyncMock(return_value={"success": False})), \
+             patch("app.api.repositories.BorgRouter.initialize_repository", new=AsyncMock(return_value={"success": True})), \
              patch("app.api.repositories.mqtt_service.sync_state_with_db"):
             response = test_client.put(
                 f"/api/repositories/{repo.id}",
@@ -653,8 +684,8 @@ class TestRepositoriesUpdate:
 
             # Update to a NEW path that doesn't exist yet
             new_path = f"{temp_dir}/new-repo"
-            with patch("app.api.repositories.BorgInterface.get_repository_info", new=AsyncMock(side_effect=RuntimeError("missing repo"))), \
-                 patch("app.api.repositories.initialize_borg_repository", new=AsyncMock(return_value={"success": True})), \
+            with patch("app.api.repositories.BorgRouter.verify_repository", new=AsyncMock(side_effect=RuntimeError("missing repo"))), \
+                 patch("app.api.repositories.BorgRouter.initialize_repository", new=AsyncMock(return_value={"success": True})), \
                  patch("app.api.repositories.mqtt_service.sync_state_with_db"):
                 response = test_client.put(
                     f"/api/repositories/{repo.id}",
@@ -699,12 +730,53 @@ class TestRepositoriesUpdate:
             test_db.refresh(repo)
 
             # Update to point to the existing borg repository
-            with patch("app.api.repositories.BorgInterface.get_repository_info", new=AsyncMock(return_value={"success": True})), \
+            with patch("app.api.repositories.BorgRouter.verify_repository", new=AsyncMock(return_value={"success": True})), \
                  patch("app.api.repositories.mqtt_service.sync_state_with_db"):
                 response = test_client.put(
                     f"/api/repositories/{repo.id}",
                     json={"path": existing_repo_path},
                     headers=admin_headers
+                )
+
+            assert response.status_code == 200
+            test_db.refresh(repo)
+            assert repo.path == existing_repo_path
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_update_repository_path_strips_whitespace(self, test_client: TestClient, admin_headers, test_db):
+        import tempfile
+        import shutil
+
+        temp_dir = tempfile.mkdtemp()
+
+        try:
+            initial_path = f"{temp_dir}/initial-repo"
+            existing_repo_path = f"{temp_dir}/existing-repo"
+
+            for path in [initial_path, existing_repo_path]:
+                os.makedirs(path, exist_ok=True)
+                os.makedirs(f"{path}/data", exist_ok=True)
+                with open(f"{path}/config", "w") as f:
+                    f.write("[repository]\nversion = 1\n")
+
+            repo = Repository(
+                name="Whitespace Repo",
+                path=initial_path,
+                encryption="none",
+                compression="lz4",
+                repository_type="local",
+            )
+            test_db.add(repo)
+            test_db.commit()
+            test_db.refresh(repo)
+
+            with patch("app.api.repositories.BorgRouter.verify_repository", new=AsyncMock(return_value={"success": True})), \
+                 patch("app.api.repositories.mqtt_service.sync_state_with_db"):
+                response = test_client.put(
+                    f"/api/repositories/{repo.id}",
+                    json={"path": f"  {existing_repo_path}  "},
+                    headers=admin_headers,
                 )
 
             assert response.status_code == 200
@@ -729,12 +801,12 @@ class TestRepositoriesUpdate:
         test_db.refresh(repo)
 
         with patch(
-            "app.api.v2.repositories._rinfo",
+            "app.api.repositories.BorgRouter.verify_repository",
             new=AsyncMock(return_value={"success": False, "stderr": "missing"}),
-        ) as mock_rinfo, patch(
-            "app.api.v2.repositories._rcreate",
+        ) as mock_verify, patch(
+            "app.api.repositories.BorgRouter.initialize_repository",
             new=AsyncMock(return_value={"success": True, "stderr": ""}),
-        ) as mock_rcreate, patch(
+        ) as mock_init, patch(
             "app.api.repositories.initialize_borg_repository",
             new=AsyncMock(return_value={"success": True}),
         ) as mock_v1_init, patch(
@@ -747,9 +819,41 @@ class TestRepositoriesUpdate:
             )
 
         assert response.status_code == 200
-        mock_rinfo.assert_awaited_once()
-        mock_rcreate.assert_awaited_once()
+        mock_verify.assert_awaited_once()
+        mock_init.assert_awaited_once()
         mock_v1_init.assert_not_awaited()
+
+    def test_download_keyfile_uses_router_export_for_borg2_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="V2 Keyfile Repo",
+            path="/tmp/v2-keyfile",
+            encryption="keyfile-aes-ocb",
+            compression="lz4",
+            repository_type="local",
+            borg_version=2,
+            has_keyfile=True,
+            passphrase="secret",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        async def fake_export_keyfile(output_path):
+            with open(output_path, "wb") as handle:
+                handle.write(b"KEYDATA")
+            return {"success": True}
+
+        with patch(
+            "app.api.repositories.BorgRouter.export_keyfile",
+            new=AsyncMock(side_effect=fake_export_keyfile),
+        ) as mock_export:
+            response = test_client.get(f"/api/repositories/{repo.id}/keyfile", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert response.content == b"KEYDATA"
+        mock_export.assert_awaited_once()
 
 
 @pytest.mark.unit
@@ -852,17 +956,46 @@ class TestRepositoriesStatistics:
         test_db.commit()
         test_db.refresh(repo)
 
-        process = AsyncMock()
-        process.returncode = 0
-        process.communicate = AsyncMock(return_value=(b'{"repository":{"id":"abc"}}', b""))
-        with patch("app.api.repositories.asyncio.create_subprocess_exec", new=AsyncMock(return_value=process)), \
-             patch("app.api.repositories.asyncio.wait_for", new=AsyncMock(return_value=(b'{"repository":{"id":"abc"}}', b""))):
+        with patch(
+            "app.api.repositories._run_repository_command",
+            new=AsyncMock(return_value=(0, b'{"repository":{"id":"abc"}}', b"")),
+        ):
             response = test_client.get(
                 f"/api/repositories/{repo.id}/info",
                 headers=admin_headers
             )
 
         assert response.status_code == 200
+
+    def test_get_repository_info_uses_v2_command_shape_for_borg2_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="V2 Info Repo",
+            path="/tmp/v2-info-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch("app.core.borg2.borg2.borg_cmd", "borg2"), patch(
+            "app.api.repositories._run_repository_command",
+            new=AsyncMock(return_value=(0, b'{"repository":{"id":"abc"}}', b"")),
+        ) as mock_run:
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/info",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        cmd = mock_run.await_args.args[2]
+        assert cmd[0] == "borg2"
+        assert "-r" in cmd
+        assert "info" in cmd
 
     def test_get_repository_stats_not_found(self, test_client: TestClient, admin_headers):
         """Test getting stats for non-existent repository returns 404"""
@@ -904,9 +1037,7 @@ class TestRepositoriesStatistics:
                 return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
             )
         ) as mock_exec, patch(
-            "app.api.repositories.borg.list_archives", new=AsyncMock(
-                return_value={"success": True, "stdout": []}
-            )
+            "app.api.repositories.BorgRouter.list_archives", new=AsyncMock(return_value=[])
         ) as mock_list:
             from app.api.repositories import get_repository_stats
 
@@ -915,8 +1046,7 @@ class TestRepositoriesStatistics:
         assert "error" not in stats
         _, kwargs = mock_exec.call_args
         assert kwargs["env"]["BORG_PASSPHRASE"] == "secret-passphrase"
-        _, kwargs = mock_list.call_args
-        assert kwargs["passphrase"] == "secret-passphrase"
+        mock_list.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_get_repository_stats_omits_passphrase_for_unencrypted_local_repo(self, test_db):
@@ -934,9 +1064,7 @@ class TestRepositoriesStatistics:
                 return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
             )
         ) as mock_exec, patch(
-            "app.api.repositories.borg.list_archives", new=AsyncMock(
-                return_value={"success": True, "stdout": []}
-            )
+            "app.api.repositories.BorgRouter.list_archives", new=AsyncMock(return_value=[])
         ):
             from app.api.repositories import get_repository_stats
 
@@ -965,9 +1093,7 @@ class TestRepositoriesStatistics:
                 return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
             )
         ) as mock_exec, patch(
-            "app.api.repositories.borg.list_archives", new=AsyncMock(
-                return_value={"success": True, "stdout": []}
-            )
+            "app.api.repositories.BorgRouter.list_archives", new=AsyncMock(return_value=[])
         ) as mock_list, patch("app.api.repositories.os.path.exists", return_value=False):
             from app.api.repositories import get_repository_stats
 
@@ -978,9 +1104,7 @@ class TestRepositoriesStatistics:
         assert "/usr/local/bin/borg1" in cmd
         _, kwargs = mock_exec.call_args
         assert "BORG_RSH" in kwargs["env"]
-        _, kwargs = mock_list.call_args
-        assert kwargs["remote_path"] == "/usr/local/bin/borg1"
-        assert kwargs["env"]["BORG_RSH"].startswith("ssh ")
+        mock_list.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_get_repository_stats_supports_bypass_lock_and_borg_info_failure(self, test_db):
@@ -1020,15 +1144,45 @@ class TestRepositoriesStatistics:
                 return_value={"success": True, "stdout": "ok", "stderr": "", "return_code": 0}
             )
         ), patch(
-            "app.api.repositories.borg.list_archives", new=AsyncMock(
-                return_value={"success": False, "stdout": "", "stderr": "list failed"}
-            )
+            "app.api.repositories.BorgRouter.list_archives", new=AsyncMock(return_value=[])
         ):
             from app.api.repositories import get_repository_stats
 
             stats = await get_repository_stats(repo, test_db)
 
         assert stats["archive_count"] == 0
+
+    def test_list_archive_files_uses_v2_router_for_borg2_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="V2 Files Repo",
+            path="/tmp/v2-files-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.BorgRouter.list_archive_contents",
+            new_callable=AsyncMock,
+        ) as mock_list:
+            mock_list.return_value = {
+                "success": True,
+                "stdout": '{"path":"photo.jpg","type":"-","size":42}\n',
+            }
+            response = test_client.get(
+                f"/api/repositories/{repo.id}/archives/archive-1/files",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        mock_list.assert_awaited_once()
 
 
 @pytest.mark.unit
@@ -1093,6 +1247,27 @@ class TestRepositoriesImport:
         assert body["success"] is True
         assert body["repository"]["encryption"] == "none"
         assert mock_verify.await_args.args[1] is None
+
+    def test_import_repository_rejects_directory_named_config(
+        self, test_client: TestClient, admin_headers, tmp_path
+    ):
+        repo_path = tmp_path / "invalid-import"
+        repo_path.mkdir()
+        (repo_path / "config").mkdir()
+
+        response = test_client.post(
+            "/api/repositories/import",
+            json={
+                "name": "Invalid Imported Repo",
+                "path": str(repo_path),
+                "compression": "lz4",
+                "mode": "observe",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["key"] == "backend.errors.repo.notValidBorgRepository"
 
     def test_import_repository_delegates_borg2_payloads_to_v2_api(
         self, test_client: TestClient, admin_headers, test_db

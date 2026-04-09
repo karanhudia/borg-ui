@@ -112,6 +112,34 @@ class TestRepositoryRouteContracts:
         assert response.status_code == 200
         assert response.json()["logs"] == "first line\nsecond line\n"
 
+    def test_get_compact_job_status_reads_log_file(self, test_client: TestClient, admin_headers, test_db, tmp_path):
+        repo = _create_repo(test_db, "Repo", "/repos/main")
+        log_path = tmp_path / "compact.log"
+        log_path.write_text("compact output\n", encoding="utf-8")
+        job = CompactJob(repository_id=repo.id, status="completed", log_file_path=str(log_path), has_logs=True)
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(f"/api/repositories/compact-jobs/{job.id}", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert response.json()["logs"] == "compact output\n"
+
+    def test_get_prune_job_status_reads_log_file(self, test_client: TestClient, admin_headers, test_db, tmp_path):
+        repo = _create_repo(test_db, "Repo", "/repos/main")
+        log_path = tmp_path / "prune.log"
+        log_path.write_text("prune output\n", encoding="utf-8")
+        job = PruneJob(repository_id=repo.id, status="completed", log_file_path=str(log_path), has_logs=True)
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(f"/api/repositories/prune-jobs/{job.id}", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert response.json()["logs"] == "prune output\n"
+
     def test_update_check_schedule_disables_cron_and_clears_next_run(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -191,7 +219,7 @@ class TestRepositoryHelperContracts:
             "stdout": '{"archives":[{"name":"old","time":"2024-01-01T10:00:00"},{"name":"new","time":"2024-02-01T12:00:00Z"}]}',
         }
         with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch.object(
-            repositories_api.borg, "list_archives", AsyncMock(return_value=list_payload)
+            repositories_api.BorgRouter, "list_archives", AsyncMock(return_value=list_payload["stdout"])
         ) as mock_list, patch.object(
             repositories_api.borg,
             "_execute_command",
@@ -211,15 +239,14 @@ class TestRepositoryHelperContracts:
         assert repo.total_size == "2.00 MB"
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
-        assert mock_list.await_args.kwargs["bypass_lock"] is True
-        assert mock_list.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
         assert "--bypass-lock" in mock_exec.await_args.args[0]
+        assert mock_exec.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
 
     @pytest.mark.asyncio
     async def test_update_repository_stats_returns_false_on_unexpected_exception(self, test_db):
         repo = _create_repo(test_db, "Repo", "/repos/main")
 
-        with patch.object(repositories_api.borg, "list_archives", AsyncMock(side_effect=RuntimeError("boom"))):
+        with patch.object(repositories_api.BorgRouter, "list_archives", AsyncMock(side_effect=RuntimeError("boom"))):
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is False
@@ -239,9 +266,9 @@ class TestRepositoryHelperContracts:
         test_db.refresh(repo)
 
         with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value="/tmp/test.key"), patch.object(
-            repositories_api.borg,
+            repositories_api.BorgRouter,
             "list_archives",
-            AsyncMock(return_value={"success": True, "stdout": '{"archives": []}'}),
+            AsyncMock(return_value='{"archives": []}'),
         ) as mock_list, patch.object(
             repositories_api.borg,
             "_execute_command",
@@ -257,8 +284,8 @@ class TestRepositoryHelperContracts:
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is True
-        assert mock_list.await_args.kwargs["remote_path"] == "/usr/local/bin/borg1"
-        assert mock_list.await_args.kwargs["env"]["BORG_RSH"].startswith("ssh ")
+        mock_list.assert_awaited_once()
+        assert mock_exec.await_args.kwargs["env"]["BORG_RSH"].startswith("ssh ")
         cmd = mock_exec.await_args.args[0]
         assert "--remote-path" in cmd
         assert "/usr/local/bin/borg1" in cmd
