@@ -1663,6 +1663,7 @@
   },
   "sourceDirectories": {
     "title": "Quellverzeichnisse und -dateien",
+    "titleHelp": "Hilfe zu Quellverzeichnissen",
     "subtitle": "Gib an, welche Verzeichnisse oder Dateien in diesem Repository gesichert werden sollen",
     "atLeastOneRequired": "(mindestens eine erforderlich)",
     "optionalSuffix": "(optional)",

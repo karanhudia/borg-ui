@@ -1663,6 +1663,7 @@
   },
   "sourceDirectories": {
     "title": "Directory e File Sorgente",
+    "titleHelp": "Aiuto sulle directory sorgente",
     "subtitle": "Specifica quali directory o file eseguire il backup in questo repository",
     "atLeastOneRequired": "(almeno uno richiesto)",
     "optionalSuffix": "(opzionale)",

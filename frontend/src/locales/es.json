@@ -1663,6 +1663,7 @@
   },
   "sourceDirectories": {
     "title": "Directorios y archivos de origen",
+    "titleHelp": "Ayuda sobre directorios de origen",
     "subtitle": "Especifica qué directorios o archivos respaldar en este repositorio",
     "atLeastOneRequired": "(se requiere al menos uno)",
     "optionalSuffix": "(opcional)",
