@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from app.database.models import User, Repository, SystemSettings
 from app.database.database import get_db
 from app.api.auth import get_current_user
-from app.core.borg import borg
+from app.core.borg_router import BorgRouter
 from app.services.cache_service import archive_cache
 
 logger = structlog.get_logger(__name__)
@@ -49,14 +49,10 @@ async def browse_archive_contents(
         else:
             # If not in cache, fetch from borg with streaming (prevents OOM)
             # Pass max_items as max_lines to ensure borg process is killed if limit exceeded
-            result = await borg.list_archive_contents(
-                repository.path,
-                archive_name,
+            result = await BorgRouter(repository).list_archive_contents(
+                archive=archive_name,
                 path="",  # Always fetch all items
-                remote_path=repository.remote_path,
-                passphrase=repository.passphrase,
                 max_lines=max_items,  # Kill borg process if this limit is exceeded
-                bypass_lock=repository.bypass_lock
             )
 
             # Check if line limit was exceeded (borg process was killed to prevent OOM)

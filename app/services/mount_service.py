@@ -19,11 +19,13 @@ from enum import Enum
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, Optional, Tuple, List
+from types import SimpleNamespace
 import structlog
 import base64
 from cryptography.fernet import Fernet
 
 from app.config import settings
+from app.core.borg_router import BorgRouter
 from app.core.security import decrypt_secret
 from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey, Repository, SystemSettings
@@ -57,6 +59,7 @@ class MountInfo:
     temp_key_file: Optional[str] = None
     connection_id: Optional[int] = None
     repository_id: Optional[int] = None
+    borg_version: Optional[int] = None
     process_pid: Optional[int] = None  # PID of borg mount process (for foreground mounts)
 
 
@@ -847,31 +850,13 @@ class MountService:
                 if repository.passphrase:
                     env["BORG_PASSPHRASE"] = repository.passphrase
 
-                # Build mount command
-                cmd = ["borg", "mount"]
-
-                # Add remote path if specified (path to borg binary on remote)
-                if repository.remote_path:
-                    cmd.extend(["--remote-path", repository.remote_path])
-
-                # Add archive-specific mount if specified
-                if archive_name:
-                    cmd.append(f"{repository.path}::{archive_name}")
-                else:
-                    cmd.append(repository.path)
-
-                cmd.append(mount_point)
-
-                # Add borg options
-                cmd.extend(["-o", "allow_other"])
-
-                # Add foreground flag to prevent daemonization
-                # We need to handle the daemonization ourselves to properly track the mount
-                cmd.extend(["-f"])  # Run in foreground
-
-                # Add bypass-lock for read-only storage access (observe-only repos)
-                if repository.bypass_lock:
-                    cmd.append("--bypass-lock")
+                cmd = BorgRouter(repository).build_mount_command(
+                    repository_path=repository.path,
+                    archive_name=archive_name,
+                    mount_point=mount_point,
+                    remote_path=repository.remote_path,
+                    bypass_lock=repository.bypass_lock,
+                )
 
                 # Log command for debugging
                 logger.info(
@@ -991,6 +976,7 @@ class MountService:
                     created_at=datetime.now(timezone.utc),
                     temp_key_file=temp_key_file,
                     repository_id=repository_id,
+                    borg_version=repository.borg_version or 1,
                     process_pid=process.pid  # Store PID for cleanup
                 )
 
@@ -1086,7 +1072,11 @@ class MountService:
             if mount_info.mount_type == MountType.SSHFS:
                 success = await self._unmount_fuse(mount_info.mount_point, force)
             elif mount_info.mount_type == MountType.BORG_ARCHIVE:
-                success = await self._unmount_borg(mount_info.mount_point, force)
+                success = await self._unmount_borg(
+                    mount_info.mount_point,
+                    borg_version=mount_info.borg_version or 1,
+                    force=force,
+                )
             else:
                 logger.error("Unknown mount type", mount_type=mount_info.mount_type)
                 success = False
@@ -1607,12 +1597,14 @@ class MountService:
 
         return False
 
-    async def _unmount_borg(self, mount_point: str, force: bool = False) -> bool:
+    async def _unmount_borg(self, mount_point: str, borg_version: int = 1, force: bool = False) -> bool:
         """Unmount a Borg mount"""
         # Try borg umount first
         for attempt in range(3):
             try:
-                cmd = ["borg", "umount", mount_point]
+                cmd = BorgRouter(SimpleNamespace(borg_version=borg_version)).build_unmount_command(
+                    mount_point
+                )
 
                 process = await asyncio.create_subprocess_exec(
                     *cmd,

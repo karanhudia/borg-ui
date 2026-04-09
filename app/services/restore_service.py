@@ -8,9 +8,11 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from typing import Optional
 import shutil
+from types import SimpleNamespace
 
 from app.database.models import RestoreJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
+from app.core.borg_router import BorgRouter
 from app.services.notification_service import notification_service
 
 logger = structlog.get_logger()
@@ -142,20 +144,20 @@ class RestoreService:
                     return
 
             try:
-                # Build borg extract command with progress tracking and JSON output
-                cmd = ["borg", "extract", "--progress", "--log-json"]
-
-                if repository and repository.remote_path:
-                    cmd.extend(["--remote-path", repository.remote_path])
-
-                if repository and repository.bypass_lock:
-                    cmd.append("--bypass-lock")
-
-                cmd.append(f"{repository_path}::{archive_name}")
-
-                # Add paths if specified
-                if paths:
-                    cmd.extend(paths)
+                repo_for_routing = repository or SimpleNamespace(
+                    borg_version=1,
+                    path=repository_path,
+                    remote_path=None,
+                    bypass_lock=False,
+                    passphrase=None,
+                )
+                cmd = BorgRouter(repo_for_routing).build_restore_extract_command(
+                    repository_path=repository_path,
+                    archive_name=archive_name,
+                    paths=paths or [],
+                    remote_path=repository.remote_path if repository else None,
+                    bypass_lock=repository.bypass_lock if repository else False,
+                )
 
                 # Set up environment
                 env = os.environ.copy()
@@ -642,19 +644,20 @@ class RestoreService:
             # Ensure mount directory exists
             os.makedirs(mount_path, exist_ok=True)
 
-            # Build borg extract command (same as local restore)
-            cmd = ["borg", "extract", "--progress", "--log-json"]
-
-            if repository and repository.remote_path:
-                cmd.extend(["--remote-path", repository.remote_path])
-
-            if repository and repository.bypass_lock:
-                cmd.append("--bypass-lock")
-
-            cmd.append(f"{repository_path}::{archive_name}")
-
-            if paths:
-                cmd.extend(paths)
+            repo_for_routing = repository or SimpleNamespace(
+                borg_version=1,
+                path=repository_path,
+                remote_path=None,
+                bypass_lock=False,
+                passphrase=None,
+            )
+            cmd = BorgRouter(repo_for_routing).build_restore_extract_command(
+                repository_path=repository_path,
+                archive_name=archive_name,
+                paths=paths or [],
+                remote_path=repository.remote_path if repository else None,
+                bypass_lock=repository.bypass_lock if repository else False,
+            )
 
             # Set up environment
             env = os.environ.copy()

@@ -10,12 +10,12 @@ import asyncio
 
 from app.database.models import User, Repository, RestoreJob
 from app.database.database import get_db
+from app.core.borg_router import BorgRouter
 from app.core.security import (
     get_current_user,
     check_repo_access,
     require_repository_access_by_path,
 )
-from app.core.borg import borg
 from app.services.restore_service import restore_service
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
@@ -64,15 +64,10 @@ async def preview_restore(
             'viewer',
         )
 
-        result = await borg.extract_archive(
-            restore_request.repository,
-            restore_request.archive,
-            restore_request.paths,
-            restore_request.destination,
-            dry_run=True,
-            remote_path=repo.remote_path if repo else None,
-            passphrase=repo.passphrase if repo else None,
-            bypass_lock=repo.bypass_lock if repo else False
+        result = await BorgRouter(repo).preview_restore(
+            archive=restore_request.archive,
+            paths=restore_request.paths,
+            destination=restore_request.destination,
         )
         return {"preview": result["stdout"]}
     except HTTPException:
@@ -249,13 +244,9 @@ async def get_archive_contents(
             # If not in cache, fetch from borg (fetch ALL items, not just the requested path)
             env, temp_key_file = _build_repo_env(repository, db)
             try:
-                result = await borg.list_archive_contents(
-                    repository.path,
-                    archive_name,
+                result = await BorgRouter(repository).list_archive_contents(
+                    archive=archive_name,
                     path="",  # Always fetch all items for caching
-                    remote_path=repository.remote_path,
-                    passphrase=repository.passphrase,
-                    bypass_lock=repository.bypass_lock,
                     env=env,
                 )
             finally:

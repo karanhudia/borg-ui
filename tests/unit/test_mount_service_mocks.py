@@ -99,6 +99,53 @@ async def test_mount_borg_archive_success(mount_service_fixture, mock_db_session
                         assert "/backups/repo" in args
                         assert "-f" in args # Foreground mode
 
+
+@pytest.mark.asyncio
+async def test_mount_borg_archive_uses_borg2_binary_for_v2_repo(mount_service_fixture, mock_db_session):
+    repo = Repository(
+        id=1,
+        name="TestRepo",
+        path="/backups/repo",
+        repository_type="local",
+        borg_version=2,
+    )
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == Repository:
+            m.filter.return_value.first.return_value = repo
+        elif model == SystemSettings:
+            m.first.return_value = SystemSettings(mount_timeout=10)
+            m.filter.return_value.all.return_value = []
+        return m
+
+    mock_db_session.query.side_effect = query_side_effect
+    mock_process = AsyncMock()
+    mock_process.pid = 12345
+    mock_process.returncode = None
+    mock_process.kill = MagicMock()
+
+    with patch("app.services.mount_service.asyncio.sleep", return_value=None), patch(
+        "app.core.borg2.borg2.borg_cmd", "borg2"
+    ), patch(
+        "app.services.mount_service.asyncio.create_subprocess_exec", return_value=mock_process
+    ) as mock_exec, patch("app.services.mount_service.subprocess.run") as mock_run, patch(
+        "app.services.mount_service.os.makedirs"
+    ), patch("app.services.mount_service.os.path.exists", return_value=False):
+        expected_mount_point = "/tmp/borg-data/mounts/repository"
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=""),
+            MagicMock(returncode=0, stdout=f"{expected_mount_point} on {expected_mount_point}"),
+        ]
+
+        _, mount_id = await mount_service_fixture.mount_borg_archive(repository_id=1)
+
+    args = mock_exec.call_args[0]
+    assert args[0] == "borg2"
+    assert "-r" in args
+    assert "mount" in args
+    assert mount_service_fixture.active_mounts[mount_id].borg_version == 2
+
 @pytest.mark.asyncio
 async def test_unmount_success(mount_service_fixture):
     """Test successful unmount"""
@@ -132,6 +179,36 @@ async def test_unmount_success(mount_service_fixture):
             
             # Verify PID verify/kill flow
             mock_kill.assert_any_call(12345, 15)
+
+
+@pytest.mark.asyncio
+async def test_unmount_v2_uses_borg2_binary(mount_service_fixture):
+    mount_id = "test-mount-id"
+    mount_service_fixture.active_mounts[mount_id] = MountInfo(
+        mount_id=mount_id,
+        mount_type=MountType.BORG_ARCHIVE,
+        mount_point="/mnt/test",
+        source="repo",
+        created_at="2024-01-01",
+        borg_version=2,
+        process_pid=12345,
+    )
+
+    mock_process = AsyncMock()
+    mock_process.returncode = 0
+    mock_process.communicate.return_value = (b"", b"")
+
+    with patch("app.services.mount_service.os.kill"), patch(
+        "app.core.borg2.borg2.borg_cmd", "borg2"
+    ), patch(
+        "app.services.mount_service.asyncio.create_subprocess_exec", return_value=mock_process
+    ) as mock_exec:
+        result = await mount_service_fixture.unmount(mount_id)
+
+    assert result is True
+    args = mock_exec.call_args[0]
+    assert args[0] == "borg2"
+    assert args[1] == "umount"
 
 @pytest.mark.asyncio
 async def test_list_mounts(mount_service_fixture):

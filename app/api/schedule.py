@@ -11,6 +11,7 @@ import asyncio
 from app.database.database import get_db, SessionLocal
 from app.database.models import User, ScheduledJob, ScheduledJobRepository, CompactJob, PruneJob, Repository, BackupJob, Script, RepositoryScript
 from app.core.authorization import authorize_request
+from app.core.borg_router import BorgRouter
 from app.core.security import get_current_user, check_repo_access
 from app.config import settings
 from app.services.notification_service import notification_service
@@ -1594,11 +1595,8 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                         backup_job.maintenance_status = "running_prune"
                         db.commit()
 
-                        # Use prune service for proper log handling
-                        from app.services.prune_service import prune_service
-                        await prune_service.execute_prune(
+                        await BorgRouter(repo).prune(
                             job_id=prune_job.id,
-                            repository_id=repo.id,
                             keep_hourly=scheduled_job.prune_keep_hourly,
                             keep_daily=scheduled_job.prune_keep_daily,
                             keep_weekly=scheduled_job.prune_keep_weekly,
@@ -1655,13 +1653,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                         backup_job.maintenance_status = "running_compact"
                         db.commit()
 
-                        # Use compact service for proper log handling (same as manual compact)
-                        from app.services.compact_service import compact_service
-                        await compact_service.execute_compact(
-                            compact_job.id,
-                            repo.id,
-                            db
-                        )
+                        await BorgRouter(repo).compact(compact_job.id)
 
                         # Refresh job to get updated status
                         db.refresh(compact_job)
@@ -1782,11 +1774,8 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 backup_job.maintenance_status = "running_prune"
                 db.commit()
 
-                # Use prune service for proper log handling
-                from app.services.prune_service import prune_service
-                await prune_service.execute_prune(
+                await BorgRouter(repo).prune(
                     job_id=prune_job.id,
-                    repository_id=repo.id,
                     keep_hourly=scheduled_job.prune_keep_hourly,
                     keep_daily=scheduled_job.prune_keep_daily,
                     keep_weekly=scheduled_job.prune_keep_weekly,
@@ -1847,13 +1836,7 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 backup_job.maintenance_status = "running_compact"
                 db.commit()
 
-                # Use compact service for proper log handling (same as manual compact)
-                from app.services.compact_service import compact_service
-                await compact_service.execute_compact(
-                    compact_job.id,
-                    repo.id,
-                    db
-                )
+                await BorgRouter(repo).compact(compact_job.id)
 
                 # Refresh job to get updated status
                 db.refresh(compact_job)

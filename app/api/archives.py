@@ -17,7 +17,7 @@ from app.core.security import (
     require_repository_access_by_path,
 )
 from app.core.borg import borg
-from app.services.delete_archive_service import delete_archive_service
+from app.core.borg_router import BorgRouter
 from app.api.repositories import get_standard_ssh_opts, setup_borg_env
 from app.utils.ssh_utils import resolve_repo_ssh_key_file
 import asyncio
@@ -276,14 +276,7 @@ async def delete_archive(
         db.refresh(delete_job)
 
         # Execute delete asynchronously (non-blocking)
-        asyncio.create_task(
-            delete_archive_service.execute_delete(
-                delete_job.id,
-                repo.id,
-                archive_id,
-                None  # Create new session for background task
-            )
-        )
+        asyncio.create_task(BorgRouter(repo).delete_archive(delete_job.id, archive_id))
 
         logger.info("Delete archive job created", job_id=delete_job.id, repository_id=repo.id, archive=archive_id, user=current_user.username)
 

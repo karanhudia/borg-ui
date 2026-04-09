@@ -66,6 +66,32 @@ class TestArchivesResourceValidation:
         assert response.status_code == 404
         assert response.json()["detail"]["key"] == "backend.errors.restore.repositoryNotFound"
 
+    def test_delete_archive_legacy_route_dispatches_v2_repo_via_router(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        repo = Repository(
+            name="V2 Repo",
+            path="/tmp/v2-repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch("app.api.archives.BorgRouter.delete_archive", new_callable=AsyncMock) as mock_delete:
+            response = test_client.delete(
+                "/api/archives/archive-1",
+                params={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        mock_delete.assert_awaited_once()
+
 
 @pytest.mark.unit
 class TestArchivesSshEnvironment:

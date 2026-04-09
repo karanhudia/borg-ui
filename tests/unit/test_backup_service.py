@@ -318,13 +318,24 @@ class TestBackupService:
         assert missing_tail == []
 
     @pytest.mark.asyncio
-    async def test_update_archive_stats_updates_job_statistics(self, backup_service, test_db):
+    async def test_update_archive_stats_updates_job_statistics(self, backup_service, test_db, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        repo = Repository(
+            name="Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            compression="lz4",
+        )
         job = BackupJob(
-            repository="/test/repo",
+            repository=str(repo_path),
             status="running",
             started_at=datetime.now(),
         )
-        test_db.add(job)
+        test_db.add_all([repo, job])
         test_db.commit()
         test_db.refresh(job)
 
@@ -341,7 +352,7 @@ class TestBackupService:
             await backup_service._update_archive_stats(
                 test_db,
                 job.id,
-                "/test/repo",
+                str(repo_path),
                 "test-archive",
                 {},
             )
@@ -391,10 +402,14 @@ class TestBackupService:
         mqtt.sync_state_with_db.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_execute_backup_success_saves_logs_and_notifies_success(self, backup_service, test_db):
+    async def test_execute_backup_success_saves_logs_and_notifies_success(self, backup_service, test_db, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
         repo = Repository(
             name="Repo",
-            path="/test/repo",
+            path=str(repo_path),
             encryption="none",
             repository_type="local",
             source_directories='["/data"]',
@@ -455,10 +470,14 @@ class TestBackupService:
         notifications.send_backup_failure.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_execute_backup_warning_marks_warning_and_notifies_warning(self, backup_service, test_db):
+    async def test_execute_backup_warning_marks_warning_and_notifies_warning(self, backup_service, test_db, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
         repo = Repository(
             name="Repo",
-            path="/test/repo",
+            path=str(repo_path),
             encryption="none",
             repository_type="local",
             source_directories='["/data"]',
@@ -513,10 +532,14 @@ class TestBackupService:
         notifications.send_backup_success.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_execute_backup_lock_error_marks_failed_and_keeps_error_hint(self, backup_service, test_db):
+    async def test_execute_backup_lock_error_marks_failed_and_keeps_error_hint(self, backup_service, test_db, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
         repo = Repository(
             name="Repo",
-            path="/test/repo",
+            path=str(repo_path),
             encryption="none",
             repository_type="local",
             source_directories='["/data"]',
@@ -565,7 +588,7 @@ class TestBackupService:
 
         test_db.refresh(job)
         assert job.status == "failed"
-        assert "LOCK_ERROR::/test/repo" in job.error_message
+        assert f"LOCK_ERROR::{repo.path}" in job.error_message
         assert job.has_logs is True
         assert Path(job.log_file_path).exists()
         notifications.send_backup_failure.assert_awaited_once()
@@ -600,6 +623,118 @@ class TestBackupService:
             except Exception:
                 # Expected to fail with repository not found
                 pass
+
+    @pytest.mark.asyncio
+    async def test_execute_backup_fails_fast_for_invalid_local_repository_path(self, backup_service, test_db, tmp_path):
+        repo_path = tmp_path / "not-a-borg-repo"
+        repo_path.mkdir()
+        (repo_path / "config").mkdir()
+
+        repo = Repository(
+            name="Invalid Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories='["/data"]',
+            compression="lz4",
+        )
+        settings_row = SystemSettings(log_save_policy="all_jobs")
+        job = BackupJob(repository=repo.path, status="pending")
+        test_db.add_all([repo, settings_row, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        notifications = MagicMock()
+        notifications.send_backup_start = AsyncMock()
+        notifications.send_backup_success = AsyncMock()
+        notifications.send_backup_warning = AsyncMock()
+        notifications.send_backup_failure = AsyncMock()
+
+        with patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec",
+            side_effect=AssertionError("borg should not run for invalid repository paths"),
+        ), patch(
+            "app.services.backup_service.notification_service", notifications
+        ), patch(
+            "app.services.backup_service.mqtt_service"
+        ) as mqtt:
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        test_db.refresh(job)
+        assert job.status == "failed"
+        assert "backend.errors.repo.notValidBorgRepository" in job.error_message
+        assert str(repo_path) in (job.logs or "")
+        notifications.send_backup_failure.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_backup_uses_borg2_command_for_borg2_repositories(self, backup_service, test_db, tmp_path):
+        repo_path = tmp_path / "borg2-repo"
+        repo_path.mkdir()
+
+        repo = Repository(
+            name="Borg 2 Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories='["/data/source.txt"]',
+            compression="lz4",
+            borg_version=2,
+        )
+        settings_row = SystemSettings(log_save_policy="all_jobs")
+        job = BackupJob(repository=repo.path, status="pending")
+        test_db.add_all([repo, settings_row, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        fake_process = FakeProcess(returncode=0, stdout_lines=['{"type":"archive_progress","finished":true}'])
+        notifications = MagicMock()
+        notifications.send_backup_start = AsyncMock()
+        notifications.send_backup_success = AsyncMock()
+        notifications.send_backup_warning = AsyncMock()
+        notifications.send_backup_failure = AsyncMock()
+
+        with patch.object(backup_service, "_execute_hooks", AsyncMock(return_value={
+            "success": True,
+            "execution_logs": [],
+            "scripts_executed": 0,
+            "scripts_failed": 0,
+            "using_library": False,
+        })), patch.object(
+            backup_service, "_prepare_source_paths", AsyncMock(return_value=(["/data/source.txt"], []))
+        ), patch.object(
+            backup_service, "_calculate_and_update_size_background", AsyncMock()
+        ), patch.object(
+            backup_service, "_update_archive_stats", AsyncMock()
+        ), patch.object(
+            backup_service, "_update_repository_stats", AsyncMock()
+        ), patch(
+            "app.services.backup_service.resolve_repo_ssh_key_file", return_value=None
+        ), patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec", return_value=fake_process
+        ) as mock_subprocess, patch(
+            "app.services.backup_service.asyncio.create_task", side_effect=_discard_background_task
+        ), patch(
+            "app.services.backup_service.notification_service", notifications
+        ), patch(
+            "app.services.backup_service.mqtt_service"
+        ) as mqtt, patch(
+            "app.core.borg2.borg2.borg_cmd", "borg2"
+        ):
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        test_db.refresh(job)
+        assert job.status == "completed"
+        create_call = mock_subprocess.call_args
+        create_cmd = create_call.args
+        assert create_cmd[0] == "borg2"
+        assert "-r" in create_cmd
+        assert str(repo_path) in create_cmd
+        assert "create" in create_cmd
+        assert f"{repo.path}::" not in " ".join(create_cmd)
+        assert "/data/source.txt" in create_cmd
+        notifications.send_backup_success.assert_awaited_once()
 
     def test_running_processes_tracking(self, backup_service):
         """Test that running_processes dict is managed correctly"""

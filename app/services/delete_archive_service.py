@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database.models import DeleteArchiveJob, Repository
 from app.database.database import SessionLocal
 from app.config import settings
+from app.core.borg import borg
 
 logger = structlog.get_logger()
 
@@ -89,7 +90,7 @@ class DeleteArchiveService:
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
             # Build command
-            cmd = ["borg", "delete", "--stats", "--progress"]
+            cmd = [borg.borg_cmd, "delete", "--stats", "--progress"]
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])
             cmd.append(f"{repository.path}::{archive_name}")

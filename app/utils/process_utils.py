@@ -7,6 +7,7 @@ import subprocess
 import structlog
 from datetime import datetime
 from sqlalchemy.orm import Session
+from app.core.borg_router import BorgRouter
 from app.database.models import CheckJob, CompactJob, BackupJob, RestoreJob, Repository
 
 logger = structlog.get_logger()
@@ -67,8 +68,10 @@ def break_repository_lock(repository: Repository) -> bool:
         True if lock was successfully broken, False otherwise
     """
     try:
-        # Build borg break-lock command
-        cmd = ["borg", "break-lock", repository.path]
+        cmd = BorgRouter(repository).build_break_lock_command(
+            repository_path=repository.path,
+            remote_path=repository.remote_path,
+        )
 
         # Set environment variables
         env = os.environ.copy()
@@ -83,9 +86,6 @@ def break_repository_lock(repository: Repository) -> bool:
                 "-o", "LogLevel=ERROR"
             ]
             env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
-
-            if repository.remote_path:
-                cmd.extend(["--remote-path", repository.remote_path])
 
         # Execute break-lock command
         result = subprocess.run(

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database.models import PruneJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.config import settings
+from app.core.borg import borg
 from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
@@ -102,7 +103,7 @@ class PruneService:
 
             # Build prune command
             # Note: --stats is not supported with --dry-run in Borg 1.4.x
-            cmd = ["borg", "prune", "--list", "--log-json"]
+            cmd = [borg.borg_cmd, "prune", "--list", "--log-json"]
 
             # Add dry-run flag if requested
             if dry_run:

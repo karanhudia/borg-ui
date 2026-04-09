@@ -85,7 +85,7 @@ class TestRestoreContents:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch('app.api.restore.borg.list_archive_contents', new_callable=AsyncMock) as mock_list:
+        with patch("app.api.restore.BorgRouter.list_archive_contents", new_callable=AsyncMock) as mock_list:
             mock_list.return_value = {
                 "success": True,
                 "stdout": '{"path": "/file.txt", "type": "f"}\n'
@@ -105,7 +105,7 @@ class TestRestoreContents:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch('app.api.restore.borg.list_archive_contents', new_callable=AsyncMock) as mock_list:
+        with patch("app.api.restore.BorgRouter.list_archive_contents", new_callable=AsyncMock) as mock_list:
             mock_list.return_value = {
                 "success": True,
                 "stdout": '{"path": "/subdir/file.txt"}\n'
@@ -135,7 +135,7 @@ class TestRestoreContents:
              patch("app.api.restore.resolve_repo_ssh_key_file", return_value=fake_key_path), \
              patch("app.api.restore.os.path.exists", side_effect=lambda path: path == fake_key_path), \
              patch("app.api.restore.os.unlink") as mock_unlink, \
-             patch('app.api.restore.borg.list_archive_contents', new_callable=AsyncMock) as mock_list:
+             patch("app.api.restore.BorgRouter.list_archive_contents", new_callable=AsyncMock) as mock_list:
             mock_list.return_value = {
                 "success": True,
                 "stdout": '{"path": "/ssh-remote.txt", "type": "f"}\n'
@@ -182,6 +182,33 @@ class TestRestoreContents:
         assert response.status_code == 200
         assert response.json()["items"] == []
 
+    def test_list_contents_uses_v2_router_for_borg2_repositories(self, test_client: TestClient, admin_headers, test_db):
+        repo = Repository(
+            name="V2 Repo",
+            path="/test/v2-repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch("app.api.restore.archive_cache.get", new_callable=AsyncMock, return_value=None), \
+             patch("app.api.restore.BorgRouter.list_archive_contents", new_callable=AsyncMock) as mock_list:
+            mock_list.return_value = {
+                "success": True,
+                "stdout": '{"path": "photo.jpg", "type": "f"}\n'
+            }
+
+            response = test_client.get(
+                f"/api/restore/contents/{repo.id}/test-archive",
+                headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        mock_list.assert_awaited_once()
+
 
 @pytest.mark.unit
 class TestRestorePreview:
@@ -194,8 +221,8 @@ class TestRestorePreview:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch("app.api.restore.borg.extract_archive", new_callable=AsyncMock) as mock_extract:
-            mock_extract.return_value = {"stdout": "preview output"}
+        with patch("app.api.restore.BorgRouter.preview_restore", new_callable=AsyncMock) as mock_preview:
+            mock_preview.return_value = {"stdout": "preview output"}
             response = test_client.post(
                 "/api/restore/preview",
                 json={
@@ -210,7 +237,11 @@ class TestRestorePreview:
 
         assert response.status_code == 200
         assert response.json()["preview"] == "preview output"
-        mock_extract.assert_awaited_once()
+        mock_preview.assert_awaited_once_with(
+            archive="test-archive",
+            paths=["/file1.txt", "/file2.txt"],
+            destination="/restore/target",
+        )
 
     def test_preview_restore_missing_fields(self, test_client: TestClient, admin_headers):
         """Test previewing restore with missing fields returns 422"""
@@ -259,19 +290,56 @@ class TestRestorePreview:
         test_db.commit()
         test_db.refresh(repo)
 
-        response = test_client.post(
-            "/api/restore/preview",
-            json={
-                "repository_id": repo.id,
-                "repository": repo.path,
-                "archive": "test-archive",
-                "paths": [],
-                "destination": "/restore"
-            },
-            headers=admin_headers
-        )
+        with patch("app.api.restore.BorgRouter.preview_restore", new_callable=AsyncMock) as mock_preview:
+            mock_preview.return_value = {"stdout": "preview output"}
+
+            response = test_client.post(
+                "/api/restore/preview",
+                json={
+                    "repository_id": repo.id,
+                    "repository": repo.path,
+                    "archive": "test-archive",
+                    "paths": [],
+                    "destination": "/restore"
+                },
+                headers=admin_headers
+            )
 
         assert response.status_code == 200
+
+    def test_preview_restore_uses_v2_router_for_borg2_repositories(self, test_client: TestClient, admin_headers, test_db):
+        repo = Repository(
+            name="V2 Repo",
+            path="/test/v2-repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch("app.api.restore.BorgRouter.preview_restore", new_callable=AsyncMock) as mock_preview:
+            mock_preview.return_value = {"stdout": "preview output"}
+            response = test_client.post(
+                "/api/restore/preview",
+                json={
+                    "repository": repo.path,
+                    "repository_id": repo.id,
+                    "archive": "test-archive",
+                    "paths": ["/file1.txt"],
+                    "destination": "/restore/target"
+                },
+                headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json()["preview"] == "preview output"
+        mock_preview.assert_awaited_once_with(
+            archive="test-archive",
+            paths=["/file1.txt"],
+            destination="/restore/target",
+        )
 
 
 @pytest.mark.unit

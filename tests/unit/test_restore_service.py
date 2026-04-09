@@ -258,8 +258,54 @@ class TestRestoreServiceExecution:
         assert refreshed.progress == 100
         assert refreshed.progress_percent == 100.0
         assert "STDOUT:" in refreshed.logs
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_local_restore_uses_borg2_extract_shape_for_v2_repositories(
+        self, testing_session_local, restore_job, restore_repository
+    ):
+        restore_repository.borg_version = 2
+        session = testing_session_local()
+        session.merge(restore_repository)
+        session.commit()
+        session.close()
+
+        service = RestoreService()
+        process = FakeRestoreProcess(
+            returncode=0,
+            stderr_chunks=[b'{"type":"progress_percent","current":1,"total":1,"finished":true}\n'],
+            stdout_lines=[b"restored\n"],
+        )
+
+        notification_mock = SimpleNamespace(
+            send_restore_success=AsyncMock(return_value=None),
+            send_restore_failure=AsyncMock(return_value=None),
+        )
+
+        with patch("app.services.restore_service.SessionLocal", testing_session_local), patch(
+            "app.services.restore_service.asyncio.create_subprocess_exec",
+            return_value=process,
+        ) as mock_exec, patch(
+            "app.services.restore_service.notification_service",
+            notification_mock,
+        ), patch(
+            "app.core.borg2.borg2.borg_cmd", "borg2"
+        ):
+            await service._execute_local_to_local(
+                restore_job.id,
+                restore_job.repository,
+                restore_job.archive,
+                restore_job.destination,
+                ["etc/hosts"],
+            )
+
+        cmd = mock_exec.call_args.args
+        assert cmd[0] == "borg2"
+        assert "-r" in cmd
+        assert restore_job.repository in cmd
+        assert "extract" in cmd
+        assert "aid:archive-1" in cmd
         notification_mock.send_restore_success.assert_awaited_once()
-        verification.close()
 
     @pytest.mark.unit
     @pytest.mark.asyncio

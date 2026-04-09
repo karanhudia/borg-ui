@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.database.models import CheckJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.config import settings
+from app.core.borg import borg
 from app.services.notification_service import NotificationService
 from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
@@ -109,7 +110,7 @@ class CheckService:
                 logger.info("Using SSH key for check", job_id=job_id)
 
             # Build command
-            cmd = ["borg", "check", "--progress", "--log-json"]
+            cmd = [borg.borg_cmd, "check", "--progress", "--log-json"]
 
             # Add max-duration if specified and not 0 (unlimited)
             # Note: --repository-only is required when using --max-duration

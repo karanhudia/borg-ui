@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.database.models import BackupJob, Repository, RepositoryScript, SystemSettings
 from app.database.database import SessionLocal
 from app.config import settings
+from app.core.borg_router import BorgRouter
 from app.core.borg_errors import format_error_message, is_lock_error, get_error_details
 from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
@@ -306,12 +307,16 @@ class BackupService:
                 logger.warning("Job not found for stats update", job_id=job_id)
                 return
 
+            repo_record = db.query(Repository).filter(Repository.path == repository_path).first()
+            if not repo_record:
+                logger.warning("Repository record not found for archive stats update", repository=repository_path)
+                return
+            router = BorgRouter(repo_record)
+
             # Get timeouts from DB settings (with fallback to config)
             timeouts = self._get_operation_timeouts(db)
 
-            # Get specific archive info using borg info --json
-            archive_path = f"{repository_path}::{archive_name}"
-            info_cmd = ["borg", "info", "--json", archive_path]
+            info_cmd = router.build_archive_info_command(repository_path, archive_name)
             info_process = await asyncio.create_subprocess_exec(
                 *info_cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -362,12 +367,12 @@ class BackupService:
             if not repo_record:
                 logger.warning("Repository record not found for stats update", repository=repository_path)
                 return
+            router = BorgRouter(repo_record)
 
             # Get timeouts from DB settings (with fallback to config)
             timeouts = self._get_operation_timeouts(db)
 
-            # Get archive count using borg list --json
-            list_cmd = ["borg", "list", "--json", repository_path]
+            list_cmd = router.build_repo_list_command(repository_path)
             list_process = await asyncio.create_subprocess_exec(
                 *list_cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -385,8 +390,7 @@ class BackupService:
                 except json.JSONDecodeError as e:
                     logger.warning("Failed to parse borg list output", error=str(e))
 
-            # Get repository info using borg info --json
-            info_cmd = ["borg", "info", "--json", repository_path]
+            info_cmd = router.build_repo_info_command(repository_path)
             info_process = await asyncio.create_subprocess_exec(
                 *info_cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -1081,9 +1085,11 @@ class BackupService:
             source_paths = None  # No default - must be configured
             exclude_patterns = []  # Default no exclusions
             compression = "lz4"  # Default compression
+            router = None
             try:
                 repo_record = db.query(Repository).filter(Repository.path == repository).first()
                 if repo_record:
+                    router = BorgRouter(repo_record)
                     # Check if repository is in observability-only mode
                     if repo_record.mode == "observe":
                         error_msg = "Cannot create backups for observability-only repositories. This repository is configured for browsing and restoring existing archives only."
@@ -1169,6 +1175,8 @@ class BackupService:
                 error_msg = f"Could not look up repository record: {str(e)}"
                 logger.error(error_msg, error=str(e))
                 raise ValueError(error_msg)
+
+            router.validate_local_repository_access()
 
             # Use repository path as-is (already contains full SSH URL for SSH repos)
             actual_repository_path = repository
@@ -1302,31 +1310,13 @@ class BackupService:
                 return
             logger.info("Source paths prepared", original_count=len(source_paths), processed_count=len(processed_source_paths), ssh_mount_count=len(ssh_mount_info), job_id=job_id)
 
-            # Build command with source directories and exclude patterns
-            cmd = [
-                "borg", "create",
-                "--progress",
-                "--stats",
-                # "--list",  # REMOVED: Generates massive output, not needed for progress tracking
-                "--show-rc",  # Show return code for better debugging
-                "--log-json",  # Structured JSON logging
-                "--compression", compression,
-            ]
-
-            # Add exclude patterns
-            for pattern in exclude_patterns:
-                cmd.extend(["--exclude", pattern])
-
-            # Add custom flags if specified
+            custom_flag_list = []
             if repo_record and repo_record.custom_flags:
                 custom_flags = repo_record.custom_flags.strip()
                 if custom_flags:
-                    # Split custom flags by whitespace and add to command
-                    # This allows users to specify multiple flags like "--stats --list"
                     import shlex
                     try:
                         custom_flag_list = shlex.split(custom_flags)
-                        cmd.extend(custom_flag_list)
                         logger.info("Added custom flags to borg create command",
                                   job_id=job_id,
                                   custom_flags=custom_flags)
@@ -1336,8 +1326,13 @@ class BackupService:
                                      custom_flags=custom_flags,
                                      error=str(e))
 
-            # Add repository::archive
-            cmd.append(f"{actual_repository_path}::{archive_name}")
+            cmd = router.build_backup_create_command(
+                repository_path=actual_repository_path,
+                archive_name=archive_name,
+                compression=compression,
+                exclude_patterns=exclude_patterns,
+                custom_flags=custom_flag_list,
+            )
 
             # Determine if we should use cwd for SSH mounts to avoid /tmp/sshfs_mount_xxx/ in archive
             # With the new mount structure, paths already preserve original directory structure
@@ -2104,7 +2099,15 @@ class BackupService:
             try:
                 failure_text = str(e)
                 job.status = "failed"
-                job.error_message = json.dumps({"key": "backend.errors.borg.unknownError"})
+                try:
+                    parsed_error = json.loads(failure_text)
+                    job.error_message = (
+                        failure_text
+                        if isinstance(parsed_error, dict) and parsed_error.get("key")
+                        else json.dumps({"key": "backend.errors.borg.unknownError"})
+                    )
+                except (TypeError, json.JSONDecodeError):
+                    job.error_message = json.dumps({"key": "backend.errors.borg.unknownError"})
                 job.completed_at = datetime.utcnow()
                 if not job.logs:
                     job.logs = failure_text
@@ -2130,7 +2133,15 @@ class BackupService:
                     retry_job = retry_db.query(BackupJob).filter(BackupJob.id == job_id).first()
                     if retry_job:
                         retry_job.status = "failed"
-                        retry_job.error_message = json.dumps({"key": "backend.errors.borg.unknownError"})
+                        try:
+                            parsed_error = json.loads(str(e))
+                            retry_job.error_message = (
+                                str(e)
+                                if isinstance(parsed_error, dict) and parsed_error.get("key")
+                                else json.dumps({"key": "backend.errors.borg.unknownError"})
+                            )
+                        except (TypeError, json.JSONDecodeError):
+                            retry_job.error_message = json.dumps({"key": "backend.errors.borg.unknownError"})
                         retry_job.completed_at = datetime.utcnow()
                         if not retry_job.logs:
                             retry_job.logs = str(e)

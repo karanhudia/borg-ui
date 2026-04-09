@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.database.models import CompactJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.config import settings
+from app.core.borg import borg
 from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
@@ -109,7 +110,7 @@ class CompactService:
                 logger.info("Using SSH key for compact", job_id=job_id)
 
             # Build command with --verbose to show freed space summary
-            cmd = ["borg", "compact", "--progress", "--verbose", "--log-json"]
+            cmd = [borg.borg_cmd, "compact", "--progress", "--verbose", "--log-json"]
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])
             cmd.append(repository.path)
