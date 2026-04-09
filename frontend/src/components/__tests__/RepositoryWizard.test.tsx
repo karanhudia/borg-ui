@@ -353,7 +353,7 @@ describe('RepositoryWizard', () => {
         expect(screen.getByText(/at least one required/i)).toBeInTheDocument()
       })
 
-      it('shows warning when no source directories added', async () => {
+      it('shows source directories helper when no source directories are added', async () => {
         const user = userEvent.setup()
         renderWizard('create')
 
@@ -364,7 +364,7 @@ describe('RepositoryWizard', () => {
         await goToStep2(user)
 
         expect(
-          screen.getByText(/At least one source directory or file is required/i)
+          screen.getByRole('button', { name: /source directories.*help/i })
         ).toBeInTheDocument()
       })
 
@@ -1157,14 +1157,14 @@ describe('RepositoryWizard', () => {
         expect(screen.getByText(/\(optional\)/i)).toBeInTheDocument()
       })
 
-      it('does NOT show required warning', async () => {
+      it('does NOT show source directories helper when source directories are optional', async () => {
         const user = userEvent.setup()
         renderWizard('import')
 
         await goToStep2Observe(user)
 
         expect(
-          screen.queryByText(/At least one source directory or file is required/i)
+          screen.queryByRole('button', { name: /source directories.*help/i })
         ).not.toBeInTheDocument()
       })
 
