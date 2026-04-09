@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast'
 const trackArchive = vi.fn()
 const borgListArchivesMock = vi.fn()
 const borgGetInfoMock = vi.fn()
+const borgDeleteArchiveMock = vi.fn()
 
 vi.mock('../../components/RepositorySelectorCard', () => ({
   default: ({ onChange }: { onChange: (id: number) => void }) => (
@@ -111,10 +112,13 @@ vi.mock('../../hooks/usePermissions', () => ({
 }))
 
 vi.mock('../../services/borgApi', () => ({
-  BorgApiClient: vi.fn().mockImplementation(() => ({
-    listArchives: borgListArchivesMock,
-    getInfo: borgGetInfoMock,
-  })),
+  BorgApiClient: vi.fn(function MockBorgApiClient() {
+    return {
+      listArchives: borgListArchivesMock,
+      getInfo: borgGetInfoMock,
+      deleteArchive: borgDeleteArchiveMock,
+    }
+  }),
 }))
 
 vi.mock('../../services/api', () => ({
@@ -197,6 +201,7 @@ describe('Archives page actions', () => {
       },
     })
     borgGetInfoMock.mockResolvedValue({ data: { info: {} } })
+    borgDeleteArchiveMock.mockResolvedValue({ data: { job_id: 7 } })
   })
 
   it('tracks filter/view and calls download, restore, and mount APIs from archive actions', async () => {
@@ -303,7 +308,7 @@ describe('Archives page actions', () => {
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     })
     const user = userEvent.setup()
-    vi.mocked(apiModule.archivesAPI.deleteArchive).mockRejectedValue({
+    borgDeleteArchiveMock.mockRejectedValue({
       response: { data: { detail: 'archives.toasts.deleteFailed' } },
     } as never)
 
@@ -314,7 +319,7 @@ describe('Archives page actions', () => {
     await user.click(await screen.findByText('Confirm Delete Archive'))
 
     await waitFor(() => {
-      expect(apiModule.archivesAPI.deleteArchive).toHaveBeenCalledWith('/repo/one', 'archive-1')
+      expect(borgDeleteArchiveMock).toHaveBeenCalledWith('archive-1')
       expect(toast.error).toHaveBeenCalledWith('Failed to delete archive')
     })
     expect(trackArchive).not.toHaveBeenCalledWith('Delete', repository)

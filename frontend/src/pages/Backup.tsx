@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import { Clock, Eye, Info, Play, RefreshCw, Square } from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
+import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import {
   formatBytes as formatBytesUtil,
@@ -84,7 +85,12 @@ const Backup: React.FC = () => {
 
   // Start backup mutation
   const startBackupMutation = useMutation({
-    mutationFn: (repository: string) => backupAPI.startBackup(repository),
+    mutationFn: () => {
+      if (!selectedRepoData) {
+        throw new Error('Repository not selected')
+      }
+      return new BorgApiClient(selectedRepoData).runBackup()
+    },
     onSuccess: () => {
       toast.success(t('backup.toasts.started'))
       queryClient.invalidateQueries({ queryKey: ['backup-status-manual'] })
@@ -138,7 +144,7 @@ const Backup: React.FC = () => {
       toast.error(t('backup.toasts.selectRepository'))
       return
     }
-    startBackupMutation.mutate(selectedRepository)
+    startBackupMutation.mutate()
   }
 
   // Handle cancel backup

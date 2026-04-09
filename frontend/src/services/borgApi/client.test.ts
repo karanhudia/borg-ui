@@ -58,12 +58,17 @@ describe('BorgApiClient', () => {
     const { BorgApiClient } = clientModule
     const client = new BorgApiClient({ id: 9, borg_version: 2 } as never)
 
+    client.runBackup({ archive_name: 'manual-v2' })
     client.getArchiveContents('archive-id', 'ignored-name', '/srv')
     client.pruneArchives({ keep_weekly: 4 })
     client.compact()
     client.checkRepository()
     const downloadUrl = client.getDownloadUrl('archive-2', '/srv/data.txt')
 
+    expect(postMock).toHaveBeenCalledWith('/v2/backup/run', {
+      repository_id: 9,
+      archive_name: 'manual-v2',
+    })
     expect(getMock).toHaveBeenCalledWith('/v2/archives/archive-id/contents', {
       params: { repository: 9, path: '/srv' },
     })

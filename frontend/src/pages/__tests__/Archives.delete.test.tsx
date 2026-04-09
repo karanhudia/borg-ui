@@ -12,6 +12,10 @@ import { renderWithProviders } from '../../test/test-utils'
 import Archives from '../Archives'
 import * as apiModule from '../../services/api'
 
+const deleteArchiveMock = vi.fn()
+const listArchivesMock = vi.fn()
+const getInfoMock = vi.fn()
+
 // Mock heavy child components to keep the test focused on deletion logic
 vi.mock('../../components/RepositorySelectorCard', () => ({
   default: ({ onChange }: { onChange: (id: number) => void }) => (
@@ -43,6 +47,16 @@ vi.mock('../../services/api', () => ({
   },
   mountsAPI: { mountBorgArchive: vi.fn() },
   restoreAPI: { getRestoreJobs: vi.fn() },
+}))
+
+vi.mock('../../services/borgApi', () => ({
+  BorgApiClient: vi.fn(function MockBorgApiClient() {
+    return {
+      listArchives: listArchivesMock,
+      getInfo: getInfoMock,
+      deleteArchive: deleteArchiveMock,
+    }
+  }),
 }))
 
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -113,9 +127,15 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
     vi.mocked(apiModule.restoreAPI.getRestoreJobs).mockResolvedValue({
       data: { jobs: [] },
     } as never)
-    vi.mocked(apiModule.archivesAPI.deleteArchive).mockResolvedValue({
+    listArchivesMock.mockResolvedValue({
+      data: { archives: [] },
+    })
+    getInfoMock.mockResolvedValue({
+      data: { info: {} },
+    })
+    deleteArchiveMock.mockResolvedValue({
       data: { job_id: 'job-123' },
-    } as never)
+    })
 
     // Intercept only the 2000ms setTimeout the component uses for invalidation,
     // letting all other setTimeout calls (react-query internals etc.) pass through
@@ -161,10 +181,7 @@ describe('Archives page — delete cache invalidation (regression #352)', () => 
 
     // Verify the API was called
     await waitFor(() => {
-      expect(apiModule.archivesAPI.deleteArchive).toHaveBeenCalledWith(
-        '/backup/repo',
-        'backup-2024-01-15'
-      )
+      expect(deleteArchiveMock).toHaveBeenCalledWith('backup-2024-01-15')
     })
 
     // Simulate the 2000ms setTimeout firing by calling the captured callback

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Backup from '../Backup'
 
+const runBackupMock = vi.fn()
+
 const { trackBackup, toastSuccess, toastError } = vi.hoisted(() => ({
   trackBackup: vi.fn(),
   toastSuccess: vi.fn(),
@@ -88,7 +90,6 @@ vi.mock('../../components/LogViewerDialog', () => ({
 
 vi.mock('../../services/api', () => ({
   backupAPI: {
-    startBackup: vi.fn(() => Promise.resolve({ data: {} })),
     getManualJobs: vi.fn(() =>
       Promise.resolve({
         data: {
@@ -109,12 +110,21 @@ vi.mock('../../services/api', () => ({
   },
 }))
 
+vi.mock('../../services/borgApi', () => ({
+  BorgApiClient: vi.fn(function MockBorgApiClient() {
+    return {
+      runBackup: runBackupMock,
+    }
+  }),
+}))
+
 describe('Backup page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     locationState = null
     canManageAll = false
     canDoBackup = true
+    runBackupMock.mockResolvedValue({ data: {} })
     repositoriesPayload = [
       {
         id: 1,
@@ -140,7 +150,6 @@ describe('Backup page', () => {
 
   it('preselects the repository from navigation state and starts a backup with that payload', async () => {
     const user = userEvent.setup()
-    const { backupAPI } = await import('../../services/api')
     locationState = { repositoryPath: '/repos/primary' }
 
     renderWithProviders(<Backup />)
@@ -150,7 +159,7 @@ describe('Backup page', () => {
     await user.click(screen.getByRole('button', { name: /start backup/i }))
 
     await waitFor(() => {
-      expect(backupAPI.startBackup).toHaveBeenCalledWith('/repos/primary')
+      expect(runBackupMock).toHaveBeenCalledTimes(1)
     })
     expect(toastSuccess).toHaveBeenCalledWith('Backup started successfully!')
     expect(trackBackup).toHaveBeenCalledWith(
@@ -161,6 +170,31 @@ describe('Backup page', () => {
         path: '/repos/primary',
       })
     )
+  })
+
+  it('uses the version-aware BorgApiClient when starting a Borg 2 backup', async () => {
+    const user = userEvent.setup()
+    locationState = { repositoryPath: '/repos/primary' }
+    repositoriesPayload = [
+      {
+        id: 1,
+        name: 'Primary Repo',
+        path: '/repos/primary',
+        compression: 'zstd',
+        exclude_patterns: ['*.tmp'],
+        source_directories: ['/data'],
+        mode: 'full',
+        borg_version: 2,
+      },
+    ]
+
+    renderWithProviders(<Backup />)
+
+    await user.click(await screen.findByRole('button', { name: /start backup/i }))
+
+    await waitFor(() => {
+      expect(runBackupMock).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('filters out observe-only repositories from manual backup selection', async () => {

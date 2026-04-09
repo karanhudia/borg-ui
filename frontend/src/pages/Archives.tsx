@@ -4,7 +4,7 @@ import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Box, Typography, CircularProgress } from '@mui/material'
 import { Folder } from 'lucide-react'
-import { archivesAPI, repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
+import { repositoriesAPI, mountsAPI, restoreAPI, archivesAPI } from '../services/api'
 import { useRepositoryStats } from '../hooks/useRepositoryStats'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -129,8 +129,8 @@ const Archives: React.FC = () => {
 
   // Delete archive mutation
   const deleteArchiveMutation = useMutation({
-    mutationFn: ({ repository, archive }: { repository: string; archive: string }) =>
-      archivesAPI.deleteArchive(repository, archive),
+    mutationFn: ({ archive }: { repository: string; archive: string }) =>
+      new BorgApiClient(selectedRepository!).deleteArchive(archive),
     onSuccess: (data) => {
       // Backend now returns job_id for background deletion
       toast.success(t('archives.deletionStarted', { id: data.data.job_id }))
