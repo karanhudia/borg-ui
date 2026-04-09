@@ -33,7 +33,16 @@ class SmokeClient:
         self.session = requests.Session()
         self.token: Optional[str] = None
         self.path_helper = DockerPathHelper(base_url, container_mode=False)
-        self.temp_dir = Path(tempfile.mkdtemp(prefix="borg-ui-smoke-"))
+        self.temp_dir = self._make_temp_dir()
+
+    def _make_temp_dir(self) -> Path:
+        base_dir = os.environ.get("BORG_UI_SMOKE_TMPDIR")
+        if base_dir:
+            root = Path(base_dir)
+        else:
+            root = REPO_ROOT / ".tmp" / "smoke"
+        root.mkdir(parents=True, exist_ok=True)
+        return Path(tempfile.mkdtemp(prefix="borg-ui-smoke-", dir=root))
 
     def cleanup(self) -> None:
         shutil.rmtree(self.temp_dir, ignore_errors=True)
@@ -284,7 +293,7 @@ class SmokeClient:
         self.log(f"Started backup job {job_id}")
         return job_id
 
-    def start_backup_v2(self, repository_id: int, *, token: Optional[str] = None) -> int:
+    def start_backup_v2(self, repository_id: int, *, token: Optional[str] = None) -> dict:
         response = self.request_ok(
             "POST",
             "/api/v2/backup/run",
@@ -293,9 +302,12 @@ class SmokeClient:
             json={"repository_id": repository_id},
             expected=(200, 201, 202),
         )
-        job_id = response.json()["job_id"]
-        self.log(f"Started Borg 2 backup job {job_id}")
-        return job_id
+        payload = response.json()
+        if "job_id" in payload:
+            self.log(f"Started Borg 2 backup job {payload['job_id']}")
+        else:
+            self.log("Borg 2 backup completed synchronously")
+        return payload
 
     def create_repository_and_backup(
         self,
@@ -347,14 +359,18 @@ class SmokeClient:
             passphrase=passphrase,
             extra=extra,
         )
-        job_id = self.start_backup_v2(repo_id, token=token)
-        job_data = self.wait_for_job(
-            "/api/backup/status",
-            job_id,
-            expected={"completed", "completed_with_warnings"},
-            token=token,
-            timeout=timeout,
-        )
+        backup_response = self.start_backup_v2(repo_id, token=token)
+        job_id = backup_response.get("job_id", 0)
+        if job_id:
+            job_data = self.wait_for_job(
+                "/api/backup/status",
+                job_id,
+                expected={"completed", "completed_with_warnings"},
+                token=token,
+                timeout=timeout,
+            )
+        else:
+            job_data = {"status": "completed", **backup_response}
         return repo_id, repository_path, job_id, job_data
 
     def wait_for_job(
