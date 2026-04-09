@@ -28,18 +28,7 @@ import {
   useTheme,
   alpha,
 } from '@mui/material'
-import {
-  Key,
-  Copy,
-  RefreshCw,
-  Wifi,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Plus,
-  Trash2,
-  Info,
-} from 'lucide-react'
+import { Key, Copy, RefreshCw, Wifi, CheckCircle, XCircle, Plus, Trash2, Info } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RemoteMachineCard from '../components/RemoteMachineCard'
@@ -1156,8 +1145,21 @@ export default function SSHConnectionsSingleKey() {
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <Tooltip title="Password is only used once to deploy the key">
-                      <AlertTriangle size={18} />
+                    <Tooltip
+                      title="The password is used to deploy your public key to the server's authorized_keys file. After deployment, you'll connect using the SSH key."
+                      arrow
+                    >
+                      <Box
+                        component="span"
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          color: 'text.secondary',
+                          cursor: 'help',
+                        }}
+                      >
+                        <Info size={18} />
+                      </Box>
                     </Tooltip>
                   </InputAdornment>
                 ),
@@ -1218,10 +1220,6 @@ export default function SSHConnectionsSingleKey() {
               helperText="Friendly name for this remote machine (e.g., hetzner, backup-server)"
               InputLabelProps={{ shrink: true }}
             />
-            <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
-              The password is used to deploy your public key to the server's authorized_keys file.
-              After deployment, you'll connect using the SSH key.
-            </Alert>
           </Stack>
         </DialogContent>
         <DialogActions>
