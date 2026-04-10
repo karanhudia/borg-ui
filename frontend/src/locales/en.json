@@ -1168,7 +1168,17 @@
       "dryRunSuccess": "Dry run completed successfully. Review the output above to see which archives would be deleted. If everything looks correct, click \"Prune Archives\" to execute.",
       "warningTitle": "Warning: Deleted archives cannot be recovered!",
       "warningCompact": "After pruning, run \"Compact\" to actually free up disk space.",
-      "dryRunButton": "Dry Run (Preview)"
+      "dryRunButton": "Dry Run (Preview)",
+      "resultsTitle": "Results",
+      "dryRunPreviewBadge": "PREVIEW",
+      "pruneCompleteBadge": "COMPLETE",
+      "pruneFailedBadge": "FAILED",
+      "runPruneNow": "Run Prune Now",
+      "done": "Done",
+      "close": "Close",
+      "dryRunNote": "Archives listed above would be deleted. If this looks correct, run prune to apply.",
+      "pruneNote": "Pruning complete. Run Compact to reclaim disk space.",
+      "noArchivesWouldBeDeleted": "No archives would be deleted with these settings."
     },
     "fileExplorer": {
       "selectDirectory": "Select Directory",
@@ -2879,6 +2889,7 @@
         "mountNotFound": "Mount {{mountId}} not found",
         "unmountFailed": "Failed to unmount {{mountId}}",
         "failedMountArchive": "Failed to mount archive",
+        "mountUnavailable": "Archive mounting is unavailable in this environment",
         "failedUnmount": "Failed to unmount",
         "failedListMounts": "Failed to list mounts",
         "failedGetMountInfo": "Failed to get mount info",

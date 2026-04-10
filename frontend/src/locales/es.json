@@ -1168,7 +1168,17 @@
       "dryRunSuccess": "Simulacro completado correctamente. Revisa la salida para ver qué archivos se eliminarían. Si todo parece correcto, haz clic en \"Podar archivos\" para ejecutar.",
       "warningTitle": "Advertencia: ¡Los archivos eliminados no se pueden recuperar!",
       "warningCompact": "Después de podar, ejecuta \"Compactar\" para liberar espacio en disco.",
-      "dryRunButton": "Simulacro (Vista previa)"
+      "dryRunButton": "Simulacro (Vista previa)",
+      "resultsTitle": "Resultados",
+      "dryRunPreviewBadge": "VISTA PREVIA",
+      "pruneCompleteBadge": "COMPLETADO",
+      "pruneFailedBadge": "FALLIDO",
+      "runPruneNow": "Ejecutar poda ahora",
+      "done": "Hecho",
+      "close": "Cerrar",
+      "dryRunNote": "Los archivos listados arriba se eliminarían. Si parece correcto, ejecuta la poda.",
+      "pruneNote": "Poda completada. Ejecuta Compactar para recuperar espacio en disco.",
+      "noArchivesWouldBeDeleted": "No se eliminarían archivos con esta configuración."
     },
     "fileExplorer": {
       "selectDirectory": "Seleccionar directorio",
@@ -2879,6 +2889,7 @@
         "mountNotFound": "Montaje {{mountId}} no encontrado",
         "unmountFailed": "Error al desmontar {{mountId}}",
         "failedMountArchive": "Error al montar el archivo",
+        "mountUnavailable": "El montaje de archivos no está disponible en este entorno",
         "failedUnmount": "Error al desmontar",
         "failedListMounts": "Error al listar los puntos de montaje",
         "failedGetMountInfo": "Error al obtener información del punto de montaje",

@@ -1168,7 +1168,17 @@
       "dryRunSuccess": "Prova simulata completata con successo. Rivedi l'output sopra per vedere quali archivi verrebbero eliminati. Se tutto sembra corretto, clicca \"Pulisci Archivi\" per eseguire.",
       "warningTitle": "Attenzione: Gli archivi eliminati non possono essere recuperati!",
       "warningCompact": "Dopo la pulizia, esegui \"Compatta\" per liberare effettivamente spazio su disco.",
-      "dryRunButton": "Prova Simulata (Anteprima)"
+      "dryRunButton": "Prova Simulata (Anteprima)",
+      "resultsTitle": "Risultati",
+      "dryRunPreviewBadge": "ANTEPRIMA",
+      "pruneCompleteBadge": "COMPLETATO",
+      "pruneFailedBadge": "FALLITO",
+      "runPruneNow": "Esegui potatura ora",
+      "done": "Fine",
+      "close": "Chiudi",
+      "dryRunNote": "Gli archivi elencati sopra verrebbero eliminati. Se sembra corretto, esegui la potatura.",
+      "pruneNote": "Potatura completata. Esegui Compatta per liberare spazio su disco.",
+      "noArchivesWouldBeDeleted": "Nessun archivio verrebbe eliminato con queste impostazioni."
     },
     "fileExplorer": {
       "selectDirectory": "Seleziona Directory",
@@ -2879,6 +2889,7 @@
         "mountNotFound": "Mount {{mountId}} non trovato",
         "unmountFailed": "Impossibile smontare {{mountId}}",
         "failedMountArchive": "Impossibile montare l'archivio",
+        "mountUnavailable": "Il montaggio degli archivi non è disponibile in questo ambiente",
         "failedUnmount": "Impossibile smontare",
         "failedListMounts": "Impossibile elencare i mount",
         "failedGetMountInfo": "Impossibile ottenere informazioni sul mount",

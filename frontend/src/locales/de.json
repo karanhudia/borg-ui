@@ -1168,7 +1168,17 @@
       "dryRunSuccess": "Testlauf erfolgreich abgeschlossen. Ausgabe prüfen, um zu sehen, welche Archive gelöscht würden. Wenn alles korrekt aussieht, auf 'Archive bereinigen' klicken.",
       "warningTitle": "Warnung: Gelöschte Archive können nicht wiederhergestellt werden!",
       "warningCompact": "Nach der Bereinigung 'Komprimieren' ausführen, um Speicherplatz tatsächlich freizugeben.",
-      "dryRunButton": "Testlauf (Vorschau)"
+      "dryRunButton": "Testlauf (Vorschau)",
+      "resultsTitle": "Ergebnisse",
+      "dryRunPreviewBadge": "VORSCHAU",
+      "pruneCompleteBadge": "ABGESCHLOSSEN",
+      "pruneFailedBadge": "FEHLGESCHLAGEN",
+      "runPruneNow": "Jetzt bereinigen",
+      "done": "Fertig",
+      "close": "Schließen",
+      "dryRunNote": "Die oben aufgeführten Archive würden gelöscht. Wenn das korrekt aussieht, Bereinigung ausführen.",
+      "pruneNote": "Bereinigung abgeschlossen. Komprimierung ausführen, um Speicherplatz freizugeben.",
+      "noArchivesWouldBeDeleted": "Mit diesen Einstellungen würden keine Archive gelöscht."
     },
     "fileExplorer": {
       "selectDirectory": "Verzeichnis auswählen",
@@ -2879,6 +2889,7 @@
         "mountNotFound": "Mount {{mountId}} nicht gefunden",
         "unmountFailed": "Aushängen von {{mountId}} fehlgeschlagen",
         "failedMountArchive": "Fehler beim Einbinden des Archivs",
+        "mountUnavailable": "Das Einhängen von Archiven ist in dieser Umgebung nicht verfügbar",
         "failedUnmount": "Fehler beim Auswerfen",
         "failedListMounts": "Fehler beim Auflisten der Einhängepunkte",
         "failedGetMountInfo": "Fehler beim Abrufen der Einhängepunkt-Info",
