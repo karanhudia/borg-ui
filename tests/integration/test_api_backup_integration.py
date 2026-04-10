@@ -1,11 +1,15 @@
 import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.database.models import Repository
 from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
+from tests.utils.borg import make_borg_test_env
 from tests.utils.jobs import wait_for_payload_status
 
 
@@ -38,6 +42,44 @@ def _wait_for_backup_status(
     )
 
 
+def _assert_v1_backup_start_contract(payload: dict) -> int:
+    assert set(payload.keys()) == {"job_id", "status", "message"}
+    assert isinstance(payload["job_id"], int)
+    assert payload["status"] == "pending"
+    assert payload["message"] == "Backup job started"
+    return payload["job_id"]
+
+
+def _assert_running_backup_status_contract(payload: dict, *, repository_path: str, job_id: int) -> None:
+    assert payload["id"] == job_id
+    assert payload["repository"] == repository_path
+    assert payload["status"] in {"pending", "running", "completed", "completed_with_warnings"}
+    assert isinstance(payload["progress_details"], dict)
+    assert {
+        "original_size",
+        "nfiles",
+        "current_file",
+        "progress_percent",
+        "backup_speed",
+        "total_expected_size",
+        "estimated_time_remaining",
+    }.issubset(payload["progress_details"].keys())
+
+
+def _assert_v2_backup_completion_contract(payload: dict) -> int:
+    assert set(payload.keys()) == {"success", "stats", "status", "job_id"}
+    assert payload["success"] is True
+    assert isinstance(payload["job_id"], int)
+    assert payload["status"] in {"completed", "completed_with_warnings"}
+    assert set(payload["stats"].keys()) == {
+        "original_size",
+        "compressed_size",
+        "deduplicated_size",
+        "nfiles",
+    }
+    return payload["job_id"]
+
+
 def _write_incompressible_file(path: Path, *, size_mb: int) -> None:
     chunk_size = 1024 * 1024
     with path.open("wb") as handle:
@@ -45,10 +87,100 @@ def _write_incompressible_file(path: Path, *, size_mb: int) -> None:
             handle.write(os.urandom(chunk_size))
 
 
+def _require_borg2_binary() -> str:
+    borg2_path = shutil.which("borg2")
+    if not borg2_path:
+        pytest.skip("Borg 2 binary not found. Install borg2 to run this integration test.")
+    return borg2_path
+
+
+def _enable_borg_v2(test_db) -> None:
+    from app.database.models import LicensingState
+
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="integration-borg-v2-backup")
+        test_db.add(state)
+
+    state.plan = "pro"
+    state.status = "active"
+    state.is_trial = False
+    test_db.commit()
+
+
+def _create_borg2_registered_repo(test_db, tmp_path):
+    borg2_binary = _require_borg2_binary()
+    _enable_borg_v2(test_db)
+
+    repo_path = tmp_path / "borg2-backup-repo"
+    source_path = tmp_path / "borg2-backup-source"
+    source_path.mkdir(parents=True, exist_ok=True)
+    (source_path / "seed.txt").write_text("borg2 backup integration seed\n", encoding="utf-8")
+
+    env = make_borg_test_env(str(tmp_path))
+    init_result = subprocess.run(
+        [borg2_binary, "-r", str(repo_path), "repo-create", "--encryption", "none"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert init_result.returncode == 0, init_result.stderr
+
+    repo = Repository(
+        name="Borg2 Backup Integration Repo",
+        path=str(repo_path),
+        borg_version=2,
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        source_directories=json.dumps([str(source_path)]),
+    )
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
+    return repo, repo_path, source_path
+
+
 @pytest.mark.integration
 @pytest.mark.requires_borg
 class TestBackupCreationIntegration:
     """Integration tests for backup creation and job tracking."""
+
+    def test_v1_backup_start_and_status_preserve_contract(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo,
+        test_db,
+    ):
+        repo, repo_path, test_data_path = db_borg_repo
+        _prepare_repository_for_backup(repo, test_db, [test_data_path])
+
+        response = test_client.post(
+            "/api/backup/start",
+            json={"repository": str(repo_path)},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        job_id = _assert_v1_backup_start_contract(response.json())
+
+        status_response = test_client.get(f"/api/backup/status/{job_id}", headers=admin_headers)
+        assert status_response.status_code == 200
+        _assert_running_backup_status_contract(
+            status_response.json(),
+            repository_path=str(repo_path),
+            job_id=job_id,
+        )
+
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/backup/status",
+            job_id,
+            admin_headers,
+            timeout=45,
+        )
+        assert job_data["status"] in ["completed", "completed_with_warnings"]
 
     def test_create_backup_success(
         self,
@@ -263,6 +395,36 @@ class TestBackupCreationIntegration:
         archive_names = [archive["name"] for archive in parse_archives_payload(list_response.json())]
         assert "encrypted-archive" in archive_names
         assert any(name.startswith("manual-backup-") for name in archive_names)
+
+    def test_v2_backup_run_and_shared_status_preserve_contract(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        repo, _repo_path, source_path = _create_borg2_registered_repo(test_db, tmp_path)
+        _prepare_repository_for_backup(repo, test_db, [source_path])
+
+        response = test_client.post(
+            "/api/v2/backup/run",
+            json={"repository_id": repo.id},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        job_id = _assert_v2_backup_completion_contract(payload)
+
+        status_response = test_client.get(f"/api/backup/status/{job_id}", headers=admin_headers)
+        assert status_response.status_code == 200
+        status_payload = status_response.json()
+        assert status_payload["status"] in {"completed", "completed_with_warnings"}
+        _assert_running_backup_status_contract(
+            status_payload,
+            repository_path=repo.path,
+            job_id=job_id,
+        )
 
     def test_cancel_running_backup_via_api(
         self,

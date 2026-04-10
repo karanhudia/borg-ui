@@ -88,7 +88,7 @@
       "activity": "Activity",
       "remoteMachines": "Remote Machines",
       "repositories": "Repositories",
-      "backup": "Backup",
+      "backup": "Manual Backup",
       "archives": "Archives",
       "restore": "Restore",
       "schedule": "Schedule"

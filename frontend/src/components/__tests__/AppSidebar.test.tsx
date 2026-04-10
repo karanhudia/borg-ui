@@ -106,6 +106,7 @@ describe('AppSidebar', () => {
     await waitFor(() => {
       expect(screen.getAllByRole('link', { name: /dashboard/i }).length).toBeGreaterThan(0)
       expect(screen.getAllByRole('link', { name: /repositories/i }).length).toBeGreaterThan(0)
+      expect(screen.getAllByRole('link', { name: /manual backup/i }).length).toBeGreaterThan(0)
     })
   })
 
