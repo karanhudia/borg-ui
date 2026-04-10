@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Repository } from '../types'
 import RepoSelect from './RepoSelect'
+import { SxProps, Theme } from '@mui/material'
 
 interface RepositorySelectorCardProps {
   title?: string
@@ -9,6 +10,7 @@ interface RepositorySelectorCardProps {
   onChange: (value: number | string) => void
   loading?: boolean
   valueKey?: 'id' | 'path'
+  sx?: SxProps<Theme>
 }
 
 export default function RepositorySelectorCard({
@@ -17,6 +19,7 @@ export default function RepositorySelectorCard({
   onChange,
   loading = false,
   valueKey = 'id',
+  sx,
 }: RepositorySelectorCardProps) {
   const { t } = useTranslation()
   return (
@@ -30,7 +33,7 @@ export default function RepositorySelectorCard({
       loadingLabel={t('repositorySelectorCard.loading')}
       placeholderLabel={t('repositorySelectorCard.placeholder')}
       maintenanceLabel={t('repositorySelectorCard.maintenanceRunning')}
-      sx={{ mb: 3 }}
+      sx={{ mb: 3, ...sx }}
     />
   )
 }

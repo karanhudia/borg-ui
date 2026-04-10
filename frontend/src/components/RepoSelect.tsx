@@ -97,7 +97,7 @@ export default function RepoSelect({
         renderValue={(val) => {
           if (loading) {
             return (
-              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              <Typography variant="body2" color="text.secondary">
                 {loadingLabel}
               </Typography>
             )
@@ -111,7 +111,7 @@ export default function RepoSelect({
               )
             }
             return (
-              <Typography variant="body2" color="text.disabled" sx={{ fontStyle: 'italic' }}>
+              <Typography variant="body2" color="text.disabled">
                 {placeholderLabel}
               </Typography>
             )
@@ -132,7 +132,12 @@ export default function RepoSelect({
 
           // Medium: icon + name + monospace path
           return (
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              sx={{ minWidth: 0, flex: 1, overflow: 'hidden' }}
+            >
               <Database size={16} style={{ flexShrink: 0 }} />
               <Box sx={{ minWidth: 0, flex: 1 }}>
                 <Stack direction="row" spacing={0.5} alignItems="center">
@@ -172,6 +177,8 @@ export default function RepoSelect({
             value={valueKey === 'id' ? repo.id : repo.path}
             disabled={repo.has_running_maintenance}
             sx={{
+              minWidth: 0,
+              overflow: 'hidden',
               '&.Mui-selected': {
                 bgcolor: alpha(
                   theme.palette.primary.main,

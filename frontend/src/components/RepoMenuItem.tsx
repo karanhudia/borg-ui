@@ -33,9 +33,9 @@ export default function RepoMenuItem({
   hidePath = false,
 }: RepoMenuItemProps) {
   return (
-    <Stack direction="row" spacing={1} alignItems="center">
-      <Database size={16} />
-      <Box>
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, overflow: 'hidden' }}>
+      <Database size={16} style={{ flexShrink: 0 }} />
+      <Box sx={{ minWidth: 0, overflow: 'hidden' }}>
         <Stack direction="row" spacing={0.75} alignItems="center">
           <Typography variant="body2" fontWeight={500}>
             {name}
@@ -54,6 +54,10 @@ export default function RepoMenuItem({
             color="text.secondary"
             sx={{
               fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,SFMono-Regular,monospace',
+              display: 'block',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
             {path}
