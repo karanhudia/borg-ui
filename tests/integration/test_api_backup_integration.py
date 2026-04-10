@@ -1,7 +1,10 @@
 import json
 import os
+import queue
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -66,6 +69,73 @@ def _assert_running_backup_status_contract(payload: dict, *, repository_path: st
     }.issubset(payload["progress_details"].keys())
 
 
+def _wait_for_live_progress(
+    test_client: TestClient,
+    job_id: int,
+    headers,
+    *,
+    repository_path: str,
+    timeout: float = 45.0,
+    poll_interval: float = 0.25,
+) -> dict:
+    deadline = time.time() + timeout
+    last_payload = None
+    while time.time() < deadline:
+        response = test_client.get(f"/api/backup/status/{job_id}", headers=headers)
+        response.raise_for_status()
+        payload = response.json()
+        last_payload = payload
+        _assert_running_backup_status_contract(
+            payload,
+            repository_path=repository_path,
+            job_id=job_id,
+        )
+        progress = payload["progress_details"]
+        has_live_progress = any(
+            [
+                progress.get("original_size", 0) > 0,
+                progress.get("nfiles", 0) > 0,
+                bool(progress.get("current_file")),
+                progress.get("backup_speed", 0) > 0,
+            ]
+        )
+        if payload["status"] == "running" and has_live_progress:
+            return payload
+        if payload["status"] in {"completed", "completed_with_warnings", "failed", "cancelled"}:
+            break
+        time.sleep(poll_interval)
+    raise AssertionError(f"Backup never exposed live progress before completion: {last_payload}")
+
+
+def _wait_for_manual_backup_job_id(
+    test_client: TestClient,
+    headers,
+    *,
+    repository_path: str,
+    timeout: float = 45.0,
+    poll_interval: float = 0.25,
+) -> int:
+    deadline = time.time() + timeout
+    last_payload = None
+    while time.time() < deadline:
+        response = test_client.get(
+            "/api/backup/jobs?manual_only=true",
+            headers=headers,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        last_payload = payload
+        matches = [
+            job
+            for job in payload.get("jobs", [])
+            if job.get("repository") == repository_path and job.get("status") in {"pending", "running"}
+        ]
+        if matches:
+            return int(max(matches, key=lambda job: int(job.get("id", 0)))["id"])
+        time.sleep(poll_interval)
+    raise AssertionError(f"Timed out waiting for manual backup job for {repository_path}: {last_payload}")
+
+
 def _assert_v2_backup_completion_contract(payload: dict) -> int:
     assert set(payload.keys()) == {"success", "stats", "status", "job_id"}
     assert payload["success"] is True
@@ -85,6 +155,52 @@ def _write_incompressible_file(path: Path, *, size_mb: int) -> None:
     with path.open("wb") as handle:
         for _ in range(size_mb):
             handle.write(os.urandom(chunk_size))
+
+
+def _borg1_emits_live_json_progress(tmp_path: Path) -> bool:
+    borg_binary = shutil.which("borg")
+    if not borg_binary:
+        return False
+
+    base = tmp_path / "borg1-progress-contract"
+    repo_path = base / "repo"
+    source_root = base / "source"
+    source_root.mkdir(parents=True, exist_ok=True)
+    (source_root / "notes.txt").write_text("borg1 integration progress contract\n", encoding="utf-8")
+    _write_incompressible_file(source_root / "large.bin", size_mb=64)
+    env = make_borg_test_env(str(base))
+    init_result = subprocess.run(
+        [borg_binary, "init", "--encryption=none", str(repo_path)],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert init_result.returncode == 0, init_result.stderr
+    create_result = subprocess.run(
+        [
+            borg_binary,
+            "create",
+            "--progress",
+            "--stats",
+            "--show-rc",
+            "--log-json",
+            "--compression",
+            "none",
+            f"{repo_path}::contract-check",
+            str(source_root),
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert create_result.returncode == 0, create_result.stderr
+    for line in create_result.stdout.splitlines():
+        if not line.startswith("{"):
+            continue
+        payload = json.loads(line)
+        if payload.get("type") == "archive_progress" and not payload.get("finished") and payload.get("original_size", 0) > 0:
+            return True
+    return False
 
 
 def _require_borg2_binary() -> str:
@@ -154,6 +270,8 @@ class TestBackupCreationIntegration:
         test_db,
     ):
         repo, repo_path, test_data_path = db_borg_repo
+        if not _borg1_emits_live_json_progress(tmp_path := test_data_path.parent):
+            pytest.skip("Current integration Borg environment does not emit live Borg 1 JSON progress")
         _prepare_repository_for_backup(repo, test_db, [test_data_path])
 
         response = test_client.post(
@@ -165,12 +283,20 @@ class TestBackupCreationIntegration:
         assert response.status_code == 200
         job_id = _assert_v1_backup_start_contract(response.json())
 
-        status_response = test_client.get(f"/api/backup/status/{job_id}", headers=admin_headers)
-        assert status_response.status_code == 200
+        status_payload = test_client.get(f"/api/backup/status/{job_id}", headers=admin_headers)
+        assert status_payload.status_code == 200
         _assert_running_backup_status_contract(
-            status_response.json(),
+            status_payload.json(),
             repository_path=str(repo_path),
             job_id=job_id,
+        )
+
+        _wait_for_live_progress(
+            test_client,
+            job_id,
+            admin_headers,
+            repository_path=str(repo_path),
+            timeout=45,
         )
 
         job_data = wait_for_job_terminal_status(
@@ -404,17 +530,54 @@ class TestBackupCreationIntegration:
         tmp_path,
     ):
         repo, _repo_path, source_path = _create_borg2_registered_repo(test_db, tmp_path)
+        large_source_dir = source_path / "large"
+        large_source_dir.mkdir(parents=True, exist_ok=True)
+        _write_incompressible_file(large_source_dir / "huge.bin", size_mb=128)
         _prepare_repository_for_backup(repo, test_db, [source_path])
+        repo.compression = "none"
+        test_db.commit()
 
-        response = test_client.post(
-            "/api/v2/backup/run",
-            json={"repository_id": repo.id},
-            headers=admin_headers,
+        result_queue: queue.Queue = queue.Queue()
+
+        def _run_v2_backup():
+            try:
+                response = test_client.post(
+                    "/api/v2/backup/run",
+                    json={"repository_id": repo.id},
+                    headers=admin_headers,
+                )
+                result_queue.put(("response", response))
+            except Exception as exc:  # pragma: no cover - defensive integration helper
+                result_queue.put(("error", exc))
+
+        worker = threading.Thread(target=_run_v2_backup, daemon=True)
+        worker.start()
+
+        job_id = _wait_for_manual_backup_job_id(
+            test_client,
+            admin_headers,
+            repository_path=repo.path,
+            timeout=45,
+        )
+        _wait_for_live_progress(
+            test_client,
+            job_id,
+            admin_headers,
+            repository_path=repo.path,
+            timeout=90,
         )
 
+        worker.join(timeout=300)
+        assert not worker.is_alive(), "Timed out waiting for Borg 2 backup request to complete"
+
+        result_kind, result_value = result_queue.get_nowait()
+        if result_kind == "error":
+            raise result_value
+
+        response = result_value
         assert response.status_code == 200
         payload = response.json()
-        job_id = _assert_v2_backup_completion_contract(payload)
+        assert _assert_v2_backup_completion_contract(payload) == job_id
 
         status_response = test_client.get(f"/api/backup/status/{job_id}", headers=admin_headers)
         assert status_response.status_code == 200

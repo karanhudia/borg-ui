@@ -1492,8 +1492,8 @@ class BackupService:
                         if len(log_buffer) == 1:
                             logger.info("First log line added to buffer", job_id=job_id, buffer_id=id(log_buffer))
 
-                        # PERFORMANCE OPTIMIZATION: Fast JSON detection (check first char only)
-                        # Parse JSON progress messages only
+                        # Parse Borg progress output from the shared JSON contract
+                        # used by Borg create with --log-json.
                         try:
                             if line_str and line_str[0] == '{':
                                 json_msg = json.loads(line_str)
@@ -1682,7 +1682,6 @@ class BackupService:
                                                        message=message)
 
                         except (json.JSONDecodeError, ValueError):
-                            # Not a JSON line, just regular log output - ignore
                             pass
                         except Exception as e:
                             logger.warning("Failed to parse JSON progress",

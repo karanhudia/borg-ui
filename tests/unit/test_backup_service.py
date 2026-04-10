@@ -470,6 +470,75 @@ class TestBackupService:
         notifications.send_backup_failure.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_execute_backup_parses_v1_json_progress(self, backup_service, test_db, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        repo = Repository(
+            name="Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories='["/data"]',
+            compression="lz4",
+        )
+        settings_row = SystemSettings(log_save_policy="all_jobs")
+        job = BackupJob(repository=repo.path, status="pending", total_expected_size=200 * 1024 * 1024)
+        test_db.add_all([repo, settings_row, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        fake_process = FakeProcess(
+            returncode=0,
+            stdout_lines=[
+                '{"type":"archive_progress","original_size":104448655,"compressed_size":83886080,'
+                '"deduplicated_size":73400320,"nfiles":18,"path":"tmp/source/file-19.bin","finished":false}',
+            ],
+        )
+        notifications = MagicMock()
+        notifications.send_backup_start = AsyncMock()
+        notifications.send_backup_success = AsyncMock()
+        notifications.send_backup_warning = AsyncMock()
+        notifications.send_backup_failure = AsyncMock()
+
+        with patch.object(backup_service, "_execute_hooks", AsyncMock(return_value={
+            "success": True,
+            "execution_logs": [],
+            "scripts_executed": 0,
+            "scripts_failed": 0,
+            "using_library": False,
+        })), patch.object(
+            backup_service, "_prepare_source_paths", AsyncMock(return_value=(["/data"], []))
+        ), patch.object(
+            backup_service, "_calculate_and_update_size_background", AsyncMock()
+        ), patch.object(
+            backup_service, "_update_archive_stats", AsyncMock()
+        ), patch.object(
+            backup_service, "_update_repository_stats", AsyncMock()
+        ), patch("app.services.backup_service.resolve_repo_ssh_key_file", return_value=None), patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec", return_value=fake_process
+        ) as mock_subprocess, patch(
+            "app.services.backup_service.asyncio.create_task", side_effect=_discard_background_task
+        ), patch(
+            "app.services.backup_service.notification_service", notifications
+        ), patch(
+            "app.services.backup_service.mqtt_service"
+        ) as mqtt:
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        test_db.refresh(job)
+        create_cmd = mock_subprocess.call_args.args
+        assert "--log-json" in create_cmd
+        assert job.original_size > 0
+        assert job.compressed_size > 0
+        assert job.deduplicated_size > 0
+        assert job.nfiles == 18
+        assert job.progress_percent > 0
+        notifications.send_backup_success.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_execute_backup_warning_marks_warning_and_notifies_warning(self, backup_service, test_db, tmp_path):
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
@@ -734,6 +803,77 @@ class TestBackupService:
         assert "create" in create_cmd
         assert f"{repo.path}::" not in " ".join(create_cmd)
         assert "/data/source.txt" in create_cmd
+        notifications.send_backup_success.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_backup_parses_v2_json_progress(self, backup_service, test_db, tmp_path):
+        repo_path = tmp_path / "borg2-progress-repo"
+        repo_path.mkdir()
+
+        repo = Repository(
+            name="Borg 2 Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories='["/data/source.txt"]',
+            compression="none",
+            borg_version=2,
+        )
+        settings_row = SystemSettings(log_save_policy="all_jobs")
+        job = BackupJob(repository=repo.path, status="pending", total_expected_size=200 * 1024 * 1024)
+        test_db.add_all([repo, settings_row, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        fake_process = FakeProcess(
+            returncode=0,
+            stdout_lines=[
+                '{"type":"archive_progress","original_size":104448655,"compressed_size":83886080,'
+                '"deduplicated_size":73400320,"nfiles":18,"path":"tmp/source/file-19.bin","finished":false}',
+            ],
+        )
+        notifications = MagicMock()
+        notifications.send_backup_start = AsyncMock()
+        notifications.send_backup_success = AsyncMock()
+        notifications.send_backup_warning = AsyncMock()
+        notifications.send_backup_failure = AsyncMock()
+
+        with patch.object(backup_service, "_execute_hooks", AsyncMock(return_value={
+            "success": True,
+            "execution_logs": [],
+            "scripts_executed": 0,
+            "scripts_failed": 0,
+            "using_library": False,
+        })), patch.object(
+            backup_service, "_prepare_source_paths", AsyncMock(return_value=(["/data/source.txt"], []))
+        ), patch.object(
+            backup_service, "_calculate_and_update_size_background", AsyncMock()
+        ), patch.object(
+            backup_service, "_update_archive_stats", AsyncMock()
+        ), patch.object(
+            backup_service, "_update_repository_stats", AsyncMock()
+        ), patch(
+            "app.services.backup_service.resolve_repo_ssh_key_file", return_value=None
+        ), patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec", return_value=fake_process
+        ), patch(
+            "app.services.backup_service.asyncio.create_task", side_effect=_discard_background_task
+        ), patch(
+            "app.services.backup_service.notification_service", notifications
+        ), patch(
+            "app.services.backup_service.mqtt_service"
+        ) as mqtt, patch(
+            "app.core.borg2.borg2.borg_cmd", "borg2"
+        ):
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        test_db.refresh(job)
+        assert job.original_size > 0
+        assert job.compressed_size > 0
+        assert job.deduplicated_size > 0
+        assert job.nfiles == 18
+        assert job.progress_percent > 0
         notifications.send_backup_success.assert_awaited_once()
 
     def test_running_processes_tracking(self, backup_service):
