@@ -16,6 +16,7 @@ import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
 import MountArchiveDialog from '../components/MountArchiveDialog'
 import ArchiveContentsDialog from '../components/ArchiveContentsDialog'
 import { toast } from 'react-hot-toast'
+import MountSuccessToast from '../components/MountSuccessToast'
 import { Archive, Repository } from '@/types'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -168,14 +169,8 @@ const Archives: React.FC = () => {
       const containerName = 'borg-web-ui'
       const accessCommand = `docker exec -it ${containerName} bash -c "cd ${mountPoint} && bash"`
 
-      toast.success(t('archives.mountSuccess', { command: accessCommand }), {
+      toast.custom((t) => <MountSuccessToast toastId={t.id} command={accessCommand} />, {
         duration: 15000,
-        style: {
-          maxWidth: '600px',
-          whiteSpace: 'pre-wrap',
-          fontFamily: 'monospace',
-          fontSize: '13px',
-        },
       })
       trackArchive(EventAction.MOUNT, selectedRepository || undefined, {
         operation: 'mount_archive',
