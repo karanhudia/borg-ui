@@ -304,7 +304,7 @@ class TestRestoreServiceExecution:
         assert "-r" in cmd
         assert restore_job.repository in cmd
         assert "extract" in cmd
-        assert "aid:archive-1" in cmd
+        assert "archive-1" in cmd
         notification_mock.send_restore_success.assert_awaited_once()
 
     @pytest.mark.unit

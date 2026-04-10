@@ -16,6 +16,18 @@ if str(REPO_ROOT) not in sys.path:
 from tests.smoke.live_helpers import SmokeClient, SmokeFailure
 
 
+def _assert_job_start_response(payload: dict, *, expected_message: str) -> int:
+    if set(payload.keys()) != {"job_id", "status", "message"}:
+        raise SmokeFailure(f"Unexpected Borg 2 job start payload: {payload}")
+    if not isinstance(payload["job_id"], int):
+        raise SmokeFailure(f"Expected integer job_id in payload: {payload}")
+    if payload["status"] != "running":
+        raise SmokeFailure(f"Expected running job status in payload: {payload}")
+    if payload["message"] != expected_message:
+        raise SmokeFailure(f"Unexpected Borg 2 job start message: {payload}")
+    return payload["job_id"]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Borg 2 API smoke test")
     parser.add_argument("--url", default="http://localhost:8082")
@@ -83,6 +95,30 @@ def main() -> int:
         imported_info = client.request_ok("GET", f"/api/v2/repositories/{imported_repo_id}/info").json()
         if imported_info.get("borg_version") != 2:
             raise SmokeFailure(f"Expected imported repository to report borg_version=2: {imported_info}")
+
+        check_response = client.request_ok(
+            "POST",
+            "/api/v2/backup/check",
+            headers=client._headers(json_body=True),
+            json={"repository_id": repo_id},
+        )
+        check_job_id = _assert_job_start_response(
+            check_response.json(),
+            expected_message="backend.success.repo.checkJobStarted",
+        )
+        client.wait_for_job("/api/repositories/check-jobs", check_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+
+        compact_response = client.request_ok(
+            "POST",
+            "/api/v2/backup/compact",
+            headers=client._headers(json_body=True),
+            json={"repository_id": repo_id},
+        )
+        compact_job_id = _assert_job_start_response(
+            compact_response.json(),
+            expected_message="backend.success.repo.compactJobStarted",
+        )
+        client.wait_for_job("/api/repositories/compact-jobs", compact_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
 
         client.log(f"Borg 2 archive available: {archive_name}")
         client.log("Borg 2 API smoke passed")

@@ -72,7 +72,11 @@ def init_borg_repo(
 ) -> Path:
     """Initialize a Borg repository."""
     repo_path.mkdir(parents=True, exist_ok=True)
-    run_borg(borg_binary, ["init", f"--encryption={encryption}", str(repo_path)], env=env)
+    borg_name = Path(borg_binary).name
+    if borg_name.startswith("borg2"):
+        run_borg(borg_binary, ["-r", str(repo_path), "repo-create", "--encryption", encryption], env=env)
+    else:
+        run_borg(borg_binary, ["init", f"--encryption={encryption}", str(repo_path)], env=env)
     return repo_path
 
 
@@ -85,7 +89,11 @@ def create_archive(
     env: Optional[dict] = None,
 ) -> subprocess.CompletedProcess:
     """Create an archive from one or more source paths."""
-    args = ["create", f"{repo_path}::{archive_name}", *[str(path) for path in source_paths]]
+    borg_name = Path(borg_binary).name
+    if borg_name.startswith("borg2"):
+        args = ["-r", str(repo_path), "create", archive_name, *[str(path) for path in source_paths]]
+    else:
+        args = ["create", f"{repo_path}::{archive_name}", *[str(path) for path in source_paths]]
     return run_borg(borg_binary, args, env=env)
 
 

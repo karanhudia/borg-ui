@@ -8,8 +8,9 @@ import json
 import shutil
 import subprocess
 from fastapi.testclient import TestClient
+from app.database.models import Repository
 from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
-from tests.utils.borg import make_borg_test_env
+from tests.utils.borg import create_archive, make_borg_test_env
 
 
 def _require_borg2_binary() -> str:
@@ -31,6 +32,120 @@ def _enable_borg_v2(test_db) -> None:
     state.status = "active"
     state.is_trial = False
     test_db.commit()
+
+
+def _create_borg2_repo_with_archives(test_db, tmp_path):
+    borg2_binary = _require_borg2_binary()
+    _enable_borg_v2(test_db)
+
+    repo_path = tmp_path / "borg2-prune-repo"
+    source_path = tmp_path / "borg2-prune-source"
+    source_path.mkdir()
+
+    env = make_borg_test_env(str(tmp_path))
+
+    init_result = subprocess.run(
+        [borg2_binary, "-r", str(repo_path), "repo-create", "--encryption", "none"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert init_result.returncode == 0, init_result.stderr
+
+    (source_path / "file1.txt").write_text("borg2 prune file 1\n", encoding="utf-8")
+    create_archive(borg2_binary, repo_path, "test-archive-1", [source_path], env=env)
+
+    (source_path / "file1.txt").write_text("borg2 prune file 1 updated\n", encoding="utf-8")
+    (source_path / "file2.txt").write_text("borg2 prune file 2\n", encoding="utf-8")
+    create_archive(borg2_binary, repo_path, "test-archive-2", [source_path], env=env)
+
+    repo = Repository(
+        name="Test Borg2 Integration Repo with Archives",
+        path=str(repo_path),
+        borg_version=2,
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        archive_count=2,
+    )
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
+
+    return repo, repo_path, source_path, ["test-archive-1", "test-archive-2"]
+
+
+def _assert_prune_contract_shape(payload: dict, *, dry_run: bool) -> None:
+    assert payload["dry_run"] is dry_run
+    assert isinstance(payload["job_id"], int)
+    assert isinstance(payload["status"], str)
+    assert payload["status"] == "completed"
+    assert set(payload["prune_result"].keys()) == {"success", "stdout", "stderr"}
+    assert payload["prune_result"]["success"] is True
+    assert isinstance(payload["prune_result"]["stdout"], str)
+    assert isinstance(payload["prune_result"]["stderr"], str)
+
+
+def _run_prune_contract_assertions(
+    test_client: TestClient,
+    admin_headers,
+    repo,
+    archive_names,
+    *,
+    dry_run: bool,
+):
+    archives_list_path = (
+        f"/api/v2/archives/list?repository={repo.id}"
+        if (repo.borg_version or 1) == 2
+        else f"/api/archives/list?repository={repo.path}"
+    )
+
+    list_before = test_client.get(
+        archives_list_path,
+        headers=admin_headers,
+    )
+    assert list_before.status_code == 200
+    archives_before = parse_archives_payload(list_before.json())
+    assert [archive["name"] for archive in archives_before] == archive_names
+
+    response = test_client.post(
+        f"/api/repositories/{repo.id}/prune",
+        json={
+            "keep_hourly": 0,
+            "keep_daily": 1,
+            "keep_weekly": 0,
+            "keep_monthly": 0,
+            "keep_quarterly": 0,
+            "keep_yearly": 0,
+            "dry_run": dry_run,
+        },
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200, f"Prune failed: {response.json()}"
+    payload = response.json()
+    _assert_prune_contract_shape(payload, dry_run=dry_run)
+
+    list_after = test_client.get(
+        archives_list_path,
+        headers=admin_headers,
+    )
+    assert list_after.status_code == 200
+    archives_after = parse_archives_payload(list_after.json())
+    archive_names_after = [archive["name"] for archive in archives_after]
+
+    if dry_run:
+        assert archive_names_after == archive_names
+    else:
+        assert archive_names_after == [archive_names[-1]]
+
+
+def _assert_borg2_job_start_contract(payload: dict, *, expected_status: str, expected_message: str) -> int:
+    assert set(payload.keys()) == {"job_id", "status", "message"}
+    assert isinstance(payload["job_id"], int)
+    assert payload["status"] == expected_status
+    assert payload["message"] == expected_message
+    return payload["job_id"]
 
 
 @pytest.mark.integration
@@ -769,6 +884,130 @@ class TestRepositoryMaintenanceOperations:
         remaining_archives = parse_archives_payload(list_after.json())
         assert len(remaining_archives) == 1
         assert remaining_archives[0]["name"] == archive_names[-1]
+
+    def test_borg1_prune_dry_run_preserves_frontend_contract(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+    ):
+        repo, _repo_path, _test_data_path, archive_names = db_borg_repo_with_archives
+        _run_prune_contract_assertions(
+            test_client,
+            admin_headers,
+            repo,
+            archive_names,
+            dry_run=True,
+        )
+
+    def test_borg1_prune_execution_preserves_frontend_contract(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+    ):
+        repo, _repo_path, _test_data_path, archive_names = db_borg_repo_with_archives
+        _run_prune_contract_assertions(
+            test_client,
+            admin_headers,
+            repo,
+            archive_names,
+            dry_run=False,
+        )
+
+    def test_borg2_prune_dry_run_preserves_frontend_contract(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        repo, _repo_path, _test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        _run_prune_contract_assertions(
+            test_client,
+            admin_headers,
+            repo,
+            archive_names,
+            dry_run=True,
+        )
+
+    def test_borg2_prune_execution_preserves_frontend_contract(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        repo, _repo_path, _test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        _run_prune_contract_assertions(
+            test_client,
+            admin_headers,
+            repo,
+            archive_names,
+            dry_run=False,
+        )
+
+    def test_borg2_check_creates_running_job_with_expected_contract(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        repo, _repo_path, _test_data_path, _archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+
+        response = test_client.post(
+            "/api/v2/backup/check",
+            json={"repository_id": repo.id},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        job_id = _assert_borg2_job_start_contract(
+            response.json(),
+            expected_status="running",
+            expected_message="backend.success.repo.checkJobStarted",
+        )
+
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/repositories/check-jobs",
+            job_id,
+            admin_headers,
+        )
+        assert job_data["status"] in {"completed", "completed_with_warnings"}
+        assert job_data["id"] == job_id
+
+    def test_borg2_compact_creates_running_job_with_expected_contract(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        repo, _repo_path, _test_data_path, _archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+
+        response = test_client.post(
+            "/api/v2/backup/compact",
+            json={"repository_id": repo.id},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200, response.json()
+        job_id = _assert_borg2_job_start_contract(
+            response.json(),
+            expected_status="running",
+            expected_message="backend.success.repo.compactJobStarted",
+        )
+
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/repositories/compact-jobs",
+            job_id,
+            admin_headers,
+        )
+        assert job_data["status"] in {"completed", "completed_with_warnings"}
+        assert job_data["id"] == job_id
 
     def test_repository_break_lock_operation(
         self,

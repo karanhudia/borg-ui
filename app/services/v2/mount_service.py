@@ -23,7 +23,7 @@ class MountV2Service:
         if mount_point:
             cmd.append(mount_point)
         if archive_name:
-            cmd.append(f"aid:{archive_name}")
+            cmd.append(archive_name)
         cmd.extend(["-o", "allow_other", "-f"])
         if bypass_lock:
             cmd.append("--bypass-lock")

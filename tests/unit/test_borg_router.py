@@ -435,7 +435,7 @@ def test_build_mount_command_uses_v2_shape():
         "/repo/path",
         "mount",
         "/mnt/repo",
-        "aid:archive-1",
+        "archive-1",
         "-o",
         "allow_other",
         "-f",
@@ -486,7 +486,7 @@ def test_build_stats_commands_use_v2_binaries():
 
     with patch(
         "app.services.v2.backup_service.backup_v2_service.build_archive_info_command",
-        return_value=["borg2", "info", "aid:a1"],
+        return_value=["borg2", "info", "a1"],
     ) as mock_archive, patch(
         "app.services.v2.backup_service.backup_v2_service.build_repo_list_command",
         return_value=["borg2", "repo-list"],
@@ -495,7 +495,7 @@ def test_build_stats_commands_use_v2_binaries():
         return_value=["borg2", "info"],
     ) as mock_info:
         router = BorgRouter(repo)
-        assert router.build_archive_info_command("/repos/v2", "a1") == ["borg2", "info", "aid:a1"]
+        assert router.build_archive_info_command("/repos/v2", "a1") == ["borg2", "info", "a1"]
         assert router.build_repo_list_command("/repos/v2") == ["borg2", "repo-list"]
         assert router.build_repo_info_command("/repos/v2") == ["borg2", "info"]
 

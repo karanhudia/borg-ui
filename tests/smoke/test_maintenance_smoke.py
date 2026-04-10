@@ -55,11 +55,21 @@ def main() -> int:
             headers=client._headers(json_body=True),
             json={"max_duration": 120},
         )
-        check_job_id = check_response.json()["job_id"]
+        check_payload = check_response.json()
+        if set(check_payload.keys()) != {"job_id", "status", "message"}:
+            raise SmokeFailure(f"Unexpected check response shape: {check_payload}")
+        if check_payload["status"] != "pending":
+            raise SmokeFailure(f"Expected check to start pending: {check_payload}")
+        check_job_id = check_payload["job_id"]
         client.wait_for_job("/api/repositories/check-jobs", check_job_id, expected={"completed"}, timeout=120)
 
         compact_response = client.request_ok("POST", f"/api/repositories/{repo_id}/compact")
-        compact_job_id = compact_response.json()["job_id"]
+        compact_payload = compact_response.json()
+        if set(compact_payload.keys()) != {"job_id", "status", "message"}:
+            raise SmokeFailure(f"Unexpected compact response shape: {compact_payload}")
+        if compact_payload["status"] != "pending":
+            raise SmokeFailure(f"Expected compact to start pending: {compact_payload}")
+        compact_job_id = compact_payload["job_id"]
         client.wait_for_job("/api/repositories/compact-jobs", compact_job_id, expected={"completed"}, timeout=120)
 
         prune_response = client.request_ok(
@@ -77,8 +87,15 @@ def main() -> int:
             },
         )
         prune_payload = prune_response.json()
+        if set(prune_payload.keys()) != {"job_id", "status", "dry_run", "prune_result"}:
+            raise SmokeFailure(f"Unexpected prune response shape: {prune_payload}")
         if prune_payload.get("status") != "completed":
             raise SmokeFailure(f"Expected prune to complete successfully: {prune_payload}")
+        prune_result = prune_payload.get("prune_result", {})
+        if set(prune_result.keys()) != {"success", "stdout", "stderr"}:
+            raise SmokeFailure(f"Unexpected prune result shape: {prune_payload}")
+        if prune_result.get("success") is not True:
+            raise SmokeFailure(f"Expected prune_result.success to be true: {prune_payload}")
 
         archives_after = client.list_archives(repo_path)
         if len(archives_after) != 1:

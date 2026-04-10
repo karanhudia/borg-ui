@@ -1,12 +1,74 @@
 """Integration tests for restore API with real borg execution."""
+import shutil
 import time
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from tests.integration.test_helpers import wait_for_job_terminal_status
 from tests.utils.jobs import wait_for_payload_status
+
+
+def _require_borg2_binary() -> str:
+    borg2_path = shutil.which("borg2")
+    if not borg2_path:
+        pytest.skip("Borg 2 binary not found. Install borg2 to run this integration test.")
+    return borg2_path
+
+
+def _enable_borg_v2(test_db) -> None:
+    from app.database.models import LicensingState
+
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="integration-borg-v2-restore")
+        test_db.add(state)
+
+    state.plan = "pro"
+    state.status = "active"
+    state.is_trial = False
+    test_db.commit()
+
+
+def _create_borg2_repo_with_archives(test_db, tmp_path):
+    from app.database.models import Repository
+    from tests.utils.borg import create_archive, create_source_tree, init_borg_repo, make_borg_test_env
+
+    borg2_binary = _require_borg2_binary()
+    _enable_borg_v2(test_db)
+
+    repo_path = tmp_path / "borg2-restore-repo"
+    source_path = tmp_path / "borg2-restore-source"
+    source_path.mkdir()
+    create_source_tree(
+        source_path,
+        {
+            "file1.txt": "restore file 1\n",
+            "subdir/file2.txt": "restore file 2\n",
+        },
+    )
+
+    env = make_borg_test_env(str(tmp_path))
+    init_borg_repo(borg2_binary, repo_path, env=env, encryption="none")
+    create_archive(borg2_binary, repo_path, "test-archive-1", [source_path], env=env)
+
+    (source_path / "file1.txt").write_text("restore file 1 updated\n", encoding="utf-8")
+    (source_path / "file3.txt").write_text("restore file 3\n", encoding="utf-8")
+    create_archive(borg2_binary, repo_path, "test-archive-2", [source_path], env=env)
+
+    repo = Repository(
+        name="Test Borg2 Restore Repo",
+        path=str(repo_path),
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        borg_version=2,
+        archive_count=2,
+    )
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
+    return repo, repo_path, source_path, ["test-archive-1", "test-archive-2"]
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -171,6 +233,123 @@ class TestRestoreOperation:
         assert any(name.endswith("subdir/file4.log") for name in restored_files)
         assert not any(name.endswith("file1.txt") for name in restored_files)
         assert not any(name.endswith("file5.txt") for name in restored_files)
+
+
+@pytest.mark.integration
+@pytest.mark.requires_borg
+class TestRestoreOperationBorg2:
+    """Test Borg 2 restore operations with real borg2 execution."""
+
+    @pytest.mark.asyncio
+    async def test_restore_preview_returns_expected_file_listing(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        repo, repo_path, _test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        preview_dest = tmp_path / "borg2-preview-destination"
+        preview_dest.mkdir()
+
+        response = test_client.post(
+            "/api/restore/preview",
+            json={
+                "repository": str(repo_path),
+                "archive": archive_names[-1],
+                "paths": [],
+                "destination": str(preview_dest),
+                "repository_id": repo.id,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        preview = response.json()["preview"]
+        assert isinstance(preview, str)
+        assert list(preview_dest.iterdir()) == []
+
+    def test_restore_contents_uses_api_and_returns_nested_items(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        repo, repo_path, test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        archive_root_path = test_data_path.as_posix().lstrip("/")
+
+        root_response = test_client.get(
+            f"/api/restore/contents/{repo.id}/{archive_names[0]}",
+            headers=admin_headers,
+        )
+        assert root_response.status_code == 200
+        assert "items" in root_response.json()
+
+        nested_response = test_client.get(
+            f"/api/restore/contents/{repo.id}/{archive_names[0]}?path={archive_root_path}",
+            headers=admin_headers,
+        )
+        assert nested_response.status_code == 200
+        nested_names = [item["name"] for item in nested_response.json()["items"]]
+        assert "file1.txt" in nested_names
+        assert "subdir" in nested_names
+
+        subdir_response = test_client.get(
+            f"/api/restore/contents/{repo.id}/{archive_names[0]}?path={archive_root_path}/subdir",
+            headers=admin_headers,
+        )
+        assert subdir_response.status_code == 200
+        subdir_names = [item["name"] for item in subdir_response.json()["items"]]
+        assert "file2.txt" in subdir_names
+
+    @pytest.mark.asyncio
+    async def test_restore_success(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        repo, repo_path, _test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        restore_dest = tmp_path / "borg2-restored-data"
+        restore_dest.mkdir()
+
+        restore_response = test_client.post(
+            "/api/restore/start",
+            json={
+                "repository": str(repo_path),
+                "archive": archive_names[-1],
+                "paths": [],
+                "destination": str(restore_dest),
+                "repository_id": repo.id,
+            },
+            headers=admin_headers,
+        )
+
+        assert restore_response.status_code == 200
+        restore_data = restore_response.json()
+        assert restore_data["status"] == "pending"
+        assert isinstance(restore_data["job_id"], int)
+        assert restore_data["message"] == "backend.success.restore.restoreJobStarted"
+
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/restore/status",
+            restore_data["job_id"],
+            admin_headers,
+            timeout=60,
+        )
+
+        assert job_data["status"] == "completed"
+        assert "progress_details" in job_data
+        restored_files = {
+            path.relative_to(restore_dest).as_posix()
+            for path in restore_dest.rglob("*")
+            if path.is_file()
+        }
+        assert any(name.endswith("file1.txt") for name in restored_files)
+        assert any(name.endswith("file3.txt") for name in restored_files)
 
 @pytest.mark.integration
 @pytest.mark.requires_borg

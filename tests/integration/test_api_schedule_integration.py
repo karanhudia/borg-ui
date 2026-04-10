@@ -4,14 +4,18 @@ Integration tests for scheduled jobs API with real borg execution
 These tests verify scheduled job functionality end-to-end.
 Focus on timezone handling and cron expression correctness.
 """
+import json
+import shutil
+import subprocess
 import time
 
 import pytest
 from fastapi.testclient import TestClient
-from app.database.models import BackupJob, Repository, ScheduledJob, ScheduledJobRepository
+from app.database.models import BackupJob, CompactJob, PruneJob, Repository, ScheduledJob, ScheduledJobRepository
 from datetime import datetime, timedelta
 
-from tests.integration.test_helpers import parse_archives_payload
+from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
+from tests.utils.borg import make_borg_test_env
 from tests.utils.borg import create_registered_local_repository
 
 
@@ -24,6 +28,65 @@ def _create_registered_borg_repo(test_db, borg_binary, tmp_path, name: str, slug
         slug=slug,
         source_files={f"{slug}.txt": f"content for {slug}"},
     )
+
+
+def _require_borg2_binary() -> str:
+    borg2_path = shutil.which("borg2")
+    if not borg2_path:
+        pytest.skip("Borg 2 binary not found. Install borg2 to run this integration test.")
+    return borg2_path
+
+
+def _enable_borg_v2(test_db) -> None:
+    from app.database.models import LicensingState
+
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="integration-borg-v2-schedule")
+        test_db.add(state)
+
+    state.plan = "pro"
+    state.status = "active"
+    state.is_trial = False
+    test_db.commit()
+
+
+def _create_borg2_registered_repo(test_db, tmp_path, source_root):
+    borg2_binary = _require_borg2_binary()
+    _enable_borg_v2(test_db)
+
+    repo_path = tmp_path / "borg2-schedule-repo"
+    env = make_borg_test_env(str(tmp_path))
+
+    init_result = subprocess.run(
+        [borg2_binary, "-r", str(repo_path), "repo-create", "--encryption", "none"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert init_result.returncode == 0, init_result.stderr
+
+    import_result = subprocess.run(
+        [borg2_binary, "-r", str(repo_path), "repo-info", "--json"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert import_result.returncode == 0, import_result.stderr
+
+    repo = Repository(
+        name="Borg2 Scheduled Repo",
+        path=str(repo_path),
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        borg_version=2,
+        source_directories=json.dumps([str(source_root)]),
+    )
+    test_db.add(repo)
+    test_db.commit()
+    test_db.refresh(repo)
+    return repo, repo_path
 
 
 @pytest.mark.integration
@@ -643,3 +706,80 @@ class TestMultiRepositorySchedules:
 
         assert response.status_code == 400
         assert response.json()["detail"]["key"] == "backend.errors.schedule.observabilityOnlyRepo"
+
+    def test_run_now_single_repo_borg2_schedule_exposes_maintenance_contract(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        source_root = tmp_path / "borg2-schedule-source"
+        source_root.mkdir()
+        (source_root / "schedule.txt").write_text("schedule data\n", encoding="utf-8")
+
+        repo, repo_path = _create_borg2_registered_repo(test_db, tmp_path, source_root)
+        create_response = test_client.post(
+            "/api/schedule/",
+            json={
+                "name": "Borg2 Schedule With Maintenance",
+                "cron_expression": "0 7 * * *",
+                "repository_id": repo.id,
+                "enabled": True,
+                "run_prune_after": True,
+                "run_compact_after": True,
+                "prune_keep_daily": 1,
+                "prune_keep_weekly": 0,
+                "prune_keep_monthly": 0,
+                "prune_keep_quarterly": 0,
+                "prune_keep_yearly": 0,
+            },
+            headers=admin_headers,
+        )
+        assert create_response.status_code == 200, create_response.json()
+        schedule_id = create_response.json()["job"]["id"]
+
+        run_response = test_client.post(
+            f"/api/schedule/{schedule_id}/run-now",
+            headers=admin_headers,
+        )
+        assert run_response.status_code == 200, run_response.json()
+        run_payload = run_response.json()
+        assert run_payload["status"] == "pending"
+        assert run_payload["message"] == "backend.success.schedule.scheduledJobStarted"
+
+        backup_job_id = run_payload["job_id"]
+        backup_job = wait_for_job_terminal_status(
+            test_client,
+            "/api/backup/status",
+            backup_job_id,
+            admin_headers,
+            timeout=120,
+        )
+        assert backup_job["status"] in {"completed", "completed_with_warnings"}
+
+        deadline = datetime.now() + timedelta(seconds=120)
+        prune_job = None
+        compact_job = None
+        while datetime.now() < deadline:
+            test_db.expire_all()
+            prune_job = (
+                test_db.query(PruneJob)
+                .filter(PruneJob.repository_id == repo.id, PruneJob.scheduled_prune.is_(True))
+                .order_by(PruneJob.id.desc())
+                .first()
+            )
+            compact_job = (
+                test_db.query(CompactJob)
+                .filter(CompactJob.repository_id == repo.id, CompactJob.scheduled_compact.is_(True))
+                .order_by(CompactJob.id.desc())
+                .first()
+            )
+            if prune_job and compact_job and prune_job.status in {"completed", "completed_with_warnings", "failed"} and compact_job.status in {"completed", "completed_with_warnings", "failed"}:
+                break
+            time.sleep(0.25)
+
+        assert prune_job is not None
+        assert compact_job is not None
+        assert prune_job.status in {"completed", "completed_with_warnings"}
+        assert compact_job.status in {"completed", "completed_with_warnings"}

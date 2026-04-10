@@ -23,7 +23,7 @@ def test_build_extract_command_uses_borg2_archive_identifier():
         "/repos/v2",
         "extract",
         "--log-json",
-        "aid:manual-1",
+        "manual-1",
         "--remote-path",
         "/usr/local/bin/borg2",
         "--bypass-lock",

@@ -288,7 +288,7 @@ class Borg2Interface:
                            passphrase: Optional[str] = None, remote_path: Optional[str] = None,
                            bypass_lock: bool = False) -> Dict:
         """Get information about a specific archive."""
-        cmd = [self.borg_cmd, "-r", repository, "info", "--json", f"aid:{archive}"]
+        cmd = [self.borg_cmd, "-r", repository, "info", "--json", archive]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
@@ -302,7 +302,7 @@ class Borg2Interface:
                                     max_lines: int = 1_000_000,
                                     bypass_lock: bool = False) -> Dict:
         """List contents of an archive with streaming to prevent OOM."""
-        cmd = [self.borg_cmd, "-r", repository, "list", "--json-lines", f"aid:{archive}"]
+        cmd = [self.borg_cmd, "-r", repository, "list", "--json-lines", archive]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
@@ -343,7 +343,7 @@ class Borg2Interface:
             cmd.append("--dry-run")
         if bypass_lock:
             cmd.append("--bypass-lock")
-        cmd.append(f"aid:{archive}")
+        cmd.append(archive)
         if paths:
             cmd.extend(paths)
         env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
@@ -357,7 +357,7 @@ class Borg2Interface:
         Note: in Borg 2, space is NOT freed automatically after delete.
         Call compact() afterwards to reclaim disk space.
         """
-        cmd = [self.borg_cmd, "-r", repository, "delete", f"aid:{archive}"]
+        cmd = [self.borg_cmd, "-r", repository, "delete", archive]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
