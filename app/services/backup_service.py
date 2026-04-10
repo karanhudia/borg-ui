@@ -1409,6 +1409,7 @@ class BackupService:
             # Performance optimization: Batch database commits
             last_commit_time = asyncio.get_event_loop().time()
             COMMIT_INTERVAL = 3.0  # Commit every 3 seconds for performance
+            live_progress_exposed = False
 
             # In-memory circular log buffer (for UI streaming)
             log_buffer = []
@@ -1467,7 +1468,7 @@ class BackupService:
 
             async def stream_logs():
                 """Stream log output from process and parse JSON progress"""
-                nonlocal cancelled, last_commit_time, last_shown_file, speed_tracking, captured_exit_code
+                nonlocal cancelled, last_commit_time, last_shown_file, speed_tracking, captured_exit_code, live_progress_exposed
                 try:
                     async for line in process.stdout:
                         if cancelled:
@@ -1589,6 +1590,22 @@ class BackupService:
                                         if job.progress == 0 and job.original_size > 0:
                                             job.progress = 1
                                             job.progress_percent = 1.0
+
+                                    # Persist the first live progress snapshot immediately so
+                                    # polling clients can observe a running job before short
+                                    # backups complete and roll straight into the terminal state.
+                                    has_live_progress = any(
+                                        [
+                                            (job.original_size or 0) > 0,
+                                            (job.nfiles or 0) > 0,
+                                            bool(job.current_file),
+                                            (job.backup_speed or 0) > 0,
+                                        ]
+                                    )
+                                    if has_live_progress and not live_progress_exposed:
+                                        db.commit()
+                                        live_progress_exposed = True
+                                        last_commit_time = asyncio.get_event_loop().time()
 
                                     # PERFORMANCE OPTIMIZATION: Batched commits (every 3 seconds)
                                     current_time = asyncio.get_event_loop().time()
