@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import LicensingTab from '../LicensingTab'
+import { BUY_URL } from '../../utils/externalLinks'
 
 const { refreshMock, activateMock, deactivateMock, trackPlanMock, invalidateQueriesMock } =
   vi.hoisted(() => ({
@@ -154,5 +155,22 @@ describe('LicensingTab', () => {
         expect.objectContaining({ operation: 'deactivate_license' })
       )
     })
+  })
+
+  it('shows a buy link and tracks clicks', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<LicensingTab />)
+
+    const buyLink = screen.getByRole('link', { name: /upgrade to pro/i })
+    expect(buyLink).toHaveAttribute('href', BUY_URL)
+    buyLink.addEventListener('click', (event) => event.preventDefault())
+
+    await user.click(buyLink)
+
+    expect(trackPlanMock).toHaveBeenCalledWith(
+      'View',
+      expect.objectContaining({ operation: 'open_buy_link' })
+    )
   })
 })

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Alert, Box, Chip, Divider, Drawer, IconButton, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, Divider, Drawer, IconButton, Typography } from '@mui/material'
 import { X, Check, Sparkles, Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Plan, PLAN_COLOR, PLAN_LABEL } from '../core/features'
 import { useAnalytics } from '../hooks/useAnalytics'
 import type { EntitlementInfo } from '../hooks/useSystemInfo'
 import { usePlanContent } from '../hooks/usePlanContent'
+import { BUY_URL } from '../utils/externalLinks'
 
 interface PlanInfoDrawerProps {
   open: boolean
@@ -112,6 +113,14 @@ export default function PlanInfoDrawer({
       setSelectedPlan(getDefaultSelectedPlan(plan, initialSelectedPlan))
     }
   }, [initialSelectedPlan, open, plan])
+
+  const handleBuyClick = () => {
+    trackPlan(EventAction.VIEW, {
+      surface: 'plan_drawer',
+      operation: 'open_buy_link',
+      selected_plan: selectedPlan,
+    })
+  }
 
   return (
     <Drawer
@@ -503,14 +512,11 @@ export default function PlanInfoDrawer({
           )}
         </Box>
 
-        {/* Sticky footer — full access expiry notice */}
-        {isFullAccess && fullAccessExpiry && (
-          <>
-            <Divider />
+        <Divider />
+        <Box sx={{ px: 2.5, py: 1.5, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+          {isFullAccess && fullAccessExpiry && (
             <Box
               sx={{
-                px: 2.5,
-                py: 1.5,
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: 1,
@@ -521,8 +527,19 @@ export default function PlanInfoDrawer({
                 {t('plan.fullAccessActiveNotice', { date: fullAccessExpiry })}
               </Typography>
             </Box>
-          </>
-        )}
+          )}
+          <Button
+            component="a"
+            href={BUY_URL}
+            target="_blank"
+            rel="noreferrer"
+            variant="contained"
+            fullWidth
+            onClick={handleBuyClick}
+          >
+            {t('plan.buyLink', { plan: PLAN_LABEL[selectedPlan] })}
+          </Button>
+        </Box>
       </Box>
     </Drawer>
   )

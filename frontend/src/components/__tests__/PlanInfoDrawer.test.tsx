@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent } from '../../test/test-utils'
 import PlanInfoDrawer from '../PlanInfoDrawer'
+import { BUY_URL } from '../../utils/externalLinks'
 
 const { trackPlan } = vi.hoisted(() => ({
   trackPlan: vi.fn(),
@@ -162,5 +163,22 @@ describe('PlanInfoDrawer', () => {
     expect(screen.queryByText('Up to 10 users')).not.toBeInTheDocument()
     expect(screen.queryByText('Borg v2 beta testing')).not.toBeInTheDocument()
     expect(screen.getByText('RBAC')).toBeInTheDocument()
+  })
+
+  it('shows a buy link for the selected plan', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <PlanInfoDrawer open={true} onClose={vi.fn()} plan="community" features={featureMap} />
+    )
+
+    expect(screen.getByRole('link', { name: /upgrade to pro/i })).toHaveAttribute('href', BUY_URL)
+
+    await user.click(screen.getByText('Enterprise'))
+
+    expect(screen.getByRole('link', { name: /upgrade to enterprise/i })).toHaveAttribute(
+      'href',
+      BUY_URL
+    )
   })
 })

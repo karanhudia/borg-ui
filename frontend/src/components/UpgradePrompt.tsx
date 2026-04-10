@@ -1,8 +1,9 @@
-import { Box, Typography, Chip } from '@mui/material'
+import { Box, Typography, Chip, Button } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Plan, PLAN_LABEL, PLAN_COLOR } from '../core/features'
+import { BUY_URL } from '../utils/externalLinks'
 
 interface UpgradePromptProps {
   requiredPlan: Plan
@@ -44,6 +45,17 @@ export default function UpgradePrompt({ requiredPlan, message }: UpgradePromptPr
       <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 280 }}>
         {message ?? t('upgradePrompt.defaultMessage', { plan: planLabel })}
       </Typography>
+      <Button
+        component="a"
+        href={BUY_URL}
+        target="_blank"
+        rel="noreferrer"
+        variant="contained"
+        size="small"
+        sx={{ mt: 0.5 }}
+      >
+        {t('upgradePrompt.buyLink')}
+      </Button>
     </Box>
   )
 }

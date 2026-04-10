@@ -3090,7 +3090,8 @@
     "planFeatures": "Funciones de {{plan}}",
     "plannedReleases": "Incluido en próximas versiones para {{plan}}",
     "upcomingFeatures": "Próximamente para {{plan}}",
-    "availableIn": "Disponible en {{version}}"
+    "availableIn": "Disponible en {{version}}",
+    "buyLink": "Actualizar a {{plan}}"
   },
   "licensing": {
     "title": "Licencias",
@@ -3104,7 +3105,8 @@
   "upgradePrompt": {
     "featureLabel": "Función de {{plan}}",
     "defaultMessage": "Esta función requiere el plan {{plan}}.",
-    "requiresPlan": "Requiere el plan {{plan}}"
+    "requiresPlan": "Requiere el plan {{plan}}",
+    "buyLink": "Actualizar en borgui.com"
   },
   "announcements": {
     "highlights": "What's new",

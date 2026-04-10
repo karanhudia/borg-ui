@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import PlanGate from '../PlanGate'
+import { BUY_URL } from '../../utils/externalLinks'
 
 vi.mock('../../hooks/usePlan', () => ({ usePlan: vi.fn() }))
 import { usePlan } from '../../hooks/usePlan'
@@ -36,6 +37,10 @@ describe('PlanGate', () => {
     )
     expect(screen.queryByText('pro content')).not.toBeInTheDocument()
     expect(screen.getByText(/Pro feature/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /upgrade at borgui.com/i })).toHaveAttribute(
+      'href',
+      BUY_URL
+    )
   })
 
   it('renders custom fallback when provided', () => {

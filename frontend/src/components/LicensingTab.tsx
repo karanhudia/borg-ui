@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Alert, Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Link,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material'
 import SettingsCard from './SettingsCard'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +17,7 @@ import { licensingAPI } from '../services/api'
 import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { BUY_URL } from '../utils/externalLinks'
 
 export default function LicensingTab() {
   const { t } = useTranslation()
@@ -146,6 +156,13 @@ export default function LicensingTab() {
     deactivateMutation.mutate()
   }
 
+  const handleBuyClick = () => {
+    trackPlan(EventAction.VIEW, {
+      ...analyticsContext,
+      operation: 'open_buy_link',
+    })
+  }
+
   return (
     <Stack spacing={3}>
       <Box>
@@ -269,9 +286,26 @@ export default function LicensingTab() {
             )}
           </Stack>
 
-          <Typography variant="body2" color="text.secondary">
-            {t('plan.licenseManagementHelp')}
-          </Typography>
+          <Stack spacing={1.25} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {t('plan.licenseManagementHelp')}
+            </Typography>
+            <Link
+              href={BUY_URL}
+              target="_blank"
+              rel="noreferrer"
+              underline="hover"
+              sx={{
+                alignSelf: 'flex-start',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                lineHeight: 1.4,
+              }}
+              onClick={handleBuyClick}
+            >
+              {t('plan.buyLink', { plan: statusLabel })}
+            </Link>
+          </Stack>
         </Stack>
       </SettingsCard>
     </Stack>
