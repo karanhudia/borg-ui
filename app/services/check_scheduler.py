@@ -4,6 +4,7 @@ import structlog
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from croniter import croniter
+from app.api.maintenance_jobs import start_background_maintenance_job
 from app.database.models import Repository, CheckJob
 from app.database.database import SessionLocal
 from app.core.borg_router import BorgRouter
@@ -48,15 +49,17 @@ class CheckScheduler:
 
             for repo in repos:
                 try:
-                    # Create check job
-                    check_job = CheckJob(
-                        repository_id=repo.id,
-                        status="pending",
-                        max_duration=repo.check_max_duration or 3600,  # Default to 1 hour if not set
-                        scheduled_check=True  # Mark as scheduled check
+                    check_job = start_background_maintenance_job(
+                        db,
+                        repo,
+                        CheckJob,
+                        error_key="backend.errors.repo.checkAlreadyRunning",
+                        dispatcher=lambda job: BorgRouter(repo).check(job.id),
+                        extra_fields={
+                            "max_duration": repo.check_max_duration or 3600,
+                            "scheduled_check": True,
+                        },
                     )
-                    db.add(check_job)
-                    db.flush()  # Get the job ID
 
                     logger.info("Created scheduled check job",
                                repo_id=repo.id,
@@ -85,11 +88,6 @@ class CheckScheduler:
                                repo_name=repo.name,
                                next_check=repo.next_scheduled_check,
                                cron_expression=repo.check_cron_expression)
-
-                    # Execute check asynchronously (don't await - fire and forget)
-                    asyncio.create_task(
-                        BorgRouter(repo).check(check_job.id)
-                    )
 
                     logger.info("Scheduled check started",
                                repo_id=repo.id,

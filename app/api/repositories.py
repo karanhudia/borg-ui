@@ -14,6 +14,7 @@ from app.database.database import get_db, SessionLocal
 from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob, SystemSettings, UserRepositoryPermission
 from app.api.maintenance_jobs import (
     create_maintenance_job,
+    start_background_maintenance_job,
     get_job_with_repository,
     get_repository_jobs,
     get_repository_with_access,
@@ -1736,26 +1737,18 @@ async def check_repository(
     """Start a background check job for repository integrity"""
     try:
         repository = get_repository_with_access(db, current_user, repo_id, required_role="operator")
-        ensure_no_running_job(
-            db,
-            CheckJob,
-            repo_id,
-            error_key="backend.errors.repo.checkAlreadyRunning",
-        )
 
         # Extract max_duration from request body (default to 3600)
         max_duration = request.get("max_duration", 3600) if request else 3600
 
-        check_job = create_maintenance_job(
+        check_job = start_background_maintenance_job(
             db,
-            CheckJob,
             repository,
-            extra_fields={
-                "max_duration": max_duration,
-            },
+            CheckJob,
+            error_key="backend.errors.repo.checkAlreadyRunning",
+            dispatcher=lambda job: BorgRouter(repository).check(job.id),
+            extra_fields={"max_duration": max_duration},
         )
-
-        schedule_background_job(BorgRouter(repository).check(check_job.id))
 
         logger.info("Check job created", job_id=check_job.id, repository_id=repo_id, user=current_user.username)
 
@@ -1779,23 +1772,14 @@ async def compact_repository(
     """Start a background compact job to free space"""
     try:
         repository = get_repository_with_access(db, current_user, repo_id, required_role="operator")
-        ensure_no_running_job(
+        compact_job = start_background_maintenance_job(
             db,
-            CompactJob,
-            repo_id,
-            error_key="backend.errors.repo.compactAlreadyRunning",
-        )
-
-        compact_job = create_maintenance_job(
-            db,
-            CompactJob,
             repository,
-            extra_fields={
-                "scheduled_compact": False,
-            },
+            CompactJob,
+            error_key="backend.errors.repo.compactAlreadyRunning",
+            dispatcher=lambda job: BorgRouter(repository).compact(job.id),
+            extra_fields={"scheduled_compact": False},
         )
-
-        schedule_background_job(BorgRouter(repository).compact(compact_job.id))
 
         logger.info("Compact job created", job_id=compact_job.id, repository_id=repo_id, user=current_user.username)
 

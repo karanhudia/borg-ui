@@ -1,7 +1,7 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import Any, Optional, Type
+from typing import Any, Awaitable, Callable, Optional, Type
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -96,6 +96,54 @@ def create_running_maintenance_job(
 
 def schedule_background_job(coro) -> None:
     asyncio.create_task(coro)
+
+
+def create_started_maintenance_job(
+    db: Session,
+    job_model: Type[Any],
+    repository: Repository,
+    *,
+    status: str = "pending",
+    extra_fields: Optional[dict[str, Any]] = None,
+):
+    payload = dict(extra_fields or {})
+    if status == "running":
+        payload.setdefault("started_at", datetime.utcnow())
+        payload.setdefault("progress", 0)
+    return create_maintenance_job(
+        db,
+        job_model,
+        repository,
+        status=status,
+        extra_fields=payload or None,
+    )
+
+
+def start_background_maintenance_job(
+    db: Session,
+    repository: Repository,
+    job_model: Type[Any],
+    *,
+    error_key: str,
+    dispatcher: Callable[[Any], Awaitable[Any]],
+    status: str = "pending",
+    extra_fields: Optional[dict[str, Any]] = None,
+):
+    ensure_no_running_job(
+        db,
+        job_model,
+        repository.id,
+        error_key=error_key,
+    )
+    job = create_started_maintenance_job(
+        db,
+        job_model,
+        repository,
+        status=status,
+        extra_fields=extra_fields,
+    )
+    schedule_background_job(dispatcher(job))
+    return job
 
 
 def get_job_with_repository(

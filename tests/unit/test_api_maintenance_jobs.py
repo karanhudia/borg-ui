@@ -6,10 +6,12 @@ from fastapi import HTTPException
 from app.api.maintenance_jobs import (
     create_maintenance_job,
     create_running_maintenance_job,
+    create_started_maintenance_job,
     ensure_no_running_job,
     get_job_with_repository,
     get_repository_jobs,
     read_job_logs,
+    start_background_maintenance_job,
     serialize_job_status,
     serialize_job_summary,
 )
@@ -52,6 +54,43 @@ class TestMaintenanceJobsHelpers:
         assert job.status == "running"
         assert job.progress == 0
         assert job.started_at is not None
+
+    def test_create_started_maintenance_job_sets_running_defaults(self, test_db):
+        repo = _create_repo(test_db)
+
+        job = create_started_maintenance_job(test_db, CheckJob, repo, status="running")
+
+        assert job.status == "running"
+        assert job.progress == 0
+        assert job.started_at is not None
+
+    def test_start_background_maintenance_job_creates_job_and_dispatches(self, test_db):
+        repo = _create_repo(test_db)
+        dispatched = []
+
+        async def fake_dispatch(job):
+            dispatched.append(job.id)
+
+        with pytest.MonkeyPatch.context() as mp:
+            scheduled = []
+            mp.setattr(
+                "app.api.maintenance_jobs.schedule_background_job",
+                lambda coro: scheduled.append(coro),
+            )
+
+            job = start_background_maintenance_job(
+                test_db,
+                repo,
+                CheckJob,
+                error_key="backend.errors.repo.checkAlreadyRunning",
+                dispatcher=fake_dispatch,
+                extra_fields={"max_duration": 90},
+            )
+
+        assert job.status == "pending"
+        assert job.max_duration == 90
+        assert len(scheduled) == 1
+        scheduled[0].close()
 
     def test_get_job_with_repository_checks_access(self, test_db, admin_user):
         repo = _create_repo(test_db)

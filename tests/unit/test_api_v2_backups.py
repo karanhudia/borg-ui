@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.models import CheckJob, CompactJob, LicensingState, Repository
+from app.database.models import BackupJob, CheckJob, CompactJob, LicensingState, Repository
 
 
 def _enable_borg_v2(test_db):
@@ -50,12 +50,16 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source-a", "/data/source-b"])
 
-        borg_response = {
-            "success": True,
-            "stdout": json.dumps({"archives": 1, "size": 2}),
-            "stderr": "",
-        }
-        with patch("app.api.v2.backups.backup_v2_service.run_backup", new=AsyncMock(return_value=borg_response)) as mock_create:
+        async def mark_backup_complete(job_id, repository_path, db=None, archive_name=None, skip_hooks=False):
+            job = test_db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            job.status = "completed"
+            job.original_size = 10
+            job.compressed_size = 5
+            job.deduplicated_size = 3
+            job.nfiles = 2
+            test_db.commit()
+
+        with patch("app.api.v2.backups.backup_service.execute_backup", new=mark_backup_complete) as mock_create:
             response = test_client.post(
                 "/api/v2/backup/run",
                 json={"repository_id": repo.id, "archive_name": "manual-archive"},
@@ -63,18 +67,20 @@ class TestV2BackupRoutes:
             )
 
         assert response.status_code == 200
-        assert response.json() == {"success": True, "stats": {"archives": 1, "size": 2}}
-        mock_create.assert_awaited_once_with(
-            repo=repo,
-            source_paths=["/data/source-a", "/data/source-b"],
-            archive_name="manual-archive",
-        )
+        assert response.json()["success"] is True
+        assert response.json()["status"] == "completed"
+        assert response.json()["stats"] == {
+            "original_size": 10,
+            "compressed_size": 5,
+            "deduplicated_size": 3,
+            "nfiles": 2,
+        }
 
     def test_backup_run_rejects_missing_source_directories(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db)
 
-        with patch("app.api.v2.backups.backup_v2_service.run_backup", new=AsyncMock()) as mock_create:
+        with patch("app.api.v2.backups.backup_service.execute_backup", new=AsyncMock()) as mock_create:
             response = test_client.post(
                 "/api/v2/backup/run",
                 json={"repository_id": repo.id},
@@ -84,6 +90,26 @@ class TestV2BackupRoutes:
         assert response.status_code == 400
         assert response.json()["detail"]["key"] == "backend.errors.backup.noSourceDirectories"
         mock_create.assert_not_called()
+
+    def test_backup_run_returns_500_when_shared_backup_execution_fails(self, test_client: TestClient, admin_headers, test_db):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/data/source-a"])
+
+        async def mark_backup_failed(job_id, repository_path, db=None, archive_name=None, skip_hooks=False):
+            job = test_db.query(BackupJob).filter(BackupJob.id == job_id).first()
+            job.status = "failed"
+            job.error_message = "boom"
+            test_db.commit()
+
+        with patch("app.api.v2.backups.backup_service.execute_backup", new=mark_backup_failed):
+            response = test_client.post(
+                "/api/v2/backup/run",
+                json={"repository_id": repo.id, "archive_name": "manual-archive"},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        assert response.json()["detail"]["key"] == "backend.errors.backup.failed"
 
     def test_backup_run_rejects_missing_repository(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)
@@ -174,7 +200,8 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
 
-        with patch("app.api.v2.backups.schedule_background_job") as mock_schedule:
+        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
+            mock_start.return_value = CompactJob(id=5, repository_id=repo.id, status="running")
             response = test_client.post(
                 "/api/v2/backup/compact",
                 json={"repository_id": repo.id},
@@ -184,12 +211,7 @@ class TestV2BackupRoutes:
         assert response.status_code == 200
         assert response.json()["status"] == "running"
         assert response.json()["message"] == "backend.success.repo.compactJobStarted"
-        mock_schedule.assert_called_once()
-        mock_schedule.call_args.args[0].close()
-        job = test_db.query(CompactJob).first()
-        assert job is not None
-        assert job.repository_id == repo.id
-        assert job.status == "running"
+        mock_start.assert_called_once()
 
     def test_backup_compact_rejects_duplicate_running_job(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)
@@ -216,7 +238,8 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
 
-        with patch("app.api.v2.backups.schedule_background_job") as mock_schedule:
+        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
+            mock_start.return_value = CheckJob(id=7, repository_id=repo.id, status="running")
             response = test_client.post(
                 "/api/v2/backup/check",
                 json={"repository_id": repo.id},
@@ -226,12 +249,7 @@ class TestV2BackupRoutes:
         assert response.status_code == 200
         assert response.json()["status"] == "running"
         assert response.json()["message"] == "backend.success.repo.checkJobStarted"
-        mock_schedule.assert_called_once()
-        mock_schedule.call_args.args[0].close()
-        job = test_db.query(CheckJob).first()
-        assert job is not None
-        assert job.repository_id == repo.id
-        assert job.status == "running"
+        mock_start.assert_called_once()
 
     def test_backup_check_rejects_duplicate_running_job(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)

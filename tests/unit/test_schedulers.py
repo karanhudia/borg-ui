@@ -33,20 +33,21 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
 
     with patch("app.services.check_scheduler.SessionLocal", testing_session_local):
         with patch("app.services.check_scheduler.BorgRouter", return_value=fake_router):
-            with patch("app.services.check_scheduler.asyncio.create_task") as mock_create_task:
+            with patch("app.services.check_scheduler.start_background_maintenance_job") as mock_start:
+                mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
+                    id=42,
+                    repository_id=repo.id,
+                    status="pending",
+                    max_duration=kwargs["extra_fields"]["max_duration"],
+                    scheduled_check=True,
+                )
                 await scheduler.run_scheduled_checks()
 
     verification_session = testing_session_local()
-    jobs = verification_session.query(CheckJob).filter(CheckJob.repository_id == repo.id).all()
-    assert len(jobs) == 1
-    assert jobs[0].status == "pending"
-    assert jobs[0].scheduled_check is True
-    assert jobs[0].max_duration == 123
-
     repo = verification_session.query(Repository).filter(Repository.id == repo.id).first()
     assert repo.last_scheduled_check is not None
     assert repo.next_scheduled_check is not None
-    mock_create_task.assert_called_once()
+    mock_start.assert_called_once()
     verification_session.close()
 
 
@@ -72,7 +73,12 @@ async def test_check_scheduler_ignores_invalid_cron_expression(db_session):
 
     with patch("app.services.check_scheduler.SessionLocal", testing_session_local):
         with patch("app.services.check_scheduler.BorgRouter", return_value=fake_router):
-            with patch("app.services.check_scheduler.asyncio.create_task"):
+            with patch("app.services.check_scheduler.start_background_maintenance_job") as mock_start:
+                mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
+                    id=43,
+                    repository_id=repo.id,
+                    status="pending",
+                )
                 await scheduler.run_scheduled_checks()
 
     verification_session = testing_session_local()

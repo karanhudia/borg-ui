@@ -14,6 +14,7 @@ from app.core.authorization import authorize_request
 from app.core.borg_router import BorgRouter
 from app.core.security import get_current_user, check_repo_access
 from app.config import settings
+from app.api.maintenance_jobs import create_started_maintenance_job
 from app.services.notification_service import notification_service
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.archive_names import build_archive_name
@@ -1581,15 +1582,12 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                     prune_job = None
                     try:
                         logger.info("Running scheduled prune", repository=repo.path)
-                        prune_job = PruneJob(
-                            repository_id=repo.id,
-                            repository_path=repo.path,
-                            status="pending",
-                            scheduled_prune=True
+                        prune_job = create_started_maintenance_job(
+                            db,
+                            PruneJob,
+                            repo,
+                            extra_fields={"scheduled_prune": True},
                         )
-                        db.add(prune_job)
-                        db.commit()
-                        db.refresh(prune_job)
 
                         # Update backup job status to show prune is running
                         backup_job.maintenance_status = "running_prune"
@@ -1604,7 +1602,6 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                             keep_quarterly=scheduled_job.prune_keep_quarterly,
                             keep_yearly=scheduled_job.prune_keep_yearly,
                             dry_run=False,
-                            db=db
                         )
 
                         # Refresh job to get updated status
@@ -1639,15 +1636,12 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 if scheduled_job.run_compact_after:
                     try:
                         logger.info("Running scheduled compact", repository=repo.path)
-                        compact_job = CompactJob(
-                            repository_id=repo.id,
-                            repository_path=repo.path,
-                            status="pending",
-                            scheduled_compact=True
+                        compact_job = create_started_maintenance_job(
+                            db,
+                            CompactJob,
+                            repo,
+                            extra_fields={"scheduled_compact": True},
                         )
-                        db.add(compact_job)
-                        db.commit()
-                        db.refresh(compact_job)
 
                         # Update backup job status to show compact is running
                         backup_job.maintenance_status = "running_compact"
@@ -1760,15 +1754,12 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 logger.info("Running scheduled prune", scheduled_job_id=scheduled_job_id, repository=repository_path)
 
                 # Create a PruneJob record for tracking and activity feed
-                prune_job = PruneJob(
-                    repository_id=repo.id,
-                    repository_path=repo.path,
-                    status="pending",
-                    scheduled_prune=True  # Mark as scheduled (not manual)
+                prune_job = create_started_maintenance_job(
+                    db,
+                    PruneJob,
+                    repo,
+                    extra_fields={"scheduled_prune": True},
                 )
-                db.add(prune_job)
-                db.commit()
-                db.refresh(prune_job)
 
                 # Update backup job status to show prune is running
                 backup_job.maintenance_status = "running_prune"
@@ -1783,7 +1774,6 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                     keep_quarterly=scheduled_job.prune_keep_quarterly,
                     keep_yearly=scheduled_job.prune_keep_yearly,
                     dry_run=False,
-                    db=db
                 )
 
                 # Refresh job to get updated status
@@ -1822,15 +1812,12 @@ async def execute_scheduled_backup_with_maintenance(backup_job_id: int, reposito
                 logger.info("Running scheduled compact", scheduled_job_id=scheduled_job_id, repository=repository_path)
 
                 # Create a CompactJob record for tracking and activity feed
-                compact_job = CompactJob(
-                    repository_id=repo.id,
-                    repository_path=repo.path,
-                    status="pending",
-                    scheduled_compact=True  # Mark as scheduled (not manual)
+                compact_job = create_started_maintenance_job(
+                    db,
+                    CompactJob,
+                    repo,
+                    extra_fields={"scheduled_compact": True},
                 )
-                db.add(compact_job)
-                db.commit()
-                db.refresh(compact_job)
 
                 # Update backup job status to show compact is running
                 backup_job.maintenance_status = "running_compact"

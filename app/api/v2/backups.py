@@ -14,18 +14,16 @@ from typing import Optional
 import structlog
 
 from app.database.database import get_db
-from app.database.models import User, Repository, CheckJob, CompactJob
+from app.database.models import User, Repository, CheckJob, CompactJob, BackupJob
 from app.api.maintenance_jobs import (
-    create_running_maintenance_job,
-    ensure_no_running_job,
     get_repository_with_access,
-    schedule_background_job,
+    start_background_maintenance_job,
 )
 from app.core.security import get_current_user
 from app.core.features import require_feature
+from app.services.backup_service import backup_service
 from app.services.v2.check_service import check_v2_service
 from app.services.v2.compact_service import compact_v2_service
-from app.services.v2.backup_service import backup_v2_service
 from app.services.v2.prune_service import prune_v2_service
 
 logger = structlog.get_logger()
@@ -96,25 +94,41 @@ async def run_backup(
             detail={"key": "backend.errors.backup.noSourceDirectories"},
         )
 
-    result = await backup_v2_service.run_backup(
-        repo=repo,
-        source_paths=source_dirs,
+    backup_job = BackupJob(
+        repository=repo.path,
+        status="pending",
+        source_ssh_connection_id=repo.source_ssh_connection_id,
+    )
+    db.add(backup_job)
+    db.commit()
+    db.refresh(backup_job)
+
+    await backup_service.execute_backup(
+        backup_job.id,
+        repo.path,
+        db=db,
         archive_name=data.archive_name,
     )
+    db.refresh(backup_job)
 
-    if not result["success"]:
+    if backup_job.status not in {"completed", "completed_with_warnings"}:
         raise HTTPException(
             status_code=500,
             detail={"key": "backend.errors.backup.failed",
-                    "params": {"error": result["stderr"]}},
+                    "params": {"error": backup_job.error_message or "Backup failed"}},
         )
 
-    try:
-        stats = json.loads(result["stdout"])
-    except json.JSONDecodeError:
-        stats = {}
-
-    return {"success": True, "stats": stats}
+    return {
+        "success": True,
+        "stats": {
+            "original_size": backup_job.original_size or 0,
+            "compressed_size": backup_job.compressed_size or 0,
+            "deduplicated_size": backup_job.deduplicated_size or 0,
+            "nfiles": backup_job.nfiles or 0,
+        },
+        "status": backup_job.status,
+        "job_id": backup_job.id,
+    }
 
 
 @router.post("/prune")
@@ -181,16 +195,14 @@ async def compact_repository(
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
 
-    ensure_no_running_job(
+    compact_job = start_background_maintenance_job(
         db,
+        repo,
         CompactJob,
-        repo.id,
         error_key="backend.errors.compact.alreadyRunning",
+        dispatcher=lambda job: compact_v2_service.execute_compact(job.id, repo.id),
+        status="running",
     )
-
-    compact_job = create_running_maintenance_job(db, CompactJob, repo)
-
-    schedule_background_job(compact_v2_service.execute_compact(compact_job.id, repo.id))
 
     logger.info("Borg2 compact job created", job_id=compact_job.id, repository_id=repo.id,
                 user=current_user.username)
@@ -219,16 +231,14 @@ async def check_repository(
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
 
-    ensure_no_running_job(
+    check_job = start_background_maintenance_job(
         db,
+        repo,
         CheckJob,
-        repo.id,
         error_key="backend.errors.repo.checkAlreadyRunning",
+        dispatcher=lambda job: check_v2_service.execute_check(job.id, repo.id),
+        status="running",
     )
-
-    check_job = create_running_maintenance_job(db, CheckJob, repo)
-
-    schedule_background_job(check_v2_service.execute_check(check_job.id, repo.id))
 
     logger.info("Borg2 check job created", job_id=check_job.id, repository_id=repo.id,
                 user=current_user.username)
