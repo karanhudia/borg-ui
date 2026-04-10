@@ -10,12 +10,27 @@ import {
   CardContent,
   CircularProgress,
   IconButton,
-  Paper,
+  LinearProgress,
   Stack,
   Tooltip,
   Typography,
+  useTheme,
+  alpha,
 } from '@mui/material'
-import { Clock, Eye, Info, Play, RefreshCw, Square } from 'lucide-react'
+import {
+  Clock,
+  Eye,
+  Info,
+  Play,
+  RefreshCw,
+  Square,
+  HardDrive,
+  FileText,
+  Archive,
+  Zap,
+  Activity,
+  Database,
+} from 'lucide-react'
 import { backupAPI, repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
@@ -37,6 +52,9 @@ import { getRepoCapabilities } from '../utils/repoCapabilities'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
 
+// Emerald green — matches the "Backup Now" button in RepositoryCard for visual continuity
+const ACCENT_BACKUP = '#059669'
+
 const Backup: React.FC = () => {
   const [selectedRepository, setSelectedRepository] = useState<string>('')
   const [logJob, setLogJob] = useState<BackupJob | null>(null)
@@ -47,6 +65,8 @@ const Backup: React.FC = () => {
   const canManageRepositoryOperations = hasGlobalPermission('repositories.manage_all')
   const permissions = usePermissions()
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
 
   const getVisibleRunningJobStats = (job: BackupJob) =>
     [
@@ -89,7 +109,7 @@ const Backup: React.FC = () => {
           job.progress_details?.total_expected_size && job.progress_details.total_expected_size > 0
             ? formatBytesUtil(job.progress_details.total_expected_size)
             : 'Unknown',
-        valueColor: 'info.main',
+        valueColor: 'success.main',
       },
       {
         key: 'speed',
@@ -376,143 +396,380 @@ const Backup: React.FC = () => {
       {runningJobs.length > 0 && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              {t('backup.runningJobs.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            {/* Section Header */}
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+              <Box sx={{ color: ACCENT_BACKUP, display: 'flex' }}>
+                <RefreshCw size={16} className="animate-spin" />
+              </Box>
+              <Typography variant="h6" fontWeight={600}>
+                {t('backup.runningJobs.title')}
+              </Typography>
+              <Box
+                sx={{
+                  px: 0.8,
+                  py: 0.15,
+                  borderRadius: '10px',
+                  bgcolor: alpha(ACCENT_BACKUP, 0.1),
+                  border: `1px solid ${alpha(ACCENT_BACKUP, 0.22)}`,
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    color: ACCENT_BACKUP,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {runningJobs.length}
+                </Typography>
+              </Box>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
               {t('backup.runningJobs.subtitle')}
             </Typography>
 
-            <Stack spacing={3}>
+            <Stack spacing={2}>
               {runningJobs.map((job: BackupJob) => {
                 const visibleStats = getVisibleRunningJobStats(job)
+                const progress = job.progress || 0
+                const stageLabel =
+                  progress === 0
+                    ? t('backup.runningJobs.progress.initializing')
+                    : progress >= 100
+                      ? t('backup.runningJobs.progress.finalizing')
+                      : t('backup.runningJobs.progress.processing')
+
+                const statIconComponents = [
+                  <FileText size={11} />,
+                  <HardDrive size={11} />,
+                  <Archive size={11} />,
+                  <Zap size={11} />,
+                  <Database size={11} />,
+                  <Activity size={11} />,
+                  <Clock size={11} />,
+                ]
+                const statColors = [
+                  ACCENT_BACKUP,
+                  theme.palette.primary.main,
+                  theme.palette.secondary.main,
+                  theme.palette.success.main,
+                  theme.palette.warning.main,
+                  theme.palette.primary.main,
+                  theme.palette.success.main,
+                ]
 
                 return (
-                  <Paper key={job.id} variant="outlined" sx={{ p: 3 }}>
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="flex-start"
-                      sx={{ mb: 2 }}
-                    >
-                      <Stack direction="row" spacing={2} alignItems="center">
-                        <Box sx={{ color: 'info.main' }}>
-                          <RefreshCw size={20} className="animate-spin" />
-                        </Box>
-                        <Box>
-                          <Typography variant="body1" fontWeight={500}>
-                            {t('backup.runningJobs.jobTitle', { id: job.id })}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {t('backup.runningJobs.repositoryPath', { path: job.repository })}
-                          </Typography>
-                        </Box>
-                      </Stack>
-                      <Stack direction="row" spacing={1}>
-                        <Button
-                          variant="outlined"
-                          color="primary"
-                          size="small"
-                          startIcon={<Eye size={16} />}
-                          onClick={() => handleViewLogs(job)}
-                        >
-                          {t('backup.runningJobs.viewLogs')}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          size="small"
-                          startIcon={<Square size={16} />}
-                          onClick={() => handleCancelBackup(String(job.id))}
-                          disabled={cancelBackupMutation.isPending}
-                        >
-                          {t('backup.runningJobs.cancel')}
-                        </Button>
-                      </Stack>
-                    </Stack>
-
-                    {/* Backup Stage Indicator */}
-                    <Box sx={{ mb: 2 }}>
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
-                        sx={{ mb: 1.5 }}
-                      >
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Box
-                            sx={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: '50%',
-                              bgcolor: 'info.main',
-                              animation: 'pulse 2s ease-in-out infinite',
-                              '@keyframes pulse': {
-                                '0%, 100%': { opacity: 1 },
-                                '50%': { opacity: 0.5 },
-                              },
-                            }}
-                          />
-                          <Typography variant="body2" fontWeight={500} color="info.main">
-                            {(job.progress || 0) === 0
-                              ? t('backup.runningJobs.progress.initializing')
-                              : (job.progress || 0) >= 100
-                                ? t('backup.runningJobs.progress.finalizing')
-                                : t('backup.runningJobs.progress.processing')}
-                          </Typography>
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatTimeRange(job.started_at, job.completed_at, job.status)}
-                        </Typography>
-                      </Stack>
-                    </Box>
-
-                    {/* Current File Being Processed */}
-                    {job.progress_details?.current_file && (
-                      <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
-                        <Typography variant="caption" fontWeight={500}>
-                          {t('backup.runningJobs.progress.currentFile')}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontFamily: 'monospace',
-                            display: 'block',
-                            mt: 0.5,
-                            wordBreak: 'break-all',
-                          }}
-                        >
-                          {job.progress_details.current_file}
-                        </Typography>
-                      </Alert>
-                    )}
-
-                    {/* Job Details with Detailed Stats - Grid Layout to prevent overflow */}
+                  <Box
+                    key={job.id}
+                    sx={{
+                      position: 'relative',
+                      borderRadius: 2,
+                      bgcolor: isDark ? alpha(ACCENT_BACKUP, 0.07) : alpha(ACCENT_BACKUP, 0.05),
+                      overflow: 'hidden',
+                      boxShadow: isDark
+                        ? `inset 0 0 0 1px ${alpha('#fff', 0.05)}`
+                        : `inset 0 0 0 1px ${alpha('#000', 0.04)}`,
+                    }}
+                  >
+                    {/* Ambient glow blob */}
                     <Box
                       sx={{
-                        display: 'grid',
-                        gridTemplateColumns: {
-                          xs: '1fr',
-                          sm: 'repeat(2, 1fr)',
-                          md: 'repeat(3, 1fr)',
-                          lg: 'repeat(4, 1fr)',
+                        position: 'absolute',
+                        top: -60,
+                        right: -40,
+                        width: 200,
+                        height: 140,
+                        borderRadius: '50%',
+                        bgcolor: alpha(ACCENT_BACKUP, isDark ? 0.1 : 0.05),
+                        filter: 'blur(55px)',
+                        pointerEvents: 'none',
+                        animation: 'blobPulseJob 3s ease-in-out infinite',
+                        '@keyframes blobPulseJob': {
+                          '0%, 100%': { opacity: 1 },
+                          '50%': { opacity: 0.25 },
                         },
-                        gap: 2,
-                        width: '100%',
                       }}
-                    >
-                      {visibleStats.map((stat) => (
-                        <Box key={stat.key}>
-                          <Typography variant="body2" color="text.secondary">
-                            {stat.label}
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500} color={stat.valueColor}>
-                            {stat.value}
+                    />
+
+                    <Box sx={{ px: { xs: 1.75, sm: 2.25 }, pt: 2, pb: 2 }}>
+                      {/* Header */}
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 2,
+                          mb: 2,
+                          flexWrap: { xs: 'wrap', sm: 'nowrap' },
+                        }}
+                      >
+                        {/* Left: Job identity */}
+                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            alignItems="center"
+                            sx={{ mb: 0.5, flexWrap: 'wrap', gap: 0.5 }}
+                          >
+                            <Box
+                              sx={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: '50%',
+                                bgcolor: ACCENT_BACKUP,
+                                flexShrink: 0,
+                                animation: 'liveDot 2s ease-in-out infinite',
+                                '@keyframes liveDot': {
+                                  '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+                                  '50%': { opacity: 0.45, transform: 'scale(0.82)' },
+                                },
+                              }}
+                            />
+                            <Typography variant="body1" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+                              {t('backup.runningJobs.jobTitle', { id: job.id })}
+                            </Typography>
+                            <Box
+                              sx={{
+                                px: 0.8,
+                                py: 0.2,
+                                borderRadius: 0.75,
+                                bgcolor: alpha(ACCENT_BACKUP, 0.1),
+                                border: `1px solid ${alpha(ACCENT_BACKUP, 0.2)}`,
+                              }}
+                            >
+                              <Typography
+                                sx={{
+                                  fontSize: '0.62rem',
+                                  fontWeight: 700,
+                                  color: ACCENT_BACKUP,
+                                  lineHeight: 1,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.05em',
+                                }}
+                              >
+                                {stageLabel}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                          <Typography
+                            sx={{
+                              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+                              fontSize: '0.69rem',
+                              color: 'text.disabled',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {job.repository}
                           </Typography>
                         </Box>
-                      ))}
+
+                        {/* Right: Actions */}
+                        <Stack direction="row" spacing={0.75} alignItems="center" flexShrink={0}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: { xs: 'none', sm: 'block' }, mr: 0.5 }}
+                          >
+                            {formatTimeRange(job.started_at, job.completed_at, job.status)}
+                          </Typography>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<Eye size={13} />}
+                            onClick={() => handleViewLogs(job)}
+                            sx={{
+                              height: 28,
+                              fontSize: '0.75rem',
+                              px: 1.25,
+                              borderColor: alpha(ACCENT_BACKUP, 0.28),
+                              color: ACCENT_BACKUP,
+                              '&:hover': {
+                                bgcolor: alpha(ACCENT_BACKUP, 0.07),
+                                borderColor: alpha(ACCENT_BACKUP, 0.5),
+                              },
+                            }}
+                          >
+                            {t('backup.runningJobs.viewLogs')}
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<Square size={13} />}
+                            color="error"
+                            onClick={() => handleCancelBackup(String(job.id))}
+                            disabled={cancelBackupMutation.isPending}
+                            sx={{ height: 28, fontSize: '0.75rem', px: 1.25 }}
+                          >
+                            {t('backup.runningJobs.cancel')}
+                          </Button>
+                        </Stack>
+                      </Box>
+
+                      {/* Real progress bar — only shown when total source size is known */}
+                      {(() => {
+                        const processed = job.progress_details?.original_size ?? 0
+                        const total = job.progress_details?.total_expected_size ?? 0
+                        if (processed <= 0 || total <= 0) return null
+                        const pct = Math.min(100, (processed / total) * 100)
+                        return (
+                          <Box sx={{ mb: 1.5 }}>
+                            <Stack
+                              direction="row"
+                              justifyContent="space-between"
+                              alignItems="center"
+                              sx={{ mb: 0.5 }}
+                            >
+                              <Typography
+                                sx={{
+                                  fontSize: '0.68rem',
+                                  fontWeight: 600,
+                                  color: ACCENT_BACKUP,
+                                  letterSpacing: '0.02em',
+                                }}
+                              >
+                                {pct.toFixed(1)}%
+                              </Typography>
+                              <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled' }}>
+                                {t('backup.runningJobs.progress.totalSourceSize')}
+                              </Typography>
+                            </Stack>
+                            <LinearProgress
+                              variant="determinate"
+                              value={pct}
+                              sx={{
+                                height: 4,
+                                borderRadius: 2,
+                                bgcolor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.07),
+                                '& .MuiLinearProgress-bar': {
+                                  borderRadius: 2,
+                                  bgcolor: ACCENT_BACKUP,
+                                },
+                              }}
+                            />
+                          </Box>
+                        )
+                      })()}
+
+                      {/* Stats Band */}
+                      {visibleStats.length > 0 && (
+                        <Box
+                          sx={{
+                            display: 'grid',
+                            gridTemplateColumns: {
+                              xs: 'repeat(2, 1fr)',
+                              sm: 'repeat(auto-fit, minmax(130px, 1fr))',
+                            },
+                            borderRadius: 1.5,
+                            overflow: 'hidden',
+                            mb: job.progress_details?.current_file ? 1.5 : 0,
+                            bgcolor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+                            gap: '1px',
+                            // Orphan fix: last item alone in its row (odd position) spans both columns on mobile
+                            '& > :last-child:nth-child(odd)': {
+                              gridColumn: { xs: 'span 2', sm: 'auto' },
+                            },
+                          }}
+                        >
+                          {visibleStats.map((stat, i) => {
+                            const statColor = statColors[i] ?? ACCENT_BACKUP
+                            return (
+                              <Box
+                                key={stat.key}
+                                sx={{
+                                  px: 1.5,
+                                  py: 1.1,
+                                  bgcolor: isDark ? alpha(ACCENT_BACKUP, 0.04) : 'background.paper',
+                                }}
+                              >
+                                <Box
+                                  sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.35 }}
+                                >
+                                  <Box
+                                    sx={{
+                                      color: alpha(statColor, 0.7),
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                    }}
+                                  >
+                                    {statIconComponents[i]}
+                                  </Box>
+                                  <Typography
+                                    sx={{
+                                      fontSize: '0.58rem',
+                                      fontWeight: 700,
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.07em',
+                                      color: alpha(statColor, 0.7),
+                                      lineHeight: 1,
+                                    }}
+                                  >
+                                    {stat.label}
+                                  </Typography>
+                                </Box>
+                                <Typography
+                                  variant="body2"
+                                  fontWeight={600}
+                                  noWrap
+                                  sx={{
+                                    fontVariantNumeric: 'tabular-nums',
+                                    fontSize: '0.85rem',
+                                    color: stat.valueColor || 'text.primary',
+                                  }}
+                                >
+                                  {stat.value}
+                                </Typography>
+                              </Box>
+                            )
+                          })}
+                        </Box>
+                      )}
+
+                      {/* Current File Terminal Box */}
+                      {job.progress_details?.current_file && (
+                        <Box
+                          sx={{
+                            px: 1.5,
+                            py: 0.875,
+                            borderRadius: 1,
+                            bgcolor: isDark ? alpha('#000', 0.3) : alpha('#000', 0.03),
+                            border: '1px solid',
+                            borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              color: alpha(ACCENT_BACKUP, 0.65),
+                              display: 'flex',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FileText size={13} />
+                          </Box>
+                          <Typography
+                            sx={{
+                              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+                              fontSize: '0.72rem',
+                              color: 'text.secondary',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              flex: 1,
+                              minWidth: 0,
+                            }}
+                          >
+                            {job.progress_details.current_file}
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
-                  </Paper>
+                  </Box>
                 )
               })}
             </Stack>
