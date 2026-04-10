@@ -14,7 +14,7 @@ from app.database.database import get_db
 from app.database.models import User
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user
-from app.services.mount_service import mount_service, MountType
+from app.services.mount_service import mount_service, MountType, MountUnavailableError
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -127,6 +127,17 @@ async def mount_borg_archive(
             source=mount_info.source
         )
 
+    except MountUnavailableError as e:
+        logger.error(
+            "Archive mounting unavailable",
+            user_id=current_user.id,
+            repository_id=request.repository_id,
+            error=str(e)
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={"key": e.error_key, "params": {"error": str(e)}}
+        )
     except Exception as e:
         logger.error(
             "Failed to mount Borg archive",

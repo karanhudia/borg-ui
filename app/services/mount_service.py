@@ -32,6 +32,20 @@ from app.database.models import SSHConnection, SSHKey, Repository, SystemSetting
 
 logger = structlog.get_logger()
 
+NO_FUSE_SUPPORT_MARKERS = (
+    "no fuse support",
+    "borg mount not available",
+    "borgfs is not supported",
+)
+
+
+class MountUnavailableError(Exception):
+    """Raised when archive mounting is unavailable in the runtime environment."""
+
+    def __init__(self, message: str, *, error_key: str = "backend.errors.mounts.mountUnavailable"):
+        super().__init__(message)
+        self.error_key = error_key
+
 
 def _decrypt_with_module_secret(encrypted_value: str) -> str:
     """Compatibility fallback for older tests that patch local Fernet/settings."""
@@ -916,6 +930,10 @@ class MountService:
                             error=error_msg,
                             waited_seconds=total_waited
                         )
+                        if self._is_fuse_unavailable_error(error_msg):
+                            raise MountUnavailableError(
+                                f"Archive mounting is unavailable in this environment: {error_msg}"
+                            )
                         raise Exception(f"Borg mount failed: {error_msg}")
 
                     logger.info(
@@ -1151,6 +1169,10 @@ class MountService:
     def get_mount(self, mount_id: str) -> Optional[MountInfo]:
         """Get mount info by ID"""
         return self.active_mounts.get(mount_id)
+
+    def _is_fuse_unavailable_error(self, error_message: str) -> bool:
+        normalized = (error_message or "").lower()
+        return any(marker in normalized for marker in NO_FUSE_SUPPORT_MARKERS)
 
     # Private helper methods
 

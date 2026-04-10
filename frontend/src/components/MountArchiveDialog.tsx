@@ -6,12 +6,12 @@ import {
   Typography,
   Stack,
   Box,
-  Alert,
   TextField,
+  Tooltip,
 } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
 import { useTranslation } from 'react-i18next'
-import { HardDrive } from 'lucide-react'
+import { HardDrive, Info } from 'lucide-react'
 import { Archive } from '../types'
 
 interface MountArchiveDialogProps {
@@ -47,11 +47,15 @@ export default function MountArchiveDialog({
               {archive?.name}
             </Typography>
           </Box>
+          <Tooltip title={t('dialogs.mount.readOnlyInfo')} arrow placement="top">
+            <Box sx={{ ml: 'auto', display: 'flex', color: 'text.disabled', cursor: 'help' }}>
+              <Info size={16} />
+            </Box>
+          </Tooltip>
         </Stack>
       </DialogTitle>
       <DialogContent>
         <Stack spacing={3} sx={{ mt: 1 }}>
-          <Alert severity="info">{t('dialogs.mount.readOnlyInfo')}</Alert>
           <TextField
             label={t('dialogs.mountArchive.mountPoint')}
             value={mountPoint}

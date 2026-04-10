@@ -73,6 +73,31 @@ class TestMountArchiveEndpoints:
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.mounts.failedMountArchive"
 
+    def test_mount_borg_archive_returns_503_when_fuse_unavailable(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            mounts.mount_service,
+            "mount_borg_archive",
+            AsyncMock(
+                side_effect=mounts.MountUnavailableError(
+                    "Archive mounting is unavailable in this environment: no FUSE support"
+                )
+            ),
+        )
+
+        response = test_client.post(
+            "/api/mounts/borg",
+            json={"repository_id": 1},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 503
+        assert response.json()["detail"]["key"] == "backend.errors.mounts.mountUnavailable"
+
     def test_unmount_borg_archive_success(
         self,
         test_client: TestClient,
