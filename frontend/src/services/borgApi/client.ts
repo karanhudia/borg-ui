@@ -67,9 +67,11 @@ export class BorgApiClient {
 
   /** Repository ID, carried for convenience on all calls. */
   readonly repoId: number
+  private readonly repoPath?: string
 
   constructor(repo: Repository) {
     this.repoId = repo.id
+    this.repoPath = typeof repo.path === 'string' ? repo.path : undefined
     this.v = isV2Repo(repo) ? '/v2' : ''
   }
 
@@ -140,8 +142,15 @@ export class BorgApiClient {
   // ── Backup operations ────────────────────────────────────────────────────
 
   runBackup(options: BackupOptions = {}) {
-    return httpClient.post(`${this.v}/backup/run`, {
-      repository_id: this.repoId,
+    if (this.v === '/v2') {
+      return httpClient.post('/v2/backup/run', {
+        repository_id: this.repoId,
+        ...options,
+      })
+    }
+
+    return httpClient.post('/backup/start', {
+      repository: this.repoPath,
       ...options,
     })
   }

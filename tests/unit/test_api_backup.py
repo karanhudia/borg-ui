@@ -34,6 +34,27 @@ class TestBackupStart:
             assert "job_id" in data
             assert data["status"] == "pending"
 
+    def test_run_backup_alias_success(self, test_client: TestClient, admin_headers, test_db):
+        """Test legacy /run alias still starts backup."""
+        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch('app.api.backup.backup_service.execute_backup', new_callable=AsyncMock):
+            response = test_client.post(
+                "/api/backup/run",
+                json={
+                    "repository": "/test/repo"
+                },
+                headers=admin_headers
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "job_id" in data
+            assert data["status"] == "pending"
+
     def test_start_backup_missing_fields(self, test_client: TestClient, admin_headers):
         """Test starting backup with empty JSON returns 200 (repository is optional)"""
         with patch('app.api.backup.backup_service.execute_backup', new_callable=AsyncMock):

@@ -12,7 +12,7 @@ describe('BorgApiClient', () => {
     const postMock = vi.spyOn(clientModule.httpClient, 'post').mockResolvedValue({} as never)
     const deleteMock = vi.spyOn(clientModule.httpClient, 'delete').mockResolvedValue({} as never)
     const { BorgApiClient } = clientModule
-    const client = new BorgApiClient({ id: 7, borg_version: 1 } as never)
+    const client = new BorgApiClient({ id: 7, borg_version: 1, path: '/repo-v1' } as never)
 
     client.getInfo()
     client.listArchives()
@@ -38,8 +38,8 @@ describe('BorgApiClient', () => {
       params: { repository: 7 },
     })
     expect(getMock).toHaveBeenCalledWith('/archives/delete-jobs/12')
-    expect(postMock).toHaveBeenCalledWith('/backup/run', {
-      repository_id: 7,
+    expect(postMock).toHaveBeenCalledWith('/backup/start', {
+      repository: '/repo-v1',
       archive_name: 'nightly',
     })
     expect(postMock).toHaveBeenCalledWith('/repositories/7/prune', { keep_daily: 7 })

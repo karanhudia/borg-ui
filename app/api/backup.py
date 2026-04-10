@@ -54,8 +54,7 @@ class BackupResponse(BaseModel):
     status: str
     message: str
 
-@router.post("/start", response_model=BackupResponse)
-async def start_backup(
+async def _start_backup_impl(
     backup_request: BackupRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -115,6 +114,26 @@ async def start_backup(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to start backup: {str(e)}"
         )
+
+
+@router.post("/start", response_model=BackupResponse)
+async def start_backup(
+    backup_request: BackupRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Start a manual backup operation."""
+    return await _start_backup_impl(backup_request, current_user, db)
+
+
+@router.post("/run", response_model=BackupResponse)
+async def run_backup(
+    backup_request: BackupRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Compatibility alias for clients using /api/backup/run."""
+    return await _start_backup_impl(backup_request, current_user, db)
 
 @router.get("/jobs")
 async def get_all_backup_jobs(
