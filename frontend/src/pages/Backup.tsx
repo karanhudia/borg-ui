@@ -262,9 +262,36 @@ const Backup: React.FC = () => {
         }}
       >
         <Box>
-          <Typography variant="h4" fontWeight={600} gutterBottom>
-            {t('backup.title')}
-          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+            <Typography variant="h4" fontWeight={600}>
+              {t('backup.title')}
+            </Typography>
+            {repositoriesData?.data?.repositories?.some(
+              (repo: Repository) => !getRepoCapabilities(repo).canBackup
+            ) &&
+              !loadingRepositories && (
+                <Tooltip
+                  title={t('backup.manualBackup.observeOnlyHidden')}
+                  arrow
+                  enterTouchDelay={0}
+                  leaveTouchDelay={4000}
+                >
+                  <IconButton
+                    size="small"
+                    aria-label={t('backup.manualBackup.observeOnlyHidden')}
+                    sx={{
+                      color: 'text.disabled',
+                      '&:hover': { color: 'text.secondary' },
+                      p: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Info size={16} />
+                  </IconButton>
+                </Tooltip>
+              )}
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             {t('backup.subtitle')}
           </Typography>
@@ -274,41 +301,6 @@ const Backup: React.FC = () => {
 
       {/* Manual Backup Control */}
       <Box sx={{ mb: 4 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 0.5 }}>
-          <Play size={20} color="#2e7d32" />
-          <Typography variant="h6" fontWeight={600}>
-            {t('backup.manualBackup.title')}
-          </Typography>
-          {repositoriesData?.data?.repositories?.some(
-            (repo: Repository) => !getRepoCapabilities(repo).canBackup
-          ) &&
-            !loadingRepositories && (
-              <Tooltip
-                title={t('backup.manualBackup.observeOnlyHidden')}
-                arrow
-                enterTouchDelay={0}
-                leaveTouchDelay={4000}
-              >
-                <IconButton
-                  size="small"
-                  aria-label={t('backup.manualBackup.observeOnlyHidden')}
-                  sx={{
-                    color: 'text.disabled',
-                    '&:hover': { color: 'text.secondary' },
-                    p: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Info size={16} />
-                </IconButton>
-              </Tooltip>
-            )}
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-          {t('backup.manualBackup.subtitle')}
-        </Typography>
-
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
           <RepoSelect
             repositories={(repositoriesData?.data?.repositories ?? []).filter(
