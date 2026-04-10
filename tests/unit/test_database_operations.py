@@ -258,3 +258,99 @@ class TestMigration048:
         assert len(rows) == 1
         assert "use_sftp_mode" in col_names
         assert "ssh_path_prefix" in col_names
+
+
+@pytest.mark.unit
+class TestMigration065:
+    """Tests for migration 065: cleanup schedule junction duplicates/orphans."""
+
+    def _make_engine(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import StaticPool
+
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        with engine.connect() as conn:
+            conn.execute(text("PRAGMA foreign_keys=OFF"))
+            conn.execute(text("CREATE TABLE scheduled_jobs (id INTEGER PRIMARY KEY, name TEXT)"))
+            conn.execute(text("CREATE TABLE repositories (id INTEGER PRIMARY KEY, name TEXT)"))
+            conn.execute(text("""
+                CREATE TABLE scheduled_job_repositories (
+                    id INTEGER PRIMARY KEY,
+                    scheduled_job_id INTEGER NOT NULL,
+                    repository_id INTEGER NOT NULL,
+                    execution_order INTEGER NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("INSERT INTO scheduled_jobs (id, name) VALUES (1, 'job-1')"))
+            conn.execute(text("INSERT INTO repositories (id, name) VALUES (1, 'repo-1')"))
+            conn.commit()
+        return engine
+
+    def test_upgrade_removes_orphaned_schedule_and_repository_rows(self):
+        import importlib
+
+        m065 = importlib.import_module("app.database.migrations.065_cleanup_schedule_duplicates")
+        engine = self._make_engine()
+
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO scheduled_job_repositories (id, scheduled_job_id, repository_id, execution_order)
+                VALUES
+                    (1, 1, 1, 0),
+                    (2, 999, 1, 1),
+                    (3, 1, 999, 2)
+            """))
+            conn.commit()
+
+            m065.upgrade(conn)
+            conn.commit()
+
+            rows = conn.execute(text("""
+                SELECT id, scheduled_job_id, repository_id
+                FROM scheduled_job_repositories
+                ORDER BY id
+            """)).fetchall()
+            fk_rows = conn.execute(text("PRAGMA foreign_key_list(scheduled_job_repositories)")).fetchall()
+
+        assert rows == [(1, 1, 1)]
+        on_delete_actions = [row[6] for row in fk_rows]
+        assert "CASCADE" in on_delete_actions
+
+    def test_upgrade_is_restart_safe_when_temp_table_exists(self):
+        import importlib
+
+        m065 = importlib.import_module("app.database.migrations.065_cleanup_schedule_duplicates")
+        engine = self._make_engine()
+
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO scheduled_job_repositories (id, scheduled_job_id, repository_id, execution_order)
+                VALUES (1, 1, 1, 0)
+            """))
+            conn.execute(text("""
+                CREATE TABLE scheduled_job_repositories_new (
+                    id INTEGER PRIMARY KEY,
+                    scheduled_job_id INTEGER NOT NULL,
+                    repository_id INTEGER NOT NULL,
+                    execution_order INTEGER NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+
+            m065.upgrade(conn)
+            conn.commit()
+
+            temp_table = conn.execute(text("""
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='scheduled_job_repositories_new'
+            """)).fetchall()
+            rows = conn.execute(text("SELECT COUNT(*) FROM scheduled_job_repositories")).scalar_one()
+
+        assert temp_table == []
+        assert rows == 1

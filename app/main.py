@@ -157,6 +157,7 @@ app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 async def startup_event():
     """Initialize application on startup"""
     logger.info("Starting Borg Web UI")
+    from app.database.database import SessionLocal
 
     # Run database migrations
     from app.database.migrations import run_migrations
@@ -169,7 +170,6 @@ async def startup_event():
     # Initialize local licensing state and attempt hidden full access activation
     # only when explicitly enabled for this runtime.
     if settings.enable_startup_license_sync:
-        from app.database.database import SessionLocal
         app_version = get_runtime_app_version()
         try:
             db = SessionLocal()

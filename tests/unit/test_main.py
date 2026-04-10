@@ -28,6 +28,7 @@ class TestStartupEvent:
                 mock_settings.mqtt_enabled = True
                 mock_settings.mqtt_beta_enabled = True
                 mock_settings.mqtt_broker_url = "mqtt://localhost:1883"
+                mock_settings.borg2_binary_path = None
                 mock_db.query.return_value.first.return_value = mock_settings
 
                 with patch('app.database.database.SessionLocal', return_value=mock_db):
@@ -48,6 +49,39 @@ class TestStartupEvent:
                                                                     await startup_event()
                                                                     mock_mqtt.configure.assert_called_once()
                                                                     mock_mqtt.sync_state_with_db.assert_called_once()
+
+    async def test_startup_configures_cache_even_when_license_sync_disabled(self, mock_db):
+        """SessionLocal must still be available for cache config when license sync is off."""
+        mock_settings = Mock()
+        mock_settings.redis_url = "redis://localhost:6379/0"
+        mock_settings.cache_max_size_mb = 128
+        mock_db.query.return_value.first.return_value = mock_settings
+
+        with patch("app.database.migrations.run_migrations"), patch(
+            "app.core.security.create_first_user", new_callable=AsyncMock
+        ), patch("app.main.settings.enable_startup_license_sync", False), patch(
+            "app.database.database.SessionLocal", return_value=mock_db
+        ), patch("app.services.cache_service.archive_cache") as mock_cache, patch(
+            "app.core.borg.borg.get_system_info", new_callable=AsyncMock
+        ), patch("app.services.backup_service.backup_service"), patch(
+            "app.utils.process_utils.cleanup_orphaned_jobs"
+        ), patch("app.utils.process_utils.cleanup_orphaned_mounts"), patch(
+            "app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()
+        ), patch("app.services.check_scheduler.check_scheduler"), patch(
+            "app.services.stats_refresh_scheduler.stats_refresh_scheduler"
+        ), patch(
+            "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler", return_value=AsyncMock()
+        ), patch("asyncio.create_task"):
+            mock_cache.reconfigure.return_value = {"success": True, "backend": "redis"}
+            from app.main import startup_event, app
+
+            app.state.background_tasks = []
+            await startup_event()
+
+        mock_cache.reconfigure.assert_called_once_with(
+            redis_url="redis://localhost:6379/0",
+            cache_max_size_mb=128,
+        )
 
 
 @pytest.mark.unit

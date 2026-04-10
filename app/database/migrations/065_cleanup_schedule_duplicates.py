@@ -19,17 +19,30 @@ from sqlalchemy import text
 
 logger = structlog.get_logger()
 
+
+def _table_exists(db, table_name: str) -> bool:
+    result = db.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name = :name"),
+        {"name": table_name},
+    )
+    return result.first() is not None
+
 def upgrade(db):
     """Clean up duplicates/orphans and add CASCADE delete to scheduled_job_repositories"""
 
     try:
-        # STEP 1: Clean up orphaned junction entries (pointing to deleted schedules)
+        # STEP 1: Clean up orphaned junction entries (pointing to deleted schedules or repositories)
         logger.info("STEP 1: Checking for orphaned junction entries...")
         result = db.execute(text("""
-            SELECT sjr.id, sjr.scheduled_job_id, sjr.repository_id
+            SELECT sjr.id, sjr.scheduled_job_id, sjr.repository_id,
+                   CASE
+                       WHEN sj.id IS NULL THEN 'scheduled_job'
+                       WHEN r.id IS NULL THEN 'repository'
+                   END AS missing_parent
             FROM scheduled_job_repositories sjr
             LEFT JOIN scheduled_jobs sj ON sjr.scheduled_job_id = sj.id
-            WHERE sj.id IS NULL
+            LEFT JOIN repositories r ON sjr.repository_id = r.id
+            WHERE sj.id IS NULL OR r.id IS NULL
         """))
 
         orphans = result.fetchall()
@@ -37,8 +50,14 @@ def upgrade(db):
         if orphans:
             logger.warning(f"Found {len(orphans)} orphaned junction entries, cleaning up...")
             for orphan in orphans:
-                entry_id, schedule_id, repo_id = orphan
-                logger.debug(f"Deleting orphaned entry: id={entry_id}, schedule_id={schedule_id} (deleted), repo_id={repo_id}")
+                entry_id, schedule_id, repo_id, missing_parent = orphan
+                logger.debug(
+                    "Deleting orphaned junction entry",
+                    entry_id=entry_id,
+                    scheduled_job_id=schedule_id,
+                    repository_id=repo_id,
+                    missing_parent=missing_parent,
+                )
                 db.execute(text("DELETE FROM scheduled_job_repositories WHERE id = :id"), {"id": entry_id})
 
             db.commit()
@@ -94,6 +113,12 @@ def upgrade(db):
 
         # STEP 3: Recreate table with CASCADE delete
         logger.info("STEP 3: Adding CASCADE delete to scheduled_job_repositories table...")
+
+        # Previous interrupted runs can leave the temp table behind. Make this migration restart-safe.
+        if _table_exists(db, "scheduled_job_repositories_new"):
+            logger.warning("Found leftover scheduled_job_repositories_new table from a previous run, dropping it")
+            db.execute(text("DROP TABLE scheduled_job_repositories_new"))
+            db.commit()
 
         # Create new table with CASCADE
         db.execute(text("""
@@ -154,6 +179,11 @@ def downgrade(db):
 
     try:
         logger.info("Removing CASCADE delete from scheduled_job_repositories...")
+
+        if _table_exists(db, "scheduled_job_repositories_old"):
+            logger.warning("Found leftover scheduled_job_repositories_old table from a previous run, dropping it")
+            db.execute(text("DROP TABLE scheduled_job_repositories_old"))
+            db.commit()
 
         # Create table without CASCADE
         db.execute(text("""
