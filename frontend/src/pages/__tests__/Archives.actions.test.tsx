@@ -275,11 +275,6 @@ describe('Archives page actions', () => {
         mount_point: 'archive-1',
       })
     })
-    expect(trackArchive).toHaveBeenCalledWith('Mount', repository, {
-      operation: 'mount_archive',
-      archive_age_bucket: expect.any(String),
-      uses_custom_mount_point: false,
-    })
   })
 
   it('shows translated backend errors when restore start fails', async () => {

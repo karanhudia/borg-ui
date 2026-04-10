@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import MountArchiveDialog from '../MountArchiveDialog'
 
@@ -36,12 +37,20 @@ describe('MountArchiveDialog', () => {
     expect(screen.getByText('backup-2024-01-15')).toBeInTheDocument()
   })
 
-  it('displays info alert about read-only filesystem', () => {
+  it('displays info alert about read-only filesystem', async () => {
+    const user = userEvent.setup()
     render(<MountArchiveDialog open={true} archive={mockArchive} mountPoint="" {...mockHandlers} />)
 
-    expect(
-      screen.getByText(/The archive will be mounted as a read-only filesystem/)
-    ).toBeInTheDocument()
+    const infoIcon = document.body.querySelector('.lucide-info')?.parentElement
+    expect(infoIcon).toBeTruthy()
+
+    if (infoIcon) {
+      await user.hover(infoIcon)
+      expect(infoIcon).toHaveAttribute(
+        'aria-label',
+        expect.stringMatching(/The archive will be mounted as a read-only filesystem/i)
+      )
+    }
   })
 
   it('renders mount point input with placeholder', () => {

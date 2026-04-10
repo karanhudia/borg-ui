@@ -54,8 +54,8 @@ describe('Login page', () => {
 
     renderWithProviders(<Login />)
 
-    await user.type(screen.getByPlaceholderText(/username/i), 'admin')
-    await user.type(screen.getByPlaceholderText(/password/i), 'secret')
+    await user.type(screen.getByLabelText(/username/i), 'admin')
+    await user.type(screen.getByLabelText(/^password$/i), 'secret')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
     await waitFor(() => {
@@ -72,8 +72,8 @@ describe('Login page', () => {
 
     renderWithProviders(<Login />)
 
-    await user.type(screen.getByPlaceholderText(/username/i), 'admin')
-    await user.type(screen.getByPlaceholderText(/password/i), 'secret')
+    await user.type(screen.getByLabelText(/username/i), 'admin')
+    await user.type(screen.getByLabelText(/^password$/i), 'secret')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
     await waitFor(() => {
@@ -93,8 +93,8 @@ describe('Login page', () => {
 
     renderWithProviders(<Login />)
 
-    await user.type(screen.getByPlaceholderText(/username/i), 'admin')
-    await user.type(screen.getByPlaceholderText(/password/i), 'wrong-secret')
+    await user.type(screen.getByLabelText(/username/i), 'admin')
+    await user.type(screen.getByLabelText(/^password$/i), 'wrong-secret')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
     await waitFor(() => {

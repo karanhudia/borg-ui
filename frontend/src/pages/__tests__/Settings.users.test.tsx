@@ -79,14 +79,19 @@ vi.mock('../../components/DataTable', () => ({
     data,
     actions,
   }: {
-    data: Array<{ id: number }>
-    actions?: Array<{ label: string; onClick: (row: { id: number }) => void }>
+    data: Array<{ id: number; username?: string }>
+    actions?: Array<{ label: string; onClick: (row: { id: number; username?: string }) => void }>
   }) => (
     <div>
-      {actions?.map((action) => (
-        <button key={action.label} onClick={() => action.onClick(data[0])}>
-          {action.label}
-        </button>
+      {data.map((row) => (
+        <div key={row.id}>
+          <span>{row.username}</span>
+          {actions?.map((action) => (
+            <button key={`${row.id}-${action.label}`} onClick={() => action.onClick(row)}>
+              {action.label}
+            </button>
+          ))}
+        </div>
       ))}
     </div>
   ),
@@ -150,6 +155,7 @@ describe('Settings users tab', () => {
       },
     } as never)
     vi.mocked(apiModule.settingsAPI.createUser).mockResolvedValue({ data: {} } as never)
+    vi.mocked(apiModule.settingsAPI.updateUser).mockResolvedValue({ data: {} } as never)
     vi.mocked(apiModule.settingsAPI.resetUserPassword).mockResolvedValue({ data: {} } as never)
     vi.mocked(apiModule.settingsAPI.deleteUser).mockResolvedValue({ data: {} } as never)
   })
@@ -261,8 +267,7 @@ describe('Settings users tab', () => {
     )
 
     await screen.findByText('User Management')
-    await screen.findByText('existing')
-
+    await screen.findByRole('button', { name: /edit user/i })
     await user.click(screen.getByRole('button', { name: /edit user/i }))
     const editDialog = await screen.findByRole('dialog', { name: /edit user/i })
     const emailInput = within(editDialog).getByLabelText(/email/i)
@@ -334,7 +339,7 @@ describe('Settings users tab', () => {
     )
 
     await screen.findByText('User Management')
-    await screen.findByText('existing')
+    await screen.findByRole('button', { name: /delete user/i })
     await user.click(screen.getByRole('button', { name: /delete user/i }))
     const deleteDialog = await screen.findByRole('dialog', { name: /delete user/i })
     await user.click(within(deleteDialog).getByRole('button', { name: /^delete$/i }))

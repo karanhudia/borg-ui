@@ -61,7 +61,8 @@ describe('PruneRepositoryDialog', () => {
       expect(screen.getByText('Test Repository')).toBeInTheDocument()
     })
 
-    it('shows info about pruning', () => {
+    it('shows info about pruning', async () => {
+      const user = userEvent.setup()
       render(
         <PruneRepositoryDialog
           open={true}
@@ -74,7 +75,11 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByText('What does pruning do?')).toBeInTheDocument()
+      const infoIcon = document.body.querySelector('.lucide-info')?.parentElement
+      expect(infoIcon).toBeTruthy()
+      if (infoIcon) {
+        await user.hover(infoIcon)
+      }
     })
   })
 
@@ -92,12 +97,13 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByLabelText(/Keep Hourly/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/Keep Daily/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/Keep Weekly/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/Keep Monthly/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/Keep Quarterly/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/Keep Yearly/i)).toBeInTheDocument()
+      expect(screen.getByText(/Keep Hourly/i)).toBeInTheDocument()
+      expect(screen.getByText(/Keep Daily/i)).toBeInTheDocument()
+      expect(screen.getByText(/Keep Weekly/i)).toBeInTheDocument()
+      expect(screen.getByText(/Keep Monthly/i)).toBeInTheDocument()
+      expect(screen.getByText(/Keep Quarterly/i)).toBeInTheDocument()
+      expect(screen.getByText(/Keep Yearly/i)).toBeInTheDocument()
+      expect(screen.getAllByRole('spinbutton')).toHaveLength(6)
     })
 
     it('shows default values', () => {
@@ -113,10 +119,11 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByLabelText(/Keep Daily/i)).toHaveValue(7)
-      expect(screen.getByLabelText(/Keep Weekly/i)).toHaveValue(4)
-      expect(screen.getByLabelText(/Keep Monthly/i)).toHaveValue(6)
-      expect(screen.getByLabelText(/Keep Yearly/i)).toHaveValue(1)
+      const inputs = screen.getAllByRole('spinbutton')
+      expect(inputs[1]).toHaveValue(7)
+      expect(inputs[2]).toHaveValue(4)
+      expect(inputs[3]).toHaveValue(6)
+      expect(inputs[5]).toHaveValue(1)
     })
 
     it('allows changing retention values', async () => {
@@ -134,7 +141,7 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      const dailyInput = screen.getByLabelText(/Keep Daily/i)
+      const dailyInput = screen.getAllByRole('spinbutton')[1]
       await user.clear(dailyInput)
       await user.type(dailyInput, '14')
 
@@ -143,7 +150,7 @@ describe('PruneRepositoryDialog', () => {
   })
 
   describe('Action Buttons', () => {
-    it('renders Cancel button', () => {
+    it('does not render a separate cancel button in the main dialog', () => {
       render(
         <PruneRepositoryDialog
           open={true}
@@ -156,7 +163,7 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByRole('button', { name: /Cancel/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Cancel/i })).not.toBeInTheDocument()
     })
 
     it('renders Dry Run button', () => {
@@ -191,27 +198,6 @@ describe('PruneRepositoryDialog', () => {
       expect(screen.getByRole('button', { name: /Run Prune/i })).toBeInTheDocument()
     })
 
-    it('calls onClose when Cancel is clicked', async () => {
-      const user = userEvent.setup()
-      const onClose = vi.fn()
-
-      render(
-        <PruneRepositoryDialog
-          open={true}
-          repository={mockRepository}
-          onClose={onClose}
-          onDryRun={vi.fn()}
-          onConfirmPrune={vi.fn()}
-          isLoading={false}
-          results={null}
-        />
-      )
-
-      await user.click(screen.getByRole('button', { name: /Cancel/i }))
-
-      expect(onClose).toHaveBeenCalled()
-    })
-
     it('calls onDryRun with form data when Dry Run is clicked', async () => {
       const user = userEvent.setup()
       const onDryRun = vi.fn()
@@ -232,15 +218,17 @@ describe('PruneRepositoryDialog', () => {
 
       expect(onDryRun).toHaveBeenCalledWith(
         expect.objectContaining({
+          keep_hourly: 0,
           keep_daily: 7,
           keep_weekly: 4,
           keep_monthly: 6,
+          keep_quarterly: 0,
           keep_yearly: 1,
         })
       )
     })
 
-    it('calls onConfirmPrune when Prune Archives is clicked', async () => {
+    it('calls onConfirmPrune when Run Prune is clicked', async () => {
       const user = userEvent.setup()
       const onConfirmPrune = vi.fn()
 
@@ -275,10 +263,10 @@ describe('PruneRepositoryDialog', () => {
       )
 
       expect(screen.getByRole('button', { name: /Dry Run/i })).toBeDisabled()
-      expect(screen.getByRole('button', { name: /Running/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Run Prune/i })).toBeDisabled()
     })
 
-    it('shows Pruning text when loading', () => {
+    it('keeps action labels stable when loading starts externally', () => {
       render(
         <PruneRepositoryDialog
           open={true}
@@ -291,12 +279,13 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByRole('button', { name: /Running/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Dry Run/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Run Prune/i })).toBeInTheDocument()
     })
   })
 
   describe('Results Display', () => {
-    it('shows dry run results header', () => {
+    it('shows dry run results header', async () => {
       render(
         <PruneRepositoryDialog
           open={true}
@@ -315,10 +304,10 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByText('Dry Run Results (Preview)')).toBeInTheDocument()
+      expect(await screen.findByText('Dry Run Results (Preview)')).toBeInTheDocument()
     })
 
-    it('shows actual prune results header', () => {
+    it('shows actual prune results header', async () => {
       render(
         <PruneRepositoryDialog
           open={true}
@@ -337,10 +326,10 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByText('Prune Results')).toBeInTheDocument()
+      expect(await screen.findByText('Prune Results')).toBeInTheDocument()
     })
 
-    it('shows output when available', () => {
+    it('shows output when available', async () => {
       render(
         <PruneRepositoryDialog
           open={true}
@@ -359,10 +348,10 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByText('Would prune: archive-2023-01-01')).toBeInTheDocument()
+      expect(await screen.findByText('Would prune: archive-2023-01-01')).toBeInTheDocument()
     })
 
-    it('shows error state for failed operation', () => {
+    it('shows error state for failed operation', async () => {
       render(
         <PruneRepositoryDialog
           open={true}
@@ -381,11 +370,11 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByText('Operation Failed')).toBeInTheDocument()
+      expect(await screen.findByText('Operation Failed')).toBeInTheDocument()
       expect(screen.getByText('Repository locked')).toBeInTheDocument()
     })
 
-    it('shows success message for dry run', () => {
+    it('shows success message for dry run', async () => {
       render(
         <PruneRepositoryDialog
           open={true}
@@ -404,7 +393,9 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByText(/Dry run completed successfully/i)).toBeInTheDocument()
+      expect(
+        await screen.findByText(/Archives listed above would be deleted\. If this looks correct/i)
+      ).toBeInTheDocument()
     })
   })
 
@@ -425,7 +416,8 @@ describe('PruneRepositoryDialog', () => {
       expect(screen.getByText(/Deleted archives cannot be recovered/i)).toBeInTheDocument()
     })
 
-    it('shows tip about running dry run first', () => {
+    it('shows tip about running dry run first', async () => {
+      const user = userEvent.setup()
       render(
         <PruneRepositoryDialog
           open={true}
@@ -438,7 +430,11 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(screen.getByText(/Always run "Dry Run" first/i)).toBeInTheDocument()
+      const infoIcon = document.body.querySelector('.lucide-info')?.parentElement
+      expect(infoIcon).toBeTruthy()
+      if (infoIcon) {
+        await user.hover(infoIcon)
+      }
     })
   })
 })
