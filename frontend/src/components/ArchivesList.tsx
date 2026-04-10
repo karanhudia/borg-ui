@@ -2,11 +2,9 @@ import React, { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Box,
-  CircularProgress,
   Stack,
   Typography,
   TablePagination,
-  Paper,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -23,6 +21,7 @@ import {
   Layers,
 } from 'lucide-react'
 import ArchiveCard from './ArchiveCard'
+import ArchiveCardSkeleton from './ArchiveCardSkeleton'
 import { Archive } from '../types'
 import {
   groupArchivesByTime,
@@ -50,7 +49,6 @@ interface ArchivesListProps {
 
 export default function ArchivesList({
   archives,
-  repositoryName,
   loading,
   onViewArchive,
   onRestoreArchive,
@@ -187,12 +185,11 @@ export default function ArchivesList({
   // Loading State
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-        <CircularProgress size={48} />
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-          {t('archivesList.loading')}
-        </Typography>
-      </Box>
+      <Stack spacing={2}>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <ArchiveCardSkeleton key={i} index={i} />
+        ))}
+      </Stack>
     )
   }
 
@@ -220,27 +217,47 @@ export default function ArchivesList({
   // Archives List
   return (
     <Box>
-      {/* Header with count and controls */}
+      {/* Sticky panel header: title + count + controls */}
       <Box
         sx={{
-          mb: 3,
           display: 'flex',
           flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
           alignItems: { xs: 'flex-start', sm: 'center' },
-          gap: 2,
+          gap: { xs: 1.5, sm: 1 },
+          px: 2,
+          py: 1.25,
+          mb: 2.5,
+          borderRadius: 2,
+          bgcolor: isDark
+            ? alpha(theme.palette.primary.main, 0.1)
+            : alpha(theme.palette.primary.main, 0.06),
+          border: '1px solid',
+          borderColor: isDark
+            ? alpha(theme.palette.primary.main, 0.2)
+            : alpha(theme.palette.primary.main, 0.15),
         }}
       >
-        <Box>
-          <Typography variant="h6" fontWeight={600}>
-            {t('archivesList.archivesFor', { repositoryName })}
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, flexShrink: 0 }}>
+          <Typography variant="h6" fontWeight={700} sx={{ fontSize: '0.95rem' }}>
+            Archives
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              px: 0.75,
+              py: 0.2,
+              borderRadius: 1,
+              bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.06),
+              color: 'text.secondary',
+              lineHeight: 1.6,
+            }}
+          >
             {filter === 'all' || sortedArchives.length === archives.length
-              ? `${archives.length} ${archives.length === 1 ? t('archivesList.archive') : t('archivesList.archives')}`
-              : `${sortedArchives.length} of ${archives.length} ${
-                  archives.length === 1 ? t('archivesList.archive') : t('archivesList.archives')
-                }`}
+              ? archives.length
+              : `${sortedArchives.length}/${archives.length}`}
           </Typography>
         </Box>
 
@@ -487,7 +504,7 @@ export default function ArchivesList({
           </Typography>
         </Box>
       ) : groupingEnabled && groupedArchives ? (
-        <Stack spacing={2} sx={{ mb: 2 }}>
+        <Stack spacing={2}>
           {groupedArchives.map((group) => (
             <Accordion
               key={group.key}
@@ -561,12 +578,7 @@ export default function ArchivesList({
 
           {/* Pagination */}
           {sortedArchives.length > 0 && (
-            <Paper
-              variant="outlined"
-              sx={{
-                borderRadius: 2,
-              }}
-            >
+            <Box>
               <TablePagination
                 component="div"
                 count={sortedArchives.length}
@@ -611,7 +623,7 @@ export default function ArchivesList({
                   },
                 }}
               />
-            </Paper>
+            </Box>
           )}
         </>
       )}
