@@ -17,6 +17,7 @@ from app.core.security import (
     check_repo_access,
 )
 from app.services.backup_service import backup_service
+from app.services.backup_progress_contract import serialize_backup_progress_details
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -186,17 +187,10 @@ async def get_all_backup_jobs(
                     "has_logs": bool(job.logs),  # Indicate if logs are available
                     "maintenance_status": job.maintenance_status,
                     "scheduled_job_id": job.scheduled_job_id,  # Include for filtering by schedule
-                    "progress_details": {
-                        "original_size": job.original_size or 0,
-                        "compressed_size": job.compressed_size or 0,
-                        "deduplicated_size": job.deduplicated_size or 0,
-                        "nfiles": job.nfiles or 0,
-                        "current_file": job.current_file or "",
-                        "progress_percent": job.progress_percent or 0,
-                        "backup_speed": job.backup_speed or 0.0,
-                        "total_expected_size": job.total_expected_size or 0,
-                        "estimated_time_remaining": job.estimated_time_remaining or 0
-                    }
+                    "progress_details": serialize_backup_progress_details(
+                        job,
+                        _get_job_repository(db, job.repository),
+                    )
                 }
                 for job in visible_jobs
             ]
@@ -236,18 +230,7 @@ async def get_backup_status(
             "error_message": job.error_message,
             "logs": job.logs,
             "maintenance_status": job.maintenance_status,
-            # Detailed progress from JSON parsing
-            "progress_details": {
-                "original_size": job.original_size or 0,
-                "compressed_size": job.compressed_size or 0,
-                "deduplicated_size": job.deduplicated_size or 0,
-                "nfiles": job.nfiles or 0,
-                "current_file": job.current_file or "",
-                "progress_percent": job.progress_percent or 0,
-                "backup_speed": job.backup_speed or 0.0,
-                "total_expected_size": job.total_expected_size or 0,
-                "estimated_time_remaining": job.estimated_time_remaining or 0
-            }
+            "progress_details": serialize_backup_progress_details(job, repo)
         }
     except Exception as e:
         logger.error("Failed to get backup status", error=str(e))

@@ -56,8 +56,8 @@ export interface BackupJob {
   maintenance_status?: string
   progress_details?: {
     original_size: number
-    compressed_size: number
-    deduplicated_size: number
+    compressed_size?: number
+    deduplicated_size?: number
     nfiles: number
     current_file: string
     backup_speed?: number

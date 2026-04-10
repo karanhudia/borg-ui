@@ -171,6 +171,37 @@ describe('RunningBackupsSection', () => {
     expect(screen.getByText('Deduplicated:')).toBeInTheDocument()
   })
 
+  it('hides unsupported optional size fields when omitted from progress_details', () => {
+    const borg2Job: BackupJob = {
+      ...mockRunningJob,
+      progress_details: {
+        nfiles: 1000,
+        original_size: 5000000,
+        current_file: '/home/user/document.pdf',
+        backup_speed: 10.5,
+        total_expected_size: 10000000,
+        estimated_time_remaining: 300,
+      },
+    }
+
+    render(
+      <RunningBackupsSection
+        runningBackupJobs={[borg2Job]}
+        getRepositoryName={mockGetRepositoryName}
+        formatRelativeTime={mockFormatRelativeTime}
+        formatDurationSeconds={mockFormatDurationSeconds}
+        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
+        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
+        onCancelBackup={mockOnCancelBackup}
+        isCancelling={false}
+      />
+    )
+
+    expect(screen.queryByText('Compressed:')).not.toBeInTheDocument()
+    expect(screen.queryByText('Deduplicated:')).not.toBeInTheDocument()
+    expect(screen.getByText('Original Size:')).toBeInTheDocument()
+  })
+
   it('displays backup speed', () => {
     render(
       <RunningBackupsSection

@@ -39,6 +39,7 @@ class BackupV2Service:
     ) -> List[str]:
         cmd = [
             borg2.borg_cmd,
+            "--progress",
             "--show-rc",
             "--log-json",
             "-r",

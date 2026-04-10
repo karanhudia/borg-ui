@@ -272,6 +272,68 @@ class TestBackupStatus:
         data = response.json()
         assert "status" in data or "job" in data
 
+    def test_get_backup_status_omits_unsupported_borg2_progress_fields(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="V2 Repo",
+            path="/test/v2-repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        job = BackupJob(
+            repository=repo.path,
+            status="running",
+            started_at=datetime.now(),
+            original_size=1024,
+            compressed_size=512,
+            deduplicated_size=256,
+            nfiles=3,
+        )
+        test_db.add_all([repo, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(f"/api/backup/status/{job.id}", headers=admin_headers)
+
+        assert response.status_code == 200
+        progress = response.json()["progress_details"]
+        assert progress["original_size"] == 1024
+        assert progress["nfiles"] == 3
+        assert "compressed_size" not in progress
+        assert "deduplicated_size" not in progress
+
+    def test_list_backup_jobs_keeps_supported_v1_progress_fields(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="V1 Repo",
+            path="/test/v1-repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=1,
+        )
+        job = BackupJob(
+            repository=repo.path,
+            status="running",
+            started_at=datetime.now(),
+            original_size=1024,
+            compressed_size=512,
+            deduplicated_size=256,
+            nfiles=3,
+        )
+        test_db.add_all([repo, job])
+        test_db.commit()
+
+        response = test_client.get("/api/backup/jobs", headers=admin_headers)
+
+        assert response.status_code == 200
+        payload_job = next(item for item in response.json()["jobs"] if item["id"] == job.id)
+        progress = payload_job["progress_details"]
+        assert progress["compressed_size"] == 512
+        assert progress["deduplicated_size"] == 256
+
     def test_get_backup_job_status_nonexistent(self, test_client: TestClient, admin_headers):
         """Test getting status of non-existent backup job"""
         response = test_client.get("/api/backup/jobs/99999/status", headers=admin_headers)

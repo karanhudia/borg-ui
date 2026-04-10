@@ -27,6 +27,7 @@ def test_build_backup_create_command_uses_borg2_shape():
 
     assert cmd == [
         "borg2",
+        "--progress",
         "--show-rc",
         "--log-json",
         "-r",

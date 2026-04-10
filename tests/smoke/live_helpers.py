@@ -556,3 +556,33 @@ class SmokeClient:
                 return last_payload
             time.sleep(0.5)
         raise SmokeFailure(f"Timed out waiting for {count} jobs at {path}: {last_payload}")
+
+    def wait_for_backup_job(
+        self,
+        repository_path: str,
+        *,
+        statuses: set[str],
+        token: Optional[str] = None,
+        timeout: float = 60.0,
+    ) -> dict:
+        deadline = time.time() + timeout
+        last_payload = None
+        while time.time() < deadline:
+            response = self.request_ok(
+                "GET",
+                "/api/backup/jobs",
+                token=token,
+                params={"manual_only": "true"},
+            )
+            last_payload = response.json()
+            matches = [
+                job
+                for job in last_payload.get("jobs", [])
+                if job.get("repository") == repository_path and job.get("status") in statuses
+            ]
+            if matches:
+                return max(matches, key=lambda job: int(job.get("id", 0)))
+            time.sleep(0.5)
+        raise SmokeFailure(
+            f"Timed out waiting for backup job for repository {repository_path}: {last_payload}"
+        )

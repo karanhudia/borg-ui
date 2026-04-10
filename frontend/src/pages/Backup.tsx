@@ -48,6 +48,69 @@ const Backup: React.FC = () => {
   const permissions = usePermissions()
   const { t } = useTranslation()
 
+  const getVisibleRunningJobStats = (job: BackupJob) =>
+    [
+      {
+        key: 'filesProcessed',
+        label: t('backup.runningJobs.progress.filesProcessed'),
+        value:
+          job.progress_details?.nfiles?.toLocaleString() ||
+          job.processed_files?.toLocaleString() ||
+          '0',
+      },
+      {
+        key: 'originalSize',
+        label: t('backup.runningJobs.progress.originalSize'),
+        value: job.progress_details?.original_size
+          ? formatBytesUtil(job.progress_details.original_size)
+          : formatFileSize(job.processed_size),
+      },
+      {
+        key: 'compressed',
+        label: t('backup.runningJobs.progress.compressed'),
+        value:
+          job.progress_details?.compressed_size !== undefined
+            ? formatBytesUtil(job.progress_details.compressed_size)
+            : null,
+      },
+      {
+        key: 'deduplicated',
+        label: t('backup.runningJobs.progress.deduplicated'),
+        value:
+          job.progress_details?.deduplicated_size !== undefined
+            ? formatBytesUtil(job.progress_details.deduplicated_size)
+            : null,
+        valueColor: 'success.main',
+      },
+      {
+        key: 'totalSourceSize',
+        label: t('backup.runningJobs.progress.totalSourceSize'),
+        value:
+          job.progress_details?.total_expected_size && job.progress_details.total_expected_size > 0
+            ? formatBytesUtil(job.progress_details.total_expected_size)
+            : 'Unknown',
+        valueColor: 'info.main',
+      },
+      {
+        key: 'speed',
+        label: t('backup.runningJobs.progress.speed'),
+        value:
+          job.status === 'running' && job.progress_details?.backup_speed
+            ? `${job.progress_details.backup_speed.toFixed(2)} MB/s`
+            : 'N/A',
+        valueColor: 'primary.main',
+      },
+      {
+        key: 'eta',
+        label: t('backup.runningJobs.progress.eta'),
+        value:
+          (job.progress_details?.estimated_time_remaining || 0) > 0
+            ? formatDurationSeconds(job.progress_details?.estimated_time_remaining || 0)
+            : 'N/A',
+        valueColor: 'success.main',
+      },
+    ].filter((stat) => stat.value !== null)
+
   // Handle incoming navigation state (from "Backup Now" button)
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -329,199 +392,137 @@ const Backup: React.FC = () => {
             </Typography>
 
             <Stack spacing={3}>
-              {runningJobs.map((job: BackupJob) => (
-                <Paper key={job.id} variant="outlined" sx={{ p: 3 }}>
-                  <Stack
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="flex-start"
-                    sx={{ mb: 2 }}
-                  >
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Box sx={{ color: 'info.main' }}>
-                        <RefreshCw size={20} className="animate-spin" />
-                      </Box>
-                      <Box>
-                        <Typography variant="body1" fontWeight={500}>
-                          {t('backup.runningJobs.jobTitle', { id: job.id })}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {t('backup.runningJobs.repositoryPath', { path: job.repository })}
-                        </Typography>
-                      </Box>
-                    </Stack>
-                    <Stack direction="row" spacing={1}>
-                      <Button
-                        variant="outlined"
-                        color="primary"
-                        size="small"
-                        startIcon={<Eye size={16} />}
-                        onClick={() => handleViewLogs(job)}
-                      >
-                        {t('backup.runningJobs.viewLogs')}
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        startIcon={<Square size={16} />}
-                        onClick={() => handleCancelBackup(String(job.id))}
-                        disabled={cancelBackupMutation.isPending}
-                      >
-                        {t('backup.runningJobs.cancel')}
-                      </Button>
-                    </Stack>
-                  </Stack>
+              {runningJobs.map((job: BackupJob) => {
+                const visibleStats = getVisibleRunningJobStats(job)
 
-                  {/* Backup Stage Indicator */}
-                  <Box sx={{ mb: 2 }}>
+                return (
+                  <Paper key={job.id} variant="outlined" sx={{ p: 3 }}>
                     <Stack
                       direction="row"
                       justifyContent="space-between"
-                      alignItems="center"
-                      sx={{ mb: 1.5 }}
+                      alignItems="flex-start"
+                      sx={{ mb: 2 }}
                     >
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Box
-                          sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            bgcolor: 'info.main',
-                            animation: 'pulse 2s ease-in-out infinite',
-                            '@keyframes pulse': {
-                              '0%, 100%': { opacity: 1 },
-                              '50%': { opacity: 0.5 },
-                            },
-                          }}
-                        />
-                        <Typography variant="body2" fontWeight={500} color="info.main">
-                          {(job.progress || 0) === 0
-                            ? t('backup.runningJobs.progress.initializing')
-                            : (job.progress || 0) >= 100
-                              ? t('backup.runningJobs.progress.finalizing')
-                              : t('backup.runningJobs.progress.processing')}
-                        </Typography>
-                      </Stack>
-                      <Typography variant="body2" color="text.secondary">
-                        {formatTimeRange(job.started_at, job.completed_at, job.status)}
-                      </Typography>
-                    </Stack>
-                  </Box>
-
-                  {/* Current File Being Processed */}
-                  {job.progress_details?.current_file && (
-                    <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
-                      <Typography variant="caption" fontWeight={500}>
-                        {t('backup.runningJobs.progress.currentFile')}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontFamily: 'monospace',
-                          display: 'block',
-                          mt: 0.5,
-                          wordBreak: 'break-all',
-                        }}
-                      >
-                        {job.progress_details.current_file}
-                      </Typography>
-                    </Alert>
-                  )}
-
-                  {/* Job Details with Detailed Stats - Grid Layout to prevent overflow */}
-                  <Box
-                    sx={{
-                      display: 'grid',
-                      gridTemplateColumns: {
-                        xs: '1fr',
-                        sm: 'repeat(2, 1fr)',
-                        md: 'repeat(3, 1fr)',
-                        lg: 'repeat(4, 1fr)',
-                      },
-                      gap: 2,
-                      width: '100%',
-                    }}
-                  >
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('backup.runningJobs.progress.filesProcessed')}
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.nfiles?.toLocaleString() ||
-                          job.processed_files?.toLocaleString() ||
-                          '0'}
-                        {job.total_files && ` / ${job.total_files.toLocaleString()}`}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('backup.runningJobs.progress.originalSize')}
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.original_size
-                          ? formatBytesUtil(job.progress_details.original_size)
-                          : formatFileSize(job.processed_size)}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('backup.runningJobs.progress.compressed')}
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500}>
-                        {job.progress_details?.compressed_size !== undefined &&
-                        job.progress_details?.compressed_size !== null
-                          ? formatBytesUtil(job.progress_details.compressed_size)
-                          : 'N/A'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('backup.runningJobs.progress.deduplicated')}
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500} color="success.main">
-                        {job.progress_details?.deduplicated_size !== undefined &&
-                        job.progress_details?.deduplicated_size !== null
-                          ? formatBytesUtil(job.progress_details.deduplicated_size)
-                          : 'N/A'}
-                      </Typography>
-                    </Box>
-                    {job.progress_details?.total_expected_size &&
-                      job.progress_details.total_expected_size > 0 && (
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <Box sx={{ color: 'info.main' }}>
+                          <RefreshCw size={20} className="animate-spin" />
+                        </Box>
                         <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            {t('backup.runningJobs.progress.totalSourceSize')}
+                          <Typography variant="body1" fontWeight={500}>
+                            {t('backup.runningJobs.jobTitle', { id: job.id })}
                           </Typography>
-                          <Typography variant="body2" fontWeight={500} color="info.main">
-                            {formatBytesUtil(job.progress_details.total_expected_size)}
+                          <Typography variant="body2" color="text.secondary">
+                            {t('backup.runningJobs.repositoryPath', { path: job.repository })}
                           </Typography>
                         </Box>
-                      )}
-                    <Box>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('backup.runningJobs.progress.speed')}
-                      </Typography>
-                      <Typography variant="body2" fontWeight={500} color="primary.main">
-                        {job.status === 'running' && job.progress_details?.backup_speed
-                          ? `${job.progress_details.backup_speed.toFixed(2)} MB/s`
-                          : 'N/A'}
-                      </Typography>
-                    </Box>
-                    {(job.progress_details?.estimated_time_remaining || 0) > 0 && (
-                      <Box>
+                      </Stack>
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          variant="outlined"
+                          color="primary"
+                          size="small"
+                          startIcon={<Eye size={16} />}
+                          onClick={() => handleViewLogs(job)}
+                        >
+                          {t('backup.runningJobs.viewLogs')}
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          size="small"
+                          startIcon={<Square size={16} />}
+                          onClick={() => handleCancelBackup(String(job.id))}
+                          disabled={cancelBackupMutation.isPending}
+                        >
+                          {t('backup.runningJobs.cancel')}
+                        </Button>
+                      </Stack>
+                    </Stack>
+
+                    {/* Backup Stage Indicator */}
+                    <Box sx={{ mb: 2 }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        sx={{ mb: 1.5 }}
+                      >
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              bgcolor: 'info.main',
+                              animation: 'pulse 2s ease-in-out infinite',
+                              '@keyframes pulse': {
+                                '0%, 100%': { opacity: 1 },
+                                '50%': { opacity: 0.5 },
+                              },
+                            }}
+                          />
+                          <Typography variant="body2" fontWeight={500} color="info.main">
+                            {(job.progress || 0) === 0
+                              ? t('backup.runningJobs.progress.initializing')
+                              : (job.progress || 0) >= 100
+                                ? t('backup.runningJobs.progress.finalizing')
+                                : t('backup.runningJobs.progress.processing')}
+                          </Typography>
+                        </Stack>
                         <Typography variant="body2" color="text.secondary">
-                          {t('backup.runningJobs.progress.eta')}
+                          {formatTimeRange(job.started_at, job.completed_at, job.status)}
                         </Typography>
-                        <Typography variant="body2" fontWeight={500} color="success.main">
-                          {formatDurationSeconds(
-                            job.progress_details?.estimated_time_remaining || 0
-                          )}
+                      </Stack>
+                    </Box>
+
+                    {/* Current File Being Processed */}
+                    {job.progress_details?.current_file && (
+                      <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
+                        <Typography variant="caption" fontWeight={500}>
+                          {t('backup.runningJobs.progress.currentFile')}
                         </Typography>
-                      </Box>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontFamily: 'monospace',
+                            display: 'block',
+                            mt: 0.5,
+                            wordBreak: 'break-all',
+                          }}
+                        >
+                          {job.progress_details.current_file}
+                        </Typography>
+                      </Alert>
                     )}
-                  </Box>
-                </Paper>
-              ))}
+
+                    {/* Job Details with Detailed Stats - Grid Layout to prevent overflow */}
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: {
+                          xs: '1fr',
+                          sm: 'repeat(2, 1fr)',
+                          md: 'repeat(3, 1fr)',
+                          lg: 'repeat(4, 1fr)',
+                        },
+                        gap: 2,
+                        width: '100%',
+                      }}
+                    >
+                      {visibleStats.map((stat) => (
+                        <Box key={stat.key}>
+                          <Typography variant="body2" color="text.secondary">
+                            {stat.label}
+                          </Typography>
+                          <Typography variant="body2" fontWeight={500} color={stat.valueColor}>
+                            {stat.value}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Paper>
+                )
+              })}
             </Stack>
           </CardContent>
         </Card>

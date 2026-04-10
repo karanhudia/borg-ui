@@ -132,8 +132,6 @@ class TestBackupCreationIntegration:
         assert set(
             [
                 "original_size",
-                "compressed_size",
-                "deduplicated_size",
                 "nfiles",
                 "current_file",
                 "progress_percent",
