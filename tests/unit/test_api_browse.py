@@ -134,7 +134,7 @@ class TestBrowseArchiveBehavior:
         ]
 
         with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)):
-            with patch.object(browse_api.borg, "list_archive_contents", new=AsyncMock()) as mock_list:
+            with patch.object(browse_api.BorgRouter, "list_archive_contents", new=AsyncMock()) as mock_list:
                 response = await browse_api.browse_archive_contents(
                     repository_id=repo.id,
                     archive_name="test-archive",
@@ -161,7 +161,7 @@ class TestBrowseArchiveBehavior:
 
         with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
             with patch.object(
-                browse_api.borg,
+                browse_api.BorgRouter,
                 "list_archive_contents",
                 new=AsyncMock(return_value={"line_count_exceeded": True, "lines_read": 77}),
             ):
@@ -203,7 +203,7 @@ class TestBrowseArchiveBehavior:
 
         with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
             with patch.object(
-                browse_api.borg,
+                browse_api.BorgRouter,
                 "list_archive_contents",
                 new=AsyncMock(return_value={"stdout": stdout}),
             ):
@@ -238,7 +238,7 @@ class TestBrowseArchiveBehavior:
         with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
             with patch.object(browse_api.archive_cache, "set", new=AsyncMock(return_value=True)) as mock_set:
                 with patch.object(
-                    browse_api.borg,
+                    browse_api.BorgRouter,
                     "list_archive_contents",
                     new=AsyncMock(return_value={"stdout": stdout}),
                 ) as mock_list:

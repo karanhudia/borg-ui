@@ -73,7 +73,15 @@ def main() -> int:
                 "mount_point": f"smoke-mount-{int(time.time())}",
             },
         )
-        if mount_response.status_code == 500:
+        if mount_response.status_code in {500, 503}:
+            detail = {}
+            try:
+                detail = mount_response.json().get("detail", {})
+            except Exception:
+                detail = {}
+            if mount_response.status_code == 503 or detail.get("key") == "backend.errors.mounts.mountUnavailable":
+                print(f"Mount smoke skipped: borg mount unavailable in this environment: {mount_response.text}", flush=True)
+                return 0
             print(f"Mount smoke skipped: borg mount failed in this environment: {mount_response.text}", flush=True)
             return 0
         if mount_response.status_code != 200:

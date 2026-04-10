@@ -183,8 +183,8 @@ class TestV2RepositoryRoutes:
         process.communicate.return_value = (b"", b"")
 
         session_factory = sessionmaker(bind=test_db.get_bind(), autocommit=False, autoflush=False)
-        with patch("app.api.v2.repositories.SessionLocal", session_factory):
-            with patch("app.api.v2.repositories.asyncio.create_subprocess_exec", return_value=process) as mock_exec:
+        with patch("app.services.v2.repository_service.SessionLocal", session_factory):
+            with patch("app.services.v2.repository_service.borg2._run", return_value={"success": True, "stdout": "", "stderr": ""}) as mock_run:
                 response = test_client.post(
                     "/api/v2/repositories/",
                     json={
@@ -197,7 +197,7 @@ class TestV2RepositoryRoutes:
                 )
 
         assert response.status_code == 201
-        env = mock_exec.call_args.kwargs["env"]
+        env = mock_run.call_args.kwargs["env"]
         assert env["BORG_RSH"].startswith("ssh ")
         assert "-i" in env["BORG_RSH"]
 

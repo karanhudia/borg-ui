@@ -140,8 +140,8 @@ class TestRestoreProtection:
         _grant(test_db, user, repo, 'viewer')
         token = create_access_token(data={"sub": user.username})
         headers = {"Authorization": f"Bearer {token}"}
-        with patch('app.api.restore.borg.extract_archive', new_callable=AsyncMock) as mock_extract:
-            mock_extract.return_value = {"success": True, "stdout": "", "stderr": ""}
+        with patch('app.api.restore.BorgRouter.preview_restore', new_callable=AsyncMock) as mock_preview:
+            mock_preview.return_value = {"success": True, "stdout": "", "stderr": ""}
             response = test_client.post(
                 '/api/restore/preview',
                 json={

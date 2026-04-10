@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -92,9 +92,7 @@ const UsersTab: React.FC = () => {
   const queryClient = useQueryClient()
   const canManageUsers = hasGlobalPermission('settings.users.manage')
 
-  const getRolePresentation = (role: string) => {
-    return getGlobalRolePresentation(role, t)
-  }
+  const getRolePresentation = useCallback((role: string) => getGlobalRolePresentation(role, t), [t])
 
   const getRepositoryAccessSummary = (user: UserType) => {
     if (getRolePresentation(user.role).isAdminRole) {
@@ -306,7 +304,7 @@ const UsersTab: React.FC = () => {
       if (statusFilter === 'inactive' && user.is_active) return false
       return true
     })
-  }, [users, searchQuery, roleFilter, statusFilter])
+  }, [users, searchQuery, roleFilter, statusFilter, getRolePresentation])
 
   // Keep selectedAccessUserId for backward compat with UserPermissionsPanel
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<number | null>(null)
@@ -421,7 +419,7 @@ const UsersTab: React.FC = () => {
         ),
       },
     ],
-    [t, isDark]
+    [t, isDark, getRolePresentation]
   )
 
   // Table row actions

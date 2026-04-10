@@ -30,7 +30,8 @@ def test_shared_backend_boundaries_do_not_hardcode_borg_v1_commands():
 @pytest.mark.unit
 def test_frontend_versioned_archive_and_backup_routes_live_in_borg_api_client():
     borg_client = (REPO_ROOT / "frontend/src/services/borgApi/client.ts").read_text()
-    assert "${this.v}/backup/run" in borg_client
+    assert "/v2/backup/run" in borg_client
+    assert "/backup/start" in borg_client
     assert "${this.v}/archives/${archiveId}" in borg_client
     assert "/browse/" in borg_client
 

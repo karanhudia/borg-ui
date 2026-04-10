@@ -32,6 +32,15 @@ def backup_service_fixture(mock_db_session):
             service = BackupService()
             yield service
 
+
+def _notification_service_mock():
+    notifications = MagicMock()
+    notifications.send_backup_failure = AsyncMock()
+    notifications.send_backup_start = AsyncMock()
+    notifications.send_backup_success = AsyncMock()
+    notifications.send_backup_warning = AsyncMock()
+    return notifications
+
 @pytest.mark.asyncio
 async def test_execute_backup_command(backup_service_fixture, mock_db_session):
     """Test 'borg create' command construction"""
@@ -71,11 +80,12 @@ async def test_execute_backup_command(backup_service_fixture, mock_db_session):
     
     with patch("app.services.backup_service.asyncio.create_subprocess_exec", return_value=mock_process) as mock_exec:
         with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
-            with patch("app.services.backup_service.notification_service") as mock_notif:
-                # Patch hooks to avoid complexity in this specific test
-                with patch.object(backup_service_fixture, '_execute_hooks', return_value={"success": True, "execution_logs": [], "scripts_executed": 0, "scripts_failed": 0, "using_library": False}):
-                     # EXECUTE
-                    await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
+            with patch("app.services.backup_service.BorgRouter.validate_local_repository_access", return_value=None):
+                with patch("app.services.backup_service.notification_service", _notification_service_mock()):
+                    # Patch hooks to avoid complexity in this specific test
+                    with patch.object(backup_service_fixture, '_execute_hooks', return_value={"success": True, "execution_logs": [], "scripts_executed": 0, "scripts_failed": 0, "using_library": False}):
+                        # EXECUTE
+                        await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
 
                     # VERIFY
                     # Verify command arguments - search for the 'create' command in all calls
@@ -143,22 +153,23 @@ async def test_execute_backup_hooks(backup_service_fixture, mock_db_session):
         mock_process.stdout.__aiter__.return_value = iter([])
         
         with patch("app.services.backup_service.asyncio.create_subprocess_exec", return_value=mock_process):
-             with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
-                 with patch("app.services.backup_service.notification_service"):
-                     # EXECUTE
-                    await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
+            with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
+                with patch("app.services.backup_service.BorgRouter.validate_local_repository_access", return_value=None):
+                    with patch("app.services.backup_service.notification_service", _notification_service_mock()):
+                        # EXECUTE
+                        await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
 
-                    # VERIFY Hooks called
-                    # Should be called once for pre-backup and once for post-backup
-                    assert instance.execute_inline_script.call_count == 2
-                    
-                    # Check first call was pre-backup
-                    call1 = instance.execute_inline_script.call_args_list[0]
-                    assert call1.kwargs['script_type'] == "pre-backup"
-                    
-                    # Check second call was post-backup
-                    call2 = instance.execute_inline_script.call_args_list[1]
-                    assert call2.kwargs['script_type'] == "post-backup"
+        # VERIFY Hooks called
+        # Should be called once for pre-backup and once for post-backup
+        assert instance.execute_inline_script.call_count == 2
+
+        # Check first call was pre-backup
+        call1 = instance.execute_inline_script.call_args_list[0]
+        assert call1.kwargs['script_type'] == "pre-backup"
+
+        # Check second call was post-backup
+        call2 = instance.execute_inline_script.call_args_list[1]
+        assert call2.kwargs['script_type'] == "post-backup"
 
 
 @pytest.mark.asyncio
@@ -202,9 +213,10 @@ async def test_execute_backup_runs_post_hook_on_cancel_as_failure(backup_service
 
     with patch("app.services.backup_service.asyncio.create_subprocess_exec", return_value=mock_process):
         with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
-            with patch("app.services.backup_service.notification_service"):
-                with patch.object(backup_service_fixture, "_execute_hooks", new=AsyncMock(return_value=hook_result)) as mock_hooks:
-                    await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
+            with patch("app.services.backup_service.BorgRouter.validate_local_repository_access", return_value=None):
+                with patch("app.services.backup_service.notification_service", _notification_service_mock()):
+                    with patch.object(backup_service_fixture, "_execute_hooks", new=AsyncMock(return_value=hook_result)) as mock_hooks:
+                        await backup_service_fixture.execute_backup(job_id, repo.path, db=mock_db_session)
 
     post_hook_calls = [
         call for call in mock_hooks.await_args_list if call.kwargs.get("hook_type") == "post-backup"
@@ -314,13 +326,14 @@ async def test_pre_backup_inline_script_failure_skips_when_flag_set(
 
     with patch.object(backup_service_fixture, "_execute_hooks", return_value=inline_failure):
         with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
-            with patch("app.services.backup_service.notification_service"):
-                with patch(
-                    "app.services.backup_service.asyncio.create_subprocess_exec"
-                ) as mock_exec:
-                    await backup_service_fixture.execute_backup(
-                        job_id, repo.path, db=mock_db_session
-                    )
+            with patch("app.services.backup_service.BorgRouter.validate_local_repository_access", return_value=None):
+                with patch("app.services.backup_service.notification_service", _notification_service_mock()):
+                    with patch(
+                        "app.services.backup_service.asyncio.create_subprocess_exec"
+                    ) as mock_exec:
+                        await backup_service_fixture.execute_backup(
+                            job_id, repo.path, db=mock_db_session
+                        )
 
     assert job.status == "skipped", f"expected 'skipped', got '{job.status}'"
     assert "Skipped by pre-backup script" in job.error_message
@@ -361,10 +374,11 @@ async def test_pre_backup_inline_script_failure_fails_job_when_skip_flag_off(
 
     with patch.object(backup_service_fixture, "_execute_hooks", return_value=inline_failure):
         with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
-            with patch("app.services.backup_service.notification_service"):
-                await backup_service_fixture.execute_backup(
-                    job_id, repo.path, db=mock_db_session
-                )
+            with patch("app.services.backup_service.BorgRouter.validate_local_repository_access", return_value=None):
+                with patch("app.services.backup_service.notification_service", _notification_service_mock()):
+                    await backup_service_fixture.execute_backup(
+                        job_id, repo.path, db=mock_db_session
+                    )
 
     assert job.status == "failed", f"expected 'failed', got '{job.status}'"
 
@@ -399,13 +413,14 @@ async def test_pre_backup_library_should_skip_signal_skips_job(
 
     with patch.object(backup_service_fixture, "_execute_hooks", return_value=library_skip):
         with patch("app.services.backup_service.SessionLocal", return_value=mock_db_session):
-            with patch("app.services.backup_service.notification_service"):
-                with patch(
-                    "app.services.backup_service.asyncio.create_subprocess_exec"
-                ) as mock_exec:
-                    await backup_service_fixture.execute_backup(
-                        job_id, repo.path, db=mock_db_session
-                    )
+            with patch("app.services.backup_service.BorgRouter.validate_local_repository_access", return_value=None):
+                with patch("app.services.backup_service.notification_service", _notification_service_mock()):
+                    with patch(
+                        "app.services.backup_service.asyncio.create_subprocess_exec"
+                    ) as mock_exec:
+                        await backup_service_fixture.execute_backup(
+                            job_id, repo.path, db=mock_db_session
+                        )
 
     assert job.status == "skipped", f"expected 'skipped', got '{job.status}'"
     assert "maintenance-guard" in job.error_message
