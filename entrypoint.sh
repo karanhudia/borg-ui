@@ -139,8 +139,12 @@ if [ ! -L /home/borg/.config/borg/keys ]; then
 fi
 
 # Set proper permissions
-chown -R borg:borg /data/borg_keys /home/borg/.config/borg
-chmod 700 /data/borg_keys
+if ! chown -R borg:borg /data/borg_keys /home/borg/.config/borg 2>/dev/null; then
+    echo "[$(date)] Warning: Could not change ownership of Borg key directories; continuing with existing permissions"
+fi
+if ! chmod 700 /data/borg_keys 2>/dev/null; then
+    echo "[$(date)] Warning: Could not chmod /data/borg_keys; continuing with existing permissions"
+fi
 chmod 600 /data/borg_keys/* 2>/dev/null || true
 echo "[$(date)] Borg keyfiles directory setup complete"
 
@@ -188,6 +192,18 @@ PORT=${PORT:-8081}
 
 # Note: Access logs disabled (/dev/null) because FastAPI middleware already logs all requests
 # with structured logging. This prevents duplicate log entries.
+#
+# Development reload mode still needs the full entrypoint setup above. Keep the
+# process launch switch here so dev and prod share the same runtime prep.
+if [ "${ENABLE_RELOAD:-false}" = "true" ]; then
+    echo "[$(date)] ENABLE_RELOAD=true, starting uvicorn with auto-reload..."
+    exec python -m uvicorn app.main:app \
+        --reload \
+        --reload-dir /app/app \
+        --host 0.0.0.0 \
+        --port "${PORT}" \
+        --no-access-log
+fi
 #
 # When PUID=0, the borg user's UID has been changed to 0 (root). gosu is a privilege-reduction
 # tool designed to DROP root privileges — using it to switch to a user that is also UID=0 causes

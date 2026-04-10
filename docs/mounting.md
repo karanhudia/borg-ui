@@ -48,6 +48,61 @@ Borg mount uses **FUSE** (Filesystem in Userspace). The container must have:
 - Access to the FUSE device: `devices: /dev/fuse`
 - Capability to mount: `cap_add: SYS_ADMIN`
 
+For Docker Compose, the minimum Linux setup looks like:
+
+```yaml
+services:
+  app:
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse:/dev/fuse
+    security_opt:
+      - apparmor:unconfined
+    environment:
+      - BORG_FUSE_IMPL=pyfuse3
+```
+
+If you want mounted archives to be visible on the host, also bind `/data/mounts`
+with `bind.propagation: shared` as shown below.
+
+### Development Compose
+
+There is a Linux-only development override in
+[`docker-compose.dev.mount.yml`](/Users/karanhudia/Documents/Projects/borg-ui/docker-compose.dev.mount.yml).
+To test archive mounting in development:
+
+1. Start the normal dev stack. It now goes through the same
+   [`entrypoint.sh`](/Users/karanhudia/Documents/Projects/borg-ui/entrypoint.sh)
+   runtime setup as the regular compose path, while still enabling code reload.
+2. On a **native Linux Docker host**, add the FUSE override:
+   `docker compose -f docker-compose.dev.yml -f docker-compose.dev.mount.yml up`
+3. Verify the FUSE device exists:
+   `docker exec borg-web-ui-dev ls -l /dev/fuse`
+4. Verify Borg sees the selected backend:
+   `docker exec borg-web-ui-dev borg --version`
+5. Mount an archive from the UI, then inspect it inside the container:
+   `docker exec borg-web-ui-dev ls /data/mounts`
+
+If mount still fails, check:
+
+- the container has `/dev/fuse`
+- the host kernel supports FUSE
+- AppArmor/seccomp is not blocking the mount
+- `pyfuse3` is importable inside the container
+
+### Docker Desktop Caveat
+
+On Docker Desktop for macOS or Windows, these Compose settings may still not be
+enough. Docker Desktop runs containers inside a Linux VM, and in practice Borg
+archive mounts often remain unavailable there because a usable FUSE device is
+not exposed to the container the same way it is on a native Linux host.
+
+Inference from Docker's container isolation model: even privileged containers
+on Docker Desktop gain privileges inside the Linux VM, not on the host itself.
+If you need reliable mount testing, use a Linux machine or Linux VM with Docker
+Engine rather than Docker Desktop.
+
 ---
 
 ## Accessing Mounted Files

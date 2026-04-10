@@ -89,7 +89,7 @@ RUN pip install --no-cache-dir 'borgbackup[fuse]>=1.4.4,<1.5.0'
 # Install Borg 2.x into an isolated prefix so it does not conflict with Borg 1
 # Available as `borg2` via the symlink created below
 RUN python3 -m venv /opt/borg2-venv && \
-    /opt/borg2-venv/bin/pip install --no-cache-dir 'borgbackup[fuse]>=2.0.0b1,<3.0.0' && \
+    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 'borgbackup[fuse]>=2.0.0b1,<3.0.0' && \
     ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2
 
 # Install additional useful tools

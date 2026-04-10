@@ -30,6 +30,7 @@ services:
       - DATABASE_URL=sqlite:////data/borg.db
       - SECRET_KEY=dev-secret-key-not-for-production
       - ENVIRONMENT=development
+      - ENABLE_RELOAD=true
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
       - CACHE_TTL_SECONDS=7200
@@ -43,8 +44,6 @@ services:
       # and uncomment the redis service + depends_on section at the bottom
       # - REDIS_HOST=redis
       # - REDIS_PORT=6379
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["python -m uvicorn app.main:app --reload --reload-dir /app/app --host 0.0.0.0 --port ${DEV_PORT:-8083} --no-access-log"]
     # Uncomment to require Redis before starting:
     # depends_on:
     #   redis:

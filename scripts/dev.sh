@@ -26,7 +26,7 @@ mkdir -p .local-data/ssh_keys .local-data/logs .local-data/borg_keys
 
 # Start dev backend in Docker with hot-reload
 echo "Starting dev backend (Docker, port $DEV_PORT)..."
-DEV_PORT=$DEV_PORT docker-compose -p borg-ui-dev -f docker-compose.dev.yml up -d
+DEV_PORT=$DEV_PORT docker-compose -p borg-ui-dev -f docker-compose.dev.yml up -d --build --force-recreate
 
 # Wait for backend to be ready
 sleep 3
