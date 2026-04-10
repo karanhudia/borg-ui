@@ -846,9 +846,9 @@ describe('RepositoryWizard', () => {
 
         // Step 3
         await waitFor(() => {
-          expect(screen.getByLabelText(/Passphrase/i)).toBeInTheDocument()
+          expect(screen.getByPlaceholderText(/Enter passphrase/i)).toBeInTheDocument()
         })
-        setInputValue(screen.getByLabelText(/Passphrase/i), 'importpass')
+        setInputValue(screen.getByPlaceholderText(/Enter passphrase/i), 'importpass')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         // Step 4
@@ -897,7 +897,7 @@ describe('RepositoryWizard', () => {
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
-          expect(screen.getByLabelText(/Passphrase/i)).toBeInTheDocument()
+          expect(screen.getByPlaceholderText(/Enter passphrase/i)).toBeInTheDocument()
           expect(screen.getByRole('combobox')).toBeInTheDocument()
         })
 
@@ -915,7 +915,7 @@ describe('RepositoryWizard', () => {
         expect(await screen.findByText(/Selected: imported.key/i)).toBeInTheDocument()
         expect(screen.getByText(/Keyfile will be uploaded after import/i)).toBeInTheDocument()
 
-        setInputValue(screen.getByLabelText(/Passphrase/i), 'importpass')
+        setInputValue(screen.getByPlaceholderText(/Enter passphrase/i), 'importpass')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
@@ -967,7 +967,7 @@ describe('RepositoryWizard', () => {
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
-          expect(screen.getByLabelText(/Passphrase/i)).toBeInTheDocument()
+          expect(screen.getByPlaceholderText(/Enter passphrase/i)).toBeInTheDocument()
           expect(screen.getByRole('combobox')).toBeInTheDocument()
         })
 
@@ -982,7 +982,7 @@ describe('RepositoryWizard', () => {
           await screen.findByText(/Keyfile content will be saved after import/i)
         ).toBeInTheDocument()
 
-        setInputValue(screen.getByLabelText(/Passphrase/i), 'pastepass')
+        setInputValue(screen.getByPlaceholderText(/Enter passphrase/i), 'pastepass')
         await user.click(screen.getByRole('button', { name: /Next/i }))
 
         await waitFor(() => {
@@ -1477,7 +1477,7 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       await waitFor(() => {
-        expect(screen.getByLabelText(/Passphrase/i)).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/Enter passphrase/i)).toBeInTheDocument()
       })
 
       expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()

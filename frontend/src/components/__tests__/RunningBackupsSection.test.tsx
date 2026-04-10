@@ -422,6 +422,8 @@ describe('RunningBackupsSection', () => {
       />
     )
 
-    expect(screen.queryByText('ETA:')).not.toBeInTheDocument()
+    expect(screen.getByText('ETA:')).toBeInTheDocument()
+    expect(screen.getByText('N/A')).toBeInTheDocument()
+    expect(mockFormatDurationSeconds).not.toHaveBeenCalled()
   })
 })
