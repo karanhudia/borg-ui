@@ -8,6 +8,7 @@ import json
 import os
 import tempfile
 import asyncio
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -22,6 +23,8 @@ from app.core.borg2 import borg2
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Archives v2"], dependencies=[require_feature("borg_v2")])
+
+ARCHIVE_ID_RE = re.compile(r"^[0-9a-fA-F]{16,}$")
 
 
 def _get_v2_repo(repository: str, db: Session) -> Repository:
@@ -50,6 +53,43 @@ def _get_v2_repo(repository: str, db: Session) -> Repository:
             detail={"key": "backend.errors.restore.repositoryNotFound"},
         )
     return repo
+
+
+async def _resolve_archive_name(repo: Repository, archive_ref: str) -> str:
+    """Resolve an archive route parameter to the actual Borg archive name.
+
+    The frontend may pass either the archive name or the archive ID/hash. Borg 2
+    commands such as `list` are most reliable when given the real archive name.
+    """
+    if not archive_ref:
+        return archive_ref
+
+    # Fast path for normal archive names.
+    if not ARCHIVE_ID_RE.fullmatch(archive_ref):
+        return archive_ref
+
+    result = await borg2.list_archives(
+        repo.path,
+        passphrase=repo.passphrase,
+        remote_path=repo.remote_path,
+        bypass_lock=repo.bypass_lock,
+    )
+    if not result["success"]:
+        return archive_ref
+
+    try:
+        payload = json.loads(result["stdout"])
+        archives = payload.get("archives", [])
+    except Exception:
+        return archive_ref
+
+    for archive in archives:
+        if archive.get("id") == archive_ref:
+            return archive.get("name") or archive_ref
+        if archive.get("name") == archive_ref:
+            return archive_ref
+
+    return archive_ref
 
 
 # ── List archives ──────────────────────────────────────────────────────────────
@@ -89,8 +129,9 @@ async def get_archive_info(
 ):
     """Get detailed information about a Borg 2 archive."""
     repo = _get_v2_repo(repository, db)
+    archive_name = await _resolve_archive_name(repo, archive_id)
     result = await borg2.info_archive(
-        repo.path, archive_id,
+        repo.path, archive_name,
         passphrase=repo.passphrase,
         remote_path=repo.remote_path,
         bypass_lock=repo.bypass_lock,
@@ -126,7 +167,7 @@ async def get_archive_info(
 
         if include_files:
             list_result = await borg2.list_archive_contents(
-                repo.path, archive_id,
+                repo.path, archive_name,
                 passphrase=repo.passphrase,
                 remote_path=repo.remote_path,
                 bypass_lock=repo.bypass_lock,
@@ -176,8 +217,9 @@ async def get_archive_contents(
     ArchiveContentsDialog works without version branching.
     """
     repo = _get_v2_repo(repository, db)
+    archive_name = await _resolve_archive_name(repo, archive_id)
     result = await borg2.list_archive_contents(
-        repo.path, archive_id,
+        repo.path, archive_name,
         passphrase=repo.passphrase,
         remote_path=repo.remote_path,
         bypass_lock=repo.bypass_lock,
@@ -186,7 +228,7 @@ async def get_archive_contents(
     # treat any result that produced stdout as usable.
     stdout = result.get("stdout", "")
     logger.info("borg2 list_archive_contents result",
-                archive=archive_id, path=path,
+                archive=archive_name, path=path,
                 return_code=result.get("return_code"),
                 success=result.get("success"),
                 stdout_len=len(stdout),
@@ -307,10 +349,11 @@ async def delete_archive(
         raise HTTPException(status_code=403, detail={"key": "backend.errors.archives.adminAccessRequired"})
 
     repo = _get_v2_repo(repository, db)
+    archive_name = await _resolve_archive_name(repo, archive_id)
 
     running_job = db.query(DeleteArchiveJob).filter(
         DeleteArchiveJob.repository_id == repo.id,
-        DeleteArchiveJob.archive_name == archive_id,
+        DeleteArchiveJob.archive_name == archive_name,
         DeleteArchiveJob.status == "running",
     ).first()
     if running_job:
@@ -323,7 +366,7 @@ async def delete_archive(
     delete_job = DeleteArchiveJob(
         repository_id=repo.id,
         repository_path=repo.path,
-        archive_name=archive_id,
+        archive_name=archive_name,
         status="pending",
     )
     db.add(delete_job)
@@ -333,12 +376,12 @@ async def delete_archive(
     from app.services.v2.delete_archive_service import delete_archive_v2_service
     asyncio.create_task(
         delete_archive_v2_service.execute_delete(
-            delete_job.id, repo.id, archive_id, None
+            delete_job.id, repo.id, archive_name, None
         )
     )
 
     logger.info("Borg2 delete archive job created",
-                job_id=delete_job.id, repository_id=repo.id, archive=archive_id)
+                job_id=delete_job.id, repository_id=repo.id, archive=archive_name)
     return {
         "job_id": delete_job.id,
         "status": "pending",
@@ -359,10 +402,11 @@ async def download_file_from_archive(
 ):
     """Extract and download a specific file from a Borg 2 archive."""
     repo = _get_v2_repo(repository, db)
+    archive_name = await _resolve_archive_name(repo, archive)
     temp_dir = tempfile.mkdtemp()
     try:
         result = await borg2.extract_archive(
-            repo.path, archive, [file_path], temp_dir,
+            repo.path, archive_name, [file_path], temp_dir,
             passphrase=repo.passphrase,
             remote_path=repo.remote_path,
             bypass_lock=repo.bypass_lock,
