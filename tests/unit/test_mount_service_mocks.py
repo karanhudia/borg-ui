@@ -144,9 +144,64 @@ async def test_mount_borg_archive_uses_borg2_binary_for_v2_repo(mount_service_fi
     assert args[0] == "borg2"
     assert "-r" in args
     assert "mount" in args
+    assert "-a" not in args
     mount_index = args.index("mount")
     assert args[mount_index + 1] == expected_mount_point
     assert mount_service_fixture.active_mounts[mount_id].borg_version == 2
+
+
+@pytest.mark.asyncio
+async def test_mount_borg_archive_uses_archive_filter_for_v2_repo(mount_service_fixture, mock_db_session):
+    repo = Repository(
+        id=1,
+        name="TestRepo",
+        path="/backups/repo",
+        repository_type="local",
+        borg_version=2,
+        bypass_lock=True,
+    )
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == Repository:
+            m.filter.return_value.first.return_value = repo
+        elif model == SystemSettings:
+            m.first.return_value = SystemSettings(mount_timeout=10)
+            m.filter.return_value.all.return_value = []
+        return m
+
+    mock_db_session.query.side_effect = query_side_effect
+    mock_process = AsyncMock()
+    mock_process.pid = 12345
+    mock_process.returncode = None
+    mock_process.kill = MagicMock()
+
+    with patch("app.services.mount_service.asyncio.sleep", return_value=None), patch(
+        "app.core.borg2.borg2.borg_cmd", "borg2"
+    ), patch(
+        "app.services.mount_service.asyncio.create_subprocess_exec", return_value=mock_process
+    ) as mock_exec, patch("app.services.mount_service.subprocess.run") as mock_run, patch(
+        "app.services.mount_service.os.makedirs"
+    ), patch("app.services.mount_service.os.path.exists", return_value=False):
+        expected_mount_point = "/tmp/borg-data/mounts/archive_mount"
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout=""),
+            MagicMock(returncode=0, stdout=f"{expected_mount_point} on {expected_mount_point}"),
+        ]
+
+        await mount_service_fixture.mount_borg_archive(
+            repository_id=1,
+            archive_name="manual-backup-2026-04-09T21:02:46",
+            mount_point=expected_mount_point,
+        )
+
+    args = mock_exec.call_args[0]
+    assert args[0] == "borg2"
+    assert "mount" in args
+    assert "-a" in args
+    assert args[args.index("-a") + 1] == "manual-backup-2026-04-09T21:02:46"
+    assert "--bypass-lock" not in args
+    assert args[args.index("-a") + 2] == expected_mount_point
 
 @pytest.mark.asyncio
 async def test_unmount_success(mount_service_fixture):

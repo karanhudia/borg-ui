@@ -434,12 +434,28 @@ def test_build_mount_command_uses_v2_shape():
         "-r",
         "/repo/path",
         "mount",
-        "/mnt/repo",
+        "-a",
         "archive-1",
+        "/mnt/repo",
         "-o",
         "allow_other",
         "-f",
     ]
+
+
+@pytest.mark.unit
+def test_build_mount_command_ignores_bypass_lock_for_v2():
+    repo = SimpleNamespace(borg_version=2)
+
+    with patch("app.core.borg2.borg2.borg_cmd", "borg2"):
+        cmd = BorgRouter(repo).build_mount_command(
+            repository_path="/repo/path",
+            archive_name="archive-1",
+            mount_point="/mnt/repo",
+            bypass_lock=True,
+        )
+
+    assert "--bypass-lock" not in cmd
 
 
 @pytest.mark.unit
