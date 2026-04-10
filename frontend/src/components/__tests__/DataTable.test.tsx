@@ -25,7 +25,8 @@ const mockColumns: Column<TestData>[] = [
 describe('DataTable', () => {
   it('renders loading state correctly', () => {
     render(<DataTable data={[]} columns={mockColumns} getRowKey={(row) => row.id} loading={true} />)
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    expect(screen.getAllByText('Name').length).toBeGreaterThan(0)
   })
 
   it('renders empty state correctly', () => {

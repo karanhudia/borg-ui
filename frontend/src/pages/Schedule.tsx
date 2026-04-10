@@ -155,7 +155,7 @@ const Schedule: React.FC = () => {
   })
 
   // Get repositories
-  const { data: repositoriesData } = useQuery({
+  const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
@@ -530,7 +530,7 @@ const Schedule: React.FC = () => {
       {currentTab === 0 && (
         <Box>
           {/* No repositories warning */}
-          {(!repositories || repositories.length === 0) && (
+          {!loadingRepositories && (!repositories || repositories.length === 0) && (
             <Alert severity="info" sx={{ mb: 3 }}>
               {t('schedule.noRepositories')}
             </Alert>

@@ -447,18 +447,6 @@ export default function Scripts() {
     },
   ]
 
-  if (loading) {
-    return (
-      <Box sx={{ mt: 4, mb: 4 }}>
-        <Box
-          sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}
-        >
-          <CircularProgress />
-        </Box>
-      </Box>
-    )
-  }
-
   return (
     <Box>
       {/* Header */}
@@ -503,6 +491,7 @@ export default function Scripts() {
         actions={actions}
         getRowKey={(script) => script.id}
         variant="outlined"
+        loading={loading}
         emptyState={{
           icon: <FileCode size={48} />,
           title: t('scripts.empty'),

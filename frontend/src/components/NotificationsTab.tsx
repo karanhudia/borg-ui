@@ -9,6 +9,7 @@ import {
   IconButton,
   TextField,
   CircularProgress,
+  Skeleton,
   Stack,
   DialogTitle,
   DialogContent,
@@ -22,6 +23,7 @@ import {
   FormLabel,
   RadioGroup,
   Radio,
+  alpha,
 } from '@mui/material'
 import { Plus, Bell, Info, ExternalLink, Archive, RotateCcw, Settings } from 'lucide-react'
 import { notificationsAPI, repositoriesAPI } from '../services/api'
@@ -327,9 +329,132 @@ const NotificationsTab: React.FC = () => {
       </Box>
 
       {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
+        <Stack spacing={2}>
+          {[0, 1, 2].map((i) => (
+            <Box
+              key={i}
+              sx={{
+                borderRadius: 2,
+                bgcolor: 'background.paper',
+                overflow: 'hidden',
+                boxShadow: (theme) =>
+                  theme.palette.mode === 'dark'
+                    ? `0 0 0 1px ${alpha('#fff', 0.08)}, 0 4px 16px ${alpha('#000', 0.25)}`
+                    : `0 0 0 1px ${alpha('#000', 0.08)}, 0 2px 8px ${alpha('#000', 0.07)}`,
+                opacity: Math.max(0.4, 1 - i * 0.2),
+              }}
+            >
+              <Box
+                sx={{ px: { xs: 1.75, sm: 2 }, pt: { xs: 1.75, sm: 2 }, pb: { xs: 1.5, sm: 1.75 } }}
+              >
+                {/* Title row */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    mb: 1.5,
+                  }}
+                >
+                  <Box sx={{ flex: 1 }}>
+                    <Skeleton
+                      variant="text"
+                      width={[120, 160, 100][i]}
+                      height={20}
+                      sx={{ transform: 'none', borderRadius: 0.5, mb: 0.4 }}
+                    />
+                    <Skeleton
+                      variant="text"
+                      width={[200, 170, 220][i]}
+                      height={14}
+                      sx={{ transform: 'none', borderRadius: 0.5 }}
+                    />
+                  </Box>
+                  <Skeleton
+                    variant="rounded"
+                    width={20}
+                    height={20}
+                    sx={{ borderRadius: 0.5, flexShrink: 0 }}
+                  />
+                </Box>
+
+                {/* Stats grid — 4 columns matching EntityCard */}
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' },
+                    borderRadius: 1.5,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    overflow: 'hidden',
+                    mb: 1.5,
+                  }}
+                >
+                  {[0, 1, 2, 3].map((j) => (
+                    <Box
+                      key={j}
+                      sx={{
+                        px: 1.5,
+                        py: 1.1,
+                        borderRight: j < 3 ? '1px solid' : 0,
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Skeleton
+                        variant="text"
+                        width={38}
+                        height={10}
+                        sx={{ transform: 'none', borderRadius: 0.5, mb: 0.5 }}
+                      />
+                      <Skeleton
+                        variant="text"
+                        width={[55, 45, 60, 50][j]}
+                        height={16}
+                        sx={{ transform: 'none', borderRadius: 0.5 }}
+                      />
+                    </Box>
+                  ))}
+                </Box>
+
+                {/* Event category tags row */}
+                <Box sx={{ display: 'flex', gap: 0.75, mb: 1.5 }}>
+                  {[52, 56, 46, 62].map((w, j) => (
+                    <Skeleton
+                      key={j}
+                      variant="rounded"
+                      width={w}
+                      height={20}
+                      sx={{ borderRadius: 1 }}
+                    />
+                  ))}
+                </Box>
+
+                {/* Actions row — 4 icon buttons */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    pt: 1.25,
+                    borderTop: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  {[0, 1, 2, 3].map((j) => (
+                    <Skeleton
+                      key={j}
+                      variant="rounded"
+                      width={32}
+                      height={32}
+                      sx={{ borderRadius: 1.5 }}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            </Box>
+          ))}
+        </Stack>
       ) : notifications.length === 0 ? (
         <Card variant="outlined" sx={{ borderRadius: 3, p: 4, textAlign: 'center' }}>
           <Bell size={48} style={{ opacity: 0.3, margin: '0 auto 16px' }} />

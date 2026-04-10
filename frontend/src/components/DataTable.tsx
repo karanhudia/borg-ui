@@ -13,7 +13,7 @@ import {
   Tooltip,
   Box,
   Typography,
-  CircularProgress,
+  Skeleton,
   SxProps,
   Theme,
   Stack,
@@ -156,14 +156,148 @@ export default function DataTable<T>({
 
   // Calculate paginated data
   const paginatedData = data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-  // Loading state
+  // Loading state — skeleton rows matching the table structure
   if (loading) {
+    const skeletonRows = 5
+    const rowWidths = [
+      [55, 70, 45, 60, 50],
+      [70, 50, 65, 40, 55],
+      [45, 65, 55, 70, 60],
+      [60, 40, 70, 55, 45],
+      [50, 60, 45, 65, 70],
+    ]
+    if (isMobile) {
+      return (
+        <Paper variant={variant} sx={{ borderRadius, overflow: 'hidden', ...sx }}>
+          <Stack divider={<Divider sx={{ borderColor: 'divider' }} />}>
+            {Array.from({ length: skeletonRows }).map((_, i) => (
+              <Box
+                key={i}
+                sx={{
+                  p: 1.5,
+                  opacity: Math.max(0.25, 1 - i * 0.15),
+                  animation: `skeletonFadeIn 0.3s ease forwards`,
+                  animationDelay: `${i * 50}ms`,
+                  '@keyframes skeletonFadeIn': {
+                    from: { opacity: 0 },
+                    to: { opacity: Math.max(0.25, 1 - i * 0.15) },
+                  },
+                }}
+              >
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.25 }}>
+                  {columns.map((col, ci) => (
+                    <Box
+                      key={col.id}
+                      sx={{ minWidth: 0, ...(col.mobileFullWidth ? { gridColumn: 'span 2' } : {}) }}
+                    >
+                      <Skeleton
+                        variant="text"
+                        width={48}
+                        height={9}
+                        sx={{ transform: 'none', mb: 0.5, borderRadius: 0.5 }}
+                      />
+                      <Skeleton
+                        variant="text"
+                        width={`${rowWidths[i][ci % 5]}%`}
+                        height={16}
+                        sx={{ transform: 'none', borderRadius: 0.5 }}
+                      />
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+        </Paper>
+      )
+    }
     return (
-      <Paper variant={variant} sx={{ borderRadius, ...sx }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
-          <CircularProgress />
-        </Box>
-      </Paper>
+      <TableContainer component={Paper} variant={variant} sx={{ borderRadius, maxHeight, ...sx }}>
+        <Table stickyHeader={stickyHeader} sx={{ tableLayout: 'fixed' }}>
+          <TableHead>
+            <TableRow>
+              {columns.map((column) => (
+                <TableCell
+                  key={column.id}
+                  align={column.align || 'left'}
+                  sx={{
+                    bgcolor: headerBgColor,
+                    fontWeight: 700,
+                    color: 'text.disabled',
+                    fontSize: '0.7rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    whiteSpace: 'nowrap',
+                    width: column.width,
+                    minWidth: column.minWidth,
+                    maxWidth: column.width,
+                  }}
+                >
+                  {column.label}
+                </TableCell>
+              ))}
+              {actions && actions.length > 0 && (
+                <TableCell
+                  align="right"
+                  sx={{
+                    bgcolor: headerBgColor,
+                    fontWeight: 700,
+                    color: 'text.disabled',
+                    fontSize: '0.7rem',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    width: '152px',
+                    minWidth: '152px',
+                    maxWidth: '152px',
+                  }}
+                >
+                  {t('dataTable.actions')}
+                </TableCell>
+              )}
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {Array.from({ length: skeletonRows }).map((_, i) => (
+              <TableRow
+                key={i}
+                sx={{
+                  opacity: Math.max(0.2, 1 - i * 0.15),
+                  '&:last-child td': { borderBottom: 0 },
+                }}
+              >
+                {columns.map((column, ci) => (
+                  <TableCell
+                    key={column.id}
+                    sx={{ width: column.width, minWidth: column.minWidth, maxWidth: column.width }}
+                  >
+                    <Skeleton
+                      variant="text"
+                      width={`${rowWidths[i][ci % 5]}%`}
+                      height={18}
+                      sx={{ transform: 'none', borderRadius: 0.5 }}
+                    />
+                  </TableCell>
+                ))}
+                {actions && actions.length > 0 && (
+                  <TableCell align="right" sx={{ width: '130px' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                      {actions.slice(0, 3).map((_, ai) => (
+                        <Skeleton
+                          key={ai}
+                          variant="rounded"
+                          width={28}
+                          height={28}
+                          sx={{ borderRadius: 1 }}
+                        />
+                      ))}
+                    </Box>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
     )
   }
 
