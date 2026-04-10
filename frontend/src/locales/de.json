@@ -677,7 +677,17 @@
         "title": "Keine Benutzer gefunden",
         "description": "Erstelle deinen ersten Benutzer, um zu beginnen"
       },
-      "planCaption": "Community umfasst bis zu 5 Benutzer. Für mehr Plätze ist ein Upgrade erforderlich."
+      "planCaption": "Community umfasst bis zu 5 Benutzer. Für mehr Plätze ist ein Upgrade erforderlich.",
+      "search": {
+        "placeholder": "Nach Name, Benutzername oder E-Mail suchen…"
+      },
+      "filter": {
+        "allRoles": "Alle Rollen",
+        "allStatuses": "Alle",
+        "showing": "{{count}} von {{total}} Benutzern",
+        "noMatch": "Keine Benutzer entsprechen den Filtern",
+        "noMatchDescription": "Passen Sie Ihre Suche oder Filterkriterien an."
+      }
     },
     "toasts": {
       "passwordChanged": "Passwort erfolgreich geändert",

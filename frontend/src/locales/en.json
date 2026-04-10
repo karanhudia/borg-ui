@@ -677,7 +677,17 @@
         "title": "No users found",
         "description": "Create your first user to get started"
       },
-      "planCaption": "Community includes up to 5 users. Upgrade for more seats."
+      "planCaption": "Community includes up to 5 users. Upgrade for more seats.",
+      "search": {
+        "placeholder": "Search by name, username or email…"
+      },
+      "filter": {
+        "allRoles": "All roles",
+        "allStatuses": "All",
+        "showing": "Showing {{count}} of {{total}} users",
+        "noMatch": "No users match your filters",
+        "noMatchDescription": "Try adjusting your search or filter criteria."
+      }
     },
     "toasts": {
       "passwordChanged": "Password changed successfully",

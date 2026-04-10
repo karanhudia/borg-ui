@@ -677,7 +677,17 @@
         "title": "No se encontraron usuarios",
         "description": "Crea tu primer usuario para empezar"
       },
-      "planCaption": "Community incluye hasta 5 usuarios. Actualiza para obtener más plazas."
+      "planCaption": "Community incluye hasta 5 usuarios. Actualiza para obtener más plazas.",
+      "search": {
+        "placeholder": "Buscar por nombre, usuario o email…"
+      },
+      "filter": {
+        "allRoles": "Todos los roles",
+        "allStatuses": "Todos",
+        "showing": "{{count}} de {{total}} usuarios",
+        "noMatch": "Ningún usuario coincide con los filtros",
+        "noMatchDescription": "Intenta ajustar tu búsqueda o criterios de filtro."
+      }
     },
     "toasts": {
       "passwordChanged": "Contraseña cambiada correctamente",

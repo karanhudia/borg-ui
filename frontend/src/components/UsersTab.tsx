@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -18,8 +18,21 @@ import {
   FormControl,
   Tooltip,
   Divider,
+  InputAdornment,
+  alpha,
+  useTheme,
 } from '@mui/material'
-import { Users, Trash2, Plus, Edit, Key, AlertCircle, ShieldCheck, UserCheck } from 'lucide-react'
+import {
+  Users,
+  Trash2,
+  Plus,
+  Edit,
+  Key,
+  AlertCircle,
+  ShieldCheck,
+  UserCheck,
+  Search,
+} from 'lucide-react'
 import { settingsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
@@ -29,7 +42,8 @@ import { usePlan } from '../hooks/usePlan'
 import { formatDateShort } from '../utils/dateUtils'
 import { formatRoleLabel, getGlobalRolePresentation } from '../utils/rolePresentation'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import EntityCard, { StatItem, ActionItem } from './EntityCard'
+import { Column, ActionButton } from './DataTable'
+import DataTable from './DataTable'
 import UserPermissionsPanel from './UserPermissionsPanel'
 import ResponsiveDialog from './ResponsiveDialog'
 
@@ -54,8 +68,23 @@ const getRoleAccentColor = (role: string): string => {
   return '#059669'
 }
 
+const getInitials = (user: UserType): string => {
+  if (user.full_name) {
+    const parts = user.full_name.trim().split(/\s+/)
+    return parts.length > 1
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : parts[0].slice(0, 2).toUpperCase()
+  }
+  return user.username.slice(0, 2).toUpperCase()
+}
+
+type RoleFilter = 'all' | 'admin' | 'operator' | 'viewer'
+type StatusFilter = 'all' | 'active' | 'inactive'
+
 const UsersTab: React.FC = () => {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const { hasGlobalPermission } = useAuth()
   const { roleHasGlobalPermission } = useAuthorization()
   const { trackSettings, EventAction } = useAnalytics()
@@ -79,6 +108,7 @@ const UsersTab: React.FC = () => {
     return t('settings.users.accessSummary.restricted')
   }
 
+  // Dialog / mutation state
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [editingUser, setEditingUser] = useState<UserType | null>(null)
   const [showUserPasswordModal, setShowUserPasswordModal] = useState(false)
@@ -96,6 +126,11 @@ const UsersTab: React.FC = () => {
   const [passwordForm, setPasswordForm] = useState({
     new_password: '',
   })
+
+  // Search + filter state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   const { data: usersData, isLoading: loadingUsers } = useQuery({
     queryKey: ['users'],
@@ -242,10 +277,7 @@ const UsersTab: React.FC = () => {
     })
   }
 
-  const users = React.useMemo<UserType[]>(
-    () => usersData?.data?.users ?? [],
-    [usersData?.data?.users]
-  )
+  const users = useMemo<UserType[]>(() => usersData?.data?.users ?? [], [usersData?.data?.users])
 
   const totalUsers = users.length
   const activeUsers = users.filter((u: UserType) => u.is_active).length
@@ -255,11 +287,193 @@ const UsersTab: React.FC = () => {
   ).length
   const viewerUsers = users.length - adminUsers - operatorUsers
 
+  // Filtered users
+  const filteredUsers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return users.filter((user) => {
+      if (q) {
+        const haystack = [user.username, user.full_name ?? '', user.email].join(' ').toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      if (roleFilter !== 'all') {
+        const presentation = getRolePresentation(user.role)
+        if (roleFilter === 'admin' && !presentation.isAdminRole) return false
+        if (roleFilter === 'operator' && !presentation.isOperatorRole) return false
+        if (roleFilter === 'viewer' && (presentation.isAdminRole || presentation.isOperatorRole))
+          return false
+      }
+      if (statusFilter === 'active' && !user.is_active) return false
+      if (statusFilter === 'inactive' && user.is_active) return false
+      return true
+    })
+  }, [users, searchQuery, roleFilter, statusFilter])
+
   // Keep selectedAccessUserId for backward compat with UserPermissionsPanel
   const [selectedAccessUserId, setSelectedAccessUserId] = useState<number | null>(null)
   useEffect(() => {
     if (accessUser) setSelectedAccessUserId(accessUser.id)
   }, [accessUser])
+
+  // Table columns
+  const columns: Column<UserType>[] = useMemo(
+    () => [
+      {
+        id: 'user',
+        label: t('settings.users.table.user'),
+        render: (user) => {
+          const accent = getRoleAccentColor(user.role)
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.25 }}>
+              <Box
+                sx={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: '50%',
+                  bgcolor: alpha(accent, isDark ? 0.2 : 0.12),
+                  border: '1.5px solid',
+                  borderColor: alpha(accent, isDark ? 0.45 : 0.35),
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Typography
+                  sx={{ fontSize: '0.64rem', fontWeight: 800, color: accent, lineHeight: 1 }}
+                >
+                  {getInitials(user)}
+                </Typography>
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body2" fontWeight={600} noWrap>
+                  {user.full_name || user.username}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  noWrap
+                  sx={{ display: 'block', lineHeight: 1.4 }}
+                >
+                  {user.email || `@${user.username}`}
+                </Typography>
+              </Box>
+            </Box>
+          )
+        },
+      },
+      {
+        id: 'role',
+        label: t('settings.users.table.role'),
+        width: '110px',
+        render: (user) => {
+          const rolePresentation = getRolePresentation(user.role)
+          return <Chip label={rolePresentation.label} color={rolePresentation.color} size="small" />
+        },
+      },
+      {
+        id: 'status',
+        label: t('settings.users.table.status'),
+        width: '100px',
+        render: (user) => (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Box
+              sx={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                bgcolor: user.is_active ? 'success.main' : 'error.main',
+                flexShrink: 0,
+              }}
+            />
+            <Typography
+              variant="body2"
+              sx={{
+                color: user.is_active ? 'success.main' : 'error.main',
+                fontWeight: 500,
+                fontSize: '0.8rem',
+              }}
+            >
+              {user.is_active
+                ? t('settings.users.status.active')
+                : t('settings.users.status.inactive')}
+            </Typography>
+          </Box>
+        ),
+      },
+      {
+        id: 'created',
+        label: t('settings.users.table.created'),
+        width: '110px',
+        render: (user) => (
+          <Typography variant="body2" color="text.secondary">
+            {formatDateShort(user.created_at)}
+          </Typography>
+        ),
+      },
+      {
+        id: 'lastLogin',
+        label: t('settings.users.table.lastLogin'),
+        width: '120px',
+        render: (user) => (
+          <Typography variant="body2" color="text.secondary">
+            {user.last_login ? formatDateShort(user.last_login) : t('common.never')}
+          </Typography>
+        ),
+      },
+    ],
+    [t, isDark]
+  )
+
+  // Table row actions
+  const tableActions: ActionButton<UserType>[] = useMemo(
+    () => [
+      {
+        icon: <UserCheck size={15} />,
+        label: t('settings.users.actions.manageAccess'),
+        onClick: (user) => setAccessUser(user),
+        color: 'primary',
+        show: () => canManageUsers,
+      },
+      {
+        icon: <Edit size={15} />,
+        label: t('settings.users.actions.edit'),
+        onClick: (user) => openEditUser(user),
+        color: 'default',
+        show: () => canManageUsers,
+      },
+      {
+        icon: <Key size={15} />,
+        label: t('settings.users.actions.resetPassword'),
+        onClick: (user) => openPasswordModal(user.id),
+        color: 'warning',
+        show: () => canManageUsers,
+      },
+      {
+        icon: <Trash2 size={15} />,
+        label: t('settings.users.actions.delete'),
+        onClick: (user) => setDeleteConfirmUser(user),
+        color: 'error',
+        show: () => canManageUsers,
+      },
+    ],
+    [t, canManageUsers]
+  )
+
+  const roleFilterOptions: { value: RoleFilter; label: string; color?: string }[] = [
+    { value: 'all', label: t('settings.users.filter.allRoles') },
+    { value: 'admin', label: t('settings.users.roles.admin'), color: '#7c3aed' },
+    { value: 'operator', label: t('settings.users.roles.operator'), color: '#0891b2' },
+    { value: 'viewer', label: t('settings.users.roles.viewer'), color: '#059669' },
+  ]
+
+  const statusFilterOptions: { value: StatusFilter; label: string }[] = [
+    { value: 'all', label: t('settings.users.filter.allStatuses') },
+    { value: 'active', label: t('settings.users.status.active') },
+    { value: 'inactive', label: t('settings.users.status.inactive') },
+  ]
+
+  const hasActiveFilters =
+    searchQuery.trim() !== '' || roleFilter !== 'all' || statusFilter !== 'all'
 
   return (
     <>
@@ -297,16 +511,12 @@ const UsersTab: React.FC = () => {
           </Tooltip>
         </Box>
 
-        {/* Compact stat strip */}
+        {/* Stat strip */}
         <Box sx={{ display: 'flex', gap: { xs: 3, sm: 4 }, flexWrap: 'wrap' }}>
           {[
             { label: t('settings.users.stats.total'), value: totalUsers, color: 'text.primary' },
             { label: t('settings.users.stats.active'), value: activeUsers, color: 'success.main' },
-            {
-              label: t('settings.users.stats.admins'),
-              value: adminUsers,
-              color: 'secondary.main',
-            },
+            { label: t('settings.users.stats.admins'), value: adminUsers, color: 'secondary.main' },
             {
               label: t('settings.users.stats.operators'),
               value: operatorUsers,
@@ -333,115 +543,178 @@ const UsersTab: React.FC = () => {
           ))}
         </Box>
 
-        {/* User list */}
-        <Box>
-          {loadingUsers ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-              <CircularProgress />
-            </Box>
-          ) : users.length === 0 ? (
-            <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
-              <Users size={40} style={{ opacity: 0.25, marginBottom: 12 }} />
-              <Typography variant="body1" gutterBottom>
-                {t('settings.users.emptyState.title')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t('settings.users.emptyState.description')}
-              </Typography>
-            </Box>
-          ) : (
-            <Stack spacing={2}>
-              {users.map((user: UserType) => {
-                const rolePresentation = getRolePresentation(user.role)
-                const displayName = user.full_name || user.username
+        {/* Search + filter toolbar */}
+        {!loadingUsers && users.length > 0 && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 1.5,
+                alignItems: 'center',
+                flexWrap: 'nowrap',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Search */}
+              <TextField
+                size="small"
+                placeholder={t('settings.users.search.placeholder')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={15} color={theme.palette.text.secondary} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{
+                  width: 240,
+                  flexShrink: 0,
+                  '& .MuiOutlinedInput-root': { borderRadius: 1.5 },
+                }}
+              />
 
-                const stats: StatItem[] = [
-                  {
-                    icon: (
-                      <Box
-                        sx={{
-                          width: 7,
-                          height: 7,
-                          borderRadius: '50%',
-                          bgcolor: user.is_active ? 'success.main' : 'error.main',
-                          mt: '1px',
-                        }}
-                      />
-                    ),
-                    label: t('settings.users.statLabels.status'),
-                    value: user.is_active
-                      ? t('settings.users.status.active')
-                      : t('settings.users.status.inactive'),
-                  },
-                  {
-                    icon: null,
-                    label: t('settings.users.statLabels.joined'),
-                    value: formatDateShort(user.created_at),
-                  },
-                  {
-                    icon: null,
-                    label: t('settings.users.statLabels.lastLogin'),
-                    value: user.last_login ? formatDateShort(user.last_login) : t('common.never'),
-                  },
-                ]
+              {/* Role filter chips */}
+              <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
+                {roleFilterOptions.map((opt) => {
+                  const isSelected = roleFilter === opt.value
+                  const chipColor = opt.color
+                  return (
+                    <Chip
+                      key={opt.value}
+                      label={opt.label}
+                      size="small"
+                      onClick={() => setRoleFilter(opt.value)}
+                      sx={{
+                        cursor: 'pointer',
+                        fontWeight: isSelected ? 600 : 400,
+                        transition: 'all 150ms ease',
+                        ...(isSelected && chipColor
+                          ? {
+                              bgcolor: alpha(chipColor, isDark ? 0.25 : 0.12),
+                              color: chipColor,
+                              border: '1px solid',
+                              borderColor: alpha(chipColor, 0.4),
+                              '&:hover': { bgcolor: alpha(chipColor, isDark ? 0.32 : 0.18) },
+                            }
+                          : isSelected
+                            ? {
+                                bgcolor: isDark ? alpha('#fff', 0.12) : alpha('#000', 0.08),
+                                '&:hover': {
+                                  bgcolor: isDark ? alpha('#fff', 0.16) : alpha('#000', 0.12),
+                                },
+                              }
+                            : {
+                                bgcolor: 'transparent',
+                                border: '1px solid',
+                                borderColor: isDark ? alpha('#fff', 0.12) : alpha('#000', 0.1),
+                                color: 'text.secondary',
+                                '&:hover': {
+                                  bgcolor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.04),
+                                  borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.18),
+                                },
+                              }),
+                      }}
+                    />
+                  )
+                })}
+              </Box>
 
-                const actions: ActionItem[] = [
-                  {
-                    icon: <Edit size={16} />,
-                    tooltip: t('settings.users.actions.edit'),
-                    onClick: () => openEditUser(user),
-                    color: 'primary',
-                    hidden: !canManageUsers,
-                  },
-                  {
-                    icon: <Key size={16} />,
-                    tooltip: t('settings.users.actions.resetPassword'),
-                    onClick: () => openPasswordModal(user.id),
-                    color: 'warning',
-                    hidden: !canManageUsers,
-                  },
-                  {
-                    icon: <Trash2 size={16} />,
-                    tooltip: t('settings.users.actions.delete'),
-                    onClick: () => setDeleteConfirmUser(user),
-                    color: 'error',
-                    hidden: !canManageUsers,
-                  },
-                ]
-
-                const badge = (
-                  <Chip
-                    label={rolePresentation.label}
-                    color={rolePresentation.color}
-                    size="small"
-                  />
-                )
-
-                return (
-                  <EntityCard
-                    key={user.id}
-                    title={displayName}
-                    subtitle={`@${user.username}${user.email ? ` · ${user.email}` : ''}`}
-                    badge={badge}
-                    stats={stats}
-                    actions={actions}
-                    primaryAction={
-                      canManageUsers
-                        ? {
-                            label: t('settings.users.actions.manageAccess'),
-                            icon: <UserCheck size={13} />,
-                            onClick: () => setAccessUser(user),
-                            color: '#6366f1',
-                          }
+              {/* Status filter chips */}
+              <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
+                {statusFilterOptions.map((opt) => {
+                  const isSelected = statusFilter === opt.value
+                  const dotColor =
+                    opt.value === 'active'
+                      ? theme.palette.success.main
+                      : opt.value === 'inactive'
+                        ? theme.palette.error.main
                         : undefined
-                    }
-                    accentColor={getRoleAccentColor(user.role)}
-                  />
-                )
-              })}
-            </Stack>
-          )}
-        </Box>
+                  return (
+                    <Chip
+                      key={opt.value}
+                      size="small"
+                      onClick={() => setStatusFilter(opt.value)}
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                          {dotColor && (
+                            <Box
+                              sx={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                bgcolor: dotColor,
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
+                          {opt.label}
+                        </Box>
+                      }
+                      sx={{
+                        cursor: 'pointer',
+                        fontWeight: isSelected ? 600 : 400,
+                        transition: 'all 150ms ease',
+                        ...(isSelected
+                          ? {
+                              bgcolor: isDark ? alpha('#fff', 0.12) : alpha('#000', 0.08),
+                              '&:hover': {
+                                bgcolor: isDark ? alpha('#fff', 0.16) : alpha('#000', 0.12),
+                              },
+                            }
+                          : {
+                              bgcolor: 'transparent',
+                              border: '1px solid',
+                              borderColor: isDark ? alpha('#fff', 0.12) : alpha('#000', 0.1),
+                              color: 'text.secondary',
+                              '&:hover': {
+                                bgcolor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.04),
+                              },
+                            }),
+                      }}
+                    />
+                  )
+                })}
+              </Box>
+            </Box>
+
+            {/* Result count */}
+            {hasActiveFilters && (
+              <Typography variant="caption" color="text.secondary" sx={{ pl: 0.5 }}>
+                {t('settings.users.filter.showing', {
+                  count: filteredUsers.length,
+                  total: totalUsers,
+                })}
+              </Typography>
+            )}
+          </Box>
+        )}
+
+        {/* User table */}
+        <DataTable<UserType>
+          data={filteredUsers}
+          columns={columns}
+          actions={tableActions}
+          getRowKey={(user) => user.id}
+          loading={loadingUsers}
+          defaultRowsPerPage={25}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          tableId="users-tab"
+          emptyState={
+            hasActiveFilters
+              ? {
+                  icon: <Search size={36} />,
+                  title: t('settings.users.filter.noMatch'),
+                  description: t('settings.users.filter.noMatchDescription'),
+                }
+              : {
+                  icon: <Users size={36} />,
+                  title: t('settings.users.emptyState.title'),
+                  description: t('settings.users.emptyState.description'),
+                }
+          }
+        />
       </Stack>
 
       {/* Repository Access Dialog */}

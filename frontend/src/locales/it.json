@@ -677,7 +677,17 @@
         "title": "Nessun utente trovato",
         "description": "Crea il tuo primo utente per iniziare"
       },
-      "planCaption": "Community include fino a 5 utenti. Passa a un piano superiore per più posti."
+      "planCaption": "Community include fino a 5 utenti. Passa a un piano superiore per più posti.",
+      "search": {
+        "placeholder": "Cerca per nome, username o email…"
+      },
+      "filter": {
+        "allRoles": "Tutti i ruoli",
+        "allStatuses": "Tutti",
+        "showing": "{{count}} di {{total}} utenti",
+        "noMatch": "Nessun utente corrisponde ai filtri",
+        "noMatchDescription": "Prova a modificare la ricerca o i criteri di filtro."
+      }
     },
     "toasts": {
       "passwordChanged": "Password cambiata con successo",

@@ -201,7 +201,7 @@ export default function DataTable<T>({
     iconOpacity = 0.45,
     justify: 'flex-start' | 'flex-end' = 'flex-end'
   ) => (
-    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: justify, flexWrap: 'wrap' }}>
+    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: justify, flexWrap: 'nowrap' }}>
       {actions?.map((action, idx) => {
         const shouldShow = action.show ? action.show(row) : true
         if (!shouldShow) return null
@@ -422,9 +422,9 @@ export default function DataTable<T>({
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                   whiteSpace: 'nowrap',
-                  width: '130px',
-                  minWidth: '130px',
-                  maxWidth: '130px',
+                  width: '152px',
+                  minWidth: '152px',
+                  maxWidth: '152px',
                 }}
               >
                 {t('dataTable.actions')}
