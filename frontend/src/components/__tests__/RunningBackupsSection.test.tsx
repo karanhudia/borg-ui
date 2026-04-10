@@ -3,24 +3,39 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import RunningBackupsSection from '../RunningBackupsSection'
 import { BackupJob } from '../../types'
 
-// Mock formatBytes from dateUtils
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, opts?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        'backup.runningJobs.title': 'Running Jobs',
+        'backup.runningJobs.subtitle': 'Currently active backup operations',
+        'backup.runningJobs.viewLogs': 'View Logs',
+        'backup.runningJobs.cancel': 'Cancel',
+        'backup.runningJobs.progress.filesProcessed': 'Files Processed',
+        'backup.runningJobs.progress.originalSize': 'Original Size',
+        'backup.runningJobs.progress.compressed': 'Compressed',
+        'backup.runningJobs.progress.deduplicated': 'Deduplicated',
+        'backup.runningJobs.progress.totalSourceSize': 'Total Source Size',
+        'backup.runningJobs.progress.speed': 'Speed',
+        'backup.runningJobs.progress.eta': 'ETA',
+        'backup.runningJobs.progress.initializing': 'Initializing',
+        'backup.runningJobs.progress.processing': 'Processing',
+        'backup.runningJobs.progress.finalizing': 'Finalizing',
+      }
+      if (key === 'backup.runningJobs.jobTitle') return `Backup Job ${opts?.id}`
+      return map[key] ?? key
+    },
+    i18n: { language: 'en' },
+  }),
+}))
+
 vi.mock('../../utils/dateUtils', () => ({
   formatBytes: vi.fn((bytes: number) => `${bytes} bytes`),
+  formatDurationSeconds: vi.fn((seconds: number) => `${seconds}s`),
+  formatTimeRange: vi.fn(() => 'Running for 2 hours'),
 }))
 
 describe('RunningBackupsSection', () => {
-  const mockGetRepositoryName = vi.fn((path: string) => `Repository: ${path}`)
-  const mockFormatRelativeTime = vi.fn((date: string | null | undefined) => {
-    if (!date) return 'Never'
-    return '2 hours ago'
-  })
-  const mockFormatDurationSeconds = vi.fn((seconds: number) => `${seconds}s`)
-  const mockGetMaintenanceStatusLabel = vi.fn((status: string) => {
-    if (status === 'prune_running') return 'Pruning repository...'
-    if (status === 'compact_running') return 'Compacting repository...'
-    return null
-  })
-  const mockGetMaintenanceStatusColor = vi.fn(() => 'info' as const)
   const mockOnCancelBackup = vi.fn()
 
   const mockRunningJob: BackupJob = {
@@ -28,6 +43,7 @@ describe('RunningBackupsSection', () => {
     repository: '/path/to/repo',
     status: 'running',
     started_at: '2024-01-01T12:00:00Z',
+    progress: 50,
     progress_details: {
       nfiles: 1000,
       original_size: 5000000,
@@ -48,130 +64,76 @@ describe('RunningBackupsSection', () => {
     const { container } = render(
       <RunningBackupsSection
         runningBackupJobs={[]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders header with running backups count', () => {
+  it('renders section header with job count', () => {
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.getByText('Running Scheduled Backups')).toBeInTheDocument()
-    expect(screen.getByText('1 active')).toBeInTheDocument()
+    expect(screen.getByText('Running Jobs')).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
   })
 
-  it('displays job ID and repository name', () => {
+  it('displays job ID', () => {
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.getByText(/Job #1/)).toBeInTheDocument()
-    expect(screen.getByText(/Repository: \/path\/to\/repo/)).toBeInTheDocument()
-    expect(mockGetRepositoryName).toHaveBeenCalledWith('/path/to/repo')
+    expect(screen.getByText('Backup Job 1')).toBeInTheDocument()
   })
 
-  it('displays started time using formatRelativeTime', () => {
+  it('displays repository path', () => {
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.getByText(/Started: 2 hours ago/)).toBeInTheDocument()
-    expect(mockFormatRelativeTime).toHaveBeenCalledWith('2024-01-01T12:00:00Z')
+    expect(screen.getByText('/path/to/repo')).toBeInTheDocument()
   })
 
   it('displays current file being processed', () => {
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.getByText('Current File:')).toBeInTheDocument()
     expect(screen.getByText('/home/user/document.pdf')).toBeInTheDocument()
   })
 
-  it('displays files processed count', () => {
+  it('displays stats labels and values', () => {
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.getByText('Files Processed:')).toBeInTheDocument()
+    expect(screen.getByText('Files Processed')).toBeInTheDocument()
     expect(screen.getByText('1,000')).toBeInTheDocument()
+    expect(screen.getByText('Original Size')).toBeInTheDocument()
+    expect(screen.getByText('Compressed')).toBeInTheDocument()
+    expect(screen.getByText('Deduplicated')).toBeInTheDocument()
+    expect(screen.getByText('Speed')).toBeInTheDocument()
+    expect(screen.getByText('10.50 MB/s')).toBeInTheDocument()
   })
 
-  it('displays size information', () => {
-    render(
-      <RunningBackupsSection
-        runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
-        onCancelBackup={mockOnCancelBackup}
-        isCancelling={false}
-      />
-    )
-
-    expect(screen.getByText('Original Size:')).toBeInTheDocument()
-    expect(screen.getByText('Compressed:')).toBeInTheDocument()
-    expect(screen.getByText('Deduplicated:')).toBeInTheDocument()
-  })
-
-  it('hides unsupported optional size fields when omitted from progress_details', () => {
+  it('hides optional size fields when absent from progress_details', () => {
     const borg2Job: BackupJob = {
       ...mockRunningJob,
       progress_details: {
@@ -183,153 +145,101 @@ describe('RunningBackupsSection', () => {
         estimated_time_remaining: 300,
       },
     }
-
     render(
       <RunningBackupsSection
         runningBackupJobs={[borg2Job]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.queryByText('Compressed:')).not.toBeInTheDocument()
-    expect(screen.queryByText('Deduplicated:')).not.toBeInTheDocument()
-    expect(screen.getByText('Original Size:')).toBeInTheDocument()
-  })
-
-  it('displays backup speed', () => {
-    render(
-      <RunningBackupsSection
-        runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
-        onCancelBackup={mockOnCancelBackup}
-        isCancelling={false}
-      />
-    )
-
-    expect(screen.getByText('Speed:')).toBeInTheDocument()
-    expect(screen.getByText('10.50 MB/s')).toBeInTheDocument()
+    expect(screen.queryByText('Compressed')).not.toBeInTheDocument()
+    expect(screen.queryByText('Deduplicated')).not.toBeInTheDocument()
+    expect(screen.getByText('Original Size')).toBeInTheDocument()
   })
 
   it('displays ETA when estimated_time_remaining is present', () => {
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.getByText('ETA:')).toBeInTheDocument()
-    expect(mockFormatDurationSeconds).toHaveBeenCalledWith(300)
+    expect(screen.getByText('ETA')).toBeInTheDocument()
+    expect(screen.getByText('300s')).toBeInTheDocument()
   })
 
-  it('displays maintenance status when present', () => {
+  it('shows N/A for ETA when estimated_time_remaining is 0', () => {
+    const jobNoETA: BackupJob = {
+      ...mockRunningJob,
+      progress_details: { ...mockRunningJob.progress_details!, estimated_time_remaining: 0 },
+    }
+    render(
+      <RunningBackupsSection
+        runningBackupJobs={[jobNoETA]}
+        onCancelBackup={mockOnCancelBackup}
+        isCancelling={false}
+      />
+    )
+    expect(screen.getByText('N/A')).toBeInTheDocument()
+  })
+
+  it('displays maintenance status badge when present', () => {
     const jobWithMaintenance: BackupJob = {
       ...mockRunningJob,
       maintenance_status: 'prune_running',
     }
-
     render(
       <RunningBackupsSection
         runningBackupJobs={[jobWithMaintenance]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.getByText('Pruning repository...')).toBeInTheDocument()
-    expect(mockGetMaintenanceStatusLabel).toHaveBeenCalledWith('prune_running')
+    expect(screen.getByText('prune_running')).toBeInTheDocument()
   })
 
-  it('renders cancel button', () => {
+  it('renders cancel button enabled', () => {
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    const cancelButton = screen.getByRole('button', { name: /cancel backup/i })
+    const cancelButton = screen.getByRole('button', { name: /cancel/i })
     expect(cancelButton).toBeInTheDocument()
     expect(cancelButton).not.toBeDisabled()
   })
 
-  it('calls onCancelBackup with confirmation', () => {
-    // Mock window.confirm
+  it('calls onCancelBackup when confirmed', () => {
     const confirmSpy = vi.fn(() => true)
     vi.stubGlobal('confirm', confirmSpy)
-
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    const cancelButton = screen.getByRole('button', { name: /cancel backup/i })
-    fireEvent.click(cancelButton)
-
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
     expect(confirmSpy).toHaveBeenCalledWith('Are you sure you want to cancel backup job #1?')
     expect(mockOnCancelBackup).toHaveBeenCalledWith(1)
-
     vi.unstubAllGlobals()
   })
 
   it('does not call onCancelBackup when confirmation is declined', () => {
     const confirmSpy = vi.fn(() => false)
     vi.stubGlobal('confirm', confirmSpy)
-
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    const cancelButton = screen.getByRole('button', { name: /cancel backup/i })
-    fireEvent.click(cancelButton)
-
-    expect(confirmSpy).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
     expect(mockOnCancelBackup).not.toHaveBeenCalled()
-
     vi.unstubAllGlobals()
   })
 
@@ -337,18 +247,11 @@ describe('RunningBackupsSection', () => {
     render(
       <RunningBackupsSection
         runningBackupJobs={[mockRunningJob]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={true}
       />
     )
-
-    const cancelButton = screen.getByRole('button', { name: /cancel backup/i })
-    expect(cancelButton).toBeDisabled()
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled()
   })
 
   it('renders multiple running jobs', () => {
@@ -356,74 +259,57 @@ describe('RunningBackupsSection', () => {
       { ...mockRunningJob, id: 1 },
       { ...mockRunningJob, id: 2 },
     ]
-
     render(
       <RunningBackupsSection
         runningBackupJobs={jobs}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.getByText('2 active')).toBeInTheDocument()
-    expect(screen.getByText(/Job #1/)).toBeInTheDocument()
-    expect(screen.getByText(/Job #2/)).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('Backup Job 1')).toBeInTheDocument()
+    expect(screen.getByText('Backup Job 2')).toBeInTheDocument()
   })
 
-  it('handles job without current_file gracefully', () => {
+  it('hides current file box when current_file is empty', () => {
     const jobWithoutFile: BackupJob = {
       ...mockRunningJob,
-      progress_details: {
-        ...mockRunningJob.progress_details!,
-        current_file: '',
-      },
+      progress_details: { ...mockRunningJob.progress_details!, current_file: '' },
     }
-
     render(
       <RunningBackupsSection
         runningBackupJobs={[jobWithoutFile]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
-
-    expect(screen.queryByText('Current File:')).not.toBeInTheDocument()
+    expect(screen.queryByText('/home/user/document.pdf')).not.toBeInTheDocument()
   })
 
-  it('handles job without ETA gracefully', () => {
-    const jobWithoutETA: BackupJob = {
-      ...mockRunningJob,
-      progress_details: {
-        ...mockRunningJob.progress_details!,
-        estimated_time_remaining: 0,
-      },
-    }
-
+  it('hides View Logs button when onViewLogs is not provided', () => {
     render(
       <RunningBackupsSection
-        runningBackupJobs={[jobWithoutETA]}
-        getRepositoryName={mockGetRepositoryName}
-        formatRelativeTime={mockFormatRelativeTime}
-        formatDurationSeconds={mockFormatDurationSeconds}
-        getMaintenanceStatusLabel={mockGetMaintenanceStatusLabel}
-        getMaintenanceStatusColor={mockGetMaintenanceStatusColor}
+        runningBackupJobs={[mockRunningJob]}
         onCancelBackup={mockOnCancelBackup}
         isCancelling={false}
       />
     )
+    expect(screen.queryByRole('button', { name: /view logs/i })).not.toBeInTheDocument()
+  })
 
-    expect(screen.getByText('ETA:')).toBeInTheDocument()
-    expect(screen.getByText('N/A')).toBeInTheDocument()
-    expect(mockFormatDurationSeconds).not.toHaveBeenCalled()
+  it('shows View Logs button and calls onViewLogs when provided', () => {
+    const onViewLogs = vi.fn()
+    render(
+      <RunningBackupsSection
+        runningBackupJobs={[mockRunningJob]}
+        onCancelBackup={mockOnCancelBackup}
+        isCancelling={false}
+        onViewLogs={onViewLogs}
+      />
+    )
+    const viewLogsButton = screen.getByRole('button', { name: /view logs/i })
+    expect(viewLogsButton).toBeInTheDocument()
+    fireEvent.click(viewLogsButton)
+    expect(onViewLogs).toHaveBeenCalledWith(mockRunningJob)
   })
 })

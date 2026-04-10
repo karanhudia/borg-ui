@@ -9,7 +9,6 @@ import { toast } from 'react-hot-toast'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
-import { formatRelativeTime, formatDurationSeconds } from '../utils/dateUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import ScheduledChecksSection, {
   ScheduledChecksSectionRef,
@@ -416,44 +415,6 @@ const Schedule: React.FC = () => {
 
   const canCreateSchedule = canManageRepositoriesGlobally || manageableRepositories.length > 0
 
-  // Note: Using StatusBadge component for status display instead of individual functions
-
-  const getMaintenanceStatusLabel = (
-    maintenanceStatus: string | null | undefined
-  ): string | null => {
-    if (!maintenanceStatus) return null
-
-    switch (maintenanceStatus) {
-      case 'running_prune':
-        return t('schedule.maintenance.pruning')
-      case 'prune_completed':
-        return t('schedule.maintenance.pruneCompleted')
-      case 'prune_failed':
-        return t('schedule.maintenance.pruneFailed')
-      case 'running_compact':
-        return t('schedule.maintenance.compacting')
-      case 'compact_completed':
-        return t('schedule.maintenance.compactCompleted')
-      case 'compact_failed':
-        return t('schedule.maintenance.compactFailed')
-      case 'maintenance_completed':
-        return t('schedule.maintenance.completed')
-      default:
-        return null
-    }
-  }
-
-  const getMaintenanceStatusColor = (
-    maintenanceStatus: string | null | undefined
-  ): 'success' | 'info' | 'error' | 'warning' => {
-    if (!maintenanceStatus) return 'info'
-
-    if (maintenanceStatus.includes('running')) return 'info'
-    if (maintenanceStatus.includes('completed')) return 'success'
-    if (maintenanceStatus.includes('failed')) return 'error'
-    return 'info'
-  }
-
   const jobs = jobsData?.data?.jobs || []
   const allBackupJobs = backupJobsData?.data?.jobs || []
   const runningBackupJobs = allBackupJobs.filter(
@@ -539,11 +500,6 @@ const Schedule: React.FC = () => {
           {/* Running Scheduled Jobs */}
           <RunningBackupsSection
             runningBackupJobs={runningBackupJobs}
-            getRepositoryName={getRepositoryName}
-            formatRelativeTime={formatRelativeTime}
-            formatDurationSeconds={formatDurationSeconds}
-            getMaintenanceStatusLabel={getMaintenanceStatusLabel}
-            getMaintenanceStatusColor={getMaintenanceStatusColor}
             onCancelBackup={(jobId) => cancelBackupMutation.mutate(String(jobId))}
             isCancelling={cancelBackupMutation.isPending}
           />
