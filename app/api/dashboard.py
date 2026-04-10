@@ -4,8 +4,9 @@ from sqlalchemy import func
 from pydantic import BaseModel
 import psutil
 import structlog
+import croniter
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from app.database.database import get_db
 from app.database.models import User, BackupJob, Repository, ScheduledJob, ScheduledJobRepository, CheckJob, CompactJob, PruneJob, SSHConnection
@@ -19,6 +20,17 @@ router = APIRouter()
 def format_datetime(dt):
     """Format datetime to ISO8601 with UTC timezone indicator"""
     return serialize_datetime(dt)
+
+
+def resolve_schedule_next_run(schedule: ScheduledJob, now: datetime) -> Optional[datetime]:
+    """Resolve the next due time for a schedule, preferring stored future values."""
+    if schedule.next_run and schedule.next_run > now:
+        return schedule.next_run
+
+    try:
+        return croniter.croniter(schedule.cron_expression, now).get_next(datetime)
+    except Exception:
+        return None
 
 # Pydantic models for responses
 class SystemMetrics(BaseModel):
@@ -510,9 +522,14 @@ async def get_dashboard_overview(
             })
 
         # Get upcoming schedules (next 24 hours)
+        end_time = now + timedelta(hours=24)
         active_schedules = [s for s in schedules if s.enabled]
         upcoming_tasks = []
-        for schedule in active_schedules[:10]:  # Limit to 10
+        for schedule in active_schedules:
+            next_run_dt = resolve_schedule_next_run(schedule, now)
+            if not next_run_dt or next_run_dt > end_time:
+                continue
+
             # Get repository info for this schedule
             repo_names = []
             if schedule.repository_id:
@@ -535,8 +552,11 @@ async def get_dashboard_overview(
                 "name": schedule.name,
                 "repositories": repo_names,
                 "cron": schedule.cron_expression,
-                "next_run": serialize_datetime(schedule.next_run) if schedule.next_run else "Not scheduled",
+                "next_run": serialize_datetime(next_run_dt),
             })
+
+        upcoming_tasks.sort(key=lambda item: item["next_run"])
+        upcoming_tasks = upcoming_tasks[:10]
 
         # Get maintenance alerts (only for full-mode repos - observe-only repos don't need maintenance)
         maintenance_alerts = []

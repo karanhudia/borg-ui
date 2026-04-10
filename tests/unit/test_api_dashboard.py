@@ -300,7 +300,7 @@ class TestDashboardHelpers:
         assert format_bytes(size_value) == expected
 
     def test_get_recent_jobs_normalizes_trigger_state_and_logs(self):
-        now = datetime(2026, 4, 4, 0, 0, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
         jobs = [
             BackupJob(
                 id=1,
@@ -458,7 +458,7 @@ class TestDashboardScheduleAndOverview:
         admin_headers,
         test_db,
     ):
-        now = datetime(2026, 4, 4, 0, 0, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
         full_repo = Repository(
             name="Full Repo",
             path="/srv/backups/full",
@@ -491,15 +491,23 @@ class TestDashboardScheduleAndOverview:
             enabled=True,
             next_run=now + timedelta(hours=2),
         )
+        far_schedule = ScheduledJob(
+            name="Far Future Repo",
+            cron_expression="0 2 * * *",
+            repository_id=full_repo.id,
+            enabled=True,
+            next_run=now + timedelta(hours=30),
+        )
         ssh_connection = SSHConnection(
             host="backup.example.com",
             username="borg",
             port=22,
             status="connected",
         )
-        test_db.add_all([schedule, ssh_connection])
+        test_db.add_all([schedule, far_schedule, ssh_connection])
         test_db.commit()
         test_db.refresh(schedule)
+        test_db.refresh(far_schedule)
         test_db.refresh(ssh_connection)
 
         test_db.add_all(
@@ -560,8 +568,8 @@ class TestDashboardScheduleAndOverview:
             "total_repositories": 2,
             "local_repositories": 1,
             "ssh_repositories": 1,
-            "active_schedules": 1,
-            "total_schedules": 1,
+            "active_schedules": 2,
+            "total_schedules": 2,
             "ssh_connections_active": 1,
             "ssh_connections_total": 1,
             "success_rate_30d": 50.0,
@@ -584,5 +592,7 @@ class TestDashboardScheduleAndOverview:
         assert len(data["repository_health"]) == 2
         assert [item["type"] for item in data["activity_feed"]][:3] == ["backup", "backup", "check"]
         assert data["activity_feed"][0]["repository"] == "Full Repo"
+        assert [item["name"] for item in data["upcoming_tasks"]] == ["Nightly Full Repo"]
+        assert data["upcoming_tasks"][0]["next_run"].startswith(schedule.next_run.isoformat())
         assert data["system_metrics"]["cpu_usage"] == 12.5
         assert data["last_updated"].endswith("+00:00")
