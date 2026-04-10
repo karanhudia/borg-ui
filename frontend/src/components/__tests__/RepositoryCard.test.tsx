@@ -28,6 +28,10 @@ describe('RepositoryCard', () => {
     updated_at: '2024-01-20T10:30:00Z',
     mode: 'full' as const,
     has_running_maintenance: false,
+    has_schedule: false,
+    schedule_enabled: false,
+    schedule_name: null,
+    next_run: null,
   }
 
   const mockCallbacks = {
@@ -173,6 +177,45 @@ describe('RepositoryCard', () => {
 
       expect(screen.getByText('Total Size')).toBeInTheDocument()
       expect(screen.getByText('10.5 GB')).toBeInTheDocument()
+    })
+
+    it('renders next backup badge when an enabled schedule exists', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            has_schedule: true,
+            schedule_enabled: true,
+            schedule_name: 'Daily Backup',
+            next_run: '2099-04-14T02:00:00Z',
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText(/Next:/)).toBeInTheDocument()
+    })
+
+    it('renders paused schedule badge when schedule is disabled', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            has_schedule: true,
+            schedule_enabled: false,
+            schedule_name: 'Nightly',
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Schedule paused')).toBeInTheDocument()
     })
 
     it('renders N/A for missing total size', () => {

@@ -47,6 +47,10 @@ interface Repository extends RepositoryData {
   last_backup: string | null
   last_check: string | null
   last_compact: string | null
+  has_schedule?: boolean
+  schedule_enabled?: boolean
+  schedule_name?: string | null
+  next_run?: string | null
   total_size: string | null
   archive_count: number
   created_at: string

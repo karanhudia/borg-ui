@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, Typography, Button, IconButton, Tooltip, Chip, useTheme, alpha } from '@mui/material'
+import { format, isTomorrow, isToday, isThisYear } from 'date-fns'
 import {
   Info,
   ShieldCheck,
@@ -152,6 +153,48 @@ export default function RepositoryCard({
       : []),
   ]
 
+  const scheduleBadge = (() => {
+    if (!repository.has_schedule) return null
+
+    if (repository.schedule_enabled === false) {
+      return {
+        label: t('repositoryCard.schedulePaused'),
+        title: repository.schedule_name
+          ? t('repositoryCard.schedulePausedWithName', { name: repository.schedule_name })
+          : t('repositoryCard.schedulePaused'),
+        color: theme.palette.warning.main,
+        bg: alpha(theme.palette.warning.main, isDark ? 0.12 : 0.1),
+        border: alpha(theme.palette.warning.main, isDark ? 0.34 : 0.28),
+      }
+    }
+
+    if (!repository.next_run) return null
+
+    const nextRunDate = new Date(repository.next_run)
+    let whenLabel = format(
+      nextRunDate,
+      isThisYear(nextRunDate) ? 'MMM d · h:mm a' : 'MMM d, yyyy · h:mm a'
+    )
+    if (isToday(nextRunDate)) {
+      whenLabel = format(nextRunDate, 'h:mm a')
+    } else if (isTomorrow(nextRunDate)) {
+      whenLabel = `${t('repositoryCard.tomorrow')} · ${format(nextRunDate, 'h:mm a')}`
+    }
+
+    return {
+      label: t('repositoryCard.nextBackupBadge', { when: whenLabel }),
+      title: repository.schedule_name
+        ? t('repositoryCard.nextBackupWithName', {
+            name: repository.schedule_name,
+            when: formatDateTimeFull(repository.next_run),
+          })
+        : t('repositoryCard.nextBackupBadge', { when: formatDateTimeFull(repository.next_run) }),
+      color: theme.palette.success.main,
+      bg: alpha(theme.palette.success.main, isDark ? 0.12 : 0.09),
+      border: alpha(theme.palette.success.main, isDark ? 0.32 : 0.24),
+    }
+  })()
+
   const iconBtnSx = {
     width: 32,
     height: 32,
@@ -236,74 +279,109 @@ export default function RepositoryCard({
 
       <Box sx={{ px: { xs: 1.75, sm: 2 }, pt: { xs: 1.75, sm: 2 }, pb: { xs: 1.5, sm: 1.75 } }}>
         {/* ── Header ── */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 1,
-            mb: 1.5,
-          }}
-        >
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            {/* Name row */}
-            <Box
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.35, flexWrap: 'wrap' }}
-            >
-              <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ lineHeight: 1.3 }}>
-                {repository.name}
-              </Typography>
-              {repository.mode === 'observe' && (
-                <Chip
-                  label={t('repositoryCard.observeOnly')}
-                  size="small"
-                  color="info"
-                  sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.75 } }}
-                />
-              )}
-              <BorgVersionChip borgVersion={repository.borg_version} />
+        <Box sx={{ mb: 1.5 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+              mb: 0.4,
+            }}
+          >
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ lineHeight: 1.3 }}>
+                  {repository.name}
+                </Typography>
+                {repository.mode === 'observe' && (
+                  <Chip
+                    label={t('repositoryCard.observeOnly')}
+                    size="small"
+                    color="info"
+                    sx={{ height: 18, fontSize: '0.65rem', '& .MuiChip-label': { px: 0.75 } }}
+                  />
+                )}
+                <BorgVersionChip borgVersion={repository.borg_version} />
+              </Box>
             </Box>
 
-            {/* Path */}
-            <Typography
-              variant="body2"
-              title={repository.path}
+            <Box
               sx={{
-                fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
-                fontSize: '0.7rem',
-                color: 'text.disabled',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 0.75,
+                flexShrink: 0,
+                minWidth: 0,
+                maxWidth: { xs: '46%', sm: '42%' },
               }}
             >
-              {repository.path}
-            </Typography>
+              {scheduleBadge && (
+                <Tooltip title={scheduleBadge.title} arrow placement="left">
+                  <Chip
+                    label={scheduleBadge.label}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      maxWidth: { xs: 140, sm: 170 },
+                      flexShrink: 1,
+                      minWidth: 0,
+                      bgcolor: scheduleBadge.bg,
+                      color: scheduleBadge.color,
+                      border: '1px solid',
+                      borderColor: scheduleBadge.border,
+                      fontSize: '0.64rem',
+                      fontWeight: 700,
+                      '& .MuiChip-label': {
+                        px: 0.9,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      },
+                    }}
+                  />
+                </Tooltip>
+              )}
+
+              {canManageRepository && (
+                <Tooltip title={t('repositoryCard.edit')} arrow placement="left">
+                  <IconButton
+                    size="small"
+                    onClick={onEdit}
+                    aria-label={t('repositoryCard.edit')}
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 1,
+                      flexShrink: 0,
+                      color: 'text.disabled',
+                      '&:hover': {
+                        color: 'text.primary',
+                        bgcolor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.06),
+                      },
+                    }}
+                  >
+                    <Pencil size={14} />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
           </Box>
 
-          {/* Edit icon button */}
-          {canManageRepository && (
-            <Tooltip title={t('repositoryCard.edit')} arrow placement="left">
-              <IconButton
-                size="small"
-                onClick={onEdit}
-                aria-label={t('repositoryCard.edit')}
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 1,
-                  flexShrink: 0,
-                  color: 'text.disabled',
-                  '&:hover': {
-                    color: 'text.primary',
-                    bgcolor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.06),
-                  },
-                }}
-              >
-                <Pencil size={14} />
-              </IconButton>
-            </Tooltip>
-          )}
+          <Typography
+            variant="body2"
+            title={repository.path}
+            sx={{
+              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+              fontSize: '0.7rem',
+              color: 'text.disabled',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {repository.path}
+          </Typography>
         </Box>
 
         {/* ── Key Stats Band ── */}

@@ -11,7 +11,17 @@ import asyncio
 import json
 
 from app.database.database import get_db, SessionLocal
-from app.database.models import User, Repository, CheckJob, CompactJob, PruneJob, SystemSettings, UserRepositoryPermission
+from app.database.models import (
+    User,
+    Repository,
+    CheckJob,
+    CompactJob,
+    PruneJob,
+    ScheduledJob,
+    ScheduledJobRepository,
+    SystemSettings,
+    UserRepositoryPermission,
+)
 from app.api.maintenance_jobs import (
     create_maintenance_job,
     start_background_maintenance_job,
@@ -191,6 +201,46 @@ def _resolve_bypass_lock(repository: Repository, db: Session, setting_name: str)
     system_enabled = bool(system_settings and getattr(system_settings, setting_name, False))
     use_bypass_lock = bool(repository.bypass_lock or system_enabled)
     return use_bypass_lock, _lock_source(repository.bypass_lock, system_enabled)
+
+
+def _get_repository_schedule_summary(repo_id: int, db: Session) -> Dict[str, Any]:
+    """Return one preferred schedule summary for a repository.
+
+    Enabled schedules win over disabled ones. We support both legacy single-repo
+    schedules and multi-repo schedules through the junction table.
+    """
+
+    direct_matches = db.query(ScheduledJob).filter(ScheduledJob.repository_id == repo_id).all()
+    linked_schedule_ids = [
+        row.scheduled_job_id
+        for row in db.query(ScheduledJobRepository.scheduled_job_id)
+        .filter(ScheduledJobRepository.repository_id == repo_id)
+        .all()
+    ]
+    linked_matches = (
+        db.query(ScheduledJob).filter(ScheduledJob.id.in_(linked_schedule_ids)).all()
+        if linked_schedule_ids
+        else []
+    )
+
+    matched = direct_matches + linked_matches
+    if not matched:
+        return {
+            "has_schedule": False,
+            "schedule_enabled": False,
+            "schedule_name": None,
+            "next_run": None,
+        }
+
+    preferred = next((job for job in matched if job.enabled), matched[0])
+    return {
+        "has_schedule": True,
+        "schedule_enabled": bool(preferred.enabled),
+        "schedule_name": preferred.name,
+        "next_run": format_datetime(preferred.next_run)
+        if preferred.enabled and preferred.next_run
+        else None,
+    }
 
 
 async def _run_repository_command(
@@ -637,6 +687,7 @@ async def get_repositories(
                 PruneJob.repository_id == repo.id,
                 PruneJob.status == "running"
             ).first() is not None
+            schedule_summary = _get_repository_schedule_summary(repo.id, db)
 
             repo_list.append({
                 "id": repo.id,
@@ -670,6 +721,10 @@ async def get_repositories(
                 "bypass_lock": repo.bypass_lock or False,
                 "custom_flags": repo.custom_flags,
                 "has_running_maintenance": has_check or has_compact or has_prune,
+                "has_schedule": schedule_summary["has_schedule"],
+                "schedule_enabled": schedule_summary["schedule_enabled"],
+                "schedule_name": schedule_summary["schedule_name"],
+                "next_run": schedule_summary["next_run"],
                 "has_keyfile": repo.has_keyfile or False,
                 "source_ssh_connection_id": repo.source_ssh_connection_id,
                 "borg_version": repo.borg_version or 1,

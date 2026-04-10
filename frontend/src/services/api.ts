@@ -77,6 +77,10 @@ export interface RepositoryData {
   mode?: 'full' | 'observe'
   custom_flags?: string | null
   bypass_lock?: boolean
+  has_schedule?: boolean
+  schedule_enabled?: boolean
+  schedule_name?: string | null
+  next_run?: string | null
   // Allow other properties for flexibility
   [key: string]: unknown
 }

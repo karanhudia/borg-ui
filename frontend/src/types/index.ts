@@ -23,6 +23,10 @@ export interface Repository {
   last_backup?: string | null
   last_check?: string | null
   last_compact?: string | null
+  has_schedule?: boolean
+  schedule_enabled?: boolean
+  schedule_name?: string | null
+  next_run?: string | null
   has_keyfile?: boolean
   source_ssh_connection_id?: number | null
   [key: string]: unknown

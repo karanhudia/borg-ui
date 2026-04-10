@@ -16,6 +16,7 @@ Integration tests (test_api_repositories_integration.py) handle:
 import pytest
 import json
 import os
+from datetime import datetime
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from app.database.models import LicensingState, Repository, ScheduledJob, SSHConnection, SystemSettings
@@ -102,6 +103,39 @@ class TestRepositoriesListAndGet:
         data = response.json()
         assert "repositories" in data
         assert len(data["repositories"]) >= 2
+
+    def test_list_repositories_includes_schedule_summary(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo With Schedule",
+            path="/repo-scheduled",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        schedule = ScheduledJob(
+            name="Daily Backup",
+            cron_expression="0 2 * * *",
+            repository_id=repo.id,
+            enabled=True,
+            next_run=datetime(2099, 4, 14, 2, 0, 0),
+        )
+        test_db.add(schedule)
+        test_db.commit()
+
+        response = test_client.get("/api/repositories/", headers=admin_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        repo_data = next(r for r in data["repositories"] if r["id"] == repo.id)
+        assert repo_data["has_schedule"] is True
+        assert repo_data["schedule_enabled"] is True
+        assert repo_data["schedule_name"] == "Daily Backup"
+        assert repo_data["next_run"] is not None
 
     def test_list_repositories_unauthorized(self, test_client: TestClient):
         """Test listing repositories without authentication"""
