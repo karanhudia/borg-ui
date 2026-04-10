@@ -392,45 +392,36 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
 
         # Get archive list and count
         archives = await router.list_archives()
-        list_result = {"success": True, "stdout": archives}
 
         archive_count = 0
         total_size = None
         last_backup_time = None
 
-        if list_result.get("success"):
-            try:
-                archives_data = json.loads(list_result.get("stdout", "{}"))
-                if isinstance(archives_data, dict):
-                    archives = archives_data.get("archives", [])
-                    # Get archive count
-                    archive_count = len(archives)
+        try:
+            if isinstance(archives, str):
+                archives_data = json.loads(archives)
+                archives = archives_data.get("archives", []) if isinstance(archives_data, dict) else archives_data
 
-                    # Get the most recent archive's timestamp for last_backup
-                    if archives:
-                        # Archives are typically sorted by time, but let's find the most recent
-                        most_recent = max(archives, key=lambda a: a.get("time", "") or a.get("start", ""))
-                        archive_time = most_recent.get("time") or most_recent.get("start")
-                        if archive_time:
-                            # Parse ISO format timestamp (e.g., "2024-01-15T10:30:00.000000")
-                            try:
-                                # Borg list returns timestamps as naive local-time ISO strings.
-                                # Replace Z→+00:00 so explicit UTC is preserved; otherwise
-                                # fromisoformat returns a naive datetime (= local time).
-                                # astimezone(utc) treats naive as local and converts to UTC.
-                                # replace(tzinfo=None) gives naive UTC for SQLite storage.
-                                dt = datetime.fromisoformat(archive_time.replace("Z", "+00:00"))
-                                last_backup_time = dt.astimezone(timezone.utc).replace(tzinfo=None)
-                            except ValueError as te:
-                                logger.warning("Failed to parse archive timestamp",
-                                             repository=repository.name,
-                                             timestamp=archive_time,
-                                             error=str(te))
-            except json.JSONDecodeError as e:
-                logger.error("Failed to parse archive list JSON",
-                           repository=repository.name,
-                           error=str(e),
-                           stdout=list_result.get("stdout", "")[:200])
+            if isinstance(archives, list):
+                archive_count = len(archives)
+
+                if archives:
+                    most_recent = max(archives, key=lambda a: a.get("time", "") or a.get("start", ""))
+                    archive_time = most_recent.get("time") or most_recent.get("start")
+                    if archive_time:
+                        try:
+                            dt = datetime.fromisoformat(archive_time.replace("Z", "+00:00"))
+                            last_backup_time = dt.astimezone(timezone.utc).replace(tzinfo=None)
+                        except ValueError as te:
+                            logger.warning("Failed to parse archive timestamp",
+                                         repository=repository.name,
+                                         timestamp=archive_time,
+                                         error=str(te))
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse archive list JSON",
+                       repository=repository.name,
+                       error=str(e),
+                       stdout=str(archives)[:200])
 
         # Get repository size from borg info (includes cache stats)
         # Use direct command execution with proper passphrase handling
@@ -499,6 +490,15 @@ def format_bytes(bytes_size: int) -> str:
             return f"{bytes_size:.2f} {unit}"
         bytes_size /= 1024.0
     return f"{bytes_size:.2f} EB"
+
+
+def _decode_json_list_field(value):
+    """Normalize repository JSON-list fields that may already be decoded."""
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        return value
+    return json.loads(value)
 
 # Helper function to format datetime with timezone
 def format_datetime(dt):
@@ -651,8 +651,8 @@ async def get_repositories(
                 "path": repo.path,
                 "encryption": repo.encryption,
                 "compression": repo.compression,
-                "source_directories": json.loads(repo.source_directories) if repo.source_directories else [],
-                "exclude_patterns": json.loads(repo.exclude_patterns) if repo.exclude_patterns else [],
+                "source_directories": _decode_json_list_field(repo.source_directories),
+                "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
                 "repository_type": repo.repository_type,
                 "host": repo.host,
                 "port": repo.port,

@@ -243,6 +243,35 @@ class TestRepositoryHelperContracts:
         assert mock_exec.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
 
     @pytest.mark.asyncio
+    async def test_update_repository_stats_accepts_router_archive_lists(self, test_db):
+        repo = _create_repo(test_db, "Repo", "/repos/main", passphrase="secret", bypass_lock=False)
+
+        archives = [
+            {"name": "old", "time": "2024-01-01T10:00:00"},
+            {"name": "new", "time": "2024-02-01T12:00:00Z"},
+        ]
+        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch.object(
+            repositories_api.BorgRouter, "list_archives", AsyncMock(return_value=archives)
+        ) as mock_list, patch.object(
+            repositories_api.borg,
+            "_execute_command",
+            AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": '{"cache":{"stats":{"unique_csize": 1024}}}',
+                    "stderr": "",
+                    "return_code": 0,
+                }
+            ),
+        ):
+            success = await repositories_api.update_repository_stats(repo, test_db)
+
+        assert success is True
+        assert repo.archive_count == 2
+        assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
+        mock_list.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_update_repository_stats_returns_false_on_unexpected_exception(self, test_db):
         repo = _create_repo(test_db, "Repo", "/repos/main")
 

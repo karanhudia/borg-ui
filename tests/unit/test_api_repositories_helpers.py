@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from app.api.repositories import (
     _borg_keyfile_name,
+    _decode_json_list_field,
     _empty_running_jobs_response,
     get_operation_timeouts,
     get_standard_ssh_opts,
@@ -30,6 +31,12 @@ class TestRepositoryHelperFunctions:
             _borg_keyfile_name("ssh://borg@example.com:2222/backups/repo-name")
             == "borg_example_com_2222_backups_repo_name"
         )
+
+    def test_decode_json_list_field_accepts_json_strings(self):
+        assert _decode_json_list_field('["/data/source"]') == ["/data/source"]
+
+    def test_decode_json_list_field_accepts_already_decoded_lists(self):
+        assert _decode_json_list_field(["*.tmp"]) == ["*.tmp"]
 
     def test_get_standard_ssh_opts_without_key(self):
         opts = get_standard_ssh_opts()
