@@ -20,10 +20,10 @@ class MountV2Service:
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         cmd.extend(["-r", repository_path, "mount"])
-        if archive_name:
-            cmd.append(f"aid:{archive_name}")
         if mount_point:
             cmd.append(mount_point)
+        if archive_name:
+            cmd.append(f"aid:{archive_name}")
         cmd.extend(["-o", "allow_other", "-f"])
         if bypass_lock:
             cmd.append("--bypass-lock")

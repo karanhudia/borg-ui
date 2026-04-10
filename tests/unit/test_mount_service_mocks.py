@@ -144,6 +144,8 @@ async def test_mount_borg_archive_uses_borg2_binary_for_v2_repo(mount_service_fi
     assert args[0] == "borg2"
     assert "-r" in args
     assert "mount" in args
+    mount_index = args.index("mount")
+    assert args[mount_index + 1] == expected_mount_point
     assert mount_service_fixture.active_mounts[mount_id].borg_version == 2
 
 @pytest.mark.asyncio
