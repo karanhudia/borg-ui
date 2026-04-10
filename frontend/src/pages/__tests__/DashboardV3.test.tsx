@@ -205,13 +205,13 @@ describe('DashboardV3', () => {
   })
 
   describe('loading and error states', () => {
-    it('shows loading spinner before data arrives', () => {
+    it('shows loading skeletons before data arrives', () => {
       vi.stubGlobal(
         'fetch',
         vi.fn(() => new Promise(() => {}))
       ) // never resolves
       renderDashboard()
-      expect(screen.getByRole('progressbar')).toBeInTheDocument()
+      expect(document.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0)
     })
 
     it('shows error alert when fetch fails', async () => {

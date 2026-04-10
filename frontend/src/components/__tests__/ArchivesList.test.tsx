@@ -47,8 +47,7 @@ describe('ArchivesList', () => {
       <ArchivesList archives={[]} repositoryName="Test Repo" loading={true} {...mockHandlers} />
     )
 
-    expect(screen.getByText('Loading archives...')).toBeInTheDocument()
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    expect(document.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0)
   })
 
   it('renders empty state when no archives', () => {
@@ -69,11 +68,11 @@ describe('ArchivesList', () => {
       />
     )
 
-    expect(screen.getByText('Archives for My Backup Repo')).toBeInTheDocument()
-    expect(screen.getByText('3 archives')).toBeInTheDocument()
+    expect(screen.getByText('Archives')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
   })
 
-  it('uses singular "archive" for count of 1', () => {
+  it('shows numeric count badge for a single archive', () => {
     render(
       <ArchivesList
         archives={[mockArchives[0]]}
@@ -83,7 +82,7 @@ describe('ArchivesList', () => {
       />
     )
 
-    expect(screen.getByText('1 archive')).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
   })
 
   it('renders all archives as cards', () => {
@@ -115,7 +114,7 @@ describe('ArchivesList', () => {
       />
     )
 
-    expect(screen.queryByText('Archives for Test Repo')).not.toBeInTheDocument()
+    expect(screen.queryByText('Archives')).not.toBeInTheDocument()
   })
 
   it('does not render header in empty state', () => {
@@ -123,7 +122,7 @@ describe('ArchivesList', () => {
       <ArchivesList archives={[]} repositoryName="Test Repo" loading={false} {...mockHandlers} />
     )
 
-    expect(screen.queryByText('Archives for Test Repo')).not.toBeInTheDocument()
+    expect(screen.queryByText('Archives')).not.toBeInTheDocument()
   })
 
   it('handles large number of archives', () => {
@@ -144,7 +143,7 @@ describe('ArchivesList', () => {
       />
     )
 
-    expect(screen.getByText('100 archives')).toBeInTheDocument()
+    expect(screen.getByText('100')).toBeInTheDocument()
     // With pagination (default 10 per page), only first 10 should be visible
     expect(screen.getByTestId('archive-card-0')).toBeInTheDocument()
     expect(screen.getByTestId('archive-card-9')).toBeInTheDocument()
@@ -429,7 +428,7 @@ describe('ArchivesList', () => {
       )
 
       // Should show total count when filter is 'all'
-      expect(screen.getByText('3 archives')).toBeInTheDocument()
+      expect(screen.getByText('3')).toBeInTheDocument()
     })
 
     it('shows empty state when no archives match filter', async () => {
