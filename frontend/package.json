@@ -16,7 +16,7 @@
     "@types/node": "^25.5.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "axios": "^1.13.6",
+    "axios": "^1.15.0",
     "clsx": "^2.0.0",
     "cron-parser": "^5.5.0",
     "date-fns": "^4.1.0",
