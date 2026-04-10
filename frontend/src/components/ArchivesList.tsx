@@ -11,6 +11,7 @@ import {
   Chip,
   alpha,
   useTheme,
+  Skeleton,
 } from '@mui/material'
 import {
   FolderOpen,
@@ -185,11 +186,46 @@ export default function ArchivesList({
   // Loading State
   if (loading) {
     return (
-      <Stack spacing={2}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <ArchiveCardSkeleton key={i} index={i} />
-        ))}
-      </Stack>
+      <Box>
+        {/* Header bar skeleton — mirrors the real header exactly */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            gap: { xs: 1.5, sm: 1 },
+            px: 2,
+            py: 1.25,
+            mb: 2.5,
+            borderRadius: 2,
+            bgcolor: isDark
+              ? alpha(theme.palette.primary.main, 0.1)
+              : alpha(theme.palette.primary.main, 0.06),
+            border: '1px solid',
+            borderColor: isDark
+              ? alpha(theme.palette.primary.main, 0.2)
+              : alpha(theme.palette.primary.main, 0.15),
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25 }}>
+            <Skeleton variant="rounded" width={64} height={19} sx={{ borderRadius: 1 }} />
+            <Skeleton variant="rounded" width={22} height={20} sx={{ borderRadius: 1 }} />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+            <Skeleton variant="rounded" width={72} height={20} sx={{ borderRadius: 1.5 }} />
+            <Skeleton variant="rounded" width={60} height={20} sx={{ borderRadius: 1.5 }} />
+            <Skeleton variant="rounded" width={72} height={20} sx={{ borderRadius: 1.5 }} />
+            <Skeleton variant="rounded" width={44} height={20} sx={{ borderRadius: 1.5 }} />
+            <Skeleton variant="rounded" width={44} height={20} sx={{ borderRadius: 1.5 }} />
+          </Box>
+        </Box>
+        <Stack spacing={2}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <ArchiveCardSkeleton key={i} index={i} />
+          ))}
+        </Stack>
+      </Box>
     )
   }
 
