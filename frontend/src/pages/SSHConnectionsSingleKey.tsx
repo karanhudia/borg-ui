@@ -607,8 +607,7 @@ export default function SSHConnectionsSingleKey() {
               <Skeleton
                 variant="text"
                 width={32}
-                height={{ xs: 28, sm: 24 }}
-                sx={{ transform: 'none', borderRadius: 0.5 }}
+                sx={{ transform: 'none', borderRadius: 0.5, height: { xs: 28, sm: 24 } }}
               />
             </Box>
           ))}
