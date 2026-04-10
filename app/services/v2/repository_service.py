@@ -8,6 +8,7 @@ from app.core.borg2 import borg2
 from app.database.database import SessionLocal
 from app.database.models import SSHKey
 from app.core.security import decrypt_secret
+from app.utils.fs import calculate_path_size_bytes
 
 
 class RepositoryV2Service:
@@ -99,6 +100,28 @@ class RepositoryV2Service:
             cmd.extend(["--remote-path", repository.remote_path])
         env = {"BORG_PASSPHRASE": repository.passphrase} if repository.passphrase else None
         return await borg2._run(cmd, timeout=30, env=env)
+
+    async def calculate_total_size_bytes(
+        self,
+        repository,
+        *,
+        temp_key_file: Optional[str] = None,
+        timeout: int = 30,
+    ) -> int:
+        """Return on-disk repository size for Borg 2 repositories."""
+        if getattr(repository, "host", None):
+            port = repository.port or 22
+            username = repository.username or "borg"
+            repo_ssh_url = (
+                f"ssh://{username}@{repository.host}:{port}/{repository.path.lstrip('/')}"
+            )
+            return await calculate_path_size_bytes(
+                [repo_ssh_url],
+                timeout=timeout,
+                key_file=temp_key_file,
+            )
+
+        return await calculate_path_size_bytes([repository.path], timeout=timeout)
 
 
 repository_v2_service = RepositoryV2Service()

@@ -14,6 +14,7 @@ async def calculate_path_size_bytes(
     paths: list[str],
     exclude_patterns: list[str] | None = None,
     timeout: int = 3600,
+    key_file: str | None = None,
 ) -> int:
     """Calculate total size in bytes for a list of local or SSH paths using du.
 
@@ -22,6 +23,7 @@ async def calculate_path_size_bytes(
       - SSH URLs  (e.g. ssh://user@host:port/path)
 
     Exclude patterns use the same format as Borg excludes.
+    key_file: optional path to SSH private key for SSH paths.
     Returns 0 if all paths fail or the total is empty.
     """
     if exclude_patterns is None:
@@ -32,7 +34,7 @@ async def calculate_path_size_bytes(
     for path in paths:
         try:
             if path.startswith("ssh://"):
-                path_size = await _du_ssh(path, exclude_patterns, timeout)
+                path_size = await _du_ssh(path, exclude_patterns, timeout, key_file=key_file)
             else:
                 path_size = await _du_local(path, exclude_patterns, timeout)
 
@@ -69,7 +71,8 @@ async def _du_local(path: str, exclude_patterns: list[str], timeout: int) -> Opt
     return None
 
 
-async def _du_ssh(path: str, exclude_patterns: list[str], timeout: int) -> Optional[int]:
+async def _du_ssh(path: str, exclude_patterns: list[str], timeout: int,
+                  key_file: str | None = None) -> Optional[int]:
     match = re.match(r"ssh://([^@]+)@([^:]+):(\d+)(/.*)", path)
     if not match:
         logger.warning("Invalid SSH URL format", path=path)
@@ -82,8 +85,10 @@ async def _du_ssh(path: str, exclude_patterns: list[str], timeout: int) -> Optio
         safe_pattern = pattern.replace("'", "'\\''")
         du_excludes += f" --exclude='{safe_pattern}'"
 
-    cmd = [
-        "ssh",
+    cmd = ["ssh"]
+    if key_file:
+        cmd.extend(["-i", key_file])
+    cmd.extend([
         "-o", "StrictHostKeyChecking=no",
         "-o", "UserKnownHostsFile=/dev/null",
         "-o", "LogLevel=ERROR",
@@ -91,7 +96,7 @@ async def _du_ssh(path: str, exclude_patterns: list[str], timeout: int) -> Optio
         "-p", port,
         f"{username}@{host}",
         f"du -sb{du_excludes} {remote_path} 2>/dev/null | cut -f1",
-    ]
+    ])
 
     process = await asyncio.create_subprocess_exec(
         *cmd,

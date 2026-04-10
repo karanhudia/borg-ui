@@ -423,31 +423,24 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
                        error=str(e),
                        stdout=str(archives)[:200])
 
-        # Get repository size from borg info (includes cache stats)
-        # Use direct command execution with proper passphrase handling
-        cmd = router.build_repo_info_command(repository.path)
-        if repository.remote_path:
-            cmd.extend(["--remote-path", repository.remote_path])
-        if use_bypass_lock:
-            cmd.append("--bypass-lock")
-
         # Get timeouts from DB settings (with fallback to config)
         timeouts = get_operation_timeouts(db)
 
         try:
-            info_result = await borg._execute_command(cmd, timeout=timeouts["info_timeout"], env=env)
-
-            if info_result["success"]:
-                info_data = json.loads(info_result["stdout"])
-                cache = info_data.get("cache", {}).get("stats", {})
-                if cache:
-                    unique_csize = cache.get("unique_csize", 0)
-                    if unique_csize > 0:
-                        total_size = format_bytes(unique_csize)
+            total_size_bytes = await router.calculate_total_size_bytes(
+                env=env,
+                info_timeout=timeouts["info_timeout"],
+                use_bypass_lock=use_bypass_lock,
+                temp_key_file=temp_key_file,
+            )
+            if total_size_bytes > 0:
+                total_size = format_bytes(total_size_bytes)
         except Exception as e:
-            logger.warning("Failed to get repository size from borg info",
-                         repository=repository.name,
-                         error=str(e))
+            logger.warning(
+                "Failed to get repository size",
+                repository=repository.name,
+                error=str(e),
+            )
 
         # Update repository
         old_count = repository.archive_count

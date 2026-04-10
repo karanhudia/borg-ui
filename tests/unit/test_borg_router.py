@@ -9,12 +9,17 @@ from app.core.borg_router import BorgRouter
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_stats_is_noop_for_v2_repo(db_session):
+async def test_update_stats_delegates_to_v2_repository_helper(db_session):
     repo = SimpleNamespace(borg_version=2)
 
-    result = await BorgRouter(repo).update_stats(db_session)
+    with patch(
+        "app.api.repositories.update_repository_stats",
+        new=AsyncMock(return_value=True),
+    ) as mock_update:
+        result = await BorgRouter(repo).update_stats(db_session)
 
     assert result is True
+    mock_update.assert_awaited_once_with(repo, db_session)
 
 
 @pytest.mark.unit
@@ -30,6 +35,64 @@ async def test_update_stats_delegates_to_v1_repository_helper(db_session):
 
     assert result is False
     mock_update.assert_awaited_once_with(repo, db_session)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_calculate_total_size_bytes_delegates_to_v2_repository_service():
+    repo = SimpleNamespace(
+        borg_version=2,
+        path="/tmp/repo",
+        remote_path="/usr/bin/borg2",
+    )
+
+    with patch(
+        "app.services.v2.repository_service.repository_v2_service.calculate_total_size_bytes",
+        new=AsyncMock(return_value=4096),
+    ) as mock_size:
+        size = await BorgRouter(repo).calculate_total_size_bytes(
+            env={"BORG_PASSPHRASE": "secret"},
+            info_timeout=99,
+            use_bypass_lock=True,
+            temp_key_file="/tmp/key",
+        )
+
+    assert size == 4096
+    mock_size.assert_awaited_once_with(
+        repo,
+        temp_key_file="/tmp/key",
+        timeout=30,
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_calculate_total_size_bytes_uses_v1_info_command():
+    repo = SimpleNamespace(
+        borg_version=1,
+        path="/tmp/repo",
+        remote_path="/usr/bin/borg",
+    )
+
+    with patch(
+        "app.core.borg.borg._execute_command",
+        new=AsyncMock(
+            return_value={
+                "success": True,
+                "stdout": '{"cache":{"stats":{"unique_csize": 2048}}}',
+            }
+        ),
+    ) as mock_exec:
+        size = await BorgRouter(repo).calculate_total_size_bytes(
+            env={"BORG_PASSPHRASE": "secret"},
+            info_timeout=55,
+            use_bypass_lock=True,
+        )
+
+    assert size == 2048
+    cmd = mock_exec.await_args.args[0]
+    assert "--remote-path" in cmd
+    assert "--bypass-lock" in cmd
 
 
 @pytest.mark.unit

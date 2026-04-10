@@ -221,17 +221,10 @@ class TestRepositoryHelperContracts:
         with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch.object(
             repositories_api.BorgRouter, "list_archives", AsyncMock(return_value=list_payload["stdout"])
         ) as mock_list, patch.object(
-            repositories_api.borg,
-            "_execute_command",
-            AsyncMock(
-                return_value={
-                    "success": True,
-                    "stdout": '{"cache":{"stats":{"unique_csize": 2097152}}}',
-                    "stderr": "",
-                    "return_code": 0,
-                }
-            ),
-        ) as mock_exec:
+            repositories_api.BorgRouter,
+            "calculate_total_size_bytes",
+            AsyncMock(return_value=2097152),
+        ) as mock_size:
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is True
@@ -239,8 +232,8 @@ class TestRepositoryHelperContracts:
         assert repo.total_size == "2.00 MB"
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
-        assert "--bypass-lock" in mock_exec.await_args.args[0]
-        assert mock_exec.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
+        assert mock_size.await_args.kwargs["use_bypass_lock"] is True
+        assert mock_size.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
 
     @pytest.mark.asyncio
     async def test_update_repository_stats_accepts_router_archive_lists(self, test_db):
@@ -299,22 +292,35 @@ class TestRepositoryHelperContracts:
             "list_archives",
             AsyncMock(return_value='{"archives": []}'),
         ) as mock_list, patch.object(
-            repositories_api.borg,
-            "_execute_command",
-            AsyncMock(
-                return_value={
-                    "success": True,
-                    "stdout": '{"cache":{"stats":{"unique_csize": 1024}}}',
-                    "stderr": "",
-                    "return_code": 0,
-                }
-            ),
-        ) as mock_exec, patch("app.api.repositories.os.path.exists", return_value=False):
+            repositories_api.BorgRouter,
+            "calculate_total_size_bytes",
+            AsyncMock(return_value=1024),
+        ) as mock_size, patch("app.api.repositories.os.path.exists", return_value=False):
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is True
         mock_list.assert_awaited_once()
-        assert mock_exec.await_args.kwargs["env"]["BORG_RSH"].startswith("ssh ")
-        cmd = mock_exec.await_args.args[0]
-        assert "--remote-path" in cmd
-        assert "/usr/local/bin/borg1" in cmd
+        assert mock_size.await_args.kwargs["env"]["BORG_RSH"].startswith("ssh ")
+        assert not mock_size.await_args.kwargs["use_bypass_lock"]
+
+    @pytest.mark.asyncio
+    async def test_update_repository_stats_formats_v2_total_size_from_router(self, test_db):
+        repo = _create_repo(test_db, "Repo V2", "/repos/v2-main", borg_version=2)
+
+        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value="/tmp/test.key"), patch.object(
+            repositories_api.BorgRouter,
+            "list_archives",
+            AsyncMock(return_value=[{"name": "new", "start": "2024-02-01T12:00:00Z"}]),
+        ) as mock_list, patch.object(
+            repositories_api.BorgRouter,
+            "calculate_total_size_bytes",
+            AsyncMock(return_value=4096),
+        ) as mock_size, patch("app.api.repositories.os.path.exists", return_value=False):
+            success = await repositories_api.update_repository_stats(repo, test_db)
+
+        assert success is True
+        assert repo.archive_count == 1
+        assert repo.total_size == "4.00 KB"
+        assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
+        mock_list.assert_awaited_once()
+        mock_size.assert_awaited_once()

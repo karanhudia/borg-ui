@@ -258,7 +258,7 @@ async def get_system_settings(
                 "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
                 "borg_version": borg.get_version(),
                 "app_version": get_runtime_app_version(),
-                
+
                 # MQTT settings
                 "mqtt_enabled": settings.mqtt_enabled,
                 "mqtt_broker_url": settings.mqtt_broker_url,
@@ -536,7 +536,10 @@ async def refresh_all_stats(
 
         return {
             "success": True,
-            "message": "backend.success.settings.statsRefreshStarted",
+            "message": {
+                "key": "backend.success.settings.statsRefreshStarted",
+                "params": {"count": len(repo_ids)}
+            },
             "repository_count": len(repo_ids)
         }
     except Exception as e:
