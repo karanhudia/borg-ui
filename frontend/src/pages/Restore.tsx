@@ -24,6 +24,7 @@ import {
   AlertCircle,
   Clock,
   RotateCcw,
+  ScrollText,
 } from 'lucide-react'
 import { restoreAPI, repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
@@ -41,6 +42,7 @@ import ArchiveBrowserDialog from '../components/ArchiveBrowserDialog'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import DataTable, { Column, ActionButton } from '../components/DataTable'
 import RestoreJobCard from '../components/RestoreJobCard'
+import LogViewerDialog from '../components/LogViewerDialog'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getArchiveAgeBucket, getJobDurationSeconds } from '../utils/analyticsProperties'
 
@@ -352,6 +354,8 @@ const Restore: React.FC = () => {
     }
   }
 
+  const [logJob, setLogJob] = useState<{ id: number; status: string; type: string } | null>(null)
+
   const runningJobs =
     restoreJobsData?.data?.jobs?.filter(
       (job: RestoreJob) => job.status === 'running' || job.status === 'pending'
@@ -403,6 +407,17 @@ const Restore: React.FC = () => {
           {formatDate(archive.start)}
         </Typography>
       ),
+    },
+  ]
+
+  // Recent Restore Jobs table actions
+  const restoreJobsActions: ActionButton<RestoreJob>[] = [
+    {
+      icon: <ScrollText size={16} />,
+      label: t('common.buttons.view'),
+      onClick: (job) => setLogJob({ id: job.id, status: job.status, type: 'restore' }),
+      color: 'default',
+      tooltip: t('common.buttons.view'),
     },
   ]
 
@@ -579,6 +594,7 @@ const Restore: React.FC = () => {
           <DataTable
             data={recentJobs}
             columns={restoreJobsColumns}
+            actions={restoreJobsActions}
             getRowKey={(job) => job.id.toString()}
             emptyState={{
               icon: <Clock size={48} />,
@@ -748,6 +764,14 @@ const Restore: React.FC = () => {
           initialSelectedPaths={selectedPaths}
         />
       )}
+
+      {/* Log Viewer Dialog */}
+      <LogViewerDialog
+        job={logJob}
+        open={!!logJob}
+        onClose={() => setLogJob(null)}
+        jobTypeLabel={t('logViewer.typeRestore')}
+      />
 
       {/* Lock Error Dialog */}
       {lockError && (

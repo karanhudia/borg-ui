@@ -1,9 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { DialogTitle, DialogContent, DialogActions, Button, Typography, Box } from '@mui/material'
+import {
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Typography,
+  Box,
+  IconButton,
+  Tooltip,
+} from '@mui/material'
+import { ContentCopy } from '@mui/icons-material'
 import ResponsiveDialog from './ResponsiveDialog'
 import StatusBadge from './StatusBadge'
-import { TerminalLogViewer } from './TerminalLogViewer'
+import { TerminalLogViewer, TerminalLogViewerHandle } from './TerminalLogViewer'
 import { BASE_PATH } from '@/utils/basePath'
 
 interface JobWithLogs {
@@ -33,6 +43,8 @@ export default function LogViewerDialog<T extends JobWithLogs>({
   // Determine display label
   const displayLabel =
     jobTypeLabel || (job?.type ? getTypeLabel(job.type, t) : t('logViewer.typeBackup'))
+
+  const logViewerRef = useRef<TerminalLogViewerHandle>(null)
 
   // Track live status so the badge and log viewer update after the job finishes
   const [currentStatus, setCurrentStatus] = useState(job?.status || 'unknown')
@@ -95,10 +107,17 @@ export default function LogViewerDialog<T extends JobWithLogs>({
             {t('logViewer.title', { label: displayLabel, jobId: job.id })}
           </Typography>
           <StatusBadge status={currentStatus} />
+          <Box sx={{ flex: 1 }} />
+          <Tooltip title={t('terminalLogViewer.copyLogs')}>
+            <IconButton size="small" onClick={() => logViewerRef.current?.copyLogs()}>
+              <ContentCopy fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
       </DialogTitle>
       <DialogContent dividers>
         <TerminalLogViewer
+          ref={logViewerRef}
           jobId={String(job.id)}
           status={currentStatus}
           jobType={jobType}
