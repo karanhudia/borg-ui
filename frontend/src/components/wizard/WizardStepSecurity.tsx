@@ -131,9 +131,12 @@ export default function WizardStepSecurity({
 
       {/* Encryption info for edit mode only */}
       {mode === 'edit' && (
-        <Alert severity="info" icon={<Shield size={20} />}>
-          <Typography variant="body2">{t('wizard.security.encryptionReadonly')}</Typography>
-        </Alert>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Shield size={14} style={{ color: 'inherit', opacity: 0.45, flexShrink: 0 }} />
+          <Typography variant="body2" color="text.secondary">
+            {t('wizard.security.encryptionReadonly')}
+          </Typography>
+        </Box>
       )}
 
       {/* Passphrase Input */}

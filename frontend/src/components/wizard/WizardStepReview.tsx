@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Typography, Alert, Paper, Chip, Divider } from '@mui/material'
-import { FolderOpen, Shield, Settings, Server, Cloud, HardDrive, Laptop } from 'lucide-react'
+import { FolderOpen, Shield, Settings, Server, Cloud, HardDrive, Laptop, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import CommandPreview from '../CommandPreview'
 import BackupFlowPreview from './BackupFlowPreview'
@@ -323,15 +323,21 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
       )}
 
       {mode === 'import' && (
-        <Alert severity="info">
-          <Typography variant="body2">{t('wizard.review.repositoryImportNote')}</Typography>
-        </Alert>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
+          <Info size={14} style={{ opacity: 0.45, flexShrink: 0, marginTop: 2 }} />
+          <Typography variant="body2" color="text.secondary">
+            {t('wizard.review.repositoryImportNote')}
+          </Typography>
+        </Box>
       )}
 
       {mode === 'edit' && (
-        <Alert severity="info">
-          <Typography variant="body2">{t('wizard.review.repositoryEditNote')}</Typography>
-        </Alert>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
+          <Info size={14} style={{ opacity: 0.45, flexShrink: 0, marginTop: 2 }} />
+          <Typography variant="body2" color="text.secondary">
+            {t('wizard.review.repositoryEditNote')}
+          </Typography>
+        </Box>
       )}
     </Box>
   )

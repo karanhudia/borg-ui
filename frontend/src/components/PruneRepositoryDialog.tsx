@@ -12,9 +12,11 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Tooltip,
 } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
-import { Delete, Info } from '@mui/icons-material'
+import { Delete } from '@mui/icons-material'
+import { Info } from 'lucide-react'
 import { Repository } from '../types'
 
 interface PruneForm {
@@ -86,20 +88,30 @@ export default function PruneRepositoryDialog({
           <Typography variant="h6" fontWeight={600}>
             {t('dialogs.pruneRepository.title')}
           </Typography>
+          <Tooltip
+            title={
+              <Box>
+                <Typography variant="body2" fontWeight={600} gutterBottom>
+                  {t('dialogs.prune.whatDoesPruningDo')}
+                </Typography>
+                <Typography variant="body2" gutterBottom>
+                  {t('dialogs.prune.explanation')}
+                </Typography>
+                <Typography variant="body2" fontWeight={600}>
+                  {t('dialogs.prune.dryRunTip')}
+                </Typography>
+              </Box>
+            }
+            arrow
+            placement="top"
+          >
+            <Box sx={{ ml: 'auto', display: 'flex', color: 'text.disabled', cursor: 'help' }}>
+              <Info size={16} />
+            </Box>
+          </Tooltip>
         </Box>
       </DialogTitle>
       <DialogContent>
-        <Alert severity="info" sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-            {t('dialogs.prune.whatDoesPruningDo')}
-          </Typography>
-          <Typography variant="body2" gutterBottom>
-            {t('dialogs.prune.explanation')}
-          </Typography>
-          <Typography variant="body2" fontWeight={600} color="primary.main">
-            {t('dialogs.prune.dryRunTip')}
-          </Typography>
-        </Alert>
 
         <Typography variant="subtitle2" fontWeight={600} gutterBottom>
           {t('dialogs.prune.retentionPolicy')}

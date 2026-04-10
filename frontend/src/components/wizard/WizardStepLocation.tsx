@@ -185,7 +185,9 @@ export default function WizardStepLocation({
       )}
 
       {mode === 'import' && data.repositoryMode === 'observe' && (
-        <Alert severity="info">{t('wizard.location.observabilityInfo')}</Alert>
+        <Typography variant="body2" color="text.secondary">
+          {t('wizard.location.observabilityInfo')}
+        </Typography>
       )}
 
       {/* Read-only storage access option for observe mode */}
@@ -350,12 +352,10 @@ export default function WizardStepLocation({
 
         {/* Warning when remote location is disabled due to remote data source */}
         {isRemoteLocationDisabled && (
-          <Alert severity="info" sx={{ mt: 2 }}>
-            <Typography variant="body2">
-              <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
-              {t('wizard.location.remoteDisabledInfo')}
-            </Typography>
-          </Alert>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+            <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
+            {t('wizard.location.remoteDisabledInfo')}
+          </Typography>
         )}
       </Box>
 

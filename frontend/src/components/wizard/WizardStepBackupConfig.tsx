@@ -1,4 +1,4 @@
-import { Box, Alert, Typography } from '@mui/material'
+import { Box, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import CompressionSettings from '../CompressionSettings'
 import ExcludePatternInput from '../ExcludePatternInput'
@@ -54,9 +54,9 @@ export default function WizardStepBackupConfig({
 
       {/* Info for remote data source */}
       {dataSource === 'remote' && (
-        <Alert severity="info">
-          <Typography variant="body2">{t('wizard.backupConfig.remoteSshfsNote')}</Typography>
-        </Alert>
+        <Typography variant="body2" color="text.secondary">
+          {t('wizard.backupConfig.remoteSshfsNote')}
+        </Typography>
       )}
 
       {/* Advanced Options */}
