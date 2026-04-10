@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Box, Typography, CircularProgress } from '@mui/material'
+import { Box, Typography, useTheme, alpha } from '@mui/material'
 import { Folder } from 'lucide-react'
 import { repositoriesAPI, mountsAPI, restoreAPI, archivesAPI } from '../services/api'
 import { useRepositoryStats } from '../hooks/useRepositoryStats'
@@ -10,6 +10,7 @@ import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RepositorySelectorCard from '../components/RepositorySelectorCard'
 import RepositoryStatsGrid from '../components/RepositoryStatsGrid'
+import RepositoryStatsGridSkeleton from '../components/RepositoryStatsGridSkeleton'
 import ArchivesList from '../components/ArchivesList'
 import LastRestoreSection from '../components/LastRestoreSection'
 import DeleteArchiveDialog from '../components/DeleteArchiveDialog'
@@ -42,6 +43,8 @@ function getDefaultMountPoint(archiveName: string): string {
 
 const Archives: React.FC = () => {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(() => {
     const repoParam = searchParams.get('repo')
@@ -365,8 +368,8 @@ const Archives: React.FC = () => {
   }, [location.state, repositories]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const archivesList = (archives?.data?.archives || []).sort((a: Archive, b: Archive) => {
-    // Sort by start date, latest first
-    return new Date(b.start).getTime() - new Date(a.start).getTime()
+    // Sort by start date (borg1) or time (borg2), latest first
+    return new Date(b.start || b.time).getTime() - new Date(a.start || a.time).getTime()
   })
 
   const repositoryStats = useRepositoryStats(repoInfo?.data?.info, selectedRepository?.borg_version)
@@ -421,54 +424,45 @@ const Archives: React.FC = () => {
     },
   })
 
+  const panelSx = {
+    borderRadius: 3,
+    border: '1px solid',
+    borderColor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.07),
+    overflow: 'hidden',
+  }
+
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" fontWeight={600} gutterBottom>
-          {t('archives.title')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {t('archives.subtitle')}
-        </Typography>
-      </Box>
-
-      {/* Repository Selector */}
-      <RepositorySelectorCard
-        repositories={repositories}
-        value={selectedRepositoryId}
-        onChange={(v) => handleRepositoryChange(v as number)}
-        loading={loadingRepositories}
-      />
-
-      {/* Repository Statistics */}
-      {selectedRepositoryId && loadingRepoInfo && (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '120px',
-            mb: 4,
-          }}
-        >
-          <CircularProgress size={48} />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            {t('archives.loadingStats')}
+      {/* ── Compact header: title + repo selector inline ── */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="h5" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+            {t('archives.title')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t('archives.subtitle')}
           </Typography>
         </Box>
-      )}
-      {selectedRepositoryId && !loadingRepoInfo && repositoryStats && (
-        <RepositoryStatsGrid stats={repositoryStats} archivesCount={archivesList.length} />
-      )}
+        <Box sx={{ width: { xs: '100%', sm: '340px' }, flexShrink: 0 }}>
+          <RepositorySelectorCard
+            repositories={repositories}
+            value={selectedRepositoryId}
+            onChange={(v) => handleRepositoryChange(v as number)}
+            loading={loadingRepositories}
+            sx={{ mb: 0 }}
+          />
+        </Box>
+      </Box>
 
-      {/* Last Restore Job for Selected Repository */}
-      {selectedRepositoryId && restoreJobsData?.data?.jobs && (
-        <LastRestoreSection restoreJob={lastRestoreJob} />
-      )}
-
-      {/* No Repository Selected State */}
+      {/* ── No repository selected ── */}
       {!selectedRepositoryId && !loadingRepositories && (
         <Box
           sx={{
@@ -488,7 +482,36 @@ const Archives: React.FC = () => {
         </Box>
       )}
 
-      {/* Archives Section */}
+      {/* ── Context panel: stats + last restore ── */}
+      {selectedRepositoryId &&
+        (loadingRepoInfo || repositoryStats || restoreJobsData?.data?.jobs) && (
+          <Box sx={{ ...panelSx, mb: 3 }}>
+            {/* Stats */}
+            <Box sx={{ p: 2.5 }}>
+              {loadingRepoInfo ? (
+                <RepositoryStatsGridSkeleton />
+              ) : repositoryStats ? (
+                <RepositoryStatsGrid stats={repositoryStats} archivesCount={archivesList.length} />
+              ) : null}
+            </Box>
+            {/* Last Restore */}
+            {restoreJobsData?.data?.jobs && (
+              <Box
+                sx={{
+                  px: 2.5,
+                  py: 2,
+                  borderTop: '1px solid',
+                  borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.06),
+                  bgcolor: isDark ? alpha('#fff', 0.012) : alpha('#000', 0.01),
+                }}
+              >
+                <LastRestoreSection restoreJob={lastRestoreJob} />
+              </Box>
+            )}
+          </Box>
+        )}
+
+      {/* ── Archives list ── */}
       {selectedRepositoryId && (
         <ArchivesList
           archives={archivesList}

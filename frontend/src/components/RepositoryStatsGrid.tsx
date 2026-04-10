@@ -92,7 +92,7 @@ export default function RepositoryStatsGrid({ stats, archivesCount }: Repository
         display: 'grid',
         gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' },
         gap: 2,
-        mb: 4,
+        mb: 0,
       }}
     >
       <StatCard
