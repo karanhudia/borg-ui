@@ -82,9 +82,14 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
           )}
         </Box>
       ) : (
-        <Typography variant="caption" display="block" color="text.secondary">
-          {t('navigation.loading')}
-        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          {/* UI version skeleton — wider due to semver string */}
+          <Skeleton variant="rounded" width={118} height={16} sx={{ borderRadius: '4px' }} />
+          {/* B1 version skeleton */}
+          <Skeleton variant="rounded" width={54} height={16} sx={{ borderRadius: '4px' }} />
+          {/* B2 version skeleton — wraps to next line naturally */}
+          <Skeleton variant="rounded" width={70} height={16} sx={{ borderRadius: '4px' }} />
+        </Box>
       )}
       <PlanInfoDrawer
         open={drawerOpen}
