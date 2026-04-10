@@ -71,8 +71,9 @@ describe('ScheduledJobsTable', () => {
   })
 
   it('shows loading state when isLoading is true', () => {
-    render(<ScheduledJobsTable {...defaultProps} isLoading={true} />)
-    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+    const { container } = render(<ScheduledJobsTable {...defaultProps} isLoading={true} />)
+    expect(container.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0)
+    expect(screen.queryByTestId('schedule-job-card')).not.toBeInTheDocument()
   })
 
   it('shows empty state when jobs array is empty', () => {

@@ -107,9 +107,10 @@ describe('SidebarVersionInfo', () => {
     })
   })
 
-  it('shows loading text when systemInfo is null', () => {
-    renderWithProviders(<SidebarVersionInfo systemInfo={null} />)
-    expect(screen.getByText(/loading/i)).toBeInTheDocument()
+  it('shows version skeletons when systemInfo is null', () => {
+    const { container } = renderWithProviders(<SidebarVersionInfo systemInfo={null} />)
+    expect(container.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument()
   })
 
   it('renders UI chip with app version', () => {

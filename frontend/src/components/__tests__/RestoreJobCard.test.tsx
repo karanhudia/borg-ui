@@ -99,10 +99,10 @@ describe('RestoreJobCard', () => {
       }
       render(<RestoreJobCard job={job} />)
 
-      expect(screen.getByText('✓ Completed')).toBeInTheDocument()
+      expect(screen.getByText('Completed')).toBeInTheDocument()
     })
 
-    it('does not display CheckCircle icon for completed status', () => {
+    it('displays CheckCircle icon for completed status', () => {
       const job = {
         ...baseJob,
         archive: 'backup',
@@ -111,9 +111,9 @@ describe('RestoreJobCard', () => {
       }
       const { container } = render(<RestoreJobCard job={job} />)
 
-      // CheckCircle icon should not be present
+      // Completed state now includes the success icon
       const icons = container.querySelectorAll('svg')
-      expect(icons.length).toBe(0)
+      expect(icons.length).toBeGreaterThan(0)
     })
 
     it('displays relative time when completed', () => {

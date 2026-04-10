@@ -154,11 +154,10 @@ describe('BackupJobsTable', () => {
 
   describe('Loading State', () => {
     it('shows loading state', () => {
-      renderWithProviders(<BackupJobsTable jobs={mockJobs} loading={true} />)
+      const { container } = renderWithProviders(<BackupJobsTable jobs={mockJobs} loading={true} />)
 
-      // Loading spinner should be visible
-      const loadingIndicator = document.querySelector('.MuiCircularProgress-root')
-      expect(loadingIndicator).toBeInTheDocument()
+      expect(container.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0)
+      expect(screen.queryByText('#1')).not.toBeInTheDocument()
     })
   })
 
