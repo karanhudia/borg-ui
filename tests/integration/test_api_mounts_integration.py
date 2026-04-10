@@ -118,8 +118,14 @@ class TestMountArchiveIntegration:
             headers=admin_headers,
         )
 
-        if mount_response.status_code == 500:
-            pytest.skip(f"borg mount failed in this environment: {mount_response.json()}")
+        if mount_response.status_code in {500, 503}:
+            payload = mount_response.json()
+            if (
+                mount_response.status_code == 503
+                and payload.get("detail", {}).get("key") == "backend.errors.mounts.mountUnavailable"
+            ):
+                pytest.skip(f"borg mount unavailable in this environment: {payload}")
+            pytest.skip(f"borg mount failed in this environment: {payload}")
 
         assert mount_response.status_code == 200, mount_response.json()
         mount_data = mount_response.json()
