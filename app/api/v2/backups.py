@@ -149,10 +149,19 @@ async def prune_archives(
                     "params": {"error": result["stderr"]}},
         )
 
+    stdout = result.get("stdout", "") or ""
+    if not data.dry_run:
+        note = "Run compact to reclaim freed space"
+        stdout = "\n\n".join(part for part in [stdout, note] if part)
+
     return {
         "success": True,
-        "output": result["stdout"],
-        "note": "Run compact to reclaim freed space" if not data.dry_run else None,
+        "dry_run": data.dry_run,
+        "prune_result": {
+            "success": True,
+            "stdout": stdout,
+            "stderr": result.get("stderr", "") or "",
+        },
     }
 
 

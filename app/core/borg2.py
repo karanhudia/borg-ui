@@ -390,8 +390,6 @@ class Borg2Interface:
         if keep_yearly > 0:
             cmd.extend(["--keep-yearly", str(keep_yearly)])
         cmd.append("--list")
-        if not dry_run:
-            cmd.append("--stats")
         if dry_run:
             cmd.append("--dry-run")
         env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}

@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.orm import sessionmaker
 
+from app.core.borg2 import borg2
 from app.database.models import PruneJob, Repository
 from app.services.v2.prune_service import PruneV2Service
 
@@ -88,3 +89,23 @@ async def test_execute_prune_marks_job_failed_on_borg_error(db_engine):
     assert refreshed_job.error_message == "boom"
     assert isinstance(refreshed_job.completed_at, datetime)
     verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_borg2_prune_command_omits_stats_flag():
+    with patch("app.core.borg2.borg2._run", new=AsyncMock(return_value={"success": True, "stdout": "", "stderr": ""})) as mock_run:
+        await borg2.prune_archives(
+            repository="/tmp/v2-repo",
+            keep_daily=7,
+            keep_weekly=4,
+            keep_monthly=6,
+            keep_yearly=1,
+            dry_run=False,
+        )
+
+    cmd = mock_run.await_args.args[0]
+    assert cmd[:3] == [borg2.borg_cmd, "-r", "/tmp/v2-repo"]
+    assert "prune" in cmd
+    assert "--stats" not in cmd
+    assert "--list" in cmd

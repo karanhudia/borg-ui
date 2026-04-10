@@ -127,8 +127,12 @@ class TestV2BackupRoutes:
         assert response.status_code == 200
         assert response.json() == {
             "success": True,
-            "output": "done",
-            "note": "Run compact to reclaim freed space",
+            "dry_run": False,
+            "prune_result": {
+                "success": True,
+                "stdout": "done\n\nRun compact to reclaim freed space",
+                "stderr": "",
+            },
         }
         mock_prune.assert_awaited_once_with(
             repo=repo,
@@ -140,6 +144,31 @@ class TestV2BackupRoutes:
             keep_yearly=1,
             dry_run=False,
         )
+
+    def test_backup_prune_dry_run_returns_legacy_modal_shape(self, test_client: TestClient, admin_headers, test_db):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/data/source"])
+
+        with patch(
+            "app.api.v2.backups.prune_v2_service.run_prune",
+            new=AsyncMock(return_value={"success": True, "stdout": "would prune", "stderr": ""}),
+        ):
+            response = test_client.post(
+                "/api/v2/backup/prune",
+                json={"repository_id": repo.id, "dry_run": True},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "success": True,
+            "dry_run": True,
+            "prune_result": {
+                "success": True,
+                "stdout": "would prune",
+                "stderr": "",
+            },
+        }
 
     def test_backup_compact_creates_job(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)
