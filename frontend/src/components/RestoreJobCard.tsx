@@ -1,5 +1,5 @@
 import { Box, Stack, Typography, Alert } from '@mui/material'
-import { RefreshCw, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import { RefreshCw, CheckCircle, AlertCircle, Clock, AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatTimeRange, formatDurationSeconds, formatRelativeTime } from '../utils/dateUtils'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -131,15 +131,17 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
       )}
 
       {job.status === 'completed' && job.completed_at && (
-        <Stack
-          direction="row"
-          spacing={1.5}
-          alignItems="baseline"
-          sx={{ flexWrap: 'wrap', gap: 1 }}
-        >
-          <Typography variant="body2" color="success.main" fontWeight={500}>
-            ✓ {t('restoreJobCard.completed')}
-          </Typography>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <CheckCircle
+              size={14}
+              color="currentColor"
+              style={{ color: 'inherit', flexShrink: 0 }}
+            />
+            <Typography variant="body2" color="success.main" fontWeight={500}>
+              {t('restoreJobCard.completed')}
+            </Typography>
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             {formatRelativeTime(job.completed_at)}
           </Typography>
@@ -157,15 +159,13 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
       )}
 
       {job.status === 'completed_with_warnings' && job.completed_at && (
-        <Stack
-          direction="row"
-          spacing={1.5}
-          alignItems="baseline"
-          sx={{ flexWrap: 'wrap', gap: 1 }}
-        >
-          <Typography variant="body2" color="warning.main" fontWeight={500}>
-            ⚠ {t('restoreJobCard.completedWithWarnings')}
-          </Typography>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <AlertTriangle size={14} style={{ color: 'inherit', flexShrink: 0 }} />
+            <Typography variant="body2" color="warning.main" fontWeight={500}>
+              {t('restoreJobCard.completedWithWarnings')}
+            </Typography>
+          </Stack>
           <Typography variant="body2" color="text.secondary">
             {formatRelativeTime(job.completed_at)}
           </Typography>

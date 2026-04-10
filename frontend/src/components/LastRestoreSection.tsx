@@ -1,4 +1,4 @@
-import { Card, CardContent, Stack, Typography, Box, Button } from '@mui/material'
+import { Box, Stack, Typography, Button, alpha, useTheme } from '@mui/material'
 import { RotateCcw, ExternalLink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -30,55 +30,67 @@ interface LastRestoreSectionProps {
 export default function LastRestoreSection({ restoreJob }: LastRestoreSectionProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
+  const cardSx = {
+    px: 0,
+    py: 0,
+  }
 
   if (!restoreJob) {
     return (
-      <Card sx={{ mb: 4, border: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <RotateCcw size={24} color="#757575" />
-            <Box>
-              <Typography variant="body2" color="text.secondary">
-                {t('lastRestoreSection.noRestores')}
-              </Typography>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+      <Box sx={{ ...cardSx, mb: 4 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <RotateCcw size={18} color={isDark ? alpha('#fff', 0.3) : alpha('#000', 0.3)} />
+          <Typography variant="body2" color="text.disabled">
+            {t('lastRestoreSection.noRestores')}
+          </Typography>
+        </Stack>
+      </Box>
     )
   }
 
   return (
-    <Box sx={{ mb: 4 }}>
+    <Box>
       <Stack
         direction="row"
         spacing={1.5}
         alignItems="center"
         justifyContent="space-between"
-        sx={{ mb: 2 }}
+        sx={{ mb: 1.5 }}
       >
         <Stack direction="row" spacing={1.5} alignItems="center">
-          <RotateCcw size={20} color="#9c27b0" />
-          <Typography variant="h6" fontWeight={600}>
+          <RotateCcw size={18} color={theme.palette.secondary.main} />
+          <Typography variant="h6" fontWeight={600} sx={{ fontSize: '1rem' }}>
             {t('lastRestoreSection.title')}
           </Typography>
         </Stack>
         <Button
           variant="outlined"
           size="small"
-          startIcon={<ExternalLink size={16} />}
+          startIcon={<ExternalLink size={14} />}
           onClick={() => navigate('/activity')}
-          sx={{ textTransform: 'none' }}
+          sx={{
+            textTransform: 'none',
+            fontSize: '0.78rem',
+            height: 30,
+            borderRadius: 1.5,
+            borderColor: isDark ? alpha('#fff', 0.15) : alpha('#000', 0.15),
+            color: 'text.secondary',
+            '&:hover': {
+              borderColor: isDark ? alpha('#fff', 0.3) : alpha('#000', 0.25),
+              bgcolor: isDark ? alpha('#fff', 0.05) : alpha('#000', 0.04),
+            },
+          }}
         >
           {t('lastRestoreSection.viewAll')}
         </Button>
       </Stack>
 
-      <Card sx={{ border: 1, borderColor: 'divider' }}>
-        <CardContent>
-          <RestoreJobCard job={restoreJob} showJobId={false} />
-        </CardContent>
-      </Card>
+      <Box sx={cardSx}>
+        <RestoreJobCard job={restoreJob} showJobId={false} />
+      </Box>
     </Box>
   )
 }
