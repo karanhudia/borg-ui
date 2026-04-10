@@ -11,8 +11,10 @@ import {
   Button,
   ToggleButton,
   ToggleButtonGroup,
+  InputAdornment,
+  IconButton,
 } from '@mui/material'
-import { Shield, Key, FileKey, Upload, FileText } from 'lucide-react'
+import { Shield, Key, FileKey, Upload, FileText, Eye, EyeOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { usePlan } from '../../hooks/usePlan'
 
@@ -69,6 +71,7 @@ export default function WizardStepSecurity({
   const { can } = usePlan()
   const [keyfileMode, setKeyfileMode] = useState<'file' | 'paste'>('file')
   const [keyfileText, setKeyfileText] = useState('')
+  const [showPassphrase, setShowPassphrase] = useState(false)
 
   const handleKeyfileModeChange = (_: unknown, newMode: 'file' | 'paste' | null) => {
     if (newMode === null) return
@@ -147,7 +150,7 @@ export default function WizardStepSecurity({
               ? t('wizard.security.passphraseOptional')
               : t('wizard.security.passphraseRequired')
           }
-          type="password"
+          type={showPassphrase ? 'text' : 'password'}
           value={data.passphrase}
           onChange={(e) => onChange({ passphrase: e.target.value })}
           placeholder={
@@ -167,6 +170,18 @@ export default function WizardStepSecurity({
               <Box sx={{ mr: 1, display: 'flex', color: 'text.secondary' }}>
                 <Key size={18} />
               </Box>
+            ),
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label={showPassphrase ? 'Hide passphrase' : 'Show passphrase'}
+                  onClick={() => setShowPassphrase((v) => !v)}
+                  edge="end"
+                  size="small"
+                >
+                  {showPassphrase ? <EyeOff size={18} /> : <Eye size={18} />}
+                </IconButton>
+              </InputAdornment>
             ),
           }}
         />

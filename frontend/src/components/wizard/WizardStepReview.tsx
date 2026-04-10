@@ -1,6 +1,17 @@
-import React from 'react'
-import { Box, Typography, Alert, Paper, Chip, Divider } from '@mui/material'
-import { FolderOpen, Shield, Settings, Server, Cloud, HardDrive, Laptop, Info } from 'lucide-react'
+import React, { useState } from 'react'
+import { Box, Typography, Alert, Paper, Chip, Divider, IconButton, Tooltip } from '@mui/material'
+import {
+  FolderOpen,
+  Shield,
+  Settings,
+  Server,
+  Cloud,
+  HardDrive,
+  Laptop,
+  Info,
+  Eye,
+  EyeOff,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import CommandPreview from '../CommandPreview'
 import BackupFlowPreview from './BackupFlowPreview'
@@ -62,6 +73,7 @@ function SummaryRow({ label, children }: { label: string; children: React.ReactN
 
 export default function WizardStepReview({ mode, data, sshConnections }: WizardStepReviewProps) {
   const { t } = useTranslation()
+  const [showPassphrase, setShowPassphrase] = useState(false)
 
   // Get source SSH connection details for command preview
   const getSourceSshConnection = () => {
@@ -277,11 +289,25 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
           )}
 
           <SummaryRow label={t('wizard.review.passphrase')}>
-            <Typography variant="body2">
-              {data.passphrase
-                ? t('wizard.review.passphraseSet')
-                : t('wizard.review.passphraseNotSet')}
-            </Typography>
+            {data.passphrase ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Typography variant="body2" fontFamily={showPassphrase ? 'inherit' : 'monospace'}>
+                  {showPassphrase ? data.passphrase : '••••••••'}
+                </Typography>
+                <Tooltip title={showPassphrase ? 'Hide passphrase' : 'Show passphrase'}>
+                  <IconButton
+                    aria-label={showPassphrase ? 'Hide passphrase' : 'Show passphrase'}
+                    onClick={() => setShowPassphrase((v) => !v)}
+                    size="small"
+                    sx={{ p: 0.25 }}
+                  >
+                    {showPassphrase ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            ) : (
+              <Typography variant="body2">{t('wizard.review.passphraseNotSet')}</Typography>
+            )}
           </SummaryRow>
         </Box>
 
