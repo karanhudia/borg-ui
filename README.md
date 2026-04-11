@@ -42,11 +42,13 @@
 
 ## Highlights
 
-- Unified dashboard for repository health, backup activity, schedules, storage, and recent operations
-- Local, SSH, and SFTP repository support with encryption, compression, and import flows
-- Live backup progress, archive browsing, restore workflows, and maintenance actions
-- Automated schedules, pre/post backup hooks, and notifications through 100+ Apprise services
-- Remote machine management with SSH key deployment and storage monitoring
+- Dashboard for repository health, activity, schedules, and storage
+- Repository management for local, SSH, and SFTP destinations
+- Live backup progress, archive browsing, and restore workflows
+- Automated schedules, maintenance actions, and pre/post backup hooks
+- Notifications through 100+ Apprise services
+- Remote machine management with SSH key deployment and storage visibility
+- Support for BorgBackup 1.x and BorgBackup 2 beta workflows
 - Multi-architecture containers for `amd64`, `arm64`, and `armv7`
 
 ## Release Readiness
@@ -124,17 +126,15 @@ docker run -d \
   ainullcode/borg-ui:latest
 ```
 
-Access the app at `http://localhost:8081`.
+Access the app at `http://localhost:8081` with `admin` / `admin123`.
 
-- Default credentials: `admin` / `admin123`
-- Installation guide: https://docs.borgui.com/installation
+For setup details, see the [installation guide](https://docs.borgui.com/installation).
 
 ## Documentation
 
-- Full documentation: https://docs.borgui.com
-- Installation guide: https://docs.borgui.com/installation
-- Development: https://docs.borgui.com/development
-- Testing: https://docs.borgui.com/testing
+- [Full documentation](https://docs.borgui.com)
+- [Development guide](https://docs.borgui.com/development)
+- [Testing guide](https://docs.borgui.com/testing)
 
 ## Support
 
@@ -163,12 +163,12 @@ See [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) and the development guide
 
 This project is licensed under the GNU Affero General Public License v3.0. See [LICENSE](LICENSE).
 
-Organizations that want commercial support, expanded services, or an enterprise conversation can use https://borgui.com/buy.
+Need commercial support, expanded services, or an enterprise conversation? [Learn more](https://borgui.com/buy).
 
 <div align="center">
 
 Built with [Borg Backup](https://borgbackup.readthedocs.io/), [FastAPI](https://fastapi.tiangolo.com/), [React](https://react.dev/), and [Material UI](https://mui.com/)
 
-Created by [Karan Hudia](https://github.com/karanhudia)
+Made with ❤️ by [Karan Hudia](https://github.com/karanhudia)
 
 </div>
