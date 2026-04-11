@@ -1,5 +1,5 @@
-import { Box, Typography, alpha, Paper } from '@mui/material'
-import { Server, Cloud, HardDrive, Laptop, ArrowRight, ArrowRightLeft } from 'lucide-react'
+import { Box, Typography, Tooltip, useTheme, alpha } from '@mui/material'
+import { Server, Cloud, HardDrive, Laptop, ArrowRight, MoveRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 interface SSHConnection {
@@ -18,6 +18,141 @@ interface BackupFlowPreviewProps {
   sourceSshConnection?: SSHConnection | null
 }
 
+const BLUE = '#3b82f6'
+const EMERALD = '#10b981'
+const AMBER = '#f59e0b'
+
+// Compact horizontal node card: [icon badge] label / subtitle
+function FlowNode({
+  icon,
+  label,
+  subtitle,
+  accentColor,
+  path,
+}: {
+  icon: React.ReactNode
+  label: string
+  subtitle?: string
+  accentColor: string
+  path?: string
+}) {
+  const theme = useTheme()
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        flex: 1,
+        minWidth: 0,
+        overflow: 'hidden',
+        borderRadius: 1.5,
+        bgcolor: alpha(accentColor, theme.palette.mode === 'dark' ? 0.1 : 0.07),
+        px: 1.25,
+        py: 1,
+      }}
+    >
+      {/* Icon badge */}
+      <Box
+        sx={{
+          width: 32,
+          height: 32,
+          borderRadius: '9px',
+          bgcolor: alpha(accentColor, 0.18),
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: accentColor,
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </Box>
+
+      {/* Text */}
+      <Box sx={{ minWidth: 0, overflow: 'hidden' }}>
+        <Tooltip title={label} placement="top" disableHoverListener={label.length < 16}>
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            fontSize="0.78rem"
+            noWrap
+            sx={{ color: 'text.primary' }}
+          >
+            {label}
+          </Typography>
+        </Tooltip>
+        {subtitle && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            fontSize="0.68rem"
+            display="block"
+            noWrap
+          >
+            {subtitle}
+          </Typography>
+        )}
+        {path && (
+          <Tooltip title={path} placement="bottom">
+            <Typography
+              variant="caption"
+              fontFamily="monospace"
+              fontSize="0.65rem"
+              noWrap
+              display="block"
+              sx={{
+                color: accentColor,
+                opacity: 0.85,
+                cursor: 'default',
+                mt: 0.15,
+              }}
+            >
+              {path}
+            </Typography>
+          </Tooltip>
+        )}
+      </Box>
+    </Box>
+  )
+}
+
+// Dashed connector between nodes
+function Connector({ double = false }: { double?: boolean }) {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        flexShrink: 0,
+        gap: 0.25,
+        px: 0.5,
+      }}
+    >
+      <Box
+        sx={{
+          width: 20,
+          borderTop: `2px dashed ${alpha(BLUE, 0.4)}`,
+        }}
+      />
+      {double ? (
+        <Box sx={{ display: 'flex', color: alpha(BLUE, 0.7) }}>
+          <ArrowRight size={13} />
+          <ArrowRight size={13} style={{ marginLeft: -6 }} />
+        </Box>
+      ) : (
+        <MoveRight size={14} color={alpha(BLUE, 0.75)} />
+      )}
+      <Box
+        sx={{
+          width: 20,
+          borderTop: `2px dashed ${alpha(BLUE, 0.4)}`,
+        }}
+      />
+    </Box>
+  )
+}
+
 export default function BackupFlowPreview({
   repositoryLocation,
   dataSource,
@@ -27,253 +162,114 @@ export default function BackupFlowPreview({
   sourceSshConnection,
 }: BackupFlowPreviewProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
 
-  // Generate summary text
   const getSummaryText = () => {
-    if (dataSource === 'local' && repositoryLocation === 'local') {
+    if (dataSource === 'local' && repositoryLocation === 'local')
       return t('wizard.backupFlowPreview.localToLocal')
-    }
-    if (dataSource === 'local' && repositoryLocation === 'ssh') {
+    if (dataSource === 'local' && repositoryLocation === 'ssh')
       return t('wizard.backupFlowPreview.localToRemote')
-    }
-    if (dataSource === 'remote' && repositoryLocation === 'local') {
+    if (dataSource === 'remote' && repositoryLocation === 'local')
       return t('wizard.backupFlowPreview.remoteToLocal')
-    }
     return t('wizard.backupFlowPreview.default')
   }
 
   const getSourceLabel = () => {
-    if (dataSource === 'local') {
-      return t('wizard.borgUiServer')
-    }
-    if (sourceSshConnection) {
-      return `${sourceSshConnection.username}@${sourceSshConnection.host}`
-    }
+    if (dataSource === 'local') return t('wizard.borgUiServer')
+    if (sourceSshConnection) return `${sourceSshConnection.username}@${sourceSshConnection.host}`
     return t('wizard.remoteClient')
   }
 
   const getRepoLabel = () => {
-    if (repositoryLocation === 'local') {
-      return t('wizard.borgUiServer')
-    }
-    if (repoSshConnection) {
-      return `${repoSshConnection.username}@${repoSshConnection.host}`
-    }
+    if (repositoryLocation === 'local') return t('wizard.borgUiServer')
+    if (repoSshConnection) return `${repoSshConnection.username}@${repoSshConnection.host}`
     return t('wizard.backupFlowPreview.remoteStorage')
   }
 
-  const getSourceIcon = () => {
-    if (dataSource === 'local') {
-      return <HardDrive size={20} />
-    }
-    return <Laptop size={20} />
-  }
+  const getSourceIcon = () =>
+    dataSource === 'local' ? <HardDrive size={16} /> : <Laptop size={16} />
 
-  const getRepoIcon = () => {
-    if (repositoryLocation === 'local') {
-      return <Server size={20} />
-    }
-    return <Cloud size={20} />
-  }
+  const getRepoIcon = () =>
+    repositoryLocation === 'local' ? <Server size={16} /> : <Cloud size={16} />
 
   const showSshfsIntermediate = dataSource === 'remote' && repositoryLocation === 'local'
 
+  const sourceSubtitle =
+    sourceDirs.length > 0
+      ? t('wizard.backupFlowPreview.dirs', { count: sourceDirs.length })
+      : undefined
+
   return (
-    <Paper
-      variant="outlined"
+    <Box
       sx={{
-        p: 2,
-        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
-        borderColor: (theme) => alpha(theme.palette.primary.main, 0.2),
         borderRadius: 2,
+        bgcolor: alpha(BLUE, theme.palette.mode === 'dark' ? 0.06 : 0.04),
+        p: 1.5,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1.25,
+        overflow: 'hidden',
       }}
     >
+      {/* Summary header */}
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flexWrap: 'wrap' }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.disabled',
+            fontWeight: 700,
+            fontSize: '0.6rem',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            flexShrink: 0,
+          }}
+        >
+          Backup Flow
+        </Typography>
+        <Typography variant="caption" fontWeight={500} fontSize="0.72rem" sx={{ color: BLUE }}>
+          {getSummaryText()}
+        </Typography>
+      </Box>
+
+      {/* Pipeline row */}
       <Box
         sx={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          mb: 1.5,
+          gap: 0.5,
+          minWidth: 0,
         }}
       >
-        <Typography variant="body2" color="primary" sx={{ fontSize: '0.8125rem', fontWeight: 500 }}>
-          {getSummaryText()}
-        </Typography>
-        {repositoryPath && (
-          <Box
-            component="span"
-            sx={{
-              fontFamily: 'monospace',
-              bgcolor: 'background.paper',
-              px: 1,
-              py: 0.5,
-              borderRadius: 1,
-              border: 1,
-              borderColor: 'divider',
-              fontSize: '0.7rem',
-              maxWidth: 200,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-            title={repositoryPath}
-          >
-            {repositoryPath}
-          </Box>
-        )}
-      </Box>
+        {/* Source */}
+        <FlowNode
+          icon={getSourceIcon()}
+          label={getSourceLabel()}
+          subtitle={sourceSubtitle}
+          accentColor={BLUE}
+        />
 
-      {/* Visual Flow Diagram */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'center',
-          gap: 3,
-          py: 2,
-          px: 2,
-        }}
-      >
-        {/* Source Node */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 1,
-            width: 90,
-          }}
-        >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 44,
-              height: 44,
-              borderRadius: 2.5,
-              bgcolor: 'background.paper',
-              border: 2,
-              borderColor: 'primary.main',
-              color: 'primary.main',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-            }}
-          >
-            {getSourceIcon()}
-          </Box>
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography
-              variant="subtitle2"
-              color="text.primary"
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.8rem',
-                lineHeight: 1.2,
-              }}
-            >
-              {getSourceLabel()}
-            </Typography>
-            {sourceDirs.length > 0 && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: '0.7rem', mt: 0.5, display: 'block' }}
-              >
-                {t('wizard.backupFlowPreview.dirs', { count: sourceDirs.length })}
-              </Typography>
-            )}
-          </Box>
-        </Box>
+        <Connector double={showSshfsIntermediate} />
 
-        {/* Arrow */}
-        <Box sx={{ display: 'flex', alignItems: 'center', color: 'primary.main', pt: 1.5 }}>
-          {showSshfsIntermediate ? <ArrowRightLeft size={20} /> : <ArrowRight size={20} />}
-        </Box>
-
-        {/* Intermediate Node (SSHFS) - only for remote source to local repo */}
+        {/* Intermediate SSHFS node */}
         {showSshfsIntermediate && (
           <>
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 1,
-                width: 80,
-              }}
-            >
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: 36,
-                  height: 36,
-                  borderRadius: 2,
-                  bgcolor: 'action.selected',
-                  border: 1,
-                  borderColor: 'divider',
-                  color: 'text.secondary',
-                }}
-              >
-                <Server size={18} />
-              </Box>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontSize: '0.7rem', fontWeight: 500 }}
-              >
-                {t('wizard.backupFlowPreview.viaSSHFS')}
-              </Typography>
-            </Box>
-
-            {/* Arrow to repo */}
-            <Box sx={{ display: 'flex', alignItems: 'center', color: 'primary.main', pt: 1.5 }}>
-              <ArrowRight size={20} />
-            </Box>
+            <FlowNode
+              icon={<Server size={16} />}
+              label={t('wizard.backupFlowPreview.viaSSHFS')}
+              accentColor={AMBER}
+            />
+            <Connector />
           </>
         )}
 
-        {/* Repository Node */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 1,
-            width: 90,
-          }}
-        >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 44,
-              height: 44,
-              borderRadius: 2.5,
-              bgcolor: 'success.main',
-              color: 'white',
-              boxShadow: '0 4px 12px rgba(46, 125, 50, 0.2)',
-            }}
-          >
-            {getRepoIcon()}
-          </Box>
-          <Box sx={{ textAlign: 'center' }}>
-            <Typography
-              variant="subtitle2"
-              color="text.primary"
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.8rem',
-                lineHeight: 1.2,
-              }}
-            >
-              {getRepoLabel()}
-            </Typography>
-          </Box>
-        </Box>
+        {/* Repository */}
+        <FlowNode
+          icon={getRepoIcon()}
+          label={getRepoLabel()}
+          accentColor={EMERALD}
+          path={repositoryPath || undefined}
+        />
       </Box>
-    </Paper>
+    </Box>
   )
 }

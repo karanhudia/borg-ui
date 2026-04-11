@@ -665,7 +665,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           },
         }}
         footer={
-          <DialogActions sx={{ px: 3, pb: 2 }}>
+          <DialogActions sx={{ px: { xs: 1, sm: 3 }, pb: { xs: 1, sm: 2 } }}>
             <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
             <Box sx={{ flex: 1 }} />
             <Button disabled={activeStep === 0} onClick={handleBack}>
@@ -716,7 +716,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             />
 
             {/* Step Content - natural height on mobile, fixed on desktop */}
-            <Box sx={{ minHeight: { xs: 'auto', md: 450 }, overflow: 'auto', p: 3 }}>
+            <Box sx={{ minHeight: { xs: 'auto', md: 450 }, overflow: 'auto', p: { xs: 1, sm: 3 } }}>
               {renderStepContent()}
             </Box>
           </Box>
