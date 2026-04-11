@@ -114,6 +114,9 @@ test_*.sh
 *.bak
 *.backup
 
+# Local README screenshot staging
+screenshots/readme/
+
 # Data directories (runtime generated)
 data/
 backups/
