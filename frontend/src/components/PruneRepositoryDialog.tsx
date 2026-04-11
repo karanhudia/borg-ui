@@ -97,7 +97,12 @@ function classifyLine(msg: string): BorgLineType {
   const t = msg.trim()
   if (t === '') return 'empty'
   if (msg.startsWith('Keeping archive') || msg.startsWith('Would keep archive')) return 'keep'
-  if (msg.startsWith('Pruning archive') || msg.startsWith('Would prune archive')) return 'prune'
+  if (
+    msg.startsWith('Pruning archive') ||
+    msg.startsWith('Would prune archive') ||
+    msg.startsWith('Would prune:')
+  )
+    return 'prune'
   if (/^-{6,}/.test(t)) return 'separator'
   if (/^\s*Deleted data:/.test(msg)) return 'stats-deleted'
   if (/^\s*All archives:/.test(msg)) return 'stats-all'
