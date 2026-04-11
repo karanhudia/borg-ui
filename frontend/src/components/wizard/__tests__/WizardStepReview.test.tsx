@@ -191,6 +191,34 @@ describe('WizardStepReview', () => {
       expect(screen.getByText('Keyfile')).toBeInTheDocument()
     })
 
+    it('shows Repokey encryption chip for Borg v2 repokey modes', () => {
+      const borg2RepokeyData = { ...defaultData, encryption: 'repokey-aes-ocb' }
+
+      render(
+        <WizardStepReview
+          mode="create"
+          data={borg2RepokeyData}
+          sshConnections={mockSshConnections}
+        />
+      )
+
+      expect(screen.getByText('Repokey')).toBeInTheDocument()
+    })
+
+    it('shows Keyfile encryption chip for Borg v2 keyfile modes', () => {
+      const borg2KeyfileData = { ...defaultData, encryption: 'keyfile-chacha20-poly1305' }
+
+      render(
+        <WizardStepReview
+          mode="create"
+          data={borg2KeyfileData}
+          sshConnections={mockSshConnections}
+        />
+      )
+
+      expect(screen.getByText('Keyfile')).toBeInTheDocument()
+    })
+
     it('shows None encryption chip', () => {
       const noEncryptionData = { ...defaultData, encryption: 'none' }
 

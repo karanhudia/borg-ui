@@ -71,6 +71,22 @@ function SummaryRow({ label, children }: { label: string; children: React.ReactN
   )
 }
 
+function getEncryptionLabelKey(encryption: string) {
+  if (encryption === 'none') {
+    return 'wizard.review.encryptionNone'
+  }
+
+  if (encryption.startsWith('repokey')) {
+    return 'wizard.review.encryptionRepokey'
+  }
+
+  if (encryption.startsWith('keyfile')) {
+    return 'wizard.review.encryptionKeyfile'
+  }
+
+  return 'wizard.review.encryptionNone'
+}
+
 export default function WizardStepReview({ mode, data, sshConnections }: WizardStepReviewProps) {
   const { t } = useTranslation()
   const [showPassphrase, setShowPassphrase] = useState(false)
@@ -275,13 +291,7 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
           {mode === 'create' && (
             <SummaryRow label={t('wizard.review.encryption')}>
               <Chip
-                label={
-                  data.encryption === 'repokey'
-                    ? t('wizard.review.encryptionRepokey')
-                    : data.encryption === 'keyfile'
-                      ? t('wizard.review.encryptionKeyfile')
-                      : t('wizard.review.encryptionNone')
-                }
+                label={t(getEncryptionLabelKey(data.encryption))}
                 size="small"
                 color={data.encryption === 'none' ? 'error' : 'success'}
               />
