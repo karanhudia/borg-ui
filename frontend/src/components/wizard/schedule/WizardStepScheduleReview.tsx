@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Box, Typography, Chip, Tooltip, useTheme, alpha } from '@mui/material'
+import { Alert, Box, Typography, Chip, Tooltip, useTheme, alpha } from '@mui/material'
 import { Calendar, Code, Wrench, Rocket, Database } from 'lucide-react'
 import { Repository } from '../../../types'
 import { Script } from '../../ScheduleWizard'
@@ -198,12 +198,12 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
             textTransform: 'uppercase',
           }}
         >
-          {t('wizard.scheduleWizard.review.jobSummary')}
+          {t('scheduleWizard.steps.review')}
         </Typography>
         <Tooltip title={t('wizard.scheduleWizard.review.readyToCreate')} placement="top" arrow>
           <Chip
             icon={<Rocket size={11} />}
-            label={t('wizard.scheduleWizard.review.readyToCreate')}
+            label="Ready"
             size="small"
             sx={{
               height: 20,
@@ -220,6 +220,15 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         </Tooltip>
       </Box>
 
+      <Alert severity="success">
+        <Typography variant="body2" fontWeight={700}>
+          {t('wizard.scheduleWizard.review.readyToCreate')}
+        </Typography>
+        <Typography variant="body2">
+          {t('wizard.scheduleWizard.review.reviewAndConfirm')}
+        </Typography>
+      </Alert>
+
       {/* 2-column grid */}
       <Box
         sx={{
@@ -233,7 +242,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         {/* Job card */}
         <SectionCard
           icon={<Calendar size={14} />}
-          label={t('wizard.scheduleWizard.review.name')}
+          label={t('wizard.scheduleWizard.review.jobSummary')}
           accentColor={BLUE}
         >
           <AttrRow label={t('wizard.scheduleWizard.review.name')}>
@@ -242,7 +251,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
             </Typography>
           </AttrRow>
           {data.description && (
-            <AttrRow label={t('wizard.scheduleWizard.steps.basicInfo') || 'Description'}>
+            <AttrRow label={t('wizard.scheduleWizard.basicInfo.descriptionLabel')}>
               <Typography
                 variant="body2"
                 fontSize="0.75rem"
@@ -269,11 +278,16 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
         >
           {selectedRepos.length === 0 ? (
             <Typography variant="body2" fontSize="0.75rem" color="text.secondary">
-              None selected
+              {t('wizard.scheduleWizard.review.none')}
             </Typography>
           ) : (
-            selectedRepos.map((repo) => (
-              <AttrRow key={repo.id} label={repo.name}>
+            selectedRepos.map((repo, index) => (
+              <AttrRow key={repo.id} label={`${index + 1}`}>
+                <Chip
+                  label={repo.name}
+                  size="small"
+                  sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600 }}
+                />
                 <CodePill>{repo.path}</CodePill>
               </AttrRow>
             ))
@@ -293,7 +307,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
               </Typography>
             ) : (
               <Typography variant="body2" fontSize="0.75rem" color="text.disabled">
-                —
+                {t('wizard.scheduleWizard.review.none')}
               </Typography>
             )}
           </AttrRow>
@@ -304,7 +318,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
               </Typography>
             ) : (
               <Typography variant="body2" fontSize="0.75rem" color="text.disabled">
-                —
+                {t('wizard.scheduleWizard.review.none')}
               </Typography>
             )}
           </AttrRow>
@@ -341,7 +355,7 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
             />
           </AttrRow>
           {data.runPruneAfter && (
-            <AttrRow label="Keep">
+            <AttrRow label="Keep:">
               <CodePill>{pruneKeeps}</CodePill>
             </AttrRow>
           )}

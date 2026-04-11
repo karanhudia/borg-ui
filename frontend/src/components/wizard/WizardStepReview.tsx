@@ -307,6 +307,15 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
         )}
       </Box>
 
+      {mode === 'create' && data.repositoryMode === 'full' && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Info size={14} style={{ opacity: 0.45, flexShrink: 0 }} />
+          <Typography variant="body2" color="text.secondary">
+            {t('wizard.review.repositoryInitialized')}
+          </Typography>
+        </Box>
+      )}
+
       {/* 2×2 section card grid */}
       <Box
         sx={{
