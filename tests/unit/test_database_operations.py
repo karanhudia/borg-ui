@@ -354,3 +354,83 @@ class TestMigration065:
 
         assert temp_table == []
         assert rows == 1
+
+
+@pytest.mark.unit
+class TestMigration081:
+    """Tests for migration 081: role + API tokens bootstrap."""
+
+    def _make_engine(self, users_ddl: str):
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import StaticPool
+
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        with engine.connect() as conn:
+            conn.execute(text(users_ddl))
+            conn.commit()
+        return engine
+
+    def test_upgrade_skips_is_admin_backfill_when_column_missing(self):
+        import importlib
+
+        m081 = importlib.import_module("app.database.migrations.081_add_role_and_api_tokens")
+        engine = self._make_engine("""
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                is_active BOOLEAN DEFAULT 1 NOT NULL
+            )
+        """)
+
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO users (id, username, password_hash, is_active)
+                VALUES (1, 'admin', 'hash', 1)
+            """))
+            conn.commit()
+
+            m081.upgrade(conn)
+
+            columns = [row[1] for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+            role = conn.execute(text("SELECT role FROM users WHERE id = 1")).scalar_one()
+            token_tables = conn.execute(text("""
+                SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'api_tokens'
+            """)).fetchall()
+
+        assert "role" in columns
+        assert role == "viewer"
+        assert token_tables == [("api_tokens",)]
+
+    def test_upgrade_migrates_legacy_is_admin_values(self):
+        import importlib
+
+        m081 = importlib.import_module("app.database.migrations.081_add_role_and_api_tokens")
+        engine = self._make_engine("""
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                is_active BOOLEAN DEFAULT 1 NOT NULL,
+                is_admin BOOLEAN
+            )
+        """)
+
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO users (id, username, password_hash, is_active, is_admin)
+                VALUES
+                    (1, 'admin', 'hash', 1, 1),
+                    (2, 'viewer', 'hash', 1, 0)
+            """))
+            conn.commit()
+
+            m081.upgrade(conn)
+
+            roles = conn.execute(text("SELECT username, role FROM users ORDER BY id")).fetchall()
+
+        assert roles == [("admin", "admin"), ("viewer", "viewer")]

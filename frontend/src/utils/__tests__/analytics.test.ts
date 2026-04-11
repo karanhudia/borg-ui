@@ -272,6 +272,38 @@ describe('analytics (umami)', () => {
       localStorage.setItem('borg_ui_install_id', 'existing-uuid')
       expect(getOrCreateInstallId()).toBe('existing-uuid')
     })
+
+    it('falls back to crypto.getRandomValues when randomUUID is unavailable', async () => {
+      vi.resetModules()
+      localStorage.clear()
+
+      const originalCrypto = globalThis.crypto
+      const getRandomValues = vi.fn((values: Uint8Array) => {
+        values.set([
+          0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+          0x88,
+        ])
+        return values
+      })
+
+      Object.defineProperty(globalThis, 'crypto', {
+        value: { getRandomValues },
+        configurable: true,
+      })
+
+      try {
+        const analytics = await import('../analytics')
+        const id = analytics.getOrCreateInstallId()
+
+        expect(id).toBe('12345678-90ab-4def-9122-334455667788')
+        expect(localStorage.getItem('borg_ui_install_id')).toBe(id)
+      } finally {
+        Object.defineProperty(globalThis, 'crypto', {
+          value: originalCrypto,
+          configurable: true,
+        })
+      }
+    })
   })
 
   describe('resetOptOutCache', () => {

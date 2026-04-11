@@ -9,6 +9,11 @@ import structlog
 logger = structlog.get_logger()
 
 
+def _column_exists(db, table_name: str, column_name: str) -> bool:
+    rows = db.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
+    return any(row[1] == column_name for row in rows)
+
+
 def upgrade(db):
     # 1. Add role column to users
     try:
@@ -27,9 +32,12 @@ def upgrade(db):
     ))
     has_roles = result.scalar() > 0
     if not has_roles:
-        db.execute(text("UPDATE users SET role = 'admin' WHERE is_admin = 1"))
-        db.execute(text("UPDATE users SET role = 'viewer' WHERE is_admin = 0 OR is_admin IS NULL"))
-        logger.info("Migrated is_admin values to role column")
+        if _column_exists(db, "users", "is_admin"):
+            db.execute(text("UPDATE users SET role = 'admin' WHERE is_admin = 1"))
+            db.execute(text("UPDATE users SET role = 'viewer' WHERE is_admin = 0 OR is_admin IS NULL"))
+            logger.info("Migrated is_admin values to role column")
+        else:
+            logger.info("users.is_admin column not present, leaving default role values in place")
     else:
         logger.info("Role column already populated, skipping is_admin migration")
 
