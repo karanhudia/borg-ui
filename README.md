@@ -98,7 +98,7 @@ Automate schedules, manage remote machines, and configure notifications for ongo
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/d060f71c-0f0c-4f75-8960-0229aaeaabf5" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/9daba1f6-d647-466a-8eb8-ad58b7ff63a5" />
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/055937c6-bfee-4632-b302-d49f593f5abd" />
   <img alt="Remote machines management" src="https://github.com/user-attachments/assets/055937c6-bfee-4632-b302-d49f593f5abd" width="100%" />
 </picture>
