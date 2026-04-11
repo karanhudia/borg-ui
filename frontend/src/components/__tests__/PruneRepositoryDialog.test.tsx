@@ -348,7 +348,8 @@ describe('PruneRepositoryDialog', () => {
         />
       )
 
-      expect(await screen.findByText('Would prune: archive-2023-01-01')).toBeInTheDocument()
+      await screen.findByText('Dry Run Results (Preview)')
+      expect(screen.getByRole('dialog')).toHaveTextContent('Would prune: archive-2023-01-01')
     })
 
     it('shows error state for failed operation', async () => {
