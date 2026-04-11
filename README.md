@@ -1,8 +1,8 @@
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/affae94f-5fdb-4690-8427-9c6164f1e267" />
-    <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/6e2bca71-91e6-41ed-8ab0-6917dc27fc6e" />
-    <img alt="Borg UI Logo v2" src="https://github.com/user-attachments/assets/6e2bca71-91e6-41ed-8ab0-6917dc27fc6e" width="360" />
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.png" />
+    <source media="(prefers-color-scheme: light)" srcset="assets/logo-light.png" />
+    <img alt="Borg UI Logo v2" src="assets/logo-light.png" width="360" />
   </picture>
 </div>
 
@@ -60,15 +60,15 @@
 Track repository health, recent activity, storage, and day-to-day backup execution from the main product surfaces.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/b7b68221-f649-4bb9-9be3-c0abc0acc670" />
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/90264678-e6ad-436c-b04d-4c804e7f5ec1" />
-  <img alt="Borg UI dashboard" src="https://github.com/user-attachments/assets/90264678-e6ad-436c-b04d-4c804e7f5ec1" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/dashboard-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/dashboard-light.png" />
+  <img alt="Borg UI dashboard" src="screenshots/readme/dashboard-light.png" width="100%" />
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/52902bd5-cd7e-45df-88fe-bc641fb565a2" />
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/2f0f27a3-5462-4474-bca2-8fb9a7166969" />
-  <img alt="Repository management" src="https://github.com/user-attachments/assets/2f0f27a3-5462-4474-bca2-8fb9a7166969" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/repositories-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/repositories-light.png" />
+  <img alt="Repository management" src="screenshots/readme/repositories-light.png" width="100%" />
 </picture>
 
 ### Backup and Restore Workflows
@@ -76,15 +76,15 @@ Track repository health, recent activity, storage, and day-to-day backup executi
 Monitor live backup progress, inspect archives, and work through restore flows without dropping to the CLI.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/4b168836-22bb-4a1a-b41e-1eab26e1b213" />
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/47c92914-53f7-449a-a34b-d99835154c84" />
-  <img alt="Live backup progress" src="https://github.com/user-attachments/assets/47c92914-53f7-449a-a34b-d99835154c84" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/backup-progress-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/backup-progress-light.png" />
+  <img alt="Live backup progress" src="screenshots/readme/backup-progress-light.png" width="100%" />
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/2319a6f7-1d14-4fc4-a03e-59df69946490" />
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/3822b1d9-3066-4a73-b9ee-6542f5885164" />
-  <img alt="Archive browser" src="https://github.com/user-attachments/assets/3822b1d9-3066-4a73-b9ee-6542f5885164" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/archive-browser-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/archive-browser-light.png" />
+  <img alt="Archive browser" src="screenshots/readme/archive-browser-light.png" width="100%" />
 </picture>
 
 ### Automation and Integrations
@@ -92,21 +92,21 @@ Monitor live backup progress, inspect archives, and work through restore flows w
 Automate schedules, manage remote machines, and configure notifications for ongoing backup operations.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/2ddff79b-71c0-4f33-99bd-e7ec25495345" />
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/5d4ce81c-abdb-4dcf-81e9-e66b10804104" />
-  <img alt="Backup schedule management" src="https://github.com/user-attachments/assets/5d4ce81c-abdb-4dcf-81e9-e66b10804104" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/schedule-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/schedule-light.png" />
+  <img alt="Backup schedule management" src="screenshots/readme/schedule-light.png" width="100%" />
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/9daba1f6-d647-466a-8eb8-ad58b7ff63a5" />
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/055937c6-bfee-4632-b302-d49f593f5abd" />
-  <img alt="Remote machines management" src="https://github.com/user-attachments/assets/055937c6-bfee-4632-b302-d49f593f5abd" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/remote-machines-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/remote-machines-light.png" />
+  <img alt="Remote machines management" src="screenshots/readme/remote-machines-light.png" width="100%" />
 </picture>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/daace69d-c7e8-4a3d-8ca3-eeb0d174dc5b" />
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/87827aa7-133b-4978-9078-b87890cee77e" />
-  <img alt="Notification services" src="https://github.com/user-attachments/assets/87827aa7-133b-4978-9078-b87890cee77e" width="100%" />
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/readme/notifications-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="screenshots/readme/notifications-light.png" />
+  <img alt="Notification services" src="screenshots/readme/notifications-light.png" width="100%" />
 </picture>
 
 ## Getting Started
