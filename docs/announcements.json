@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-04-06T00:00:00Z",
+  "generated_at": "2026-04-11T00:00:00Z",
   "announcements": [
     {
       "id": "release-2.0.0-whats-new",
@@ -9,31 +9,55 @@
       "title": "What's new in 2.0.0",
       "title_localized": {
         "es": "Novedades de la version 2.0.0",
-        "de": "Neu in 2.0.0",
+        "de": "Neu in Version 2.0.0",
         "it": "Novita della versione 2.0.0"
       },
-      "message": "Borg UI 2.0.0 adds built-in plans, Borg 2 support, better access control, and a more polished day-to-day experience. New installs include 60 days of full access before Community plan limits apply.",
+      "message": "Borg UI 2.0 is here with Borg 2 beta support, a fully responsive UI, RBAC, a fresh new look across the app, localisation across English, German, Spanish, and Italian, and a more reliable foundation backed by 64% combined test coverage.",
       "message_localized": {
-        "es": "Borg UI 2.0.0 agrega planes integrados, soporte para Borg 2, mejor control de acceso y una experiencia diaria mas pulida. Las instalaciones nuevas incluyen 60 dias de acceso completo antes de que se apliquen los limites del plan Community.",
-        "de": "Borg UI 2.0.0 bringt integrierte Plane, Borg-2-Unterstutzung, bessere Zugriffskontrollen und ein reiferes Nutzungserlebnis. Neue Installationen enthalten 60 Tage vollen Zugriff, bevor die Grenzen des Community-Plans gelten.",
-        "it": "Borg UI 2.0.0 aggiunge piani integrati, supporto a Borg 2, un controllo degli accessi migliore e un'esperienza d'uso piu rifinita. Le nuove installazioni includono 60 giorni di accesso completo prima che si applichino i limiti del piano Community."
+        "es": "Borg UI 2.0 ya esta aqui con soporte beta para Borg 2, una interfaz totalmente adaptable, RBAC, una apariencia renovada en toda la app, localizacion en ingles, aleman, espanol e italiano, y una base mas fiable respaldada por un 64 % de cobertura de pruebas combinada.",
+        "de": "Borg UI 2.0 ist da mit Borg-2-Beta-Unterstutzung, einer voll responsiven Oberflache, RBAC, einem frischen neuen Look in der gesamten App, Lokalisierung auf Englisch, Deutsch, Spanisch und Italienisch sowie einer zuverlassigeren Grundlage mit 64 % kombinierter Testabdeckung.",
+        "it": "Borg UI 2.0 e arrivato con supporto beta per Borg 2, un'interfaccia completamente reattiva, RBAC, un look rinnovato in tutta l'app, localizzazione in inglese, tedesco, spagnolo e italiano, e una base piu affidabile supportata dal 64% di copertura test combinata."
       },
       "highlights": [
-        "Built-in Community, Pro, and Enterprise plans, with licensing managed directly in the app",
-        "Borg 2 support across repository create, import, stats, and archive flows",
-        "A revamped dashboard, cleaner navigation, improved settings, and auto theme mode",
-        "RBAC, repository access controls, personal profiles, and API tokens for multi-user setups",
-        "Announcements, Umami analytics, and better product telemetry",
-        "Stronger SSH, restore, testing, and CI reliability"
+        "Borg 2 beta support across core repository flows",
+        "Responsive UI built for desktop and mobile",
+        "RBAC, permissions, and API tokens for multi-user setups",
+        "A redesigned interface with a fresh new look across the app",
+        "Community stays available, with most features continuing to stay free",
+        "Pro and Enterprise are available for users who need more advanced capabilities",
+        "New installs include 60 days of full access to explore everything",
+        "Cleaner architecture and broader test coverage for a more reliable product"
       ],
       "highlights_localized": {
         "es": [
-          "Planes Community, Pro y Enterprise integrados, con licencias gestionadas directamente en la app",
-          "Soporte para Borg 2 en creacion, importacion, estadisticas y archivos",
-          "Panel renovado, navegacion mas limpia, mejor configuracion y modo de tema automatico",
-          "RBAC, controles de acceso por repositorio, perfiles personales y tokens API para entornos multiusuario",
-          "Announcements, analitica Umami y mejor telemetria del producto",
-          "Mayor fiabilidad en SSH, restauracion, pruebas y CI"
+          "Soporte beta para Borg 2 en los flujos principales de repositorios",
+          "Interfaz adaptable pensada para escritorio y movil",
+          "RBAC, permisos y tokens API para entornos multiusuario",
+          "Una interfaz redisenada con un aspecto nuevo en toda la app",
+          "Community sigue disponible y la mayoria de las funciones continuan siendo gratuitas",
+          "Pro y Enterprise estan disponibles para quienes necesiten capacidades mas avanzadas",
+          "Las instalaciones nuevas incluyen 60 dias de acceso completo para explorar todo",
+          "Arquitectura mas limpia y mayor cobertura de pruebas para un producto mas fiable"
+        ],
+        "de": [
+          "Borg-2-Beta-Unterstutzung in den zentralen Repository-Ablaufen",
+          "Responsive Oberflache fur Desktop und Mobilgerate",
+          "RBAC, Berechtigungen und API-Tokens fur Multi-User-Umgebungen",
+          "Eine neu gestaltete Oberflache mit frischem Look in der ganzen App",
+          "Community bleibt verfugbar und die meisten Funktionen bleiben kostenlos",
+          "Pro und Enterprise stehen fur Nutzer bereit, die erweiterte Funktionen brauchen",
+          "Neue Installationen enthalten 60 Tage vollen Zugriff, um alles auszuprobieren",
+          "Saubere Architektur und breitere Testabdeckung fur ein zuverlassigeres Produkt"
+        ],
+        "it": [
+          "Supporto beta per Borg 2 nei flussi principali dei repository",
+          "Interfaccia reattiva progettata per desktop e mobile",
+          "RBAC, permessi e token API per configurazioni multiutente",
+          "Un'interfaccia riprogettata con un look nuovo in tutta l'app",
+          "Community resta disponibile e la maggior parte delle funzionalita continua a essere gratuita",
+          "Pro ed Enterprise sono disponibili per chi ha bisogno di capacita piu avanzate",
+          "Le nuove installazioni includono 60 giorni di accesso completo per esplorare tutto",
+          "Architettura piu pulita e copertura test piu ampia per un prodotto piu affidabile"
         ]
       },
       "cta_label": "View release notes",
@@ -45,10 +69,10 @@
       "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.0.0",
       "dismissible": true,
       "snooze_days": 7,
-      "starts_at": "2026-04-06T00:00:00Z",
-      "ends_at": "2027-04-06T00:00:00Z",
+      "starts_at": "2026-04-11T00:00:00Z",
+      "ends_at": "2027-04-11T00:00:00Z",
       "min_app_version": "2.0.0",
-      "max_app_version": "2.1.0",
+      "max_app_version": "2.0.999",
       "target_plans": ["community", "pro", "enterprise"]
     }
   ]
