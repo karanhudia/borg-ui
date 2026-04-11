@@ -394,7 +394,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
         },
       }}
       footer={
-        <DialogActions sx={{ px: 3, pb: 2 }}>
+        <DialogActions sx={{ px: { xs: 1, sm: 3 }, pb: { xs: 1, sm: 2 } }}>
           <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
           <Box sx={{ flex: 1 }} />
           <Button disabled={activeStep === 0} onClick={handleBack}>
@@ -439,7 +439,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
             sx={{
               minHeight: { xs: 'auto', md: 450 },
               overflow: 'auto',
-              p: 2.5,
+              p: { xs: 1, sm: 2.5 },
             }}
           >
             {renderStepContent()}
