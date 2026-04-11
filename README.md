@@ -1,6 +1,8 @@
 <div align="center">
   <picture>
-    <img alt="Borg UI Logo v2" src="https://github.com/user-attachments/assets/9be180c8-f512-4ad9-aff5-fbf428ccf99f" width="320" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/9be180c8-f512-4ad9-aff5-fbf428ccf99f" />
+    <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/9f8d4b7a-0078-4bf8-a262-4a4939212172" />
+    <img alt="Borg UI Logo v2" src="https://github.com/user-attachments/assets/9f8d4b7a-0078-4bf8-a262-4a4939212172" width="320" />
   </picture>
 </div>
 
@@ -13,8 +15,6 @@
     <a href="https://docs.borgui.com">Documentation</a>
     <span> | </span>
     <a href="https://hub.docker.com/r/ainullcode/borg-ui">Docker Hub</a>
-    <span> | </span>
-    <a href="https://discord.gg/5KfVa5QkdQ">Discord</a>
   </h5>
 </div>
 
@@ -22,10 +22,8 @@
 
 [![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borg-ui)](https://hub.docker.com/r/ainullcode/borg-ui)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
-[![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 [![Tests](https://github.com/karanhudia/borg-ui/workflows/Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/karanhudia/borg-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/karanhudia/borg-ui)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/5KfVa5QkdQ)
 
 </div>
 
@@ -84,8 +82,8 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/2319a6f7-1d14-4fc4-a03e-59df69946490" />
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/daace69d-c7e8-4a3d-8ca3-eeb0d174dc5b" />
-  <img alt="Archive browser" src="https://github.com/user-attachments/assets/daace69d-c7e8-4a3d-8ca3-eeb0d174dc5b" width="100%" />
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/3822b1d9-3066-4a73-b9ee-6542f5885164" />
+  <img alt="Archive browser" src="https://github.com/user-attachments/assets/3822b1d9-3066-4a73-b9ee-6542f5885164" width="100%" />
 </picture>
 
 ### Schedule Automation
@@ -107,7 +105,7 @@
 ### Notifications
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/3822b1d9-3066-4a73-b9ee-6542f5885164" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/daace69d-c7e8-4a3d-8ca3-eeb0d174dc5b" />
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/87827aa7-133b-4978-9078-b87890cee77e" />
   <img alt="Notification services" src="https://github.com/user-attachments/assets/87827aa7-133b-4978-9078-b87890cee77e" width="100%" />
 </picture>
@@ -132,20 +130,14 @@ Access the app at `http://localhost:8081`.
 ## Documentation
 
 - Full documentation: https://docs.borgui.com
-- Configuration guide: https://docs.borgui.com/configuration
-- Usage guide: https://docs.borgui.com/usage-guide
-- Notifications: https://docs.borgui.com/notifications
-- SSH keys: https://docs.borgui.com/ssh-keys
-- Security: https://docs.borgui.com/security
+- Installation guide: https://docs.borgui.com/installation
 - Development: https://docs.borgui.com/development
 - Testing: https://docs.borgui.com/testing
 
 ## Support
 
-- Website: https://borgui.com
 - Discord: https://discord.gg/5KfVa5QkdQ
 - Issues: https://github.com/karanhudia/borg-ui/issues
-- Discussions: https://github.com/karanhudia/borg-ui/discussions
 
 ## Star History
 
