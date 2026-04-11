@@ -1,8 +1,8 @@
 <div align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/9be180c8-f512-4ad9-aff5-fbf428ccf99f" />
-    <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/9f8d4b7a-0078-4bf8-a262-4a4939212172" />
-    <img alt="Borg UI Logo v2" src="https://github.com/user-attachments/assets/9f8d4b7a-0078-4bf8-a262-4a4939212172" width="320" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/affae94f-5fdb-4690-8427-9c6164f1e267" />
+    <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/6e2bca71-91e6-41ed-8ab0-6917dc27fc6e" />
+    <img alt="Borg UI Logo v2" src="https://github.com/user-attachments/assets/6e2bca71-91e6-41ed-8ab0-6917dc27fc6e" width="360" />
   </picture>
 </div>
 
@@ -22,8 +22,10 @@
 
 [![Docker Hub](https://img.shields.io/docker/pulls/ainullcode/borg-ui)](https://hub.docker.com/r/ainullcode/borg-ui)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE)
+[![GitHub Actions](https://github.com/karanhudia/borg-ui/workflows/Build%20and%20Publish%20Docker%20Images/badge.svg)](https://github.com/karanhudia/borg-ui/actions)
 [![Tests](https://github.com/karanhudia/borg-ui/workflows/Tests/badge.svg)](https://github.com/karanhudia/borg-ui/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/karanhudia/borg-ui/branch/main/graph/badge.svg)](https://codecov.io/gh/karanhudia/borg-ui)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/5KfVa5QkdQ)
 
 </div>
 
