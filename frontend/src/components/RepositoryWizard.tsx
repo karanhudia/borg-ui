@@ -655,6 +655,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           sx: {
             borderRadius: 3,
             overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            height: { xs: 'auto', md: 'min(860px, calc(100vh - 64px))' },
             backdropFilter: 'blur(10px)',
             backgroundImage:
               'linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05))',
@@ -706,8 +709,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
                 : t('repositoryWizard.titleImport')}
           </Typography>
         </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
+        <DialogContent sx={{ pb: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             {/* Step Indicator */}
             <WizardStepIndicator
               steps={steps}
@@ -716,7 +719,14 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             />
 
             {/* Step Content - natural height on mobile, fixed on desktop */}
-            <Box sx={{ minHeight: { xs: 'auto', md: 450 }, overflow: 'auto', p: { xs: 1, sm: 3 } }}>
+            <Box
+              sx={{
+                minHeight: { xs: 'auto', md: 450 },
+                flex: { xs: '0 0 auto', md: 1 },
+                overflow: 'auto',
+                p: { xs: 1, sm: 3 },
+              }}
+            >
               {renderStepContent()}
             </Box>
           </Box>
