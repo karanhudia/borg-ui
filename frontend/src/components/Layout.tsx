@@ -3,11 +3,13 @@ import { hasConsentBeenGiven, loadUserPreference } from '../utils/analytics'
 import AnalyticsConsentBanner from './AnalyticsConsentBanner'
 import AppHeader from './AppHeader'
 import AppSidebar from './AppSidebar'
+import { useAuth } from '../hooks/useAuth'
 import { Box, Container, Toolbar } from '@mui/material'
 
 const drawerWidth = 240
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [showConsentBanner, setShowConsentBanner] = useState(false)
 
@@ -16,10 +18,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       await loadUserPreference()
       if (hasConsentBeenGiven() === false) {
         setShowConsentBanner(true)
+      } else {
+        setShowConsentBanner(false)
       }
     }
     checkConsent()
-  }, [])
+  }, [user?.must_change_password])
 
   return (
     <Box sx={{ display: 'flex' }}>

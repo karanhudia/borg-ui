@@ -2,17 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Layout from '../Layout'
 
-const { logoutMock, hasConsentBeenGivenMock, loadUserPreferenceMock } = vi.hoisted(() => ({
-  logoutMock: vi.fn(),
-  hasConsentBeenGivenMock: vi.fn(),
-  loadUserPreferenceMock: vi.fn(),
-}))
+const { logoutMock, hasConsentBeenGivenMock, loadUserPreferenceMock, useAuthMock } = vi.hoisted(
+  () => ({
+    logoutMock: vi.fn(),
+    hasConsentBeenGivenMock: vi.fn(),
+    loadUserPreferenceMock: vi.fn(),
+    useAuthMock: vi.fn(),
+  })
+)
 
 vi.mock('../../hooks/useAuth.tsx', () => ({
-  useAuth: () => ({
-    user: { username: 'admin', email: 'admin@example.com', role: 'admin' },
-    logout: logoutMock,
-  }),
+  useAuth: () => useAuthMock(),
 }))
 
 vi.mock('../../hooks/useAuthorization', () => ({
@@ -50,6 +50,10 @@ describe('Layout', () => {
     vi.clearAllMocks()
     loadUserPreferenceMock.mockResolvedValue(undefined)
     hasConsentBeenGivenMock.mockReturnValue(true)
+    useAuthMock.mockReturnValue({
+      user: { username: 'admin', email: 'admin@example.com', role: 'admin' },
+      logout: logoutMock,
+    })
   })
 
   it('shows the analytics consent banner when consent has not been given', async () => {
@@ -96,5 +100,29 @@ describe('Layout', () => {
     await user.click(await screen.findByRole('button', { name: /logout/i }))
 
     expect(logoutMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('still shows the analytics consent banner during forced password setup', async () => {
+    hasConsentBeenGivenMock.mockReturnValue(false)
+    useAuthMock.mockReturnValue({
+      user: {
+        username: 'admin',
+        email: 'admin@example.com',
+        role: 'admin',
+        must_change_password: true,
+      },
+      logout: logoutMock,
+    })
+
+    renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    await waitFor(() => {
+      expect(loadUserPreferenceMock).toHaveBeenCalledTimes(1)
+    })
+    expect(await screen.findByText('Consent Banner')).toBeInTheDocument()
   })
 })
