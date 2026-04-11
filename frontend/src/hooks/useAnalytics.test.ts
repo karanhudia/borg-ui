@@ -24,6 +24,7 @@ vi.mock('../utils/analytics', () => ({
     AUTH: 'Authentication',
     NAVIGATION: 'Navigation',
     PLAN: 'Plan',
+    ANNOUNCEMENT: 'Announcement',
   },
   EventAction: {
     VIEW: 'View',
@@ -101,6 +102,21 @@ describe('useAnalytics', () => {
       name: 'hash:repo-a',
       size_bytes: 2048,
       size_human: '2.00 KB',
+    })
+  })
+
+  it('tracks announcement events through the dedicated wrapper', async () => {
+    const { useAnalytics } = await import('./useAnalytics')
+    const { result } = renderHook(() => useAnalytics())
+
+    result.current.trackAnnouncement('Acknowledge', {
+      announcement_id: 'update-1',
+      announcement_type: 'update_available',
+    })
+
+    expect(trackEventMock).toHaveBeenCalledWith('Announcement', 'Acknowledge', {
+      announcement_id: 'update-1',
+      announcement_type: 'update_available',
     })
   })
 })

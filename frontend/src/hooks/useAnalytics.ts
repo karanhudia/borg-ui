@@ -194,6 +194,10 @@ export const useAnalytics = () => {
     trackEvent(EventCategory.PLAN, action, data)
   }, [])
 
+  const trackAnnouncement = useCallback((action: string, data?: Record<string, unknown>) => {
+    trackEvent(EventCategory.ANNOUNCEMENT, action, data)
+  }, [])
+
   // Auth tracking
   const trackAuth = useCallback((action: string, data?: Record<string, unknown>) => {
     trackEvent(EventCategory.AUTH, action, data)
@@ -215,6 +219,7 @@ export const useAnalytics = () => {
     trackPackage,
     trackNavigation,
     trackPlan,
+    trackAnnouncement,
     trackAuth,
     buildEntityData,
     EventCategory,

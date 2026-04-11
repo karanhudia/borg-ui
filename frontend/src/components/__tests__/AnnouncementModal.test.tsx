@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { screen, renderWithProviders, userEvent } from '../../test/test-utils'
+import { fireEvent, screen, renderWithProviders, userEvent } from '../../test/test-utils'
 import AnnouncementModal from '../AnnouncementModal'
 
 describe('AnnouncementModal', () => {
@@ -41,6 +41,7 @@ describe('AnnouncementModal', () => {
     const user = userEvent.setup()
     const onAcknowledge = vi.fn()
     const onSnooze = vi.fn()
+    const onCtaClick = vi.fn()
 
     renderWithProviders(
       <AnnouncementModal
@@ -49,11 +50,12 @@ describe('AnnouncementModal', () => {
           dismissible: true,
           highlights: ['First improvement', 'Second improvement'],
           cta_label: 'View release notes',
-          cta_url: 'https://example.com/release',
+          cta_url: 'javascript:void(0)',
         }}
         open
         onAcknowledge={onAcknowledge}
         onSnooze={onSnooze}
+        onCtaClick={onCtaClick}
       />
     )
 
@@ -62,14 +64,16 @@ describe('AnnouncementModal', () => {
     expect(screen.getByText('Latest release')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /view release notes/i })).toHaveAttribute(
       'href',
-      'https://example.com/release'
+      'javascript:void(0)'
     )
 
     await user.click(screen.getByRole('button', { name: 'Remind me later' }))
     await user.click(screen.getByRole('button', { name: 'Got it' }))
+    fireEvent.click(screen.getByRole('link', { name: /view release notes/i }))
 
     expect(onSnooze).toHaveBeenCalledTimes(1)
     expect(onAcknowledge).toHaveBeenCalledTimes(1)
+    expect(onCtaClick).toHaveBeenCalledTimes(1)
   })
 
   it('uses the close button for dismissible notices', async () => {

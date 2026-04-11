@@ -381,6 +381,7 @@ export const EventCategory = {
   AUTH: 'Authentication',
   NAVIGATION: 'Navigation',
   PLAN: 'Plan',
+  ANNOUNCEMENT: 'Announcement',
 } as const
 
 // Pre-defined event actions

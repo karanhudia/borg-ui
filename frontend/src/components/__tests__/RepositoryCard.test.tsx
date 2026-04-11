@@ -74,6 +74,7 @@ describe('RepositoryCard', () => {
     trackPackage: vi.fn(),
     trackNavigation: vi.fn(),
     trackPlan: vi.fn(),
+    trackAnnouncement: vi.fn(),
     trackAuth: vi.fn(),
     buildEntityData: vi.fn(),
     EventCategory: {
@@ -91,6 +92,7 @@ describe('RepositoryCard', () => {
       AUTH: 'Authentication',
       NAVIGATION: 'Navigation',
       PLAN: 'Plan',
+      ANNOUNCEMENT: 'Announcement',
     } as const,
     EventAction: {
       CREATE: 'Create',
