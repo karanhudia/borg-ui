@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import AnnouncementModal from './AnnouncementModal'
@@ -55,15 +55,16 @@ export default function AnnouncementManager() {
     setHiddenAnnouncementIds((current) => [...current, id])
   }
 
-  const buildAnnouncementAnalyticsData = (
-    announcement: NonNullable<typeof selectedAnnouncement>
-  ) => ({
-    announcement_id: announcement.id,
-    announcement_type: announcement.type,
-    priority: announcement.priority ?? null,
-    dismissible: announcement.dismissible !== false,
-    has_cta: Boolean(announcement.cta_url),
-  })
+  const buildAnnouncementAnalyticsData = useCallback(
+    (announcement: NonNullable<typeof selectedAnnouncement>) => ({
+      announcement_id: announcement.id,
+      announcement_type: announcement.type,
+      priority: announcement.priority ?? null,
+      dismissible: announcement.dismissible !== false,
+      has_cta: Boolean(announcement.cta_url),
+    }),
+    []
+  )
 
   useEffect(() => {
     if (!selectedAnnouncement) {
@@ -75,7 +76,7 @@ export default function AnnouncementManager() {
 
     lastTrackedAnnouncementIdRef.current = selectedAnnouncement.id
     trackAnnouncement(EventAction.VIEW, buildAnnouncementAnalyticsData(selectedAnnouncement))
-  }, [EventAction.VIEW, selectedAnnouncement, trackAnnouncement])
+  }, [EventAction.VIEW, buildAnnouncementAnalyticsData, selectedAnnouncement, trackAnnouncement])
 
   const handleAcknowledge = () => {
     if (!selectedAnnouncement || selectedAnnouncement.dismissible === false) return

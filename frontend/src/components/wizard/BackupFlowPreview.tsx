@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Box, Typography, Tooltip, useTheme, alpha } from '@mui/material'
 import { Server, Cloud, HardDrive, Laptop, ArrowRight, MoveRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -30,7 +31,7 @@ function FlowNode({
   accentColor,
   path,
 }: {
-  icon: React.ReactNode
+  icon: ReactNode
   label: string
   subtitle?: string
   accentColor: string
