@@ -86,11 +86,31 @@ function CodePill({ children }: { children: React.ReactNode }) {
 
 function AttrRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, minWidth: 0 }}>
-      <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.7rem', flexShrink: 0 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 1,
+        minWidth: 0,
+      }}
+    >
+      <Typography
+        variant="caption"
+        sx={{ color: 'text.disabled', fontSize: '0.7rem', flexShrink: 0 }}
+      >
         {label}
       </Typography>
-      <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      <Box
+        sx={{
+          minWidth: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          flexWrap: 'wrap',
+          justifyContent: 'flex-end',
+        }}
+      >
         {children}
       </Box>
     </Box>
@@ -126,7 +146,13 @@ function SectionCard({
         <IconBadge icon={icon} accentColor={accentColor} />
         <Typography
           variant="caption"
-          sx={{ color: 'text.secondary', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}
+          sx={{
+            color: 'text.secondary',
+            fontWeight: 700,
+            fontSize: '0.68rem',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+          }}
         >
           {label}
         </Typography>
@@ -136,7 +162,11 @@ function SectionCard({
   )
 }
 
-const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({ data, repositories, scripts }) => {
+const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({
+  data,
+  repositories,
+  scripts,
+}) => {
   const { t } = useTranslation()
 
   const selectedRepos = repositories.filter((r) => data.repositoryIds.includes(r.id))
@@ -150,13 +180,24 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({ dat
     `${data.pruneKeepMonthly}m`,
     data.pruneKeepQuarterly > 0 && `${data.pruneKeepQuarterly}q`,
     `${data.pruneKeepYearly}y`,
-  ].filter(Boolean).join(' · ')
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="caption" sx={{ color: 'text.disabled', fontWeight: 700, fontSize: '0.6rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: 'text.disabled',
+            fontWeight: 700,
+            fontSize: '0.6rem',
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+          }}
+        >
           {t('wizard.scheduleWizard.review.jobSummary')}
         </Typography>
         <Tooltip title={t('wizard.scheduleWizard.review.readyToCreate')} placement="top" arrow>
@@ -180,16 +221,36 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({ dat
       </Box>
 
       {/* 2-column grid */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25, minWidth: 0, overflow: 'hidden' }}>
-
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+          gap: 1.25,
+          minWidth: 0,
+          overflow: 'hidden',
+        }}
+      >
         {/* Job card */}
-        <SectionCard icon={<Calendar size={14} />} label={t('wizard.scheduleWizard.review.name')} accentColor={BLUE}>
+        <SectionCard
+          icon={<Calendar size={14} />}
+          label={t('wizard.scheduleWizard.review.name')}
+          accentColor={BLUE}
+        >
           <AttrRow label={t('wizard.scheduleWizard.review.name')}>
-            <Typography variant="body2" fontWeight={700} fontSize="0.8rem">{data.name}</Typography>
+            <Typography variant="body2" fontWeight={700} fontSize="0.8rem">
+              {data.name}
+            </Typography>
           </AttrRow>
           {data.description && (
             <AttrRow label={t('wizard.scheduleWizard.steps.basicInfo') || 'Description'}>
-              <Typography variant="body2" fontSize="0.75rem" color="text.secondary" sx={{ textAlign: 'right' }}>{data.description}</Typography>
+              <Typography
+                variant="body2"
+                fontSize="0.75rem"
+                color="text.secondary"
+                sx={{ textAlign: 'right' }}
+              >
+                {data.description}
+              </Typography>
             </AttrRow>
           )}
           <AttrRow label={t('wizard.scheduleWizard.review.schedule')}>
@@ -201,9 +262,15 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({ dat
         </SectionCard>
 
         {/* Repositories card */}
-        <SectionCard icon={<Database size={14} />} label={t('wizard.scheduleWizard.review.repositories', { count: selectedRepos.length })} accentColor={AMBER}>
+        <SectionCard
+          icon={<Database size={14} />}
+          label={t('wizard.scheduleWizard.review.repositories', { count: selectedRepos.length })}
+          accentColor={AMBER}
+        >
           {selectedRepos.length === 0 ? (
-            <Typography variant="body2" fontSize="0.75rem" color="text.secondary">None selected</Typography>
+            <Typography variant="body2" fontSize="0.75rem" color="text.secondary">
+              None selected
+            </Typography>
           ) : (
             selectedRepos.map((repo) => (
               <AttrRow key={repo.id} label={repo.name}>
@@ -214,24 +281,40 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({ dat
         </SectionCard>
 
         {/* Scripts card */}
-        <SectionCard icon={<Code size={14} />} label={t('wizard.scheduleWizard.review.scriptsConfiguration')} accentColor={VIOLET}>
+        <SectionCard
+          icon={<Code size={14} />}
+          label={t('wizard.scheduleWizard.review.scriptsConfiguration')}
+          accentColor={VIOLET}
+        >
           <AttrRow label={t('wizard.scheduleWizard.review.preBackupScript')}>
             {preScript ? (
-              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>{preScript.name}</Typography>
+              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+                {preScript.name}
+              </Typography>
             ) : (
-              <Typography variant="body2" fontSize="0.75rem" color="text.disabled">—</Typography>
+              <Typography variant="body2" fontSize="0.75rem" color="text.disabled">
+                —
+              </Typography>
             )}
           </AttrRow>
           <AttrRow label={t('wizard.scheduleWizard.review.postBackupScript')}>
             {postScript ? (
-              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>{postScript.name}</Typography>
+              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+                {postScript.name}
+              </Typography>
             ) : (
-              <Typography variant="body2" fontSize="0.75rem" color="text.disabled">—</Typography>
+              <Typography variant="body2" fontSize="0.75rem" color="text.disabled">
+                —
+              </Typography>
             )}
           </AttrRow>
           <AttrRow label={t('wizard.scheduleWizard.review.repositoryLevelScripts')}>
             <Chip
-              label={data.runRepositoryScripts ? t('wizard.scheduleWizard.review.enabled') : t('wizard.scheduleWizard.review.disabled')}
+              label={
+                data.runRepositoryScripts
+                  ? t('wizard.scheduleWizard.review.enabled')
+                  : t('wizard.scheduleWizard.review.disabled')
+              }
               color={data.runRepositoryScripts ? 'primary' : 'default'}
               size="small"
               sx={{ height: 17, fontSize: '0.62rem', fontWeight: 600 }}
@@ -240,10 +323,18 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({ dat
         </SectionCard>
 
         {/* Maintenance card */}
-        <SectionCard icon={<Wrench size={14} />} label={t('wizard.scheduleWizard.review.maintenanceSettings')} accentColor={EMERALD}>
+        <SectionCard
+          icon={<Wrench size={14} />}
+          label={t('wizard.scheduleWizard.review.maintenanceSettings')}
+          accentColor={EMERALD}
+        >
           <AttrRow label={t('wizard.scheduleWizard.review.pruneAfterBackup')}>
             <Chip
-              label={data.runPruneAfter ? t('wizard.scheduleWizard.review.enabled') : t('wizard.scheduleWizard.review.disabled')}
+              label={
+                data.runPruneAfter
+                  ? t('wizard.scheduleWizard.review.enabled')
+                  : t('wizard.scheduleWizard.review.disabled')
+              }
               color={data.runPruneAfter ? 'success' : 'default'}
               size="small"
               sx={{ height: 17, fontSize: '0.62rem', fontWeight: 600 }}
@@ -256,14 +347,17 @@ const WizardStepScheduleReview: React.FC<WizardStepScheduleReviewProps> = ({ dat
           )}
           <AttrRow label={t('wizard.scheduleWizard.review.compactAfterPrune')}>
             <Chip
-              label={data.runCompactAfter ? t('wizard.scheduleWizard.review.enabled') : t('wizard.scheduleWizard.review.disabled')}
+              label={
+                data.runCompactAfter
+                  ? t('wizard.scheduleWizard.review.enabled')
+                  : t('wizard.scheduleWizard.review.disabled')
+              }
               color={data.runCompactAfter ? 'success' : 'default'}
               size="small"
               sx={{ height: 17, fontSize: '0.62rem', fontWeight: 600 }}
             />
           </AttrRow>
         </SectionCard>
-
       </Box>
     </Box>
   )
