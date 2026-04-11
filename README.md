@@ -30,15 +30,9 @@
 </div>
 
 <p align="center">
-  <strong>A modern web interface for <a href="https://borgbackup.readthedocs.io/">Borg Backup</a></strong>
-</p>
-
-<p align="center">
+  <strong>A modern web interface for <a href="https://borgbackup.readthedocs.io/">Borg Backup</a></strong><br>
   Run backups, browse archives, restore files, manage repositories, and automate schedules from one interface.
 </p>
-
-> [!NOTE]
-> Borg UI is developed with modern AI tooling as part of the workflow. Architecture, security, and release decisions are reviewed before merge.
 
 ## Highlights
 
@@ -50,6 +44,9 @@
 - Remote machine management with SSH key deployment and storage visibility
 - Support for BorgBackup 1.x and BorgBackup 2 beta workflows
 - Multi-architecture containers for `amd64`, `arm64`, and `armv7`
+
+> [!NOTE]
+> Borg UI is developed with modern AI tooling as part of the workflow. Architecture, security, and release decisions are reviewed before merge.
 
 ## Release Readiness
 
