@@ -3,13 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, waitFor } from '../test/test-utils'
 import App from '../App'
 
-const { useAuthMock, loadUserPreferenceMock, initAnalyticsIfEnabledMock, protectedRouteMock } =
-  vi.hoisted(() => ({
-    useAuthMock: vi.fn(),
-    loadUserPreferenceMock: vi.fn().mockResolvedValue(undefined),
-    initAnalyticsIfEnabledMock: vi.fn(),
-    protectedRouteMock: vi.fn(),
-  }))
+const {
+  useAuthMock,
+  loadUserPreferenceMock,
+  initAnalyticsIfEnabledMock,
+  identifyUserMock,
+  protectedRouteMock,
+} = vi.hoisted(() => ({
+  useAuthMock: vi.fn(),
+  loadUserPreferenceMock: vi.fn().mockResolvedValue(undefined),
+  initAnalyticsIfEnabledMock: vi.fn(),
+  identifyUserMock: vi.fn(),
+  protectedRouteMock: vi.fn(),
+}))
 
 vi.mock('../hooks/useAuth.tsx', () => ({
   useAuth: () => useAuthMock(),
@@ -18,6 +24,7 @@ vi.mock('../hooks/useAuth.tsx', () => ({
 vi.mock('../utils/analytics', () => ({
   loadUserPreference: loadUserPreferenceMock,
   initAnalyticsIfEnabled: initAnalyticsIfEnabledMock,
+  identifyUser: identifyUserMock,
 }))
 
 vi.mock('../components/Layout', () => ({
@@ -82,6 +89,7 @@ describe('App', () => {
       isAuthenticated: true,
       isLoading: false,
       proxyAuthEnabled: false,
+      user: null,
     })
   })
 
@@ -90,6 +98,7 @@ describe('App', () => {
       isAuthenticated: false,
       isLoading: true,
       proxyAuthEnabled: false,
+      user: null,
     })
 
     renderWithProviders(<App />)
@@ -103,6 +112,7 @@ describe('App', () => {
       isAuthenticated: false,
       isLoading: false,
       proxyAuthEnabled: true,
+      user: null,
     })
 
     renderWithProviders(<App />, { initialRoute: '/login' })
@@ -116,6 +126,7 @@ describe('App', () => {
       isAuthenticated: false,
       isLoading: false,
       proxyAuthEnabled: false,
+      user: null,
     })
 
     renderWithProviders(<App />, { initialRoute: '/backup' })
@@ -133,6 +144,20 @@ describe('App', () => {
     expect(screen.getByText('Layout')).toBeInTheDocument()
     expect(screen.getByText('Umami Tracker')).toBeInTheDocument()
     expect(screen.getByText('Announcement Manager')).toBeInTheDocument()
+  })
+
+  it('does not force users with required password changes back to account settings on every route', async () => {
+    useAuthMock.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      proxyAuthEnabled: false,
+      user: { username: 'admin', must_change_password: true },
+    })
+
+    renderWithProviders(<App />, { initialRoute: '/backup' })
+
+    expect(await screen.findByText('Backup Page')).toBeInTheDocument()
+    expect(screen.queryByText('Settings Page')).not.toBeInTheDocument()
   })
 
   it('wraps guarded routes with the expected required tab', async () => {

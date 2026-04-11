@@ -13,10 +13,10 @@ import AccountProfileSection, {
   AccountProfileFormData,
   DeploymentProfileFormData,
 } from './AccountProfileSection'
-import AccountSecuritySection from './AccountSecuritySection'
 import AccountAccessSection from './AccountAccessSection'
 import AccountPasswordDialog from './AccountPasswordDialog'
 import AccountTabNavigation, { AccountView } from './AccountTabNavigation'
+import { clearPasswordSetupPromptSeen } from '../utils/passwordSetupPrompt'
 
 const AccountTab: React.FC = () => {
   const { t } = useTranslation()
@@ -49,6 +49,9 @@ const AccountTab: React.FC = () => {
       toast.success(t('settings.toasts.passwordChanged'))
       setChangePasswordForm({ current_password: '', new_password: '', confirm_password: '' })
       setShowChangePasswordDialog(false)
+      if (user?.username) {
+        clearPasswordSetupPromptSeen(user.username)
+      }
       await refreshUser()
       trackSettings(EventAction.EDIT, { section: 'account', operation: 'change_password' })
     },
@@ -107,13 +110,6 @@ const AccountTab: React.FC = () => {
     },
   })
 
-  useEffect(() => {
-    if (user?.must_change_password) {
-      setShowChangePasswordDialog(true)
-      setAccountView('security')
-    }
-  }, [user?.must_change_password])
-
   const setAccountSurface = (view: AccountView) => {
     setAccountView(view)
     trackSettings(EventAction.VIEW, { section: 'account', surface: view })
@@ -171,7 +167,7 @@ const AccountTab: React.FC = () => {
             {accountView === 'profile' && (
               <AccountProfileSection
                 canManageSystem={canManageSystem}
-                showSetupBanner={!!user?.must_change_password}
+                mustChangePassword={!!user?.must_change_password}
                 profileForm={profileForm}
                 deploymentForm={deploymentForm}
                 isSavingProfile={updateProfileMutation.isPending}
@@ -184,12 +180,6 @@ const AccountTab: React.FC = () => {
                 }
                 onSaveProfile={() => updateProfileMutation.mutate(profileForm)}
                 onSaveDeployment={() => updateDeploymentMutation.mutate(deploymentForm)}
-              />
-            )}
-
-            {accountView === 'security' && (
-              <AccountSecuritySection
-                mustChangePassword={!!user?.must_change_password}
                 onOpenChangePassword={() => {
                   setShowChangePasswordDialog(true)
                   trackSettings(EventAction.VIEW, {

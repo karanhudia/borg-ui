@@ -6,30 +6,12 @@ import * as apiModule from '../../services/api'
 import { toast } from 'react-hot-toast'
 
 const trackSettings = vi.fn()
+const { useAuthMock } = vi.hoisted(() => ({
+  useAuthMock: vi.fn(),
+}))
 
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({
-    user: {
-      id: 1,
-      username: 'admin',
-      full_name: 'Admin User',
-      email: 'admin@example.com',
-      role: 'admin',
-      created_at: '2024-01-01T00:00:00Z',
-      deployment_type: 'enterprise',
-      enterprise_name: 'NullCode AI',
-      global_permissions: [
-        'settings.users.manage',
-        'settings.system.manage',
-        'repositories.manage_all',
-      ],
-    },
-    hasGlobalPermission: (permission: string) =>
-      ['settings.users.manage', 'settings.system.manage', 'repositories.manage_all'].includes(
-        permission
-      ),
-    refreshUser: vi.fn(),
-  }),
+  useAuth: () => useAuthMock(),
 }))
 
 vi.mock('../../hooks/useAuthorization', () => ({
@@ -112,6 +94,28 @@ vi.mock('react-router-dom', async () => {
 describe('Settings account tab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 1,
+        username: 'admin',
+        full_name: 'Admin User',
+        email: 'admin@example.com',
+        role: 'admin',
+        created_at: '2024-01-01T00:00:00Z',
+        deployment_type: 'enterprise',
+        enterprise_name: 'NullCode AI',
+        global_permissions: [
+          'settings.users.manage',
+          'settings.system.manage',
+          'repositories.manage_all',
+        ],
+      },
+      hasGlobalPermission: (permission: string) =>
+        ['settings.users.manage', 'settings.system.manage', 'repositories.manage_all'].includes(
+          permission
+        ),
+      refreshUser: vi.fn(),
+    })
     vi.mocked(apiModule.settingsAPI.getSystemSettings).mockResolvedValue({
       data: { settings: {} },
     } as never)
@@ -136,6 +140,45 @@ describe('Settings account tab', () => {
     })
   })
 
+  it('shows the password action at the top when password change is required', async () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 1,
+        username: 'admin',
+        full_name: 'Admin User',
+        email: 'admin@example.com',
+        role: 'admin',
+        created_at: '2024-01-01T00:00:00Z',
+        deployment_type: 'enterprise',
+        enterprise_name: 'NullCode AI',
+        must_change_password: true,
+        global_permissions: [
+          'settings.users.manage',
+          'settings.system.manage',
+          'repositories.manage_all',
+        ],
+      },
+      hasGlobalPermission: (permission: string) =>
+        ['settings.users.manage', 'settings.system.manage', 'repositories.manage_all'].includes(
+          permission
+        ),
+      refreshUser: vi.fn(),
+    })
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await screen.findByText('Personal profile')
+
+    const headings = screen.getAllByText('Account password')
+    expect(headings[0]).toBeInTheDocument()
+    expect(screen.getByText('Password update required')).toBeInTheDocument()
+    expect(screen.queryByText('Finish account setup')).not.toBeInTheDocument()
+  })
+
   it('changes password and tracks the edit event', async () => {
     const user = userEvent.setup()
 
@@ -146,8 +189,7 @@ describe('Settings account tab', () => {
     )
 
     await screen.findByText('Personal profile')
-    await user.click(screen.getByRole('tab', { name: /security/i }))
-    await user.click(screen.getByText(/account password/i))
+    await user.click(screen.getByRole('button', { name: /account password/i }))
     const dialog = await screen.findByRole('dialog', { name: /change password/i })
     const newPasswordInput = within(dialog).getByLabelText(/new password/i)
     await user.type(within(dialog).getByLabelText(/current password/i), 'old-password')
@@ -178,8 +220,7 @@ describe('Settings account tab', () => {
     )
 
     await screen.findByText('Personal profile')
-    await user.click(screen.getByRole('tab', { name: /security/i }))
-    await user.click(screen.getByText(/account password/i))
+    await user.click(screen.getByRole('button', { name: /account password/i }))
     const dialog = await screen.findByRole('dialog', { name: /change password/i })
     const newPasswordInput = within(dialog).getByLabelText(/new password/i)
     await user.type(within(dialog).getByLabelText(/current password/i), 'old-password')
@@ -204,8 +245,7 @@ describe('Settings account tab', () => {
     )
 
     await screen.findByText('Personal profile')
-    await user.click(screen.getByRole('tab', { name: /security/i }))
-    await user.click(screen.getByText(/account password/i))
+    await user.click(screen.getByRole('button', { name: /account password/i }))
     const dialog = await screen.findByRole('dialog', { name: /change password/i })
     const newPasswordInput = within(dialog).getByLabelText(/new password/i)
     await user.type(within(dialog).getByLabelText(/current password/i), 'old-password')

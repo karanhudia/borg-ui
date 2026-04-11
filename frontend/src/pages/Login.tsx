@@ -8,6 +8,10 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { BASE_PATH } from '@/utils/basePath'
+import {
+  hasSeenPasswordSetupPrompt,
+  markPasswordSetupPromptSeen,
+} from '../utils/passwordSetupPrompt'
 
 interface LoginForm {
   username: string
@@ -92,8 +96,14 @@ export default function Login() {
       const mustChangePassword = await login(data.username, data.password)
       trackAuth(EventAction.LOGIN)
       if (mustChangePassword) {
-        toast.success(t('login.successChangePassword'))
-        navigate('/settings/account')
+        if (hasSeenPasswordSetupPrompt(data.username)) {
+          toast.success(t('login.success'))
+          navigate('/dashboard')
+        } else {
+          markPasswordSetupPromptSeen(data.username)
+          toast.success(t('login.successChangePassword'))
+          navigate('/settings/account')
+        }
       } else {
         toast.success(t('login.success'))
         navigate('/dashboard')

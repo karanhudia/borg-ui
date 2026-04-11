@@ -1,7 +1,7 @@
 import { Box, Tab, Tabs } from '@mui/material'
-import { Lock, ShieldCheck, User } from 'lucide-react'
+import { ShieldCheck, User } from 'lucide-react'
 
-export type AccountView = 'profile' | 'security' | 'access'
+export type AccountView = 'profile' | 'access'
 
 interface AccountTabNavigationProps {
   value: AccountView
@@ -12,22 +12,14 @@ export default function AccountTabNavigation({ value, onChange }: AccountTabNavi
   return (
     <Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
       <Tabs
-        value={value === 'profile' ? 0 : value === 'security' ? 1 : 2}
-        onChange={(_, nextValue) =>
-          onChange(nextValue === 0 ? 'profile' : nextValue === 1 ? 'security' : 'access')
-        }
+        value={value === 'profile' ? 0 : 1}
+        onChange={(_, nextValue) => onChange(nextValue === 0 ? 'profile' : 'access')}
         sx={{ px: { xs: 1, md: 2 } }}
       >
         <Tab
           icon={<User size={15} />}
           iconPosition="start"
           label="Profile"
-          sx={{ minHeight: 48, gap: 0.5, textTransform: 'none', fontWeight: 600 }}
-        />
-        <Tab
-          icon={<Lock size={15} />}
-          iconPosition="start"
-          label="Security"
           sx={{ minHeight: 48, gap: 0.5, textTransform: 'none', fontWeight: 600 }}
         />
         <Tab

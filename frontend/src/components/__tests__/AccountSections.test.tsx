@@ -21,7 +21,7 @@ vi.mock('../UserPermissionsPanel', () => ({
 }))
 
 describe('AccountProfileSection', () => {
-  it('renders the setup banner and submits personal profile changes', async () => {
+  it('renders the password action first when setup is incomplete and submits personal profile changes', async () => {
     const user = userEvent.setup()
     const onProfileFormChange = vi.fn()
     const onSaveProfile = vi.fn()
@@ -29,7 +29,7 @@ describe('AccountProfileSection', () => {
     renderWithProviders(
       <AccountProfileSection
         canManageSystem={false}
-        showSetupBanner={true}
+        mustChangePassword={true}
         profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
         deploymentForm={{ deployment_type: 'individual', enterprise_name: '' }}
         isSavingProfile={false}
@@ -38,10 +38,14 @@ describe('AccountProfileSection', () => {
         onDeploymentFormChange={vi.fn()}
         onSaveProfile={onSaveProfile}
         onSaveDeployment={vi.fn()}
+        onOpenChangePassword={vi.fn()}
       />
     )
 
-    expect(screen.getByText('Finish account setup')).toBeInTheDocument()
+    const headings = screen.getAllByText('Account password')
+    expect(headings[0]).toBeInTheDocument()
+    expect(screen.getByText('Password update required')).toBeInTheDocument()
+    expect(screen.queryByText('Finish account setup')).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'backup-admin' } })
     expect(onProfileFormChange).toHaveBeenCalledWith({ username: 'backup-admin' })
@@ -59,7 +63,7 @@ describe('AccountProfileSection', () => {
     const { unmount } = renderWithProviders(
       <AccountProfileSection
         canManageSystem={true}
-        showSetupBanner={false}
+        mustChangePassword={false}
         profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
         deploymentForm={{ deployment_type: 'enterprise', enterprise_name: '' }}
         isSavingProfile={false}
@@ -68,6 +72,7 @@ describe('AccountProfileSection', () => {
         onDeploymentFormChange={onDeploymentFormChange}
         onSaveProfile={vi.fn()}
         onSaveDeployment={onSaveDeployment}
+        onOpenChangePassword={vi.fn()}
       />
     )
 
@@ -87,7 +92,7 @@ describe('AccountProfileSection', () => {
     renderWithProviders(
       <AccountProfileSection
         canManageSystem={true}
-        showSetupBanner={false}
+        mustChangePassword={false}
         profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
         deploymentForm={{ deployment_type: 'enterprise', enterprise_name: 'NullCode AI' }}
         isSavingProfile={false}
@@ -96,6 +101,7 @@ describe('AccountProfileSection', () => {
         onDeploymentFormChange={onDeploymentFormChange}
         onSaveProfile={vi.fn()}
         onSaveDeployment={onSaveDeployment}
+        onOpenChangePassword={vi.fn()}
       />
     )
 
@@ -225,10 +231,9 @@ describe('AccountTabNavigation', () => {
 
     renderWithProviders(<AccountTabNavigation value="profile" onChange={onChange} />)
 
-    await user.click(screen.getByRole('tab', { name: /security/i }))
     await user.click(screen.getByRole('tab', { name: /access/i }))
 
-    expect(onChange).toHaveBeenNthCalledWith(1, 'security')
-    expect(onChange).toHaveBeenNthCalledWith(2, 'access')
+    expect(onChange).toHaveBeenCalledWith('access')
+    expect(screen.queryByRole('tab', { name: /security/i })).not.toBeInTheDocument()
   })
 })

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth.tsx'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -19,7 +19,6 @@ import { loadUserPreference, initAnalyticsIfEnabled, identifyUser } from './util
 
 function App() {
   const { isAuthenticated, isLoading, proxyAuthEnabled, user } = useAuth()
-  const location = useLocation()
 
   // Load user analytics preference on mount and after login, then conditionally initialize Umami
   useEffect(() => {
@@ -65,10 +64,6 @@ function App() {
         </Routes>
       </>
     )
-  }
-
-  if (user?.must_change_password && !location.pathname.startsWith('/settings/account')) {
-    return <Navigate to="/settings/account" replace />
   }
 
   return (

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import AnnouncementModal from './AnnouncementModal'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { useAuth } from '../hooks/useAuth'
 import { useSystemInfo } from '../hooks/useSystemInfo'
 import {
   DEFAULT_ANNOUNCEMENTS_MANIFEST,
@@ -18,6 +20,8 @@ import {
 } from '../utils/announcements'
 
 export default function AnnouncementManager() {
+  const { user } = useAuth()
+  const location = useLocation()
   const [hiddenAnnouncementIds, setHiddenAnnouncementIds] = useState<string[]>([])
   const { i18n } = useTranslation()
   const { trackAnnouncement, EventAction } = useAnalytics()
@@ -35,6 +39,7 @@ export default function AnnouncementManager() {
   })
 
   const selectedAnnouncement = useMemo(() => {
+    if (user?.must_change_password && location.pathname.startsWith('/settings/account')) return null
     if (!systemInfo || !manifest) return null
 
     const announcement = selectAnnouncement(
@@ -49,7 +54,14 @@ export default function AnnouncementManager() {
     )
 
     return announcement ? resolveAnnouncementLocale(announcement, i18n.resolvedLanguage) : null
-  }, [hiddenAnnouncementIds, i18n.resolvedLanguage, manifest, systemInfo])
+  }, [
+    hiddenAnnouncementIds,
+    i18n.resolvedLanguage,
+    location.pathname,
+    manifest,
+    systemInfo,
+    user?.must_change_password,
+  ])
 
   const hideAnnouncement = (id: string) => {
     setHiddenAnnouncementIds((current) => [...current, id])

@@ -12,10 +12,25 @@ export default function AccountSecuritySection({
   onOpenChangePassword,
 }: AccountSecuritySectionProps) {
   const { t } = useTranslation()
+  const title = mustChangePassword
+    ? t('settings.account.security.passwordUpdateRequired')
+    : t('settings.account.security.accountPassword')
+  const description = mustChangePassword
+    ? t('settings.account.security.passwordUpdateHint')
+    : t('settings.account.security.changeCredentialsHint')
 
   return (
     <Box
       onClick={onOpenChangePassword}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpenChangePassword()
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={title}
       sx={{
         display: 'flex',
         alignItems: 'center',
@@ -66,14 +81,10 @@ export default function AccountSecuritySection({
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="body2" fontWeight={600} noWrap>
-            {mustChangePassword
-              ? t('settings.account.security.passwordUpdateRequired')
-              : t('settings.account.security.accountPassword')}
+            {title}
           </Typography>
           <Typography variant="caption" color="text.secondary" noWrap>
-            {mustChangePassword
-              ? t('settings.account.security.passwordUpdateHint')
-              : t('settings.account.security.changeCredentialsHint')}
+            {description}
           </Typography>
         </Box>
       </Stack>

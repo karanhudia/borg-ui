@@ -7,11 +7,17 @@ const {
   getAnnouncementsUrlMock,
   systemInfoMock,
   trackAnnouncementMock,
+  useAuthMock,
 } = vi.hoisted(() => ({
   fetchAnnouncementsManifestMock: vi.fn(),
   getAnnouncementsUrlMock: vi.fn(() => 'https://example.test/announcements.json'),
   systemInfoMock: vi.fn(),
   trackAnnouncementMock: vi.fn(),
+  useAuthMock: vi.fn(),
+}))
+
+vi.mock('../../hooks/useAuth', () => ({
+  useAuth: () => useAuthMock(),
 }))
 
 vi.mock('../../hooks/useSystemInfo', () => ({
@@ -62,6 +68,9 @@ describe('AnnouncementManager', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    useAuthMock.mockReturnValue({
+      user: { username: 'admin', must_change_password: false },
+    })
     systemInfoMock.mockReturnValue({
       data: {
         app_version: '1.78.0',
@@ -234,5 +243,19 @@ describe('AnnouncementManager', () => {
       dismissible: true,
       has_cta: true,
     })
+  })
+
+  it('suppresses announcements during forced password setup', async () => {
+    useAuthMock.mockReturnValue({
+      user: { username: 'admin', must_change_password: true },
+    })
+
+    renderWithProviders(<AnnouncementManager />)
+
+    await waitFor(() => {
+      expect(fetchAnnouncementsManifestMock).toHaveBeenCalled()
+    })
+    expect(screen.queryByText('Update Available')).not.toBeInTheDocument()
+    expect(trackAnnouncementMock).not.toHaveBeenCalled()
   })
 })

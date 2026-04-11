@@ -1,5 +1,6 @@
 import { Box, Button, CircularProgress, Divider, Stack, TextField, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
+import AccountSecuritySection from './AccountSecuritySection'
 
 export interface AccountProfileFormData {
   username: string
@@ -14,7 +15,7 @@ export interface DeploymentProfileFormData {
 
 interface AccountProfileSectionProps {
   canManageSystem: boolean
-  showSetupBanner: boolean
+  mustChangePassword: boolean
   profileForm: AccountProfileFormData
   deploymentForm: DeploymentProfileFormData
   isSavingProfile: boolean
@@ -23,11 +24,12 @@ interface AccountProfileSectionProps {
   onDeploymentFormChange: (updates: Partial<DeploymentProfileFormData>) => void
   onSaveProfile: () => void
   onSaveDeployment: () => void
+  onOpenChangePassword: () => void
 }
 
 export default function AccountProfileSection({
   canManageSystem,
-  showSetupBanner,
+  mustChangePassword,
   profileForm,
   deploymentForm,
   isSavingProfile,
@@ -36,30 +38,32 @@ export default function AccountProfileSection({
   onDeploymentFormChange,
   onSaveProfile,
   onSaveDeployment,
+  onOpenChangePassword,
 }: AccountProfileSectionProps) {
   const { t } = useTranslation()
 
+  const passwordSection = (
+    <Box>
+      <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+        {t('settings.account.security.accountPassword')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        {mustChangePassword
+          ? t('settings.account.security.passwordUpdateHint')
+          : t('settings.account.security.changeCredentialsHint')}
+      </Typography>
+      <AccountSecuritySection
+        mustChangePassword={mustChangePassword}
+        onOpenChangePassword={onOpenChangePassword}
+      />
+    </Box>
+  )
+
   return (
     <Stack spacing={3}>
-      {showSetupBanner && (
-        <Box
-          sx={{
-            px: 2,
-            py: 1.5,
-            border: '1px solid',
-            borderColor: 'warning.main',
-            borderRadius: 2,
-            bgcolor: 'warning.50',
-          }}
-        >
-          <Typography variant="body2" fontWeight={700}>
-            {t('settings.account.profile.setup.title')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t('settings.account.profile.setup.description')}
-          </Typography>
-        </Box>
-      )}
+      {mustChangePassword && passwordSection}
+
+      {mustChangePassword && <Divider />}
 
       {/* Personal profile */}
       <Box>
@@ -203,6 +207,10 @@ export default function AccountProfileSection({
           </Box>
         </>
       )}
+
+      <Divider />
+
+      {!mustChangePassword && passwordSection}
     </Stack>
   )
 }
