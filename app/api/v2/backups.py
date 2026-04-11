@@ -21,6 +21,7 @@ from app.api.maintenance_jobs import (
 )
 from app.core.security import get_current_user
 from app.core.features import require_feature
+from app.core.borg_router import BorgRouter
 from app.services.backup_service import backup_service
 from app.services.v2.check_service import check_v2_service
 from app.services.v2.compact_service import compact_v2_service
@@ -167,6 +168,7 @@ async def prune_archives(
     if not data.dry_run:
         note = "Run compact to reclaim freed space"
         stdout = "\n\n".join(part for part in [stdout, note] if part)
+        await BorgRouter(repo).update_stats(db)
 
     return {
         "success": True,

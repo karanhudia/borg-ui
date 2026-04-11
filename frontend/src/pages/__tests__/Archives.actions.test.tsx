@@ -9,6 +9,7 @@ const trackArchive = vi.fn()
 const borgListArchivesMock = vi.fn()
 const borgGetInfoMock = vi.fn()
 const borgDeleteArchiveMock = vi.fn()
+const borgGetDownloadUrlMock = vi.fn()
 
 vi.mock('../../components/RepositorySelectorCard', () => ({
   default: ({ onChange }: { onChange: (id: number) => void }) => (
@@ -27,12 +28,12 @@ vi.mock('../../components/ArchivesList', () => ({
     onMountArchive,
     onDeleteArchive,
   }: {
-    onViewArchive: (archive: { name: string; start: string }) => void
-    onRestoreArchive: (archive: { name: string; start: string }) => void
-    onMountArchive: (archive: { name: string; start: string }) => void
+    onViewArchive: (archive: { id: string; name: string; start: string }) => void
+    onRestoreArchive: (archive: { id: string; name: string; start: string }) => void
+    onMountArchive: (archive: { id: string; name: string; start: string }) => void
     onDeleteArchive: (archiveName: string) => void
   }) => {
-    const archive = { name: 'archive-1', start: '2026-01-01T00:00:00Z' }
+    const archive = { id: 'a1', name: 'archive-1', start: '2026-01-01T00:00:00Z' }
     return (
       <div>
         <button onClick={() => onViewArchive(archive)}>View Archive</button>
@@ -117,6 +118,7 @@ vi.mock('../../services/borgApi', () => ({
       listArchives: borgListArchivesMock,
       getInfo: borgGetInfoMock,
       deleteArchive: borgDeleteArchiveMock,
+      getDownloadUrl: borgGetDownloadUrlMock,
     }
   }),
 }))
@@ -176,13 +178,14 @@ describe('Archives page actions', () => {
     id: 1,
     name: 'Repo One',
     path: '/repo/one',
-    borg_version: 1,
+    borg_version: 2,
     mode: 'full',
     repository_type: 'local',
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('open', vi.fn())
     vi.mocked(apiModule.repositoriesAPI.getRepositories).mockResolvedValue({
       data: { repositories: [repository] },
     } as never)
@@ -202,6 +205,9 @@ describe('Archives page actions', () => {
     })
     borgGetInfoMock.mockResolvedValue({ data: { info: {} } })
     borgDeleteArchiveMock.mockResolvedValue({ data: { job_id: 7 } })
+    borgGetDownloadUrlMock.mockReturnValue(
+      '/api/v2/archives/download?repository=1&archive=a1&file_path=%2Fetc%2Fhosts'
+    )
   })
 
   it('tracks filter/view and calls download, restore, and mount APIs from archive actions', async () => {
@@ -223,10 +229,10 @@ describe('Archives page actions', () => {
     await user.click(screen.getByText('View Archive'))
     await user.click(await screen.findByText('Download File'))
 
-    expect(apiModule.archivesAPI.downloadFile).toHaveBeenCalledWith(
-      '/repo/one',
-      'archive-1',
-      '/etc/hosts'
+    expect(borgGetDownloadUrlMock).toHaveBeenCalledWith('a1', '/etc/hosts')
+    expect(window.open).toHaveBeenCalledWith(
+      '/api/v2/archives/download?repository=1&archive=a1&file_path=%2Fetc%2Fhosts',
+      '_blank'
     )
     expect(trackArchive).toHaveBeenCalledWith('View', repository, {
       surface: 'archive_contents',

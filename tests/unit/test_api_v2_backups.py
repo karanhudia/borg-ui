@@ -143,7 +143,10 @@ class TestV2BackupRoutes:
         with patch(
             "app.api.v2.backups.prune_v2_service.run_prune",
             new=AsyncMock(return_value={"success": True, "stdout": "done", "stderr": ""}),
-        ) as mock_prune:
+        ) as mock_prune, patch(
+            "app.api.v2.backups.BorgRouter.update_stats",
+            new=AsyncMock(return_value=True),
+        ) as mock_update_stats:
             response = test_client.post(
                 "/api/v2/backup/prune",
                 json={"repository_id": repo.id, "keep_daily": 3, "dry_run": False},
@@ -170,6 +173,7 @@ class TestV2BackupRoutes:
             keep_yearly=1,
             dry_run=False,
         )
+        mock_update_stats.assert_awaited_once_with(test_db)
 
     def test_backup_prune_dry_run_returns_legacy_modal_shape(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)
@@ -178,7 +182,10 @@ class TestV2BackupRoutes:
         with patch(
             "app.api.v2.backups.prune_v2_service.run_prune",
             new=AsyncMock(return_value={"success": True, "stdout": "would prune", "stderr": ""}),
-        ):
+        ), patch(
+            "app.api.v2.backups.BorgRouter.update_stats",
+            new=AsyncMock(return_value=True),
+        ) as mock_update_stats:
             response = test_client.post(
                 "/api/v2/backup/prune",
                 json={"repository_id": repo.id, "dry_run": True},
@@ -195,6 +202,7 @@ class TestV2BackupRoutes:
                 "stderr": "",
             },
         }
+        mock_update_stats.assert_not_awaited()
 
     def test_backup_compact_creates_job(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)
