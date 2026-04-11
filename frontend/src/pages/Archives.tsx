@@ -4,7 +4,7 @@ import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Box, Typography, useTheme, alpha } from '@mui/material'
 import { Folder } from 'lucide-react'
-import { repositoriesAPI, mountsAPI, restoreAPI, archivesAPI } from '../services/api'
+import { repositoriesAPI, mountsAPI, restoreAPI } from '../services/api'
 import { useRepositoryStats } from '../hooks/useRepositoryStats'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -543,7 +543,14 @@ const Archives: React.FC = () => {
               operation: 'download_archive_file',
               archive_age_bucket: getArchiveAgeBucket(viewArchive?.start),
             })
-            archivesAPI.downloadFile(selectedRepository.path, archiveName, filePath)
+            const archiveRef =
+              getBorgVersion(selectedRepository) === 2
+                ? (viewArchive?.id ?? archiveName)
+                : archiveName
+            window.open(
+              new BorgApiClient(selectedRepository).getDownloadUrl(archiveRef, filePath),
+              '_blank'
+            )
           }
         }}
       />
