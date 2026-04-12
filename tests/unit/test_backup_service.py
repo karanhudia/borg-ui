@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from app.services.backup_service import BackupService
-from app.database.models import BackupJob, Repository, SystemSettings
+from app.database.models import BackupJob, Repository, SSHConnection, SystemSettings
 
 
 class AsyncLineStream:
@@ -48,6 +48,19 @@ class FakeProcess:
 def _discard_background_task(coro):
     coro.close()
     return Mock()
+
+
+@pytest.fixture
+def backup_service():
+    """Create a BackupService instance"""
+    with patch('app.services.backup_service.settings') as mock_settings:
+        mock_settings.data_dir = tempfile.mkdtemp()
+        mock_settings.borg_info_timeout = 60
+        mock_settings.borg_list_timeout = 60
+        mock_settings.backup_timeout = 3600
+        mock_settings.source_size_timeout = 120
+        service = BackupService()
+        yield service
 
 
 @pytest.mark.unit
@@ -1189,3 +1202,41 @@ class TestBackupServicePeriodicSync:
         mock_logger.error.assert_called_once_with(
             "Error in periodic sync state task", job_id=mock_job.id, error="Test error"
         )
+
+    @pytest.mark.asyncio
+    async def test_prepare_source_paths_resolves_relative_remote_paths(
+        self, backup_service, db_session, monkeypatch
+    ):
+        connection = SSHConnection(
+            host="example.com",
+            username="borg",
+            port=22,
+            default_path="/etc/komodo",
+        )
+        db_session.add(connection)
+        db_session.commit()
+        db_session.refresh(connection)
+
+        captured = {}
+
+        async def mock_mount_ssh_paths_shared(connection_id, remote_paths, job_id):
+            captured["connection_id"] = connection_id
+            captured["remote_paths"] = remote_paths
+            return "/tmp/sshfs_mount_test", [("mount-1", "etc/komodo")]
+
+        monkeypatch.setattr("app.services.backup_service.SessionLocal", lambda: db_session)
+        monkeypatch.setattr(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            mock_mount_ssh_paths_shared,
+        )
+
+        processed_paths, ssh_mount_info = await backup_service._prepare_source_paths(
+            [f"ssh://{connection.username}@{connection.host}:{connection.port}/etc/komodo"],
+            job_id=42,
+            source_connection_id=connection.id,
+        )
+
+        assert captured["connection_id"] == connection.id
+        assert captured["remote_paths"] == ["/etc/komodo"]
+        assert processed_paths == ["etc/komodo"]
+        assert ssh_mount_info == [("/tmp/sshfs_mount_test", "etc/komodo")]

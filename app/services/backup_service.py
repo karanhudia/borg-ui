@@ -16,6 +16,7 @@ from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
+from app.utils.ssh_paths import resolve_sshfs_source_path
 from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
@@ -1119,9 +1120,10 @@ class BackupService:
                                     ).first()
 
                                     if connection:
-                                        # Convert plain paths to SSH URLs
+                                        # Convert source paths from the SFTP/browsing view into
+                                        # executable SSH paths for SSHFS mounts.
                                         source_paths = [
-                                            f"ssh://{connection.username}@{connection.host}:{connection.port}{path}"
+                                            f"ssh://{connection.username}@{connection.host}:{connection.port}{resolve_sshfs_source_path(path, connection.default_path)}"
                                             for path in source_dirs
                                         ]
                                         logger.info("Using remote source directories (pull-based backup)",

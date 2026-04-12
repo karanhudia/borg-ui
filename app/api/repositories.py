@@ -43,6 +43,7 @@ from app.core.features import FEATURES, get_current_plan, plan_includes
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.ssh_paths import apply_ssh_command_prefix
 from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
 logger = structlog.get_logger()
@@ -830,11 +831,7 @@ async def create_repository(
             # The prefix is prepended ONLY for SSH commands, not for SFTP browsing
             ssh_path_prefix = connection_details.get("ssh_path_prefix")
             if ssh_path_prefix:
-                # Ensure both prefix and path start with / and combine them
-                ssh_path_prefix = ssh_path_prefix.strip()
-                if ssh_path_prefix and not ssh_path_prefix.startswith("/"):
-                    ssh_path_prefix = f"/{ssh_path_prefix}"
-                repo_path_for_ssh = f"{ssh_path_prefix}/{repo_path.lstrip('/')}"
+                repo_path_for_ssh = apply_ssh_command_prefix(repo_path, ssh_path_prefix)
                 logger.info("Applying SSH path prefix",
                            original_path=repo_path,
                            prefix=ssh_path_prefix,
@@ -1092,10 +1089,7 @@ async def import_repository(
             # Apply SSH path prefix if configured (e.g., /volume1 for Synology)
             ssh_path_prefix = connection_details.get("ssh_path_prefix")
             if ssh_path_prefix:
-                ssh_path_prefix = ssh_path_prefix.strip()
-                if ssh_path_prefix and not ssh_path_prefix.startswith("/"):
-                    ssh_path_prefix = f"/{ssh_path_prefix}"
-                repo_path_for_ssh = f"{ssh_path_prefix}/{repo_path.lstrip('/')}"
+                repo_path_for_ssh = apply_ssh_command_prefix(repo_path, ssh_path_prefix)
                 logger.info("Applying SSH path prefix",
                            original_path=repo_path,
                            prefix=ssh_path_prefix,
@@ -1488,10 +1482,7 @@ async def update_repository(
                 # Apply SSH path prefix if configured
                 ssh_path_prefix = connection_details.get("ssh_path_prefix")
                 if ssh_path_prefix:
-                    ssh_path_prefix = ssh_path_prefix.strip()
-                    if ssh_path_prefix and not ssh_path_prefix.startswith("/"):
-                        ssh_path_prefix = f"/{ssh_path_prefix}"
-                    path_to_use = f"{ssh_path_prefix}/{path_to_use.lstrip('/')}"
+                    path_to_use = apply_ssh_command_prefix(path_to_use, ssh_path_prefix)
                     logger.info("Applying SSH path prefix",
                                original_path=path_to_use,
                                prefix=ssh_path_prefix)

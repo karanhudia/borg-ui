@@ -7,6 +7,7 @@ interface SourceSshConnection {
   username: string
   host: string
   port: number
+  defaultPath?: string
 }
 
 interface CommandPreviewProps {
@@ -92,8 +93,28 @@ export default function CommandPreview({
     return path.startsWith('/') ? path.substring(1) : path
   }
 
+  const resolveRemoteSourcePath = (path: string) => {
+    const rawPath = (path || '').trim()
+    const defaultPath = sourceSshConnection?.defaultPath?.trim() || '/'
+    const normalizedDefaultPath = defaultPath.startsWith('/') ? defaultPath : `/${defaultPath}`
+
+    let resolvedPath = normalizedDefaultPath
+    if (!rawPath || rawPath === '.' || rawPath === './') {
+      resolvedPath = normalizedDefaultPath
+    } else if (rawPath.startsWith('/')) {
+      resolvedPath = rawPath
+    } else {
+      resolvedPath = `${normalizedDefaultPath.replace(/\/$/, '')}/${rawPath}`
+    }
+
+    return resolvedPath.replace(/\/+/g, '/')
+  }
+
+  const resolvedRemoteSourceDirs = isRemoteSource
+    ? sourceDirs.map(resolveRemoteSourcePath)
+    : sourceDirs
   const effectiveSourceDirs = isRemoteSource
-    ? sourceDirs.map(getPreservedRemotePath)
+    ? resolvedRemoteSourceDirs.map(getPreservedRemotePath)
     : sourceDirs.length > 0
       ? sourceDirs
       : ['/path/to/source']
@@ -142,8 +163,8 @@ export default function CommandPreview({
     }
 
     const mountPaths =
-      sourceDirs.length > 0
-        ? [...new Set(sourceDirs.map(getParentOrSelf))] // Deduplicate
+      resolvedRemoteSourceDirs.length > 0
+        ? [...new Set(resolvedRemoteSourceDirs.map(getParentOrSelf))] // Deduplicate
         : ['/path']
 
     const sshfsMountCommands = mountPaths.map(

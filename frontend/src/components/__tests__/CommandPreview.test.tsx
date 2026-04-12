@@ -224,6 +224,47 @@ describe('CommandPreview', () => {
         screen.getByText(/Unmounts remote directory after backup completes/)
       ).toBeInTheDocument()
     })
+
+    it('resolves dot paths against the SSH connection default path', () => {
+      render(
+        <CommandPreview
+          mode="import"
+          repositoryPath="/backups"
+          sourceDirs={['./']}
+          repositoryMode="full"
+          dataSource="remote"
+          sourceSshConnection={{
+            username: 'admin',
+            host: '192.168.1.100',
+            port: 22,
+            defaultPath: '/etc/komodo',
+          }}
+        />
+      )
+
+      expect(screen.getByText(/sshfs admin@192.168.1.100:\/etc\/komodo/)).toBeInTheDocument()
+      expect(screen.getByText(/borg create .* etc\/komodo/)).toBeInTheDocument()
+    })
+
+    it('does not apply ssh path prefix in the preview for remote SSHFS sources', () => {
+      render(
+        <CommandPreview
+          mode="import"
+          repositoryPath="/backups"
+          sourceDirs={['/share/komodo']}
+          repositoryMode="full"
+          dataSource="remote"
+          sourceSshConnection={{
+            username: 'admin',
+            host: '192.168.1.100',
+            port: 22,
+          }}
+        />
+      )
+
+      expect(screen.getByText(/sshfs admin@192.168.1.100:\/share\/komodo/)).toBeInTheDocument()
+      expect(screen.getByText(/borg create .* share\/komodo/)).toBeInTheDocument()
+    })
   })
 
   describe('Edge cases', () => {
