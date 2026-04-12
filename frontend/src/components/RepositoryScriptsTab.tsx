@@ -250,6 +250,7 @@ export default function RepositoryScriptsTab({
     try {
       const response = await api.post(`/scripts/${script.script_id}/test`, {
         repository_id: repositoryId,
+        parameter_values: script.parameter_values ?? undefined,
       })
       setTestDialog((prev) => ({ ...prev, running: false, result: response.data }))
       trackScripts(EventAction.TEST, script.script_name, {

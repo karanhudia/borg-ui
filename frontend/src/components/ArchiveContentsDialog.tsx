@@ -8,12 +8,12 @@ import {
   Typography,
   Stack,
   Box,
-  CircularProgress,
+  Skeleton,
   IconButton,
   alpha,
 } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
-import { FolderOpen, Folder, AlertCircle } from 'lucide-react'
+import { FolderOpen, Folder, FileText, Inbox } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import { Archive } from '../types'
@@ -43,6 +43,13 @@ interface RawFileItem {
   mtime?: string
 }
 
+function normalizeArchivePath(path: string) {
+  if (!path || path === '/') {
+    return '/'
+  }
+  return `/${path.replace(/^\/+/, '').replace(/\/+$/, '')}`
+}
+
 export default function ArchiveContentsDialog({
   open,
   archive,
@@ -61,13 +68,13 @@ export default function ArchiveContentsDialog({
   }, [open, archive])
 
   // Fetch archive contents
-  const { data: archiveContents, isLoading: loadingArchiveContents } = useQuery({
+  const { data: archiveContents, isFetching } = useQuery({
     queryKey: ['archive-contents', repository?.id, archive?.name, currentPath],
     queryFn: async () => {
       if (!repository || !archive) {
         throw new Error('Repository or archive not selected')
       }
-      const path = currentPath === '/' ? '' : currentPath.replace(/^\//, '')
+      const path = currentPath === '/' ? '' : currentPath.slice(1)
       return new BorgApiClient(repository).getArchiveContents(archive.id, archive.name, path)
     },
     enabled: !!archive && !!repository && open,
@@ -105,7 +112,7 @@ export default function ArchiveContentsDialog({
   }
 
   const navigateToPath = (path: string) => {
-    setCurrentPath(path)
+    setCurrentPath(normalizeArchivePath(path))
   }
 
   const getBreadcrumbs = () => {
@@ -158,206 +165,280 @@ export default function ArchiveContentsDialog({
           flexDirection: 'column',
         }}
       >
-        {loadingArchiveContents ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 8 }}>
-            <CircularProgress size={48} />
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              {t('archiveContents.loading')}
-            </Typography>
+        <Stack spacing={2} sx={{ height: '100%', overflow: 'hidden' }}>
+          {/* Breadcrumb Navigation — always visible, updates immediately on navigation */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 0.5,
+              flexShrink: 0,
+            }}
+          >
+            {getBreadcrumbs().map((crumb, index) => (
+              <React.Fragment key={crumb.path}>
+                {index > 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    /
+                  </Typography>
+                )}
+                <Typography
+                  variant="body2"
+                  onClick={() => navigateToPath(crumb.path)}
+                  sx={{
+                    cursor: 'pointer',
+                    color: 'primary.main',
+                    textDecoration: 'underline',
+                    '&:hover': { color: 'primary.dark' },
+                  }}
+                >
+                  {crumb.label}
+                </Typography>
+              </React.Fragment>
+            ))}
           </Box>
-        ) : archiveContents?.data?.items ? (
-          <Stack spacing={2} sx={{ height: '100%', overflow: 'hidden' }}>
-            {/* Breadcrumb Navigation */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 0.5,
-                flexShrink: 0,
-              }}
-            >
-              {getBreadcrumbs().map((crumb, index) => (
-                <React.Fragment key={crumb.path}>
-                  {index > 0 && (
-                    <Typography variant="body2" color="text.secondary">
-                      /
-                    </Typography>
-                  )}
-                  <Typography
-                    variant="body2"
-                    onClick={() => navigateToPath(crumb.path)}
+
+          {/* Content area — skeleton while loading, list or empty state when ready */}
+          <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {isFetching ? (
+              <Stack spacing={0.5}>
+                {[
+                  { width: '55%', isFolder: true },
+                  { width: '40%', isFolder: true },
+                  { width: '70%', isFolder: true },
+                  { width: '62%', isFolder: false },
+                  { width: '48%', isFolder: false },
+                  { width: '75%', isFolder: false },
+                  { width: '33%', isFolder: false },
+                ].map((row, i) => (
+                  <Box
+                    key={i}
                     sx={{
-                      cursor: 'pointer',
-                      color: 'primary.main',
-                      textDecoration: 'underline',
-                      '&:hover': {
-                        color: 'primary.dark',
-                      },
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      p: 1.5,
+                      borderRadius: 1,
+                      bgcolor: (theme) =>
+                        row.isFolder ? alpha(theme.palette.primary.main, 0.05) : 'action.hover',
                     }}
                   >
-                    {crumb.label}
-                  </Typography>
-                </React.Fragment>
-              ))}
-            </Box>
-
-            {/* Files and Folders List */}
-            {archiveContents?.data?.items && archiveContents.data.items.length > 0 ? (
-              <Box sx={{ flex: 1, overflow: 'hidden' }}>
-                <Box sx={{ height: '100%', overflowY: 'auto' }}>
-                  {folders.length === 0 && files.length === 0 ? (
-                    <Box sx={{ textAlign: 'center', py: 4 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        {t('archiveContents.emptyDirectory')}
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Stack spacing={0.5}>
-                      {/* Folders */}
-                      {folders.map((folder, index) => (
-                        <Box
-                          key={`folder-${index}`}
-                          onClick={() => navigateToPath(folder.path)}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            p: 1.5,
-                            borderRadius: 1,
-                            cursor: 'pointer',
-                            userSelect: 'none',
-                            backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.1),
-                            '&:hover': {
-                              backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.2),
-                            },
-                          }}
-                        >
-                          <Stack
-                            direction="row"
-                            spacing={1.5}
-                            alignItems="center"
-                            sx={{ color: 'text.primary', flex: 1 }}
+                    <Skeleton variant="rounded" width={20} height={20} sx={{ flexShrink: 0 }} />
+                    <Skeleton variant="text" sx={{ flex: 1, maxWidth: row.width }} />
+                    <Skeleton variant="text" width={52} />
+                  </Box>
+                ))}
+              </Stack>
+            ) : archiveContents?.data?.items ? (
+              archiveContents.data.items.length > 0 ? (
+                <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                  <Box sx={{ height: '100%', overflowY: 'auto' }}>
+                    {folders.length === 0 && files.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', py: 4 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('archiveContents.emptyDirectory')}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Stack spacing={0.5}>
+                        {/* Folders */}
+                        {folders.map((folder, index) => (
+                          <Box
+                            key={`folder-${index}`}
+                            onClick={() => navigateToPath(folder.path)}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              p: 1.5,
+                              borderRadius: 1,
+                              cursor: 'pointer',
+                              userSelect: 'none',
+                              backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.1),
+                              '&:hover': {
+                                backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.2),
+                              },
+                            }}
                           >
-                            <Folder size={20} />
-                            <Typography variant="body2" fontWeight={500}>
-                              {folder.name}
+                            <Stack
+                              direction="row"
+                              spacing={1.5}
+                              alignItems="center"
+                              sx={{ color: 'text.primary', flex: 1 }}
+                            >
+                              <Folder size={20} />
+                              <Typography variant="body2" fontWeight={500}>
+                                {folder.name}
+                              </Typography>
+                            </Stack>
+                            <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                              {formatBytesUtil(folder.size)}
                             </Typography>
-                          </Stack>
-                          <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                            {formatBytesUtil(folder.size)}
-                          </Typography>
-                        </Box>
-                      ))}
+                          </Box>
+                        ))}
 
-                      {/* Files */}
-                      {files.map((file, index) => (
-                        <Box
-                          key={`file-${index}`}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            p: 1.5,
-                            borderRadius: 1,
-                            userSelect: 'none',
-                            backgroundColor: 'action.hover',
-                            '&:hover': {
-                              backgroundColor: 'action.selected',
-                            },
-                          }}
-                        >
-                          <Stack
-                            direction="row"
-                            spacing={1.5}
-                            alignItems="center"
-                            sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}
+                        {/* Files */}
+                        {files.map((file, index) => (
+                          <Box
+                            key={`file-${index}`}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              p: 1.5,
+                              borderRadius: 1,
+                              userSelect: 'none',
+                              backgroundColor: 'action.hover',
+                              '&:hover': {
+                                backgroundColor: 'action.selected',
+                              },
+                            }}
                           >
-                            <FolderOpen size={20} />
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
+                            <Stack
+                              direction="row"
+                              spacing={1.5}
+                              alignItems="center"
+                              sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}
                             >
-                              {file.name}
-                            </Typography>
-                          </Stack>
-                          <Stack direction="row" spacing={2} alignItems="center">
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{
-                                minWidth: 165,
-                                textAlign: 'right',
-                                fontFamily: 'monospace',
-                                fontSize: '0.8rem',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {file.mtime ? formatDateCompact(file.mtime) : '-'}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ width: 80, textAlign: 'right' }}
-                            >
-                              {file.size ? formatBytesUtil(file.size) : '0 B'}
-                            </Typography>
-                            {onDownloadFile && (
-                              <IconButton
-                                size="small"
-                                sx={{ color: 'text.secondary' }}
-                                onClick={() => {
-                                  if (archive) {
-                                    onDownloadFile(archive.name, file.path)
-                                  }
+                              <FileText size={20} />
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
                                 }}
-                                title={t('archiveContents.downloadFile')}
                               >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
+                                {file.name}
+                              </Typography>
+                            </Stack>
+                            <Stack direction="row" spacing={2} alignItems="center">
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{
+                                  minWidth: 165,
+                                  textAlign: 'right',
+                                  fontFamily: 'monospace',
+                                  fontSize: '0.8rem',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {file.mtime ? formatDateCompact(file.mtime) : '-'}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ width: 80, textAlign: 'right' }}
+                              >
+                                {file.size ? formatBytesUtil(file.size) : '0 B'}
+                              </Typography>
+                              {onDownloadFile && (
+                                <IconButton
+                                  size="small"
+                                  sx={{ color: 'text.secondary' }}
+                                  onClick={() => {
+                                    if (archive) {
+                                      onDownloadFile(archive.name, file.path)
+                                    }
+                                  }}
+                                  title={t('archiveContents.downloadFile')}
                                 >
-                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                  <polyline points="7 10 12 15 17 10" />
-                                  <line x1="12" y1="15" x2="12" y2="3" />
-                                </svg>
-                              </IconButton>
-                            )}
-                          </Stack>
-                        </Box>
-                      ))}
-                    </Stack>
-                  )}
+                                  <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                  </svg>
+                                </IconButton>
+                              )}
+                            </Stack>
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
+                  </Box>
                 </Box>
-              </Box>
+              ) : (
+                <Box
+                  sx={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    py: 4,
+                    px: 3,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: (theme) => alpha(theme.palette.text.secondary, 0.08),
+                      mb: 2.5,
+                    }}
+                  >
+                    <Inbox size={32} style={{ opacity: 0.5 }} />
+                  </Box>
+                  <Typography variant="h6" fontWeight={600} gutterBottom>
+                    {t('archiveContents.emptyArchive')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ maxWidth: 380, lineHeight: 1.7 }}
+                  >
+                    {t('archiveContents.emptyArchiveDesc')}
+                  </Typography>
+                </Box>
+              )
             ) : (
-              <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-                <AlertCircle size={48} style={{ display: 'block', margin: '0 auto 16px auto' }} />
-                <Typography variant="h6" color="text.secondary" gutterBottom>
-                  {t('archiveContents.emptyArchive')}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {t('archiveContents.emptyArchiveDesc')}
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  py: 4,
+                  px: 3,
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 72,
+                    height: 72,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: (theme) => alpha(theme.palette.text.secondary, 0.08),
+                    mb: 2.5,
+                  }}
+                >
+                  <Inbox size={32} style={{ opacity: 0.5 }} />
+                </Box>
+                <Typography variant="body1" color="text.secondary">
+                  {t('archiveContents.noInfo')}
                 </Typography>
               </Box>
             )}
-          </Stack>
-        ) : (
-          <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-            <AlertCircle size={48} style={{ display: 'block', margin: '0 auto 16px auto' }} />
-            <Typography variant="body1" color="text.secondary">
-              {t('archiveContents.noInfo')}
-            </Typography>
           </Box>
-        )}
+        </Stack>
       </DialogContent>
       <DialogActions sx={{ display: { xs: 'none', md: 'flex' } }}>
         <Button onClick={onClose}>{t('common.buttons.close')}</Button>

@@ -92,6 +92,8 @@ class Repository(Base):
     # Backup hooks
     pre_backup_script = Column(Text, nullable=True)  # Shell script to run before backup
     post_backup_script = Column(Text, nullable=True)  # Shell script to run after backup
+    pre_backup_script_parameters = Column(JSON, nullable=True)  # Parameters for pre-backup inline script (JSON dict)
+    post_backup_script_parameters = Column(JSON, nullable=True)  # Parameters for post-backup inline script (JSON dict)
     hook_timeout = Column(Integer, default=300)  # Hook timeout in seconds (legacy, kept for compatibility)
     pre_hook_timeout = Column(Integer, default=300)  # Pre-backup hook timeout in seconds
     post_hook_timeout = Column(Integer, default=300)  # Post-backup hook timeout in seconds

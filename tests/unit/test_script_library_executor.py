@@ -145,3 +145,42 @@ async def test_execute_hooks_treats_cancelled_as_failure_for_run_on_filtering(db
     assert set(executed_script_ids) == {scripts["always"].id, scripts["failure"].id}
     assert result["scripts_executed"] == 2
     assert result["success"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_inline_script_injects_repository_parameter_values(db_session):
+    repository = Repository(
+        id=7,
+        name="Repo",
+        path="/backups/repo",
+        pre_backup_script_parameters={"TARGET_DIR": "/srv/data", "RETRIES": 3},
+        post_backup_script_parameters={"RESULT_PATH": "/tmp/out"},
+    )
+    executor = ScriptLibraryExecutor(db_session)
+    captured = {}
+
+    async def fake_execute_script(script, timeout, env, context):
+        captured["script"] = script
+        captured["timeout"] = timeout
+        captured["env"] = env
+        captured["context"] = context
+        return {"success": True, "exit_code": 0, "stdout": "", "stderr": ""}
+
+    with patch("app.services.script_library_executor.execute_script", new=fake_execute_script):
+        result = await executor.execute_inline_script(
+            script_content="echo test",
+            script_type="pre-backup",
+            timeout=30,
+            repository=repository,
+            backup_job_id=11,
+            backup_result=None,
+        )
+
+    assert result["success"] is True
+    assert captured["script"] == "echo test"
+    assert captured["timeout"] == 30.0
+    assert captured["context"] == "repo:7:inline:pre-backup"
+    assert captured["env"]["TARGET_DIR"] == "/srv/data"
+    assert captured["env"]["RETRIES"] == "3"
+    assert "RESULT_PATH" not in captured["env"]

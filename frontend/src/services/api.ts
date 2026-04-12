@@ -68,6 +68,8 @@ export interface RepositoryData {
   remote_path?: string
   pre_backup_script?: string
   post_backup_script?: string
+  pre_backup_script_parameters?: Record<string, string> | null
+  post_backup_script_parameters?: Record<string, string> | null
   hook_timeout?: number
   pre_hook_timeout?: number
   post_hook_timeout?: number

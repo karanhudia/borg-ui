@@ -608,6 +608,8 @@ class RepositoryUpdate(BaseModel):
     remote_path: Optional[str] = None
     pre_backup_script: Optional[str] = None
     post_backup_script: Optional[str] = None
+    pre_backup_script_parameters: Optional[Dict[str, Any]] = None
+    post_backup_script_parameters: Optional[Dict[str, Any]] = None
     hook_timeout: Optional[int] = None  # Legacy, use pre/post_hook_timeout
     pre_hook_timeout: Optional[int] = None
     post_hook_timeout: Optional[int] = None
@@ -712,6 +714,8 @@ async def get_repositories(
                 "updated_at": format_datetime(repo.updated_at),
                 "pre_backup_script": repo.pre_backup_script,
                 "post_backup_script": repo.post_backup_script,
+                "pre_backup_script_parameters": repo.pre_backup_script_parameters,
+                "post_backup_script_parameters": repo.post_backup_script_parameters,
                 "hook_timeout": repo.hook_timeout,
                 "pre_hook_timeout": repo.pre_hook_timeout,
                 "post_hook_timeout": repo.post_hook_timeout,
@@ -1599,6 +1603,12 @@ async def update_repository(
 
         if repo_data.post_backup_script is not None:
             repository.post_backup_script = repo_data.post_backup_script
+
+        if repo_data.pre_backup_script_parameters is not None:
+            repository.pre_backup_script_parameters = repo_data.pre_backup_script_parameters
+
+        if repo_data.post_backup_script_parameters is not None:
+            repository.post_backup_script_parameters = repo_data.post_backup_script_parameters
 
         if repo_data.hook_timeout is not None:
             repository.hook_timeout = repo_data.hook_timeout

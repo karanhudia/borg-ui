@@ -104,6 +104,29 @@ class TestRepositoriesListAndGet:
         assert "repositories" in data
         assert len(data["repositories"]) >= 2
 
+    def test_list_repositories_includes_inline_script_parameters(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo With Params",
+            path="/repo-with-params",
+            encryption="none",
+            repository_type="local",
+            pre_backup_script_parameters={"TARGET_DIR": "/srv/data"},
+            post_backup_script_parameters={"STATUS_FILE": "/tmp/status"},
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        response = test_client.get("/api/repositories/", headers=admin_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        repos = data["repositories"] if isinstance(data, dict) else data
+        matching = next(item for item in repos if item["path"] == "/repo-with-params")
+        assert matching["pre_backup_script_parameters"] == {"TARGET_DIR": "/srv/data"}
+        assert matching["post_backup_script_parameters"] == {"STATUS_FILE": "/tmp/status"}
+
     def test_list_repositories_includes_schedule_summary(
         self, test_client: TestClient, admin_headers, test_db
     ):

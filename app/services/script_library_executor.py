@@ -521,6 +521,16 @@ class ScriptLibraryExecutor:
             source_connection=source_connection,
         )
 
+        # Inject per-repository inline script parameters as env vars
+        script_parameters = (
+            repository.pre_backup_script_parameters if script_type == "pre-backup"
+            else repository.post_backup_script_parameters
+        )
+        if script_parameters and isinstance(script_parameters, dict):
+            for key, value in script_parameters.items():
+                if value is not None:
+                    script_env[key] = str(value)
+
         try:
             exec_result = await execute_script(
                 script=script_content,
