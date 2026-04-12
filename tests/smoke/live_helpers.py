@@ -425,6 +425,34 @@ class SmokeClient:
         )
         return parse_archives_payload(response.json())
 
+    def list_archives_v2(self, repository: int | str, *, token: Optional[str] = None) -> list[dict]:
+        response = self.request_ok(
+            "GET",
+            "/api/v2/archives/list",
+            token=token,
+            params={"repository": str(repository)},
+        )
+        return parse_archives_payload(response.json())
+
+    def browse_archive_contents_v2(
+        self,
+        repository: int | str,
+        archive_id: str,
+        *,
+        path: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> list[dict]:
+        params = {"repository": str(repository)}
+        if path:
+            params["path"] = path
+        response = self.request_ok(
+            "GET",
+            f"/api/v2/archives/{archive_id}/contents",
+            token=token,
+            params=params,
+        )
+        return response.json()["items"]
+
     def get_archive_info(self, archive_name: str, repository_path: str, *, token: Optional[str] = None, include_files: bool = False) -> dict:
         params = {"repository": repository_path}
         if include_files:

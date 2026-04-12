@@ -85,7 +85,7 @@ describe('ArchiveContentsDialog', () => {
     expect(screen.getByText('backup-2024-01-15')).toBeInTheDocument()
   })
 
-  it('shows loading state', () => {
+  it('shows loading state', async () => {
     mockGetArchiveContents.mockImplementation(() => new Promise(() => {}))
 
     renderWithProviders(
@@ -97,7 +97,9 @@ describe('ArchiveContentsDialog', () => {
       />
     )
 
-    expect(screen.getByText('Loading archive contents...')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(document.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0)
+    })
   })
 
   it('displays empty archive message when no items', async () => {
@@ -192,6 +194,70 @@ describe('ArchiveContentsDialog', () => {
         'documents'
       )
     })
+  })
+
+  it('reuses the same query path when returning via breadcrumb', async () => {
+    mockGetArchiveContents.mockImplementation((_archiveId, _archiveName, path) => {
+      if (path === '') {
+        return Promise.resolve({
+          data: {
+            items: [
+              {
+                name: 'documents',
+                path: 'documents',
+                type: 'directory',
+                size: 1024,
+              },
+            ],
+          },
+        } as AxiosResponse)
+      }
+
+      if (path === 'documents') {
+        return Promise.resolve({
+          data: {
+            items: [
+              {
+                name: 'notes.txt',
+                path: 'documents/notes.txt',
+                type: 'file',
+                size: 512,
+                mtime: '2024-01-15T10:00:00Z',
+              },
+            ],
+          },
+        } as AxiosResponse)
+      }
+
+      return Promise.resolve({ data: { items: [] } } as AxiosResponse)
+    })
+
+    renderWithProviders(
+      <ArchiveContentsDialog
+        open={true}
+        archive={mockArchive}
+        repository={mockRepository}
+        {...mockHandlers}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('documents')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('documents'))
+
+    await waitFor(() => {
+      expect(screen.getByText('notes.txt')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('Root'))
+
+    await waitFor(() => {
+      expect(screen.getByText('documents')).toBeInTheDocument()
+    })
+
+    expect(mockGetArchiveContents.mock.calls.map((call) => call[2])).toEqual(['', 'documents'])
   })
 
   it('displays breadcrumb navigation', async () => {

@@ -300,13 +300,19 @@ class Borg2Interface:
                                     passphrase: Optional[str] = None,
                                     remote_path: Optional[str] = None,
                                     max_lines: int = 1_000_000,
-                                    bypass_lock: bool = False) -> Dict:
+                                    bypass_lock: bool = False,
+                                    browse_depth: Optional[int] = None) -> Dict:
         """List contents of an archive with streaming to prevent OOM."""
-        cmd = [self.borg_cmd, "-r", repository, "list", "--json-lines", archive]
+        cmd = [self.borg_cmd, "-r", repository, "list", "--json-lines"]
+        if browse_depth is not None:
+            cmd.extend(["--depth", str(browse_depth)])
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
             cmd.append("--bypass-lock")
+        cmd.append(archive)
+        if path:
+            cmd.append(path.strip("/"))
         env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
         return await self._run_streaming(cmd, max_lines=max_lines, env=env or None)
 

@@ -18,7 +18,13 @@ def _enable_borg_v2(test_db):
     test_db.commit()
 
 
-def _create_v2_repo(test_db, *, name="V2 Archive Repo", path="/tmp/v2-archive-repo"):
+def _create_v2_repo(
+    test_db,
+    *,
+    name="V2 Archive Repo",
+    path="/tmp/v2-archive-repo",
+    source_directories=None,
+):
     repo = Repository(
         name=name,
         path=path,
@@ -26,7 +32,7 @@ def _create_v2_repo(test_db, *, name="V2 Archive Repo", path="/tmp/v2-archive-re
         compression="lz4",
         repository_type="local",
         borg_version=2,
-        source_directories=json.dumps(["/data/source"]),
+        source_directories=json.dumps(source_directories if source_directories is not None else ["/data/source"]),
     )
     test_db.add(repo)
     test_db.commit()
@@ -180,8 +186,14 @@ class TestV2ArchiveRoutes:
         )
 
         with patch(
+            "app.api.v2.archives.archive_cache.get",
+            new=AsyncMock(return_value=None),
+        ), patch(
             "app.api.v2.archives.borg2.list_archive_contents",
             new=AsyncMock(return_value={"success": True, "stdout": stdout, "stderr": ""}),
+        ), patch(
+            "app.api.v2.archives.archive_cache.set",
+            new=AsyncMock(return_value=True),
         ):
             response = test_client.get(
                 f"/api/v2/archives/archive-1/contents?repository={repo.path}&path=docs",
@@ -195,37 +207,142 @@ class TestV2ArchiveRoutes:
         assert sub_dir["type"] == "directory"
         assert sub_dir["size"] == 5
 
-    def test_get_archive_contents_resolves_archive_id_to_name(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_archive_contents_passes_requested_path_to_borg2(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)
-        repo = _create_v2_repo(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/local/Users/karanhudia/Downloads"])
+
+        with patch(
+            "app.api.v2.archives.archive_cache.get",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "app.api.v2.archives.borg2.list_archive_contents",
+            new=AsyncMock(return_value={"success": True, "stdout": "", "stderr": ""}),
+        ) as mock_contents, patch(
+            "app.api.v2.archives.archive_cache.set",
+            new=AsyncMock(return_value=True),
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/archive-1/contents?repository={repo.path}&path=docs/sub",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        mock_contents.assert_awaited_once_with(
+            repo.path,
+            "archive-1",
+            path="docs/sub",
+            passphrase=None,
+            remote_path=None,
+            bypass_lock=False,
+            browse_depth=6,
+        )
+
+    def test_get_archive_contents_uses_archive_id_selector_without_resolving_name(self, test_client: TestClient, admin_headers, test_db):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/local/Users/karanhudia/Downloads"])
         archive_id = "10614da295b13209b207fc2499d67e7f10c24f4a1745e482bd3fc2595e4ec7fd"
 
         with patch(
-            "app.api.v2.archives.borg2.list_archives",
-            new=AsyncMock(
-                return_value={
-                    "success": True,
-                    "stdout": json.dumps({"archives": [{"id": archive_id, "name": "archive-1"}]}),
-                    "stderr": "",
-                }
-            ),
-        ) as mock_archives, patch(
+            "app.api.v2.archives.archive_cache.get",
+            new=AsyncMock(return_value=None),
+        ), patch(
             "app.api.v2.archives.borg2.list_archive_contents",
             new=AsyncMock(return_value={"success": True, "stdout": "", "stderr": ""}),
-        ) as mock_contents:
+        ) as mock_contents, patch(
+            "app.api.v2.archives.archive_cache.set",
+            new=AsyncMock(return_value=True),
+        ):
             response = test_client.get(
                 f"/api/v2/archives/{archive_id}/contents?repository={repo.id}",
                 headers=admin_headers,
             )
 
         assert response.status_code == 200
-        mock_archives.assert_awaited_once()
         mock_contents.assert_awaited_once_with(
             repo.path,
-            "archive-1",
+            f"aid:{archive_id}",
+            path="",
             passphrase=None,
             remote_path=None,
             bypass_lock=False,
+            browse_depth=4,
+        )
+
+    def test_get_archive_contents_uses_cached_items_when_available(self, test_client: TestClient, admin_headers, test_db):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        cached_items = [{"name": "report.txt", "path": "docs/report.txt", "size": 11, "type": "file", "mtime": ""}]
+
+        with patch(
+            "app.api.v2.archives.archive_cache.get",
+            new=AsyncMock(return_value=cached_items),
+        ) as mock_cache_get, patch(
+            "app.api.v2.archives.borg2.list_archive_contents",
+            new=AsyncMock(),
+        ) as mock_contents:
+            response = test_client.get(
+                f"/api/v2/archives/archive-1/contents?repository={repo.path}&path=docs",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["items"] == cached_items
+        mock_cache_get.assert_awaited_once_with(repo.id, "archive-1::path::docs")
+        mock_contents.assert_not_called()
+
+    def test_get_archive_contents_uses_archive_id_cache_key(self, test_client: TestClient, admin_headers, test_db):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        archive_id = "10614da295b13209b207fc2499d67e7f10c24f4a1745e482bd3fc2595e4ec7fd"
+        cached_items = [{"name": "report.txt", "path": "docs/report.txt", "size": 11, "type": "file", "mtime": ""}]
+
+        with patch(
+            "app.api.v2.archives.archive_cache.get",
+            new=AsyncMock(return_value=cached_items),
+        ) as mock_cache_get, patch(
+            "app.api.v2.archives.borg2.list_archive_contents",
+            new=AsyncMock(),
+        ) as mock_contents:
+            response = test_client.get(
+                f"/api/v2/archives/{archive_id}/contents?repository={repo.path}&path=docs",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.json()["items"] == cached_items
+        mock_cache_get.assert_awaited_once_with(repo.id, f"aid:{archive_id}::path::docs")
+        mock_contents.assert_not_called()
+
+    def test_get_archive_contents_caches_items_by_archive_and_path(self, test_client: TestClient, admin_headers, test_db):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        stdout = "\n".join(
+            [
+                json.dumps({"path": "docs", "type": "d", "size": 0, "mtime": "2026-04-04T00:00:00"}),
+                json.dumps({"path": "docs/report.txt", "type": "f", "size": 11, "mtime": "2026-04-04T00:00:01"}),
+            ]
+        )
+
+        with patch(
+            "app.api.v2.archives.archive_cache.get",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "app.api.v2.archives.borg2.list_archive_contents",
+            new=AsyncMock(return_value={"success": True, "stdout": stdout, "stderr": ""}),
+        ), patch(
+            "app.api.v2.archives.archive_cache.set",
+            new=AsyncMock(return_value=True),
+        ) as mock_cache_set:
+            response = test_client.get(
+                f"/api/v2/archives/archive-1/contents?repository={repo.path}&path=docs",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        mock_cache_set.assert_awaited_once_with(
+            repo.id,
+            "archive-1::path::docs",
+            response.json()["items"],
         )
 
     def test_download_file_success(self, test_client: TestClient, admin_headers, test_db, tmp_path):
@@ -251,6 +368,31 @@ class TestV2ArchiveRoutes:
 
         assert response.status_code == 200
         assert response.content == b"hello borg2"
+
+    def test_download_file_uses_archive_id_selector(self, test_client: TestClient, admin_headers, test_db, tmp_path):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        archive_id = "10614da295b13209b207fc2499d67e7f10c24f4a1745e482bd3fc2595e4ec7fd"
+
+        with patch("app.api.v2.archives.tempfile.mkdtemp", return_value=str(tmp_path)), patch(
+            "app.api.v2.archives.borg2.extract_archive",
+            new=AsyncMock(return_value={"success": False, "stderr": "extract failed"}),
+        ) as mock_extract:
+            response = test_client.get(
+                f"/api/v2/archives/download?repository={repo.id}&archive={archive_id}&file_path=/documents/report.txt",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        mock_extract.assert_awaited_once_with(
+            repo.path,
+            f"aid:{archive_id}",
+            ["/documents/report.txt"],
+            str(tmp_path),
+            passphrase=None,
+            remote_path=None,
+            bypass_lock=False,
+        )
 
     def test_download_file_returns_500_when_extract_fails(self, test_client: TestClient, admin_headers, test_db, tmp_path):
         _enable_borg_v2(test_db)

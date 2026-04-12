@@ -20,6 +20,7 @@ from app.database.models import User, Repository, DeleteArchiveJob
 from app.core.security import get_current_user, get_current_download_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2
+from app.services.cache_service import archive_cache
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Archives v2"], dependencies=[require_feature("borg_v2")])
@@ -92,6 +93,49 @@ async def _resolve_archive_name(repo: Repository, archive_ref: str) -> str:
     return archive_ref
 
 
+def _get_archive_selector(archive_ref: str) -> str:
+    if not archive_ref:
+        return archive_ref
+    if archive_ref.startswith("aid:"):
+        return archive_ref
+    if ARCHIVE_ID_RE.fullmatch(archive_ref):
+        return f"aid:{archive_ref}"
+    return archive_ref
+
+
+def _get_browse_cache_key(archive_ref: str, path: str) -> str:
+    archive_key = _get_archive_selector(archive_ref)
+    normalized_path = path.strip("/")
+    if not normalized_path:
+        return archive_key
+    return f"{archive_key}::path::{normalized_path}"
+
+
+def _get_archive_root_depth(repo: Repository) -> int:
+    if not repo.source_directories:
+        return 1
+    try:
+        source_directories = json.loads(repo.source_directories)
+    except (json.JSONDecodeError, TypeError):
+        return 1
+
+    depths = []
+    for source_dir in source_directories:
+        if not isinstance(source_dir, str):
+            continue
+        parts = [part for part in source_dir.strip("/").split("/") if part]
+        if parts:
+            depths.append(len(parts))
+
+    return min(depths) if depths else 1
+
+
+def _get_browse_depth(repo: Repository, path: str) -> int:
+    normalized_path = path.strip("/")
+    path_depth = len([part for part in normalized_path.split("/") if part])
+    return _get_archive_root_depth(repo) + path_depth
+
+
 # ── List archives ──────────────────────────────────────────────────────────────
 
 @router.get("/list")
@@ -129,9 +173,9 @@ async def get_archive_info(
 ):
     """Get detailed information about a Borg 2 archive."""
     repo = _get_v2_repo(repository, db)
-    archive_name = await _resolve_archive_name(repo, archive_id)
+    archive_selector = _get_archive_selector(archive_id)
     result = await borg2.info_archive(
-        repo.path, archive_name,
+        repo.path, archive_selector,
         passphrase=repo.passphrase,
         remote_path=repo.remote_path,
         bypass_lock=repo.bypass_lock,
@@ -167,7 +211,7 @@ async def get_archive_info(
 
         if include_files:
             list_result = await borg2.list_archive_contents(
-                repo.path, archive_name,
+                repo.path, archive_selector,
                 passphrase=repo.passphrase,
                 remote_path=repo.remote_path,
                 bypass_lock=repo.bypass_lock,
@@ -217,18 +261,33 @@ async def get_archive_contents(
     ArchiveContentsDialog works without version branching.
     """
     repo = _get_v2_repo(repository, db)
-    archive_name = await _resolve_archive_name(repo, archive_id)
+    archive_selector = _get_archive_selector(archive_id)
+    cache_key = _get_browse_cache_key(archive_id, path)
+
+    cached_items = await archive_cache.get(repo.id, cache_key)
+    if cached_items is not None:
+        logger.info(
+            "Using cached borg2 archive contents",
+            repository_id=repo.id,
+            archive=archive_selector,
+            path=path,
+            items_count=len(cached_items),
+        )
+        return {"items": cached_items}
+
     result = await borg2.list_archive_contents(
-        repo.path, archive_name,
+        repo.path, archive_selector,
+        path=path,
         passphrase=repo.passphrase,
         remote_path=repo.remote_path,
         bypass_lock=repo.bypass_lock,
+        browse_depth=_get_browse_depth(repo, path),
     )
     # borg2 list exits with 1 on warnings but stdout is still valid JSONL —
     # treat any result that produced stdout as usable.
     stdout = result.get("stdout", "")
     logger.info("borg2 list_archive_contents result",
-                archive=archive_name, path=path,
+                archive=archive_selector, path=path,
                 return_code=result.get("return_code"),
                 success=result.get("success"),
                 stdout_len=len(stdout),
@@ -328,6 +387,24 @@ async def get_archive_contents(
                     "mtime": "",
                 })
 
+    cache_success = await archive_cache.set(repo.id, cache_key, items)
+    if cache_success:
+        logger.info(
+            "Cached borg2 archive contents",
+            repository_id=repo.id,
+            archive=archive_selector,
+            path=path,
+            items_count=len(items),
+        )
+    else:
+        logger.warning(
+            "Failed to cache borg2 archive contents",
+            repository_id=repo.id,
+            archive=archive_selector,
+            path=path,
+            items_count=len(items),
+        )
+
     return {"items": items}
 
 
@@ -402,11 +479,11 @@ async def download_file_from_archive(
 ):
     """Extract and download a specific file from a Borg 2 archive."""
     repo = _get_v2_repo(repository, db)
-    archive_name = await _resolve_archive_name(repo, archive)
+    archive_selector = _get_archive_selector(archive)
     temp_dir = tempfile.mkdtemp()
     try:
         result = await borg2.extract_archive(
-            repo.path, archive_name, [file_path], temp_dir,
+            repo.path, archive_selector, [file_path], temp_dir,
             passphrase=repo.passphrase,
             remote_path=repo.remote_path,
             bypass_lock=repo.bypass_lock,
