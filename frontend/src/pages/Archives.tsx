@@ -83,8 +83,6 @@ const Archives: React.FC = () => {
     queryFn: repositoriesAPI.getRepositories,
   })
 
-  // Get repositories from API response
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const repositories = React.useMemo(
     () => repositoriesData?.data?.repositories || [],
     [repositoriesData]
@@ -111,8 +109,9 @@ const Archives: React.FC = () => {
 
   // Handle archives error
   React.useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (archivesError && (archivesError as any)?.response?.status === 423 && selectedRepositoryId) {
+    const responseStatus = (archivesError as { response?: { status?: number } } | null)?.response
+      ?.status
+    if (responseStatus === 423 && selectedRepositoryId) {
       setLockError({
         repositoryId: selectedRepositoryId,
         repositoryName: selectedRepository?.name || 'Unknown',
@@ -365,9 +364,8 @@ const Archives: React.FC = () => {
 
   useEffect(() => {
     // Handle incoming navigation state (from "View Archives" button)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stateRepoId = normalizeRepositoryId(
-      location.state && (location.state as any).repositoryId
+      (location.state as { repositoryId?: number | string | null } | null)?.repositoryId
     )
     if (stateRepoId) {
       setSelectedRepositoryId(stateRepoId)

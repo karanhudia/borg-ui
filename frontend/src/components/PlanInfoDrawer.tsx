@@ -37,6 +37,10 @@ function getDefaultSelectedPlan(plan: Plan, initialSelectedPlan?: Plan): Plan {
   return UPGRADE_PLANS.includes(plan) ? plan : UPGRADE_PLANS[0]
 }
 
+function getDefaultActiveTab(plan: Plan): ActiveTab {
+  return plan === 'community' ? 'upgrade' : 'your-plan'
+}
+
 export default function PlanInfoDrawer({
   open,
   onClose,
@@ -51,19 +55,23 @@ export default function PlanInfoDrawer({
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
     getDefaultSelectedPlan(plan, initialSelectedPlan)
   )
-  const [activeTab, setActiveTab] = useState<ActiveTab>('your-plan')
+  const [activeTab, setActiveTab] = useState<ActiveTab>(getDefaultActiveTab(plan))
+  const [referenceNowMs, setReferenceNowMs] = useState<number | null>(null)
 
   const fullAccessExpiry = entitlement?.expires_at
     ? new Date(entitlement.expires_at).toLocaleDateString()
     : null
   const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
 
-  const daysRemaining = entitlement?.expires_at
-    ? Math.max(
-        0,
-        Math.ceil((new Date(entitlement.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-      )
-    : null
+  const daysRemaining =
+    entitlement?.expires_at && referenceNowMs !== null
+      ? Math.max(
+          0,
+          Math.ceil(
+            (new Date(entitlement.expires_at).getTime() - referenceNowMs) / (1000 * 60 * 60 * 24)
+          )
+        )
+      : null
 
   const color = isFullAccess ? PLAN_COLOR.enterprise : PLAN_COLOR[plan]
   const label = isFullAccess ? t('plan.fullAccessLabel') : PLAN_LABEL[plan]
@@ -126,7 +134,8 @@ export default function PlanInfoDrawer({
   useEffect(() => {
     if (open) {
       setSelectedPlan(getDefaultSelectedPlan(plan, initialSelectedPlan))
-      setActiveTab('your-plan')
+      setActiveTab(getDefaultActiveTab(plan))
+      setReferenceNowMs(Date.now())
     }
   }, [initialSelectedPlan, open, plan])
 
@@ -149,7 +158,7 @@ export default function PlanInfoDrawer({
       SlideProps={{
         onExited: () => {
           setSelectedPlan(getDefaultSelectedPlan(plan, initialSelectedPlan))
-          setActiveTab('your-plan')
+          setActiveTab(getDefaultActiveTab(plan))
         },
       }}
       sx={{ '& .MuiDrawer-paper': { width: 340, boxSizing: 'border-box' } }}
