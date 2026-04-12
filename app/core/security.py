@@ -293,10 +293,19 @@ def get_repository_by_path_or_404(
     *,
     detail_key: str = "backend.errors.restore.repositoryNotFound",
 ) -> Repository:
-    """Resolve a repository by path or raise a standardized 404."""
+    """Resolve a repository by ID or path or raise a standardized 404."""
     repo = None
     if repository_path:
-        repo = db.query(Repository).filter(Repository.path == repository_path).first()
+        try:
+            repo_id = int(repository_path)
+        except (TypeError, ValueError):
+            repo_id = None
+
+        if repo_id is not None:
+            repo = db.query(Repository).filter(Repository.id == repo_id).first()
+
+        if repo is None:
+            repo = db.query(Repository).filter(Repository.path == repository_path).first()
     if repo is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

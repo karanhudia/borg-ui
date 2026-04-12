@@ -92,6 +92,7 @@ async def start_restore(
         if not repository:
             raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
         check_repo_access(db, current_user, repository, 'viewer')
+        repository_path = repository.path
 
         # Validate scenario: SSH repository → SSH destination is not supported
         if repository.repository_type == 'ssh' and restore_request.destination_type == 'ssh':
@@ -116,7 +117,7 @@ async def start_restore(
 
         # Create restore job record with new fields
         restore_job = RestoreJob(
-            repository=restore_request.repository,
+            repository=repository_path,
             archive=restore_request.archive,
             destination=restore_request.destination,
             status="pending",
@@ -135,7 +136,7 @@ async def start_restore(
         asyncio.create_task(
             restore_service.execute_restore(
                 restore_job.id,
-                restore_request.repository,
+                repository_path,
                 restore_request.archive,
                 restore_request.destination,
                 restore_request.paths,

@@ -341,6 +341,34 @@ class TestRestorePreview:
             destination="/restore/target",
         )
 
+    def test_preview_restore_accepts_repository_id(self, test_client: TestClient, admin_headers, test_db):
+        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch("app.api.restore.BorgRouter.preview_restore", new_callable=AsyncMock) as mock_preview:
+            mock_preview.return_value = {"stdout": "preview output"}
+            response = test_client.post(
+                "/api/restore/preview",
+                json={
+                    "repository": str(repo.id),
+                    "repository_id": repo.id,
+                    "archive": "test-archive",
+                    "paths": ["/file1.txt"],
+                    "destination": "/restore/target"
+                },
+                headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        assert response.json()["preview"] == "preview output"
+        mock_preview.assert_awaited_once_with(
+            archive="test-archive",
+            paths=["/file1.txt"],
+            destination="/restore/target",
+        )
+
 
 @pytest.mark.unit
 class TestRestoreStart:
@@ -443,6 +471,32 @@ class TestRestoreStart:
         )
 
         assert response.status_code == 200
+
+    def test_start_restore_accepts_repository_id_in_repository_field(self, test_client: TestClient, admin_headers, test_db):
+        repo = Repository(name="Test Repo", path="/test/repo", encryption="none", repository_type="local")
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch("app.api.restore.asyncio.create_task", return_value=object()) as mock_create_task:
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository_id": repo.id,
+                    "repository": str(repo.id),
+                    "archive": "test-archive",
+                    "paths": ["/file.txt"],
+                    "destination": "/restore"
+                },
+                headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        job = test_db.query(RestoreJob).order_by(RestoreJob.id.desc()).first()
+        assert job is not None
+        assert job.repository == repo.path
+        scheduled = mock_create_task.call_args.args[0]
+        scheduled.close()
 
 
 @pytest.mark.unit

@@ -40,12 +40,12 @@ def main() -> int:
         )
         client.log(f"Backup completed with status {backup_data['status']}")
 
-        archives = client.list_archives(repo_path)
+        archives = client.list_archives(repo_id)
         if len(archives) != 1:
             raise SmokeFailure(f"Expected exactly one archive, got {archives}")
         archive_name = archives[0]["name"]
 
-        archive_info = client.get_archive_info(archive_name, repo_path, include_files=True)
+        archive_info = client.get_archive_info(archive_name, repo_id, include_files=True)
         if archive_info["name"] != archive_name:
             raise SmokeFailure(f"Archive info mismatch: {archive_info}")
 
@@ -60,12 +60,12 @@ def main() -> int:
         if "nested" not in nested_names or "root.txt" not in nested_names:
             raise SmokeFailure(f"Unexpected nested listing: {nested_names}")
 
-        file_bytes = client.download_archive_file(repo_path, archive_name, f"{repo_root}/nested/notes.txt")
+        file_bytes = client.download_archive_file(repo_id, archive_name, f"{repo_root}/nested/notes.txt")
         if file_bytes != b"nested smoke data\n":
             raise SmokeFailure(f"Archive download content mismatch: {file_bytes!r}")
 
         restore_job_id = client.start_restore(
-            repository_path=repo_path,
+            repository=repo_id,
             archive_name=archive_name,
             repository_id=repo_id,
             destination=restore_root,

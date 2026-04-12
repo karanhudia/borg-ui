@@ -313,3 +313,46 @@ class TestDownloadFileEndpoint:
         assert kwargs["env"]["BORG_RSH"].startswith("ssh -i /tmp/test-ssh.key")
         mock_file_response.assert_called_once()
         mock_unlink.assert_called_once_with(fake_key_path)
+
+    def test_download_file_accepts_repository_id(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        repo = Repository(
+            name="Local Repo",
+            path="/tmp/local-repo",
+            repository_type="local",
+            passphrase=None,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        extracted_path = "/tmp/archive-download/extracted.txt"
+        with patch("app.api.archives.resolve_repo_ssh_key_file", return_value=None), \
+             patch("app.api.archives.os.path.exists", side_effect=lambda path: path == extracted_path), \
+             patch("app.api.archives.tempfile.mkdtemp", return_value="/tmp/archive-download"), \
+             patch("app.api.archives.FileResponse", side_effect=lambda **kwargs: {"path": kwargs["path"]}) as mock_file_response, \
+             patch(
+                 "app.api.archives.borg.extract_archive",
+                 new=AsyncMock(return_value={"success": True, "stdout": ""}),
+             ) as mock_extract:
+            response = test_client.get(
+                f"/api/archives/download?repository={repo.id}&archive=test-archive&file_path=/extracted.txt",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        args, kwargs = mock_extract.await_args
+        assert args == (
+            repo.path,
+            "test-archive",
+            ["/extracted.txt"],
+            "/tmp/archive-download",
+        )
+        assert kwargs["dry_run"] is False
+        assert kwargs["remote_path"] == repo.remote_path
+        assert kwargs["passphrase"] == repo.passphrase
+        assert kwargs["bypass_lock"] == repo.bypass_lock
+        mock_file_response.assert_called_once()

@@ -72,6 +72,28 @@ class TestArchivesListIntegration:
         archives = archives_data.get("archives", [])
         assert len(archives) == 0
 
+    def test_list_archives_from_real_repository_by_id(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+    ):
+        """Test listing archives when the client sends repository ID instead of path."""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+
+        response = test_client.get(
+            f"/api/archives/list?repository={repo.id}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        archives_data = json.loads(response.json()["archives"])
+        archives = archives_data.get("archives", [])
+        archive_list_names = [a["name"] for a in archives]
+        assert len(archives) == 2
+        assert "test-archive-1" in archive_list_names
+        assert "test-archive-2" in archive_list_names
+
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -182,6 +204,26 @@ class TestArchiveInfoIntegration:
         assert response.status_code == 500
         assert "Failed to get archive info" in response.json()["detail"]
 
+    def test_get_archive_info_real_archive_by_id(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+    ):
+        """Test getting archive info when the client sends repository ID."""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+
+        response = test_client.get(
+            f"/api/archives/{archive_names[0]}/info?repository={repo.id}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        info = response.json()["info"]
+        assert info["name"] == archive_names[0]
+        assert "id" in info
+        assert "stats" in info
+
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -234,6 +276,25 @@ class TestArchiveContentsIntegration:
         assert len(contents) > 0
         # Should contain files from subdir
         assert "file3.txt" in contents or "file4.log" in contents
+
+    def test_get_archive_contents_root_by_id(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+    ):
+        """Test browsing archive contents when the client sends repository ID."""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+
+        response = test_client.get(
+            f"/api/archives/{archive_names[0]}/contents?repository={repo.id}",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        contents = response.json()["contents"]
+        assert isinstance(contents, str)
+        assert len(contents) > 0
 
 
 @pytest.mark.integration
@@ -417,6 +478,29 @@ class TestDownloadFileIntegration:
         response = test_client.get(
             f"/api/archives/download?repository={repo.path}&archive={archive_names[0]}&file_path={file_path}",
             headers=admin_headers
+        )
+
+        assert response.status_code == 200, response.text
+        assert "application/octet-stream" in response.headers.get("content-type", "")
+        assert "attachment;" in response.headers.get("content-disposition", "")
+        assert "file1.txt" in response.headers.get("content-disposition", "")
+        assert response.content == b"Content of file 1"
+
+    def test_download_file_from_real_archive_by_id(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+        test_db,
+    ):
+        """Test downloading a real file when the client sends repository ID."""
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+
+        file_path = test_data_path.joinpath("file1.txt").as_posix()
+
+        response = test_client.get(
+            f"/api/archives/download?repository={repo.id}&archive={archive_names[0]}&file_path={file_path}",
+            headers=admin_headers,
         )
 
         assert response.status_code == 200, response.text

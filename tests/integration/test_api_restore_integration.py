@@ -105,6 +105,36 @@ class TestRestoreOperation:
         assert isinstance(preview, str)
         assert list(preview_dest.iterdir()) == []
 
+    @pytest.mark.asyncio
+    async def test_restore_preview_accepts_repository_id_in_payload(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+        tmp_path,
+    ):
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+        latest_archive = archive_names[-1]
+        preview_dest = tmp_path / "preview-destination-id"
+        preview_dest.mkdir()
+
+        response = test_client.post(
+            "/api/restore/preview",
+            json={
+                "repository": str(repo.id),
+                "archive": latest_archive,
+                "paths": [],
+                "destination": str(preview_dest),
+                "repository_id": repo.id,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        preview = response.json()["preview"]
+        assert isinstance(preview, str)
+        assert list(preview_dest.iterdir()) == []
+
     def test_restore_contents_uses_api_and_returns_nested_items(
         self,
         test_client: TestClient,
@@ -161,6 +191,47 @@ class TestRestoreOperation:
             "/api/restore/start",
             json={
                 "repository": str(repo_path),
+                "archive": latest_archive,
+                "paths": [],
+                "destination": str(restore_dest),
+                "repository_id": repo.id,
+            },
+            headers=admin_headers,
+        )
+
+        assert restore_response.status_code == 200
+        restore_job_id = restore_response.json()["job_id"]
+
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/restore/status",
+            restore_job_id,
+            admin_headers,
+            timeout=45,
+        )
+
+        assert job_data["status"] == "completed"
+        restored_files = {path.relative_to(restore_dest).as_posix() for path in restore_dest.rglob("*") if path.is_file()}
+        assert any(name.endswith("file1.txt") for name in restored_files)
+        assert any(name.endswith("file5.txt") for name in restored_files)
+
+    @pytest.mark.asyncio
+    async def test_restore_success_accepts_repository_id_in_payload(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        db_borg_repo_with_archives,
+        tmp_path,
+    ):
+        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+        latest_archive = archive_names[-1]
+        restore_dest = tmp_path / "restored_data_by_id"
+        restore_dest.mkdir()
+
+        restore_response = test_client.post(
+            "/api/restore/start",
+            json={
+                "repository": str(repo.id),
                 "archive": latest_archive,
                 "paths": [],
                 "destination": str(restore_dest),

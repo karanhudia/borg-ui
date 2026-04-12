@@ -416,12 +416,12 @@ class SmokeClient:
         except TimeoutError as exc:
             raise SmokeFailure(str(exc)) from exc
 
-    def list_archives(self, repository_path: str, *, token: Optional[str] = None) -> list[dict]:
+    def list_archives(self, repository: int | str, *, token: Optional[str] = None) -> list[dict]:
         response = self.request_ok(
             "GET",
             "/api/archives/list",
             token=token,
-            params={"repository": repository_path},
+            params={"repository": str(repository)},
         )
         return parse_archives_payload(response.json())
 
@@ -453,8 +453,8 @@ class SmokeClient:
         )
         return response.json()["items"]
 
-    def get_archive_info(self, archive_name: str, repository_path: str, *, token: Optional[str] = None, include_files: bool = False) -> dict:
-        params = {"repository": repository_path}
+    def get_archive_info(self, archive_name: str, repository: int | str, *, token: Optional[str] = None, include_files: bool = False) -> dict:
+        params = {"repository": str(repository)}
         if include_files:
             params["include_files"] = "true"
         response = self.request_ok("GET", f"/api/archives/{archive_name}/info", token=token, params=params)
@@ -470,19 +470,19 @@ class SmokeClient:
         )
         return response.json()["items"]
 
-    def download_archive_file(self, repository_path: str, archive_name: str, file_path: str, *, token: Optional[str] = None) -> bytes:
+    def download_archive_file(self, repository: int | str, archive_name: str, file_path: str, *, token: Optional[str] = None) -> bytes:
         response = self.request_ok(
             "GET",
             "/api/archives/download",
             token=token,
-            params={"repository": repository_path, "archive": archive_name, "file_path": file_path},
+            params={"repository": str(repository), "archive": archive_name, "file_path": file_path},
         )
         return response.content
 
     def start_restore(
         self,
         *,
-        repository_path: str,
+        repository: int | str,
         archive_name: str,
         repository_id: int,
         destination: Path,
@@ -495,7 +495,7 @@ class SmokeClient:
             token=token,
             headers=self._headers(token=token, json_body=True),
             json={
-                "repository": repository_path,
+                "repository": str(repository),
                 "archive": archive_name,
                 "paths": paths,
                 "destination": str(destination),

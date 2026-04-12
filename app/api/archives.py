@@ -45,7 +45,7 @@ async def list_archives(
         env, temp_key_file = _build_repo_env(repo, db)
         try:
             result = await borg.list_archives(
-                repository,
+                repo.path,
                 remote_path=repo.remote_path,
                 passphrase=repo.passphrase,
                 bypass_lock=repo.bypass_lock,
@@ -86,7 +86,7 @@ async def get_archive_info(
         env, temp_key_file = _build_repo_env(repo, db)
         try:
             result = await borg.info_archive(
-                repository,
+                repo.path,
                 archive_id,
                 remote_path=repo.remote_path,
                 passphrase=repo.passphrase,
@@ -142,7 +142,7 @@ async def get_archive_info(
                 env, temp_key_file = _build_repo_env(repo, db)
                 try:
                     list_result = await borg.list_archive_contents(
-                        repository,
+                        repo.path,
                         archive_id,
                         remote_path=repo.remote_path,
                         passphrase=repo.passphrase,
@@ -213,7 +213,7 @@ async def get_archive_contents(
         env, temp_key_file = _build_repo_env(repo, db)
         try:
             result = await borg.list_archive_contents(
-                repository,
+                repo.path,
                 archive_id,
                 path,
                 remote_path=repo.remote_path,
@@ -320,7 +320,7 @@ async def download_file_from_archive(
             # Extract the specific file using borg extract
             try:
                 result = await borg.extract_archive(
-                    repository,
+                    repo.path,
                     archive,
                     [file_path],
                     temp_dir,
