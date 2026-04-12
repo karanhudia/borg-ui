@@ -3084,6 +3084,11 @@
     }
   },
   "plan": {
+    "labels": {
+      "community": "Community",
+      "pro": "Pro",
+      "enterprise": "Enterprise"
+    },
     "currentPlan": "Your Plan",
     "fullAccessLabel": "Full Access",
     "proFeatures": "Pro features",

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Box, Button, Chip, Divider, Drawer, IconButton, Typography } from '@mui/material'
 import { X, Check, Sparkles, Clock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Plan, PLAN_COLOR, PLAN_LABEL } from '../core/features'
+import { Plan, PLAN_COLOR } from '../core/features'
 import { useAnalytics } from '../hooks/useAnalytics'
 import type { EntitlementInfo } from '../hooks/useSystemInfo'
 import { usePlanContent } from '../hooks/usePlanContent'
@@ -62,6 +62,7 @@ export default function PlanInfoDrawer({
     ? new Date(entitlement.expires_at).toLocaleDateString()
     : null
   const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
+  const planLabel = (value: Plan) => t(`plan.labels.${value}`)
 
   const daysRemaining =
     entitlement?.expires_at && referenceNowMs !== null
@@ -74,7 +75,7 @@ export default function PlanInfoDrawer({
       : null
 
   const color = isFullAccess ? PLAN_COLOR.enterprise : PLAN_COLOR[plan]
-  const label = isFullAccess ? t('plan.fullAccessLabel') : PLAN_LABEL[plan]
+  const label = isFullAccess ? t('plan.fullAccessLabel') : planLabel(plan)
 
   const selectedColor = PLAN_COLOR[selectedPlan]
   const visibleFeatureIds = Object.entries(features ?? {}).filter(
@@ -435,7 +436,7 @@ export default function PlanInfoDrawer({
                         letterSpacing: '0.04em',
                       }}
                     >
-                      {PLAN_LABEL[p]}
+                      {planLabel(p)}
                     </Typography>
                   </Box>
                 ))}
@@ -463,7 +464,7 @@ export default function PlanInfoDrawer({
                         color: 'text.disabled',
                       }}
                     >
-                      {t('plan.planFeatures', { plan: PLAN_LABEL[selectedPlan] })}
+                      {t('plan.planFeatures', { plan: planLabel(selectedPlan) })}
                     </Typography>
                   </Box>
                   {currentFeatures.map((feature) => (
@@ -533,7 +534,7 @@ export default function PlanInfoDrawer({
                         color: 'text.disabled',
                       }}
                     >
-                      {t('plan.plannedReleases', { plan: PLAN_LABEL[selectedPlan] })}
+                      {t('plan.plannedReleases', { plan: planLabel(selectedPlan) })}
                     </Typography>
                   </Box>
                   {upcomingVersionedFeatures.map((feature) => (
@@ -616,7 +617,7 @@ export default function PlanInfoDrawer({
                         color: 'text.disabled',
                       }}
                     >
-                      {t('plan.upcomingFeatures', { plan: PLAN_LABEL[selectedPlan] })}
+                      {t('plan.upcomingFeatures', { plan: planLabel(selectedPlan) })}
                     </Typography>
                     <Chip
                       icon={<Clock size={10} />}
@@ -719,7 +720,7 @@ export default function PlanInfoDrawer({
             onClick={handleBuyClick}
           >
             {t('plan.buyLink', {
-              plan: PLAN_LABEL[activeTab === 'upgrade' ? selectedPlan : 'pro'],
+              plan: planLabel(activeTab === 'upgrade' ? selectedPlan : 'pro'),
             })}
           </Button>
         </Box>

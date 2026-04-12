@@ -3084,6 +3084,11 @@
     }
   },
   "plan": {
+    "labels": {
+      "community": "Community",
+      "pro": "Pro",
+      "enterprise": "Enterprise"
+    },
     "currentPlan": "Piano attuale",
     "fullAccessLabel": "Accesso completo",
     "proFeatures": "Funzionalità Pro",
@@ -3117,18 +3122,18 @@
     "upcomingFeatures": "In arrivo per {{plan}}",
     "availableIn": "Disponibile in {{version}}",
     "buyLink": "Passa a {{plan}}",
-    "yourPlanTab": "Your Plan",
+    "yourPlanTab": "Il tuo piano",
     "upgradeTab": "Upgrade",
-    "communityIncluded": "Included in Community Edition",
-    "fullAccessCountdown_one": "{{count}} day of full access remaining",
-    "fullAccessCountdown_other": "{{count}} days of full access remaining",
-    "fullAccessEndsNotice": "On {{date}}, Pro & Enterprise features will deactivate. Everything below is yours, forever.",
-    "afterFullAccessEndsNotice": "These features were available during your full access period but are not included in Community Edition.",
-    "upgradeNudgeTitle": "Want more after full access?",
-    "upgradeNudgeAfterTitle": "Unlock more on Pro or Enterprise",
+    "communityIncluded": "Incluso nell'edizione Community",
+    "fullAccessCountdown_one": "Rimane {{count}} giorno di accesso completo",
+    "fullAccessCountdown_other": "Rimangono {{count}} giorni di accesso completo",
+    "fullAccessEndsNotice": "Il {{date}} le funzionalità Pro ed Enterprise verranno disattivate. Tutto ciò che vedi sotto resterà tuo per sempre.",
+    "afterFullAccessEndsNotice": "Queste funzionalità erano disponibili durante il periodo di accesso completo, ma non sono incluse nell'edizione Community.",
+    "upgradeNudgeTitle": "Vuoi di più dopo l'accesso completo?",
+    "upgradeNudgeAfterTitle": "Sblocca di più con Pro o Enterprise",
     "upgradeNudgePro": "Pro",
     "upgradeNudgeEnterprise": "Enterprise",
-    "viewUpgradeOptions": "View upgrade options"
+    "viewUpgradeOptions": "Visualizza le opzioni di upgrade"
   },
   "licensing": {
     "title": "Licenze",

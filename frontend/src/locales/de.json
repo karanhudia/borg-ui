@@ -3084,6 +3084,11 @@
     }
   },
   "plan": {
+    "labels": {
+      "community": "Community",
+      "pro": "Pro",
+      "enterprise": "Enterprise"
+    },
     "currentPlan": "Aktueller Plan",
     "fullAccessLabel": "Voller Zugriff",
     "proFeatures": "Pro-Funktionen",
@@ -3117,18 +3122,18 @@
     "upcomingFeatures": "Demnächst für {{plan}}",
     "availableIn": "Verfügbar in {{version}}",
     "buyLink": "Upgrade auf {{plan}}",
-    "yourPlanTab": "Your Plan",
+    "yourPlanTab": "Ihr Plan",
     "upgradeTab": "Upgrade",
-    "communityIncluded": "Included in Community Edition",
-    "fullAccessCountdown_one": "{{count}} day of full access remaining",
-    "fullAccessCountdown_other": "{{count}} days of full access remaining",
-    "fullAccessEndsNotice": "On {{date}}, Pro & Enterprise features will deactivate. Everything below is yours, forever.",
-    "afterFullAccessEndsNotice": "These features were available during your full access period but are not included in Community Edition.",
-    "upgradeNudgeTitle": "Want more after full access?",
-    "upgradeNudgeAfterTitle": "Unlock more on Pro or Enterprise",
+    "communityIncluded": "In der Community Edition enthalten",
+    "fullAccessCountdown_one": "Noch {{count}} Tag voller Zugriff",
+    "fullAccessCountdown_other": "Noch {{count}} Tage voller Zugriff",
+    "fullAccessEndsNotice": "Am {{date}} werden Pro- und Enterprise-Funktionen deaktiviert. Alles unten bleibt Ihnen dauerhaft erhalten.",
+    "afterFullAccessEndsNotice": "Diese Funktionen waren während Ihres Zeitraums mit vollem Zugriff verfügbar, sind aber nicht in der Community Edition enthalten.",
+    "upgradeNudgeTitle": "Möchten Sie nach dem vollen Zugriff mehr?",
+    "upgradeNudgeAfterTitle": "Schalten Sie mehr mit Pro oder Enterprise frei",
     "upgradeNudgePro": "Pro",
     "upgradeNudgeEnterprise": "Enterprise",
-    "viewUpgradeOptions": "View upgrade options"
+    "viewUpgradeOptions": "Upgrade-Optionen anzeigen"
   },
   "licensing": {
     "title": "Lizenzierung",

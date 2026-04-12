@@ -3084,6 +3084,11 @@
     }
   },
   "plan": {
+    "labels": {
+      "community": "Community",
+      "pro": "Pro",
+      "enterprise": "Enterprise"
+    },
     "currentPlan": "Plan actual",
     "fullAccessLabel": "Acceso completo",
     "proFeatures": "Funciones Pro",
@@ -3117,18 +3122,18 @@
     "upcomingFeatures": "Próximamente para {{plan}}",
     "availableIn": "Disponible en {{version}}",
     "buyLink": "Actualizar a {{plan}}",
-    "yourPlanTab": "Your Plan",
-    "upgradeTab": "Upgrade",
-    "communityIncluded": "Included in Community Edition",
-    "fullAccessCountdown_one": "{{count}} day of full access remaining",
-    "fullAccessCountdown_other": "{{count}} days of full access remaining",
-    "fullAccessEndsNotice": "On {{date}}, Pro & Enterprise features will deactivate. Everything below is yours, forever.",
-    "afterFullAccessEndsNotice": "These features were available during your full access period but are not included in Community Edition.",
-    "upgradeNudgeTitle": "Want more after full access?",
-    "upgradeNudgeAfterTitle": "Unlock more on Pro or Enterprise",
+    "yourPlanTab": "Tu plan",
+    "upgradeTab": "Mejorar",
+    "communityIncluded": "Incluido en la edición Community",
+    "fullAccessCountdown_one": "Queda {{count}} día de acceso completo",
+    "fullAccessCountdown_other": "Quedan {{count}} días de acceso completo",
+    "fullAccessEndsNotice": "El {{date}} se desactivarán las funciones Pro y Enterprise. Todo lo que aparece abajo será tuyo para siempre.",
+    "afterFullAccessEndsNotice": "Estas funciones estuvieron disponibles durante tu periodo de acceso completo, pero no están incluidas en la edición Community.",
+    "upgradeNudgeTitle": "¿Quieres más después del acceso completo?",
+    "upgradeNudgeAfterTitle": "Desbloquea más con Pro o Enterprise",
     "upgradeNudgePro": "Pro",
     "upgradeNudgeEnterprise": "Enterprise",
-    "viewUpgradeOptions": "View upgrade options"
+    "viewUpgradeOptions": "Ver opciones de mejora"
   },
   "licensing": {
     "title": "Licencias",
