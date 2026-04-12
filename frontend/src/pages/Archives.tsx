@@ -41,16 +41,23 @@ function getDefaultMountPoint(archiveName: string): string {
   return archiveName.replace(/[/:]/g, '_').replace(/\s+/g, '_')
 }
 
+function normalizeRepositoryId(value: number | string | null | undefined): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number.parseInt(value, 10)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
 const Archives: React.FC = () => {
   const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(() => {
-    const repoParam = searchParams.get('repo')
-    return repoParam ? parseInt(repoParam, 10) : null
+    return normalizeRepositoryId(searchParams.get('repo'))
   })
-  const [selectedRepository, setSelectedRepository] = useState<Repository | null>(null)
   const [viewArchive, setViewArchive] = useState<Archive | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [lockError, setLockError] = useState<{
@@ -75,6 +82,20 @@ const Archives: React.FC = () => {
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
+
+  // Get repositories from API response
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
+  const repositories = React.useMemo(
+    () => repositoriesData?.data?.repositories || [],
+    [repositoriesData]
+  )
+  const selectedRepository = React.useMemo(
+    () =>
+      selectedRepositoryId
+        ? repositories.find((r: Repository) => r.id === selectedRepositoryId) || null
+        : null,
+    [repositories, selectedRepositoryId]
+  )
 
   // Get archives for selected repository
   const {
@@ -254,10 +275,15 @@ const Archives: React.FC = () => {
 
   // Handle repository selection
   const handleRepositoryChange = (repositoryId: number) => {
-    setSelectedRepositoryId(repositoryId)
-    const repo = repositories.find((r: Repository) => r.id === repositoryId)
-    setSelectedRepository(repo || null)
-    setSearchParams({ repo: String(repositoryId) }, { replace: true })
+    const normalizedRepositoryId = normalizeRepositoryId(repositoryId)
+    setSelectedRepositoryId(normalizedRepositoryId)
+    const repo = repositories.find((r: Repository) => r.id === normalizedRepositoryId)
+
+    if (normalizedRepositoryId) {
+      setSearchParams({ repo: String(normalizedRepositoryId) }, { replace: true })
+    } else {
+      setSearchParams({}, { replace: true })
+    }
     // Track archive listing (selecting a repo to filter/list its archives)
     if (repo) {
       trackArchive(EventAction.FILTER, repo, { surface: 'archives_page' })
@@ -337,35 +363,18 @@ const Archives: React.FC = () => {
     setShowRestoreWizard(false)
   }
 
-  // Get repositories from API response
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
-  const repositories = React.useMemo(
-    () => repositoriesData?.data?.repositories || [],
-    [repositoriesData]
-  )
-
-  // Resolve selectedRepository object once repositories are loaded
   useEffect(() => {
-    if (repositories.length === 0) return
-
     // Handle incoming navigation state (from "View Archives" button)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stateRepoId = location.state && (location.state as any).repositoryId
+    const stateRepoId = normalizeRepositoryId(
+      location.state && (location.state as any).repositoryId
+    )
     if (stateRepoId) {
       setSelectedRepositoryId(stateRepoId)
-      setSelectedRepository(repositories.find((r: Repository) => r.id === stateRepoId) || null)
       setSearchParams({ repo: String(stateRepoId) }, { replace: true })
       window.scrollTo(0, 0)
-      return
     }
-
-    // Restore selection from URL param (e.g. on page refresh)
-    if (selectedRepositoryId) {
-      setSelectedRepository(
-        repositories.find((r: Repository) => r.id === selectedRepositoryId) || null
-      )
-    }
-  }, [location.state, repositories]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.state, setSearchParams])
 
   const archivesList = (archives?.data?.archives || []).sort((a: Archive, b: Archive) => {
     // Sort by start date (borg1) or time (borg2), latest first

@@ -12,8 +12,8 @@ const borgDeleteArchiveMock = vi.fn()
 const borgGetDownloadUrlMock = vi.fn()
 
 vi.mock('../../components/RepositorySelectorCard', () => ({
-  default: ({ onChange }: { onChange: (id: number) => void }) => (
-    <button onClick={() => onChange(1)}>Select Repo</button>
+  default: ({ onChange }: { onChange: (id: number | string) => void }) => (
+    <button onClick={() => onChange('1')}>Select Repo</button>
   ),
 }))
 
@@ -221,6 +221,8 @@ describe('Archives page actions', () => {
     await user.click(await screen.findByText('Select Repo'))
 
     await waitFor(() => {
+      expect(borgListArchivesMock).toHaveBeenCalledTimes(1)
+      expect(borgGetInfoMock).toHaveBeenCalledTimes(1)
       expect(trackArchive).toHaveBeenCalledWith('Filter', repository, {
         surface: 'archives_page',
       })
