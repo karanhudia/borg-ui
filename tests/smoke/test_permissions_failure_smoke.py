@@ -47,7 +47,7 @@ def main() -> int:
         if len(archives) != 1:
             raise SmokeFailure(f"Expected one archive before permission checks, got {archives}")
         archive_name = archives[0]["name"]
-        repo_root = source_root.as_posix().lstrip("/")
+        repo_root = client.container_path(source_root).lstrip("/")
 
         viewer_username = "smoke-viewer"
         viewer_password = "smoke-viewer-pass"

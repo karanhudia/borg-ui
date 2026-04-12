@@ -49,7 +49,7 @@ def main() -> int:
         if archive_info["name"] != archive_name:
             raise SmokeFailure(f"Archive info mismatch: {archive_info}")
 
-        repo_root = source_root.as_posix().lstrip("/")
+        repo_root = client.container_path(source_root).lstrip("/")
         root_items = client.restore_contents(repo_id, archive_name)
         root_names = [item["name"] for item in root_items]
         if repo_root.split("/")[0] not in root_names:

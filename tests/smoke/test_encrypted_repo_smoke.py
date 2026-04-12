@@ -22,6 +22,7 @@ def main() -> int:
     client = SmokeClient(args.url)
     try:
         client.authenticate()
+        run_id = client.temp_dir.name
 
         source_root = client.prepare_source_tree(
             "encrypted-source",
@@ -32,7 +33,7 @@ def main() -> int:
         )
 
         repokey_repo_id, repokey_repo_path, _backup_job_id, _backup_data = client.create_repository_and_backup(
-            name="Repokey Smoke Repo",
+            name=f"Repokey Smoke Repo {run_id}",
             repo_path=client.temp_dir / "repokey-repo",
             source_dirs=[source_root],
             encryption="repokey",
@@ -50,9 +51,9 @@ def main() -> int:
 
         selected_restore_dir = client.temp_dir / "repokey-restore"
         selected_restore_dir.mkdir(parents=True, exist_ok=True)
-        repo_root = source_root.as_posix().lstrip("/")
+        repo_root = client.container_path(source_root).lstrip("/")
         restore_job_id = client.start_restore(
-            repository_path=repokey_repo_path,
+            repository=repokey_repo_path,
             archive_name=archive_name,
             repository_id=repokey_repo_id,
             destination=selected_restore_dir,
@@ -78,11 +79,12 @@ def main() -> int:
         client.create_borg_key_export(keyfile_repo_path, keyfile_passphrase, exported_key)
 
         imported_repo_id, imported_repo_path = client.import_repository(
-            name="Keyfile Smoke Repo",
+            name=f"Keyfile Smoke Repo {run_id}",
             repo_path=keyfile_repo_path,
             encryption="keyfile",
             source_dirs=[keyfile_source],
             passphrase=keyfile_passphrase,
+            keyfile_content=exported_key.read_text(encoding="utf-8"),
         )
         client.upload_keyfile(imported_repo_id, exported_key)
         keyfile_bytes = client.download_keyfile(imported_repo_id)

@@ -22,6 +22,7 @@ def main() -> int:
     client = SmokeClient(args.url)
     try:
         client.authenticate()
+        run_id = client.temp_dir.name
 
         source_root = client.prepare_source_tree(
             "restore-cancel-source",
@@ -30,7 +31,7 @@ def main() -> int:
         client.write_incompressible_file(source_root / "large.bin", size_mb=96)
 
         repo_id, repo_path = client.create_repository(
-            name="Restore Cancel Smoke Repo",
+            name=f"Restore Cancel Smoke Repo {run_id}",
             repo_path=client.temp_dir / "restore-cancel-repo",
             source_dirs=[source_root],
         )
@@ -49,9 +50,9 @@ def main() -> int:
 
         restore_dest = client.temp_dir / "restore-cancel-output"
         restore_dest.mkdir(parents=True, exist_ok=True)
-        repo_root = source_root.as_posix().lstrip("/")
+        repo_root = client.container_path(source_root).lstrip("/")
         restore_job_id = client.start_restore(
-            repository_path=repo_path,
+            repository=repo_path,
             archive_name=archive_name,
             repository_id=repo_id,
             destination=restore_dest,

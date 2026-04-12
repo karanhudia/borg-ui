@@ -498,7 +498,7 @@ class SmokeClient:
                 "repository": str(repository),
                 "archive": archive_name,
                 "paths": paths,
-                "destination": str(destination),
+                "destination": self.container_path(destination),
                 "repository_id": repository_id,
             },
         )
