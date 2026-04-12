@@ -566,7 +566,11 @@ class MountService:
                                 job_id=job_id
                             )
                             # Unmount without cleanup (we'll remount parent immediately)
-                            await self.unmount(child_mount_id, force=False)
+                            await self.unmount(
+                                child_mount_id,
+                                force=False,
+                                cleanup_temp_resources=False
+                            )
                             # Remove from mounted_dirs
                             del mounted_dirs[child_mount_dir]
 
@@ -1028,13 +1032,19 @@ class MountService:
         finally:
             db.close()
 
-    async def unmount(self, mount_id: str, force: bool = False) -> bool:
+    async def unmount(
+        self,
+        mount_id: str,
+        force: bool = False,
+        cleanup_temp_resources: bool = True
+    ) -> bool:
         """
         Unmount and cleanup a mount
 
         Args:
             mount_id: Mount ID to unmount
             force: Force unmount even if busy
+            cleanup_temp_resources: Whether to remove associated temp directories/key files
 
         Returns:
             True if successful, False otherwise
@@ -1109,7 +1119,14 @@ class MountService:
                         other_mounts_using_temp_root = True
                         break
 
-            if other_mounts_using_temp_root:
+            if not cleanup_temp_resources:
+                logger.debug(
+                    "Skipping temp resource cleanup for internal remount flow",
+                    mount_id=mount_id,
+                    temp_root=mount_info.temp_root,
+                    temp_key_file=mount_info.temp_key_file
+                )
+            elif other_mounts_using_temp_root:
                 # Don't cleanup temp_root (still in use by other mounts)
                 # Only cleanup temp_key_file if no other mount is using it
                 other_using_key = any(

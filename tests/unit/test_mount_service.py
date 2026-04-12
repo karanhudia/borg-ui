@@ -322,6 +322,79 @@ class TestMountService:
         result = await mount_service.unmount("nonexistent-mount-id")
         assert result is False
 
+    @pytest.mark.asyncio
+    async def test_mount_ssh_paths_shared_preserves_temp_resources_during_remount(self, mount_service):
+        """Test child mount replacement does not delete the shared temp root or SSH key"""
+        with patch('app.services.mount_service.SessionLocal') as mock_session:
+            mock_db = Mock()
+            mock_session.return_value = mock_db
+
+            mock_connection = Mock(spec=SSHConnection)
+            mock_connection.id = 1
+            mock_connection.host = "example.com"
+            mock_connection.username = "tester"
+            mock_connection.port = 22
+            mock_connection.ssh_key_id = 10
+
+            mock_key = Mock(spec=SSHKey)
+            mock_key.id = 10
+
+            def query_side_effect(model):
+                mock_query = Mock()
+                if model == SSHConnection:
+                    mock_query.filter.return_value.first.return_value = mock_connection
+                elif model == SSHKey:
+                    mock_query.filter.return_value.first.return_value = mock_key
+                return mock_query
+
+            mock_db.query.side_effect = query_side_effect
+
+            temp_key = tempfile.NamedTemporaryFile(delete=False, suffix=".key")
+            temp_key.close()
+
+            mount_calls = []
+
+            async def mock_execute_mount(connection, remote_path, mount_point, temp_key_file):
+                assert os.path.exists(mount_point)
+                assert os.path.exists(temp_key_file)
+                mount_calls.append((remote_path, mount_point))
+
+            try:
+                with patch.object(mount_service, '_check_sshfs_available', return_value=True), \
+                     patch.object(mount_service, '_decrypt_and_write_key', return_value=temp_key.name), \
+                     patch.object(mount_service, '_check_remote_is_file', side_effect=[False, True]), \
+                     patch.object(mount_service, '_execute_sshfs_mount', new_callable=AsyncMock) as mock_mount, \
+                     patch.object(mount_service, '_verify_mount_readable', new_callable=AsyncMock), \
+                     patch.object(mount_service, '_unmount_fuse', new_callable=AsyncMock, return_value=True), \
+                     patch.object(mount_service, '_save_state'):
+
+                    mock_mount.side_effect = mock_execute_mount
+
+                    temp_root, mount_info_list = await mount_service.mount_ssh_paths_shared(
+                        connection_id=1,
+                        remote_paths=["/home/tester/docs", "/home/tester/file.txt"],
+                        job_id=42
+                    )
+
+                    assert len(mount_calls) == 2
+                    assert mount_calls[0][0] == "/home/tester/docs"
+                    assert mount_calls[1][0] == "/home/tester"
+
+                    assert os.path.exists(temp_root)
+                    assert os.path.exists(temp_key.name)
+                    assert len(mount_service.active_mounts) == 1
+                    assert len(set(mount_id for mount_id, _ in mount_info_list)) == 1
+
+                    final_mount = next(iter(mount_service.active_mounts.values()))
+                    assert final_mount.mount_point == os.path.join(temp_root, "home/tester")
+            finally:
+                mount_service._cleanup_temp_files(
+                    next(iter(mount_service.active_mounts.values())).temp_root
+                    if mount_service.active_mounts else None,
+                    temp_key.name if os.path.exists(temp_key.name) else None
+                )
+                mount_service.active_mounts.clear()
+
     @pytest.mark.skip(reason="_verify_mount_writable() method not yet implemented - planned feature")
     @pytest.mark.asyncio
     async def test_verify_mount_writable_success(self, mount_service):
