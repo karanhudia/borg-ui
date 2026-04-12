@@ -12,12 +12,10 @@ import {
   CircularProgress,
   FormControlLabel,
   Switch,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   IconButton,
   Tooltip,
+  Tabs,
+  Tab,
 } from '@mui/material'
 import {
   Save,
@@ -61,11 +59,11 @@ const SystemSettingsTab: React.FC = () => {
   const [rotateMetricsToken, setRotateMetricsToken] = useState(false)
   const [newMetricsToken, setNewMetricsToken] = useState<string | null>(null)
   const [metricsTokenCopied, setMetricsTokenCopied] = useState(false)
-  const [metricsTokenCloseConfirmOpen, setMetricsTokenCloseConfirmOpen] = useState(false)
 
   const [hasChanges, setHasChanges] = useState(false)
   const [browseChanged, setBrowseChanged] = useState(false)
   const [systemChanged, setSystemChanged] = useState(false)
+  const [activeSection, setActiveSection] = useState(0)
 
   interface CacheStats {
     browse_max_items?: number
@@ -151,9 +149,6 @@ const SystemSettingsTab: React.FC = () => {
       setMetricsEnabled(systemSettings.metrics_enabled ?? false)
       setMetricsRequireAuth(systemSettings.metrics_require_auth ?? false)
       setRotateMetricsToken(false)
-      setNewMetricsToken(null)
-      setMetricsTokenCopied(false)
-      setMetricsTokenCloseConfirmOpen(false)
       setHasChanges(false)
     }
   }, [systemSettings])
@@ -331,7 +326,6 @@ const SystemSettingsTab: React.FC = () => {
       if (generatedMetricsToken) {
         setNewMetricsToken(generatedMetricsToken)
         setMetricsTokenCopied(false)
-        setMetricsTokenCloseConfirmOpen(false)
       }
       trackSystem(EventAction.EDIT, {
         section: 'system_settings',
@@ -415,16 +409,26 @@ const SystemSettingsTab: React.FC = () => {
     setTimeout(() => setMetricsTokenCopied(false), 2000)
   }
 
-  const handleCloseMetricsTokenDialog = () => {
-    if (!metricsTokenCopied) {
-      setMetricsTokenCloseConfirmOpen(true)
-      return
-    }
-    setNewMetricsToken(null)
-  }
-
   const isLoading = cacheLoading || systemLoading
   const isSaving = saveBrowseLimitsMutation.isPending || saveTimeoutsMutation.isPending
+  const sectionTabs = [
+    {
+      label: t('systemSettings.operationTimeoutsTitle'),
+      description: t('systemSettings.operationTimeoutsDescription'),
+    },
+    {
+      label: t('systemSettings.repositoryMonitoringTitle'),
+      description: t('systemSettings.repositoryMonitoringDescription'),
+    },
+    {
+      label: t('systemSettings.metricsAccessTitle'),
+      description: t('systemSettings.metricsAccessDescription'),
+    },
+    {
+      label: t('systemSettings.archiveBrowsingLimitsTitle'),
+      description: t('systemSettings.archiveBrowsingLimitsDescription'),
+    },
+  ]
 
   if (isLoading) {
     return (
@@ -437,7 +441,6 @@ const SystemSettingsTab: React.FC = () => {
   return (
     <Box>
       <Stack spacing={3}>
-        {/* Header */}
         <Box
           sx={{
             display: 'flex',
@@ -467,414 +470,438 @@ const SystemSettingsTab: React.FC = () => {
           </Button>
         </Box>
 
-        {/* Operation Timeouts Card */}
-        <SettingsCard>
-          <Stack spacing={3}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Clock size={24} />
-              <Typography variant="h6">{t('systemSettings.operationTimeoutsTitle')}</Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {t('systemSettings.operationTimeoutsDescription')}
-            </Typography>
-            <Divider />
-
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' },
-                gap: 3,
-              }}
+        <SettingsCard sx={{ overflow: 'hidden' }} contentSx={{ p: 0 }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs
+              value={activeSection}
+              onChange={(_, value) => setActiveSection(value)}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+              sx={{ px: { xs: 1, md: 2 } }}
             >
-              <TextField
-                label={t('systemSettings.mountTimeoutLabel')}
-                type="number"
-                fullWidth
-                value={mountTimeout}
-                onChange={(e) => setMountTimeout(Number(e.target.value))}
-                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 }}
-                error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
-                helperText={
-                  <>
-                    {t('systemSettings.mountTimeoutHelper')} {formatTimeout(mountTimeout)}
-                    {renderSourceLabel(timeoutSources?.mount_timeout)}
-                  </>
-                }
-              />
+              {[
+                { label: sectionTabs[0].label, icon: <Clock size={15} /> },
+                { label: sectionTabs[1].label, icon: <RefreshCw size={15} /> },
+                { label: sectionTabs[2].label, icon: <Key size={15} /> },
+                { label: sectionTabs[3].label, icon: <AlertTriangle size={15} /> },
+              ].map((section) => (
+                <Tab
+                  key={section.label}
+                  label={section.label}
+                  icon={section.icon}
+                  iconPosition="start"
+                  sx={{ minHeight: 48, gap: 0.5, textTransform: 'none', fontWeight: 600 }}
+                />
+              ))}
+            </Tabs>
+          </Box>
 
-              <TextField
-                label={t('systemSettings.infoTimeoutLabel')}
-                type="number"
-                fullWidth
-                value={infoTimeout}
-                onChange={(e) => setInfoTimeout(Number(e.target.value))}
-                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
-                error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
-                helperText={
-                  <>
-                    {t('systemSettings.infoTimeoutHelper')} {formatTimeout(infoTimeout)}
-                    {renderSourceLabel(timeoutSources?.info_timeout)}
-                  </>
-                }
-              />
-
-              <TextField
-                label={t('systemSettings.listTimeoutLabel')}
-                type="number"
-                fullWidth
-                value={listTimeout}
-                onChange={(e) => setListTimeout(Number(e.target.value))}
-                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
-                error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
-                helperText={
-                  <>
-                    {t('systemSettings.listTimeoutHelper')} {formatTimeout(listTimeout)}
-                    {renderSourceLabel(timeoutSources?.list_timeout)}
-                  </>
-                }
-              />
-
-              <TextField
-                label={t('systemSettings.initTimeoutLabel')}
-                type="number"
-                fullWidth
-                value={initTimeout}
-                onChange={(e) => setInitTimeout(Number(e.target.value))}
-                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
-                error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
-                helperText={
-                  <>
-                    {t('systemSettings.initTimeoutHelper')} {formatTimeout(initTimeout)}
-                    {renderSourceLabel(timeoutSources?.init_timeout)}
-                  </>
-                }
-              />
-
-              <TextField
-                label={t('systemSettings.backupTimeoutLabel')}
-                type="number"
-                fullWidth
-                value={backupTimeout}
-                onChange={(e) => setBackupTimeout(Number(e.target.value))}
-                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
-                error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
-                helperText={
-                  <>
-                    {t('systemSettings.backupTimeoutHelper')} {formatTimeout(backupTimeout)}
-                    {renderSourceLabel(timeoutSources?.backup_timeout)}
-                  </>
-                }
-              />
-
-              <TextField
-                label={t('systemSettings.sourceSizeTimeoutLabel')}
-                type="number"
-                fullWidth
-                value={sourceSizeTimeout}
-                onChange={(e) => setSourceSizeTimeout(Number(e.target.value))}
-                inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
-                error={sourceSizeTimeout < MIN_TIMEOUT || sourceSizeTimeout > MAX_TIMEOUT}
-                helperText={
-                  <>
-                    {t('systemSettings.sourceSizeTimeoutHelper')} {formatTimeout(sourceSizeTimeout)}
-                    {renderSourceLabel(timeoutSources?.source_size_timeout)}
-                  </>
-                }
-              />
-            </Box>
-          </Stack>
-        </SettingsCard>
-
-        {/* Repository Monitoring Card */}
-        <SettingsCard>
-          <Stack spacing={3}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <RefreshCw size={24} />
-              <Typography variant="h6">{t('systemSettings.repositoryMonitoringTitle')}</Typography>
-              <Tooltip title={t('systemSettings.manualRefreshAlert')} placement="right">
-                <Box
-                  component="span"
-                  sx={{ display: 'inline-flex', color: 'info.main', cursor: 'help', ml: 0.5 }}
-                >
-                  <Info size={16} />
-                </Box>
-              </Tooltip>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {t('systemSettings.repositoryMonitoringDescription')}
-            </Typography>
-            <Divider />
-
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-              <TextField
-                label={t('systemSettings.statsRefreshIntervalLabel')}
-                type="number"
-                value={statsRefreshInterval}
-                onChange={(e) => setStatsRefreshInterval(Number(e.target.value))}
-                inputProps={{ min: 0, max: MAX_STATS_REFRESH, step: 15 }}
-                error={statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH}
-                helperText={
-                  statsRefreshInterval === 0
-                    ? t('systemSettings.statsRefreshDisabled')
-                    : statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH
-                      ? t('systemSettings.statsRefreshRangeError', { max: MAX_STATS_REFRESH })
-                      : t('systemSettings.statsRefreshIntervalHelper', {
-                          interval: statsRefreshInterval,
-                        })
-                }
-                sx={{ width: 300 }}
-              />
-              <Button
-                variant="outlined"
-                onClick={handleRefreshStats}
-                disabled={isRefreshingStats}
-                startIcon={
-                  isRefreshingStats ? <CircularProgress size={16} /> : <RefreshCw size={16} />
-                }
-                sx={{ height: 40 }}
-              >
-                {isRefreshingStats
-                  ? t('systemSettings.refreshing')
-                  : t('systemSettings.refreshNow')}
-              </Button>
-            </Box>
-
-            {systemSettings?.last_stats_refresh && (
-              <Typography variant="body2" color="text.secondary">
-                {t('systemSettings.lastRefreshed')}{' '}
-                {new Date(systemSettings.last_stats_refresh).toLocaleString()}
-              </Typography>
-            )}
-          </Stack>
-        </SettingsCard>
-
-        <SettingsCard>
-          <Stack spacing={3}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Settings size={24} />
-              <Typography variant="h6">{t('systemSettings.metricsAccessTitle')}</Typography>
-              <Tooltip title={t('systemSettings.metricsHeaderHelp')} placement="right">
-                <Box
-                  component="span"
-                  sx={{ display: 'inline-flex', color: 'info.main', cursor: 'help', ml: 0.5 }}
-                >
-                  <Info size={16} />
-                </Box>
-              </Tooltip>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {t('systemSettings.metricsAccessDescription')}
-            </Typography>
-            <Divider />
-
-            <Stack spacing={2}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={metricsEnabled}
-                    onChange={(e) => {
-                      const enabled = e.target.checked
-                      setMetricsEnabled(enabled)
-                      if (!enabled) {
-                        setMetricsRequireAuth(false)
-                        setRotateMetricsToken(false)
-                      }
-                    }}
-                  />
-                }
-                label={t('systemSettings.metricsEnabledLabel')}
-              />
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={metricsRequireAuth}
-                    disabled={!metricsEnabled}
-                    onChange={(e) => {
-                      const enabled = e.target.checked
-                      setMetricsRequireAuth(enabled)
-                      if (!enabled) {
-                        setRotateMetricsToken(false)
-                      }
-                    }}
-                  />
-                }
-                label={t('systemSettings.metricsRequireAuthLabel')}
-              />
-
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: { xs: 'column', sm: 'row' },
-                  gap: 1.5,
-                  alignItems: { xs: 'stretch', sm: 'center' },
-                }}
-              >
-                <Button
-                  variant="outlined"
-                  startIcon={<Key size={16} />}
-                  disabled={!metricsEnabled || !metricsRequireAuth}
-                  onClick={() => setRotateMetricsToken(true)}
-                >
-                  {systemSettings?.metrics_token_set
-                    ? t('systemSettings.metricsRotateToken')
-                    : t('systemSettings.metricsGenerateToken')}
-                </Button>
-                <Typography variant="body2" color="text.secondary">
-                  {!metricsEnabled || !metricsRequireAuth
-                    ? t('systemSettings.metricsTokenDisabledHelper')
-                    : rotateMetricsToken
-                      ? t('systemSettings.metricsTokenWillRotate')
-                      : systemSettings?.metrics_token_set
-                        ? t('systemSettings.metricsTokenConfigured')
-                        : t('systemSettings.metricsTokenWillGenerate')}
-                </Typography>
+          <Box sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack spacing={3}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {activeSection === 0 && <Clock size={22} />}
+                {activeSection === 1 && <RefreshCw size={22} />}
+                {activeSection === 2 && <Settings size={22} />}
+                {activeSection === 3 && <AlertTriangle size={22} />}
+                <Typography variant="h6">{sectionTabs[activeSection].label}</Typography>
+                {activeSection === 1 && (
+                  <Tooltip title={t('systemSettings.manualRefreshAlert')} placement="right">
+                    <Box
+                      component="span"
+                      sx={{ display: 'inline-flex', color: 'info.main', cursor: 'help', ml: 0.5 }}
+                    >
+                      <Info size={16} />
+                    </Box>
+                  </Tooltip>
+                )}
+                {activeSection === 2 && (
+                  <Tooltip title={t('systemSettings.metricsHeaderHelp')} placement="right">
+                    <Box
+                      component="span"
+                      sx={{ display: 'inline-flex', color: 'info.main', cursor: 'help', ml: 0.5 }}
+                    >
+                      <Info size={16} />
+                    </Box>
+                  </Tooltip>
+                )}
+                {activeSection === 3 && (
+                  <Tooltip
+                    title={
+                      <>
+                        <strong>{t('systemSettings.warningLabel')}</strong>{' '}
+                        {t('systemSettings.largeLimitsWarning')}
+                      </>
+                    }
+                    placement="right"
+                  >
+                    <Box
+                      component="span"
+                      sx={{
+                        display: 'inline-flex',
+                        color: 'warning.main',
+                        cursor: 'help',
+                        ml: 0.5,
+                      }}
+                    >
+                      <AlertTriangle size={16} />
+                    </Box>
+                  </Tooltip>
+                )}
               </Box>
-            </Stack>
-          </Stack>
-        </SettingsCard>
 
-        {/* Archive Browsing Limits Card */}
-        <SettingsCard>
-          <Stack spacing={3}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Settings size={24} />
-              <Typography variant="h6">{t('systemSettings.archiveBrowsingLimitsTitle')}</Typography>
-              <Tooltip
-                title={
-                  <>
-                    <strong>{t('systemSettings.warningLabel')}</strong>{' '}
-                    {t('systemSettings.largeLimitsWarning')}
-                  </>
-                }
-                placement="right"
-              >
+              <Typography variant="body2" color="text.secondary">
+                {sectionTabs[activeSection].description}
+              </Typography>
+
+              <Divider />
+
+              {activeSection === 0 && (
                 <Box
-                  component="span"
-                  sx={{ display: 'inline-flex', color: 'warning.main', cursor: 'help', ml: 0.5 }}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', xl: '1fr 1fr 1fr' },
+                    gap: 2,
+                  }}
                 >
-                  <AlertTriangle size={16} />
+                  <TextField
+                    label={t('systemSettings.mountTimeoutLabel')}
+                    type="number"
+                    fullWidth
+                    value={mountTimeout}
+                    onChange={(e) => setMountTimeout(Number(e.target.value))}
+                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 10 }}
+                    error={mountTimeout < MIN_TIMEOUT || mountTimeout > MAX_TIMEOUT}
+                    helperText={
+                      <>
+                        {t('systemSettings.mountTimeoutHelper')} {formatTimeout(mountTimeout)}
+                        {renderSourceLabel(timeoutSources?.mount_timeout)}
+                      </>
+                    }
+                  />
+
+                  <TextField
+                    label={t('systemSettings.infoTimeoutLabel')}
+                    type="number"
+                    fullWidth
+                    value={infoTimeout}
+                    onChange={(e) => setInfoTimeout(Number(e.target.value))}
+                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
+                    error={infoTimeout < MIN_TIMEOUT || infoTimeout > MAX_TIMEOUT}
+                    helperText={
+                      <>
+                        {t('systemSettings.infoTimeoutHelper')} {formatTimeout(infoTimeout)}
+                        {renderSourceLabel(timeoutSources?.info_timeout)}
+                      </>
+                    }
+                  />
+
+                  <TextField
+                    label={t('systemSettings.listTimeoutLabel')}
+                    type="number"
+                    fullWidth
+                    value={listTimeout}
+                    onChange={(e) => setListTimeout(Number(e.target.value))}
+                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
+                    error={listTimeout < MIN_TIMEOUT || listTimeout > MAX_TIMEOUT}
+                    helperText={
+                      <>
+                        {t('systemSettings.listTimeoutHelper')} {formatTimeout(listTimeout)}
+                        {renderSourceLabel(timeoutSources?.list_timeout)}
+                      </>
+                    }
+                  />
+
+                  <TextField
+                    label={t('systemSettings.initTimeoutLabel')}
+                    type="number"
+                    fullWidth
+                    value={initTimeout}
+                    onChange={(e) => setInitTimeout(Number(e.target.value))}
+                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 60 }}
+                    error={initTimeout < MIN_TIMEOUT || initTimeout > MAX_TIMEOUT}
+                    helperText={
+                      <>
+                        {t('systemSettings.initTimeoutHelper')} {formatTimeout(initTimeout)}
+                        {renderSourceLabel(timeoutSources?.init_timeout)}
+                      </>
+                    }
+                  />
+
+                  <TextField
+                    label={t('systemSettings.backupTimeoutLabel')}
+                    type="number"
+                    fullWidth
+                    value={backupTimeout}
+                    onChange={(e) => setBackupTimeout(Number(e.target.value))}
+                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
+                    error={backupTimeout < MIN_TIMEOUT || backupTimeout > MAX_TIMEOUT}
+                    helperText={
+                      <>
+                        {t('systemSettings.backupTimeoutHelper')} {formatTimeout(backupTimeout)}
+                        {renderSourceLabel(timeoutSources?.backup_timeout)}
+                      </>
+                    }
+                  />
+
+                  <TextField
+                    label={t('systemSettings.sourceSizeTimeoutLabel')}
+                    type="number"
+                    fullWidth
+                    value={sourceSizeTimeout}
+                    onChange={(e) => setSourceSizeTimeout(Number(e.target.value))}
+                    inputProps={{ min: MIN_TIMEOUT, max: MAX_TIMEOUT, step: 300 }}
+                    error={sourceSizeTimeout < MIN_TIMEOUT || sourceSizeTimeout > MAX_TIMEOUT}
+                    helperText={
+                      <>
+                        {t('systemSettings.sourceSizeTimeoutHelper')}{' '}
+                        {formatTimeout(sourceSizeTimeout)}
+                        {renderSourceLabel(timeoutSources?.source_size_timeout)}
+                      </>
+                    }
+                  />
                 </Box>
-              </Tooltip>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {t('systemSettings.archiveBrowsingLimitsDescription')}
-            </Typography>
-            <Divider />
+              )}
 
-            <Box
-              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}
-            >
-              <TextField
-                label={t('systemSettings.maxFilesToLoadLabel')}
-                type="number"
-                fullWidth
-                value={browseMaxItems}
-                onChange={(e) => setBrowseMaxItems(Number(e.target.value))}
-                inputProps={{ min: MIN_FILES, max: MAX_FILES, step: 100_000 }}
-                error={browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES}
-                helperText={
-                  browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES
-                    ? t('systemSettings.maxFilesRangeError', {
-                        min: MIN_FILES.toLocaleString(),
-                        max: MAX_FILES.toLocaleString(),
-                      })
-                    : t('systemSettings.maxFilesHelperText', {
-                        current: (browseMaxItems / 1_000_000).toFixed(1),
-                      })
-                }
-              />
+              {activeSection === 1 && (
+                <Stack spacing={2.5}>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', md: 'minmax(280px, 340px) auto' },
+                      gap: 2,
+                      alignItems: 'start',
+                    }}
+                  >
+                    <TextField
+                      label={t('systemSettings.statsRefreshIntervalLabel')}
+                      type="number"
+                      value={statsRefreshInterval}
+                      onChange={(e) => setStatsRefreshInterval(Number(e.target.value))}
+                      inputProps={{ min: 0, max: MAX_STATS_REFRESH, step: 15 }}
+                      error={statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH}
+                      helperText={
+                        statsRefreshInterval === 0
+                          ? t('systemSettings.statsRefreshDisabled')
+                          : statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH
+                            ? t('systemSettings.statsRefreshRangeError', {
+                                max: MAX_STATS_REFRESH,
+                              })
+                            : t('systemSettings.statsRefreshIntervalHelper', {
+                                interval: statsRefreshInterval,
+                              })
+                      }
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={handleRefreshStats}
+                      disabled={isRefreshingStats}
+                      startIcon={
+                        isRefreshingStats ? <CircularProgress size={16} /> : <RefreshCw size={16} />
+                      }
+                      sx={{ justifySelf: { xs: 'stretch', md: 'start' }, height: 40 }}
+                    >
+                      {isRefreshingStats
+                        ? t('systemSettings.refreshing')
+                        : t('systemSettings.refreshNow')}
+                    </Button>
+                  </Box>
 
-              <TextField
-                label={t('systemSettings.maxMemoryLabel')}
-                type="number"
-                fullWidth
-                value={browseMaxMemoryMb}
-                onChange={(e) => setBrowseMaxMemoryMb(Number(e.target.value))}
-                inputProps={{ min: MIN_MEMORY, max: MAX_MEMORY, step: 128 }}
-                error={browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY}
-                helperText={
-                  browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY
-                    ? t('systemSettings.maxMemoryRangeError', {
-                        min: MIN_MEMORY,
-                        max: MAX_MEMORY,
-                      })
-                    : t('systemSettings.maxMemoryHelperText', {
-                        current: (browseMaxMemoryMb / 1024).toFixed(2),
-                      })
-                }
-              />
-            </Box>
-          </Stack>
+                  {systemSettings?.last_stats_refresh && (
+                    <Alert severity="info">
+                      <Typography variant="body2">
+                        {t('systemSettings.lastRefreshed')}{' '}
+                        {new Date(systemSettings.last_stats_refresh).toLocaleString()}
+                      </Typography>
+                    </Alert>
+                  )}
+                </Stack>
+              )}
+
+              {activeSection === 2 && (
+                <Stack spacing={2}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={metricsEnabled}
+                        onChange={(e) => {
+                          const enabled = e.target.checked
+                          setMetricsEnabled(enabled)
+                          if (!enabled) {
+                            setMetricsRequireAuth(false)
+                            setRotateMetricsToken(false)
+                          }
+                        }}
+                      />
+                    }
+                    label={t('systemSettings.metricsEnabledLabel')}
+                  />
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={metricsRequireAuth}
+                        disabled={!metricsEnabled}
+                        onChange={(e) => {
+                          const enabled = e.target.checked
+                          setMetricsRequireAuth(enabled)
+                          if (!enabled) {
+                            setRotateMetricsToken(false)
+                          }
+                        }}
+                      />
+                    }
+                    label={t('systemSettings.metricsRequireAuthLabel')}
+                  />
+
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: { xs: 'column', md: 'row' },
+                      gap: 1.5,
+                      alignItems: { xs: 'stretch', md: 'center' },
+                    }}
+                  >
+                    <Button
+                      variant="outlined"
+                      startIcon={<Key size={16} />}
+                      disabled={!metricsEnabled || !metricsRequireAuth}
+                      onClick={() => setRotateMetricsToken(true)}
+                    >
+                      {systemSettings?.metrics_token_set
+                        ? t('systemSettings.metricsRotateToken')
+                        : t('systemSettings.metricsGenerateToken')}
+                    </Button>
+                    <Typography variant="body2" color="text.secondary">
+                      {!metricsEnabled || !metricsRequireAuth
+                        ? t('systemSettings.metricsTokenDisabledHelper')
+                        : rotateMetricsToken
+                          ? t('systemSettings.metricsTokenWillRotate')
+                          : systemSettings?.metrics_token_set
+                            ? t('systemSettings.metricsTokenConfigured')
+                            : t('systemSettings.metricsTokenWillGenerate')}
+                    </Typography>
+                  </Box>
+
+                  {newMetricsToken && (
+                    <Box
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        border: '1px solid',
+                        borderColor: 'success.main',
+                        bgcolor: 'rgba(76, 175, 80, 0.06)',
+                      }}
+                    >
+                      <Stack spacing={1.5}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <AlertTriangle size={13} color="orange" />
+                          <Typography variant="caption" fontWeight={600} color="warning.main">
+                            {t('systemSettings.metricsTokenDialogWarning')}
+                          </Typography>
+                        </Box>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            px: 1.5,
+                            py: 1,
+                            borderRadius: 1.5,
+                            bgcolor: 'background.default',
+                            border: '1px solid',
+                            borderColor: 'divider',
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              flex: 1,
+                              fontFamily: 'monospace',
+                              fontSize: '0.78rem',
+                              color: 'text.primary',
+                              wordBreak: 'break-all',
+                              lineHeight: 1.6,
+                              userSelect: 'all',
+                            }}
+                          >
+                            {newMetricsToken}
+                          </Typography>
+                          <Tooltip
+                            title={
+                              metricsTokenCopied
+                                ? t('systemSettings.metricsTokenCopied')
+                                : t('common.buttons.copy')
+                            }
+                          >
+                            <IconButton
+                              size="small"
+                              onClick={handleCopyMetricsToken}
+                              color={metricsTokenCopied ? 'success' : 'default'}
+                              sx={{ flexShrink: 0 }}
+                            >
+                              {metricsTokenCopied ? <Check size={15} /> : <Copy size={15} />}
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </Stack>
+                    </Box>
+                  )}
+                </Stack>
+              )}
+
+              {activeSection === 3 && (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
+                    gap: 2,
+                  }}
+                >
+                  <TextField
+                    label={t('systemSettings.maxFilesToLoadLabel')}
+                    type="number"
+                    fullWidth
+                    value={browseMaxItems}
+                    onChange={(e) => setBrowseMaxItems(Number(e.target.value))}
+                    inputProps={{ min: MIN_FILES, max: MAX_FILES, step: 100_000 }}
+                    error={browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES}
+                    helperText={
+                      browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES
+                        ? t('systemSettings.maxFilesRangeError', {
+                            min: MIN_FILES.toLocaleString(),
+                            max: MAX_FILES.toLocaleString(),
+                          })
+                        : t('systemSettings.maxFilesHelperText', {
+                            current: (browseMaxItems / 1_000_000).toFixed(1),
+                          })
+                    }
+                  />
+
+                  <TextField
+                    label={t('systemSettings.maxMemoryLabel')}
+                    type="number"
+                    fullWidth
+                    value={browseMaxMemoryMb}
+                    onChange={(e) => setBrowseMaxMemoryMb(Number(e.target.value))}
+                    inputProps={{ min: MIN_MEMORY, max: MAX_MEMORY, step: 128 }}
+                    error={browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY}
+                    helperText={
+                      browseMaxMemoryMb < MIN_MEMORY || browseMaxMemoryMb > MAX_MEMORY
+                        ? t('systemSettings.maxMemoryRangeError', {
+                            min: MIN_MEMORY,
+                            max: MAX_MEMORY,
+                          })
+                        : t('systemSettings.maxMemoryHelperText', {
+                            current: (browseMaxMemoryMb / 1024).toFixed(2),
+                          })
+                    }
+                  />
+                </Box>
+              )}
+            </Stack>
+          </Box>
         </SettingsCard>
       </Stack>
-
-      <Dialog
-        open={!!newMetricsToken}
-        onClose={handleCloseMetricsTokenDialog}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{t('systemSettings.metricsTokenDialogTitle')}</DialogTitle>
-        <DialogContent>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            {t('systemSettings.metricsTokenDialogWarning')}
-          </Alert>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <TextField
-              value={newMetricsToken ?? ''}
-              fullWidth
-              InputProps={{ readOnly: true, sx: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
-              onClick={(e) => (e.target as HTMLInputElement).select()}
-            />
-            <Tooltip
-              title={
-                metricsTokenCopied
-                  ? t('systemSettings.metricsTokenCopied')
-                  : t('common.buttons.copy')
-              }
-            >
-              <IconButton
-                onClick={handleCopyMetricsToken}
-                color={metricsTokenCopied ? 'success' : 'default'}
-              >
-                {metricsTokenCopied ? <Check size={18} /> : <Copy size={18} />}
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseMetricsTokenDialog} variant="contained">
-            {t('systemSettings.metricsTokenDialogDone')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={metricsTokenCloseConfirmOpen}
-        onClose={() => setMetricsTokenCloseConfirmOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>{t('systemSettings.metricsTokenCloseTitle')}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2">{t('systemSettings.metricsTokenCloseBody')}</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setMetricsTokenCloseConfirmOpen(false)}>
-            {t('systemSettings.metricsTokenCloseBack')}
-          </Button>
-          <Button
-            color="error"
-            onClick={() => {
-              setNewMetricsToken(null)
-              setMetricsTokenCloseConfirmOpen(false)
-            }}
-          >
-            {t('systemSettings.metricsTokenCloseAnyway')}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }
