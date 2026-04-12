@@ -10,8 +10,26 @@ import {
   TextField,
   Divider,
   CircularProgress,
+  FormControlLabel,
+  Switch,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Tooltip,
 } from '@mui/material'
-import { Save, AlertTriangle, Settings, Clock, RefreshCw } from 'lucide-react'
+import {
+  Save,
+  AlertTriangle,
+  Settings,
+  Clock,
+  RefreshCw,
+  Copy,
+  Check,
+  Key,
+  Info,
+} from 'lucide-react'
 import SettingsCard from './SettingsCard'
 import { toast } from 'react-hot-toast'
 import { settingsAPI } from '../services/api'
@@ -38,6 +56,12 @@ const SystemSettingsTab: React.FC = () => {
   // Local state for stats refresh
   const [statsRefreshInterval, setStatsRefreshInterval] = useState(60)
   const [isRefreshingStats, setIsRefreshingStats] = useState(false)
+  const [metricsEnabled, setMetricsEnabled] = useState(false)
+  const [metricsRequireAuth, setMetricsRequireAuth] = useState(false)
+  const [rotateMetricsToken, setRotateMetricsToken] = useState(false)
+  const [newMetricsToken, setNewMetricsToken] = useState<string | null>(null)
+  const [metricsTokenCopied, setMetricsTokenCopied] = useState(false)
+  const [metricsTokenCloseConfirmOpen, setMetricsTokenCloseConfirmOpen] = useState(false)
 
   const [hasChanges, setHasChanges] = useState(false)
 
@@ -122,6 +146,12 @@ const SystemSettingsTab: React.FC = () => {
       setBackupTimeout(systemSettings.backup_timeout || 3600)
       setSourceSizeTimeout(systemSettings.source_size_timeout || 3600)
       setStatsRefreshInterval(systemSettings.stats_refresh_interval_minutes ?? 60)
+      setMetricsEnabled(systemSettings.metrics_enabled ?? false)
+      setMetricsRequireAuth(systemSettings.metrics_require_auth ?? false)
+      setRotateMetricsToken(false)
+      setNewMetricsToken(null)
+      setMetricsTokenCopied(false)
+      setMetricsTokenCloseConfirmOpen(false)
       setHasChanges(false)
     }
   }, [systemSettings])
@@ -144,7 +174,12 @@ const SystemSettingsTab: React.FC = () => {
       const statsRefreshChanged =
         statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60)
 
-      setHasChanges(browseChanged || timeoutChanged || statsRefreshChanged)
+      const metricsChanged =
+        metricsEnabled !== (systemSettings.metrics_enabled ?? false) ||
+        metricsRequireAuth !== (systemSettings.metrics_require_auth ?? false) ||
+        rotateMetricsToken
+
+      setHasChanges(browseChanged || timeoutChanged || statsRefreshChanged || metricsChanged)
     }
   }, [
     browseMaxItems,
@@ -156,6 +191,9 @@ const SystemSettingsTab: React.FC = () => {
     backupTimeout,
     sourceSizeTimeout,
     statsRefreshInterval,
+    metricsEnabled,
+    metricsRequireAuth,
+    rotateMetricsToken,
     cacheStats,
     systemSettings,
   ])
@@ -234,6 +272,9 @@ const SystemSettingsTab: React.FC = () => {
         backup_timeout: backupTimeout,
         source_size_timeout: sourceSizeTimeout,
         stats_refresh_interval_minutes: statsRefreshInterval,
+        metrics_enabled: metricsEnabled,
+        metrics_require_auth: metricsRequireAuth,
+        rotate_metrics_token: rotateMetricsToken,
       })
     },
     onSuccess: () => {
@@ -260,12 +301,19 @@ const SystemSettingsTab: React.FC = () => {
     }
 
     try {
-      await Promise.all([
+      const [, systemResponse] = await Promise.all([
         saveBrowseLimitsMutation.mutateAsync(),
         saveTimeoutsMutation.mutateAsync(),
       ])
       toast.success(t('systemSettings.savedSuccessfully'))
       setHasChanges(false)
+      setRotateMetricsToken(false)
+      const generatedMetricsToken = systemResponse?.data?.generated_metrics_token
+      if (generatedMetricsToken) {
+        setNewMetricsToken(generatedMetricsToken)
+        setMetricsTokenCopied(false)
+        setMetricsTokenCloseConfirmOpen(false)
+      }
       trackSystem(EventAction.EDIT, {
         section: 'system_settings',
         browse_max_items: browseMaxItems,
@@ -277,6 +325,9 @@ const SystemSettingsTab: React.FC = () => {
         backup_timeout: backupTimeout,
         source_size_timeout: sourceSizeTimeout,
         stats_refresh_interval_minutes: statsRefreshInterval,
+        metrics_enabled: metricsEnabled,
+        metrics_require_auth: metricsRequireAuth,
+        rotate_metrics_token: rotateMetricsToken,
       })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
@@ -336,6 +387,21 @@ const SystemSettingsTab: React.FC = () => {
       )
       setIsRefreshingStats(false)
     }
+  }
+
+  const handleCopyMetricsToken = async () => {
+    if (!newMetricsToken) return
+    await navigator.clipboard.writeText(newMetricsToken)
+    setMetricsTokenCopied(true)
+    setTimeout(() => setMetricsTokenCopied(false), 2000)
+  }
+
+  const handleCloseMetricsTokenDialog = () => {
+    if (!metricsTokenCopied) {
+      setMetricsTokenCloseConfirmOpen(true)
+      return
+    }
+    setNewMetricsToken(null)
   }
 
   const isLoading = cacheLoading || systemLoading
@@ -506,6 +572,14 @@ const SystemSettingsTab: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <RefreshCw size={24} />
               <Typography variant="h6">{t('systemSettings.repositoryMonitoringTitle')}</Typography>
+              <Tooltip title={t('systemSettings.manualRefreshAlert')} placement="right">
+                <Box
+                  component="span"
+                  sx={{ display: 'inline-flex', color: 'info.main', cursor: 'help', ml: 0.5 }}
+                >
+                  <Info size={16} />
+                </Box>
+              </Tooltip>
             </Box>
             <Typography variant="body2" color="text.secondary">
               {t('systemSettings.repositoryMonitoringDescription')}
@@ -552,8 +626,85 @@ const SystemSettingsTab: React.FC = () => {
                 {new Date(systemSettings.last_stats_refresh).toLocaleString()}
               </Typography>
             )}
+          </Stack>
+        </SettingsCard>
 
-            <Alert severity="info">{t('systemSettings.manualRefreshAlert')}</Alert>
+        <SettingsCard>
+          <Stack spacing={3}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Settings size={24} />
+              <Typography variant="h6">{t('systemSettings.metricsAccessTitle')}</Typography>
+              <Tooltip title={t('systemSettings.metricsHeaderHelp')} placement="right">
+                <Box
+                  component="span"
+                  sx={{ display: 'inline-flex', color: 'info.main', cursor: 'help', ml: 0.5 }}
+                >
+                  <Info size={16} />
+                </Box>
+              </Tooltip>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              {t('systemSettings.metricsAccessDescription')}
+            </Typography>
+            <Divider />
+
+            <Stack spacing={2}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={metricsEnabled}
+                    onChange={(e) => setMetricsEnabled(e.target.checked)}
+                  />
+                }
+                label={t('systemSettings.metricsEnabledLabel')}
+              />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={metricsRequireAuth}
+                    disabled={!metricsEnabled}
+                    onChange={(e) => {
+                      const enabled = e.target.checked
+                      setMetricsRequireAuth(enabled)
+                      if (!enabled) {
+                        setRotateMetricsToken(false)
+                      }
+                    }}
+                  />
+                }
+                label={t('systemSettings.metricsRequireAuthLabel')}
+              />
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  gap: 1.5,
+                  alignItems: { xs: 'stretch', sm: 'center' },
+                }}
+              >
+                <Button
+                  variant="outlined"
+                  startIcon={<Key size={16} />}
+                  disabled={!metricsEnabled || !metricsRequireAuth}
+                  onClick={() => setRotateMetricsToken(true)}
+                >
+                  {systemSettings?.metrics_token_set
+                    ? t('systemSettings.metricsRotateToken')
+                    : t('systemSettings.metricsGenerateToken')}
+                </Button>
+                <Typography variant="body2" color="text.secondary">
+                  {!metricsEnabled || !metricsRequireAuth
+                    ? t('systemSettings.metricsTokenDisabledHelper')
+                    : rotateMetricsToken
+                      ? t('systemSettings.metricsTokenWillRotate')
+                      : systemSettings?.metrics_token_set
+                        ? t('systemSettings.metricsTokenConfigured')
+                        : t('systemSettings.metricsTokenWillGenerate')}
+                </Typography>
+              </Box>
+            </Stack>
           </Stack>
         </SettingsCard>
 
@@ -563,6 +714,22 @@ const SystemSettingsTab: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Settings size={24} />
               <Typography variant="h6">{t('systemSettings.archiveBrowsingLimitsTitle')}</Typography>
+              <Tooltip
+                title={
+                  <>
+                    <strong>{t('systemSettings.warningLabel')}</strong>{' '}
+                    {t('systemSettings.largeLimitsWarning')}
+                  </>
+                }
+                placement="right"
+              >
+                <Box
+                  component="span"
+                  sx={{ display: 'inline-flex', color: 'warning.main', cursor: 'help', ml: 0.5 }}
+                >
+                  <AlertTriangle size={16} />
+                </Box>
+              </Tooltip>
             </Box>
             <Typography variant="body2" color="text.secondary">
               {t('systemSettings.archiveBrowsingLimitsDescription')}
@@ -612,14 +779,76 @@ const SystemSettingsTab: React.FC = () => {
                 }
               />
             </Box>
-
-            <Alert severity="warning" icon={<AlertTriangle size={20} />}>
-              <strong>{t('systemSettings.warningLabel')}</strong>{' '}
-              {t('systemSettings.largeLimitsWarning')}
-            </Alert>
           </Stack>
         </SettingsCard>
       </Stack>
+
+      <Dialog
+        open={!!newMetricsToken}
+        onClose={handleCloseMetricsTokenDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{t('systemSettings.metricsTokenDialogTitle')}</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {t('systemSettings.metricsTokenDialogWarning')}
+          </Alert>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <TextField
+              value={newMetricsToken ?? ''}
+              fullWidth
+              InputProps={{ readOnly: true, sx: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+            />
+            <Tooltip
+              title={
+                metricsTokenCopied
+                  ? t('systemSettings.metricsTokenCopied')
+                  : t('common.buttons.copy')
+              }
+            >
+              <IconButton
+                onClick={handleCopyMetricsToken}
+                color={metricsTokenCopied ? 'success' : 'default'}
+              >
+                {metricsTokenCopied ? <Check size={18} /> : <Copy size={18} />}
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseMetricsTokenDialog} variant="contained">
+            {t('systemSettings.metricsTokenDialogDone')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={metricsTokenCloseConfirmOpen}
+        onClose={() => setMetricsTokenCloseConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{t('systemSettings.metricsTokenCloseTitle')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">{t('systemSettings.metricsTokenCloseBody')}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMetricsTokenCloseConfirmOpen(false)}>
+            {t('systemSettings.metricsTokenCloseBack')}
+          </Button>
+          <Button
+            color="error"
+            onClick={() => {
+              setNewMetricsToken(null)
+              setMetricsTokenCloseConfirmOpen(false)
+            }}
+          >
+            {t('systemSettings.metricsTokenCloseAnyway')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }
