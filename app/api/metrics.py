@@ -2,10 +2,12 @@
 Prometheus metrics endpoint for borg-ui
 
 Exports metrics in Prometheus text format for monitoring and alerting.
-Accessible at /metrics (no authentication required for Prometheus scraping).
+Accessible at /metrics when enabled in system settings. Token authentication is optional.
 """
 
-from fastapi import APIRouter, Depends
+from typing import Optional, Tuple
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status as http_status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -15,11 +17,34 @@ import structlog
 from app.database.database import get_db
 from app.database.models import (
     Repository, BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob,
+    SystemSettings,
     ScheduledJob, DeleteArchiveJob
 )
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["metrics"])
+
+
+def _resolve_metrics_settings(db: Session) -> Tuple[bool, bool, Optional[str]]:
+    settings = db.query(SystemSettings).first()
+    if settings is None:
+        return False, False, None
+    return (
+        settings.metrics_enabled if settings.metrics_enabled is not None else False,
+        settings.metrics_require_auth if settings.metrics_require_auth is not None else False,
+        settings.metrics_token,
+    )
+
+
+def _extract_metrics_token(
+    x_borg_metrics_token: Optional[str],
+    authorization: Optional[str],
+) -> Optional[str]:
+    if x_borg_metrics_token:
+        return x_borg_metrics_token
+    if authorization and authorization.startswith("Bearer "):
+        return authorization.split(" ", 1)[1]
+    return None
 
 
 def parse_size_string(size_str: str) -> int:
@@ -58,13 +83,28 @@ def timestamp_to_unix(dt: datetime) -> int:
 
 
 @router.get("/metrics", response_class=PlainTextResponse)
-async def get_metrics(db: Session = Depends(get_db)):
+async def get_metrics(
+    db: Session = Depends(get_db),
+    x_borg_metrics_token: Optional[str] = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+):
     """
     Prometheus metrics endpoint
 
     Returns metrics in Prometheus text format for scraping.
-    No authentication required to allow Prometheus to scrape freely.
     """
+    metrics_enabled, metrics_require_auth, metrics_token = _resolve_metrics_settings(db)
+    if not metrics_enabled:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Metrics disabled")
+
+    if metrics_require_auth:
+        presented_token = _extract_metrics_token(x_borg_metrics_token, authorization)
+        if not metrics_token or presented_token != metrics_token:
+            raise HTTPException(
+                status_code=http_status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid metrics token",
+            )
+
     lines = []
 
     # Header

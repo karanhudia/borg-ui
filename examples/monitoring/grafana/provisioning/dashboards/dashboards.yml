@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: borg-ui
+    orgId: 1
+    folder: Borg UI
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
+import secrets
 import structlog
 
 from app.database.database import get_db, engine
@@ -131,6 +132,12 @@ class SystemSettingsUpdate(BaseModel):
     mqtt_tls_client_cert: Optional[str] = None
     mqtt_tls_client_key: Optional[str] = None
     mqtt_beta_enabled: Optional[bool] = None
+
+    # Metrics settings
+    metrics_enabled: Optional[bool] = None
+    metrics_require_auth: Optional[bool] = None
+    metrics_token: Optional[str] = None
+    rotate_metrics_token: Optional[bool] = None
 
     # Deployment profile
     deployment_type: Optional[str] = None
@@ -272,7 +279,10 @@ async def get_system_settings(
                 "mqtt_tls_client_cert": settings.mqtt_tls_client_cert,
                 "mqtt_tls_client_key": settings.mqtt_tls_client_key,
                 "mqtt_beta_enabled": settings.mqtt_beta_enabled,
-                "mqtt_password_set": bool(settings.mqtt_password)  # Indicate if password is set (without exposing it)
+                "mqtt_password_set": bool(settings.mqtt_password),  # Indicate if password is set (without exposing it)
+                "metrics_enabled": settings.metrics_enabled if settings.metrics_enabled is not None else False,
+                "metrics_require_auth": settings.metrics_require_auth if settings.metrics_require_auth is not None else False,
+                "metrics_token_set": bool(settings.metrics_token),
             },
             "log_storage": log_storage_info
         }
@@ -417,6 +427,29 @@ async def update_system_settings(
         if settings_update.mqtt_tls_client_key is not None:
             settings.mqtt_tls_client_key = settings_update.mqtt_tls_client_key
 
+        generated_metrics_token = None
+
+        # Metrics settings
+        if settings_update.metrics_enabled is not None:
+            settings.metrics_enabled = settings_update.metrics_enabled
+        if settings_update.metrics_require_auth is not None:
+            settings.metrics_require_auth = settings_update.metrics_require_auth
+        if settings_update.metrics_token is not None:
+            if settings_update.metrics_token == "":
+                settings.metrics_token = None
+            else:
+                settings.metrics_token = settings_update.metrics_token
+                generated_metrics_token = settings.metrics_token
+        if settings_update.rotate_metrics_token:
+            settings.metrics_token = secrets.token_urlsafe(32)
+            generated_metrics_token = settings.metrics_token
+        elif (
+            settings.metrics_require_auth
+            and not settings.metrics_token
+        ):
+            settings.metrics_token = secrets.token_urlsafe(32)
+            generated_metrics_token = settings.metrics_token
+
         if settings_update.deployment_type is not None:
             if settings_update.deployment_type not in ('individual', 'enterprise'):
                 raise HTTPException(
@@ -451,6 +484,8 @@ async def update_system_settings(
             "success": True,
             "message": "backend.success.settings.systemSettingsUpdated"
         }
+        if generated_metrics_token:
+            response["generated_metrics_token"] = generated_metrics_token
         if warnings:
             response["warnings"] = warnings
 

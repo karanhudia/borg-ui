@@ -5,7 +5,7 @@ Each test verifies ONE specific expected outcome.
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import User
+from app.database.models import User, SystemSettings
 from app.core.features import Plan
 
 
@@ -59,6 +59,87 @@ class TestSystemSettings:
         )
 
         assert response.status_code == 401
+
+    def test_get_system_settings_includes_metrics_configuration(self, test_client: TestClient, admin_headers, test_db):
+        settings = SystemSettings(
+            metrics_enabled=True,
+            metrics_require_auth=True,
+            metrics_token="metrics-secret",
+        )
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.get("/api/settings/system", headers=admin_headers)
+
+        assert response.status_code == 200
+        payload = response.json()["settings"]
+        assert payload["metrics_enabled"] is True
+        assert payload["metrics_require_auth"] is True
+        assert payload["metrics_token_set"] is True
+
+    def test_update_system_settings_persists_metrics_configuration(self, test_client: TestClient, admin_headers, test_db):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "metrics_enabled": True,
+                "metrics_require_auth": True,
+                "metrics_token": "rotated-metrics-token",
+                "mqtt_password": "",
+            },
+            headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(settings)
+        assert settings.metrics_enabled is True
+        assert settings.metrics_require_auth is True
+        assert settings.metrics_token == "rotated-metrics-token"
+
+    def test_update_system_settings_generates_metrics_token_when_auth_enabled(self, test_client: TestClient, admin_headers, test_db):
+        settings = SystemSettings(metrics_enabled=False, metrics_require_auth=False, metrics_token=None)
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "metrics_enabled": True,
+                "metrics_require_auth": True,
+                "mqtt_password": "",
+            },
+            headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["generated_metrics_token"]
+        test_db.refresh(settings)
+        assert settings.metrics_token == body["generated_metrics_token"]
+
+    def test_update_system_settings_rotates_metrics_token(self, test_client: TestClient, admin_headers, test_db):
+        settings = SystemSettings(metrics_enabled=True, metrics_require_auth=True, metrics_token="old-token")
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "rotate_metrics_token": True,
+                "mqtt_password": "",
+            },
+            headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["generated_metrics_token"]
+        assert body["generated_metrics_token"] != "old-token"
+        test_db.refresh(settings)
+        assert settings.metrics_token == body["generated_metrics_token"]
 
 
 @pytest.mark.unit

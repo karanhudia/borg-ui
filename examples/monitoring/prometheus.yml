@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 60s
+
+scrape_configs:
+  - job_name: borg-ui
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - app:8081
+    authorization:
+      type: Bearer
+      credentials: replace-with-generated-borg-ui-metrics-token

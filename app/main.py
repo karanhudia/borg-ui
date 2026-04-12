@@ -126,7 +126,7 @@ if os.path.exists("app/static"):
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Include API routers
-app.include_router(metrics.router)  # /metrics endpoint (no prefix for Prometheus)
+app.include_router(metrics.router)  # /metrics endpoint (disabled by default, no API prefix)
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])

@@ -1,14 +1,34 @@
 # Prometheus Metrics
 
-Borg-UI exposes Prometheus metrics at the `/metrics` endpoint for monitoring and alerting.
+Borg-UI can expose Prometheus metrics at `/metrics` for monitoring and alerting.
+
+Metrics are disabled by default. If you enable them, the recommended setup is:
+
+- keep `/metrics` on a private network
+- require a shared metrics token
+- let Prometheus or Grafana be the public-facing consumer, not borg-ui itself
+
+## Enable Metrics
+
+In `Settings -> System -> Metrics Access`:
+
+- turn on `Enable /metrics endpoint`
+- turn on `Require token for /metrics`
+- save to let borg-ui generate a token
+- copy the token from the one-time dialog and store it in Prometheus
+
+When token protection is enabled, borg-ui accepts either of these headers:
+
+- `X-Borg-Metrics-Token: <token>`
+- `Authorization: Bearer <token>`
+
+If metrics remain disabled, `/metrics` returns `404`.
 
 ## Endpoint
 
-```
+```text
 GET http://your-borg-ui:8081/metrics
 ```
-
-**Note:** The `/metrics` endpoint does not require authentication to allow Prometheus to scrape freely.
 
 ## Prometheus Configuration
 
@@ -16,33 +36,66 @@ Add this to your `prometheus.yml`:
 
 ```yaml
 scrape_configs:
-  - job_name: 'borg-ui'
-    static_configs:
-      - targets: ['borg-ui:8081']
+  - job_name: borg-ui
     scrape_interval: 60s
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - borg-ui:8081
+    authorization:
+      type: Bearer
+      credentials: <your-generated-metrics-token>
+```
+
+If you prefer a custom header instead of bearer auth:
+
+```yaml
+scrape_configs:
+  - job_name: borg-ui
+    static_configs:
+      - targets:
+          - borg-ui:8081
+    http_headers:
+      X-Borg-Metrics-Token:
+        values:
+          - <your-generated-metrics-token>
 ```
 
 ## Docker Compose Example
 
-```yaml
-services:
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
-    ports:
-      - "9090:9090"
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+An example monitoring stack is included in this repository:
 
-  borg-ui:
-    image: ghcr.io/borgui/borg-ui:latest
-    # ... your borg-ui config
+- [examples/monitoring/docker-compose.yml](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/docker-compose.yml)
+- [examples/monitoring/prometheus.yml](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/prometheus.yml)
+- [examples/monitoring/grafana/provisioning/datasources/prometheus.yml](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/grafana/provisioning/datasources/prometheus.yml)
+- [examples/monitoring/grafana/provisioning/dashboards/dashboards.yml](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/grafana/provisioning/dashboards/dashboards.yml)
+- [examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-overview.json](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-overview.json)
+- [examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-jobs.json](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-jobs.json)
 
-volumes:
-  prometheus-data:
+Bring it up with:
+
+```bash
+docker compose -f docker-compose.yml -f examples/monitoring/docker-compose.yml up -d
 ```
+
+Before starting Prometheus, set the generated metrics token in `examples/monitoring/prometheus.yml`.
+
+This example keeps Prometheus and Grafana on the same private Docker network as borg-ui while exposing:
+
+- Prometheus on `http://localhost:9090`
+- Grafana on `http://localhost:3000`
+
+Default Grafana credentials in the example:
+
+- username: `admin`
+- password: `admin`
+
+Change those before using the stack beyond local testing.
+
+The example also provisions an official starter dashboard pack automatically:
+
+- `Borg UI / Borg UI Overview`
+- `Borg UI / Borg UI Jobs`
 
 ## Available Metrics
 
@@ -58,8 +111,8 @@ volumes:
 ### Backup Job Metrics
 
 - `borg_backup_jobs_total` - Total number of backup jobs (labels: repository, status)
-- `borg_backup_orphaned_jobs_total` - Backup jobs for deleted/renamed repositories (labels: repository_path, status)
-- `borg_backup_last_job_success` - Last backup job success (1=success, 0=failure)
+- `borg_backup_orphaned_jobs_total` - Backup jobs for deleted or renamed repositories (labels: repository_path, status)
+- `borg_backup_last_job_success` - Last backup job success (`1` = success, `0` = failure)
 - `borg_backup_last_duration_seconds` - Duration of last backup job in seconds
 - `borg_backup_last_original_size_bytes` - Original size of last backup in bytes
 - `borg_backup_last_deduplicated_size_bytes` - Deduplicated size of last backup in bytes
@@ -92,108 +145,70 @@ volumes:
 ## Example Queries
 
 ### Check if last backup succeeded
+
 ```promql
 borg_backup_last_job_success{repository="my-repo"} == 0
 ```
 
 ### Time since last backup
+
 ```promql
 time() - borg_repository_last_backup_timestamp{repository="my-repo"}
 ```
 
-### Backup duration trend
-```promql
-rate(borg_backup_last_duration_seconds{repository="my-repo"}[1h])
-```
-
 ### Repository size growth
+
 ```promql
 delta(borg_repository_size_bytes{repository="my-repo"}[24h])
 ```
 
 ### Failed backups in last 24h
+
 ```promql
 sum(increase(borg_backup_jobs_total{status="failed"}[24h])) by (repository)
 ```
 
-## Alerting Examples
+## Grafana Consumption
 
-### Alert on backup failure
-```yaml
-groups:
-  - name: borg_backup_alerts
-    rules:
-      - alert: BackupFailed
-        expr: borg_backup_last_job_success == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Backup failed for {{ $labels.repository }}"
-          description: "Last backup job failed for repository {{ $labels.repository }}"
+You can start from the community Borg dashboard:
 
-      - alert: BackupOld
-        expr: (time() - borg_repository_last_backup_timestamp) > 86400
-        for: 1h
-        labels:
-          severity: warning
-        annotations:
-          summary: "No backup in 24h for {{ $labels.repository }}"
-          description: "Repository {{ $labels.repository }} has not been backed up in over 24 hours"
-
-      - alert: BackupSlow
-        expr: borg_backup_last_duration_seconds > 3600
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Slow backup for {{ $labels.repository }}"
-          description: "Backup took {{ $value }}s (>1h) for repository {{ $labels.repository }}"
-```
-
-## Grafana Dashboard
-
-You can use the existing Borg Backup Status dashboard as a starting point:
 https://grafana.com/grafana/dashboards/14516-borg-backup-status
 
-Or create your own custom dashboard using the metrics above.
+The shipped dashboards cover the main views already:
 
-### Example Dashboard Panels
+- fleet overview and backup freshness
+- repository growth and last backup duration
+- backup outcomes over the last 24 hours
+- maintenance totals and last-backup success state
 
-**Repository Size Over Time:**
-```promql
-borg_repository_size_bytes
-```
+If you want to build further custom dashboards, useful panel queries include:
 
-**Backup Success Rate:**
-```promql
-sum(borg_backup_jobs_total{status="completed"}) by (repository) /
-sum(borg_backup_jobs_total) by (repository)
-```
-
-**Active Jobs:**
-```promql
-borg_ui_active_jobs
-```
-
-**Backup Duration Heatmap:**
-```promql
-borg_backup_last_duration_seconds
-```
+- repository size over time: `borg_repository_size_bytes`
+- backup success rate: `sum(borg_backup_jobs_total{status="completed"}) by (repository) / sum(borg_backup_jobs_total) by (repository)`
+- active jobs: `borg_ui_active_jobs`
+- last backup age: `time() - borg_repository_last_backup_timestamp`
 
 ## Troubleshooting
 
-### Metrics endpoint returns empty
-- Check that borg-ui is running
-- Verify the endpoint: `curl http://borg-ui:8081/metrics`
-- Check borg-ui logs for errors
+### Metrics endpoint returns 404
 
-### Prometheus can't scrape
-- Verify network connectivity between Prometheus and borg-ui
-- Check Prometheus targets page: `http://prometheus:9090/targets`
-- Verify borg-ui port is accessible
+- check that metrics are enabled in `Settings -> System`
+- verify the request is hitting the correct borg-ui instance
+
+### Metrics endpoint returns 401
+
+- verify token protection is enabled
+- check the exact token being sent by Prometheus
+- confirm you copied the new token after generation or rotation
+
+### Prometheus cannot scrape borg-ui
+
+- verify network connectivity between Prometheus and borg-ui
+- check Prometheus targets at `http://localhost:9090/targets`
+- if auth is enabled, confirm the scrape job sends the token header
 
 ### Missing metrics
-- Metrics are only generated for existing data
-- Run at least one backup/check/compact to see job metrics
-- Repository metrics require repository to be created and synced
+
+- metrics are generated from existing repository and job data
+- run at least one backup, check, prune, compact, or restore to populate job metrics
+- repository metrics require a repository to exist and be synced

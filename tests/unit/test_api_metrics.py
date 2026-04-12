@@ -16,15 +16,30 @@ from sqlalchemy.orm import Session
 
 from app.database.models import (
     Repository, BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob,
+    SystemSettings,
     ScheduledJob, utc_now
 )
+
+
+@pytest.fixture(autouse=True)
+def enable_metrics_for_tests(test_db):
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings(metrics_enabled=True, metrics_require_auth=False)
+        test_db.add(settings)
+    else:
+        settings.metrics_enabled = True
+        settings.metrics_require_auth = False
+        settings.metrics_token = None
+    test_db.commit()
+    return settings
 
 
 class TestMetricsEndpoint:
     """Test the /metrics endpoint"""
 
     def test_endpoint_accessible_no_auth(self, test_client):
-        """Metrics endpoint should be accessible without authentication"""
+        """Metrics endpoint should be accessible when explicitly enabled without auth"""
         response = test_client.get("/metrics")
         assert response.status_code == 200
 
@@ -42,6 +57,43 @@ class TestMetricsEndpoint:
         # Should still have headers and system metrics
         assert "# Prometheus metrics for borg-ui" in content
         assert "borg_ui_repositories_total 0" in content
+
+    def test_endpoint_returns_404_when_metrics_disabled(self, test_client, test_db):
+        settings = test_db.query(SystemSettings).first()
+        assert settings is not None
+        settings.metrics_enabled = False
+        test_db.commit()
+
+        response = test_client.get("/metrics")
+        assert response.status_code == 404
+
+    def test_endpoint_requires_shared_token_when_enabled(self, test_client, test_db):
+        settings = test_db.query(SystemSettings).first()
+        assert settings is not None
+        settings.metrics_enabled = True
+        settings.metrics_require_auth = True
+        settings.metrics_token = "secret-token"
+        test_db.commit()
+
+        response = test_client.get("/metrics")
+        assert response.status_code == 401
+
+        response = test_client.get("/metrics", headers={"X-Borg-Metrics-Token": "wrong-token"})
+        assert response.status_code == 401
+
+        response = test_client.get("/metrics", headers={"X-Borg-Metrics-Token": "secret-token"})
+        assert response.status_code == 200
+
+    def test_endpoint_accepts_bearer_token_for_metrics_auth(self, test_client, test_db):
+        settings = test_db.query(SystemSettings).first()
+        assert settings is not None
+        settings.metrics_enabled = True
+        settings.metrics_require_auth = True
+        settings.metrics_token = "secret-token"
+        test_db.commit()
+
+        response = test_client.get("/metrics", headers={"Authorization": "Bearer secret-token"})
+        assert response.status_code == 200
 
 
 class TestPrometheusFormat:

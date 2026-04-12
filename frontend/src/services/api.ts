@@ -96,6 +96,10 @@ export interface SystemSettings {
   stats_refresh_interval_minutes?: number
   bypass_lock_on_info?: boolean
   bypass_lock_on_list?: boolean
+  metrics_enabled?: boolean
+  metrics_require_auth?: boolean
+  metrics_token?: string
+  metrics_token_set?: boolean
   [key: string]: unknown
 }
 
