@@ -167,10 +167,11 @@ async def startup_event():
         logger.error("Failed to run migrations", error=str(e))
         # Don't fail startup, just log the error
 
+    app_version = get_runtime_app_version()
+
     # Initialize local licensing state and attempt hidden full access activation
     # only when explicitly enabled for this runtime.
     if settings.enable_startup_license_sync:
-        app_version = get_runtime_app_version()
         try:
             db = SessionLocal()
             try:

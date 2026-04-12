@@ -83,6 +83,53 @@ class TestStartupEvent:
             cache_max_size_mb=128,
         )
 
+    async def test_background_license_refresh_uses_runtime_version_when_startup_sync_disabled(self, mock_db):
+        """The refresh loop should not close over an undefined app_version."""
+        mock_settings = Mock()
+        mock_settings.redis_url = None
+        mock_settings.log_cleanup_on_startup = False
+        mock_settings.mqtt_enabled = False
+        mock_settings.mqtt_beta_enabled = False
+        mock_db.query.return_value.first.return_value = mock_settings
+
+        captured_refresh_coro = None
+
+        def fake_spawn_background_task(coro):
+            nonlocal captured_refresh_coro
+            coro_name = getattr(getattr(coro, "cr_code", None), "co_name", "")
+            if coro_name == "licensing_refresh_loop":
+                captured_refresh_coro = coro
+            else:
+                coro.close()
+            return Mock()
+
+        with patch("app.database.migrations.run_migrations"), patch(
+            "app.core.security.create_first_user", new_callable=AsyncMock
+        ), patch("app.main.settings.enable_startup_license_sync", False), patch(
+            "app.database.database.SessionLocal", return_value=mock_db
+        ), patch("app.main.get_runtime_app_version", return_value="9.9.9"), patch(
+            "app.main._spawn_background_task", side_effect=fake_spawn_background_task
+        ), patch("app.services.cache_service.archive_cache"), patch(
+            "app.core.borg.borg.get_system_info", new_callable=AsyncMock
+        ), patch("app.services.backup_service.backup_service"), patch(
+            "app.utils.process_utils.cleanup_orphaned_jobs"
+        ), patch("app.utils.process_utils.cleanup_orphaned_mounts"), patch(
+            "app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()
+        ), patch("app.services.check_scheduler.check_scheduler"), patch(
+            "app.services.stats_refresh_scheduler.stats_refresh_scheduler"
+        ), patch(
+            "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler", return_value=AsyncMock()
+        ), patch("asyncio.create_task"):
+            from app.main import startup_event, app
+
+            app.state.background_tasks = []
+            await startup_event()
+
+            assert captured_refresh_coro is not None
+            assert captured_refresh_coro.cr_frame is not None
+            assert captured_refresh_coro.cr_frame.f_locals["app_version"] == "9.9.9"
+            captured_refresh_coro.close()
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
