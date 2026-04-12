@@ -393,6 +393,41 @@ class TestV2RepositoryRoutes:
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.infoFailed"
 
+    def test_get_repository_info_retries_with_bypass_lock_on_lock_like_failure(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, path="/tmp/v2-lock-retry")
+
+        with patch(
+            "app.api.v2.repositories.borg2.info_repo",
+            new=AsyncMock(
+                side_effect=[
+                    {
+                        "success": False,
+                        "stdout": "",
+                        "stderr": "ObjectNotFound: locks/ddba06e6e875813a",
+                        "return_code": 2,
+                    },
+                    {
+                        "success": True,
+                        "stdout": json.dumps({"archives": [], "repository": {"id": 9}}),
+                        "stderr": "",
+                        "return_code": 0,
+                    },
+                ]
+            ),
+        ) as mock_info, patch(
+            "app.api.v2.repositories.borg2.rinfo",
+            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({}), "stderr": ""}),
+        ):
+            response = test_client.get(f"/api/v2/repositories/{repo.id}/info", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert mock_info.await_count == 2
+        assert mock_info.await_args_list[0].kwargs["bypass_lock"] is False
+        assert mock_info.await_args_list[1].kwargs["bypass_lock"] is True
+
     def test_get_repository_info_returns_404_for_missing_repo(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)
 
@@ -415,6 +450,22 @@ class TestV2RepositoryRoutes:
         assert response.json() == {"archives": [{"name": "one"}], "borg_version": 2}
         mock_list.assert_awaited_once()
         assert mock_list.call_args.kwargs["bypass_lock"] is True
+
+    def test_get_repository_info_respects_system_bypass_lock(self, test_client: TestClient, admin_headers, test_db):
+        _enable_borg_v2(test_db, bypass_lock_on_info=True)
+        repo = _create_v2_repo(test_db, path="/tmp/v2-info-bypass")
+
+        with patch(
+            "app.api.v2.repositories.borg2.info_repo",
+            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({}), "stderr": ""}),
+        ) as mock_info, patch(
+            "app.api.v2.repositories.borg2.rinfo",
+            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({}), "stderr": ""}),
+        ):
+            response = test_client.get(f"/api/v2/repositories/{repo.id}/info", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert mock_info.await_args.kwargs["bypass_lock"] is True
 
     def test_list_archives_returns_500_on_borg_failure(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)
@@ -475,3 +526,16 @@ class TestV2RepositoryRoutes:
 
         assert response.status_code == 500
         assert response.json()["detail"]["key"] == "backend.errors.repo.infoFailed"
+
+    def test_get_repository_stats_respects_system_bypass_lock(self, test_client: TestClient, admin_headers, test_db):
+        _enable_borg_v2(test_db, bypass_lock_on_info=True)
+        repo = _create_v2_repo(test_db)
+
+        with patch(
+            "app.api.v2.repositories.borg2.rinfo",
+            new=AsyncMock(return_value={"success": True, "stdout": json.dumps({}), "stderr": ""}),
+        ) as mock_rinfo:
+            response = test_client.get(f"/api/v2/repositories/{repo.id}/stats", headers=admin_headers)
+
+        assert response.status_code == 200
+        assert mock_rinfo.await_args.kwargs["bypass_lock"] is True

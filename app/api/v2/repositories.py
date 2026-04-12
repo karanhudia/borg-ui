@@ -20,6 +20,7 @@ from app.database.models import User, Repository, SystemSettings
 from app.core.security import get_current_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2, BORG2_ENCRYPTION_MODES
+from app.core.borg_errors import is_lock_error
 from app.config import settings
 from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
@@ -89,6 +90,16 @@ def _get_info_timeout(db: Session) -> int:
     if sys_settings and sys_settings.info_timeout:
         return sys_settings.info_timeout
     return 600
+
+
+def _resolve_bypass_lock(repo: Repository, db: Session, setting_name: str) -> bool:
+    system_settings = db.query(SystemSettings).first()
+    return bool(repo.bypass_lock or (system_settings and getattr(system_settings, setting_name, False)))
+
+
+def _is_borg2_lock_like_failure(result: dict) -> bool:
+    stderr = result.get("stderr", "") or ""
+    return is_lock_error(exit_code=result.get("return_code")) or "ObjectNotFound: locks/" in stderr
 
 
 def _borg_keyfile_name(repo_path: str) -> str:
@@ -332,13 +343,27 @@ async def get_repository_info(
         raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.notFound"})
 
     info_timeout = _get_info_timeout(db)
+    bypass_lock = _resolve_bypass_lock(repo, db, "bypass_lock_on_info")
     result = await borg2.info_repo(
         repository=repo.path,
         passphrase=repo.passphrase,
         remote_path=repo.remote_path,
-        bypass_lock=repo.bypass_lock,
+        bypass_lock=bypass_lock,
         timeout=info_timeout,
     )
+    if not result["success"] and not bypass_lock and _is_borg2_lock_like_failure(result):
+        logger.warning(
+            "Retrying borg2 info_repo with bypass lock after lock-like failure",
+            repo_id=repo.id,
+            path=repo.path,
+        )
+        result = await borg2.info_repo(
+            repository=repo.path,
+            passphrase=repo.passphrase,
+            remote_path=repo.remote_path,
+            bypass_lock=True,
+            timeout=info_timeout,
+        )
     if not result["success"]:
         raise HTTPException(
             status_code=500,
@@ -437,7 +462,7 @@ async def get_repository_stats(
         repository=repo.path,
         passphrase=repo.passphrase,
         remote_path=repo.remote_path,
-        bypass_lock=repo.bypass_lock,
+        bypass_lock=_resolve_bypass_lock(repo, db, "bypass_lock_on_info"),
         timeout=info_timeout,
     )
     if not result["success"]:
