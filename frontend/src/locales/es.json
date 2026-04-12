@@ -3137,7 +3137,8 @@
     "currentPlanValue": "Acceso actual: {{plan}}",
     "instanceIdValue": "ID de instancia: {{instanceId}}",
     "licenseIdValue": "Licencia activa: {{licenseId}}",
-    "expiresAtValue": "Caduca el: {{date}}"
+    "expiresAtValue": "Caduca el: {{date}}",
+    "viewPlanDetails": "Ver detalles del plan →"
   },
   "upgradePrompt": {
     "featureLabel": "Función de {{plan}}",
