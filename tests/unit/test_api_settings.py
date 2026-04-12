@@ -77,6 +77,15 @@ class TestSystemSettings:
         assert payload["metrics_require_auth"] is True
         assert payload["metrics_token_set"] is True
 
+    def test_get_system_settings_defaults_metrics_to_disabled_for_new_install(self, test_client: TestClient, admin_headers, test_db):
+        response = test_client.get("/api/settings/system", headers=admin_headers)
+
+        assert response.status_code == 200
+        payload = response.json()["settings"]
+        assert payload["metrics_enabled"] is False
+        assert payload["metrics_require_auth"] is False
+        assert payload["metrics_token_set"] is False
+
     def test_update_system_settings_persists_metrics_configuration(self, test_client: TestClient, admin_headers, test_db):
         settings = SystemSettings()
         test_db.add(settings)
@@ -98,6 +107,26 @@ class TestSystemSettings:
         assert settings.metrics_enabled is True
         assert settings.metrics_require_auth is True
         assert settings.metrics_token == "rotated-metrics-token"
+
+    def test_update_system_settings_disabling_metrics_also_disables_metrics_auth(self, test_client: TestClient, admin_headers, test_db):
+        settings = SystemSettings(metrics_enabled=True, metrics_require_auth=True, metrics_token="metrics-secret")
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "metrics_enabled": False,
+                "mqtt_password": "",
+            },
+            headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(settings)
+        assert settings.metrics_enabled is False
+        assert settings.metrics_require_auth is False
+        assert settings.metrics_token == "metrics-secret"
 
     def test_update_system_settings_generates_metrics_token_when_auth_enabled(self, test_client: TestClient, admin_headers, test_db):
         settings = SystemSettings(metrics_enabled=False, metrics_require_auth=False, metrics_token=None)

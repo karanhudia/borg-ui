@@ -450,6 +450,10 @@ async def update_system_settings(
             settings.metrics_token = secrets.token_urlsafe(32)
             generated_metrics_token = settings.metrics_token
 
+        # Keep persisted metrics state internally consistent when the endpoint is disabled.
+        if settings.metrics_enabled is False:
+            settings.metrics_require_auth = False
+
         if settings_update.deployment_type is not None:
             if settings_update.deployment_type not in ('individual', 'enterprise'):
                 raise HTTPException(

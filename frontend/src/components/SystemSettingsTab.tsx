@@ -64,6 +64,8 @@ const SystemSettingsTab: React.FC = () => {
   const [metricsTokenCloseConfirmOpen, setMetricsTokenCloseConfirmOpen] = useState(false)
 
   const [hasChanges, setHasChanges] = useState(false)
+  const [browseChanged, setBrowseChanged] = useState(false)
+  const [systemChanged, setSystemChanged] = useState(false)
 
   interface CacheStats {
     browse_max_items?: number
@@ -159,11 +161,11 @@ const SystemSettingsTab: React.FC = () => {
   // Track form changes
   useEffect(() => {
     if (cacheStats && systemSettings) {
-      const browseChanged =
+      const browseDirty =
         browseMaxItems !== (cacheStats.browse_max_items || 1_000_000) ||
         browseMaxMemoryMb !== (cacheStats.browse_max_memory_mb || 1024)
 
-      const timeoutChanged =
+      const timeoutDirty =
         mountTimeout !== (systemSettings.mount_timeout || 120) ||
         infoTimeout !== (systemSettings.info_timeout || 600) ||
         listTimeout !== (systemSettings.list_timeout || 600) ||
@@ -171,15 +173,17 @@ const SystemSettingsTab: React.FC = () => {
         backupTimeout !== (systemSettings.backup_timeout || 3600) ||
         sourceSizeTimeout !== (systemSettings.source_size_timeout || 3600)
 
-      const statsRefreshChanged =
+      const statsRefreshDirty =
         statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60)
 
-      const metricsChanged =
+      const metricsDirty =
         metricsEnabled !== (systemSettings.metrics_enabled ?? false) ||
         metricsRequireAuth !== (systemSettings.metrics_require_auth ?? false) ||
         rotateMetricsToken
 
-      setHasChanges(browseChanged || timeoutChanged || statsRefreshChanged || metricsChanged)
+      setBrowseChanged(browseDirty)
+      setSystemChanged(timeoutDirty || statsRefreshDirty || metricsDirty)
+      setHasChanges(browseDirty || timeoutDirty || statsRefreshDirty || metricsDirty)
     }
   }, [
     browseMaxItems,
@@ -301,14 +305,29 @@ const SystemSettingsTab: React.FC = () => {
     }
 
     try {
-      const [, systemResponse] = await Promise.all([
-        saveBrowseLimitsMutation.mutateAsync(),
-        saveTimeoutsMutation.mutateAsync(),
-      ])
+      const operations: Array<Promise<unknown>> = []
+      let generatedMetricsToken: string | undefined
+
+      if (browseChanged) {
+        operations.push(saveBrowseLimitsMutation.mutateAsync())
+      }
+      if (systemChanged) {
+        operations.push(
+          saveTimeoutsMutation.mutateAsync().then((response) => {
+            generatedMetricsToken = response?.data?.generated_metrics_token
+            return response
+          })
+        )
+      }
+
+      if (operations.length === 0) {
+        return
+      }
+
+      await Promise.all(operations)
       toast.success(t('systemSettings.savedSuccessfully'))
       setHasChanges(false)
       setRotateMetricsToken(false)
-      const generatedMetricsToken = systemResponse?.data?.generated_metrics_token
       if (generatedMetricsToken) {
         setNewMetricsToken(generatedMetricsToken)
         setMetricsTokenCopied(false)
@@ -653,7 +672,14 @@ const SystemSettingsTab: React.FC = () => {
                 control={
                   <Switch
                     checked={metricsEnabled}
-                    onChange={(e) => setMetricsEnabled(e.target.checked)}
+                    onChange={(e) => {
+                      const enabled = e.target.checked
+                      setMetricsEnabled(enabled)
+                      if (!enabled) {
+                        setMetricsRequireAuth(false)
+                        setRotateMetricsToken(false)
+                      }
+                    }}
                   />
                 }
                 label={t('systemSettings.metricsEnabledLabel')}
