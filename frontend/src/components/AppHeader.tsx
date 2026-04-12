@@ -10,11 +10,13 @@ import {
   Typography,
 } from '@mui/material'
 import { alpha, useTheme as useMuiTheme } from '@mui/material/styles'
-import { ChevronDown, LogOut, Menu, Shield } from 'lucide-react'
+import { ChevronDown, LogOut, Menu, Shield, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { formatRoleLabel } from '../utils/rolePresentation'
+import PlanInfoDrawer from './PlanInfoDrawer'
+import { usePlan } from '../hooks/usePlan'
 
 const drawerWidth = 240
 const headerHeight = 64
@@ -50,7 +52,9 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
   const { trackAuth, trackNavigation, EventAction } = useAnalytics()
   const muiTheme = useMuiTheme()
   const isDark = muiTheme.palette.mode === 'dark'
+  const { plan, features, entitlement } = usePlan()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+  const [planDrawerOpen, setPlanDrawerOpen] = useState(false)
   const open = Boolean(anchorEl)
 
   const displayName = user?.full_name?.trim() || user?.username || user?.email || ''
@@ -228,6 +232,38 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
             component="button"
             onClick={() => {
               setAnchorEl(null)
+              setPlanDrawerOpen(true)
+            }}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              width: '100%',
+              px: 2,
+              py: 1.25,
+              border: 'none',
+              bgcolor: 'transparent',
+              color: 'text.primary',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              transition: 'background-color 150ms',
+              '&:hover': {
+                bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+              },
+            }}
+          >
+            <Sparkles size={15} style={{ opacity: 0.6 }} />
+            {t('navigation.yourPlan')}
+          </Box>
+
+          <Divider />
+
+          <Box
+            component="button"
+            onClick={() => {
+              setAnchorEl(null)
               trackAuth(EventAction.LOGOUT, { surface: 'user_menu' })
               logout()
             }}
@@ -255,6 +291,14 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
             {t('navigation.logout')}
           </Box>
         </Popover>
+
+        <PlanInfoDrawer
+          open={planDrawerOpen}
+          onClose={() => setPlanDrawerOpen(false)}
+          plan={plan}
+          features={features}
+          entitlement={entitlement}
+        />
       </Toolbar>
     </AppBar>
   )

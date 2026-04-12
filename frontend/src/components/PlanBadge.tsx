@@ -1,4 +1,5 @@
 import { Box, Typography } from '@mui/material'
+import { ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Plan, PLAN_COLOR, PLAN_LABEL } from '../core/features'
 import type { EntitlementInfo } from '../hooks/useSystemInfo'
@@ -56,6 +57,7 @@ export default function PlanBadge({ plan, entitlement, onClick }: PlanBadgeProps
       >
         {label}
       </Typography>
+      <ChevronRight size={9} style={{ color, opacity: 0.6, marginLeft: 1 }} />
     </Box>
   )
 }

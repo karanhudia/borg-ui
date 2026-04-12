@@ -118,7 +118,8 @@
     "app": "App:",
     "loading": "Loading...",
     "welcome": "Welcome,",
-    "logout": "Logout"
+    "logout": "Logout",
+    "yourPlan": "Your Plan"
   },
   "status": {
     "completed": "Completed",
@@ -3083,7 +3084,7 @@
     }
   },
   "plan": {
-    "currentPlan": "Current Plan",
+    "currentPlan": "Your Plan",
     "fullAccessLabel": "Full Access",
     "proFeatures": "Pro features",
     "plans": "Plans",
@@ -3115,7 +3116,19 @@
     "plannedReleases": "Included in upcoming releases for {{plan}}",
     "upcomingFeatures": "Upcoming for {{plan}}",
     "availableIn": "Available in {{version}}",
-    "buyLink": "Upgrade to {{plan}}"
+    "buyLink": "Upgrade to {{plan}}",
+    "yourPlanTab": "Your Plan",
+    "upgradeTab": "Upgrade",
+    "communityIncluded": "Included in Community Edition",
+    "fullAccessCountdown_one": "{{count}} day of full access remaining",
+    "fullAccessCountdown_other": "{{count}} days of full access remaining",
+    "fullAccessEndsNotice": "On {{date}}, Pro & Enterprise features will deactivate. Everything below is yours, forever.",
+    "afterFullAccessEndsNotice": "These features were available during your full access period but are not included in Community Edition.",
+    "upgradeNudgeTitle": "Want more after full access?",
+    "upgradeNudgeAfterTitle": "Unlock more on Pro or Enterprise",
+    "upgradeNudgePro": "Pro",
+    "upgradeNudgeEnterprise": "Enterprise",
+    "viewUpgradeOptions": "View upgrade options"
   },
   "licensing": {
     "title": "Licensing",
@@ -3124,13 +3137,15 @@
     "currentPlanValue": "Current access: {{plan}}",
     "instanceIdValue": "Instance ID: {{instanceId}}",
     "licenseIdValue": "Active licence: {{licenseId}}",
-    "expiresAtValue": "Expires on: {{date}}"
+    "expiresAtValue": "Expires on: {{date}}",
+    "viewPlanDetails": "View plan details →"
   },
   "upgradePrompt": {
     "featureLabel": "{{plan}} feature",
     "defaultMessage": "This feature requires the {{plan}} plan.",
     "requiresPlan": "Requires {{plan}} plan",
-    "buyLink": "Upgrade at borgui.com"
+    "buyLink": "Upgrade at borgui.com",
+    "learnMore": "See what's included →"
   },
   "announcements": {
     "highlights": "What's new",

@@ -3,6 +3,62 @@
   "generated_at": "2026-04-08T00:00:00Z",
   "features": [
     {
+      "id": "unlimited_repos",
+      "plan": "community",
+      "label": "Unlimited repositories",
+      "description": "Create and manage as many Borg repositories as you need.",
+      "availability": "included"
+    },
+    {
+      "id": "scheduled_backups",
+      "plan": "community",
+      "label": "Scheduled backups",
+      "description": "Cron-based schedules with configurable retention and pruning policies.",
+      "availability": "included"
+    },
+    {
+      "id": "community_users",
+      "plan": "community",
+      "label": "Up to 5 users",
+      "description": "Invite up to 5 user accounts to manage your Borg UI instance.",
+      "availability": "included"
+    },
+    {
+      "id": "archive_browsing",
+      "plan": "community",
+      "label": "Archive browsing and restore",
+      "description": "Browse archive contents and restore individual files from the UI.",
+      "availability": "included"
+    },
+    {
+      "id": "notifications",
+      "plan": "community",
+      "label": "Notifications",
+      "description": "Email and webhook alerts for backup success, failure, and warnings.",
+      "availability": "included"
+    },
+    {
+      "id": "script_library",
+      "plan": "community",
+      "label": "Script library and hooks",
+      "description": "Pre/post-backup scripts with configurable parameters per repository.",
+      "availability": "included"
+    },
+    {
+      "id": "prometheus_metrics",
+      "plan": "community",
+      "label": "Prometheus metrics",
+      "description": "Export backup metrics for Grafana and other monitoring tools.",
+      "availability": "included"
+    },
+    {
+      "id": "single_server",
+      "plan": "community",
+      "label": "Single server deployment",
+      "description": "Self-host on one server. No external calls required.",
+      "availability": "included"
+    },
+    {
       "id": "borg_v2",
       "plan": "pro",
       "label": "Borg v2 beta testing",

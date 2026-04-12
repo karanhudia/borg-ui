@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { Box, Typography, Tooltip, Skeleton } from '@mui/material'
-import { Info } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
+import { Box, Skeleton } from '@mui/material'
 import VersionChip from './VersionChip'
 import PlanBadge from './PlanBadge'
 import PlanInfoDrawer from './PlanInfoDrawer'
@@ -19,7 +17,6 @@ interface SidebarVersionInfoProps {
 }
 
 export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoProps) {
-  const { t } = useTranslation()
   const { plan, features, entitlement, isLoading: isPlanLoading } = usePlan()
   const { trackPlan, EventAction } = useAnalytics()
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -42,31 +39,17 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
   }
 
   return (
-    <Box sx={{ mt: 'auto', px: 2, py: 1.5, borderTop: 1, borderColor: 'divider' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <Tooltip title={t('layout.systemInformation')} arrow placement="right">
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-            <Info size={13} style={{ color: '#555', flexShrink: 0 }} />
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 600,
-                fontSize: '0.65rem',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                color: 'text.disabled',
-              }}
-            >
-              {t('navigation.versionInfo')}
-            </Typography>
-          </Box>
-        </Tooltip>
+    <Box sx={{ mt: 'auto', px: 2, pt: 1, pb: 1.5, borderTop: 1, borderColor: 'divider' }}>
+      {/* Plan badge — own row, full width */}
+      <Box sx={{ mb: 1 }}>
         {isPlanLoading ? (
-          <Skeleton variant="rounded" width={32} height={12} sx={{ borderRadius: '3px' }} />
+          <Skeleton variant="rounded" width={80} height={14} sx={{ borderRadius: '3px' }} />
         ) : (
           <PlanBadge plan={plan} entitlement={entitlement} onClick={handleBadgeClick} />
         )}
       </Box>
+
+      {/* Version chips */}
       {systemInfo ? (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
           <VersionChip label="UI" version={systemInfo.app_version} />
@@ -83,14 +66,12 @@ export default function SidebarVersionInfo({ systemInfo }: SidebarVersionInfoPro
         </Box>
       ) : (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-          {/* UI version skeleton — wider due to semver string */}
           <Skeleton variant="rounded" width={118} height={16} sx={{ borderRadius: '4px' }} />
-          {/* B1 version skeleton */}
           <Skeleton variant="rounded" width={54} height={16} sx={{ borderRadius: '4px' }} />
-          {/* B2 version skeleton — wraps to next line naturally */}
           <Skeleton variant="rounded" width={70} height={16} sx={{ borderRadius: '4px' }} />
         </Box>
       )}
+
       <PlanInfoDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}

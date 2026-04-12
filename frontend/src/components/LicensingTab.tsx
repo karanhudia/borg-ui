@@ -18,13 +18,15 @@ import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { BUY_URL } from '../utils/externalLinks'
+import PlanInfoDrawer from './PlanInfoDrawer'
 
 export default function LicensingTab() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { plan, entitlement } = usePlan()
+  const { plan, features, entitlement } = usePlan()
   const { trackPlan, EventAction } = useAnalytics()
   const [licenseKey, setLicenseKey] = useState('')
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   const analyticsContext = useMemo(
     () => ({
@@ -305,9 +307,29 @@ export default function LicensingTab() {
             >
               {t('plan.buyLink', { plan: statusLabel })}
             </Link>
+            <Link
+              component="button"
+              underline="hover"
+              onClick={() => setDrawerOpen(true)}
+              sx={{
+                alignSelf: 'flex-start',
+                fontSize: '0.8rem',
+                color: 'text.secondary',
+                lineHeight: 1.4,
+              }}
+            >
+              {t('licensing.viewPlanDetails')}
+            </Link>
           </Stack>
         </Stack>
       </SettingsCard>
+      <PlanInfoDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        plan={plan}
+        features={features}
+        entitlement={entitlement}
+      />
     </Stack>
   )
 }

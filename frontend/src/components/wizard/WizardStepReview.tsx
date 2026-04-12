@@ -25,6 +25,8 @@ interface SSHConnection {
   username: string
   port: number
   ssh_key_id: number
+  default_path?: string
+  ssh_path_prefix?: string
 }
 
 export interface WizardReviewData {
@@ -201,7 +203,12 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
     if (data.dataSource !== 'remote' || !data.sourceSshConnectionId) return null
     const conn = sshConnections.find((c) => c.id === data.sourceSshConnectionId)
     if (!conn) return null
-    return { username: conn.username, host: conn.host, port: conn.port }
+    return {
+      username: conn.username,
+      host: conn.host,
+      port: conn.port,
+      defaultPath: conn.default_path,
+    }
   }
 
   const getRepoSshConnection = () => {

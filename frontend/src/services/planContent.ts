@@ -3,6 +3,8 @@ import { BASE_PATH } from '../utils/basePath'
 import planContentManifestData from '../data/plan-content.json'
 import localPlanContentUrl from '../data/plan-content.json?url'
 
+const MAX_SUPPORTED_VERSION = 1
+
 export const LOCAL_PLAN_CONTENT_URL =
   BASE_PATH === '/' ? localPlanContentUrl : `${BASE_PATH}${localPlanContentUrl}`
 const DEFAULT_REMOTE_PLAN_CONTENT_URL = 'https://updates.borgui.com/plan-content.json'
@@ -77,9 +79,14 @@ export async function fetchPlanContentManifest(url = getPlanContentUrl()) {
     }
 
     const data = (await response.json()) as Partial<PlanContentManifest>
+    const version =
+      typeof data.version === 'number' ? data.version : DEFAULT_PLAN_CONTENT_MANIFEST.version
+    if (version > MAX_SUPPORTED_VERSION) {
+      lastStatus = null
+      continue
+    }
     return {
-      version:
-        typeof data.version === 'number' ? data.version : DEFAULT_PLAN_CONTENT_MANIFEST.version,
+      version,
       generated_at: data.generated_at,
       features: Array.isArray(data.features)
         ? data.features.filter(isValidPlanContentFeature)

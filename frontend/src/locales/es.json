@@ -118,7 +118,8 @@
     "app": "App:",
     "loading": "Cargando...",
     "welcome": "Bienvenido,",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "yourPlan": "Your Plan"
   },
   "status": {
     "completed": "Completado",
@@ -3115,7 +3116,19 @@
     "plannedReleases": "Incluido en próximas versiones para {{plan}}",
     "upcomingFeatures": "Próximamente para {{plan}}",
     "availableIn": "Disponible en {{version}}",
-    "buyLink": "Actualizar a {{plan}}"
+    "buyLink": "Actualizar a {{plan}}",
+    "yourPlanTab": "Your Plan",
+    "upgradeTab": "Upgrade",
+    "communityIncluded": "Included in Community Edition",
+    "fullAccessCountdown_one": "{{count}} day of full access remaining",
+    "fullAccessCountdown_other": "{{count}} days of full access remaining",
+    "fullAccessEndsNotice": "On {{date}}, Pro & Enterprise features will deactivate. Everything below is yours, forever.",
+    "afterFullAccessEndsNotice": "These features were available during your full access period but are not included in Community Edition.",
+    "upgradeNudgeTitle": "Want more after full access?",
+    "upgradeNudgeAfterTitle": "Unlock more on Pro or Enterprise",
+    "upgradeNudgePro": "Pro",
+    "upgradeNudgeEnterprise": "Enterprise",
+    "viewUpgradeOptions": "View upgrade options"
   },
   "licensing": {
     "title": "Licencias",
@@ -3130,7 +3143,8 @@
     "featureLabel": "Función de {{plan}}",
     "defaultMessage": "Esta función requiere el plan {{plan}}.",
     "requiresPlan": "Requiere el plan {{plan}}",
-    "buyLink": "Actualizar en borgui.com"
+    "buyLink": "Actualizar en borgui.com",
+    "learnMore": "See what's included →"
   },
   "announcements": {
     "highlights": "What's new",
