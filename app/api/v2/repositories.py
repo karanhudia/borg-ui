@@ -24,7 +24,7 @@ from app.core.borg_errors import is_lock_error
 from app.config import settings
 from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
-from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.borg_env import repository_borg_env
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Repositories v2"], dependencies=[require_feature("borg_v2")])
@@ -345,8 +345,7 @@ async def get_repository_info(
 
     info_timeout = _get_info_timeout(db)
     bypass_lock = _resolve_bypass_lock(repo, db, "bypass_lock_on_info")
-    env, temp_key_file = build_repository_borg_env(repo, db)
-    try:
+    with repository_borg_env(repo, db) as env:
         result = await borg2.info_repo(
             repository=repo.path,
             passphrase=repo.passphrase,
@@ -355,16 +354,13 @@ async def get_repository_info(
             timeout=info_timeout,
             env=env,
         )
-    finally:
-        cleanup_temp_key_file(temp_key_file)
     if not result["success"] and not bypass_lock and _is_borg2_lock_like_failure(result):
         logger.warning(
             "Retrying borg2 info_repo with bypass lock after lock-like failure",
             repo_id=repo.id,
             path=repo.path,
         )
-        env, temp_key_file = build_repository_borg_env(repo, db)
-        try:
+        with repository_borg_env(repo, db) as env:
             result = await borg2.info_repo(
                 repository=repo.path,
                 passphrase=repo.passphrase,
@@ -373,8 +369,6 @@ async def get_repository_info(
                 timeout=info_timeout,
                 env=env,
             )
-        finally:
-            cleanup_temp_key_file(temp_key_file)
     if not result["success"]:
         raise HTTPException(
             status_code=500,
@@ -389,16 +383,13 @@ async def get_repository_info(
     # borg2 info --json has per-archive original_size but no repo-level disk usage.
     # borg2 repo-info --json has cache.path only — no cache.stats like borg1.
     # Pull repository/encryption metadata from rinfo, then compute disk usage separately.
-    env, temp_key_file = build_repository_borg_env(repo, db)
-    try:
+    with repository_borg_env(repo, db) as env:
         rinfo_result = await borg2.rinfo(
             repository=repo.path,
             passphrase=repo.passphrase,
             remote_path=repo.remote_path,
             env=env,
         )
-    finally:
-        cleanup_temp_key_file(temp_key_file)
     if rinfo_result["success"]:
         try:
             rinfo_data = json.loads(rinfo_result["stdout"])
@@ -440,8 +431,7 @@ async def list_archives(
     system_settings = db.query(SystemSettings).first()
     bypass_lock = repo.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
 
-    env, temp_key_file = build_repository_borg_env(repo, db)
-    try:
+    with repository_borg_env(repo, db) as env:
         result = await borg2.list_archives(
             repo.path,
             passphrase=repo.passphrase,
@@ -449,8 +439,6 @@ async def list_archives(
             bypass_lock=bypass_lock,
             env=env,
         )
-    finally:
-        cleanup_temp_key_file(temp_key_file)
     if not result["success"]:
         raise HTTPException(
             status_code=500,
@@ -479,8 +467,7 @@ async def get_repository_stats(
         raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.notFound"})
 
     info_timeout = _get_info_timeout(db)
-    env, temp_key_file = build_repository_borg_env(repo, db)
-    try:
+    with repository_borg_env(repo, db) as env:
         result = await borg2.rinfo(
             repository=repo.path,
             passphrase=repo.passphrase,
@@ -489,8 +476,6 @@ async def get_repository_stats(
             timeout=info_timeout,
             env=env,
         )
-    finally:
-        cleanup_temp_key_file(temp_key_file)
     if not result["success"]:
         raise HTTPException(
             status_code=500,

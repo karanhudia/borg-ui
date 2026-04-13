@@ -6,7 +6,6 @@ commands inline.
 """
 
 import asyncio
-import os
 from typing import Any, Dict, Optional
 
 import structlog
@@ -15,7 +14,7 @@ from app.core.borg import borg
 from app.database.database import SessionLocal
 from app.database.models import SystemSettings
 from app.config import settings
-from app.utils.borg_env import build_ssh_key_borg_env, cleanup_temp_key_file
+from app.utils.borg_env import setup_borg_env, ssh_key_borg_env
 
 logger = structlog.get_logger()
 
@@ -47,46 +46,43 @@ class RepositoryService:
         bypass_lock: bool = False,
         timeout: Optional[int] = None,
     ) -> Dict[str, Any]:
-        temp_key_file = None
         try:
-            env, temp_key_file = build_ssh_key_borg_env(
+            with ssh_key_borg_env(
                 path=path,
                 passphrase=passphrase,
                 ssh_key_id=ssh_key_id,
-            )
+            ) as env:
 
-            cmd = [borg.borg_cmd, "info"]
-            if remote_path:
-                cmd.extend(["--remote-path", remote_path])
-            if bypass_lock:
-                cmd.append("--bypass-lock")
-            cmd.extend([path, "--json"])
+                cmd = [borg.borg_cmd, "info"]
+                if remote_path:
+                    cmd.extend(["--remote-path", remote_path])
+                if bypass_lock:
+                    cmd.append("--bypass-lock")
+                cmd.extend([path, "--json"])
 
-            result = await borg._execute_command(
-                cmd,
-                timeout=timeout or _get_operation_timeouts()["info_timeout"],
-                env=env,
-            )
-            if not result["success"]:
-                return {
-                    "success": False,
-                    "error": result.get("stderr") or "Repository verification failed",
-                }
+                result = await borg._execute_command(
+                    cmd,
+                    timeout=timeout or _get_operation_timeouts()["info_timeout"],
+                    env=env,
+                )
+                if not result["success"]:
+                    return {
+                        "success": False,
+                        "error": result.get("stderr") or "Repository verification failed",
+                    }
 
-            import json
+                import json
 
-            try:
-                return {"success": True, "info": json.loads(result["stdout"])}
-            except json.JSONDecodeError as exc:
-                logger.error("Failed to parse borg info output", error=str(exc))
-                return {"success": False, "error": f"Failed to parse repository info: {exc}"}
+                try:
+                    return {"success": True, "info": json.loads(result["stdout"])}
+                except json.JSONDecodeError as exc:
+                    logger.error("Failed to parse borg info output", error=str(exc))
+                    return {"success": False, "error": f"Failed to parse repository info: {exc}"}
         except asyncio.TimeoutError:
             return {"success": False, "error": "Repository verification timed out"}
         except Exception as exc:
             logger.error("Failed to verify repository", path=path, error=str(exc))
             return {"success": False, "error": str(exc)}
-        finally:
-            cleanup_temp_key_file(temp_key_file)
 
     async def initialize_repository(
         self,
@@ -96,7 +92,6 @@ class RepositoryService:
         ssh_key_id: Optional[int] = None,
         remote_path: Optional[str] = None,
     ) -> Dict[str, Any]:
-        temp_key_file = None
         try:
             test_process = await asyncio.create_subprocess_exec(
                 borg.borg_cmd,
@@ -114,28 +109,28 @@ class RepositoryService:
                 cmd.extend(["--remote-path", remote_path])
             cmd.append(path)
 
-            env, temp_key_file = build_ssh_key_borg_env(
+            with ssh_key_borg_env(
                 path=path,
                 passphrase=passphrase,
                 ssh_key_id=ssh_key_id,
-            )
+            ) as env:
 
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=_get_operation_timeouts()["init_timeout"],
-            )
-            return {
-                "success": process.returncode == 0,
-                "return_code": process.returncode,
-                "stdout": stdout.decode() if stdout else "",
-                "stderr": stderr.decode() if stderr else "",
-            }
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=_get_operation_timeouts()["init_timeout"],
+                )
+                return {
+                    "success": process.returncode == 0,
+                    "return_code": process.returncode,
+                    "stdout": stdout.decode() if stdout else "",
+                    "stderr": stderr.decode() if stderr else "",
+                }
         except (FileNotFoundError, OSError) as exc:
             logger.error("Borg not available", error=str(exc))
             return {"success": False, "error": f"Borg not available on this system: {exc}"}
@@ -144,11 +139,9 @@ class RepositoryService:
         except Exception as exc:
             logger.error("Failed to initialize repository", path=path, error=str(exc))
             return {"success": False, "error": str(exc)}
-        finally:
-            cleanup_temp_key_file(temp_key_file)
 
     async def export_keyfile(self, repository, output_path: str) -> Dict[str, Any]:
-        env = _setup_borg_env(passphrase=repository.passphrase)
+        env = setup_borg_env(passphrase=repository.passphrase)
         process = await asyncio.create_subprocess_exec(
             borg.borg_cmd,
             "key",
