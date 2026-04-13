@@ -1,5 +1,5 @@
 import { Box, IconButton, Tooltip, Chip, useTheme, alpha } from '@mui/material'
-import { Eye, RotateCcw, HardDrive, Trash2 } from 'lucide-react'
+import { FolderOpen, RotateCcw, HardDrive, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDate } from '../utils/dateUtils'
 import { Archive } from '../types'
@@ -155,9 +155,9 @@ export default function ArchiveCard({
             size="small"
             onClick={() => onView(archive)}
             aria-label={t('archiveCard.viewContents')}
-            sx={iconBtnSx(theme.palette.primary.main)}
+            sx={iconBtnSx(theme.palette.success.main)}
           >
-            <Eye size={15} />
+            <FolderOpen size={15} />
           </IconButton>
         </Tooltip>
 
