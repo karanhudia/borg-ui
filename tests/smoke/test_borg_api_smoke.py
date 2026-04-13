@@ -55,6 +55,18 @@ def main() -> int:
         if repo_root.split("/")[0] not in root_names:
             raise SmokeFailure(f"Unexpected restore root listing: {root_names}")
 
+        preview = client.preview_restore(
+            repository=repo_id,
+            repository_id=repo_id,
+            archive_name=archive_name,
+            destination=restore_root,
+            paths=[f"{repo_root}/nested"],
+        )
+        if not isinstance(preview, str):
+            raise SmokeFailure(f"Unexpected restore preview payload: {preview!r}")
+        if any(restore_root.iterdir()):
+            raise SmokeFailure("Restore preview should not write files to destination")
+
         nested_items = client.restore_contents(repo_id, archive_name, path=repo_root)
         nested_names = [item["name"] for item in nested_items]
         if "nested" not in nested_names or "root.txt" not in nested_names:

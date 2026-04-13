@@ -73,10 +73,24 @@ def main() -> int:
             raise SmokeFailure(f"Expected exactly one Borg 2 archive, got {archives}")
 
         archive_name = archives[0]["name"]
+        archive_id = archives[0].get("id") or archive_name
         info_response = client.request_ok("GET", f"/api/v2/repositories/{repo_id}/info")
         info_payload = info_response.json()["info"]
         if "repository" not in info_payload:
             raise SmokeFailure(f"Unexpected Borg 2 info payload: {info_payload}")
+
+        archive_info = client.get_archive_info_v2(archive_id, repo_id, include_files=True)
+        if archive_info.get("name") != archive_name:
+            raise SmokeFailure(f"Unexpected Borg 2 archive info payload: {archive_info}")
+
+        browse_items = client.browse_archive_contents_v2(repo_id, archive_id)
+        if not browse_items:
+            raise SmokeFailure("Expected Borg 2 archive browse payload")
+
+        repo_root = client.container_path(source_root).lstrip("/")
+        downloaded = client.download_archive_file_v2(repo_id, archive_name, f"{repo_root}/nested/notes.txt")
+        if downloaded != b"borg2 nested smoke data\n":
+            raise SmokeFailure(f"Unexpected Borg 2 archive download payload: {downloaded!r}")
 
         imported_repo_path = client.temp_dir / "borg2-import-repo"
         subprocess.run(
@@ -119,6 +133,21 @@ def main() -> int:
             expected_message="backend.success.repo.compactJobStarted",
         )
         client.wait_for_job("/api/repositories/compact-jobs", compact_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+
+        delete_response = client.request_ok(
+            "DELETE",
+            f"/api/v2/archives/{archive_id}",
+            params={"repository": str(repo_id)},
+        )
+        delete_payload = delete_response.json()
+        delete_job_id = delete_payload.get("job_id")
+        if not isinstance(delete_job_id, int):
+            raise SmokeFailure(f"Unexpected Borg 2 delete response: {delete_payload}")
+        client.wait_for_job("/api/archives/delete-jobs", delete_job_id, expected={"completed"}, timeout=120)
+
+        remaining_archives = client.list_archives_v2(repo_id)
+        if remaining_archives:
+            raise SmokeFailure(f"Expected Borg 2 delete to remove the final archive, got {remaining_archives}")
 
         client.log(f"Borg 2 archive available: {archive_name}")
         client.log("Borg 2 API smoke passed")

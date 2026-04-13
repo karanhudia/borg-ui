@@ -116,19 +116,19 @@ class SmokeClient:
         self,
         *,
         name: str,
-        repo_path: Path,
-        source_dirs: list[Path],
+        repo_path: Path | str,
+        source_dirs: list[Path | str],
         encryption: str = "none",
         passphrase: Optional[str] = None,
         extra: Optional[dict] = None,
     ) -> tuple[int, str]:
         payload = {
             "name": name,
-            "path": self.container_path(repo_path),
+            "path": self.container_path(repo_path) if isinstance(repo_path, Path) else str(repo_path),
             "encryption": encryption,
             "compression": "lz4",
             "repository_type": "local",
-            "source_directories": [self.container_path(path) for path in source_dirs],
+            "source_directories": [self.container_path(path) if isinstance(path, Path) else str(path) for path in source_dirs],
             "exclude_patterns": [],
         }
         if passphrase:
@@ -152,19 +152,19 @@ class SmokeClient:
         self,
         *,
         name: str,
-        repo_path: Path,
-        source_dirs: list[Path],
+        repo_path: Path | str,
+        source_dirs: list[Path | str],
         encryption: str = "none",
         passphrase: Optional[str] = None,
         extra: Optional[dict] = None,
     ) -> tuple[int, str]:
         payload = {
             "name": name,
-            "path": self.container_path(repo_path),
+            "path": self.container_path(repo_path) if isinstance(repo_path, Path) else str(repo_path),
             "borg_version": 2,
             "encryption": encryption,
             "compression": "lz4",
-            "source_directories": [self.container_path(path) for path in source_dirs],
+            "source_directories": [self.container_path(path) if isinstance(path, Path) else str(path) for path in source_dirs],
             "exclude_patterns": [],
         }
         if passphrase:
@@ -187,22 +187,25 @@ class SmokeClient:
         self,
         *,
         name: str,
-        repo_path: Path,
+        repo_path: Path | str,
         encryption: str,
-        source_dirs: list[Path],
+        source_dirs: list[Path | str],
         passphrase: Optional[str] = None,
         keyfile_content: Optional[str] = None,
+        extra: Optional[dict] = None,
     ) -> tuple[int, str]:
         payload = {
             "name": name,
-            "path": self.container_path(repo_path),
+            "path": self.container_path(repo_path) if isinstance(repo_path, Path) else str(repo_path),
             "encryption": encryption,
-            "source_directories": [self.container_path(path) for path in source_dirs],
+            "source_directories": [self.container_path(path) if isinstance(path, Path) else str(path) for path in source_dirs],
         }
         if passphrase:
             payload["passphrase"] = passphrase
         if keyfile_content:
             payload["keyfile_content"] = keyfile_content
+        if extra:
+            payload.update(extra)
         response = self.request_ok(
             "POST",
             "/api/repositories/import",
@@ -219,23 +222,26 @@ class SmokeClient:
         self,
         *,
         name: str,
-        repo_path: Path,
+        repo_path: Path | str,
         encryption: str,
-        source_dirs: list[Path],
+        source_dirs: list[Path | str],
         passphrase: Optional[str] = None,
         keyfile_content: Optional[str] = None,
+        extra: Optional[dict] = None,
     ) -> tuple[int, str]:
         payload = {
             "name": name,
-            "path": self.container_path(repo_path),
+            "path": self.container_path(repo_path) if isinstance(repo_path, Path) else str(repo_path),
             "borg_version": 2,
             "encryption": encryption,
-            "source_directories": [self.container_path(path) for path in source_dirs],
+            "source_directories": [self.container_path(path) if isinstance(path, Path) else str(path) for path in source_dirs],
         }
         if passphrase:
             payload["passphrase"] = passphrase
         if keyfile_content:
             payload["keyfile_content"] = keyfile_content
+        if extra:
+            payload.update(extra)
         response = self.request_ok(
             "POST",
             "/api/v2/repositories/import",
@@ -434,6 +440,54 @@ class SmokeClient:
         )
         return parse_archives_payload(response.json())
 
+    def generate_ssh_key(self, *, name: str = "SSH Smoke Key") -> dict:
+        response = self.request_ok(
+            "POST",
+            "/api/ssh-keys/generate",
+            headers=self._headers(json_body=True),
+            json={"name": name, "key_type": "ed25519"},
+            expected=(200,),
+        )
+        return response.json()["ssh_key"]
+
+    def create_ssh_connection(
+        self,
+        *,
+        key_id: int,
+        host: str,
+        username: str,
+        port: int,
+        default_path: Optional[str] = None,
+        ssh_path_prefix: Optional[str] = None,
+        mount_point: Optional[str] = None,
+        use_sftp_mode: bool = True,
+    ) -> dict:
+        payload = {
+            "host": host,
+            "username": username,
+            "port": port,
+            "password": "",
+            "use_sftp_mode": use_sftp_mode,
+        }
+        if default_path is not None:
+            payload["default_path"] = default_path
+        if ssh_path_prefix is not None:
+            payload["ssh_path_prefix"] = ssh_path_prefix
+        if mount_point is not None:
+            payload["mount_point"] = mount_point
+        response = self.request_ok(
+            "POST",
+            f"/api/ssh-keys/{key_id}/test-connection",
+            headers=self._headers(json_body=True),
+            json=payload,
+            expected=(200,),
+        )
+        return response.json()["connection"]
+
+    def verify_ssh_connection_borg(self, connection_id: int) -> dict:
+        response = self.request_ok("POST", f"/api/ssh-keys/connections/{connection_id}/verify-borg")
+        return response.json()
+
     def browse_archive_contents_v2(
         self,
         repository: int | str,
@@ -460,6 +514,13 @@ class SmokeClient:
         response = self.request_ok("GET", f"/api/archives/{archive_name}/info", token=token, params=params)
         return response.json()["info"]
 
+    def get_archive_info_v2(self, archive_id: str, repository: int | str, *, token: Optional[str] = None, include_files: bool = False) -> dict:
+        params = {"repository": str(repository)}
+        if include_files:
+            params["include_files"] = "true"
+        response = self.request_ok("GET", f"/api/v2/archives/{archive_id}/info", token=token, params=params)
+        return response.json()["info"]
+
     def restore_contents(self, repo_id: int, archive_name: str, *, path: Optional[str] = None, token: Optional[str] = None) -> list[dict]:
         params = {"path": path} if path else None
         response = self.request_ok(
@@ -470,10 +531,50 @@ class SmokeClient:
         )
         return response.json()["items"]
 
+    def preview_restore(
+        self,
+        *,
+        repository: int | str,
+        repository_id: int,
+        archive_name: str,
+        destination: Path | str,
+        paths: list[str],
+        destination_type: str = "local",
+        destination_connection_id: Optional[int] = None,
+        token: Optional[str] = None,
+    ) -> str:
+        payload = {
+            "repository": str(repository),
+            "archive": archive_name,
+            "paths": paths,
+            "destination": self.container_path(destination) if isinstance(destination, Path) else str(destination),
+            "repository_id": repository_id,
+            "destination_type": destination_type,
+        }
+        if destination_connection_id is not None:
+            payload["destination_connection_id"] = destination_connection_id
+        response = self.request_ok(
+            "POST",
+            "/api/restore/preview",
+            token=token,
+            headers=self._headers(token=token, json_body=True),
+            json=payload,
+        )
+        return response.json()["preview"]
+
     def download_archive_file(self, repository: int | str, archive_name: str, file_path: str, *, token: Optional[str] = None) -> bytes:
         response = self.request_ok(
             "GET",
             "/api/archives/download",
+            token=token,
+            params={"repository": str(repository), "archive": archive_name, "file_path": file_path},
+        )
+        return response.content
+
+    def download_archive_file_v2(self, repository: int | str, archive_name: str, file_path: str, *, token: Optional[str] = None) -> bytes:
+        response = self.request_ok(
+            "GET",
+            "/api/v2/archives/download",
             token=token,
             params={"repository": str(repository), "archive": archive_name, "file_path": file_path},
         )
@@ -485,22 +586,28 @@ class SmokeClient:
         repository: int | str,
         archive_name: str,
         repository_id: int,
-        destination: Path,
+        destination: Path | str,
         paths: list[str],
+        destination_type: str = "local",
+        destination_connection_id: Optional[int] = None,
         token: Optional[str] = None,
     ) -> int:
+        payload = {
+            "repository": str(repository),
+            "archive": archive_name,
+            "paths": paths,
+            "destination": self.container_path(destination) if isinstance(destination, Path) else str(destination),
+            "repository_id": repository_id,
+            "destination_type": destination_type,
+        }
+        if destination_connection_id is not None:
+            payload["destination_connection_id"] = destination_connection_id
         response = self.request_ok(
             "POST",
             "/api/restore/start",
             token=token,
             headers=self._headers(token=token, json_body=True),
-            json={
-                "repository": str(repository),
-                "archive": archive_name,
-                "paths": paths,
-                "destination": self.container_path(destination),
-                "repository_id": repository_id,
-            },
+            json=payload,
         )
         return response.json()["job_id"]
 
