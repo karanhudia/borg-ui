@@ -229,7 +229,8 @@ class Borg2Interface:
         return await self._run(cmd, timeout=300, env=env or None)
 
     async def rinfo(self, repository: str, passphrase: Optional[str] = None,
-                    remote_path: Optional[str] = None, bypass_lock: bool = False) -> Dict:
+                    remote_path: Optional[str] = None, bypass_lock: bool = False,
+                    env: Optional[Dict] = None) -> Dict:
         """Get repository-level metadata only (no archive stats).
 
         Returns encryption, repository ID/location — but no per-archive stats.
@@ -239,12 +240,14 @@ class Borg2Interface:
         cmd = [self.borg_cmd, "-r", repository, "repo-info", "--json"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, timeout=60, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, timeout=60, env=exec_env or None)
 
     async def info_repo(self, repository: str, passphrase: Optional[str] = None,
                         remote_path: Optional[str] = None, bypass_lock: bool = False,
-                        timeout: int = 600) -> Dict:
+                        timeout: int = 600, env: Optional[Dict] = None) -> Dict:
         """Get info for all archives in a repository (per-archive stats).
 
         Unlike rinfo (repo-info), this returns an 'archives' array where each entry
@@ -256,8 +259,10 @@ class Borg2Interface:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
             cmd.append("--bypass-lock")
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, timeout=timeout, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, timeout=timeout, env=exec_env or None)
 
     async def rdelete(self, repository: str, passphrase: Optional[str] = None,
                       remote_path: Optional[str] = None) -> Dict:
@@ -274,34 +279,40 @@ class Borg2Interface:
     # ── Archive listing & info ─────────────────────────────────────────────────
 
     async def list_archives(self, repository: str, passphrase: Optional[str] = None,
-                            remote_path: Optional[str] = None, bypass_lock: bool = False) -> Dict:
+                            remote_path: Optional[str] = None, bypass_lock: bool = False,
+                            env: Optional[Dict] = None) -> Dict:
         """List archives in a repository (same CLI as borg1 but different binary).
         Note: borg2 repo-list does not support --bypass-lock.
         """
         cmd = [self.borg_cmd, "-r", repository, "repo-list", "--json"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, env=exec_env or None)
 
     async def info_archive(self, repository: str, archive: str,
                            passphrase: Optional[str] = None, remote_path: Optional[str] = None,
-                           bypass_lock: bool = False) -> Dict:
+                           bypass_lock: bool = False, env: Optional[Dict] = None) -> Dict:
         """Get information about a specific archive."""
         cmd = [self.borg_cmd, "-r", repository, "info", "--json", archive]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
             cmd.append("--bypass-lock")
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, env=exec_env or None)
 
     async def list_archive_contents(self, repository: str, archive: str, path: str = "",
                                     passphrase: Optional[str] = None,
                                     remote_path: Optional[str] = None,
                                     max_lines: int = 1_000_000,
                                     bypass_lock: bool = False,
-                                    browse_depth: Optional[int] = None) -> Dict:
+                                    browse_depth: Optional[int] = None,
+                                    env: Optional[Dict] = None) -> Dict:
         """List contents of an archive with streaming to prevent OOM."""
         cmd = [self.borg_cmd, "-r", repository, "list", "--json-lines"]
         if browse_depth is not None:
@@ -313,8 +324,10 @@ class Borg2Interface:
         cmd.append(archive)
         if path:
             cmd.append(path.strip("/"))
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run_streaming(cmd, max_lines=max_lines, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run_streaming(cmd, max_lines=max_lines, env=exec_env or None)
 
     # ── Backup operations ──────────────────────────────────────────────────────
 
@@ -340,7 +353,8 @@ class Borg2Interface:
                               destination: str, dry_run: bool = False,
                               passphrase: Optional[str] = None,
                               remote_path: Optional[str] = None,
-                              bypass_lock: bool = False) -> Dict:
+                              bypass_lock: bool = False,
+                              env: Optional[Dict] = None) -> Dict:
         """Extract files from an archive."""
         cmd = [self.borg_cmd, "-r", repository, "extract"]
         if remote_path:
@@ -352,12 +366,15 @@ class Borg2Interface:
         cmd.append(archive)
         if paths:
             cmd.extend(paths)
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, timeout=settings.backup_timeout, cwd=destination, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, timeout=settings.backup_timeout, cwd=destination, env=exec_env or None)
 
     async def delete_archive(self, repository: str, archive: str,
                              passphrase: Optional[str] = None,
-                             remote_path: Optional[str] = None) -> Dict:
+                             remote_path: Optional[str] = None,
+                             env: Optional[Dict] = None) -> Dict:
         """Delete a single archive.
 
         Note: in Borg 2, space is NOT freed automatically after delete.
@@ -366,8 +383,10 @@ class Borg2Interface:
         cmd = [self.borg_cmd, "-r", repository, "delete", archive]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, env=exec_env or None)
 
     async def prune_archives(self, repository: str, keep_hourly: int = 0,
                              keep_daily: int = 7, keep_weekly: int = 4,
@@ -402,7 +421,8 @@ class Borg2Interface:
         return await self._run(cmd, env=env or None)
 
     async def compact(self, repository: str, passphrase: Optional[str] = None,
-                      remote_path: Optional[str] = None) -> Dict:
+                      remote_path: Optional[str] = None,
+                      env: Optional[Dict] = None) -> Dict:
         """Compact repository to free space.
 
         In Borg 2 this step is REQUIRED after delete/prune — space is not freed
@@ -411,27 +431,35 @@ class Borg2Interface:
         cmd = [self.borg_cmd, "-r", repository, "compact"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, env=exec_env or None)
 
     async def check_repository(self, repository: str, passphrase: Optional[str] = None,
-                                remote_path: Optional[str] = None) -> Dict:
+                                remote_path: Optional[str] = None,
+                                env: Optional[Dict] = None) -> Dict:
         """Check repository integrity."""
         cmd = [self.borg_cmd, "-r", repository, "check"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, env=exec_env or None)
 
     async def break_lock(self, repository: str, passphrase: Optional[str] = None,
-                         remote_path: Optional[str] = None) -> Dict:
+                         remote_path: Optional[str] = None,
+                         env: Optional[Dict] = None) -> Dict:
         """Break a stale lock on a repository."""
         logger.warning("Breaking stale borg2 lock", repository=repository)
         cmd = [self.borg_cmd, "-r", repository, "break-lock"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        env = {"BORG_PASSPHRASE": passphrase} if passphrase else {}
-        return await self._run(cmd, timeout=30, env=env or None)
+        exec_env = env.copy() if env else {}
+        if passphrase:
+            exec_env["BORG_PASSPHRASE"] = passphrase
+        return await self._run(cmd, timeout=30, env=exec_env or None)
 
     # ── Version & system info ──────────────────────────────────────────────────
 

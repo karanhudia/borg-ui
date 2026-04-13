@@ -206,48 +206,54 @@ class BorgRouter:
             return [borg2.borg_cmd, "umount", mount_point]
         return ["borg", "umount", mount_point]
 
-    async def break_lock(self) -> dict:
+    async def break_lock(self, env: dict = None) -> dict:
         """Break a repository lock via the version-appropriate implementation."""
         if self.is_v2:
             from app.core.borg2 import borg2
 
-            return await borg2.break_lock(
-                self.repo.path,
-                passphrase=self.repo.passphrase,
-                remote_path=self.repo.remote_path,
-            )
+            kwargs = {
+                "passphrase": self.repo.passphrase,
+                "remote_path": self.repo.remote_path,
+            }
+            if env is not None:
+                kwargs["env"] = env
+            return await borg2.break_lock(self.repo.path, **kwargs)
 
         from app.core.borg import borg
 
-        return await borg.break_lock(
-            self.repo.path,
-            remote_path=self.repo.remote_path,
-            passphrase=self.repo.passphrase,
-        )
+        kwargs = {
+            "remote_path": self.repo.remote_path,
+            "passphrase": self.repo.passphrase,
+        }
+        if env is not None:
+            kwargs["env"] = env
+        return await borg.break_lock(self.repo.path, **kwargs)
 
-    async def preview_restore(self, archive: str, paths: List[str], destination: str) -> dict:
+    async def preview_restore(self, archive: str, paths: List[str], destination: str, env: dict = None) -> dict:
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
-            return await restore_v2_service.preview_restore(
-                repo=self.repo,
-                archive=archive,
-                paths=paths,
-                destination=destination,
-            )
+            kwargs = {
+                "repo": self.repo,
+                "archive": archive,
+                "paths": paths,
+                "destination": destination,
+            }
+            if env is not None:
+                kwargs["env"] = env
+            return await restore_v2_service.preview_restore(**kwargs)
 
         from app.core.borg import borg
 
-        return await borg.extract_archive(
-            self.repo.path,
-            archive,
-            paths,
-            destination,
-            dry_run=True,
-            remote_path=self.repo.remote_path,
-            passphrase=self.repo.passphrase,
-            bypass_lock=self.repo.bypass_lock,
-        )
+        kwargs = {
+            "dry_run": True,
+            "remote_path": self.repo.remote_path,
+            "passphrase": self.repo.passphrase,
+            "bypass_lock": self.repo.bypass_lock,
+        }
+        if env is not None:
+            kwargs["env"] = env
+        return await borg.extract_archive(self.repo.path, archive, paths, destination, **kwargs)
 
     async def list_archive_contents(
         self,
@@ -399,7 +405,7 @@ class BorgRouter:
 
             await delete_archive_service.execute_delete(job_id, self.repo.id, archive_name)
 
-    async def list_archives(self) -> list:
+    async def list_archives(self, env: dict = None) -> list:
         """Return the list of archives for this repository.
 
         Used as a version-aware guard before repository deletion.
@@ -414,6 +420,7 @@ class BorgRouter:
                 passphrase=self.repo.passphrase,
                 remote_path=self.repo.remote_path,
                 bypass_lock=self.repo.bypass_lock,
+                env=env,
             )
             if not result["success"]:
                 return []
@@ -429,6 +436,7 @@ class BorgRouter:
                 remote_path=self.repo.remote_path,
                 passphrase=self.repo.passphrase,
                 bypass_lock=self.repo.bypass_lock,
+                env=env,
             )
             if not result["success"]:
                 return []

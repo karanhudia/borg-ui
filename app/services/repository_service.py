@@ -13,46 +13,11 @@ import structlog
 
 from app.core.borg import borg
 from app.database.database import SessionLocal
-from app.database.models import SSHKey, SystemSettings
-from app.core.security import decrypt_secret
+from app.database.models import SystemSettings
 from app.config import settings
+from app.utils.borg_env import build_ssh_key_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
-
-
-def _get_standard_ssh_opts(include_key_path: Optional[str] = None) -> list[str]:
-    opts = []
-    if include_key_path:
-        opts.extend(["-i", include_key_path])
-    opts.extend(
-        [
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "LogLevel=ERROR",
-            "-o",
-            "RequestTTY=no",
-            "-o",
-            "PermitLocalCommand=no",
-        ]
-    )
-    return opts
-
-
-def _setup_borg_env(base_env=None, passphrase: Optional[str] = None, ssh_opts: Optional[list[str]] = None):
-    env = base_env.copy() if base_env else os.environ.copy()
-    if passphrase:
-        env["BORG_PASSPHRASE"] = passphrase
-    env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-    env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-    env["BORG_LOCK_WAIT"] = "180"
-    env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-    if ssh_opts:
-        env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
-    return env
-
 
 def _get_operation_timeouts() -> dict:
     timeouts = {
@@ -84,32 +49,11 @@ class RepositoryService:
     ) -> Dict[str, Any]:
         temp_key_file = None
         try:
-            env = os.environ.copy()
-            if ssh_key_id and path.startswith("ssh://"):
-                db = SessionLocal()
-                try:
-                    ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-                    if not ssh_key:
-                        return {"success": False, "error": "SSH key not found"}
-
-                    private_key = decrypt_secret(ssh_key.private_key)
-                finally:
-                    db.close()
-
-                import tempfile
-
-                with tempfile.NamedTemporaryFile(mode="w", delete=False) as handle:
-                    handle.write(private_key)
-                    temp_key_file = handle.name
-
-                os.chmod(temp_key_file, 0o600)
-                env = _setup_borg_env(
-                    base_env=env,
-                    passphrase=passphrase,
-                    ssh_opts=_get_standard_ssh_opts(include_key_path=temp_key_file),
-                )
-            else:
-                env = _setup_borg_env(base_env=env, passphrase=passphrase)
+            env, temp_key_file = build_ssh_key_borg_env(
+                path=path,
+                passphrase=passphrase,
+                ssh_key_id=ssh_key_id,
+            )
 
             cmd = [borg.borg_cmd, "info"]
             if remote_path:
@@ -142,8 +86,7 @@ class RepositoryService:
             logger.error("Failed to verify repository", path=path, error=str(exc))
             return {"success": False, "error": str(exc)}
         finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                os.unlink(temp_key_file)
+            cleanup_temp_key_file(temp_key_file)
 
     async def initialize_repository(
         self,
@@ -171,29 +114,11 @@ class RepositoryService:
                 cmd.extend(["--remote-path", remote_path])
             cmd.append(path)
 
-            env = _setup_borg_env(passphrase=passphrase)
-            if ssh_key_id and path.startswith("ssh://"):
-                db = SessionLocal()
-                try:
-                    ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-                    if not ssh_key:
-                        return {"success": False, "error": "SSH key not found"}
-
-                    private_key = decrypt_secret(ssh_key.private_key)
-                finally:
-                    db.close()
-
-                import tempfile
-
-                with tempfile.NamedTemporaryFile(mode="w", delete=False) as handle:
-                    handle.write(private_key)
-                    temp_key_file = handle.name
-
-                os.chmod(temp_key_file, 0o600)
-                env = _setup_borg_env(
-                    passphrase=passphrase,
-                    ssh_opts=_get_standard_ssh_opts(include_key_path=temp_key_file),
-                )
+            env, temp_key_file = build_ssh_key_borg_env(
+                path=path,
+                passphrase=passphrase,
+                ssh_key_id=ssh_key_id,
+            )
 
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -220,8 +145,7 @@ class RepositoryService:
             logger.error("Failed to initialize repository", path=path, error=str(exc))
             return {"success": False, "error": str(exc)}
         finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                os.unlink(temp_key_file)
+            cleanup_temp_key_file(temp_key_file)
 
     async def export_keyfile(self, repository, output_path: str) -> Dict[str, Any]:
         env = _setup_borg_env(passphrase=repository.passphrase)

@@ -34,17 +34,21 @@ class RestoreV2Service:
         archive: str,
         paths: List[str],
         destination: str,
+        env: Optional[dict] = None,
     ) -> dict:
-        return await borg2.extract_archive(
-            repository=repo.path,
-            archive=archive,
-            paths=paths,
-            destination=destination,
-            dry_run=True,
-            passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
-            bypass_lock=repo.bypass_lock,
-        )
+        kwargs = {
+            "repository": repo.path,
+            "archive": archive,
+            "paths": paths,
+            "destination": destination,
+            "dry_run": True,
+            "passphrase": repo.passphrase,
+            "remote_path": repo.remote_path,
+            "bypass_lock": repo.bypass_lock,
+        }
+        if env is not None:
+            kwargs["env"] = env
+        return await borg2.extract_archive(**kwargs)
 
     async def list_archive_contents(
         self,
@@ -52,16 +56,20 @@ class RestoreV2Service:
         archive: str,
         path: str = "",
         max_lines: int = 1_000_000,
+        env: Optional[dict] = None,
     ) -> dict:
-        return await borg2.list_archive_contents(
-            repository=repo.path,
-            archive=archive,
-            path=path,
-            passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
-            max_lines=max_lines,
-            bypass_lock=repo.bypass_lock,
-        )
+        kwargs = {
+            "repository": repo.path,
+            "archive": archive,
+            "path": path,
+            "passphrase": repo.passphrase,
+            "remote_path": repo.remote_path,
+            "max_lines": max_lines,
+            "bypass_lock": repo.bypass_lock,
+        }
+        if env is not None:
+            kwargs["env"] = env
+        return await borg2.list_archive_contents(**kwargs)
 
 
 restore_v2_service = RestoreV2Service()

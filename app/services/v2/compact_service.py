@@ -20,7 +20,8 @@ from app.database.models import CompactJob, Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import _get_borg2_binary
 from app.config import settings
-from app.utils.ssh_utils import resolve_repo_ssh_key_file
+from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 
@@ -71,32 +72,12 @@ class CompactV2Service:
                                job_id=job_id, status=job.status)
                 return
 
-            env = os.environ.copy()
-            env["BORG_LOCK_WAIT"] = "180"
-            env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-            env["BORG_SHOW_PROGRESS"] = "1"
-            env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-            env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-
-            if repo.passphrase:
-                env["BORG_PASSPHRASE"] = repo.passphrase
-
-            ssh_opts = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR",
-                "-o", "ServerAliveInterval=15",
-                "-o", "ServerAliveCountMax=3",
-                "-o", "TCPKeepAlive=yes",
-                "-o", "RequestTTY=no",
-                "-o", "PermitLocalCommand=no",
-            ]
-            env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
-
-            temp_key_file = resolve_repo_ssh_key_file(repo, db)
-            if temp_key_file:
-                ssh_opts = ["-i", temp_key_file] + ssh_opts
-                env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
+            env, temp_key_file = build_repository_borg_env(
+                repo,
+                db,
+                keepalive=True,
+                show_progress=True,
+            )
 
             borg_cmd = _get_borg2_binary()
             cmd = [borg_cmd, "-r", repo.path, "compact", "--progress", "--log-json"]
@@ -262,11 +243,7 @@ class CompactV2Service:
                 db.rollback()
         finally:
             self.running_processes.pop(job_id, None)
-            if temp_key_file and os.path.exists(temp_key_file):
-                try:
-                    os.unlink(temp_key_file)
-                except Exception:
-                    pass
+            cleanup_temp_key_file(temp_key_file)
             db.close()
 
 

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 import structlog
 import json
 import hashlib
+import os
 from datetime import datetime, timedelta
 
 from app.database.models import User, Repository, SystemSettings
@@ -10,6 +11,8 @@ from app.database.database import get_db
 from app.api.auth import get_current_user
 from app.core.borg_router import BorgRouter
 from app.services.cache_service import archive_cache
+from app.utils.borg_env import get_standard_ssh_opts, setup_borg_env, cleanup_temp_key_file
+from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger(__name__)
 
@@ -19,6 +22,13 @@ router = APIRouter()
 MAX_ITEMS_IN_MEMORY = 1_000_000  # Maximum number of items to load into memory
 MAX_ESTIMATED_MEMORY_MB = 1024   # Maximum estimated memory usage (1GB)
 ITEM_SIZE_ESTIMATE = 200         # Average bytes per item in memory (conservative estimate)
+
+
+def _build_repo_env(repo: Repository, db: Session):
+    temp_key_file = resolve_repo_ssh_key_file(repo, db)
+    ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
+    env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
+    return env, temp_key_file
 
 @router.get("/{repository_id}/{archive_name}")
 async def browse_archive_contents(
@@ -49,11 +59,16 @@ async def browse_archive_contents(
         else:
             # If not in cache, fetch from borg with streaming (prevents OOM)
             # Pass max_items as max_lines to ensure borg process is killed if limit exceeded
-            result = await BorgRouter(repository).list_archive_contents(
-                archive=archive_name,
-                path="",  # Always fetch all items
-                max_lines=max_items,  # Kill borg process if this limit is exceeded
-            )
+            env, temp_key_file = _build_repo_env(repository, db)
+            try:
+                result = await BorgRouter(repository).list_archive_contents(
+                    archive=archive_name,
+                    path="",  # Always fetch all items
+                    max_lines=max_items,  # Kill borg process if this limit is exceeded
+                    env=env,
+                )
+            finally:
+                cleanup_temp_key_file(temp_key_file)
 
             # Check if line limit was exceeded (borg process was killed to prevent OOM)
             if result.get("line_count_exceeded"):

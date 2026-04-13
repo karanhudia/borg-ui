@@ -13,6 +13,7 @@ from app.database.models import DeleteArchiveJob, Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import borg2
 from app.config import settings
+from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
 
@@ -27,6 +28,7 @@ class DeleteArchiveV2Service:
                              archive_name: str, _db=None):
         """Delete a Borg 2 archive and compact the repository to free space."""
         db = SessionLocal()
+        temp_key_file = None
         try:
             job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
             if not job:
@@ -46,12 +48,15 @@ class DeleteArchiveV2Service:
             job.progress_message = "Deleting archive..."
             db.commit()
 
+            env, temp_key_file = build_repository_borg_env(repo, db, keepalive=True)
+
             # Step 1: delete the archive
             delete_result = await borg2.delete_archive(
                 repository=repo.path,
                 archive=archive_name,
                 passphrase=repo.passphrase,
                 remote_path=repo.remote_path,
+                env=env,
             )
 
             if not delete_result["success"]:
@@ -72,6 +77,7 @@ class DeleteArchiveV2Service:
                 repository=repo.path,
                 passphrase=repo.passphrase,
                 remote_path=repo.remote_path,
+                env=env,
             )
 
             if not compact_result["success"]:
@@ -101,6 +107,7 @@ class DeleteArchiveV2Service:
             except Exception:
                 pass
         finally:
+            cleanup_temp_key_file(temp_key_file)
             db.close()
 
 

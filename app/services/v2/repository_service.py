@@ -1,44 +1,23 @@
 """Borg 2 repository operation helpers."""
 
 import os
-import tempfile
 from typing import Any, Dict, Optional
 
 from app.core.borg2 import borg2
 from app.database.database import SessionLocal
-from app.database.models import SSHKey
-from app.core.security import decrypt_secret
 from app.utils.fs import calculate_path_size_bytes
+from app.utils.borg_env import build_ssh_key_borg_env, cleanup_temp_key_file
 
 
 class RepositoryV2Service:
     def _get_ssh_env(self, path: str, ssh_key_id: Optional[int]) -> tuple[dict, Optional[str]]:
         if not ssh_key_id or not path.startswith("ssh://"):
             return {}, None
-
         db = SessionLocal()
         try:
-            ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-            if not ssh_key:
-                raise ValueError(f"SSH key {ssh_key_id} not found")
-            private_key = decrypt_secret(ssh_key.private_key)
+            return build_ssh_key_borg_env(path=path, ssh_key_id=ssh_key_id, db=db)
         finally:
             db.close()
-
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as handle:
-            handle.write(private_key)
-            temp_path = handle.name
-        os.chmod(temp_path, 0o600)
-
-        ssh_opts = [
-            "-i", temp_path,
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR",
-            "-o", "RequestTTY=no",
-            "-o", "PermitLocalCommand=no",
-        ]
-        return {"BORG_RSH": f"ssh {' '.join(ssh_opts)}"}, temp_path
 
     async def initialize_repository(
         self,
@@ -63,8 +42,7 @@ class RepositoryV2Service:
                 env={"BORG_PASSPHRASE": passphrase, **env} if passphrase else env,
             )
         finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                os.unlink(temp_key_file)
+            cleanup_temp_key_file(temp_key_file)
 
     async def verify_repository(
         self,
@@ -91,8 +69,7 @@ class RepositoryV2Service:
                 env={"BORG_PASSPHRASE": passphrase, **env} if passphrase else env,
             )
         finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                os.unlink(temp_key_file)
+            cleanup_temp_key_file(temp_key_file)
 
     async def export_keyfile(self, repository, output_path: str) -> Dict[str, Any]:
         cmd = [borg2.borg_cmd, "-r", repository.path, "key", "export", output_path]

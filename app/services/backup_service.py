@@ -17,7 +17,8 @@ from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
 from app.utils.ssh_paths import resolve_sshfs_source_path
-from app.utils.ssh_utils import resolve_repo_ssh_key_file
+from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file, setup_borg_env
+from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 
@@ -1053,34 +1054,22 @@ class BackupService:
             if not archive_name:
                 archive_name = f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
 
+            # Store archive name on the job for later reference
+            try:
+                job = db.query(BackupJob).filter(BackupJob.id == job_id).first()
+                if job:
+                    job.archive_name = archive_name
+                    db.commit()
+            except Exception as e:
+                logger.warning("Could not save archive_name on job", job_id=job_id, error=str(e))
+
             # Set environment variables for borg
-            env = os.environ.copy()
+            env = setup_borg_env()
 
             # Use modern exit codes for better error handling
             # 0 = success, 1 = warning, 2+ = error
             # Modern: 0 = success, 1-99 reserved, 3-99 = errors, 100-127 = warnings
             env['BORG_EXIT_CODES'] = 'modern'
-
-            # Skip interactive prompts (auto-accept for unencrypted repos, etc.)
-            env['BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK'] = 'yes'
-            env['BORG_RELOCATED_REPO_ACCESS_IS_OK'] = 'yes'
-
-            # Configure lock behavior to prevent timeout issues with SSH repositories
-            # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
-            env["BORG_LOCK_WAIT"] = "180"
-            # Mark this container's hostname as unique to avoid lock conflicts
-            env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-
-            # Add SSH options to disable host key checking for remote repos
-            # This allows automatic connection to new hosts without manual intervention
-            ssh_opts = [
-                "-o", "StrictHostKeyChecking=no",  # Don't check host keys
-                "-o", "UserKnownHostsFile=/dev/null",  # Don't save host keys
-                "-o", "LogLevel=ERROR",  # Reduce SSH verbosity
-                "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output
-                "-o", "PermitLocalCommand=no"  # Prevent local command execution
-            ]
-            env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
 
             # Look up repository record to get passphrase, source directories, exclude patterns, and compression
             source_paths = None  # No default - must be configured
@@ -1096,11 +1085,6 @@ class BackupService:
                         error_msg = "Cannot create backups for observability-only repositories. This repository is configured for browsing and restoring existing archives only."
                         logger.error(error_msg, repository=repository, mode=repo_record.mode)
                         raise ValueError(error_msg)
-                    # Set passphrase if available
-                    if repo_record.passphrase:
-                        env['BORG_PASSPHRASE'] = repo_record.passphrase
-                        logger.info("Using passphrase from repository record", repository=repository)
-
                     # Get compression setting from repository
                     if repo_record.compression:
                         compression = repo_record.compression
@@ -1184,17 +1168,8 @@ class BackupService:
             actual_repository_path = repository
 
             # Setup SSH-specific configuration if this is an SSH repository
-            temp_key_file = resolve_repo_ssh_key_file(repo_record, db)
+            env, temp_key_file = build_repository_borg_env(repo_record, db, base_env=env)
             if temp_key_file:
-                ssh_opts = [
-                    "-i", temp_key_file,
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "UserKnownHostsFile=/dev/null",
-                    "-o", "LogLevel=ERROR",
-                    "-o", "RequestTTY=no",
-                    "-o", "PermitLocalCommand=no"
-                ]
-                env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
                 logger.info("Using SSH key for remote repository",
                             repository=actual_repository_path)
 
@@ -2206,12 +2181,12 @@ class BackupService:
                 logger.error("Failed to cleanup SSH mounts", job_id=job_id, error=str(e))
 
             # Clean up temporary SSH key file if it exists
-            if temp_key_file and os.path.exists(temp_key_file):
-                try:
-                    os.unlink(temp_key_file)
+            try:
+                cleanup_temp_key_file(temp_key_file)
+                if temp_key_file:
                     logger.debug("Cleaned up temporary SSH key file", temp_key_file=temp_key_file)
-                except Exception as e:
-                    logger.warning("Failed to delete temporary SSH key file", temp_key_file=temp_key_file, error=str(e))
+            except Exception as e:
+                logger.warning("Failed to delete temporary SSH key file", temp_key_file=temp_key_file, error=str(e))
 
             # Close the database session only if we created it
             if close_db:

@@ -21,6 +21,7 @@ from app.core.security import get_current_user, get_current_download_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2
 from app.services.cache_service import archive_cache
+from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Archives v2"], dependencies=[require_feature("borg_v2")])
@@ -56,7 +57,7 @@ def _get_v2_repo(repository: str, db: Session) -> Repository:
     return repo
 
 
-async def _resolve_archive_name(repo: Repository, archive_ref: str) -> str:
+async def _resolve_archive_name(repo: Repository, archive_ref: str, db: Session) -> str:
     """Resolve an archive route parameter to the actual Borg archive name.
 
     The frontend may pass either the archive name or the archive ID/hash. Borg 2
@@ -69,12 +70,17 @@ async def _resolve_archive_name(repo: Repository, archive_ref: str) -> str:
     if not ARCHIVE_ID_RE.fullmatch(archive_ref):
         return archive_ref
 
-    result = await borg2.list_archives(
-        repo.path,
-        passphrase=repo.passphrase,
-        remote_path=repo.remote_path,
-        bypass_lock=repo.bypass_lock,
-    )
+    env, temp_key_file = build_repository_borg_env(repo, db)
+    try:
+        result = await borg2.list_archives(
+            repo.path,
+            passphrase=repo.passphrase,
+            remote_path=repo.remote_path,
+            bypass_lock=repo.bypass_lock,
+            env=env,
+        )
+    finally:
+        cleanup_temp_key_file(temp_key_file)
     if not result["success"]:
         return archive_ref
 
@@ -146,12 +152,17 @@ async def list_archives(
 ):
     """List archives in a Borg 2 repository."""
     repo = _get_v2_repo(repository, db)
-    result = await borg2.list_archives(
-        repo.path,
-        passphrase=repo.passphrase,
-        remote_path=repo.remote_path,
-        bypass_lock=repo.bypass_lock,
-    )
+    env, temp_key_file = build_repository_borg_env(repo, db)
+    try:
+        result = await borg2.list_archives(
+            repo.path,
+            passphrase=repo.passphrase,
+            remote_path=repo.remote_path,
+            bypass_lock=repo.bypass_lock,
+            env=env,
+        )
+    finally:
+        cleanup_temp_key_file(temp_key_file)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -174,12 +185,17 @@ async def get_archive_info(
     """Get detailed information about a Borg 2 archive."""
     repo = _get_v2_repo(repository, db)
     archive_selector = _get_archive_selector(archive_id)
-    result = await borg2.info_archive(
-        repo.path, archive_selector,
-        passphrase=repo.passphrase,
-        remote_path=repo.remote_path,
-        bypass_lock=repo.bypass_lock,
-    )
+    env, temp_key_file = build_repository_borg_env(repo, db)
+    try:
+        result = await borg2.info_archive(
+            repo.path, archive_selector,
+            passphrase=repo.passphrase,
+            remote_path=repo.remote_path,
+            bypass_lock=repo.bypass_lock,
+            env=env,
+        )
+    finally:
+        cleanup_temp_key_file(temp_key_file)
     if not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -210,12 +226,17 @@ async def get_archive_info(
         }
 
         if include_files:
-            list_result = await borg2.list_archive_contents(
-                repo.path, archive_selector,
-                passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
-                bypass_lock=repo.bypass_lock,
-            )
+            env, temp_key_file = build_repository_borg_env(repo, db)
+            try:
+                list_result = await borg2.list_archive_contents(
+                    repo.path, archive_selector,
+                    passphrase=repo.passphrase,
+                    remote_path=repo.remote_path,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
+            finally:
+                cleanup_temp_key_file(temp_key_file)
             if list_result["success"]:
                 files = []
                 for line in list_result["stdout"].strip().split("\n"):
@@ -275,14 +296,19 @@ async def get_archive_contents(
         )
         return {"items": cached_items}
 
-    result = await borg2.list_archive_contents(
-        repo.path, archive_selector,
-        path=path,
-        passphrase=repo.passphrase,
-        remote_path=repo.remote_path,
-        bypass_lock=repo.bypass_lock,
-        browse_depth=_get_browse_depth(repo, path),
-    )
+    env, temp_key_file = build_repository_borg_env(repo, db)
+    try:
+        result = await borg2.list_archive_contents(
+            repo.path, archive_selector,
+            path=path,
+            passphrase=repo.passphrase,
+            remote_path=repo.remote_path,
+            bypass_lock=repo.bypass_lock,
+            browse_depth=_get_browse_depth(repo, path),
+            env=env,
+        )
+    finally:
+        cleanup_temp_key_file(temp_key_file)
     # borg2 list exits with 1 on warnings but stdout is still valid JSONL —
     # treat any result that produced stdout as usable.
     stdout = result.get("stdout", "")
@@ -426,7 +452,7 @@ async def delete_archive(
         raise HTTPException(status_code=403, detail={"key": "backend.errors.archives.adminAccessRequired"})
 
     repo = _get_v2_repo(repository, db)
-    archive_name = await _resolve_archive_name(repo, archive_id)
+    archive_name = await _resolve_archive_name(repo, archive_id, db)
 
     running_job = db.query(DeleteArchiveJob).filter(
         DeleteArchiveJob.repository_id == repo.id,
@@ -482,12 +508,17 @@ async def download_file_from_archive(
     archive_selector = _get_archive_selector(archive)
     temp_dir = tempfile.mkdtemp()
     try:
-        result = await borg2.extract_archive(
-            repo.path, archive_selector, [file_path], temp_dir,
-            passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
-            bypass_lock=repo.bypass_lock,
-        )
+        env, temp_key_file = build_repository_borg_env(repo, db)
+        try:
+            result = await borg2.extract_archive(
+                repo.path, archive_selector, [file_path], temp_dir,
+                passphrase=repo.passphrase,
+                remote_path=repo.remote_path,
+                bypass_lock=repo.bypass_lock,
+                env=env,
+            )
+        finally:
+            cleanup_temp_key_file(temp_key_file)
         if not result.get("success"):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

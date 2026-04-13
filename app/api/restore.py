@@ -19,8 +19,8 @@ from app.core.security import (
 from app.services.restore_service import restore_service
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
-from app.api.repositories import get_standard_ssh_opts, setup_borg_env
-from app.utils.ssh_utils import resolve_repo_ssh_key_file
+from app.utils.borg_env import get_standard_ssh_opts, setup_borg_env, cleanup_temp_key_file
+from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -64,11 +64,23 @@ async def preview_restore(
             'viewer',
         )
 
-        result = await BorgRouter(repo).preview_restore(
-            archive=restore_request.archive,
-            paths=restore_request.paths,
-            destination=restore_request.destination,
-        )
+        if repo.repository_type == "ssh" or repo.path.startswith("ssh://") or repo.connection_id:
+            env, temp_key_file = _build_repo_env(repo, db)
+            try:
+                result = await BorgRouter(repo).preview_restore(
+                    archive=restore_request.archive,
+                    paths=restore_request.paths,
+                    destination=restore_request.destination,
+                    env=env,
+                )
+            finally:
+                cleanup_temp_key_file(temp_key_file)
+        else:
+            result = await BorgRouter(repo).preview_restore(
+                archive=restore_request.archive,
+                paths=restore_request.paths,
+                destination=restore_request.destination,
+            )
         return {"preview": result["stdout"]}
     except HTTPException:
         raise
@@ -251,12 +263,10 @@ async def get_archive_contents(
                     env=env,
                 )
             finally:
-                if temp_key_file:
-                    try:
-                        if os.path.exists(temp_key_file):
-                            os.unlink(temp_key_file)
-                    except Exception:
-                        pass
+                try:
+                    cleanup_temp_key_file(temp_key_file)
+                except Exception:
+                    pass
 
             # Parse all items
             all_items = []

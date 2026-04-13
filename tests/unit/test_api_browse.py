@@ -262,6 +262,48 @@ class TestBrowseArchiveBehavior:
         assert len(cached_args[2]) == 3
 
     @pytest.mark.asyncio
+    async def test_browse_archive_uses_repo_ssh_environment_when_cache_misses(
+        self,
+        test_db,
+        admin_user,
+    ):
+        repo = Repository(
+            name="SSH Browse Repo",
+            path="ssh://borgsmoke@127.0.0.1:2222/home/borgsmoke/remote-repo",
+            repository_type="ssh",
+            connection_id=1,
+            passphrase=None,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
+            with patch.object(browse_api.archive_cache, "set", new=AsyncMock(return_value=True)):
+                with patch.object(
+                    browse_api.BorgRouter,
+                    "list_archive_contents",
+                    new=AsyncMock(return_value={"stdout": ""}),
+                ) as mock_list, patch(
+                    "app.api.browse.resolve_repo_ssh_key_file",
+                    return_value="/tmp/test-browse.key",
+                ), patch(
+                    "app.api.browse.os.path.exists",
+                    side_effect=lambda path: path == "/tmp/test-browse.key",
+                ), patch("app.api.browse.os.unlink") as mock_unlink:
+                    await browse_api.browse_archive_contents(
+                        repository_id=repo.id,
+                        archive_name="parsed-archive",
+                        path="",
+                        current_user=admin_user,
+                        db=test_db,
+                    )
+
+        _, kwargs = mock_list.await_args
+        assert kwargs["env"]["BORG_RSH"].startswith("ssh -i /tmp/test-browse.key")
+        mock_unlink.assert_called_once_with("/tmp/test-browse.key")
+
+    @pytest.mark.asyncio
     async def test_browse_archive_subdirectory_only_returns_immediate_children(
         self,
         test_db,

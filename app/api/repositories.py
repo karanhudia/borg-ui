@@ -44,7 +44,12 @@ from app.config import settings
 from app.services.mqtt_service import mqtt_service
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.ssh_paths import apply_ssh_command_prefix
-from app.utils.ssh_utils import resolve_repo_ssh_key_file
+from app.utils.borg_env import (
+    get_standard_ssh_opts as shared_get_standard_ssh_opts,
+    setup_borg_env as shared_setup_borg_env,
+    cleanup_temp_key_file,
+)
+from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["repositories"], dependencies=[Depends(authorize_request)])
@@ -113,56 +118,13 @@ def _borg_keyfile_name(repo_path: str) -> str:
 
 
 def get_standard_ssh_opts(include_key_path=None):
-    """Get standardized SSH options for Borg operations
-
-    Args:
-        include_key_path: Optional path to SSH private key file
-
-    Returns:
-        List of SSH options for use with BORG_RSH
-    """
-    opts = []
-
-    if include_key_path:
-        opts.extend(["-i", include_key_path])
-
-    opts.extend([
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "UserKnownHostsFile=/dev/null",
-        "-o", "LogLevel=ERROR",
-        "-o", "RequestTTY=no",  # Disable TTY allocation to prevent shell initialization output (fixes Aurora Linux)
-        "-o", "PermitLocalCommand=no"  # Prevent local command execution
-    ])
-
-    return opts
+    """Backwards-compatible wrapper for shared Borg SSH options."""
+    return shared_get_standard_ssh_opts(include_key_path=include_key_path)
 
 # Helper function to setup Borg environment with proper lock configuration
 def setup_borg_env(base_env=None, passphrase=None, ssh_opts=None):
-    """Setup Borg environment variables with lock and timeout configuration"""
-    env = base_env.copy() if base_env else os.environ.copy()
-
-    # Set passphrase if provided
-    if passphrase:
-        env["BORG_PASSPHRASE"] = passphrase
-
-    # Allow non-interactive access to unencrypted repositories
-    env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
-    # Allow access to repositories that have been relocated/moved
-    env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-
-    # Configure lock behavior to prevent timeout issues
-    # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
-    env["BORG_LOCK_WAIT"] = "180"
-
-    # Mark this container's hostname as unique to avoid lock conflicts
-    # This prevents issues when multiple operations run on same repository
-    env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-
-    # Set SSH options if provided
-    if ssh_opts:
-        env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
-
-    return env
+    """Backwards-compatible wrapper for shared Borg environment setup."""
+    return shared_setup_borg_env(base_env=base_env, passphrase=passphrase, ssh_opts=ssh_opts)
 
 
 def _prepare_repository_borg_env(repository: Repository, db: Session):
@@ -268,11 +230,10 @@ async def _run_repository_command(
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         return process.returncode, stdout, stderr
     finally:
-        if temp_key_file and os.path.exists(temp_key_file):
-            try:
-                os.unlink(temp_key_file)
-            except Exception:
-                pass
+        try:
+            cleanup_temp_key_file(temp_key_file)
+        except Exception:
+            pass
 
 
 async def _run_repository_command_with_retries(
@@ -442,7 +403,7 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
         router = BorgRouter(repository)
 
         # Get archive list and count
-        archives = await router.list_archives()
+        archives = await router.list_archives(env=env)
 
         archive_count = 0
         total_size = None
@@ -2208,7 +2169,11 @@ async def break_repository_lock(
         logger.warning("User requested lock break", repo_id=repo_id, user=current_user.username)
 
         # Break the lock using borg break-lock
-        result = await BorgRouter(repository).break_lock()
+        env, temp_key_file = _prepare_repository_borg_env(repository, db)
+        try:
+            result = await BorgRouter(repository).break_lock(env=env)
+        finally:
+            cleanup_temp_key_file(temp_key_file)
 
         if result.get("success"):
             logger.info("Successfully broke repository lock", repo_id=repo_id, user=current_user.username)
@@ -2439,7 +2404,7 @@ async def get_repository_stats(
         }
 
         # Try to get archive count
-        archives_data = await router.list_archives()
+        archives_data = await router.list_archives(env=env)
         if archives_data is not None:
             try:
                 if archives_data:

@@ -8,6 +8,7 @@ from app.database.models import DeleteArchiveJob, Repository
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
+from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
 
@@ -42,6 +43,7 @@ class DeleteArchiveService:
         # Create a new database session for this background task
         db = SessionLocal()
 
+        temp_key_file = None
         try:
             # Get job
             job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
@@ -65,29 +67,11 @@ class DeleteArchiveService:
             job.progress_message = "Starting archive deletion"
             db.commit()
 
-            # Set environment variables for borg
-            env = os.environ.copy()
-
-            # Add passphrase if available
-            if repository.passphrase:
-                env['BORG_PASSPHRASE'] = repository.passphrase
-
-            # Configure lock behavior
-            env["BORG_LOCK_WAIT"] = "180"
-            env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-
-            # Add SSH options for remote repos
-            ssh_opts = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR",
-                "-o", "ServerAliveInterval=15",
-                "-o", "ServerAliveCountMax=3",
-                "-o", "TCPKeepAlive=yes",
-                "-o", "RequestTTY=no",
-                "-o", "PermitLocalCommand=no"
-            ]
-            env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+            env, temp_key_file = build_repository_borg_env(
+                repository,
+                db,
+                keepalive=True,
+            )
 
             # Build command
             cmd = [borg.borg_cmd, "delete", "--stats", "--progress"]
@@ -223,6 +207,7 @@ class DeleteArchiveService:
             except:
                 pass
         finally:
+            cleanup_temp_key_file(temp_key_file)
             db.close()
 
     async def cancel_delete(self, job_id: int, db: Session):

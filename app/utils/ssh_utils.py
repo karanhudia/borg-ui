@@ -9,6 +9,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import settings
 from app.core.security import decrypt_secret
+from app.database.database import SessionLocal
 from app.database.models import SSHConnection, SSHKey
 
 logger = structlog.get_logger()
@@ -81,3 +82,23 @@ def write_ssh_key_to_tempfile(ssh_key) -> str:
         raise
 
     return temp_key_file
+
+
+def resolve_ssh_key_file_by_id(ssh_key_id: Optional[int], db=None) -> Optional[str]:
+    """Resolve an SSH key ID to a decrypted temporary private key file."""
+    if not ssh_key_id:
+        return None
+
+    close_db = False
+    if db is None:
+        db = SessionLocal()
+        close_db = True
+
+    try:
+        ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
+        if not ssh_key:
+            return None
+        return write_ssh_key_to_tempfile(ssh_key)
+    finally:
+        if close_db:
+            db.close()

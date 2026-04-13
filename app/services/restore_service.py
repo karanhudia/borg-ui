@@ -14,6 +14,7 @@ from app.database.models import RestoreJob, Repository, SSHConnection, SSHKey
 from app.database.database import SessionLocal
 from app.core.borg_router import BorgRouter
 from app.services.notification_service import notification_service
+from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
 
@@ -160,23 +161,15 @@ class RestoreService:
                 )
 
                 # Set up environment
-                env = os.environ.copy()
-                if repository and repository.passphrase:
-                    env["BORG_PASSPHRASE"] = repository.passphrase
-
-                # Configure lock behavior to prevent timeout issues with SSH repositories
-                # Wait up to 180 seconds (3 minutes) for locks instead of default 1 second
-                env["BORG_LOCK_WAIT"] = "180"
-                # Mark this container's hostname as unique to avoid lock conflicts
-                env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-
-                # Add SSH options
-                ssh_opts = [
-                    "-o", "StrictHostKeyChecking=no",
-                    "-o", "UserKnownHostsFile=/dev/null",
-                    "-o", "LogLevel=ERROR"
-                ]
-                env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+                if repository:
+                    env, temp_key_file = build_repository_borg_env(repository, db_session)
+                else:
+                    env = os.environ.copy()
+                    env["BORG_LOCK_WAIT"] = "180"
+                    env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+                    env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+                    env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+                    env["BORG_RSH"] = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o RequestTTY=no -o PermitLocalCommand=no"
 
                 logger.info("Executing restore command", command=" ".join(cmd), cwd=destination)
 
@@ -510,6 +503,7 @@ class RestoreService:
                 del self.running_processes[job_id]
                 logger.debug("Removed restore process from tracking", job_id=job_id)
 
+            cleanup_temp_key_file(temp_key_file)
             db_session.close()
 
     async def cancel_restore(self, job_id: int) -> bool:
@@ -582,6 +576,7 @@ class RestoreService:
 
         db_session = SessionLocal()
         mount_id = None
+        temp_key_file = None
 
         try:
             # Get job record
@@ -660,15 +655,15 @@ class RestoreService:
             )
 
             # Set up environment
-            env = os.environ.copy()
-            if repository and repository.passphrase:
-                env["BORG_PASSPHRASE"] = repository.passphrase
-
-            env["BORG_LOCK_WAIT"] = "180"
-            env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-
-            ssh_opts = ["-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR"]
-            env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+            if repository:
+                env, temp_key_file = build_repository_borg_env(repository, db_session)
+            else:
+                env = os.environ.copy()
+                env["BORG_LOCK_WAIT"] = "180"
+                env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
+                env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
+                env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
+                env["BORG_RSH"] = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o RequestTTY=no -o PermitLocalCommand=no"
 
             logger.info("Executing extraction to SSHFS mount", command=" ".join(cmd), cwd=mount_path)
 
@@ -883,6 +878,7 @@ class RestoreService:
                                error=str(unmount_error))
 
             # Remove from running processes
+            cleanup_temp_key_file(temp_key_file)
             if job_id in self.running_processes:
                 del self.running_processes[job_id]
 

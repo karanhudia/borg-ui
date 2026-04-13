@@ -13,7 +13,7 @@ from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
 from app.services.notification_service import NotificationService
-from app.utils.ssh_utils import resolve_repo_ssh_key_file
+from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
 
@@ -77,36 +77,13 @@ class CheckService:
                               job_id=job_id, error=str(status_error))
                 return
 
-            # Set environment variables for borg
-            env = os.environ.copy()
-
-            # Add passphrase if available
-            if repository.passphrase:
-                env['BORG_PASSPHRASE'] = repository.passphrase
-
-            # Configure lock behavior
-            env["BORG_LOCK_WAIT"] = "180"
-            env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
-            env["BORG_SHOW_PROGRESS"] = "1"  # Force progress output even when not in a TTY
-
-            # Add SSH options for remote repos with keepalive for orphan prevention
-            ssh_opts = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR",
-                "-o", "ServerAliveInterval=15",   # Send keepalive every 15s
-                "-o", "ServerAliveCountMax=3",    # Give up after 3 failures (~45s)
-                "-o", "TCPKeepAlive=yes",         # Enable TCP-level keepalives
-                "-o", "RequestTTY=no",            # Disable TTY allocation to prevent shell initialization output
-                "-o", "PermitLocalCommand=no"     # Prevent local command execution
-            ]
-            env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
-
-            # Inject SSH identity file if repository uses key-based auth
-            temp_key_file = resolve_repo_ssh_key_file(repository, db)
+            env, temp_key_file = build_repository_borg_env(
+                repository,
+                db,
+                keepalive=True,
+                show_progress=True,
+            )
             if temp_key_file:
-                ssh_opts = ["-i", temp_key_file] + ssh_opts
-                env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
                 logger.info("Using SSH key for check", job_id=job_id)
 
             # Build command
@@ -403,11 +380,7 @@ class CheckService:
                 del self.running_processes[job_id]
 
             # Clean up temporary SSH key file
-            if temp_key_file and os.path.exists(temp_key_file):
-                try:
-                    os.unlink(temp_key_file)
-                except Exception:
-                    pass
+            cleanup_temp_key_file(temp_key_file)
 
             # Close the database session
             db.close()

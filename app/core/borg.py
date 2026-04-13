@@ -272,7 +272,7 @@ class BorgInterface:
                 "lines_read": 0
             }
 
-    async def break_lock(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
+    async def break_lock(self, repository: str, remote_path: str = None, passphrase: str = None, env: dict = None) -> Dict:
         """Break a stale lock on a repository and its cache"""
         logger.warning("Breaking stale lock", repository=repository)
 
@@ -285,12 +285,12 @@ class BorgInterface:
         cmd.append(repository)
 
         # Set passphrase environment variable if provided
-        env = {}
+        exec_env = env.copy() if env else {}
         if passphrase:
-            env["BORG_PASSPHRASE"] = passphrase
+            exec_env["BORG_PASSPHRASE"] = passphrase
 
         # Break repository lock
-        result = await self._execute_command(cmd, timeout=30, env=env if env else None)
+        result = await self._execute_command(cmd, timeout=30, env=exec_env if exec_env else None)
 
         # Also try to break cache lock by deleting cache lock files
         # This handles the case where cache locks remain after repository locks are broken
@@ -304,7 +304,7 @@ class BorgInterface:
                 info_cmd.extend(["--remote-path", remote_path])
             info_cmd.append(repository)
 
-            info_result = await self._execute_command(info_cmd, timeout=30, env=env if env else None)
+            info_result = await self._execute_command(info_cmd, timeout=30, env=exec_env if exec_env else None)
 
             if info_result.get("success"):
                 info_data = json.loads(info_result["stdout"])

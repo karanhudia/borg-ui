@@ -18,8 +18,8 @@ from app.core.security import (
 )
 from app.core.borg import borg
 from app.core.borg_router import BorgRouter
-from app.api.repositories import get_standard_ssh_opts, setup_borg_env
-from app.utils.ssh_utils import resolve_repo_ssh_key_file
+from app.utils.borg_env import get_standard_ssh_opts, setup_borg_env, cleanup_temp_key_file
+from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
 import asyncio
 
 logger = structlog.get_logger()
@@ -52,8 +52,7 @@ async def list_archives(
                 env=env,
             )
         finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                os.unlink(temp_key_file)
+            cleanup_temp_key_file(temp_key_file)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -94,8 +93,7 @@ async def get_archive_info(
                 env=env,
             )
         finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                os.unlink(temp_key_file)
+            cleanup_temp_key_file(temp_key_file)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -150,8 +148,7 @@ async def get_archive_info(
                         env=env,
                     )
                 finally:
-                    if temp_key_file and os.path.exists(temp_key_file):
-                        os.unlink(temp_key_file)
+                    cleanup_temp_key_file(temp_key_file)
                 if list_result["success"]:
                     try:
                         # Parse JSON-lines output
@@ -222,8 +219,7 @@ async def get_archive_contents(
                 env=env,
             )
         finally:
-            if temp_key_file and os.path.exists(temp_key_file):
-                os.unlink(temp_key_file)
+            cleanup_temp_key_file(temp_key_file)
         if not result["success"]:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -331,8 +327,7 @@ async def download_file_from_archive(
                     env=env,
                 )
             finally:
-                if temp_key_file and os.path.exists(temp_key_file):
-                    os.unlink(temp_key_file)
+                cleanup_temp_key_file(temp_key_file)
 
             if not result.get("success"):
                 raise HTTPException(
