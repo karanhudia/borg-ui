@@ -182,7 +182,7 @@ export default function ArchivesList({
     localStorage.setItem('archives-list-filter', filterValue)
   }
 
-  const TableHeader = () => (
+  const tableHeader = (
     <Box
       sx={{
         display: { xs: 'none', md: 'grid' },
@@ -633,7 +633,7 @@ export default function ArchivesList({
               mb: 2,
             }}
           >
-            <TableHeader />
+            {tableHeader}
             {sortedArchives
               .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
               .map((archive) => (
