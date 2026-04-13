@@ -143,6 +143,7 @@ export default function SSHConnectionsSingleKey() {
 
   // State
   const [keyVisible, setKeyVisible] = useState(false)
+  const [fingerprintVisible, setFingerprintVisible] = useState(false)
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [deployDialogOpen, setDeployDialogOpen] = useState(false)
@@ -1088,9 +1089,22 @@ export default function SSHConnectionsSingleKey() {
                 {/* Fingerprint */}
                 {systemKey?.fingerprint && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('sshConnections.systemKey.fingerprint')}
-                    </Typography>
+                    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.25 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('sshConnections.systemKey.fingerprint')}
+                      </Typography>
+                      <Tooltip
+                        title={fingerprintVisible ? 'Hide fingerprint' : 'Reveal fingerprint'}
+                      >
+                        <IconButton
+                          size="small"
+                          onClick={() => setFingerprintVisible((v) => !v)}
+                          sx={{ p: 0.25 }}
+                        >
+                          {fingerprintVisible ? <EyeOff size={13} /> : <Eye size={13} />}
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
                     <Typography
                       variant="body2"
                       fontWeight={500}
@@ -1098,6 +1112,9 @@ export default function SSHConnectionsSingleKey() {
                         fontFamily: 'monospace',
                         fontSize: '0.85rem',
                         wordBreak: 'break-all',
+                        filter: fingerprintVisible ? 'none' : 'blur(4px)',
+                        userSelect: fingerprintVisible ? 'auto' : 'none',
+                        transition: 'filter 0.2s ease',
                       }}
                     >
                       {systemKey.fingerprint}
@@ -1107,19 +1124,26 @@ export default function SSHConnectionsSingleKey() {
 
                 {/* Public Key */}
                 <Box>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ mb: 0.5, display: 'block' }}
-                  >
-                    {t('sshConnections.systemKey.publicKey')}
-                  </Typography>
+                  <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('sshConnections.systemKey.publicKey')}
+                    </Typography>
+                    <Tooltip title={keyVisible ? 'Hide key' : 'Reveal key'}>
+                      <IconButton
+                        size="small"
+                        onClick={() => setKeyVisible((v) => !v)}
+                        sx={{ p: 0.25 }}
+                      >
+                        {keyVisible ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
                   <Box
                     sx={{
                       position: 'relative',
                       bgcolor: 'background.default',
                       p: 1.5,
-                      pr: 8,
+                      pr: 5,
                       borderRadius: 1,
                       border: '1px solid',
                       borderColor: 'divider',
@@ -1140,22 +1164,13 @@ export default function SSHConnectionsSingleKey() {
                     >
                       {systemKey?.public_key || 'N/A'}
                     </Typography>
-                    <Stack
-                      direction="row"
-                      spacing={0.25}
-                      sx={{ position: 'absolute', top: 6, right: 6 }}
-                    >
-                      <Tooltip title={keyVisible ? 'Hide key' : 'Reveal key'}>
-                        <IconButton size="small" onClick={() => setKeyVisible((v) => !v)}>
-                          {keyVisible ? <EyeOff size={15} /> : <Eye size={15} />}
-                        </IconButton>
-                      </Tooltip>
+                    <Box sx={{ position: 'absolute', top: 6, right: 6 }}>
                       <Tooltip title="Copy to clipboard">
                         <IconButton size="small" onClick={handleCopyPublicKey}>
                           <Copy size={15} />
                         </IconButton>
                       </Tooltip>
-                    </Stack>
+                    </Box>
                   </Box>
                 </Box>
 
