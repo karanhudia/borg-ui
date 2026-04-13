@@ -63,8 +63,12 @@ def activation_keys(monkeypatch):
         encoding=serialization.Encoding.Raw,
         format=serialization.PublicFormat.Raw,
     )
-    monkeypatch.setattr(settings, "activation_public_key", base64.b64encode(public_key).decode("utf-8"))
-    monkeypatch.setattr(settings, "activation_service_url", "https://activation.example.test")
+    monkeypatch.setattr(
+        settings, "activation_public_key", base64.b64encode(public_key).decode("utf-8")
+    )
+    monkeypatch.setattr(
+        settings, "activation_service_url", "https://activation.example.test"
+    )
     return private_key
 
 
@@ -75,8 +79,12 @@ def activation_keys_der(monkeypatch):
         encoding=serialization.Encoding.DER,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
-    monkeypatch.setattr(settings, "activation_public_key", base64.b64encode(public_key).decode("utf-8"))
-    monkeypatch.setattr(settings, "activation_service_url", "https://activation.example.test")
+    monkeypatch.setattr(
+        settings, "activation_public_key", base64.b64encode(public_key).decode("utf-8")
+    )
+    monkeypatch.setattr(
+        settings, "activation_service_url", "https://activation.example.test"
+    )
     return private_key
 
 
@@ -97,7 +105,9 @@ def test_import_offline_entitlement_sets_active_trial(db_session, activation_key
 
 
 @pytest.mark.unit
-def test_import_offline_entitlement_accepts_der_public_keys(db_session, activation_keys_der):
+def test_import_offline_entitlement_accepts_der_public_keys(
+    db_session, activation_keys_der
+):
     state = get_or_create_licensing_state(db_session)
     document = _build_document(activation_keys_der, instance_id=state.instance_id)
 
@@ -131,7 +141,9 @@ def test_expired_entitlement_downgrades_to_community(db_session, activation_keys
 @pytest.mark.asyncio
 async def test_refresh_entitlement_updates_state(db_session, activation_keys):
     state = get_or_create_licensing_state(db_session)
-    initial = _build_document(activation_keys, instance_id=state.instance_id, entitlement_id="ent_old")
+    initial = _build_document(
+        activation_keys, instance_id=state.instance_id, entitlement_id="ent_old"
+    )
     import_offline_entitlement(db_session, initial)
     updated = _build_document(
         activation_keys,
@@ -141,7 +153,10 @@ async def test_refresh_entitlement_updates_state(db_session, activation_keys):
         is_trial=False,
     )
 
-    with patch("app.services.licensing_service._post_activation", new=AsyncMock(return_value={"result": "updated", "entitlement": updated})):
+    with patch(
+        "app.services.licensing_service._post_activation",
+        new=AsyncMock(return_value={"result": "updated", "entitlement": updated}),
+    ):
         result = await refresh_entitlement(db_session, app_version="1.70.0")
 
     summary = get_entitlement_summary(db_session)
@@ -154,7 +169,9 @@ async def test_refresh_entitlement_updates_state(db_session, activation_keys):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_refresh_failure_keeps_active_entitlement_until_expiry(db_session, activation_keys):
+async def test_refresh_failure_keeps_active_entitlement_until_expiry(
+    db_session, activation_keys
+):
     state = get_or_create_licensing_state(db_session)
     document = _build_document(
         activation_keys,
@@ -219,10 +236,15 @@ async def test_activate_and_deactivate_paid_license(db_session, activation_keys)
         plan="pro",
     )
 
-    with patch("app.services.licensing_service._post_activation", new=AsyncMock(side_effect=[
-        {"result": "activated", "entitlement": activated},
-        {"result": "deactivated"},
-    ])):
+    with patch(
+        "app.services.licensing_service._post_activation",
+        new=AsyncMock(
+            side_effect=[
+                {"result": "activated", "entitlement": activated},
+                {"result": "deactivated"},
+            ]
+        ),
+    ):
         activation_result = await activate_paid_license(
             db_session,
             license_key="BORG-XXXX-XXXX-XXXX",
@@ -246,5 +268,7 @@ async def test_activate_and_deactivate_paid_license(db_session, activation_keys)
 async def test_deactivate_paid_license_requires_stored_license_id(db_session):
     get_or_create_licensing_state(db_session)
 
-    with pytest.raises(RuntimeError, match="No active paid license is stored for this instance"):
+    with pytest.raises(
+        RuntimeError, match="No active paid license is stored for this instance"
+    ):
         await deactivate_paid_license(db_session)

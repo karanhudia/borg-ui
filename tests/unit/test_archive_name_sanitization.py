@@ -1,10 +1,10 @@
-import pytest
 from app.utils.archive_names import sanitize_archive_component, build_archive_name
 
 
 # ==========================================
 # sanitize_archive_component Tests
 # ==========================================
+
 
 class TestSanitizeArchiveComponent:
     def test_space_replaced_with_hyphen(self):
@@ -39,6 +39,7 @@ class TestSanitizeArchiveComponent:
 # ==========================================
 # build_archive_name Tests
 # ==========================================
+
 
 class TestBuildArchiveName:
     def test_default_no_template_no_repo(self):

@@ -42,7 +42,10 @@ def upgrade(db):
 
     except Exception as e:
         # If column already exists (migration already ran), that's okay
-        if "duplicate column name" in str(e).lower() or "already exists" in str(e).lower():
+        if (
+            "duplicate column name" in str(e).lower()
+            or "already exists" in str(e).lower()
+        ):
             logger.info("ssh_path_prefix column already exists, skipping")
         else:
             logger.error("Failed to add ssh_path_prefix column", error=str(e))

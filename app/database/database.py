@@ -27,17 +27,19 @@ engine = create_engine(
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,
-    echo=False  # Always disable SQL logging for performance (creates massive log spam)
+    echo=False,  # Always disable SQL logging for performance (creates massive log spam)
 )
 
 # Enable foreign key constraints for SQLite
 # This is required for CASCADE deletes to work properly
 if settings.database_url.startswith("sqlite"):
+
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_conn, connection_record):
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -45,10 +47,11 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Create base class for models
 Base = declarative_base()
 
+
 def get_db():
     """Dependency to get database session"""
     db = SessionLocal()
     try:
         yield db
     finally:
-        db.close() 
+        db.close()

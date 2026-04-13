@@ -90,7 +90,9 @@ class TestFilesystemBrowseLocal:
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.pathNotFound"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.filesystem.pathNotFound"
+        )
 
     def test_browse_local_filesystem_rejects_non_directory(
         self,
@@ -108,7 +110,10 @@ class TestFilesystemBrowseLocal:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.pathNotDirectory"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.pathNotDirectory"
+        )
 
     def test_browse_filesystem_rejects_invalid_connection_type(
         self,
@@ -122,7 +127,10 @@ class TestFilesystemBrowseLocal:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.invalidConnectionType"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.invalidConnectionType"
+        )
 
     @pytest.mark.asyncio
     async def test_browse_local_filesystem_permission_denied_raises_403(self, tmp_path):
@@ -188,8 +196,12 @@ class TestFilesystemBrowseSSH:
         monkeypatch,
     ):
         secret_key = "a" * 32
-        monkeypatch.setattr(filesystem.settings, "secret_key", secret_key, raising=False)
-        monkeypatch.setattr(filesystem.settings.__class__, "get_local_mount_points", lambda self: [])
+        monkeypatch.setattr(
+            filesystem.settings, "secret_key", secret_key, raising=False
+        )
+        monkeypatch.setattr(
+            filesystem.settings.__class__, "get_local_mount_points", lambda self: []
+        )
 
         ssh_key = SSHKey(
             name="ssh-key",
@@ -214,7 +226,9 @@ class TestFilesystemBrowseSSH:
             return SimpleNamespace(returncode=0, stdout="config\ndata\n", stderr="")
 
         monkeypatch.setattr(filesystem.subprocess, "run", run_side_effect)
-        monkeypatch.setattr(filesystem, "is_borg_repository_ssh", lambda *args, **kwargs: True)
+        monkeypatch.setattr(
+            filesystem, "is_borg_repository_ssh", lambda *args, **kwargs: True
+        )
 
         response = await filesystem.browse_ssh_filesystem(
             path="/remote",
@@ -260,7 +274,10 @@ class TestFilesystemBrowseSSH:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.sshParamsRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.sshParamsRequired"
+        )
 
 
 @pytest.mark.unit
@@ -310,7 +327,10 @@ class TestFilesystemValidationAndCreateFolder:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.sshParamsRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.sshParamsRequired"
+        )
 
     def test_validate_path_rejects_invalid_connection_type(
         self,
@@ -324,7 +344,10 @@ class TestFilesystemValidationAndCreateFolder:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.invalidConnectionType"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.invalidConnectionType"
+        )
 
     @pytest.mark.asyncio
     async def test_validate_path_ssh_success(
@@ -333,7 +356,9 @@ class TestFilesystemValidationAndCreateFolder:
         monkeypatch,
     ):
         secret_key = "a" * 32
-        monkeypatch.setattr(filesystem.settings, "secret_key", secret_key, raising=False)
+        monkeypatch.setattr(
+            filesystem.settings, "secret_key", secret_key, raising=False
+        )
 
         ssh_key = SSHKey(
             name="validate-ssh",
@@ -347,9 +372,13 @@ class TestFilesystemValidationAndCreateFolder:
         monkeypatch.setattr(
             filesystem.subprocess,
             "run",
-            lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="File: /remote\nType: directory\n", stderr=""),
+            lambda *args, **kwargs: SimpleNamespace(
+                returncode=0, stdout="File: /remote\nType: directory\n", stderr=""
+            ),
         )
-        monkeypatch.setattr(filesystem, "is_borg_repository_ssh", lambda *args, **kwargs: True)
+        monkeypatch.setattr(
+            filesystem, "is_borg_repository_ssh", lambda *args, **kwargs: True
+        )
 
         payload = await filesystem.validate_path(
             path="/remote",
@@ -407,7 +436,10 @@ class TestFilesystemValidationAndCreateFolder:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.invalidFolderName"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.invalidFolderName"
+        )
 
     def test_create_folder_local_existing_directory_returns_400(
         self,
@@ -429,7 +461,10 @@ class TestFilesystemValidationAndCreateFolder:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.folderAlreadyExists"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.folderAlreadyExists"
+        )
 
     def test_create_folder_local_permission_error_returns_403(
         self,
@@ -438,7 +473,11 @@ class TestFilesystemValidationAndCreateFolder:
         tmp_path,
         monkeypatch,
     ):
-        monkeypatch.setattr(filesystem.os, "makedirs", lambda *args, **kwargs: (_ for _ in ()).throw(PermissionError()))
+        monkeypatch.setattr(
+            filesystem.os,
+            "makedirs",
+            lambda *args, **kwargs: (_ for _ in ()).throw(PermissionError()),
+        )
 
         response = test_client.post(
             "/api/filesystem/create-folder",
@@ -451,7 +490,10 @@ class TestFilesystemValidationAndCreateFolder:
         )
 
         assert response.status_code == 403
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.permissionDeniedCreateFolder"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.permissionDeniedCreateFolder"
+        )
 
     def test_create_folder_ssh_missing_connection_details_returns_400(
         self,
@@ -470,7 +512,10 @@ class TestFilesystemValidationAndCreateFolder:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.sshConnectionDetailsRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.sshConnectionDetailsRequired"
+        )
 
     def test_validate_path_ssh_missing_key_returns_404(
         self,
@@ -540,7 +585,9 @@ class TestFilesystemValidationAndCreateFolder:
         monkeypatch.setattr(
             filesystem.subprocess,
             "run",
-            lambda *args, **kwargs: SimpleNamespace(returncode=1, stdout="", stderr="File exists"),
+            lambda *args, **kwargs: SimpleNamespace(
+                returncode=1, stdout="", stderr="File exists"
+            ),
         )
 
         response = test_client.post(
@@ -558,4 +605,7 @@ class TestFilesystemValidationAndCreateFolder:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.filesystem.folderAlreadyExists"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.filesystem.folderAlreadyExists"
+        )

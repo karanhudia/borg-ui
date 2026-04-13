@@ -1,5 +1,6 @@
 from sqlalchemy import text
 
+
 def upgrade(connection):
     """Remove config_file columns from backup_jobs and scheduled_jobs tables"""
 
@@ -7,9 +8,10 @@ def upgrade(connection):
     result = connection.execute(text("PRAGMA table_info(backup_jobs)"))
     backup_columns = [row[1] for row in result]
 
-    if 'config_file' in backup_columns:
+    if "config_file" in backup_columns:
         # SQLite doesn't support DROP COLUMN directly, need to recreate table
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE TABLE backup_jobs_new (
                 id INTEGER PRIMARY KEY,
                 repository VARCHAR,
@@ -34,9 +36,11 @@ def upgrade(connection):
                 created_at DATETIME,
                 FOREIGN KEY(scheduled_job_id) REFERENCES scheduled_jobs(id)
             )
-        """))
+        """)
+        )
 
-        connection.execute(text("""
+        connection.execute(
+            text("""
             INSERT INTO backup_jobs_new
             SELECT id, repository, status, started_at, completed_at, progress,
                    error_message, logs, log_file_path, scheduled_job_id, original_size,
@@ -44,7 +48,8 @@ def upgrade(connection):
                    backup_speed, total_expected_size, estimated_time_remaining,
                    maintenance_status, created_at
             FROM backup_jobs
-        """))
+        """)
+        )
 
         connection.execute(text("DROP TABLE backup_jobs"))
         connection.execute(text("ALTER TABLE backup_jobs_new RENAME TO backup_jobs"))
@@ -53,8 +58,9 @@ def upgrade(connection):
     result = connection.execute(text("PRAGMA table_info(scheduled_jobs)"))
     scheduled_columns = [row[1] for row in result]
 
-    if 'config_file' in scheduled_columns:
-        connection.execute(text("""
+    if "config_file" in scheduled_columns:
+        connection.execute(
+            text("""
             CREATE TABLE scheduled_jobs_new (
                 id INTEGER PRIMARY KEY,
                 name VARCHAR UNIQUE NOT NULL,
@@ -75,21 +81,27 @@ def upgrade(connection):
                 created_at DATETIME,
                 updated_at DATETIME
             )
-        """))
+        """)
+        )
 
-        connection.execute(text("""
+        connection.execute(
+            text("""
             INSERT INTO scheduled_jobs_new
             SELECT id, name, cron_expression, repository, enabled, last_run, next_run,
                    description, run_prune_after, run_compact_after, prune_keep_daily,
                    prune_keep_weekly, prune_keep_monthly, prune_keep_yearly, last_prune,
                    last_compact, created_at, updated_at
             FROM scheduled_jobs
-        """))
+        """)
+        )
 
         connection.execute(text("DROP TABLE scheduled_jobs"))
-        connection.execute(text("ALTER TABLE scheduled_jobs_new RENAME TO scheduled_jobs"))
+        connection.execute(
+            text("ALTER TABLE scheduled_jobs_new RENAME TO scheduled_jobs")
+        )
 
     connection.commit()
+
 
 def downgrade(connection):
     """Add config_file columns back to backup_jobs and scheduled_jobs tables"""
@@ -98,17 +110,21 @@ def downgrade(connection):
     result = connection.execute(text("PRAGMA table_info(backup_jobs)"))
     backup_columns = [row[1] for row in result]
 
-    if 'config_file' not in backup_columns:
-        connection.execute(text("""
+    if "config_file" not in backup_columns:
+        connection.execute(
+            text("""
             ALTER TABLE backup_jobs ADD COLUMN config_file VARCHAR
-        """))
+        """)
+        )
 
     result = connection.execute(text("PRAGMA table_info(scheduled_jobs)"))
     scheduled_columns = [row[1] for row in result]
 
-    if 'config_file' not in scheduled_columns:
-        connection.execute(text("""
+    if "config_file" not in scheduled_columns:
+        connection.execute(
+            text("""
             ALTER TABLE scheduled_jobs ADD COLUMN config_file VARCHAR
-        """))
+        """)
+        )
 
     connection.commit()

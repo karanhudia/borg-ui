@@ -1,5 +1,4 @@
 import asyncio
-import os
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -12,22 +11,24 @@ from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
 
+
 def get_process_start_time(pid: int) -> int:
     """
     Read process start time from /proc/[pid]/stat
     Returns: jiffies since system boot (unique per process)
     """
     try:
-        with open(f'/proc/{pid}/stat', 'r') as f:
+        with open(f"/proc/{pid}/stat", "r") as f:
             stat_data = f.read()
         # Parse: pid (comm) state ppid ... starttime (22nd field)
         # Split by ) to handle process names with spaces/parens
-        fields = stat_data.split(')')[1].split()
+        fields = stat_data.split(")")[1].split()
         starttime = int(fields[19])  # 22nd field overall
         return starttime
     except Exception as e:
         logger.error("Failed to read process start time", pid=pid, error=str(e))
         return 0
+
 
 class DeleteArchiveService:
     """Service for executing archive delete operations with real-time progress tracking"""
@@ -37,7 +38,9 @@ class DeleteArchiveService:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes = {}  # Track running processes by job_id
 
-    async def execute_delete(self, job_id: int, repository_id: int, archive_name: str, db: Session = None):
+    async def execute_delete(
+        self, job_id: int, repository_id: int, archive_name: str, db: Session = None
+    ):
         """Execute archive delete operation with progress tracking"""
 
         # Create a new database session for this background task
@@ -46,13 +49,17 @@ class DeleteArchiveService:
         temp_key_file = None
         try:
             # Get job
-            job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
+            job = (
+                db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
+            )
             if not job:
                 logger.error("Delete archive job not found", job_id=job_id)
                 return
 
             # Get repository
-            repository = db.query(Repository).filter(Repository.id == repository_id).first()
+            repository = (
+                db.query(Repository).filter(Repository.id == repository_id).first()
+            )
             if not repository:
                 logger.error("Repository not found", repository_id=repository_id)
                 job.status = "failed"
@@ -79,14 +86,20 @@ class DeleteArchiveService:
                 cmd.extend(["--remote-path", repository.remote_path])
             cmd.append(f"{repository.path}::{archive_name}")
 
-            logger.info("Starting borg delete", job_id=job_id, repository=repository.path, archive=archive_name, command=" ".join(cmd))
+            logger.info(
+                "Starting borg delete",
+                job_id=job_id,
+                repository=repository.path,
+                archive=archive_name,
+                command=" ".join(cmd),
+            )
 
             # Execute command
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=env
+                env=env,
             )
 
             # Store PID and start time for orphan detection
@@ -96,10 +109,12 @@ class DeleteArchiveService:
             job.progress_message = f"Deleting archive {archive_name}"
             db.commit()
 
-            logger.info("Stored PID tracking info",
-                       job_id=job_id,
-                       pid=job.process_pid,
-                       start_time=job.process_start_time)
+            logger.info(
+                "Stored PID tracking info",
+                job_id=job_id,
+                pid=job.process_pid,
+                start_time=job.process_start_time,
+            )
 
             # Track this process so it can be cancelled
             self.running_processes[job_id] = process
@@ -117,13 +132,17 @@ class DeleteArchiveService:
                     await asyncio.sleep(3)
                     db.refresh(job)
                     if job.status == "cancelled":
-                        logger.info("Delete job cancelled, terminating process", job_id=job_id)
+                        logger.info(
+                            "Delete job cancelled, terminating process", job_id=job_id
+                        )
                         cancelled = True
                         process.terminate()
                         try:
                             await asyncio.wait_for(process.wait(), timeout=5.0)
                         except asyncio.TimeoutError:
-                            logger.warning("Process didn't terminate, killing it", job_id=job_id)
+                            logger.warning(
+                                "Process didn't terminate, killing it", job_id=job_id
+                            )
                             process.kill()
                             await process.wait()
                         break
@@ -136,7 +155,7 @@ class DeleteArchiveService:
                         if cancelled:
                             break
 
-                        line_str = line.decode('utf-8', errors='replace').strip()
+                        line_str = line.decode("utf-8", errors="replace").strip()
                         if line_str:
                             log_buffer.append(line_str)
 
@@ -174,20 +193,28 @@ class DeleteArchiveService:
                 job.progress_message = f"Archive {archive_name} deleted with warnings (exit code {process.returncode})"
                 job.error_message = f"Archive deletion completed with warnings (exit code {process.returncode})"
                 if log_buffer:
-                    job.error_message += "\n\n" + "\n".join(log_buffer[-50:])  # Last 50 lines
-                logger.warning("Delete job completed with warnings", job_id=job_id, exit_code=process.returncode)
+                    job.error_message += "\n\n" + "\n".join(
+                        log_buffer[-50:]
+                    )  # Last 50 lines
+                logger.warning(
+                    "Delete job completed with warnings",
+                    job_id=job_id,
+                    exit_code=process.returncode,
+                )
             else:
                 job.status = "failed"
                 job.progress_message = "Archive deletion failed"
                 # Capture error from stderr
                 if log_buffer:
                     job.error_message = "\n".join(log_buffer[-50:])  # Last 50 lines
-                logger.error("Delete job failed", job_id=job_id, return_code=process.returncode)
+                logger.error(
+                    "Delete job failed", job_id=job_id, return_code=process.returncode
+                )
 
             # Save logs
             if log_buffer:
                 log_file_path = self.log_dir / f"delete_archive_{job_id}.log"
-                with open(log_file_path, 'w') as f:
+                with open(log_file_path, "w") as f:
                     f.write("\n".join(log_buffer))
                 job.log_file_path = str(log_file_path)
                 job.has_logs = True
@@ -217,13 +244,16 @@ class DeleteArchiveService:
             raise ValueError(f"Delete job {job_id} not found")
 
         if job.status != "running":
-            raise ValueError(f"Delete job {job_id} is not running (status: {job.status})")
+            raise ValueError(
+                f"Delete job {job_id} is not running (status: {job.status})"
+            )
 
         # Mark as cancelled in database
         job.status = "cancelled"
         db.commit()
 
         logger.info("Delete job marked for cancellation", job_id=job_id)
+
 
 # Global service instance
 delete_archive_service = DeleteArchiveService()

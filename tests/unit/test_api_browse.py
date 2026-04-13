@@ -1,6 +1,7 @@
 """
 Unit tests for browse/filesystem API endpoints
 """
+
 import json
 from unittest.mock import AsyncMock, patch
 
@@ -35,11 +36,12 @@ class TestBrowseEndpoints:
 
         assert response.status_code == 404
 
-    def test_browse_archive_invalid_repository(self, test_client: TestClient, admin_headers):
+    def test_browse_archive_invalid_repository(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test browsing archive with invalid repository"""
         response = test_client.get(
-            "/api/browse/99999/archive-name/",
-            headers=admin_headers
+            "/api/browse/99999/archive-name/", headers=admin_headers
         )
 
         assert response.status_code == 404
@@ -49,10 +51,17 @@ class TestBrowseEndpoints:
         repo = _create_repository(test_db)
         cached_items = [
             {"path": "docs", "type": "d", "size": None, "mtime": "2024-01-01T00:00:00"},
-            {"path": "docs/readme.md", "type": "f", "size": 12, "mtime": "2024-01-01T00:00:01"},
+            {
+                "path": "docs/readme.md",
+                "type": "f",
+                "size": 12,
+                "mtime": "2024-01-01T00:00:01",
+            },
         ]
 
-        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)):
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)
+        ):
             response = test_client.get(
                 f"/api/browse/{repo.id}/test-archive",
                 headers=admin_headers,
@@ -61,16 +70,35 @@ class TestBrowseEndpoints:
         assert response.status_code == 200
         assert response.json()["items"][0]["name"] == "docs"
 
-    def test_browse_archive_subdirectory(self, test_client: TestClient, admin_headers, test_db):
+    def test_browse_archive_subdirectory(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         """Test browsing archive subdirectory"""
         repo = _create_repository(test_db)
         cached_items = [
-            {"path": "home/user/file.txt", "type": "f", "size": 10, "mtime": "2024-01-01T00:00:01"},
-            {"path": "home/user/docs", "type": "d", "size": None, "mtime": "2024-01-01T00:00:02"},
-            {"path": "home/user/docs/a.txt", "type": "f", "size": 11, "mtime": "2024-01-01T00:00:03"},
+            {
+                "path": "home/user/file.txt",
+                "type": "f",
+                "size": 10,
+                "mtime": "2024-01-01T00:00:01",
+            },
+            {
+                "path": "home/user/docs",
+                "type": "d",
+                "size": None,
+                "mtime": "2024-01-01T00:00:02",
+            },
+            {
+                "path": "home/user/docs/a.txt",
+                "type": "f",
+                "size": 11,
+                "mtime": "2024-01-01T00:00:03",
+            },
         ]
 
-        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)):
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)
+        ):
             response = test_client.get(
                 f"/api/browse/{repo.id}/test-archive",
                 params={"path": "home/user"},
@@ -78,13 +106,15 @@ class TestBrowseEndpoints:
             )
 
         assert response.status_code == 200
-        assert [item["name"] for item in response.json()["items"]] == ["docs", "file.txt"]
+        assert [item["name"] for item in response.json()["items"]] == [
+            "docs",
+            "file.txt",
+        ]
 
     def test_get_file_content_invalid(self, test_client: TestClient, admin_headers):
         """Test getting file content from invalid archive"""
         response = test_client.get(
-            "/api/browse/99999/archive-name/path/to/file.txt",
-            headers=admin_headers
+            "/api/browse/99999/archive-name/path/to/file.txt", headers=admin_headers
         )
 
         assert response.status_code == 404
@@ -94,7 +124,7 @@ class TestBrowseEndpoints:
         response = test_client.post(
             "/api/browse/99999/archive-name/search",
             json={"query": "test"},
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 405
@@ -129,12 +159,21 @@ class TestBrowseArchiveBehavior:
         repo = _create_repository(test_db)
         cached_items = [
             {"path": "docs", "type": "d", "size": None, "mtime": "2024-01-01T00:00:00"},
-            {"path": "docs/readme.md", "type": "f", "size": 12, "mtime": "2024-01-01T00:00:01"},
+            {
+                "path": "docs/readme.md",
+                "type": "f",
+                "size": 12,
+                "mtime": "2024-01-01T00:00:01",
+            },
             {"path": "z.txt", "type": "f", "size": 3, "mtime": "2024-01-01T00:00:02"},
         ]
 
-        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)):
-            with patch.object(browse_api.BorgRouter, "list_archive_contents", new=AsyncMock()) as mock_list:
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)
+        ):
+            with patch.object(
+                browse_api.BorgRouter, "list_archive_contents", new=AsyncMock()
+            ) as mock_list:
                 response = await browse_api.browse_archive_contents(
                     repository_id=repo.id,
                     archive_name="test-archive",
@@ -159,11 +198,15 @@ class TestBrowseArchiveBehavior:
     ):
         repo = _create_repository(test_db, name="Line Limit Repo")
 
-        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=None)
+        ):
             with patch.object(
                 browse_api.BorgRouter,
                 "list_archive_contents",
-                new=AsyncMock(return_value={"line_count_exceeded": True, "lines_read": 77}),
+                new=AsyncMock(
+                    return_value={"line_count_exceeded": True, "lines_read": 77}
+                ),
             ):
                 with pytest.raises(HTTPException) as exc:
                     await browse_api.browse_archive_contents(
@@ -194,14 +237,25 @@ class TestBrowseArchiveBehavior:
 
         stdout = "\n".join(
             [
-                json.dumps({"path": "docs", "type": "d", "mtime": "2024-01-01T00:00:00"}),
-                json.dumps({"path": "docs/readme.md", "type": "f", "size": 12, "mtime": "2024-01-01T00:00:01"}),
+                json.dumps(
+                    {"path": "docs", "type": "d", "mtime": "2024-01-01T00:00:00"}
+                ),
+                json.dumps(
+                    {
+                        "path": "docs/readme.md",
+                        "type": "f",
+                        "size": 12,
+                        "mtime": "2024-01-01T00:00:01",
+                    }
+                ),
             ]
         )
 
         monkeypatch.setattr(browse_api, "ITEM_SIZE_ESTIMATE", 1024 * 1024)
 
-        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=None)
+        ):
             with patch.object(
                 browse_api.BorgRouter,
                 "list_archive_contents",
@@ -228,15 +282,35 @@ class TestBrowseArchiveBehavior:
         repo = _create_repository(test_db, name="Parse Repo")
         stdout = "\n".join(
             [
-                json.dumps({"path": "docs", "type": "d", "mtime": "2024-01-01T00:00:00"}),
+                json.dumps(
+                    {"path": "docs", "type": "d", "mtime": "2024-01-01T00:00:00"}
+                ),
                 "not-json",
-                json.dumps({"path": "docs/readme.md", "type": "f", "size": 7, "mtime": "2024-01-01T00:00:01"}),
-                json.dumps({"path": "notes.txt", "type": "f", "size": 3, "mtime": "2024-01-01T00:00:02"}),
+                json.dumps(
+                    {
+                        "path": "docs/readme.md",
+                        "type": "f",
+                        "size": 7,
+                        "mtime": "2024-01-01T00:00:01",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "path": "notes.txt",
+                        "type": "f",
+                        "size": 3,
+                        "mtime": "2024-01-01T00:00:02",
+                    }
+                ),
             ]
         )
 
-        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
-            with patch.object(browse_api.archive_cache, "set", new=AsyncMock(return_value=True)) as mock_set:
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=None)
+        ):
+            with patch.object(
+                browse_api.archive_cache, "set", new=AsyncMock(return_value=True)
+            ) as mock_set:
                 with patch.object(
                     browse_api.BorgRouter,
                     "list_archive_contents",
@@ -278,19 +352,28 @@ class TestBrowseArchiveBehavior:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=None)):
-            with patch.object(browse_api.archive_cache, "set", new=AsyncMock(return_value=True)):
-                with patch.object(
-                    browse_api.BorgRouter,
-                    "list_archive_contents",
-                    new=AsyncMock(return_value={"stdout": ""}),
-                ) as mock_list, patch(
-                    "app.api.browse.resolve_repo_ssh_key_file",
-                    return_value="/tmp/test-browse.key",
-                ), patch(
-                    "app.api.browse.os.path.exists",
-                    side_effect=lambda path: path == "/tmp/test-browse.key",
-                ), patch("app.api.browse.os.unlink") as mock_unlink:
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=None)
+        ):
+            with patch.object(
+                browse_api.archive_cache, "set", new=AsyncMock(return_value=True)
+            ):
+                with (
+                    patch.object(
+                        browse_api.BorgRouter,
+                        "list_archive_contents",
+                        new=AsyncMock(return_value={"stdout": ""}),
+                    ) as mock_list,
+                    patch(
+                        "app.api.browse.resolve_repo_ssh_key_file",
+                        return_value="/tmp/test-browse.key",
+                    ),
+                    patch(
+                        "app.api.browse.os.path.exists",
+                        side_effect=lambda path: path == "/tmp/test-browse.key",
+                    ),
+                    patch("app.api.browse.os.unlink") as mock_unlink,
+                ):
                     await browse_api.browse_archive_contents(
                         repository_id=repo.id,
                         archive_name="parsed-archive",
@@ -311,15 +394,47 @@ class TestBrowseArchiveBehavior:
     ):
         repo = _create_repository(test_db, name="Nested Repo")
         cached_items = [
-            {"path": "home/user", "type": "d", "size": None, "mtime": "2024-01-01T00:00:00"},
-            {"path": "home/user/file.txt", "type": "f", "size": 10, "mtime": "2024-01-01T00:00:01"},
-            {"path": "home/user/docs", "type": "d", "size": None, "mtime": "2024-01-01T00:00:02"},
-            {"path": "home/user/docs/a.txt", "type": "f", "size": 11, "mtime": "2024-01-01T00:00:03"},
-            {"path": "home/user/docs/b.txt", "type": "f", "size": 12, "mtime": "2024-01-01T00:00:04"},
-            {"path": "home/other/skip.txt", "type": "f", "size": 99, "mtime": "2024-01-01T00:00:05"},
+            {
+                "path": "home/user",
+                "type": "d",
+                "size": None,
+                "mtime": "2024-01-01T00:00:00",
+            },
+            {
+                "path": "home/user/file.txt",
+                "type": "f",
+                "size": 10,
+                "mtime": "2024-01-01T00:00:01",
+            },
+            {
+                "path": "home/user/docs",
+                "type": "d",
+                "size": None,
+                "mtime": "2024-01-01T00:00:02",
+            },
+            {
+                "path": "home/user/docs/a.txt",
+                "type": "f",
+                "size": 11,
+                "mtime": "2024-01-01T00:00:03",
+            },
+            {
+                "path": "home/user/docs/b.txt",
+                "type": "f",
+                "size": 12,
+                "mtime": "2024-01-01T00:00:04",
+            },
+            {
+                "path": "home/other/skip.txt",
+                "type": "f",
+                "size": 99,
+                "mtime": "2024-01-01T00:00:05",
+            },
         ]
 
-        with patch.object(browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)):
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)
+        ):
             response = await browse_api.browse_archive_contents(
                 repository_id=repo.id,
                 archive_name="nested-archive",
@@ -359,9 +474,7 @@ class TestFilesystemEndpoints:
     def test_list_directory_root(self, test_client: TestClient, admin_headers):
         """Test listing root directory"""
         response = test_client.get(
-            "/api/filesystem/browse",
-            params={"path": "/"},
-            headers=admin_headers
+            "/api/filesystem/browse", params={"path": "/"}, headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -371,7 +484,7 @@ class TestFilesystemEndpoints:
         response = test_client.get(
             "/api/filesystem/browse",
             params={"path": "/nonexistent/path"},
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 404
@@ -379,19 +492,17 @@ class TestFilesystemEndpoints:
     def test_get_directory_info(self, test_client: TestClient, admin_headers):
         """Test getting directory information"""
         response = test_client.get(
-            "/api/filesystem/info",
-            params={"path": "/tmp"},
-            headers=admin_headers
+            "/api/filesystem/info", params={"path": "/tmp"}, headers=admin_headers
         )
 
         assert response.status_code == 404
 
-    def test_create_directory_missing_path(self, test_client: TestClient, admin_headers):
+    def test_create_directory_missing_path(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test creating directory without path"""
         response = test_client.post(
-            "/api/filesystem/create-folder",
-            json={},
-            headers=admin_headers
+            "/api/filesystem/create-folder", json={}, headers=admin_headers
         )
 
         assert response.status_code == 422
@@ -399,9 +510,7 @@ class TestFilesystemEndpoints:
     def test_validate_path_empty(self, test_client: TestClient, admin_headers):
         """Test path validation with empty path"""
         response = test_client.post(
-            "/api/filesystem/validate-path",
-            params={"path": ""},
-            headers=admin_headers
+            "/api/filesystem/validate-path", params={"path": ""}, headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -412,7 +521,7 @@ class TestFilesystemEndpoints:
         response = test_client.post(
             "/api/filesystem/validate-path",
             params={"path": "/tmp"},
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -421,9 +530,7 @@ class TestFilesystemEndpoints:
     def test_get_disk_usage(self, test_client: TestClient, admin_headers):
         """Test getting disk usage for path"""
         response = test_client.get(
-            "/api/filesystem/disk-usage",
-            params={"path": "/tmp"},
-            headers=admin_headers
+            "/api/filesystem/disk-usage", params={"path": "/tmp"}, headers=admin_headers
         )
 
         assert response.status_code == 404

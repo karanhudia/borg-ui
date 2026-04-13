@@ -1,6 +1,7 @@
 """
 Add all_repositories_role to users for persistent repository-wide assignments.
 """
+
 from sqlalchemy import text
 import structlog
 

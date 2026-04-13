@@ -47,7 +47,10 @@ def upgrade(db):
             logger.info(f"✓ Added column: {column_name}")
         except Exception as e:
             # If column already exists, skip it
-            if "duplicate column name" in str(e).lower() or "already exists" in str(e).lower():
+            if (
+                "duplicate column name" in str(e).lower()
+                or "already exists" in str(e).lower()
+            ):
                 logger.info(f"Column {column_name} already exists, skipping")
             else:
                 logger.error(f"Failed to add column {column_name}", error=str(e))
@@ -65,7 +68,9 @@ def downgrade(db):
 
         # SQLite doesn't support DROP COLUMN, so we need to recreate the table
         # For now, we'll just log a warning
-        logger.warning("Downgrade not fully supported for SQLite - manual intervention may be required")
+        logger.warning(
+            "Downgrade not fully supported for SQLite - manual intervention may be required"
+        )
 
         # For PostgreSQL/MySQL, you would use:
         # db.execute(text("ALTER TABLE restore_jobs DROP COLUMN destination_type"))

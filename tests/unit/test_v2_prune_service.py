@@ -35,9 +35,14 @@ async def test_execute_prune_marks_job_complete_and_updates_repo(db_engine):
 
     service = PruneV2Service()
 
-    with patch("app.services.v2.prune_service.SessionLocal", testing_session_local), patch(
-        "app.services.v2.prune_service.borg2.prune_archives",
-        new=AsyncMock(return_value={"success": True, "stdout": "pruned", "stderr": ""}),
+    with (
+        patch("app.services.v2.prune_service.SessionLocal", testing_session_local),
+        patch(
+            "app.services.v2.prune_service.borg2.prune_archives",
+            new=AsyncMock(
+                return_value={"success": True, "stdout": "pruned", "stderr": ""}
+            ),
+        ),
     ):
         await service.execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1, dry_run=False)
 
@@ -76,9 +81,14 @@ async def test_execute_prune_marks_job_failed_on_borg_error(db_engine):
 
     service = PruneV2Service()
 
-    with patch("app.services.v2.prune_service.SessionLocal", testing_session_local), patch(
-        "app.services.v2.prune_service.borg2.prune_archives",
-        new=AsyncMock(return_value={"success": False, "stdout": "", "stderr": "boom"}),
+    with (
+        patch("app.services.v2.prune_service.SessionLocal", testing_session_local),
+        patch(
+            "app.services.v2.prune_service.borg2.prune_archives",
+            new=AsyncMock(
+                return_value={"success": False, "stdout": "", "stderr": "boom"}
+            ),
+        ),
     ):
         await service.execute_prune(job_id, repo_id, 0, 7, 4, 6, 0, 1, dry_run=True)
 
@@ -94,7 +104,10 @@ async def test_execute_prune_marks_job_failed_on_borg_error(db_engine):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_borg2_prune_command_omits_stats_flag():
-    with patch("app.core.borg2.borg2._run", new=AsyncMock(return_value={"success": True, "stdout": "", "stderr": ""})) as mock_run:
+    with patch(
+        "app.core.borg2.borg2._run",
+        new=AsyncMock(return_value={"success": True, "stdout": "", "stderr": ""}),
+    ) as mock_run:
         await borg2.prune_archives(
             repository="/tmp/v2-repo",
             keep_daily=7,

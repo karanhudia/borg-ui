@@ -9,7 +9,6 @@ This module provides a unified caching interface for archive browsing with:
 - Repository-level and global cache clearing
 """
 
-import asyncio
 import json
 import logging
 import time
@@ -286,7 +285,9 @@ class RedisBackend(CacheBackend):
             dbsize = client.dbsize()
 
             total_requests = self._hits + self._misses
-            hit_rate = (self._hits / total_requests * 100) if total_requests > 0 else 0.0
+            hit_rate = (
+                (self._hits / total_requests * 100) if total_requests > 0 else 0.0
+            )
 
             return {
                 "backend": "redis",
@@ -348,7 +349,9 @@ class InMemoryBackend(CacheBackend):
             max_size_bytes: Maximum cache size in bytes (default 2GB)
         """
         self.max_size_bytes = max_size_bytes
-        self._cache: OrderedDict[str, Tuple[bytes, float]] = OrderedDict()  # key -> (value, expiry_time)
+        self._cache: OrderedDict[str, Tuple[bytes, float]] = (
+            OrderedDict()
+        )  # key -> (value, expiry_time)
         self._size_bytes = 0
 
         # Stats
@@ -388,7 +391,9 @@ class InMemoryBackend(CacheBackend):
             self._size_bytes -= len(old_value)
 
         # Evict entries if we're approaching the limit
-        while self._size_bytes + value_size > self.max_size_bytes and len(self._cache) > 0:
+        while (
+            self._size_bytes + value_size > self.max_size_bytes and len(self._cache) > 0
+        ):
             await self._evict_oldest()
 
         # Check if we still can't fit after eviction
@@ -495,7 +500,9 @@ class ArchiveCacheService:
         )
         self._current_backend: CacheBackend = self._memory_backend
         self._redis_failure_count: int = 0
-        self._max_redis_failures: int = 3  # Switch to in-memory after 3 consecutive failures
+        self._max_redis_failures: int = (
+            3  # Switch to in-memory after 3 consecutive failures
+        )
 
         # Precedence: redis_url > redis_host/port > in-memory fallback
 
@@ -507,13 +514,21 @@ class ArchiveCacheService:
                 client = self._redis_backend._get_client()
                 client.ping()
                 self._current_backend = self._redis_backend
-                logger.info(f"Archive cache initialized with external Redis backend (URL: {settings.redis_url})")
+                logger.info(
+                    f"Archive cache initialized with external Redis backend (URL: {settings.redis_url})"
+                )
             except Exception as e:
-                logger.warning(f"Failed to initialize external Redis from URL, trying local: {e}")
+                logger.warning(
+                    f"Failed to initialize external Redis from URL, trying local: {e}"
+                )
                 # Fall through to try local Redis
 
         # Option 2: Try local Redis (if external URL not configured or failed)
-        if self._current_backend == self._memory_backend and settings.redis_host and settings.redis_host.lower() != "disabled":
+        if (
+            self._current_backend == self._memory_backend
+            and settings.redis_host
+            and settings.redis_host.lower() != "disabled"
+        ):
             try:
                 self._redis_backend = RedisBackend(
                     host=settings.redis_host,
@@ -525,14 +540,20 @@ class ArchiveCacheService:
                 client = self._redis_backend._get_client()
                 client.ping()
                 self._current_backend = self._redis_backend
-                logger.info(f"Archive cache initialized with local Redis backend ({settings.redis_host}:{settings.redis_port})")
+                logger.info(
+                    f"Archive cache initialized with local Redis backend ({settings.redis_host}:{settings.redis_port})"
+                )
             except Exception as e:
-                logger.warning(f"Failed to initialize local Redis, using in-memory cache: {e}")
+                logger.warning(
+                    f"Failed to initialize local Redis, using in-memory cache: {e}"
+                )
                 self._current_backend = self._memory_backend
 
         # Option 3: In-memory fallback (if no Redis configured or both failed)
         if self._current_backend == self._memory_backend and not self._redis_backend:
-            logger.info("Archive cache initialized with in-memory backend (no Redis configured)")
+            logger.info(
+                "Archive cache initialized with in-memory backend (no Redis configured)"
+            )
 
     def _make_key(self, repo_id: int, archive_name: str) -> str:
         """
@@ -666,10 +687,14 @@ class ArchiveCacheService:
 
             # Skip caching if too large (>500MB uncompressed is suspicious)
             if len(data) > 500 * 1024 * 1024:
-                logger.warning(f"Archive {key} too large to cache ({len(data)} bytes), skipping")
+                logger.warning(
+                    f"Archive {key} too large to cache ({len(data)} bytes), skipping"
+                )
                 return False
 
-            success = await self._current_backend.set(key, data, settings.cache_ttl_seconds)
+            success = await self._current_backend.set(
+                key, data, settings.cache_ttl_seconds
+            )
             if success:
                 self._handle_redis_success()
                 logger.debug(f"Cached {key} ({len(items)} items, {len(data)} bytes)")
@@ -754,7 +779,9 @@ class ArchiveCacheService:
                         stats["connection_info"] = safe_url
                 else:
                     stats["connection_type"] = "local"
-                    stats["connection_info"] = f"{self._redis_backend.host}:{self._redis_backend.port}/{self._redis_backend.db}"
+                    stats["connection_info"] = (
+                        f"{self._redis_backend.host}:{self._redis_backend.port}/{self._redis_backend.db}"
+                    )
             else:
                 stats["connection_type"] = "in-memory"
                 stats["connection_info"] = "Python process memory"
@@ -784,7 +811,9 @@ class ArchiveCacheService:
         else:
             return "in-memory"
 
-    def reconfigure(self, redis_url: Optional[str] = None, cache_max_size_mb: Optional[int] = None):
+    def reconfigure(
+        self, redis_url: Optional[str] = None, cache_max_size_mb: Optional[int] = None
+    ):
         """
         Reconfigure the cache service with new settings.
 
@@ -804,7 +833,9 @@ class ArchiveCacheService:
                 self._memory_backend = InMemoryBackend(
                     max_size_bytes=cache_max_size_mb * 1024 * 1024
                 )
-                logger.info(f"Updated in-memory cache max size to {cache_max_size_mb}MB")
+                logger.info(
+                    f"Updated in-memory cache max size to {cache_max_size_mb}MB"
+                )
 
             # Reconfigure Redis connection
             old_backend_type = self.get_backend_type()
@@ -829,20 +860,28 @@ class ArchiveCacheService:
                             protocol = parts[0].split("://", 1)[0]
                             safe_url = f"{protocol}://:***@{parts[1]}"
 
-                    logger.info(f"Reconfigured to external Redis backend (URL: {redis_url})")
+                    logger.info(
+                        f"Reconfigured to external Redis backend (URL: {redis_url})"
+                    )
                     return {
                         "success": True,
                         "backend": "redis",
                         "connection_type": "external_url",
                         "connection_info": safe_url,
-                        "message": f"Successfully connected to external Redis"
+                        "message": f"Successfully connected to external Redis",
                     }
                 except Exception as e:
-                    logger.warning(f"Failed to connect to new Redis URL, falling back to local: {e}")
+                    logger.warning(
+                        f"Failed to connect to new Redis URL, falling back to local: {e}"
+                    )
                     # Fall through to try local Redis
 
             # Try local Redis (if external URL not provided or failed)
-            if self._current_backend == self._memory_backend and settings.redis_host and settings.redis_host.lower() != "disabled":
+            if (
+                self._current_backend == self._memory_backend
+                and settings.redis_host
+                and settings.redis_host.lower() != "disabled"
+            ):
                 try:
                     self._redis_backend = RedisBackend(
                         host=settings.redis_host,
@@ -854,16 +893,20 @@ class ArchiveCacheService:
                     client = self._redis_backend._get_client()
                     client.ping()
                     self._current_backend = self._redis_backend
-                    logger.info(f"Reconfigured to local Redis backend ({settings.redis_host}:{settings.redis_port})")
+                    logger.info(
+                        f"Reconfigured to local Redis backend ({settings.redis_host}:{settings.redis_port})"
+                    )
                     return {
                         "success": True,
                         "backend": "redis",
                         "connection_type": "local",
                         "connection_info": f"{settings.redis_host}:{settings.redis_port}/{settings.redis_db}",
-                        "message": f"Connected to local Redis at {settings.redis_host}:{settings.redis_port}"
+                        "message": f"Connected to local Redis at {settings.redis_host}:{settings.redis_port}",
                     }
                 except Exception as e:
-                    logger.warning(f"Failed to connect to local Redis, using in-memory: {e}")
+                    logger.warning(
+                        f"Failed to connect to local Redis, using in-memory: {e}"
+                    )
 
             # Fallback to in-memory
             logger.info("Reconfigured to in-memory backend")
@@ -871,7 +914,7 @@ class ArchiveCacheService:
                 "success": True,
                 "backend": "in-memory",
                 "connection_type": "in-memory",
-                "message": "Using in-memory cache (Redis not configured or unavailable)"
+                "message": "Using in-memory cache (Redis not configured or unavailable)",
             }
 
         except Exception as e:
@@ -879,7 +922,7 @@ class ArchiveCacheService:
             return {
                 "success": False,
                 "error": str(e),
-                "message": f"Failed to reconfigure cache: {str(e)}"
+                "message": f"Failed to reconfigure cache: {str(e)}",
             }
 
 

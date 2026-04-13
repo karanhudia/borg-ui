@@ -2,6 +2,7 @@
 Comprehensive unit tests for authentication API endpoints and security
 Consolidated from test_api_auth.py, test_auth_comprehensive.py, and test_auth_specific.py
 """
+
 import pytest
 from fastapi.testclient import TestClient
 from datetime import timedelta
@@ -63,16 +64,12 @@ class TestTokenGeneration:
         assert isinstance(token, str)
         assert len(token) > 0
         # JWT tokens have three parts separated by dots
-        assert token.count('.') == 2
+        assert token.count(".") == 2
 
     def test_create_access_token_with_extra_data(self):
         """Test creating token with additional claims"""
         token = create_access_token(
-            data={
-                "sub": "testuser",
-                "role": "admin",
-                "permissions": ["read", "write"]
-            }
+            data={"sub": "testuser", "role": "admin", "permissions": ["read", "write"]}
         )
 
         assert token is not None
@@ -95,7 +92,7 @@ class TestUserManagement:
         user = User(
             username="newuser",
             password_hash=get_password_hash("password123"),
-            is_active=True
+            is_active=True,
         )
         db_session.add(user)
         db_session.commit()
@@ -110,7 +107,7 @@ class TestUserManagement:
         user = User(
             username="findme",
             password_hash=get_password_hash("password123"),
-            is_active=True
+            is_active=True,
         )
         db_session.add(user)
         db_session.commit()
@@ -125,7 +122,7 @@ class TestUserManagement:
         user1 = User(
             username="duplicate",
             password_hash=get_password_hash("password123"),
-            is_active=True
+            is_active=True,
         )
         db_session.add(user1)
         db_session.commit()
@@ -133,7 +130,7 @@ class TestUserManagement:
         user2 = User(
             username="duplicate",
             password_hash=get_password_hash("password456"),
-            is_active=True
+            is_active=True,
         )
         db_session.add(user2)
 
@@ -145,7 +142,7 @@ class TestUserManagement:
         user = User(
             username="deactivate_me",
             password_hash=get_password_hash("password123"),
-            is_active=True
+            is_active=True,
         )
         db_session.add(user)
         db_session.commit()
@@ -163,11 +160,7 @@ class TestAuthenticationLogin:
     def test_login_success(self, test_client: TestClient, admin_user):
         """Test successful login with admin user"""
         response = test_client.post(
-            "/api/auth/login",
-            data={
-                "username": "admin",
-                "password": "admin123"
-            }
+            "/api/auth/login", data={"username": "admin", "password": "admin123"}
         )
 
         assert response.status_code == 200
@@ -178,11 +171,7 @@ class TestAuthenticationLogin:
     def test_login_with_form_data(self, test_client: TestClient, test_user):
         """Test login endpoint with form data"""
         response = test_client.post(
-            "/api/auth/login",
-            data={
-                "username": "testuser",
-                "password": "testpass123"
-            }
+            "/api/auth/login", data={"username": "testuser", "password": "testpass123"}
         )
 
         assert response.status_code == 200
@@ -192,9 +181,7 @@ class TestAuthenticationLogin:
         assert data["token_type"] == "bearer"
 
     def test_login_with_correct_credentials_returns_200(
-        self,
-        test_client: TestClient,
-        test_db
+        self, test_client: TestClient, test_db
     ):
         """Should return 200 and access token for valid credentials"""
         # Create an active user
@@ -202,7 +189,7 @@ class TestAuthenticationLogin:
             username="activeuser",
             password_hash=get_password_hash("password123"),
             is_active=True,
-            role='viewer'
+            role="viewer",
         )
         test_db.add(user)
         test_db.commit()
@@ -210,10 +197,7 @@ class TestAuthenticationLogin:
         # Login with correct credentials
         response = test_client.post(
             "/api/auth/login",
-            data={
-                "username": "activeuser",
-                "password": "password123"
-            }
+            data={"username": "activeuser", "password": "password123"},
         )
 
         assert response.status_code == 200
@@ -224,19 +208,13 @@ class TestAuthenticationLogin:
     def test_login_invalid_credentials(self, test_client: TestClient, admin_user):
         """Test login with invalid password"""
         response = test_client.post(
-            "/api/auth/login",
-            data={
-                "username": "admin",
-                "password": "wrongpassword"
-            }
+            "/api/auth/login", data={"username": "admin", "password": "wrongpassword"}
         )
 
         assert response.status_code == 401
 
     def test_login_with_wrong_password_returns_401(
-        self,
-        test_client: TestClient,
-        test_db
+        self, test_client: TestClient, test_db
     ):
         """Should return 401 for incorrect password"""
         # Create a user
@@ -244,7 +222,7 @@ class TestAuthenticationLogin:
             username="testuser",
             password_hash=get_password_hash("correctpassword"),
             is_active=True,
-            role='viewer'
+            role="viewer",
         )
         test_db.add(user)
         test_db.commit()
@@ -252,23 +230,19 @@ class TestAuthenticationLogin:
         # Try to login with wrong password
         response = test_client.post(
             "/api/auth/login",
-            data={
-                "username": "testuser",
-                "password": "wrongpassword"
-            }
+            data={"username": "testuser", "password": "wrongpassword"},
         )
 
         assert response.status_code == 401
-        assert response.json()["detail"]["key"] == "backend.errors.auth.incorrectCredentials"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.incorrectCredentials"
+        )
 
     def test_login_nonexistent_user(self, test_client: TestClient):
         """Test login with non-existent user"""
         response = test_client.post(
-            "/api/auth/login",
-            data={
-                "username": "nonexistent",
-                "password": "password"
-            }
+            "/api/auth/login", data={"username": "nonexistent", "password": "password"}
         )
 
         assert response.status_code == 401
@@ -276,20 +250,17 @@ class TestAuthenticationLogin:
     def test_login_with_nonexistent_user_returns_401(self, test_client: TestClient):
         """Should return 401 for non-existent user"""
         response = test_client.post(
-            "/api/auth/login",
-            data={
-                "username": "nonexistent",
-                "password": "password"
-            }
+            "/api/auth/login", data={"username": "nonexistent", "password": "password"}
         )
 
         assert response.status_code == 401
-        assert response.json()["detail"]["key"] == "backend.errors.auth.incorrectCredentials"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.incorrectCredentials"
+        )
 
     def test_login_with_inactive_user_returns_401(
-        self,
-        test_client: TestClient,
-        test_db
+        self, test_client: TestClient, test_db
     ):
         """
         CRITICAL TEST: Inactive user should return 401, NOT 400.
@@ -300,7 +271,7 @@ class TestAuthenticationLogin:
             username="inactive_user",
             password_hash=get_password_hash("password123"),
             is_active=False,
-            role='viewer'
+            role="viewer",
         )
         test_db.add(user)
         test_db.commit()
@@ -308,16 +279,14 @@ class TestAuthenticationLogin:
         # Try to login with inactive user
         response = test_client.post(
             "/api/auth/login",
-            data={
-                "username": "inactive_user",
-                "password": "password123"
-            }
+            data={"username": "inactive_user", "password": "password123"},
         )
 
         # MUST be 401 (authentication failure), NOT 400 (validation error)
-        assert response.status_code == 401, \
-            f"Expected 401 for inactive user, got {response.status_code}. " \
+        assert response.status_code == 401, (
+            f"Expected 401 for inactive user, got {response.status_code}. "
             f"This means the inactive user bug fix was not applied!"
+        )
         assert response.json()["detail"]["key"] == "backend.errors.auth.inactiveUser"
 
     def test_login_case_sensitive_username(self, test_client: TestClient, test_user):
@@ -326,8 +295,8 @@ class TestAuthenticationLogin:
             "/api/auth/login",
             data={
                 "username": "TESTUSER",  # Wrong case
-                "password": "testpass123"
-            }
+                "password": "testpass123",
+            },
         )
 
         # Should fail with case mismatch
@@ -336,11 +305,7 @@ class TestAuthenticationLogin:
     def test_login_empty_credentials(self, test_client: TestClient):
         """Test login with empty credentials"""
         response = test_client.post(
-            "/api/auth/login",
-            data={
-                "username": "",
-                "password": ""
-            }
+            "/api/auth/login", data={"username": "", "password": ""}
         )
 
         assert response.status_code == 422
@@ -349,18 +314,13 @@ class TestAuthenticationLogin:
         """Test that SQL injection is prevented"""
         response = test_client.post(
             "/api/auth/login",
-            data={
-                "username": "admin' OR '1'='1",
-                "password": "anything"
-            }
+            data={"username": "admin' OR '1'='1", "password": "anything"},
         )
 
         assert response.status_code == 401
 
     def test_login_with_special_characters_in_password(
-        self,
-        test_client: TestClient,
-        test_db
+        self, test_client: TestClient, test_db
     ):
         """
         Test login with special characters in password (especially '&' which can be problematic in URL encoding).
@@ -372,7 +332,7 @@ class TestAuthenticationLogin:
             username="specialuser",
             password_hash=get_password_hash(special_password),
             is_active=True,
-            role='viewer'
+            role="viewer",
         )
         test_db.add(user)
         test_db.commit()
@@ -380,10 +340,7 @@ class TestAuthenticationLogin:
         # Login with the special character password
         response = test_client.post(
             "/api/auth/login",
-            data={
-                "username": "specialuser",
-                "password": special_password
-            }
+            data={"username": "specialuser", "password": special_password},
         )
 
         assert response.status_code == 200
@@ -391,11 +348,7 @@ class TestAuthenticationLogin:
         assert "access_token" in data
         assert data["token_type"] == "bearer"
 
-    def test_login_with_ampersand_in_password(
-        self,
-        test_client: TestClient,
-        test_db
-    ):
+    def test_login_with_ampersand_in_password(self, test_client: TestClient, test_db):
         """
         Test login with ampersand specifically in password.
         This is a regression test for issue #117.
@@ -406,7 +359,7 @@ class TestAuthenticationLogin:
             username="ampersanduser",
             password_hash=get_password_hash(password_with_ampersand),
             is_active=True,
-            role='viewer'
+            role="viewer",
         )
         test_db.add(user)
         test_db.commit()
@@ -414,10 +367,7 @@ class TestAuthenticationLogin:
         # Login should succeed
         response = test_client.post(
             "/api/auth/login",
-            data={
-                "username": "ampersanduser",
-                "password": password_with_ampersand
-            }
+            data={"username": "ampersanduser", "password": password_with_ampersand},
         )
 
         assert response.status_code == 200
@@ -446,8 +396,7 @@ class TestProtectedEndpoints:
     def test_get_current_user_invalid_token(self, test_client: TestClient):
         """Test getting current user with invalid token"""
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Borg-Authorization": "Bearer invalid_token"}
+            "/api/auth/me", headers={"X-Borg-Authorization": "Bearer invalid_token"}
         )
 
         assert response.status_code == 401
@@ -459,8 +408,7 @@ class TestProtectedEndpoints:
         assert response.status_code == 401
 
     def test_access_protected_endpoint_without_token_returns_403(
-        self,
-        test_client: TestClient
+        self, test_client: TestClient
     ):
         """
         Currently returns 403 when no token is provided.
@@ -473,20 +421,18 @@ class TestProtectedEndpoints:
     def test_protected_endpoint_with_malformed_token(self, test_client: TestClient):
         """Test accessing protected endpoint with malformed token"""
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Borg-Authorization": "Bearer malformed_token"}
+            "/api/auth/me", headers={"X-Borg-Authorization": "Bearer malformed_token"}
         )
 
         assert response.status_code == 401
 
     def test_access_protected_endpoint_with_invalid_token_returns_401(
-        self,
-        test_client: TestClient
+        self, test_client: TestClient
     ):
         """Should return 401 for invalid JWT token"""
         response = test_client.get(
             "/api/repositories/",
-            headers={"X-Borg-Authorization": "Bearer invalid_token_here"}
+            headers={"X-Borg-Authorization": "Bearer invalid_token_here"},
         )
 
         assert response.status_code == 401
@@ -495,36 +441,31 @@ class TestProtectedEndpoints:
         """Test accessing protected endpoint with expired token"""
         # Create a token with negative expiry (already expired)
         expired_token = create_access_token(
-            data={"sub": "testuser"},
-            expires_delta=timedelta(minutes=-10)
+            data={"sub": "testuser"}, expires_delta=timedelta(minutes=-10)
         )
 
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Borg-Authorization": f"Bearer {expired_token}"}
+            "/api/auth/me", headers={"X-Borg-Authorization": f"Bearer {expired_token}"}
         )
 
         assert response.status_code == 401
 
-    def test_protected_endpoint_missing_bearer_prefix(self, test_client: TestClient, auth_token):
+    def test_protected_endpoint_missing_bearer_prefix(
+        self, test_client: TestClient, auth_token
+    ):
         """Test accessing protected endpoint without Bearer prefix"""
         response = test_client.get(
             "/api/auth/me",
-            headers={"X-Borg-Authorization": auth_token}  # Missing "Bearer" prefix
+            headers={"X-Borg-Authorization": auth_token},  # Missing "Bearer" prefix
         )
 
         assert response.status_code == 401
 
     def test_access_protected_endpoint_with_valid_token_succeeds(
-        self,
-        test_client: TestClient,
-        admin_headers
+        self, test_client: TestClient, admin_headers
     ):
         """Should allow access to protected endpoint with valid token"""
-        response = test_client.get(
-            "/api/repositories/",
-            headers=admin_headers
-        )
+        response = test_client.get("/api/repositories/", headers=admin_headers)
 
         assert response.status_code == 200
 
@@ -540,7 +481,7 @@ class TestTokenValidation:
 
         response = test_client.get(
             "/api/repositories/",
-            headers={"X-Borg-Authorization": f"Bearer {expired_token}"}
+            headers={"X-Borg-Authorization": f"Bearer {expired_token}"},
         )
 
         assert response.status_code == 401
@@ -549,7 +490,7 @@ class TestTokenValidation:
         """Should return 401 for malformed token"""
         response = test_client.get(
             "/api/repositories/",
-            headers={"X-Borg-Authorization": "Bearer not.a.valid.jwt"}
+            headers={"X-Borg-Authorization": "Bearer not.a.valid.jwt"},
         )
 
         assert response.status_code == 401
@@ -561,7 +502,7 @@ class TestTokenValidation:
         """
         response = test_client.get(
             "/api/repositories/",
-            headers={"X-Borg-Authorization": "InvalidPrefix token_here"}
+            headers={"X-Borg-Authorization": "InvalidPrefix token_here"},
         )
 
         assert response.status_code == 401
@@ -582,9 +523,12 @@ class TestProxyAuthentication:
         assert data["proxy_auth_enabled"] is False
         assert data["authentication_required"] is True
 
-    def test_auth_config_endpoint_proxy_mode(self, test_client: TestClient, monkeypatch):
+    def test_auth_config_endpoint_proxy_mode(
+        self, test_client: TestClient, monkeypatch
+    ):
         """Test auth config endpoint returns proxy mode when enabled"""
         from app import config
+
         monkeypatch.setattr(config.settings, "disable_authentication", True)
 
         response = test_client.get("/api/auth/config")
@@ -594,15 +538,17 @@ class TestProxyAuthentication:
         assert data["proxy_auth_enabled"] is True
         assert data["authentication_required"] is False
 
-    def test_proxy_auth_with_header(self, test_client: TestClient, test_db, monkeypatch):
+    def test_proxy_auth_with_header(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
         """Test proxy auth with X-Forwarded-User header auto-creates and logs in user"""
         from app import config
+
         monkeypatch.setattr(config.settings, "disable_authentication", True)
 
         # Access protected endpoint with proxy header
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Forwarded-User": "proxyuser"}
+            "/api/auth/me", headers={"X-Forwarded-User": "proxyuser"}
         )
 
         assert response.status_code == 200
@@ -612,6 +558,7 @@ class TestProxyAuthentication:
 
         # Verify user was created in database
         from app.database.models import User
+
         user = test_db.query(User).filter(User.username == "proxyuser").first()
         assert user is not None
         assert user.username == "proxyuser"
@@ -619,13 +566,11 @@ class TestProxyAuthentication:
         assert user.password_hash == ""  # No password for proxy auth users
 
     def test_proxy_auth_without_header_uses_default_admin(
-        self,
-        test_client: TestClient,
-        test_db,
-        monkeypatch
+        self, test_client: TestClient, test_db, monkeypatch
     ):
         """Test proxy auth without header uses default 'admin' user"""
         from app import config
+
         monkeypatch.setattr(config.settings, "disable_authentication", True)
 
         # Access without any proxy header
@@ -637,23 +582,21 @@ class TestProxyAuthentication:
 
         # Verify admin user was created
         from app.database.models import User
+
         user = test_db.query(User).filter(User.username == "admin").first()
         assert user is not None
 
     def test_proxy_auth_with_alternative_headers(
-        self,
-        test_client: TestClient,
-        test_db,
-        monkeypatch
+        self, test_client: TestClient, test_db, monkeypatch
     ):
         """Test proxy auth tries alternative common headers"""
         from app import config
+
         monkeypatch.setattr(config.settings, "disable_authentication", True)
 
         # Test with X-Remote-User header (used by Authelia)
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Remote-User": "authelia_user"}
+            "/api/auth/me", headers={"X-Remote-User": "authelia_user"}
         )
 
         assert response.status_code == 200
@@ -662,8 +605,7 @@ class TestProxyAuthentication:
 
         # Test with Remote-User header
         response = test_client.get(
-            "/api/auth/me",
-            headers={"Remote-User": "nginx_user"}
+            "/api/auth/me", headers={"Remote-User": "nginx_user"}
         )
 
         assert response.status_code == 200
@@ -672,8 +614,7 @@ class TestProxyAuthentication:
 
         # Test with X-authentik-username (Authentik specific)
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-authentik-username": "authentik_user"}
+            "/api/auth/me", headers={"X-authentik-username": "authentik_user"}
         )
 
         assert response.status_code == 200
@@ -681,18 +622,15 @@ class TestProxyAuthentication:
         assert data["username"] == "authentik_user"
 
     def test_proxy_auth_username_normalized_lowercase(
-        self,
-        test_client: TestClient,
-        test_db,
-        monkeypatch
+        self, test_client: TestClient, test_db, monkeypatch
     ):
         """Test proxy auth normalizes username to lowercase"""
         from app import config
+
         monkeypatch.setattr(config.settings, "disable_authentication", True)
 
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Forwarded-User": "JohnDoe"}
+            "/api/auth/me", headers={"X-Forwarded-User": "JohnDoe"}
         )
 
         assert response.status_code == 200
@@ -700,10 +638,7 @@ class TestProxyAuthentication:
         assert data["username"] == "johndoe"  # Normalized to lowercase
 
     def test_proxy_auth_reuses_existing_user(
-        self,
-        test_client: TestClient,
-        test_db,
-        monkeypatch
+        self, test_client: TestClient, test_db, monkeypatch
     ):
         """Test proxy auth reuses existing user instead of creating duplicate"""
         from app import config
@@ -716,7 +651,7 @@ class TestProxyAuthentication:
             password_hash=get_password_hash("somepassword"),
             email="existing@example.com",
             is_active=True,
-            role='admin'
+            role="admin",
         )
         test_db.add(existing_user)
         test_db.commit()
@@ -726,8 +661,7 @@ class TestProxyAuthentication:
 
         # Access with same username via proxy
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Forwarded-User": "existinguser"}
+            "/api/auth/me", headers={"X-Forwarded-User": "existinguser"}
         )
 
         assert response.status_code == 200
@@ -742,10 +676,7 @@ class TestProxyAuthentication:
         assert users[0].id == user_id  # Same user
 
     def test_proxy_auth_inactive_user_denied(
-        self,
-        test_client: TestClient,
-        test_db,
-        monkeypatch
+        self, test_client: TestClient, test_db, monkeypatch
     ):
         """Test proxy auth denies access to inactive users"""
         from app import config
@@ -757,7 +688,7 @@ class TestProxyAuthentication:
             password_hash="",
             email="inactive@proxy.local",
             is_active=False,
-            role='viewer'
+            role="viewer",
         )
         test_db.add(inactive_user)
         test_db.commit()
@@ -765,42 +696,33 @@ class TestProxyAuthentication:
         monkeypatch.setattr(config.settings, "disable_authentication", True)
 
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Forwarded-User": "inactiveuser"}
+            "/api/auth/me", headers={"X-Forwarded-User": "inactiveuser"}
         )
 
         assert response.status_code == 403
         assert "disabled" in response.json()["detail"].lower()
 
     def test_jwt_auth_still_works_when_proxy_disabled(
-        self,
-        test_client: TestClient,
-        admin_headers
+        self, test_client: TestClient, admin_headers
     ):
         """Test that JWT auth still works normally when proxy auth is disabled"""
         # Proxy auth disabled by default, should use JWT
-        response = test_client.get(
-            "/api/auth/me",
-            headers=admin_headers
-        )
+        response = test_client.get("/api/auth/me", headers=admin_headers)
 
         # Should work with JWT token
         assert response.status_code == 200
 
     def test_proxy_auth_custom_header_configuration(
-        self,
-        test_client: TestClient,
-        test_db,
-        monkeypatch
+        self, test_client: TestClient, test_db, monkeypatch
     ):
         """Test proxy auth with custom configured header"""
         from app import config
+
         monkeypatch.setattr(config.settings, "disable_authentication", True)
         monkeypatch.setattr(config.settings, "proxy_auth_header", "X-Custom-User")
 
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Custom-User": "customuser"}
+            "/api/auth/me", headers={"X-Custom-User": "customuser"}
         )
 
         assert response.status_code == 200
@@ -808,10 +730,7 @@ class TestProxyAuthentication:
         assert data["username"] == "customuser"
 
     def test_proxy_auth_updates_last_login(
-        self,
-        test_client: TestClient,
-        test_db,
-        monkeypatch
+        self, test_client: TestClient, test_db, monkeypatch
     ):
         """Test proxy auth updates last_login timestamp"""
         from app import config
@@ -822,8 +741,7 @@ class TestProxyAuthentication:
 
         # First access
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Forwarded-User": "timeuser"}
+            "/api/auth/me", headers={"X-Forwarded-User": "timeuser"}
         )
         assert response.status_code == 200
 
@@ -834,8 +752,7 @@ class TestProxyAuthentication:
 
         # Second access
         response = test_client.get(
-            "/api/auth/me",
-            headers={"X-Forwarded-User": "timeuser"}
+            "/api/auth/me", headers={"X-Forwarded-User": "timeuser"}
         )
         assert response.status_code == 200
 
@@ -851,22 +768,17 @@ class TestDualHeaderFallback:
     """Test that both X-Borg-Authorization and legacy Authorization headers are accepted"""
 
     def test_legacy_authorization_header_still_works(
-        self,
-        test_client: TestClient,
-        admin_token
+        self, test_client: TestClient, admin_token
     ):
         """Legacy Authorization header should still be accepted for backward compatibility"""
         response = test_client.get(
-            "/api/repositories/",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            "/api/repositories/", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code in [200, 204]
 
     def test_x_borg_authorization_takes_precedence(
-        self,
-        test_client: TestClient,
-        admin_token
+        self, test_client: TestClient, admin_token
     ):
         """X-Borg-Authorization should take precedence over Authorization"""
         response = test_client.get(
@@ -874,15 +786,13 @@ class TestDualHeaderFallback:
             headers={
                 "X-Borg-Authorization": f"Bearer {admin_token}",
                 "Authorization": "Bearer invalid_token_here",
-            }
+            },
         )
 
         assert response.status_code in [200, 204]
 
     def test_invalid_x_borg_does_not_fall_back_to_valid_authorization(
-        self,
-        test_client: TestClient,
-        admin_token
+        self, test_client: TestClient, admin_token
     ):
         """When X-Borg-Authorization is present but invalid, it should NOT fall back to Authorization"""
         response = test_client.get(
@@ -890,7 +800,7 @@ class TestDualHeaderFallback:
             headers={
                 "X-Borg-Authorization": "Bearer invalid_token_here",
                 "Authorization": f"Bearer {admin_token}",
-            }
+            },
         )
 
         assert response.status_code == 401

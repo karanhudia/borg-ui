@@ -48,7 +48,10 @@ def main() -> int:
             return 0
 
         if shutil.which("borg2") is None:
-            print("Borg 2 smoke skipped: borg2 binary not available on smoke runner", flush=True)
+            print(
+                "Borg 2 smoke skipped: borg2 binary not available on smoke runner",
+                flush=True,
+            )
             return 0
 
         source_root = client.prepare_source_tree(
@@ -59,15 +62,19 @@ def main() -> int:
             },
         )
 
-        repo_id, repo_path, _backup_job_id, backup_data = client.create_repository_and_backup_v2(
-            name="Borg2 Smoke Repo",
-            repo_path=client.temp_dir / "borg2-repo",
-            source_dirs=[source_root],
-            encryption="none",
+        repo_id, repo_path, _backup_job_id, backup_data = (
+            client.create_repository_and_backup_v2(
+                name="Borg2 Smoke Repo",
+                repo_path=client.temp_dir / "borg2-repo",
+                source_dirs=[source_root],
+                encryption="none",
+            )
         )
         client.log(f"Borg 2 backup completed with status {backup_data['status']}")
 
-        archives_response = client.request_ok("GET", f"/api/v2/repositories/{repo_id}/archives")
+        archives_response = client.request_ok(
+            "GET", f"/api/v2/repositories/{repo_id}/archives"
+        )
         archives = archives_response.json()["archives"]
         if len(archives) != 1:
             raise SmokeFailure(f"Expected exactly one Borg 2 archive, got {archives}")
@@ -79,22 +86,37 @@ def main() -> int:
         if "repository" not in info_payload:
             raise SmokeFailure(f"Unexpected Borg 2 info payload: {info_payload}")
 
-        archive_info = client.get_archive_info_v2(archive_id, repo_id, include_files=True)
+        archive_info = client.get_archive_info_v2(
+            archive_id, repo_id, include_files=True
+        )
         if archive_info.get("name") != archive_name:
-            raise SmokeFailure(f"Unexpected Borg 2 archive info payload: {archive_info}")
+            raise SmokeFailure(
+                f"Unexpected Borg 2 archive info payload: {archive_info}"
+            )
 
         browse_items = client.browse_archive_contents_v2(repo_id, archive_id)
         if not browse_items:
             raise SmokeFailure("Expected Borg 2 archive browse payload")
 
         repo_root = client.container_path(source_root).lstrip("/")
-        downloaded = client.download_archive_file_v2(repo_id, archive_name, f"{repo_root}/nested/notes.txt")
+        downloaded = client.download_archive_file_v2(
+            repo_id, archive_name, f"{repo_root}/nested/notes.txt"
+        )
         if downloaded != b"borg2 nested smoke data\n":
-            raise SmokeFailure(f"Unexpected Borg 2 archive download payload: {downloaded!r}")
+            raise SmokeFailure(
+                f"Unexpected Borg 2 archive download payload: {downloaded!r}"
+            )
 
         imported_repo_path = client.temp_dir / "borg2-import-repo"
         subprocess.run(
-            ["borg2", "-r", str(imported_repo_path), "repo-create", "--encryption", "none"],
+            [
+                "borg2",
+                "-r",
+                str(imported_repo_path),
+                "repo-create",
+                "--encryption",
+                "none",
+            ],
             check=True,
             capture_output=True,
             text=True,
@@ -106,9 +128,13 @@ def main() -> int:
             encryption="none",
             source_dirs=[source_root],
         )
-        imported_info = client.request_ok("GET", f"/api/v2/repositories/{imported_repo_id}/info").json()
+        imported_info = client.request_ok(
+            "GET", f"/api/v2/repositories/{imported_repo_id}/info"
+        ).json()
         if imported_info.get("borg_version") != 2:
-            raise SmokeFailure(f"Expected imported repository to report borg_version=2: {imported_info}")
+            raise SmokeFailure(
+                f"Expected imported repository to report borg_version=2: {imported_info}"
+            )
 
         check_response = client.request_ok(
             "POST",
@@ -120,7 +146,12 @@ def main() -> int:
             check_response.json(),
             expected_message="backend.success.repo.checkJobStarted",
         )
-        client.wait_for_job("/api/repositories/check-jobs", check_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+        client.wait_for_job(
+            "/api/repositories/check-jobs",
+            check_job_id,
+            expected={"completed", "completed_with_warnings"},
+            timeout=120,
+        )
 
         compact_response = client.request_ok(
             "POST",
@@ -132,7 +163,12 @@ def main() -> int:
             compact_response.json(),
             expected_message="backend.success.repo.compactJobStarted",
         )
-        client.wait_for_job("/api/repositories/compact-jobs", compact_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+        client.wait_for_job(
+            "/api/repositories/compact-jobs",
+            compact_job_id,
+            expected={"completed", "completed_with_warnings"},
+            timeout=120,
+        )
 
         delete_response = client.request_ok(
             "DELETE",
@@ -143,11 +179,18 @@ def main() -> int:
         delete_job_id = delete_payload.get("job_id")
         if not isinstance(delete_job_id, int):
             raise SmokeFailure(f"Unexpected Borg 2 delete response: {delete_payload}")
-        client.wait_for_job("/api/archives/delete-jobs", delete_job_id, expected={"completed"}, timeout=120)
+        client.wait_for_job(
+            "/api/archives/delete-jobs",
+            delete_job_id,
+            expected={"completed"},
+            timeout=120,
+        )
 
         remaining_archives = client.list_archives_v2(repo_id)
         if remaining_archives:
-            raise SmokeFailure(f"Expected Borg 2 delete to remove the final archive, got {remaining_archives}")
+            raise SmokeFailure(
+                f"Expected Borg 2 delete to remove the final archive, got {remaining_archives}"
+            )
 
         client.log(f"Borg 2 archive available: {archive_name}")
         client.log("Borg 2 API smoke passed")

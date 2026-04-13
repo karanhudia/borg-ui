@@ -16,6 +16,7 @@ from sqlalchemy import text
 
 logger = structlog.get_logger()
 
+
 def upgrade(db):
     """Add script parameter columns to scheduled_jobs table"""
 
@@ -23,16 +24,20 @@ def upgrade(db):
 
     try:
         # Add pre_backup_script_parameters column
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE scheduled_jobs
             ADD COLUMN pre_backup_script_parameters TEXT
-        """))
+        """)
+        )
 
         # Add post_backup_script_parameters column
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE scheduled_jobs
             ADD COLUMN post_backup_script_parameters TEXT
-        """))
+        """)
+        )
 
         db.commit()
         logger.info("Script parameter columns added successfully")
@@ -50,15 +55,19 @@ def downgrade(db):
     logger.info("Removing script parameter columns from scheduled_jobs table...")
 
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE scheduled_jobs
             DROP COLUMN IF EXISTS pre_backup_script_parameters
-        """))
+        """)
+        )
 
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE scheduled_jobs
             DROP COLUMN IF EXISTS post_backup_script_parameters
-        """))
+        """)
+        )
 
         db.commit()
         logger.info("Script parameter columns removed successfully")

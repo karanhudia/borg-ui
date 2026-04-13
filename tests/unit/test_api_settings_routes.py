@@ -67,7 +67,10 @@ class TestSystemSettingsContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.invalidLogSavePolicy"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidLogSavePolicy"
+        )
 
     def test_update_system_settings_rejects_too_small_log_limit(
         self, test_client: TestClient, admin_headers
@@ -79,7 +82,10 @@ class TestSystemSettingsContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.logSizeTooSmall"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.logSizeTooSmall"
+        )
 
     def test_update_system_settings_returns_warning_when_new_log_limit_is_below_current_usage(
         self, test_client: TestClient, admin_headers
@@ -87,9 +93,14 @@ class TestSystemSettingsContracts:
         fake_log_manager = Mock()
         fake_log_manager.calculate_log_storage.return_value = {"total_size_mb": 250}
 
-        with patch("app.services.log_manager.log_manager", fake_log_manager), patch(
-            "app.services.mqtt_service.mqtt_service.configure"
-        ), patch("app.services.mqtt_service.build_mqtt_runtime_config", return_value={"enabled": False}):
+        with (
+            patch("app.services.log_manager.log_manager", fake_log_manager),
+            patch("app.services.mqtt_service.mqtt_service.configure"),
+            patch(
+                "app.services.mqtt_service.build_mqtt_runtime_config",
+                return_value={"enabled": False},
+            ),
+        ):
             response = test_client.put(
                 "/api/settings/system",
                 json={"log_max_total_size_mb": 100, "mqtt_password": ""},
@@ -105,7 +116,9 @@ class TestSystemSettingsContracts:
 
 @pytest.mark.unit
 class TestSettingsUserContracts:
-    def test_create_user_rejects_duplicate_email(self, test_client: TestClient, admin_headers, test_db):
+    def test_create_user_rejects_duplicate_email(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         test_db.add(SystemSettings())
         state = test_db.query(LicensingState).first()
         if state is None:
@@ -135,9 +148,14 @@ class TestSettingsUserContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.emailAlreadyExists"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.emailAlreadyExists"
+        )
 
-    def test_update_user_role_normalizes_repository_scope(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_user_role_normalizes_repository_scope(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         user = User(
             username="scoped-user",
             email="scoped@example.com",
@@ -160,16 +178,28 @@ class TestSettingsUserContracts:
         assert user.role == "viewer"
         assert user.all_repositories_role == "viewer"
 
-    def test_delete_user_rejects_deleting_self(self, test_client: TestClient, admin_headers, admin_user, test_db):
+    def test_delete_user_rejects_deleting_self(
+        self, test_client: TestClient, admin_headers, admin_user, test_db
+    ):
         test_db.add(
-            User(username="other-admin", email="other-admin@example.com", role="admin", password_hash="hash")
+            User(
+                username="other-admin",
+                email="other-admin@example.com",
+                role="admin",
+                password_hash="hash",
+            )
         )
         test_db.commit()
 
-        response = test_client.delete(f"/api/settings/users/{admin_user.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/settings/users/{admin_user.id}", headers=admin_headers
+        )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.cannotDeleteOwnAccount"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.cannotDeleteOwnAccount"
+        )
 
     def test_change_password_rejects_wrong_current_password(
         self, test_client: TestClient, admin_headers
@@ -181,10 +211,17 @@ class TestSettingsUserContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.auth.currentPasswordIncorrect"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.currentPasswordIncorrect"
+        )
 
-    def test_get_profile_includes_deployment_metadata(self, test_client: TestClient, admin_headers, test_db):
-        settings = SystemSettings(deployment_type="enterprise", enterprise_name="Acme Inc")
+    def test_get_profile_includes_deployment_metadata(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings(
+            deployment_type="enterprise", enterprise_name="Acme Inc"
+        )
         test_db.add(settings)
         test_db.commit()
 
@@ -195,7 +232,9 @@ class TestSettingsUserContracts:
         assert profile["deployment_type"] == "enterprise"
         assert profile["enterprise_name"] == "Acme Inc"
 
-    def test_get_preferences_returns_user_analytics_flags(self, test_client: TestClient, admin_headers, admin_user):
+    def test_get_preferences_returns_user_analytics_flags(
+        self, test_client: TestClient, admin_headers, admin_user
+    ):
         admin_user.analytics_enabled = False
         admin_user.analytics_consent_given = True
 
@@ -210,7 +249,9 @@ class TestSettingsUserContracts:
             },
         }
 
-    def test_update_preferences_persists_analytics_flags(self, test_client: TestClient, admin_headers, admin_user, test_db):
+    def test_update_preferences_persists_analytics_flags(
+        self, test_client: TestClient, admin_headers, admin_user, test_db
+    ):
         response = test_client.put(
             "/api/settings/preferences",
             json={"analytics_enabled": False, "analytics_consent_given": True},
@@ -221,26 +262,39 @@ class TestSettingsUserContracts:
         test_db.refresh(admin_user)
         assert admin_user.analytics_enabled is False
         assert admin_user.analytics_consent_given is True
-        assert response.json()["message"] == "backend.success.settings.preferencesUpdated"
+        assert (
+            response.json()["message"] == "backend.success.settings.preferencesUpdated"
+        )
 
 
 @pytest.mark.unit
 class TestCacheSettingsContracts:
-    def test_clear_cache_rejects_missing_repository(self, test_client: TestClient, admin_headers):
-        response = test_client.post("/api/settings/cache/clear?repository_id=99999", headers=admin_headers)
+    def test_clear_cache_rejects_missing_repository(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.post(
+            "/api/settings/cache/clear?repository_id=99999", headers=admin_headers
+        )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.repo.repositoryNotFound"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.repo.repositoryNotFound"
+        )
 
     def test_clear_cache_for_repository_returns_cleared_count(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        repository = Repository(name="Repo", path="/repos/main", encryption="none", repository_type="local")
+        repository = Repository(
+            name="Repo", path="/repos/main", encryption="none", repository_type="local"
+        )
         test_db.add(repository)
         test_db.commit()
         test_db.refresh(repository)
 
-        with patch("app.api.settings.archive_cache.clear_repository", new=AsyncMock(return_value=3)) as mock_clear:
+        with patch(
+            "app.api.settings.archive_cache.clear_repository",
+            new=AsyncMock(return_value=3),
+        ) as mock_clear:
             response = test_client.post(
                 f"/api/settings/cache/clear?repository_id={repository.id}",
                 headers=admin_headers,
@@ -250,13 +304,22 @@ class TestCacheSettingsContracts:
         assert response.json()["cleared_count"] == 3
         mock_clear.assert_awaited_once_with(repository.id)
 
-    def test_update_cache_settings_requires_at_least_one_value(self, test_client: TestClient, admin_headers):
-        response = test_client.put("/api/settings/cache/settings", headers=admin_headers)
+    def test_update_cache_settings_requires_at_least_one_value(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/cache/settings", headers=admin_headers
+        )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.settings.atLeastOneSettingRequired"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.atLeastOneSettingRequired"
+        )
 
-    def test_update_cache_settings_reconfigures_backend(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_cache_settings_reconfigures_backend(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         with patch(
             "app.api.settings.archive_cache.reconfigure",
             return_value={"success": True, "backend": "in-memory"},
@@ -272,7 +335,9 @@ class TestCacheSettingsContracts:
         assert body["backend"] == "in-memory"
         assert body["cache_ttl_minutes"] == 90
         assert body["cache_max_size_mb"] == 256
-        mock_reconfigure.assert_called_once_with(redis_url="disabled", cache_max_size_mb=256)
+        mock_reconfigure.assert_called_once_with(
+            redis_url="disabled", cache_max_size_mb=256
+        )
         settings = test_db.query(SystemSettings).first()
         assert settings.cache_ttl_minutes == 90
         assert settings.cache_max_size_mb == 256
@@ -295,7 +360,9 @@ class TestCacheSettingsContracts:
         }
 
         with patch("app.services.log_manager.log_manager", fake_log_manager):
-            response = test_client.get("/api/settings/system/logs/storage", headers=admin_headers)
+            response = test_client.get(
+                "/api/settings/system/logs/storage", headers=admin_headers
+            )
 
         assert response.status_code == 200
         log_storage = response.json()["storage"]

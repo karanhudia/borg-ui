@@ -6,17 +6,17 @@ from sqlalchemy import text
 def upgrade(connection):
     """Add use_new_wizard column to system_settings table"""
     # Check if column already exists (SQLite compatible)
-    result = connection.execute(
-        text("PRAGMA table_info(system_settings)")
-    ).fetchall()
+    result = connection.execute(text("PRAGMA table_info(system_settings)")).fetchall()
 
     column_names = [row[1] for row in result]
 
-    if 'use_new_wizard' not in column_names:
+    if "use_new_wizard" not in column_names:
         # Add use_new_wizard column (default false for stable)
-        connection.execute(text(
-            "ALTER TABLE system_settings ADD COLUMN use_new_wizard BOOLEAN DEFAULT 0 NOT NULL"
-        ))
+        connection.execute(
+            text(
+                "ALTER TABLE system_settings ADD COLUMN use_new_wizard BOOLEAN DEFAULT 0 NOT NULL"
+            )
+        )
 
         print("✓ Added use_new_wizard column to system_settings table")
     else:

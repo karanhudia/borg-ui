@@ -7,17 +7,21 @@ with progress tracking support for long-running operations.
 
 from sqlalchemy import text
 
+
 def upgrade(connection):
     """Create check_jobs and compact_jobs tables"""
 
     # Create check_jobs table
-    result = connection.execute(text("""
+    result = connection.execute(
+        text("""
         SELECT name FROM sqlite_master
         WHERE type='table' AND name='check_jobs'
-    """))
+    """)
+    )
 
     if result.fetchone() is None:
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE TABLE check_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 repository_id INTEGER NOT NULL,
@@ -31,34 +35,46 @@ def upgrade(connection):
                 created_at DATETIME NOT NULL,
                 FOREIGN KEY (repository_id) REFERENCES repositories (id)
             )
-        """))
+        """)
+        )
 
         # Create indexes for common queries
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE INDEX ix_check_jobs_id ON check_jobs (id)
-        """))
+        """)
+        )
 
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE INDEX ix_check_jobs_status ON check_jobs (status)
-        """))
+        """)
+        )
 
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE INDEX ix_check_jobs_repository_id ON check_jobs (repository_id)
-        """))
+        """)
+        )
 
         print("  Created table: check_jobs")
-        print("  Created indexes: ix_check_jobs_id, ix_check_jobs_status, ix_check_jobs_repository_id")
+        print(
+            "  Created indexes: ix_check_jobs_id, ix_check_jobs_status, ix_check_jobs_repository_id"
+        )
     else:
         print("  Skipped (exists): check_jobs table")
 
     # Create compact_jobs table
-    result = connection.execute(text("""
+    result = connection.execute(
+        text("""
         SELECT name FROM sqlite_master
         WHERE type='table' AND name='compact_jobs'
-    """))
+    """)
+    )
 
     if result.fetchone() is None:
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE TABLE compact_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 repository_id INTEGER NOT NULL,
@@ -72,27 +88,37 @@ def upgrade(connection):
                 created_at DATETIME NOT NULL,
                 FOREIGN KEY (repository_id) REFERENCES repositories (id)
             )
-        """))
+        """)
+        )
 
         # Create indexes for common queries
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE INDEX ix_compact_jobs_id ON compact_jobs (id)
-        """))
+        """)
+        )
 
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE INDEX ix_compact_jobs_status ON compact_jobs (status)
-        """))
+        """)
+        )
 
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE INDEX ix_compact_jobs_repository_id ON compact_jobs (repository_id)
-        """))
+        """)
+        )
 
         print("  Created table: compact_jobs")
-        print("  Created indexes: ix_compact_jobs_id, ix_compact_jobs_status, ix_compact_jobs_repository_id")
+        print(
+            "  Created indexes: ix_compact_jobs_id, ix_compact_jobs_status, ix_compact_jobs_repository_id"
+        )
     else:
         print("  Skipped (exists): compact_jobs table")
 
     print("✓ Migration 014: Added check_jobs and compact_jobs tables")
+
 
 def downgrade(connection):
     """Drop check_jobs and compact_jobs tables"""

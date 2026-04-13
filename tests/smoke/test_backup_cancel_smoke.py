@@ -43,17 +43,25 @@ def main() -> int:
         if "cancel" not in str(payload).lower():
             raise SmokeFailure(f"Unexpected cancel response: {payload}")
 
-        job_data = client.wait_for_job("/api/backup/status", job_id, expected={"cancelled"}, timeout=60)
+        job_data = client.wait_for_job(
+            "/api/backup/status", job_id, expected={"cancelled"}, timeout=60
+        )
         if job_data["status"] != "cancelled":
             raise SmokeFailure(f"Expected cancelled backup job, got {job_data}")
 
         archives = client.list_archives(repo_path)
         if archives:
-            raise SmokeFailure(f"Cancelled backup should not leave archives behind: {archives}")
+            raise SmokeFailure(
+                f"Cancelled backup should not leave archives behind: {archives}"
+            )
 
-        running_jobs = client.request_ok("GET", f"/api/repositories/{repo_id}/running-jobs").json()
+        running_jobs = client.request_ok(
+            "GET", f"/api/repositories/{repo_id}/running-jobs"
+        ).json()
         if running_jobs.get("has_running_jobs"):
-            raise SmokeFailure(f"Repository should not report running jobs after cancel: {running_jobs}")
+            raise SmokeFailure(
+                f"Repository should not report running jobs after cancel: {running_jobs}"
+            )
 
         client.log("Backup cancel smoke passed")
         return 0

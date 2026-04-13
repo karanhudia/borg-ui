@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,7 +17,9 @@ from app.database.models import (
 
 
 def _create_repo(test_db, name: str, path: str, **kwargs) -> Repository:
-    repo = Repository(name=name, path=path, encryption="none", repository_type="local", **kwargs)
+    repo = Repository(
+        name=name, path=path, encryption="none", repository_type="local", **kwargs
+    )
     test_db.add(repo)
     test_db.commit()
     test_db.refresh(repo)
@@ -32,7 +33,9 @@ class TestRepositoryRouteContracts:
     ):
         allowed = _create_repo(test_db, "Allowed", "/repos/allowed")
         _create_repo(test_db, "Denied", "/repos/denied")
-        permission = UserRepositoryPermission(user_id=test_user.id, repository_id=allowed.id, role="viewer")
+        permission = UserRepositoryPermission(
+            user_id=test_user.id, repository_id=allowed.id, role="viewer"
+        )
         test_db.add(permission)
         test_db.commit()
 
@@ -42,20 +45,32 @@ class TestRepositoryRouteContracts:
         body = response.json()
         assert [repo["id"] for repo in body["repositories"]] == [allowed.id]
 
-    def test_get_check_jobs_missing_repository_returns_empty_list(self, test_client: TestClient, admin_headers):
-        response = test_client.get("/api/repositories/99999/check-jobs", headers=admin_headers)
+    def test_get_check_jobs_missing_repository_returns_empty_list(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.get(
+            "/api/repositories/99999/check-jobs", headers=admin_headers
+        )
 
         assert response.status_code == 200
         assert response.json() == {"jobs": []}
 
-    def test_get_compact_jobs_missing_repository_returns_empty_list(self, test_client: TestClient, admin_headers):
-        response = test_client.get("/api/repositories/99999/compact-jobs", headers=admin_headers)
+    def test_get_compact_jobs_missing_repository_returns_empty_list(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.get(
+            "/api/repositories/99999/compact-jobs", headers=admin_headers
+        )
 
         assert response.status_code == 200
         assert response.json() == {"jobs": []}
 
-    def test_get_running_jobs_missing_repository_returns_empty_shape(self, test_client: TestClient, admin_headers):
-        response = test_client.get("/api/repositories/99999/running-jobs", headers=admin_headers)
+    def test_get_running_jobs_missing_repository_returns_empty_shape(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.get(
+            "/api/repositories/99999/running-jobs", headers=admin_headers
+        )
 
         assert response.status_code == 200
         assert response.json() == repositories_api._empty_running_jobs_response()
@@ -89,7 +104,9 @@ class TestRepositoryRouteContracts:
         )
         test_db.commit()
 
-        response = test_client.get(f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers
+        )
 
         assert response.status_code == 200
         body = response.json()
@@ -98,44 +115,71 @@ class TestRepositoryRouteContracts:
         assert body["compact_job"]["progress"] == 60
         assert body["prune_job"]["id"] is not None
 
-    def test_get_check_job_status_reads_log_file(self, test_client: TestClient, admin_headers, test_db, tmp_path):
+    def test_get_check_job_status_reads_log_file(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
         repo = _create_repo(test_db, "Repo", "/repos/main")
         log_path = tmp_path / "check.log"
         log_path.write_text("first line\nsecond line\n", encoding="utf-8")
-        job = CheckJob(repository_id=repo.id, status="completed", log_file_path=str(log_path), has_logs=True)
+        job = CheckJob(
+            repository_id=repo.id,
+            status="completed",
+            log_file_path=str(log_path),
+            has_logs=True,
+        )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
-        response = test_client.get(f"/api/repositories/check-jobs/{job.id}", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/check-jobs/{job.id}", headers=admin_headers
+        )
 
         assert response.status_code == 200
         assert response.json()["logs"] == "first line\nsecond line\n"
 
-    def test_get_compact_job_status_reads_log_file(self, test_client: TestClient, admin_headers, test_db, tmp_path):
+    def test_get_compact_job_status_reads_log_file(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
         repo = _create_repo(test_db, "Repo", "/repos/main")
         log_path = tmp_path / "compact.log"
         log_path.write_text("compact output\n", encoding="utf-8")
-        job = CompactJob(repository_id=repo.id, status="completed", log_file_path=str(log_path), has_logs=True)
+        job = CompactJob(
+            repository_id=repo.id,
+            status="completed",
+            log_file_path=str(log_path),
+            has_logs=True,
+        )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
-        response = test_client.get(f"/api/repositories/compact-jobs/{job.id}", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/compact-jobs/{job.id}", headers=admin_headers
+        )
 
         assert response.status_code == 200
         assert response.json()["logs"] == "compact output\n"
 
-    def test_get_prune_job_status_reads_log_file(self, test_client: TestClient, admin_headers, test_db, tmp_path):
+    def test_get_prune_job_status_reads_log_file(
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
+    ):
         repo = _create_repo(test_db, "Repo", "/repos/main")
         log_path = tmp_path / "prune.log"
         log_path.write_text("prune output\n", encoding="utf-8")
-        job = PruneJob(repository_id=repo.id, status="completed", log_file_path=str(log_path), has_logs=True)
+        job = PruneJob(
+            repository_id=repo.id,
+            status="completed",
+            log_file_path=str(log_path),
+            has_logs=True,
+        )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
-        response = test_client.get(f"/api/repositories/prune-jobs/{job.id}", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/prune-jobs/{job.id}", headers=admin_headers
+        )
 
         assert response.status_code == 200
         assert response.json()["logs"] == "prune output\n"
@@ -162,7 +206,9 @@ class TestRepositoryRouteContracts:
         assert body["check_cron_expression"] is None
         assert body["next_scheduled_check"] is None
 
-    def test_get_check_schedule_reports_enabled_state(self, test_client: TestClient, admin_headers, test_db):
+    def test_get_check_schedule_reports_enabled_state(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         repo = _create_repo(
             test_db,
             "Repo",
@@ -173,7 +219,9 @@ class TestRepositoryRouteContracts:
             notify_on_check_failure=False,
         )
 
-        response = test_client.get(f"/api/repositories/{repo.id}/check-schedule", headers=admin_headers)
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/check-schedule", headers=admin_headers
+        )
 
         assert response.status_code == 200
         body = response.json()
@@ -208,8 +256,12 @@ class TestRepositoryHelperContracts:
         }
 
     @pytest.mark.asyncio
-    async def test_update_repository_stats_updates_archive_count_size_and_last_backup(self, test_db):
-        repo = _create_repo(test_db, "Repo", "/repos/main", passphrase="secret", bypass_lock=False)
+    async def test_update_repository_stats_updates_archive_count_size_and_last_backup(
+        self, test_db
+    ):
+        repo = _create_repo(
+            test_db, "Repo", "/repos/main", passphrase="secret", bypass_lock=False
+        )
         settings = SystemSettings(bypass_lock_on_list=True)
         test_db.add(settings)
         test_db.commit()
@@ -218,13 +270,19 @@ class TestRepositoryHelperContracts:
             "success": True,
             "stdout": '{"archives":[{"name":"old","time":"2024-01-01T10:00:00"},{"name":"new","time":"2024-02-01T12:00:00Z"}]}',
         }
-        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch.object(
-            repositories_api.BorgRouter, "list_archives", AsyncMock(return_value=list_payload["stdout"])
-        ) as mock_list, patch.object(
-            repositories_api.BorgRouter,
-            "calculate_total_size_bytes",
-            AsyncMock(return_value=2097152),
-        ) as mock_size:
+        with (
+            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
+            patch.object(
+                repositories_api.BorgRouter,
+                "list_archives",
+                AsyncMock(return_value=list_payload["stdout"]),
+            ) as mock_list,
+            patch.object(
+                repositories_api.BorgRouter,
+                "calculate_total_size_bytes",
+                AsyncMock(return_value=2097152),
+            ) as mock_size,
+        ):
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is True
@@ -237,24 +295,32 @@ class TestRepositoryHelperContracts:
 
     @pytest.mark.asyncio
     async def test_update_repository_stats_accepts_router_archive_lists(self, test_db):
-        repo = _create_repo(test_db, "Repo", "/repos/main", passphrase="secret", bypass_lock=False)
+        repo = _create_repo(
+            test_db, "Repo", "/repos/main", passphrase="secret", bypass_lock=False
+        )
 
         archives = [
             {"name": "old", "time": "2024-01-01T10:00:00"},
             {"name": "new", "time": "2024-02-01T12:00:00Z"},
         ]
-        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None), patch.object(
-            repositories_api.BorgRouter, "list_archives", AsyncMock(return_value=archives)
-        ) as mock_list, patch.object(
-            repositories_api.borg,
-            "_execute_command",
-            AsyncMock(
-                return_value={
-                    "success": True,
-                    "stdout": '{"cache":{"stats":{"unique_csize": 1024}}}',
-                    "stderr": "",
-                    "return_code": 0,
-                }
+        with (
+            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
+            patch.object(
+                repositories_api.BorgRouter,
+                "list_archives",
+                AsyncMock(return_value=archives),
+            ) as mock_list,
+            patch.object(
+                repositories_api.borg,
+                "_execute_command",
+                AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": '{"cache":{"stats":{"unique_csize": 1024}}}',
+                        "stderr": "",
+                        "return_code": 0,
+                    }
+                ),
             ),
         ):
             success = await repositories_api.update_repository_stats(repo, test_db)
@@ -265,16 +331,24 @@ class TestRepositoryHelperContracts:
         mock_list.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_update_repository_stats_returns_false_on_unexpected_exception(self, test_db):
+    async def test_update_repository_stats_returns_false_on_unexpected_exception(
+        self, test_db
+    ):
         repo = _create_repo(test_db, "Repo", "/repos/main")
 
-        with patch.object(repositories_api.BorgRouter, "list_archives", AsyncMock(side_effect=RuntimeError("boom"))):
+        with patch.object(
+            repositories_api.BorgRouter,
+            "list_archives",
+            AsyncMock(side_effect=RuntimeError("boom")),
+        ):
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is False
 
     @pytest.mark.asyncio
-    async def test_update_repository_stats_uses_remote_path_and_ssh_key_env(self, test_db):
+    async def test_update_repository_stats_uses_remote_path_and_ssh_key_env(
+        self, test_db
+    ):
         repo = Repository(
             name="Remote Repo",
             path="ssh://borg@example.com:22/backups/main",
@@ -287,15 +361,23 @@ class TestRepositoryHelperContracts:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value="/tmp/test.key"), patch.object(
-            repositories_api.BorgRouter,
-            "list_archives",
-            AsyncMock(return_value='{"archives": []}'),
-        ) as mock_list, patch.object(
-            repositories_api.BorgRouter,
-            "calculate_total_size_bytes",
-            AsyncMock(return_value=1024),
-        ) as mock_size, patch("app.api.repositories.os.path.exists", return_value=False):
+        with (
+            patch(
+                "app.api.repositories.resolve_repo_ssh_key_file",
+                return_value="/tmp/test.key",
+            ),
+            patch.object(
+                repositories_api.BorgRouter,
+                "list_archives",
+                AsyncMock(return_value='{"archives": []}'),
+            ) as mock_list,
+            patch.object(
+                repositories_api.BorgRouter,
+                "calculate_total_size_bytes",
+                AsyncMock(return_value=1024),
+            ) as mock_size,
+            patch("app.api.repositories.os.path.exists", return_value=False),
+        ):
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is True
@@ -304,18 +386,30 @@ class TestRepositoryHelperContracts:
         assert not mock_size.await_args.kwargs["use_bypass_lock"]
 
     @pytest.mark.asyncio
-    async def test_update_repository_stats_formats_v2_total_size_from_router(self, test_db):
+    async def test_update_repository_stats_formats_v2_total_size_from_router(
+        self, test_db
+    ):
         repo = _create_repo(test_db, "Repo V2", "/repos/v2-main", borg_version=2)
 
-        with patch("app.api.repositories.resolve_repo_ssh_key_file", return_value="/tmp/test.key"), patch.object(
-            repositories_api.BorgRouter,
-            "list_archives",
-            AsyncMock(return_value=[{"name": "new", "start": "2024-02-01T12:00:00Z"}]),
-        ) as mock_list, patch.object(
-            repositories_api.BorgRouter,
-            "calculate_total_size_bytes",
-            AsyncMock(return_value=4096),
-        ) as mock_size, patch("app.api.repositories.os.path.exists", return_value=False):
+        with (
+            patch(
+                "app.api.repositories.resolve_repo_ssh_key_file",
+                return_value="/tmp/test.key",
+            ),
+            patch.object(
+                repositories_api.BorgRouter,
+                "list_archives",
+                AsyncMock(
+                    return_value=[{"name": "new", "start": "2024-02-01T12:00:00Z"}]
+                ),
+            ) as mock_list,
+            patch.object(
+                repositories_api.BorgRouter,
+                "calculate_total_size_bytes",
+                AsyncMock(return_value=4096),
+            ) as mock_size,
+            patch("app.api.repositories.os.path.exists", return_value=False),
+        ):
             success = await repositories_api.update_repository_stats(repo, test_db)
 
         assert success is True

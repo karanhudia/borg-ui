@@ -21,7 +21,9 @@ def run_script(*args: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Borg UI core smoke tests")
-    parser.add_argument("--url", default="http://localhost:8082", help="Base URL of the running app")
+    parser.add_argument(
+        "--url", default="http://localhost:8082", help="Base URL of the running app"
+    )
     args = parser.parse_args()
 
     failures = []

@@ -108,9 +108,11 @@ REPOSITORY_STATE_TOPICS = [
     "backup/progress",
 ]
 
+
 def _get_app_version():
-    #TODO provide actual version
+    # TODO provide actual version
     return "unknown"
+
 
 def _serialize_first_datetime(
     *values: Optional[datetime.datetime],
@@ -164,9 +166,7 @@ class MQTTSyncStateStore:
         """Persist a set[int] sync marker to DB."""
         state_value = json.dumps(sorted(id_set))
         state_row = (
-            db.query(MQTTSyncState)
-            .filter(MQTTSyncState.sync_key == sync_key)
-            .first()
+            db.query(MQTTSyncState).filter(MQTTSyncState.sync_key == sync_key).first()
         )
 
         if state_row:
@@ -193,20 +193,17 @@ class BackupJobQueryService:
         status_filter: Optional[str] = None,
         order_field: Any = BackupJob.created_at,
     ):
-        query = (
-            db.query(
-                BackupJob.id.label("job_id"),
-                BackupJob.repository.label("repository"),
-                BackupJob.status.label("status"),
-                func.row_number()
-                .over(
-                    partition_by=BackupJob.repository,
-                    order_by=(order_field.desc(), BackupJob.id.desc()),
-                )
-                .label("row_num"),
+        query = db.query(
+            BackupJob.id.label("job_id"),
+            BackupJob.repository.label("repository"),
+            BackupJob.status.label("status"),
+            func.row_number()
+            .over(
+                partition_by=BackupJob.repository,
+                order_by=(order_field.desc(), BackupJob.id.desc()),
             )
-            .filter(BackupJob.repository.isnot(None))
-        )
+            .label("row_num"),
+        ).filter(BackupJob.repository.isnot(None))
         if status_filter:
             query = query.filter(BackupJob.status == status_filter)
         return query.subquery()
@@ -490,9 +487,7 @@ class HomeAssistantDiscoveryPublisher:
 
         for component, suffix in REPOSITORY_DISCOVERY_COMPONENTS:
             unique_id = f"{node_id}_repo_{repository_id}_{suffix}"
-            discovery_topic = (
-                f"homeassistant/{component}/{node_id}/{unique_id}/config"
-            )
+            discovery_topic = f"homeassistant/{component}/{node_id}/{unique_id}/config"
             if not self._mqtt_service._publish_raw(
                 discovery_topic,
                 "",
@@ -588,8 +583,9 @@ class ServerStatePublisher:
             # Calculate ETA timestamp
             eta_timestamp = None
             if estimated_time_remaining > 0:
-                eta_time = (datetime.datetime.now(datetime.timezone.utc) +
-                            datetime.timedelta(seconds=estimated_time_remaining))
+                eta_time = datetime.datetime.now(
+                    datetime.timezone.utc
+                ) + datetime.timedelta(seconds=estimated_time_remaining)
                 eta_timestamp = serialize_datetime(eta_time)
 
             progress_payload: Dict[str, Any] = {
@@ -733,10 +729,14 @@ class RepositoryStatePublisher:
                 last_job_status = running_job.status
                 progress_status = "running"
                 progress_job_id = running_job.id
-                estimated_time_remaining = int(running_job.estimated_time_remaining or 0)
+                estimated_time_remaining = int(
+                    running_job.estimated_time_remaining or 0
+                )
                 # Calculate ETA timestamp
                 if estimated_time_remaining > 0:
-                    eta_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=estimated_time_remaining)
+                    eta_time = datetime.datetime.now(
+                        datetime.timezone.utc
+                    ) + datetime.timedelta(seconds=estimated_time_remaining)
                     eta_timestamp = serialize_datetime(eta_time)
             elif latest_job:
                 backup_status = latest_job.status
@@ -1022,10 +1022,7 @@ class MQTTService:
     # ------------------------------------------------------------------
 
     def is_configured(self) -> bool:
-        return bool(
-            self.config["enabled"]
-            and self.config["broker_url"]
-        )
+        return bool(self.config["enabled"] and self.config["broker_url"])
 
     def is_connected(self) -> bool:
         return self.connected
@@ -1130,7 +1127,9 @@ class MQTTService:
             )
             return False
         except Exception as e:
-            logger.error("Exception publishing MQTT raw message", topic=topic, error=str(e))
+            logger.error(
+                "Exception publishing MQTT raw message", topic=topic, error=str(e)
+            )
             return False
 
     # ------------------------------------------------------------------
@@ -1364,7 +1363,9 @@ class MQTTService:
                 db,
                 PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY,
             )
-            stale_repo_ids = (previously_synced_repo_ids - current_repo_ids) | pending_deleted_repo_ids
+            stale_repo_ids = (
+                previously_synced_repo_ids - current_repo_ids
+            ) | pending_deleted_repo_ids
 
             success = True
             if not self.publish_availability():
@@ -1392,7 +1393,9 @@ class MQTTService:
             path_to_id = {repo.path: repo.id for repo in repositories}
             failed_repository_ids = self._fetch_failed_repositories(db, path_to_id)
             latest_jobs_by_repository = self._fetch_latest_backup_jobs_by_repository(db)
-            running_jobs_by_repository = self._fetch_running_backup_jobs_by_repository(db)
+            running_jobs_by_repository = self._fetch_running_backup_jobs_by_repository(
+                db
+            )
 
             for repo in repositories:
                 if not self.setup_repository_sensors(repo.id, repo.name, repo.path):
@@ -1439,7 +1442,9 @@ class MQTTService:
             )
             return success
         except Exception as e:
-            logger.error("Failed MQTT DB-derived state sync", reason=reason, error=str(e))
+            logger.error(
+                "Failed MQTT DB-derived state sync", reason=reason, error=str(e)
+            )
             return False
 
     def queue_deleted_repository_cleanup(self, db: Session, repository_id: int) -> None:
@@ -1502,15 +1507,21 @@ class MQTTService:
             running_jobs_by_repository=running_jobs_by_repository,
         )
 
-    def _fetch_failed_repositories(self, db: Session, path_to_id: Dict[str, int]) -> Set[int]:
+    def _fetch_failed_repositories(
+        self, db: Session, path_to_id: Dict[str, int]
+    ) -> Set[int]:
         """Return repository IDs whose latest backup job failed."""
         return self._job_query_service.fetch_failed_repositories(db, path_to_id)
 
-    def _fetch_latest_backup_jobs_by_repository(self, db: Session) -> Dict[str, BackupJob]:
+    def _fetch_latest_backup_jobs_by_repository(
+        self, db: Session
+    ) -> Dict[str, BackupJob]:
         """Return latest backup job row per repository path."""
         return self._job_query_service.fetch_latest_backup_jobs_by_repository(db)
 
-    def _fetch_running_backup_jobs_by_repository(self, db: Session) -> Dict[str, BackupJob]:
+    def _fetch_running_backup_jobs_by_repository(
+        self, db: Session
+    ) -> Dict[str, BackupJob]:
         """Return latest running backup job row per repository path."""
         return self._job_query_service.fetch_running_backup_jobs_by_repository(db)
 

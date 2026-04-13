@@ -1,13 +1,14 @@
-
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import patch
 from app.services.notification_service import notification_service
 from app.database.models import Repository, NotificationSettings
+
 
 @pytest.fixture
 def mock_apprise():
     with patch("app.services.notification_service.apprise.Apprise") as mock:
         yield mock
+
 
 @pytest.fixture
 def mock_repository(test_db):
@@ -16,6 +17,7 @@ def mock_repository(test_db):
     test_db.commit()
     test_db.refresh(repo)
     return repo
+
 
 @pytest.fixture
 def email_notification_setting(test_db, mock_repository):
@@ -26,13 +28,14 @@ def email_notification_setting(test_db, mock_repository):
         notify_on_backup_success=True,
         notify_on_backup_failure=True,
         title_prefix="[Borg]",
-        monitor_all_repositories=False  # Important for filtering tests
+        monitor_all_repositories=False,  # Important for filtering tests
     )
     setting.repositories.append(mock_repository)
     test_db.add(setting)
     test_db.commit()
     test_db.refresh(setting)
     return setting
+
 
 @pytest.fixture
 def discord_notification_setting(test_db, mock_repository):
@@ -41,7 +44,7 @@ def discord_notification_setting(test_db, mock_repository):
         service_url="discord://webhook_id/token",
         enabled=True,
         notify_on_backup_success=True,
-        notify_on_backup_failure=True
+        notify_on_backup_failure=True,
     )
     setting.repositories.append(mock_repository)
     test_db.add(setting)
@@ -49,8 +52,11 @@ def discord_notification_setting(test_db, mock_repository):
     test_db.refresh(setting)
     return setting
 
+
 @pytest.mark.asyncio
-async def test_send_backup_success_email(test_db, mock_apprise, mock_repository, email_notification_setting):
+async def test_send_backup_success_email(
+    test_db, mock_apprise, mock_repository, email_notification_setting
+):
     """Test sending success notification via Email (HTML format)"""
     # Setup mock
     apprise_instance = mock_apprise.return_value
@@ -58,25 +64,29 @@ async def test_send_backup_success_email(test_db, mock_apprise, mock_repository,
     apprise_instance.notify.return_value = True
 
     # Action
-    stats = {"original_size": 1024 * 1024, "compressed_size": 512 * 1024, "deduplicated_size": 100}
+    stats = {
+        "original_size": 1024 * 1024,
+        "compressed_size": 512 * 1024,
+        "deduplicated_size": 100,
+    }
     await notification_service.send_backup_success(
-        test_db, 
-        mock_repository.name, 
-        "archive-2024", 
-        stats=stats
+        test_db, mock_repository.name, "archive-2024", stats=stats
     )
 
     # Assert
     assert apprise_instance.add.call_count == 1
     # Verify mock was called with HTML format
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "[Borg] [SUCCESS] Backup Successful"
-    assert "1.00 MB" in call_args['body']  # Formatted original size
-    assert "512.00 KB" in call_args['body'] # Formatted compressed size
-    assert "<html>" in call_args['body']
-    
+    assert call_args["title"] == "[Borg] [SUCCESS] Backup Successful"
+    assert "1.00 MB" in call_args["body"]  # Formatted original size
+    assert "512.00 KB" in call_args["body"]  # Formatted compressed size
+    assert "<html>" in call_args["body"]
+
+
 @pytest.mark.asyncio
-async def test_send_backup_failure_discord(test_db, mock_apprise, mock_repository, discord_notification_setting):
+async def test_send_backup_failure_discord(
+    test_db, mock_apprise, mock_repository, discord_notification_setting
+):
     """Test sending failure notification via Discord (Markdown format)"""
     # Setup mock
     apprise_instance = mock_apprise.return_value
@@ -87,27 +97,27 @@ async def test_send_backup_failure_discord(test_db, mock_apprise, mock_repositor
     job_id = 123
     error_msg = "Connection timed out"
     await notification_service.send_backup_failure(
-        test_db, 
-        mock_repository.name, 
-        error_msg,
-        job_id=job_id
+        test_db, mock_repository.name, error_msg, job_id=job_id
     )
 
     # Assert
     assert apprise_instance.add.call_count == 1
     # Verify mock was called with Markdown format (implicit for non-email)
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "[FAILED] Backup Failed"
-    assert error_msg in call_args['body']
-    assert str(job_id) in call_args['body']
-    assert "```" in call_args['body'] # Markdown code block
+    assert call_args["title"] == "[FAILED] Backup Failed"
+    assert error_msg in call_args["body"]
+    assert str(job_id) in call_args["body"]
+    assert "```" in call_args["body"]  # Markdown code block
+
 
 @pytest.mark.asyncio
-async def test_repo_filtering(test_db, mock_apprise, mock_repository, email_notification_setting):
+async def test_repo_filtering(
+    test_db, mock_apprise, mock_repository, email_notification_setting
+):
     """Test that notifications are NOT sent for excluded repositories"""
     # Setup mock
     apprise_instance = mock_apprise.return_value
-    
+
     # Create another repo NOT linked to the setting
     other_repo = Repository(name="Other Repo", path="/tmp/other")
     test_db.add(other_repo)
@@ -115,27 +125,28 @@ async def test_repo_filtering(test_db, mock_apprise, mock_repository, email_noti
 
     # Action: Trigge notification for the OTHER repo
     await notification_service.send_backup_success(
-        test_db, 
-        other_repo.name, 
-        "archive-other"
+        test_db, other_repo.name, "archive-other"
     )
 
     # Assert: Should NOT call notify because the setting filters to "Test Repo" only
     apprise_instance.notify.assert_not_called()
 
+
 @pytest.mark.asyncio
-async def test_global_repo_setting(test_db, mock_apprise, mock_repository, email_notification_setting):
+async def test_global_repo_setting(
+    test_db, mock_apprise, mock_repository, email_notification_setting
+):
     """Test that monitor_all_repositories=True ignores filters"""
     # Setup mock
     apprise_instance = mock_apprise.return_value
     apprise_instance.add.return_value = True
     apprise_instance.notify.return_value = True
-    
+
     # Enable global monitoring
     email_notification_setting.monitor_all_repositories = True
-    email_notification_setting.repositories = [] # Clear specific list
+    email_notification_setting.repositories = []  # Clear specific list
     test_db.commit()
-    
+
     # Create another repo
     other_repo = Repository(name="New Repo", path="/tmp/new")
     test_db.add(other_repo)
@@ -143,9 +154,7 @@ async def test_global_repo_setting(test_db, mock_apprise, mock_repository, email
 
     # Action
     await notification_service.send_backup_success(
-        test_db, 
-        other_repo.name, 
-        "archive-new"
+        test_db, other_repo.name, "archive-new"
     )
 
     # Assert: Should call notify because monitor_all_repositories is True
@@ -163,9 +172,8 @@ from app.services.notification_service import (
     _build_json_data,
     _append_json_to_body,
     _is_json_webhook,
-    _sanitize_ssh_url
+    _sanitize_ssh_url,
 )
-from datetime import datetime
 import json as json_module
 
 
@@ -196,32 +204,24 @@ class TestHelperFunctions:
     def test_should_include_json_for_json_webhooks(self, test_db):
         """Test JSON inclusion for json:// and jsons:// webhooks"""
         setting_jsons = NotificationSettings(
-            name="Test",
-            service_url="jsons://webhook.site/abc123",
-            enabled=True
+            name="Test", service_url="jsons://webhook.site/abc123", enabled=True
         )
         assert _should_include_json(setting_jsons) is True
 
         setting_json = NotificationSettings(
-            name="Test",
-            service_url="json://myserver.com/webhook",
-            enabled=True
+            name="Test", service_url="json://myserver.com/webhook", enabled=True
         )
         assert _should_include_json(setting_json) is True
 
     def test_should_not_include_json_for_other_services(self, test_db):
         """Test JSON exclusion for non-JSON webhook services"""
         setting_slack = NotificationSettings(
-            name="Test",
-            service_url="slack://token",
-            enabled=True
+            name="Test", service_url="slack://token", enabled=True
         )
         assert _should_include_json(setting_slack) is False
 
         setting_email = NotificationSettings(
-            name="Test",
-            service_url="mailto://user@example.com",
-            enabled=True
+            name="Test", service_url="mailto://user@example.com", enabled=True
         )
         assert _should_include_json(setting_email) is False
 
@@ -230,7 +230,7 @@ class TestHelperFunctions:
         data = {
             "repository_name": "my-repo",
             "archive_name": "backup-2024-01-30",
-            "stats": {"original_size": 1024, "compressed_size": 512}
+            "stats": {"original_size": 1024, "compressed_size": 512},
         }
 
         result = _build_json_data("backup_success", data)
@@ -243,14 +243,11 @@ class TestHelperFunctions:
         assert parsed["stats"]["original_size"] == 1024
 
         # Default should be pretty-printed with newlines
-        assert '\n' in result
+        assert "\n" in result
 
     def test_build_json_data_compact(self):
         """Test JSON data building with compact format"""
-        data = {
-            "repository_name": "my-repo",
-            "archive_name": "backup-2024-01-30"
-        }
+        data = {"repository_name": "my-repo", "archive_name": "backup-2024-01-30"}
 
         result = _build_json_data("backup_success", data, compact=True)
         parsed = json_module.loads(result)
@@ -260,36 +257,40 @@ class TestHelperFunctions:
         assert parsed["repository_name"] == "my-repo"
 
         # Compact format should have no newlines or extra spaces
-        assert '\n' not in result
-        assert '  ' not in result  # No double spaces from indentation
+        assert "\n" not in result
+        assert "  " not in result  # No double spaces from indentation
 
     def test_append_json_to_html_body(self):
         """Test JSON appending to HTML body"""
         # Use the actual structure that _create_html_email generates
-        html_body = '''<html><body><div>Test content</div>
+        html_body = """<html><body><div>Test content</div>
 </body>
-</html>'''
+</html>"""
         json_data = '{"event": "test", "data": "value"}'
 
-        result = _append_json_to_body(html_body, json_data, is_html=True, service_url='mailto://user@example.com')
+        result = _append_json_to_body(
+            html_body, json_data, is_html=True, service_url="mailto://user@example.com"
+        )
 
-        assert '<details>' in result
-        assert '<summary' in result
-        assert 'JSON Data' in result
+        assert "<details>" in result
+        assert "<summary" in result
+        assert "JSON Data" in result
         assert json_data in result
-        assert '<pre' in result
+        assert "<pre" in result
 
     def test_append_json_to_markdown_body(self):
         """Test JSON appending to Markdown body"""
-        markdown_body = '**Title**\n\nSome content here'
+        markdown_body = "**Title**\n\nSome content here"
         json_data = '{"event": "test", "data": "value"}'
 
-        result = _append_json_to_body(markdown_body, json_data, is_html=False, service_url='slack://token/channel')
+        result = _append_json_to_body(
+            markdown_body, json_data, is_html=False, service_url="slack://token/channel"
+        )
 
-        assert '**JSON Data' in result
-        assert '```json' in result
+        assert "**JSON Data" in result
+        assert "```json" in result
         assert json_data in result
-        assert '```' in result
+        assert "```" in result
 
     def test_is_json_webhook(self):
         """Test JSON webhook detection"""
@@ -307,21 +308,27 @@ class TestHelperFunctions:
         json_data = '{"event": "test", "status": "success", "data": {"key": "value"}}'
 
         # Test with jsons:// webhook (secure)
-        result = _append_json_to_body(body, json_data, is_html=False, service_url='jsons://webhook.site/abc123')
+        result = _append_json_to_body(
+            body, json_data, is_html=False, service_url="jsons://webhook.site/abc123"
+        )
         assert result == json_data
-        assert '```json' not in result
-        assert '**JSON Data' not in result
+        assert "```json" not in result
+        assert "**JSON Data" not in result
 
         # Test with json:// webhook (insecure)
-        result = _append_json_to_body(body, json_data, is_html=False, service_url='json://myserver.com/webhook')
+        result = _append_json_to_body(
+            body, json_data, is_html=False, service_url="json://myserver.com/webhook"
+        )
         assert result == json_data
-        assert '```json' not in result
+        assert "```json" not in result
 
         # Test with HTML format (should still return pure JSON for json webhooks)
-        result = _append_json_to_body(body, json_data, is_html=True, service_url='jsons://webhook.site/abc123')
+        result = _append_json_to_body(
+            body, json_data, is_html=True, service_url="jsons://webhook.site/abc123"
+        )
         assert result == json_data
-        assert '<details>' not in result
-        assert '<pre' not in result
+        assert "<details>" not in result
+        assert "<pre" not in result
 
     def test_non_json_webhooks_still_get_formatted_json(self):
         """Test that non-JSON webhooks still get markdown/HTML formatted JSON"""
@@ -329,22 +336,28 @@ class TestHelperFunctions:
         json_data = '{"event": "test"}'
 
         # Test https:// webhook - should get markdown formatting
-        result = _append_json_to_body(body, json_data, is_html=False, service_url='https://webhook.site/abc123')
+        result = _append_json_to_body(
+            body, json_data, is_html=False, service_url="https://webhook.site/abc123"
+        )
         assert result != json_data
-        assert '```json' in result
-        assert '**JSON Data' in result
+        assert "```json" in result
+        assert "**JSON Data" in result
 
         # Test form:// webhook - should get markdown formatting
-        result = _append_json_to_body(body, json_data, is_html=False, service_url='form://webhook.site/abc123')
+        result = _append_json_to_body(
+            body, json_data, is_html=False, service_url="form://webhook.site/abc123"
+        )
         assert result != json_data
-        assert '```json' in result
+        assert "```json" in result
 
     def test_sanitize_ssh_url_removes_username(self):
         """Test that SSH URL sanitization removes username to prevent @ mentions"""
         # SSH URL with username
         url = "ssh://u331525-sub1@u331525-sub1.your-storagebox.de:23/home/BorgTestRepoKaran"
         result = _sanitize_ssh_url(url)
-        assert result == "ssh://u331525-sub1.your-storagebox.de:23/home/BorgTestRepoKaran"
+        assert (
+            result == "ssh://u331525-sub1.your-storagebox.de:23/home/BorgTestRepoKaran"
+        )
         assert "@" not in result
 
         # Another SSH URL
@@ -398,7 +411,7 @@ async def test_job_name_in_title_when_enabled(test_db, mock_apprise, mock_reposi
         enabled=True,
         notify_on_backup_success=True,
         include_job_name_in_title=True,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -415,16 +428,18 @@ async def test_job_name_in_title_when_enabled(test_db, mock_apprise, mock_reposi
         "archive-2024",
         stats=None,
         completion_time=None,
-        job_name="Daily Backup"
+        job_name="Daily Backup",
     )
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "[SUCCESS] Backup Successful - Daily Backup"
+    assert call_args["title"] == "[SUCCESS] Backup Successful - Daily Backup"
 
 
 @pytest.mark.asyncio
-async def test_job_name_not_in_title_when_disabled(test_db, mock_apprise, mock_repository):
+async def test_job_name_not_in_title_when_disabled(
+    test_db, mock_apprise, mock_repository
+):
     """Test that job name does NOT appear in title when disabled"""
     # Setup notification setting with job name disabled
     setting = NotificationSettings(
@@ -433,7 +448,7 @@ async def test_job_name_not_in_title_when_disabled(test_db, mock_apprise, mock_r
         enabled=True,
         notify_on_backup_success=True,
         include_job_name_in_title=False,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -450,17 +465,19 @@ async def test_job_name_not_in_title_when_disabled(test_db, mock_apprise, mock_r
         "archive-2024",
         stats=None,
         completion_time=None,
-        job_name="Daily Backup"
+        job_name="Daily Backup",
     )
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    assert call_args['title'] == "[SUCCESS] Backup Successful"
-    assert "Daily Backup" not in call_args['title']
+    assert call_args["title"] == "[SUCCESS] Backup Successful"
+    assert "Daily Backup" not in call_args["title"]
 
 
 @pytest.mark.asyncio
-async def test_json_data_in_body_for_json_webhook(test_db, mock_apprise, mock_repository):
+async def test_json_data_in_body_for_json_webhook(
+    test_db, mock_apprise, mock_repository
+):
     """Test that JSON data is included in body for JSON webhooks"""
     # Setup notification setting with JSON webhook URL
     setting = NotificationSettings(
@@ -468,7 +485,7 @@ async def test_json_data_in_body_for_json_webhook(test_db, mock_apprise, mock_re
         service_url="jsons://webhook.site/test",
         enabled=True,
         notify_on_backup_success=True,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -486,15 +503,16 @@ async def test_json_data_in_body_for_json_webhook(test_db, mock_apprise, mock_re
         "archive-2024",
         stats=stats,
         completion_time=None,
-        job_name="Daily Backup"
+        job_name="Daily Backup",
     )
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
 
     # Body should be pure compact JSON
     import json as json_module
+
     parsed = json_module.loads(body)
     assert parsed["event_type"] == "backup_success"
     assert parsed["repository_name"] == mock_repository.name
@@ -503,12 +521,14 @@ async def test_json_data_in_body_for_json_webhook(test_db, mock_apprise, mock_re
     assert parsed["stats"]["original_size"] == 1024
 
     # Should NOT contain markdown formatting
-    assert 'JSON Data' not in body
-    assert '```json' not in body
+    assert "JSON Data" not in body
+    assert "```json" not in body
 
 
 @pytest.mark.asyncio
-async def test_json_data_not_in_body_for_non_json_services(test_db, mock_apprise, mock_repository):
+async def test_json_data_not_in_body_for_non_json_services(
+    test_db, mock_apprise, mock_repository
+):
     """Test that JSON data is NOT included for non-JSON webhook services"""
     # Setup notification setting with non-JSON service
     setting = NotificationSettings(
@@ -516,7 +536,7 @@ async def test_json_data_not_in_body_for_non_json_services(test_db, mock_apprise
         service_url="slack://token/channel",
         enabled=True,
         notify_on_backup_success=True,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -533,21 +553,23 @@ async def test_json_data_not_in_body_for_non_json_services(test_db, mock_apprise
         "archive-2024",
         stats=None,
         completion_time=None,
-        job_name="Daily Backup"
+        job_name="Daily Backup",
     )
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
 
     # Check JSON is NOT present
-    assert 'JSON Data' not in body
-    assert '```json' not in body
+    assert "JSON Data" not in body
+    assert "```json" not in body
     assert '"event_type"' not in body
 
 
 @pytest.mark.asyncio
-async def test_json_format_for_json_webhook_uses_compact_format(test_db, mock_apprise, mock_repository):
+async def test_json_format_for_json_webhook_uses_compact_format(
+    test_db, mock_apprise, mock_repository
+):
     """Test that JSON webhooks get compact JSON (not HTML formatted)"""
     # Setup JSON webhook notification
     setting = NotificationSettings(
@@ -555,7 +577,7 @@ async def test_json_format_for_json_webhook_uses_compact_format(test_db, mock_ap
         service_url="jsons://webhook.site/test",
         enabled=True,
         notify_on_backup_failure=True,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -571,28 +593,31 @@ async def test_json_format_for_json_webhook_uses_compact_format(test_db, mock_ap
         mock_repository.name,
         "Connection error",
         job_id=123,
-        job_name="Nightly Backup"
+        job_name="Nightly Backup",
     )
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
 
     # Body should be pure compact JSON (no HTML, no markdown)
     import json as json_module
+
     parsed = json_module.loads(body)
     assert parsed["event_type"] == "backup_failure"
     assert parsed["error_message"] == "Connection error"
     assert parsed["job_name"] == "Nightly Backup"
 
     # Should NOT contain HTML or markdown formatting
-    assert '<details>' not in body
-    assert '```json' not in body
-    assert 'JSON Data' not in body
+    assert "<details>" not in body
+    assert "```json" not in body
+    assert "JSON Data" not in body
 
 
 @pytest.mark.asyncio
-async def test_all_notification_methods_support_job_name(test_db, mock_apprise, mock_repository):
+async def test_all_notification_methods_support_job_name(
+    test_db, mock_apprise, mock_repository
+):
     """Test that all notification methods accept job_name parameter"""
     # Setup notification setting
     setting = NotificationSettings(
@@ -608,7 +633,7 @@ async def test_all_notification_methods_support_job_name(test_db, mock_apprise, 
         notify_on_check_success=True,
         notify_on_check_failure=True,
         include_job_name_in_title=True,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -624,32 +649,39 @@ async def test_all_notification_methods_support_job_name(test_db, mock_apprise, 
     await notification_service.send_backup_start(
         test_db, mock_repository.name, "archive", None, None, job_name
     )
-    assert "Test Job" in apprise_instance.notify.call_args[1]['title']
+    assert "Test Job" in apprise_instance.notify.call_args[1]["title"]
 
     await notification_service.send_backup_success(
         test_db, mock_repository.name, "archive", None, None, job_name
     )
-    assert "Test Job" in apprise_instance.notify.call_args[1]['title']
+    assert "Test Job" in apprise_instance.notify.call_args[1]["title"]
 
     await notification_service.send_backup_failure(
         test_db, mock_repository.name, "error", None, job_name
     )
-    assert "Test Job" in apprise_instance.notify.call_args[1]['title']
+    assert "Test Job" in apprise_instance.notify.call_args[1]["title"]
 
     await notification_service.send_restore_success(
         test_db, mock_repository.name, "archive", "/dest", None, job_name
     )
-    assert "Test Job" in apprise_instance.notify.call_args[1]['title']
+    assert "Test Job" in apprise_instance.notify.call_args[1]["title"]
 
     await notification_service.send_restore_failure(
         test_db, mock_repository.name, "archive", "error", job_name
     )
-    assert "Test Job" in apprise_instance.notify.call_args[1]['title']
+    assert "Test Job" in apprise_instance.notify.call_args[1]["title"]
 
     await notification_service.send_check_completion(
-        test_db, mock_repository.name, "/path", "completed", None, None, "manual", job_name
+        test_db,
+        mock_repository.name,
+        "/path",
+        "completed",
+        None,
+        None,
+        "manual",
+        job_name,
     )
-    assert "Test Job" in apprise_instance.notify.call_args[1]['title']
+    assert "Test Job" in apprise_instance.notify.call_args[1]["title"]
 
 
 @pytest.mark.asyncio
@@ -661,7 +693,7 @@ async def test_json_webhook_receives_pure_json(test_db, mock_apprise, mock_repos
         service_url="jsons://webhook.site/test-123",
         enabled=True,
         notify_on_backup_success=True,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -679,12 +711,12 @@ async def test_json_webhook_receives_pure_json(test_db, mock_apprise, mock_repos
         "archive-2024",
         stats=stats,
         completion_time=None,
-        job_name="Daily Backup"
+        job_name="Daily Backup",
     )
 
     # Assert
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
 
     # Body should be pure JSON string (parseable)
     parsed = json_module.loads(body)
@@ -694,13 +726,15 @@ async def test_json_webhook_receives_pure_json(test_db, mock_apprise, mock_repos
     assert parsed["job_name"] == "Daily Backup"
 
     # Should NOT contain markdown formatting
-    assert '```json' not in body
-    assert '**JSON Data' not in body
-    assert '<details>' not in body
+    assert "```json" not in body
+    assert "**JSON Data" not in body
+    assert "<details>" not in body
 
 
 @pytest.mark.asyncio
-async def test_webhook_json_has_correct_repository_name_when_called_with_path(test_db, mock_apprise):
+async def test_webhook_json_has_correct_repository_name_when_called_with_path(
+    test_db, mock_apprise
+):
     """
     Test for bug: When notification is called with repository PATH,
     the JSON webhook should have repository_name as the NAME (not path).
@@ -724,7 +758,7 @@ async def test_webhook_json_has_correct_repository_name_when_called_with_path(te
         notify_on_backup_success=True,
         notify_on_backup_failure=True,
         notify_on_restore_success=True,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -742,19 +776,21 @@ async def test_webhook_json_has_correct_repository_name_when_called_with_path(te
         "archive-2024",
         source_directories=["/home/user/data"],
         expected_size=1024,
-        job_name="Daily Backup"
+        job_name="Daily Backup",
     )
 
     # Parse the JSON body
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
     parsed = json_module.loads(body)
 
     # Assert: repository_name should be the NAME, not the PATH
-    assert parsed["repository_name"] == "My Backup Repo", \
+    assert parsed["repository_name"] == "My Backup Repo", (
         f"Expected repository_name='My Backup Repo', got '{parsed['repository_name']}'"
-    assert parsed["repository_path"] == "/tmp/backup-repo", \
+    )
+    assert parsed["repository_path"] == "/tmp/backup-repo", (
         f"Expected repository_path='/tmp/backup-repo', got '{parsed['repository_path']}'"
+    )
 
     # ========== Test send_backup_success ==========
     await notification_service.send_backup_success(
@@ -762,14 +798,15 @@ async def test_webhook_json_has_correct_repository_name_when_called_with_path(te
         repo.path,  # <-- Passing PATH, not name
         "archive-2024",
         stats={"original_size": 1024},
-        job_name="Daily Backup"
+        job_name="Daily Backup",
     )
 
-    body = apprise_instance.notify.call_args[1]['body']
+    body = apprise_instance.notify.call_args[1]["body"]
     parsed = json_module.loads(body)
 
-    assert parsed["repository_name"] == "My Backup Repo", \
+    assert parsed["repository_name"] == "My Backup Repo", (
         f"Expected repository_name='My Backup Repo', got '{parsed['repository_name']}'"
+    )
     assert parsed["repository_path"] == "/tmp/backup-repo"
 
     # ========== Test send_backup_failure ==========
@@ -778,14 +815,15 @@ async def test_webhook_json_has_correct_repository_name_when_called_with_path(te
         repo.path,  # <-- Passing PATH, not name
         "Test error",
         job_id=123,
-        job_name="Daily Backup"
+        job_name="Daily Backup",
     )
 
-    body = apprise_instance.notify.call_args[1]['body']
+    body = apprise_instance.notify.call_args[1]["body"]
     parsed = json_module.loads(body)
 
-    assert parsed["repository_name"] == "My Backup Repo", \
+    assert parsed["repository_name"] == "My Backup Repo", (
         f"Expected repository_name='My Backup Repo', got '{parsed['repository_name']}'"
+    )
     assert parsed["repository_path"] == "/tmp/backup-repo"
 
     # ========== Test send_restore_success ==========
@@ -794,14 +832,15 @@ async def test_webhook_json_has_correct_repository_name_when_called_with_path(te
         repo.path,  # <-- Passing PATH, not name
         "archive-2024",
         "/restore/dest",
-        job_name="Restore Job"
+        job_name="Restore Job",
     )
 
-    body = apprise_instance.notify.call_args[1]['body']
+    body = apprise_instance.notify.call_args[1]["body"]
     parsed = json_module.loads(body)
 
-    assert parsed["repository_name"] == "My Backup Repo", \
+    assert parsed["repository_name"] == "My Backup Repo", (
         f"Expected repository_name='My Backup Repo', got '{parsed['repository_name']}'"
+    )
     assert parsed["repository_path"] == "/tmp/backup-repo"
 
 
@@ -811,7 +850,7 @@ async def test_ssh_url_sanitization_in_notifications(test_db, mock_apprise):
     # Create SSH repository with username in path
     ssh_repo = Repository(
         name="SSH Backup Repo",
-        path="ssh://u331525-sub1@u331525-sub1.your-storagebox.de:23/home/BorgTestRepoKaran"
+        path="ssh://u331525-sub1@u331525-sub1.your-storagebox.de:23/home/BorgTestRepoKaran",
     )
     test_db.add(ssh_repo)
     test_db.commit()
@@ -827,7 +866,7 @@ async def test_ssh_url_sanitization_in_notifications(test_db, mock_apprise):
         notify_on_backup_failure=True,
         notify_on_restore_success=True,
         notify_on_restore_failure=True,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -839,84 +878,66 @@ async def test_ssh_url_sanitization_in_notifications(test_db, mock_apprise):
 
     # Test backup_start
     await notification_service.send_backup_start(
-        test_db,
-        ssh_repo.name,
-        "archive-2024",
-        source_directories=["/data"]
+        test_db, ssh_repo.name, "archive-2024", source_directories=["/data"]
     )
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
     assert "ssh://u331525-sub1.your-storagebox.de:23" in body  # Username removed
     # Verify username @ is not in Location line
-    for line in body.split('\n'):
-        if 'Location' in line and 'ssh://' in line:
-            assert '@' not in line, f"Found @ in Location line: {line}"
+    for line in body.split("\n"):
+        if "Location" in line and "ssh://" in line:
+            assert "@" not in line, f"Found @ in Location line: {line}"
 
     # Test backup_success
     await notification_service.send_backup_success(
-        test_db,
-        ssh_repo.name,
-        "archive-2024",
-        stats={"original_size": 1024}
+        test_db, ssh_repo.name, "archive-2024", stats={"original_size": 1024}
     )
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
     assert "ssh://u331525-sub1.your-storagebox.de:23" in body
-    for line in body.split('\n'):
-        if 'Location' in line and 'ssh://' in line:
-            assert '@' not in line, f"Found @ in Location line: {line}"
+    for line in body.split("\n"):
+        if "Location" in line and "ssh://" in line:
+            assert "@" not in line, f"Found @ in Location line: {line}"
 
     # Test backup_failure
     await notification_service.send_backup_failure(
-        test_db,
-        ssh_repo.name,
-        "Connection error",
-        job_id=123
+        test_db, ssh_repo.name, "Connection error", job_id=123
     )
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
     assert "ssh://u331525-sub1.your-storagebox.de:23" in body
-    for line in body.split('\n'):
-        if 'Location' in line and 'ssh://' in line:
-            assert '@' not in line, f"Found @ in Location line: {line}"
+    for line in body.split("\n"):
+        if "Location" in line and "ssh://" in line:
+            assert "@" not in line, f"Found @ in Location line: {line}"
 
     # Test restore_success
     await notification_service.send_restore_success(
-        test_db,
-        ssh_repo.name,
-        "archive-2024",
-        "/restore/dest"
+        test_db, ssh_repo.name, "archive-2024", "/restore/dest"
     )
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
     assert "ssh://u331525-sub1.your-storagebox.de:23" in body
-    for line in body.split('\n'):
-        if 'Location' in line and 'ssh://' in line:
-            assert '@' not in line, f"Found @ in Location line: {line}"
+    for line in body.split("\n"):
+        if "Location" in line and "ssh://" in line:
+            assert "@" not in line, f"Found @ in Location line: {line}"
 
     # Test restore_failure
     await notification_service.send_restore_failure(
-        test_db,
-        ssh_repo.name,
-        "archive-2024",
-        "Restore failed"
+        test_db, ssh_repo.name, "archive-2024", "Restore failed"
     )
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
     assert "ssh://u331525-sub1.your-storagebox.de:23" in body
-    for line in body.split('\n'):
-        if 'Location' in line and 'ssh://' in line:
-            assert '@' not in line, f"Found @ in Location line: {line}"
+    for line in body.split("\n"):
+        if "Location" in line and "ssh://" in line:
+            assert "@" not in line, f"Found @ in Location line: {line}"
 
 
 @pytest.mark.asyncio
 async def test_local_repo_urls_unchanged(test_db, mock_apprise):
     """Test that local repository paths are not affected by SSH sanitization"""
     # Create local repository
-    local_repo = Repository(
-        name="Local Backup Repo",
-        path="/local/path/to/repo"
-    )
+    local_repo = Repository(name="Local Backup Repo", path="/local/path/to/repo")
     test_db.add(local_repo)
     test_db.commit()
     test_db.refresh(local_repo)
@@ -927,7 +948,7 @@ async def test_local_repo_urls_unchanged(test_db, mock_apprise):
         service_url="slack://token/channel",
         enabled=True,
         notify_on_backup_success=True,
-        monitor_all_repositories=True
+        monitor_all_repositories=True,
     )
     test_db.add(setting)
     test_db.commit()
@@ -939,13 +960,10 @@ async def test_local_repo_urls_unchanged(test_db, mock_apprise):
 
     # Test
     await notification_service.send_backup_success(
-        test_db,
-        local_repo.name,
-        "archive-2024",
-        stats={"original_size": 1024}
+        test_db, local_repo.name, "archive-2024", stats={"original_size": 1024}
     )
 
     # Assert - local path should be unchanged
     call_args = apprise_instance.notify.call_args[1]
-    body = call_args['body']
+    body = call_args["body"]
     assert "/local/path/to/repo" in body

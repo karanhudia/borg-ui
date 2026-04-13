@@ -61,7 +61,7 @@ async def get_system_info(db: Session = Depends(get_db)):
         borg_version = None
         try:
             system_info = await borg.get_system_info()
-            borg_version = system_info.get('borg_version')
+            borg_version = system_info.get("borg_version")
         except Exception as e:
             logger.warning("Failed to get borg version", error=str(e))
 
@@ -69,8 +69,8 @@ async def get_system_info(db: Session = Depends(get_db)):
         borg2_version = None
         try:
             borg2_info = await borg2.get_system_info()
-            if borg2_info.get('success'):
-                borg2_version = borg2_info.get('borg_version')
+            if borg2_info.get("success"):
+                borg2_version = borg2_info.get("borg_version")
         except Exception as e:
             logger.warning("Failed to get borg2 version", error=str(e))
 

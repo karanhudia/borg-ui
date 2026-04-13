@@ -4,6 +4,7 @@ Tests for the script executor service.
 These tests verify that bash-specific syntax works correctly
 and demonstrate the difference between /bin/sh and /bin/bash execution.
 """
+
 import pytest
 import asyncio
 import tempfile
@@ -21,7 +22,7 @@ class TestScriptExecutor:
 
         This is the syntax that was failing in production when using /bin/sh.
         """
-        script = '''#!/bin/bash
+        script = """#!/bin/bash
 # Bash array syntax - NOT supported in POSIX sh
 EXCLUDED_STACKS=("borg-ui" "traefik" "postgres")
 
@@ -31,12 +32,10 @@ for stack in "${EXCLUDED_STACKS[@]}"; do
 done
 
 echo "Array length: ${#EXCLUDED_STACKS[@]}"
-'''
+"""
 
         result = await execute_script(
-            script=script,
-            timeout=5.0,
-            context="test_bash_arrays"
+            script=script, timeout=5.0, context="test_bash_arrays"
         )
 
         # Should succeed with bash
@@ -59,15 +58,15 @@ echo "Array length: ${#EXCLUDED_STACKS[@]}"
         (used in production Docker), /bin/sh is busybox's ash which
         strictly rejects bash syntax.
         """
-        script = '''#!/bin/sh
+        script = """#!/bin/sh
 # Use explicit POSIX mode check - this syntax will fail in strict sh
 # Arrays with () are bash-specific
 arr=("one" "two")
 echo "${arr[@]}"
-'''
+"""
 
         # Write script to temp file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
             f.write(script)
             temp_script = f.name
 
@@ -76,21 +75,18 @@ echo "${arr[@]}"
 
             # Execute with /bin/sh in POSIX mode explicitly (NOT bash)
             process = await asyncio.create_subprocess_exec(
-                '/bin/sh',
-                '--posix',
+                "/bin/sh",
+                "--posix",
                 temp_script,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=os.environ.copy()
+                env=os.environ.copy(),
             )
 
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=5.0
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
 
-            stdout_str = stdout.decode('utf-8', errors='replace') if stdout else ""
-            stderr_str = stderr.decode('utf-8', errors='replace') if stderr else ""
+            stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
+            stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
 
             # Should FAIL with /bin/sh --posix
             # On macOS bash-as-sh, this may still succeed, so we check if it at least
@@ -98,8 +94,11 @@ echo "${arr[@]}"
             # The key point is that our script executor uses /bin/bash explicitly
             if process.returncode != 0:
                 # Good - failed as expected in strict POSIX mode
-                assert "Syntax error" in stderr_str or "syntax error" in stderr_str or len(stderr_str) > 0, \
-                    f"Expected error output, got: {stderr_str}"
+                assert (
+                    "Syntax error" in stderr_str
+                    or "syntax error" in stderr_str
+                    or len(stderr_str) > 0
+                ), f"Expected error output, got: {stderr_str}"
             else:
                 # On macOS, even with --posix, bash may allow arrays
                 # The test documents the expected behavior in production (Alpine)
@@ -116,7 +115,7 @@ echo "${arr[@]}"
 
         Uses features compatible with bash 3.2+ (macOS default bash).
         """
-        script = '''#!/bin/bash
+        script = """#!/bin/bash
 # Test bash-specific features (compatible with bash 3.2+)
 
 # 1. Bash arrays
@@ -144,12 +143,10 @@ echo "Substring: ${text:0:5}"
 echo "Process sub works"
 
 echo "All bash features work!"
-'''
+"""
 
         result = await execute_script(
-            script=script,
-            timeout=5.0,
-            context="test_bash_features"
+            script=script, timeout=5.0, context="test_bash_features"
         )
 
         # Should succeed with our script executor (uses /bin/bash)
@@ -166,16 +163,14 @@ echo "All bash features work!"
     @pytest.mark.asyncio
     async def test_script_timeout(self):
         """Test that scripts timeout correctly"""
-        script = '''#!/bin/bash
+        script = """#!/bin/bash
 echo "Starting long operation"
 sleep 10
 echo "Should not reach here"
-'''
+"""
 
         result = await execute_script(
-            script=script,
-            timeout=1.0,
-            context="test_timeout"
+            script=script, timeout=1.0, context="test_timeout"
         )
 
         assert result["success"] is False
@@ -187,18 +182,14 @@ echo "Should not reach here"
         """Test that exit codes are properly captured"""
         # Success
         result = await execute_script(
-            script="#!/bin/bash\nexit 0",
-            timeout=5.0,
-            context="test_exit_0"
+            script="#!/bin/bash\nexit 0", timeout=5.0, context="test_exit_0"
         )
         assert result["success"] is True
         assert result["exit_code"] == 0
 
         # Failure
         result = await execute_script(
-            script="#!/bin/bash\nexit 42",
-            timeout=5.0,
-            context="test_exit_42"
+            script="#!/bin/bash\nexit 42", timeout=5.0, context="test_exit_42"
         )
         assert result["success"] is False
         assert result["exit_code"] == 42
@@ -206,16 +197,14 @@ echo "Should not reach here"
     @pytest.mark.asyncio
     async def test_stdout_and_stderr_capture(self):
         """Test that stdout and stderr are properly captured"""
-        script = '''#!/bin/bash
+        script = """#!/bin/bash
 echo "This goes to stdout"
 echo "This goes to stderr" >&2
 exit 1
-'''
+"""
 
         result = await execute_script(
-            script=script,
-            timeout=5.0,
-            context="test_output_capture"
+            script=script, timeout=5.0, context="test_output_capture"
         )
 
         assert result["success"] is False
@@ -226,20 +215,20 @@ exit 1
     @pytest.mark.asyncio
     async def test_environment_variables(self):
         """Test that custom environment variables are passed correctly"""
-        script = '''#!/bin/bash
+        script = """#!/bin/bash
 echo "HOME is: $HOME"
 echo "CUSTOM_VAR is: $CUSTOM_VAR"
-'''
+"""
 
         result = await execute_script(
             script=script,
             timeout=5.0,
             env={
-                'HOME': '/test/home',
-                'CUSTOM_VAR': 'test_value',
-                'PATH': '/usr/bin:/bin'
+                "HOME": "/test/home",
+                "CUSTOM_VAR": "test_value",
+                "PATH": "/usr/bin:/bin",
             },
-            context="test_env_vars"
+            context="test_env_vars",
         )
 
         assert result["success"] is True
@@ -249,16 +238,12 @@ echo "CUSTOM_VAR is: $CUSTOM_VAR"
     @pytest.mark.asyncio
     async def test_execution_time_tracking(self):
         """Test that execution time is tracked"""
-        script = '''#!/bin/bash
+        script = """#!/bin/bash
 sleep 0.1
 echo "Done"
-'''
+"""
 
-        result = await execute_script(
-            script=script,
-            timeout=5.0,
-            context="test_timing"
-        )
+        result = await execute_script(script=script, timeout=5.0, context="test_timing")
 
         assert result["success"] is True
         assert "execution_time" in result
@@ -273,7 +258,7 @@ echo "Done"
 
         This is the exact pattern that was failing in production.
         """
-        script = '''#!/bin/bash
+        script = """#!/bin/bash
 set -e
 
 # Define stacks to exclude from backup
@@ -300,12 +285,10 @@ done
 
 echo "Backup preparation complete"
 exit 0
-'''
+"""
 
         result = await execute_script(
-            script=script,
-            timeout=5.0,
-            context="test_docker_backup"
+            script=script, timeout=5.0, context="test_docker_backup"
         )
 
         # Should succeed with bash

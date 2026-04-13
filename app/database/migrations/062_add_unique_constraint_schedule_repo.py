@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 logger = structlog.get_logger()
 
+
 def upgrade(db):
     """Add unique constraint to scheduled_job_repositories table"""
 
@@ -20,24 +21,31 @@ def upgrade(db):
     logger.info("Checking for duplicate repository entries in schedules...")
 
     # Query to find duplicates
-    result = db.execute(text("""
+    result = db.execute(
+        text("""
         SELECT scheduled_job_id, repository_id, COUNT(*) as count
         FROM scheduled_job_repositories
         GROUP BY scheduled_job_id, repository_id
         HAVING COUNT(*) > 1
-    """))
+    """)
+    )
 
     duplicates = result.fetchall()
 
     if duplicates:
-        logger.warning(f"Found {len(duplicates)} duplicate schedule-repository combinations")
+        logger.warning(
+            f"Found {len(duplicates)} duplicate schedule-repository combinations"
+        )
 
         for dup in duplicates:
             schedule_id, repo_id, count = dup
-            logger.info(f"Removing duplicates for schedule_id={schedule_id}, repository_id={repo_id} (count={count})")
+            logger.info(
+                f"Removing duplicates for schedule_id={schedule_id}, repository_id={repo_id} (count={count})"
+            )
 
             # Keep only the first entry (lowest execution_order), delete the rest
-            db.execute(text("""
+            db.execute(
+                text("""
                 DELETE FROM scheduled_job_repositories
                 WHERE id NOT IN (
                     SELECT MIN(id)
@@ -48,7 +56,9 @@ def upgrade(db):
                 )
                 AND scheduled_job_id = :schedule_id
                 AND repository_id = :repo_id
-            """), {"schedule_id": schedule_id, "repo_id": repo_id})
+            """),
+                {"schedule_id": schedule_id, "repo_id": repo_id},
+            )
 
         db.commit()
         logger.info("Duplicate cleanup completed")
@@ -59,10 +69,12 @@ def upgrade(db):
     logger.info("Adding unique constraint to scheduled_job_repositories table...")
 
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE UNIQUE INDEX uq_schedule_repository
             ON scheduled_job_repositories (scheduled_job_id, repository_id)
-        """))
+        """)
+        )
         db.commit()
         logger.info("Unique constraint added successfully")
     except Exception as e:

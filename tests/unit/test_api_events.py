@@ -1,6 +1,7 @@
 """
 Unit tests for events API endpoints
 """
+
 import asyncio
 
 import pytest
@@ -16,22 +17,26 @@ class TestEventsEndpoints:
         response = test_client.get("/api/events/stream")
 
         assert response.status_code == 401
-        assert response.json()["detail"]["key"] == "backend.errors.events.notAuthenticated"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.events.notAuthenticated"
+        )
 
-    def test_events_stream_rejects_invalid_token(self, test_client: TestClient, monkeypatch):
+    def test_events_stream_rejects_invalid_token(
+        self, test_client: TestClient, monkeypatch
+    ):
         """Test SSE events stream rejects invalid tokens."""
         monkeypatch.setattr("app.core.security.verify_token", lambda token: None)
 
         response = test_client.get("/api/events/stream?token=invalid-token")
 
         assert response.status_code == 401
-        assert response.json()["detail"]["key"] == "backend.errors.events.invalidAuthCredentials"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.events.invalidAuthCredentials"
+        )
 
     def test_events_stream_returns_streaming_response_for_valid_token(
-        self,
-        test_client: TestClient,
-        test_db,
-        monkeypatch
+        self, test_client: TestClient, test_db, monkeypatch
     ):
         """Test SSE stream returns the expected response contract for a valid token."""
         from app.database.models import User
@@ -47,7 +52,9 @@ class TestEventsEndpoints:
         test_db.commit()
         test_db.refresh(user)
 
-        monkeypatch.setattr("app.core.security.verify_token", lambda token: user.username)
+        monkeypatch.setattr(
+            "app.core.security.verify_token", lambda token: user.username
+        )
 
         async def fake_event_generator(user_id: str):
             assert user_id == str(user.id)
@@ -67,21 +74,31 @@ class TestEventsEndpoints:
 
         assert response.status_code == 404
 
-    def test_backup_logs_stream_nonexistent(self, test_client: TestClient, admin_headers):
+    def test_backup_logs_stream_nonexistent(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test backup logs stream for non-existent job"""
-        response = test_client.get("/api/events/backup/99999/logs", headers=admin_headers)
+        response = test_client.get(
+            "/api/events/backup/99999/logs", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
-    def test_restore_logs_stream_nonexistent(self, test_client: TestClient, admin_headers):
+    def test_restore_logs_stream_nonexistent(
+        self, test_client: TestClient, admin_headers
+    ):
         """Test restore logs stream for non-existent job"""
-        response = test_client.get("/api/events/restore/99999/logs", headers=admin_headers)
+        response = test_client.get(
+            "/api/events/restore/99999/logs", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
     def test_job_progress_nonexistent(self, test_client: TestClient, admin_headers):
         """Test job progress for non-existent job"""
-        response = test_client.get("/api/events/job/99999/progress", headers=admin_headers)
+        response = test_client.get(
+            "/api/events/job/99999/progress", headers=admin_headers
+        )
 
         assert response.status_code == 404
 
@@ -120,7 +137,9 @@ class TestEventManagerInternals:
         await manager.remove_connection("2")
         assert await manager.get_connection_count() == 0
 
-    async def test_event_generator_emits_initial_event_keepalive_and_cleans_up(self, monkeypatch):
+    async def test_event_generator_emits_initial_event_keepalive_and_cleans_up(
+        self, monkeypatch
+    ):
         from app.api import events
 
         manager = events.EventManager()

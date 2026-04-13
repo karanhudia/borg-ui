@@ -21,7 +21,9 @@ def run_script(*args: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run Borg UI extended smoke tests")
-    parser.add_argument("--url", default="http://localhost:8082", help="Base URL of the running app")
+    parser.add_argument(
+        "--url", default="http://localhost:8082", help="Base URL of the running app"
+    )
     parser.add_argument(
         "--test-dir",
         default="/tmp/borg-ui-tests",
@@ -45,7 +47,12 @@ def main() -> int:
         ("tests/smoke/test_remote_source_to_ssh_repo_smoke.py", "--url", args.url),
         ("tests/smoke/test_restore_to_ssh_destination_smoke.py", "--url", args.url),
         ("tests/integration/test_multiple_source_dirs.py", "--url", args.url),
-        ("tests/integration/test_archive_contents.py", args.test_dir, "--url", args.url),
+        (
+            "tests/integration/test_archive_contents.py",
+            args.test_dir,
+            "--url",
+            args.url,
+        ),
         ("tests/integration/test_archive_directory_browsing.py", "--url", args.url),
     ]
 

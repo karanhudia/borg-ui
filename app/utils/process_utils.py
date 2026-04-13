@@ -1,6 +1,7 @@
 """
 Utility functions for process management and orphan detection
 """
+
 import json
 import os
 import subprocess
@@ -11,6 +12,7 @@ from app.core.borg_router import BorgRouter
 from app.database.models import CheckJob, CompactJob, BackupJob, RestoreJob, Repository
 
 logger = structlog.get_logger()
+
 
 def is_process_alive(pid: int, stored_start_time: int) -> bool:
     """
@@ -29,12 +31,12 @@ def is_process_alive(pid: int, stored_start_time: int) -> bool:
 
     try:
         # Try to read /proc/[pid]/stat
-        with open(f'/proc/{pid}/stat', 'r') as f:
+        with open(f"/proc/{pid}/stat", "r") as f:
             stat_data = f.read()
 
         # Extract current start_time
         # Format: pid (comm) state ppid ... starttime (22nd field)
-        fields = stat_data.split(')')[1].split()
+        fields = stat_data.split(")")[1].split()
         current_start_time = int(fields[19])
 
         # Compare with stored start_time
@@ -43,10 +45,12 @@ def is_process_alive(pid: int, stored_start_time: int) -> bool:
             return True
         else:
             # PID was reused by a different process
-            logger.info("PID reused by different process",
-                       pid=pid,
-                       stored_start_time=stored_start_time,
-                       current_start_time=current_start_time)
+            logger.info(
+                "PID reused by different process",
+                pid=pid,
+                stored_start_time=stored_start_time,
+                current_start_time=current_start_time,
+            )
             return False
 
     except FileNotFoundError:
@@ -56,6 +60,7 @@ def is_process_alive(pid: int, stored_start_time: int) -> bool:
     except Exception as e:
         logger.error("Error checking process", pid=pid, error=str(e))
         return False
+
 
 def break_repository_lock(repository: Repository) -> bool:
     """
@@ -76,43 +81,47 @@ def break_repository_lock(repository: Repository) -> bool:
         # Set environment variables
         env = os.environ.copy()
         if repository.passphrase:
-            env['BORG_PASSPHRASE'] = repository.passphrase
+            env["BORG_PASSPHRASE"] = repository.passphrase
 
         # For remote repos, add SSH options
         if repository.connection_id:
             ssh_opts = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "LogLevel=ERROR"
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "LogLevel=ERROR",
             ]
-            env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+            env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
 
         # Execute break-lock command
         result = subprocess.run(
-            cmd,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=30
+            cmd, env=env, capture_output=True, text=True, timeout=30
         )
 
         if result.returncode == 0:
-            logger.info("Successfully broke repository lock",
-                       repository_id=repository.id,
-                       repository_path=repository.path)
+            logger.info(
+                "Successfully broke repository lock",
+                repository_id=repository.id,
+                repository_path=repository.path,
+            )
             return True
         else:
-            logger.error("Failed to break repository lock",
-                        repository_id=repository.id,
-                        returncode=result.returncode,
-                        stderr=result.stderr)
+            logger.error(
+                "Failed to break repository lock",
+                repository_id=repository.id,
+                returncode=result.returncode,
+                stderr=result.stderr,
+            )
             return False
 
     except Exception as e:
-        logger.error("Error breaking repository lock",
-                    repository_id=repository.id,
-                    error=str(e))
+        logger.error(
+            "Error breaking repository lock", repository_id=repository.id, error=str(e)
+        )
         return False
+
 
 def cleanup_orphaned_jobs(db: Session):
     """
@@ -127,31 +136,36 @@ def cleanup_orphaned_jobs(db: Session):
     logger.info("Checking for orphaned jobs...")
 
     # Find all running backup jobs
-    running_backup_jobs = db.query(BackupJob).filter(
-        BackupJob.status == "running"
-    ).all()
+    running_backup_jobs = (
+        db.query(BackupJob).filter(BackupJob.status == "running").all()
+    )
 
     # Find all running restore jobs
-    running_restore_jobs = db.query(RestoreJob).filter(
-        RestoreJob.status == "running"
-    ).all()
+    running_restore_jobs = (
+        db.query(RestoreJob).filter(RestoreJob.status == "running").all()
+    )
 
     # Find all running check jobs
-    running_check_jobs = db.query(CheckJob).filter(
-        CheckJob.status == "running"
-    ).all()
+    running_check_jobs = db.query(CheckJob).filter(CheckJob.status == "running").all()
 
     # Find all running compact jobs
-    running_compact_jobs = db.query(CompactJob).filter(
-        CompactJob.status == "running"
-    ).all()
+    running_compact_jobs = (
+        db.query(CompactJob).filter(CompactJob.status == "running").all()
+    )
 
-    total_jobs = len(running_backup_jobs) + len(running_restore_jobs) + len(running_check_jobs) + len(running_compact_jobs)
-    logger.info("Found running jobs",
-               backup_jobs=len(running_backup_jobs),
-               restore_jobs=len(running_restore_jobs),
-               check_jobs=len(running_check_jobs),
-               compact_jobs=len(running_compact_jobs))
+    total_jobs = (
+        len(running_backup_jobs)
+        + len(running_restore_jobs)
+        + len(running_check_jobs)
+        + len(running_compact_jobs)
+    )
+    logger.info(
+        "Found running jobs",
+        backup_jobs=len(running_backup_jobs),
+        restore_jobs=len(running_restore_jobs),
+        check_jobs=len(running_check_jobs),
+        compact_jobs=len(running_compact_jobs),
+    )
 
     if total_jobs == 0:
         logger.info("No orphaned jobs found")
@@ -161,105 +175,149 @@ def cleanup_orphaned_jobs(db: Session):
     for job in running_backup_jobs:
         # Backup jobs don't have process_pid tracking, so we mark them all as failed on restart
         job.status = "failed"
-        job.error_message = json.dumps({"key": "backend.errors.service.containerRestartedDuringBackup"})
+        job.error_message = json.dumps(
+            {"key": "backend.errors.service.containerRestartedDuringBackup"}
+        )
         job.completed_at = datetime.utcnow()
 
-        logger.info("Orphaned backup job detected",
-                   job_id=job.id,
-                   repository=job.repository)
+        logger.info(
+            "Orphaned backup job detected", job_id=job.id, repository=job.repository
+        )
 
     # Process restore jobs
     for job in running_restore_jobs:
         # Restore jobs don't have process_pid tracking, so we mark them all as failed on restart
         job.status = "failed"
-        job.error_message = json.dumps({"key": "backend.errors.service.containerRestartedDuringRestore"})
+        job.error_message = json.dumps(
+            {"key": "backend.errors.service.containerRestartedDuringRestore"}
+        )
         job.completed_at = datetime.utcnow()
 
-        logger.info("Orphaned restore job detected",
-                   job_id=job.id,
-                   repository=job.repository)
+        logger.info(
+            "Orphaned restore job detected", job_id=job.id, repository=job.repository
+        )
 
     # Process check jobs
     for job in running_check_jobs:
         if not is_process_alive(job.process_pid, job.process_start_time):
             # Process is dead! Mark job as failed
             job.status = "failed"
-            job.error_message = json.dumps({"key": "backend.errors.service.containerRestartedDuringOperation"})
+            job.error_message = json.dumps(
+                {"key": "backend.errors.service.containerRestartedDuringOperation"}
+            )
             job.completed_at = datetime.utcnow()
 
-            logger.info("Orphaned check job detected",
-                       job_id=job.id,
-                       repository_id=job.repository_id,
-                       pid=job.process_pid)
+            logger.info(
+                "Orphaned check job detected",
+                job_id=job.id,
+                repository_id=job.repository_id,
+                pid=job.process_pid,
+            )
 
             # Get repository to determine if we should auto-break lock
-            repository = db.query(Repository).filter(
-                Repository.id == job.repository_id
-            ).first()
+            repository = (
+                db.query(Repository).filter(Repository.id == job.repository_id).first()
+            )
 
             if repository:
                 if not repository.connection_id:
                     # For local repos, we can safely break the lock
-                    logger.info("Attempting to break lock for local repository",
-                               repository_id=repository.id)
+                    logger.info(
+                        "Attempting to break lock for local repository",
+                        repository_id=repository.id,
+                    )
                     if break_repository_lock(repository):
-                        logger.info("Successfully broke lock for local repository",
-                                   repository_id=repository.id)
+                        logger.info(
+                            "Successfully broke lock for local repository",
+                            repository_id=repository.id,
+                        )
                     else:
-                        logger.warning("Failed to break lock for local repository",
-                                      repository_id=repository.id)
-                        job.error_message += "\n" + json.dumps({"key": "backend.errors.service.warningFailedBreakLock"})
+                        logger.warning(
+                            "Failed to break lock for local repository",
+                            repository_id=repository.id,
+                        )
+                        job.error_message += "\n" + json.dumps(
+                            {"key": "backend.errors.service.warningFailedBreakLock"}
+                        )
                 else:
                     # For remote repos, don't auto-break lock (remote process may still be running)
-                    logger.warning("Orphaned check job for remote repository - manual lock break may be needed",
-                                  repository_id=repository.id)
-                    job.error_message += "\n" + json.dumps({"key": "backend.errors.service.warningRemoteProcessMayBeRunning"})
+                    logger.warning(
+                        "Orphaned check job for remote repository - manual lock break may be needed",
+                        repository_id=repository.id,
+                    )
+                    job.error_message += "\n" + json.dumps(
+                        {
+                            "key": "backend.errors.service.warningRemoteProcessMayBeRunning"
+                        }
+                    )
         else:
             # Process is still alive! This is unexpected
-            logger.warning("Check job marked as running and process is still alive",
-                          job_id=job.id,
-                          pid=job.process_pid)
+            logger.warning(
+                "Check job marked as running and process is still alive",
+                job_id=job.id,
+                pid=job.process_pid,
+            )
 
     # Process compact jobs
     for job in running_compact_jobs:
         if not is_process_alive(job.process_pid, job.process_start_time):
             # Process is dead! Mark job as failed
             job.status = "failed"
-            job.error_message = json.dumps({"key": "backend.errors.service.containerRestartedDuringOperation"})
+            job.error_message = json.dumps(
+                {"key": "backend.errors.service.containerRestartedDuringOperation"}
+            )
             job.completed_at = datetime.utcnow()
 
-            logger.info("Orphaned compact job detected",
-                       job_id=job.id,
-                       repository_id=job.repository_id,
-                       pid=job.process_pid)
+            logger.info(
+                "Orphaned compact job detected",
+                job_id=job.id,
+                repository_id=job.repository_id,
+                pid=job.process_pid,
+            )
 
             # Get repository to determine if we should auto-break lock
-            repository = db.query(Repository).filter(
-                Repository.id == job.repository_id
-            ).first()
+            repository = (
+                db.query(Repository).filter(Repository.id == job.repository_id).first()
+            )
 
             if repository:
                 if not repository.connection_id:
                     # For local repos, we can safely break the lock
-                    logger.info("Attempting to break lock for local repository",
-                               repository_id=repository.id)
+                    logger.info(
+                        "Attempting to break lock for local repository",
+                        repository_id=repository.id,
+                    )
                     if break_repository_lock(repository):
-                        logger.info("Successfully broke lock for local repository",
-                                   repository_id=repository.id)
+                        logger.info(
+                            "Successfully broke lock for local repository",
+                            repository_id=repository.id,
+                        )
                     else:
-                        logger.warning("Failed to break lock for local repository",
-                                      repository_id=repository.id)
-                        job.error_message += "\n" + json.dumps({"key": "backend.errors.service.warningFailedBreakLock"})
+                        logger.warning(
+                            "Failed to break lock for local repository",
+                            repository_id=repository.id,
+                        )
+                        job.error_message += "\n" + json.dumps(
+                            {"key": "backend.errors.service.warningFailedBreakLock"}
+                        )
                 else:
                     # For remote repos, don't auto-break lock
-                    logger.warning("Orphaned compact job for remote repository - manual lock break may be needed",
-                                  repository_id=repository.id)
-                    job.error_message += "\n" + json.dumps({"key": "backend.errors.service.warningRemoteProcessMayBeRunning"})
+                    logger.warning(
+                        "Orphaned compact job for remote repository - manual lock break may be needed",
+                        repository_id=repository.id,
+                    )
+                    job.error_message += "\n" + json.dumps(
+                        {
+                            "key": "backend.errors.service.warningRemoteProcessMayBeRunning"
+                        }
+                    )
         else:
             # Process is still alive! This is unexpected
-            logger.warning("Compact job marked as running and process is still alive",
-                          job_id=job.id,
-                          pid=job.process_pid)
+            logger.warning(
+                "Compact job marked as running and process is still alive",
+                job_id=job.id,
+                pid=job.process_pid,
+            )
 
     # Commit all changes
     db.commit()
@@ -280,12 +338,7 @@ def cleanup_orphaned_mounts():
 
     try:
         # Get list of active mounts
-        result = subprocess.run(
-            ["mount"],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
+        result = subprocess.run(["mount"], capture_output=True, text=True, timeout=5)
 
         if result.returncode != 0:
             logger.warning("Failed to list mounts", returncode=result.returncode)
@@ -293,17 +346,17 @@ def cleanup_orphaned_mounts():
 
         orphaned_count = 0
 
-        for line in result.stdout.split('\n'):
+        for line in result.stdout.split("\n"):
             # Look for borg_ui mount points
             # Patterns: sshfs_mount_, /mounts/borg_, etc.
-            if 'sshfs_mount_' in line or '/mounts/borg_' in line:
+            if "sshfs_mount_" in line or "/mounts/borg_" in line:
                 # Extract mount point from mount output
                 # Format: "source on /mount/point type fuse.sshfs (options)"
                 parts = line.split()
                 if len(parts) >= 3:
                     # Find the "on" keyword and get the next part
                     try:
-                        on_index = parts.index('on')
+                        on_index = parts.index("on")
                         if on_index + 1 < len(parts):
                             mount_point = parts[on_index + 1]
 
@@ -316,36 +369,54 @@ def cleanup_orphaned_mounts():
                                     ["fusermount", "-uz", mount_point],
                                     capture_output=True,
                                     text=True,
-                                    timeout=10
+                                    timeout=10,
                                 )
 
                                 if cleanup_result.returncode == 0:
-                                    logger.info("Successfully unmounted orphaned mount",
-                                              mount_point=mount_point)
+                                    logger.info(
+                                        "Successfully unmounted orphaned mount",
+                                        mount_point=mount_point,
+                                    )
 
                                     # Try to remove the directory if it's empty
                                     try:
                                         if os.path.exists(mount_point):
                                             # Check if it's in a temp directory
-                                            if 'sshfs_mount_' in mount_point or 'borg_backup_root_' in mount_point:
+                                            if (
+                                                "sshfs_mount_" in mount_point
+                                                or "borg_backup_root_" in mount_point
+                                            ):
                                                 # Remove parent temp directory
                                                 import shutil
-                                                parent_dir = os.path.dirname(mount_point)
+
+                                                parent_dir = os.path.dirname(
+                                                    mount_point
+                                                )
                                                 if os.path.exists(parent_dir):
-                                                    shutil.rmtree(parent_dir, ignore_errors=True)
-                                                    logger.debug("Removed orphaned temp directory",
-                                                               temp_dir=parent_dir)
+                                                    shutil.rmtree(
+                                                        parent_dir, ignore_errors=True
+                                                    )
+                                                    logger.debug(
+                                                        "Removed orphaned temp directory",
+                                                        temp_dir=parent_dir,
+                                                    )
                                     except Exception as e:
-                                        logger.debug("Could not remove mount directory",
-                                                   mount_point=mount_point,
-                                                   error=str(e))
+                                        logger.debug(
+                                            "Could not remove mount directory",
+                                            mount_point=mount_point,
+                                            error=str(e),
+                                        )
                                 else:
-                                    logger.warning("Failed to unmount orphaned mount",
-                                                 mount_point=mount_point,
-                                                 stderr=cleanup_result.stderr)
+                                    logger.warning(
+                                        "Failed to unmount orphaned mount",
+                                        mount_point=mount_point,
+                                        stderr=cleanup_result.stderr,
+                                    )
                             except subprocess.TimeoutExpired:
-                                logger.warning("Timeout unmounting orphaned mount",
-                                             mount_point=mount_point)
+                                logger.warning(
+                                    "Timeout unmounting orphaned mount",
+                                    mount_point=mount_point,
+                                )
                             except FileNotFoundError:
                                 # fusermount not found, try umount on macOS
                                 try:
@@ -353,26 +424,33 @@ def cleanup_orphaned_mounts():
                                         ["umount", "-f", mount_point],
                                         capture_output=True,
                                         text=True,
-                                        timeout=10
+                                        timeout=10,
                                     )
                                     if cleanup_result.returncode == 0:
-                                        logger.info("Successfully unmounted orphaned mount (umount)",
-                                                  mount_point=mount_point)
+                                        logger.info(
+                                            "Successfully unmounted orphaned mount (umount)",
+                                            mount_point=mount_point,
+                                        )
                                 except Exception as e:
-                                    logger.warning("Failed to unmount with umount",
-                                                 mount_point=mount_point,
-                                                 error=str(e))
+                                    logger.warning(
+                                        "Failed to unmount with umount",
+                                        mount_point=mount_point,
+                                        error=str(e),
+                                    )
                             except Exception as e:
-                                logger.error("Error unmounting orphaned mount",
-                                           mount_point=mount_point,
-                                           error=str(e))
+                                logger.error(
+                                    "Error unmounting orphaned mount",
+                                    mount_point=mount_point,
+                                    error=str(e),
+                                )
                     except (ValueError, IndexError):
                         # "on" not found or invalid format
                         continue
 
         if orphaned_count > 0:
-            logger.info("Orphaned mount cleanup completed",
-                       cleaned_up_count=orphaned_count)
+            logger.info(
+                "Orphaned mount cleanup completed", cleaned_up_count=orphaned_count
+            )
         else:
             logger.info("No orphaned mounts found")
 

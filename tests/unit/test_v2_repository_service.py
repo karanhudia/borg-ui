@@ -58,17 +58,31 @@ async def test_initialize_repository_uses_borg2_rcreate_without_ssh_key():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_export_keyfile_uses_borg2_key_export_shape():
-    repository = SimpleNamespace(path="/tmp/repo", passphrase="secret", remote_path="/usr/bin/borg2")
+    repository = SimpleNamespace(
+        path="/tmp/repo", passphrase="secret", remote_path="/usr/bin/borg2"
+    )
 
-    with patch(
-        "app.services.v2.repository_service.borg2._run",
-        new=AsyncMock(return_value={"success": True}),
-    ) as mock_run, patch("app.services.v2.repository_service.borg2.borg_cmd", "borg2"):
+    with (
+        patch(
+            "app.services.v2.repository_service.borg2._run",
+            new=AsyncMock(return_value={"success": True}),
+        ) as mock_run,
+        patch("app.services.v2.repository_service.borg2.borg_cmd", "borg2"),
+    ):
         result = await RepositoryV2Service().export_keyfile(repository, "/tmp/repo.key")
 
     assert result == {"success": True}
     mock_run.assert_awaited_once_with(
-        ["borg2", "-r", "/tmp/repo", "key", "export", "/tmp/repo.key", "--remote-path", "/usr/bin/borg2"],
+        [
+            "borg2",
+            "-r",
+            "/tmp/repo",
+            "key",
+            "export",
+            "/tmp/repo.key",
+            "--remote-path",
+            "/usr/bin/borg2",
+        ],
         timeout=30,
         env={"BORG_PASSPHRASE": "secret"},
     )

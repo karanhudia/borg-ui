@@ -20,7 +20,9 @@ if str(REPO_ROOT) not in sys.path:
 from tests.smoke.live_helpers import SmokeClient, SmokeFailure
 
 
-def _start_borg2_backup(base_url: str, token: str, repository_id: int, result_queue: queue.Queue) -> None:
+def _start_borg2_backup(
+    base_url: str, token: str, repository_id: int, result_queue: queue.Queue
+) -> None:
     try:
         response = requests.post(
             f"{base_url.rstrip('/')}/api/v2/backup/run",
@@ -37,7 +39,9 @@ def _start_borg2_backup(base_url: str, token: str, repository_id: int, result_qu
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Borg 2 backup contract smoke test")
+    parser = argparse.ArgumentParser(
+        description="Run Borg 2 backup contract smoke test"
+    )
     parser.add_argument("--url", default="http://localhost:8082")
     args = parser.parse_args()
 
@@ -48,15 +52,24 @@ def main() -> int:
         system_info = client.system_info()
         feature_access = system_info.get("feature_access", {})
         if not feature_access.get("borg_v2"):
-            print("Borg 2 backup contract smoke skipped: borg_v2 feature not enabled", flush=True)
+            print(
+                "Borg 2 backup contract smoke skipped: borg_v2 feature not enabled",
+                flush=True,
+            )
             return 0
 
         if not system_info.get("borg2_version"):
-            print("Borg 2 backup contract smoke skipped: borg2 binary not available in app", flush=True)
+            print(
+                "Borg 2 backup contract smoke skipped: borg2 binary not available in app",
+                flush=True,
+            )
             return 0
 
         if shutil.which("borg2") is None:
-            print("Borg 2 backup contract smoke skipped: borg2 binary not available on smoke runner", flush=True)
+            print(
+                "Borg 2 backup contract smoke skipped: borg2 binary not available on smoke runner",
+                flush=True,
+            )
             return 0
 
         source_root = client.prepare_source_tree(
@@ -80,7 +93,9 @@ def main() -> int:
         )
         worker.start()
 
-        running_job = client.wait_for_backup_job(repo_path, statuses={"pending", "running"}, timeout=45)
+        running_job = client.wait_for_backup_job(
+            repo_path, statuses={"pending", "running"}, timeout=45
+        )
         job_id = int(running_job["id"])
         client.wait_for_running("/api/backup/status", job_id, timeout=45)
 
@@ -97,11 +112,15 @@ def main() -> int:
         deadline = time.time() + 90
         last_payload = None
         while time.time() < deadline:
-            status_payload = client.request_ok("GET", f"/api/backup/status/{job_id}").json()
+            status_payload = client.request_ok(
+                "GET", f"/api/backup/status/{job_id}"
+            ).json()
             last_payload = status_payload
             progress = status_payload.get("progress_details", {})
             if not required_keys.issubset(progress.keys()):
-                raise SmokeFailure(f"Unexpected Borg 2 progress_details shape: {status_payload}")
+                raise SmokeFailure(
+                    f"Unexpected Borg 2 progress_details shape: {status_payload}"
+                )
 
             has_live_progress = any(
                 [
@@ -121,7 +140,9 @@ def main() -> int:
 
         worker.join(timeout=300)
         if worker.is_alive():
-            raise SmokeFailure("Timed out waiting for Borg 2 backup request to complete")
+            raise SmokeFailure(
+                "Timed out waiting for Borg 2 backup request to complete"
+            )
 
         result_kind, result_value = result_queue.get_nowait()
         if result_kind == "error":
@@ -129,11 +150,15 @@ def main() -> int:
 
         response = result_value
         if response.status_code != 200:
-            raise SmokeFailure(f"Borg 2 backup run returned {response.status_code}: {response.text}")
+            raise SmokeFailure(
+                f"Borg 2 backup run returned {response.status_code}: {response.text}"
+            )
 
         payload = response.json()
         if payload.get("status") not in {"completed", "completed_with_warnings"}:
-            raise SmokeFailure(f"Unexpected Borg 2 backup completion payload: {payload}")
+            raise SmokeFailure(
+                f"Unexpected Borg 2 backup completion payload: {payload}"
+            )
 
         client.log(f"Borg 2 backup contract smoke passed with job {job_id}")
         return 0

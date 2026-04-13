@@ -33,6 +33,7 @@ router = APIRouter(tags=["Backup v2"], dependencies=[require_feature("borg_v2")]
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
 
+
 class BackupV2Request(BaseModel):
     repository_id: int
     archive_name: Optional[str] = None
@@ -60,8 +61,11 @@ class CheckV2Request(BaseModel):
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def _get_v2_repo_by_id(repo_id: int, db: Session, current_user: User) -> Repository:
-    repo = get_repository_with_access(db, current_user, repo_id, required_role="operator")
+    repo = get_repository_with_access(
+        db, current_user, repo_id, required_role="operator"
+    )
     if repo.borg_version != 2:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -80,6 +84,7 @@ def _source_dirs(repo: Repository) -> list:
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
+
 
 @router.post("/run")
 async def run_backup(
@@ -116,8 +121,10 @@ async def run_backup(
     if backup_job.status not in {"completed", "completed_with_warnings"}:
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.backup.failed",
-                    "params": {"error": backup_job.error_message or "Backup failed"}},
+            detail={
+                "key": "backend.errors.backup.failed",
+                "params": {"error": backup_job.error_message or "Backup failed"},
+            },
         )
 
     return {
@@ -144,7 +151,9 @@ async def prune_archives(
     Note: after pruning, space is not freed until compact() is called.
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
+        raise HTTPException(
+            status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"}
+        )
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
     result = await prune_v2_service.run_prune(
@@ -161,8 +170,10 @@ async def prune_archives(
     if not result["success"]:
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.prune.failed",
-                    "params": {"error": result["stderr"]}},
+            detail={
+                "key": "backend.errors.prune.failed",
+                "params": {"error": result["stderr"]},
+            },
         )
 
     stdout = result.get("stdout", "") or ""
@@ -194,7 +205,9 @@ async def compact_repository(
     GET /repositories/{id}/running-jobs endpoint — no frontend changes required.
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
+        raise HTTPException(
+            status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"}
+        )
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
 
@@ -207,8 +220,12 @@ async def compact_repository(
         status="running",
     )
 
-    logger.info("Borg2 compact job created", job_id=compact_job.id, repository_id=repo.id,
-                user=current_user.username)
+    logger.info(
+        "Borg2 compact job created",
+        job_id=compact_job.id,
+        repository_id=repo.id,
+        user=current_user.username,
+    )
 
     return {
         "job_id": compact_job.id,
@@ -230,7 +247,9 @@ async def check_repository(
     endpoints — no frontend changes required.
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
+        raise HTTPException(
+            status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"}
+        )
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
 
@@ -246,8 +265,12 @@ async def check_repository(
         },
     )
 
-    logger.info("Borg2 check job created", job_id=check_job.id, repository_id=repo.id,
-                user=current_user.username)
+    logger.info(
+        "Borg2 check job created",
+        job_id=check_job.id,
+        repository_id=repo.id,
+        user=current_user.username,
+    )
 
     return {
         "job_id": check_job.id,

@@ -20,7 +20,9 @@ def get_repository_with_access(
 ) -> Repository:
     repository = db.query(Repository).filter(Repository.id == repo_id).first()
     if not repository:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"}
+        )
     check_repo_access(db, current_user, repository, required_role)
     return repository
 
@@ -46,10 +48,14 @@ def ensure_no_running_job(
     *,
     error_key: str,
 ) -> None:
-    running_job = db.query(job_model).filter(
-        job_model.repository_id == repository_id,
-        job_model.status == "running",
-    ).first()
+    running_job = (
+        db.query(job_model)
+        .filter(
+            job_model.repository_id == repository_id,
+            job_model.status == "running",
+        )
+        .first()
+    )
     if running_job:
         raise HTTPException(status_code=409, detail={"key": error_key})
 
@@ -161,7 +167,9 @@ def get_job_with_repository(
 
     repository = db.query(Repository).filter(Repository.id == job.repository_id).first()
     if not repository:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"}
+        )
 
     check_repo_access(db, current_user, repository, required_role)
     return job, repository
@@ -185,9 +193,13 @@ def get_repository_jobs(
     if not repository:
         return []
 
-    return db.query(job_model).filter(
-        job_model.repository_id == repo_id
-    ).order_by(job_model.id.desc()).limit(limit).all()
+    return (
+        db.query(job_model)
+        .filter(job_model.repository_id == repo_id)
+        .order_by(job_model.id.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 def read_job_logs(job: Any, *, fallback_to_logs: bool = True) -> str:

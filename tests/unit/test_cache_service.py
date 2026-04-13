@@ -47,7 +47,9 @@ async def test_in_memory_backend_evicts_oldest_when_full():
 async def test_in_memory_backend_expires_entries():
     backend = InMemoryBackend(max_size_bytes=1024)
 
-    with patch("app.services.cache_service.time.time", side_effect=[100.0, 102.0, 102.0, 102.0]):
+    with patch(
+        "app.services.cache_service.time.time", side_effect=[100.0, 102.0, 102.0, 102.0]
+    ):
         assert await backend.set("expired", b"value", ttl_seconds=1) is True
         assert await backend.get("expired") is None
 
@@ -137,9 +139,16 @@ async def test_archive_cache_service_get_stats_redacts_redis_password():
 def test_archive_cache_service_reconfigure_falls_back_to_memory_when_redis_unavailable():
     service = ArchiveCacheService()
 
-    with patch("app.services.cache_service.ConnectionPool.from_url", side_effect=RuntimeError("no redis")), \
-         patch("app.services.cache_service.settings.redis_host", "disabled"):
-        result = service.reconfigure(redis_url="redis://:secret@cache.internal:6379/0", cache_max_size_mb=32)
+    with (
+        patch(
+            "app.services.cache_service.ConnectionPool.from_url",
+            side_effect=RuntimeError("no redis"),
+        ),
+        patch("app.services.cache_service.settings.redis_host", "disabled"),
+    ):
+        result = service.reconfigure(
+            redis_url="redis://:secret@cache.internal:6379/0", cache_max_size_mb=32
+        )
 
     assert result["success"] is True
     assert result["backend"] == "in-memory"

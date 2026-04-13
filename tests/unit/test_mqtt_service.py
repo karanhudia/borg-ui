@@ -10,8 +10,9 @@ Tests cover:
 - MQTTService configuration, connection, publishing, and sync
 - Edge cases and error handling
 """
+
 from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, patch
 import json
 
 import pytest
@@ -21,7 +22,6 @@ from app.database.models import (
     BackupJob,
     Repository,
     MQTTSyncState,
-    SystemSettings,
 )
 from app.services.mqtt_service import (
     MQTTService,
@@ -34,7 +34,6 @@ from app.services.mqtt_service import (
     REPOSITORY_SYNC_STATE_KEY,
     PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY,
     REPOSITORY_SENSOR_DEFINITIONS,
-    TERMINAL_JOB_STATUSES,
 )
 from app.utils.datetime_utils import serialize_datetime
 
@@ -42,6 +41,7 @@ from app.utils.datetime_utils import serialize_datetime
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def _payload_for_topic(mock_publish: Mock, topic: str):
     """Extract payload for a specific topic from mock publish calls."""
@@ -62,14 +62,16 @@ def _topic_was_published(mock_publish: Mock, topic: str) -> bool:
 def _create_mqtt_service_configured() -> MQTTService:
     """Create a configured MQTT service instance without real connection."""
     service = MQTTService()
-    service.config.update({
-        "enabled": True,
-        "broker_url": "mqtt://test-broker",
-        "broker_port": 1883,
-        "base_topic": "test-borg-ui",
-        "client_id": "test-client",
-        "qos": 1,
-    })
+    service.config.update(
+        {
+            "enabled": True,
+            "broker_url": "mqtt://test-broker",
+            "broker_port": 1883,
+            "base_topic": "test-borg-ui",
+            "client_id": "test-client",
+            "qos": 1,
+        }
+    )
     service.connected = True
     service.client = Mock()
     service.publish = Mock(return_value=True)
@@ -183,6 +185,7 @@ def test_publish_repository_data_uses_latest_job_timestamp(db_session):
     assert status_payload["timestamp"] == expected_timestamp
     assert progress_payload["timestamp"] == expected_timestamp
 
+
 @pytest.mark.unit
 def test_fetch_latest_backup_jobs_by_repository_uses_latest_row(db_session):
     old_repo1_job = BackupJob(
@@ -214,6 +217,7 @@ def test_fetch_latest_backup_jobs_by_repository_uses_latest_row(db_session):
 # =============================================================================
 # MQTTSyncStateStore Tests
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestMQTTSyncStateStore:
@@ -253,7 +257,9 @@ class TestMQTTSyncStateStore:
 
     def test_load_id_set_handles_non_list_json(self, db_session):
         """Should return empty set and log warning for non-list JSON."""
-        state = MQTTSyncState(sync_key="test_key", sync_value=json.dumps({"foo": "bar"}))
+        state = MQTTSyncState(
+            sync_key="test_key", sync_value=json.dumps({"foo": "bar"})
+        )
         db_session.add(state)
         db_session.commit()
 
@@ -276,7 +282,9 @@ class TestMQTTSyncStateStore:
 
         MQTTSyncStateStore.save_id_set(db_session, "test_key", {3, 4, 5})
 
-        updated_state = db_session.query(MQTTSyncState).filter_by(sync_key="test_key").first()
+        updated_state = (
+            db_session.query(MQTTSyncState).filter_by(sync_key="test_key").first()
+        )
         assert json.loads(updated_state.sync_value) == [3, 4, 5]
 
     def test_save_id_set_sorts_ids(self, db_session):
@@ -299,6 +307,7 @@ class TestMQTTSyncStateStore:
 # =============================================================================
 # BackupJobQueryService Tests
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestBackupJobQueryService:
@@ -363,7 +372,9 @@ class TestBackupJobQueryService:
     def test_fetch_latest_backup_jobs_ignores_null_repository(self, db_session):
         """Should ignore jobs with null repository."""
         job1 = BackupJob(repository=None, status="completed", created_at=datetime.now())
-        job2 = BackupJob(repository="/repo1", status="completed", created_at=datetime.now())
+        job2 = BackupJob(
+            repository="/repo1", status="completed", created_at=datetime.now()
+        )
         db_session.add_all([job1, job2])
         db_session.commit()
 
@@ -471,24 +482,28 @@ class TestBackupJobQueryService:
 # RepositoryStatePublisher Tests
 # =============================================================================
 
+
 @pytest.mark.unit
 class TestRepositoryStatePublisher:
     """Tests for RepositoryStatePublisher."""
 
-    @pytest.mark.parametrize("size_str,expected", [
-        ("0", 0),
-        ("100", 100),
-        ("1 KB", 1024),
-        ("1KB", 1024),
-        ("2 MB", 2 * 1024 ** 2),
-        ("3 GB", 3 * 1024 ** 3),
-        ("4 TB", 4 * 1024 ** 4),
-        ("5 PB", 5 * 1024 ** 5),
-        ("1.5 GB", int(1.5 * 1024 ** 3)),
-        ("", 0),
-        ("invalid", 0),
-        ("  2.5 MB  ", int(2.5 * 1024 ** 2)),
-    ])
+    @pytest.mark.parametrize(
+        "size_str,expected",
+        [
+            ("0", 0),
+            ("100", 100),
+            ("1 KB", 1024),
+            ("1KB", 1024),
+            ("2 MB", 2 * 1024**2),
+            ("3 GB", 3 * 1024**3),
+            ("4 TB", 4 * 1024**4),
+            ("5 PB", 5 * 1024**5),
+            ("1.5 GB", int(1.5 * 1024**3)),
+            ("", 0),
+            ("invalid", 0),
+            ("  2.5 MB  ", int(2.5 * 1024**2)),
+        ],
+    )
     def test_parse_size_to_bytes(self, size_str, expected):
         """Should parse various size formats correctly."""
         publisher = RepositoryStatePublisher(Mock())
@@ -632,6 +647,7 @@ class TestRepositoryStatePublisher:
 # ServerStatePublisher Tests
 # =============================================================================
 
+
 @pytest.mark.unit
 class TestServerStatePublisher:
     """Tests for ServerStatePublisher."""
@@ -648,7 +664,7 @@ class TestServerStatePublisher:
         assert status_payload["status"] == "idle"
         assert status_payload["timestamp"] is None
 
-    @patch('app.services.mqtt_service.datetime')
+    @patch("app.services.mqtt_service.datetime")
     def test_publish_server_state_with_running_job(self, mock_datetime, db_session):
         """Should publish running state with job details."""
         # Mock datetime.now() to return the job start time for deterministic ETA calculation
@@ -683,7 +699,9 @@ class TestServerStatePublisher:
         assert progress_payload["status"] == "running"
         assert progress_payload["percent"] == 50.0
         # ETA should be start time + 600 seconds (10 minutes) = 2026-02-22T12:10:00+00:00
-        expected_eta = serialize_datetime(datetime(2026, 2, 22, 12, 10, 0, tzinfo=timezone.utc))
+        expected_eta = serialize_datetime(
+            datetime(2026, 2, 22, 12, 10, 0, tzinfo=timezone.utc)
+        )
         assert progress_payload["eta_timestamp"] == expected_eta
 
     def test_publish_server_state_with_completed_job(self, db_session):
@@ -754,7 +772,9 @@ class TestServerStatePublisher:
 
         assert result is True
         last_payload = _payload_for_topic(mqtt_service.publish, "backup/last")
-        expected_timestamp = serialize_datetime(datetime(2026, 2, 22, 13, 0, 0, tzinfo=timezone.utc))
+        expected_timestamp = serialize_datetime(
+            datetime(2026, 2, 22, 13, 0, 0, tzinfo=timezone.utc)
+        )
         assert last_payload["timestamp"] == expected_timestamp
 
     def test_publish_server_state_completed_with_warnings_is_success(self, db_session):
@@ -781,6 +801,7 @@ class TestServerStatePublisher:
 # =============================================================================
 # HomeAssistantDiscoveryPublisher Tests
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestHomeAssistantDiscoveryPublisher:
@@ -809,9 +830,7 @@ class TestHomeAssistantDiscoveryPublisher:
 
         publisher = HomeAssistantDiscoveryPublisher(mqtt_service)
         device_info = publisher.get_home_assistant_device_info(
-            is_repository=True,
-            repo_id=7,
-            repository_name="Test Repo"
+            is_repository=True, repo_id=7, repository_name="Test Repo"
         )
 
         assert device_info["identifiers"] == ["borg_ui_repo_7"]
@@ -870,15 +889,23 @@ class TestHomeAssistantDiscoveryPublisher:
 
         assert result is True
         # Should publish empty payloads for discovery and state topics
-        expected_calls = len(REPOSITORY_SENSOR_DEFINITIONS) + len([
-            "status", "size", "archives", "last_backup", "backup/status", "backup/progress"
-        ])
+        expected_calls = len(REPOSITORY_SENSOR_DEFINITIONS) + len(
+            [
+                "status",
+                "size",
+                "archives",
+                "last_backup",
+                "backup/status",
+                "backup/progress",
+            ]
+        )
         assert mqtt_service._publish_raw.call_count >= expected_calls
 
 
 # =============================================================================
 # MQTTService Configuration Tests
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestMQTTServiceConfiguration:
@@ -896,11 +923,13 @@ class TestMQTTServiceConfiguration:
     def test_configure_updates_config(self):
         """Should update configuration."""
         service = MQTTService()
-        service.configure({
-            "enabled": True,
-            "broker_url": "mqtt://test-broker",
-            "broker_port": 8883,
-        })
+        service.configure(
+            {
+                "enabled": True,
+                "broker_url": "mqtt://test-broker",
+                "broker_port": 8883,
+            }
+        )
 
         assert service.config["enabled"] is True
         assert service.config["broker_url"] == "mqtt://test-broker"
@@ -911,22 +940,26 @@ class TestMQTTServiceConfiguration:
         service = MQTTService()
 
         with pytest.raises(ValueError, match="broker_url"):
-            service.configure({
-                "enabled": True,
-                "broker_url": None,
-                "base_topic": "test",
-            })
+            service.configure(
+                {
+                    "enabled": True,
+                    "broker_url": None,
+                    "base_topic": "test",
+                }
+            )
 
     def test_configure_validates_base_topic(self):
         """Should raise error for missing base_topic when enabled."""
         service = MQTTService()
 
         with pytest.raises(ValueError, match="base_topic"):
-            service.configure({
-                "enabled": True,
-                "broker_url": "mqtt://test",
-                "base_topic": None,
-            })
+            service.configure(
+                {
+                    "enabled": True,
+                    "broker_url": "mqtt://test",
+                    "base_topic": None,
+                }
+            )
 
     def test_configure_disconnects_existing_client(self):
         """Should disconnect existing client before reconfiguring."""
@@ -935,11 +968,13 @@ class TestMQTTServiceConfiguration:
         service.connected = True
         service.disconnect = Mock()
 
-        service.configure({
-            "enabled": False,
-            "broker_url": "mqtt://test",
-            "base_topic": "test",
-        })
+        service.configure(
+            {
+                "enabled": False,
+                "broker_url": "mqtt://test",
+                "base_topic": "test",
+            }
+        )
 
         service.disconnect.assert_called_once()
 
@@ -992,6 +1027,7 @@ class TestMQTTServiceConfiguration:
 # MQTTService Connection Tests
 # =============================================================================
 
+
 @pytest.mark.unit
 class TestMQTTServiceConnection:
     """Tests for MQTT connection handling."""
@@ -1035,13 +1071,15 @@ class TestMQTTServiceConnection:
         mock_client_class.return_value = mock_client
 
         service = MQTTService()
-        service.config.update({
-            "enabled": True,
-            "broker_url": "mqtt://test",
-            "broker_port": 1883,
-            "base_topic": "test",
-            "client_id": "test-client",
-        })
+        service.config.update(
+            {
+                "enabled": True,
+                "broker_url": "mqtt://test",
+                "broker_port": 1883,
+                "base_topic": "test",
+                "client_id": "test-client",
+            }
+        )
         service._initialize_client()
 
         mock_client_class.assert_called_once()
@@ -1054,14 +1092,16 @@ class TestMQTTServiceConnection:
         mock_client_class.return_value = mock_client
 
         service = MQTTService()
-        service.config.update({
-            "enabled": True,
-            "broker_url": "mqtt://test",
-            "broker_port": 1883,
-            "base_topic": "test",
-            "username": "testuser",
-            "password": "testpass",
-        })
+        service.config.update(
+            {
+                "enabled": True,
+                "broker_url": "mqtt://test",
+                "broker_port": 1883,
+                "base_topic": "test",
+                "username": "testuser",
+                "password": "testpass",
+            }
+        )
         service._initialize_client()
 
         mock_client.username_pw_set.assert_called_once_with("testuser", "testpass")
@@ -1073,16 +1113,18 @@ class TestMQTTServiceConnection:
         mock_client_class.return_value = mock_client
 
         service = MQTTService()
-        service.config.update({
-            "enabled": True,
-            "broker_url": "mqtt://test",
-            "broker_port": 8883,
-            "base_topic": "test",
-            "tls_enabled": True,
-            "tls_ca_cert": "/ca.crt",
-            "tls_client_cert": "/client.crt",
-            "tls_client_key": "/client.key",
-        })
+        service.config.update(
+            {
+                "enabled": True,
+                "broker_url": "mqtt://test",
+                "broker_port": 8883,
+                "base_topic": "test",
+                "tls_enabled": True,
+                "tls_ca_cert": "/ca.crt",
+                "tls_client_cert": "/client.crt",
+                "tls_client_key": "/client.key",
+            }
+        )
         service._initialize_client()
 
         mock_client.tls_set.assert_called_once_with(
@@ -1098,12 +1140,14 @@ class TestMQTTServiceConnection:
         mock_client_class.return_value = mock_client
 
         service = MQTTService()
-        service.config.update({
-            "enabled": True,
-            "broker_url": "mqtt://test",
-            "broker_port": 1883,
-            "base_topic": "test-topic",
-        })
+        service.config.update(
+            {
+                "enabled": True,
+                "broker_url": "mqtt://test",
+                "broker_port": 1883,
+                "base_topic": "test-topic",
+            }
+        )
         service._initialize_client()
 
         mock_client.will_set.assert_called_once()
@@ -1159,6 +1203,7 @@ class TestMQTTServiceConnection:
 # MQTTService Publishing Tests
 # =============================================================================
 
+
 @pytest.mark.unit
 class TestMQTTServicePublishing:
     """Tests for MQTT message publishing."""
@@ -1209,7 +1254,9 @@ class TestMQTTServicePublishing:
         service.client = Mock()
         service.client.publish = Mock(return_value=Mock(rc=mqtt.MQTT_ERR_SUCCESS))
 
-        result = service.publish("absolute/topic", {"data": "value"}, use_base_topic=False)
+        result = service.publish(
+            "absolute/topic", {"data": "value"}, use_base_topic=False
+        )
 
         assert result is True
         assert service.client.publish.call_args[0][0] == "absolute/topic"
@@ -1292,6 +1339,7 @@ class TestMQTTServicePublishing:
 # =============================================================================
 # MQTTService State Sync Tests
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestMQTTServiceStateSync:
@@ -1381,9 +1429,7 @@ class TestMQTTServiceStateSync:
         """Should process pending deleted repository cleanup."""
         # Queue repo 5 for deletion
         MQTTSyncStateStore.save_id_set(
-            db_session,
-            PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY,
-            {5}
+            db_session, PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY, {5}
         )
 
         service = _create_mqtt_service_configured()
@@ -1399,8 +1445,7 @@ class TestMQTTServiceStateSync:
 
         # Pending deleted should be cleared after successful sync
         pending = MQTTSyncStateStore.load_id_set(
-            db_session,
-            PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY
+            db_session, PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY
         )
         assert pending == set()
 
@@ -1421,7 +1466,9 @@ class TestMQTTServiceStateSync:
         result = service.sync_state_with_db(db_session, reason="test")
 
         assert result is True
-        saved_ids = MQTTSyncStateStore.load_id_set(db_session, REPOSITORY_SYNC_STATE_KEY)
+        saved_ids = MQTTSyncStateStore.load_id_set(
+            db_session, REPOSITORY_SYNC_STATE_KEY
+        )
         assert saved_ids == {repo.id}
 
     def test_sync_state_with_db_rollback_on_failure(self, db_session):
@@ -1437,7 +1484,9 @@ class TestMQTTServiceStateSync:
 
         assert result is False
         # Sync state should not be saved
-        saved_ids = MQTTSyncStateStore.load_id_set(db_session, REPOSITORY_SYNC_STATE_KEY)
+        saved_ids = MQTTSyncStateStore.load_id_set(
+            db_session, REPOSITORY_SYNC_STATE_KEY
+        )
         assert saved_ids == set()
 
     def test_queue_deleted_repository_cleanup(self, db_session):
@@ -1447,8 +1496,7 @@ class TestMQTTServiceStateSync:
         service.queue_deleted_repository_cleanup(db_session, 42)
 
         pending = MQTTSyncStateStore.load_id_set(
-            db_session,
-            PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY
+            db_session, PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY
         )
         assert pending == {42}
 
@@ -1461,8 +1509,7 @@ class TestMQTTServiceStateSync:
         service.queue_deleted_repository_cleanup(db_session, 3)
 
         pending = MQTTSyncStateStore.load_id_set(
-            db_session,
-            PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY
+            db_session, PENDING_DELETED_REPOSITORY_SYNC_STATE_KEY
         )
         assert pending == {1, 2, 3}
 
@@ -1470,6 +1517,7 @@ class TestMQTTServiceStateSync:
 # =============================================================================
 # Edge Cases & Error Handling Tests
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestMQTTServiceEdgeCases:
@@ -1567,11 +1615,13 @@ class TestMQTTServiceEdgeCases:
         service = MQTTService()
 
         with pytest.raises(ValueError):
-            service.configure({
-                "enabled": True,
-                "broker_url": "",
-                "base_topic": "test",
-            })
+            service.configure(
+                {
+                    "enabled": True,
+                    "broker_url": "",
+                    "base_topic": "test",
+                }
+            )
 
     def test_disconnect_without_client(self):
         """Should handle disconnect when client is None."""
@@ -1598,6 +1648,7 @@ class TestMQTTServiceEdgeCases:
 # =============================================================================
 # Integration Test Scenarios
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestMQTTIntegrationScenarios:

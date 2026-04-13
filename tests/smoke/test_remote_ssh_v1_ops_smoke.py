@@ -13,11 +13,17 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tests.smoke.live_helpers import SmokeClient, SmokeFailure
-from tests.smoke.ssh_smoke_helpers import add_ssh_smoke_args, ensure_public_key_authorized, require_ssh_smoke_config
+from tests.smoke.ssh_smoke_helpers import (
+    add_ssh_smoke_args,
+    ensure_public_key_authorized,
+    require_ssh_smoke_config,
+)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Borg 1 SSH repository operations smoke test")
+    parser = argparse.ArgumentParser(
+        description="Run Borg 1 SSH repository operations smoke test"
+    )
     add_ssh_smoke_args(parser)
     args = parser.parse_args()
 
@@ -66,17 +72,28 @@ def main() -> int:
         )
 
         for index in range(3):
-            (source_root / "docs" / f"version-{index}.txt").write_text(f"ssh v1 version {index}\n", encoding="utf-8")
+            (source_root / "docs" / f"version-{index}.txt").write_text(
+                f"ssh v1 version {index}\n", encoding="utf-8"
+            )
             backup_job_id = client.start_backup(repo_path)
-            client.wait_for_job("/api/backup/status", backup_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+            client.wait_for_job(
+                "/api/backup/status",
+                backup_job_id,
+                expected={"completed", "completed_with_warnings"},
+                timeout=120,
+            )
             time.sleep(1)
 
         archives = client.list_archives(repo_path)
         if len(archives) < 3:
-            raise SmokeFailure(f"Expected at least 3 archives in SSH repo, got {archives}")
+            raise SmokeFailure(
+                f"Expected at least 3 archives in SSH repo, got {archives}"
+            )
         archive_name = archives[-1]["name"]
 
-        archive_info = client.get_archive_info(archive_name, repo_path, include_files=True)
+        archive_info = client.get_archive_info(
+            archive_name, repo_path, include_files=True
+        )
         if archive_info.get("name") != archive_name:
             raise SmokeFailure(f"Unexpected SSH archive info payload: {archive_info}")
 
@@ -93,7 +110,9 @@ def main() -> int:
         if not isinstance(preview, str):
             raise SmokeFailure(f"Unexpected SSH restore preview payload: {preview!r}")
         if any(preview_dest.iterdir()):
-            raise SmokeFailure("SSH restore preview should not write files to destination")
+            raise SmokeFailure(
+                "SSH restore preview should not write files to destination"
+            )
 
         restore_root = client.temp_dir / "ssh-v1-restore"
         restore_root.mkdir(parents=True, exist_ok=True)
@@ -104,10 +123,18 @@ def main() -> int:
             destination=restore_root,
             paths=[f"{repo_root}/docs"],
         )
-        client.wait_for_job("/api/restore/status", restore_job_id, expected={"completed"}, timeout=120)
-        restored_files = sorted(path.relative_to(restore_root).as_posix() for path in restore_root.rglob("*") if path.is_file())
+        client.wait_for_job(
+            "/api/restore/status", restore_job_id, expected={"completed"}, timeout=120
+        )
+        restored_files = sorted(
+            path.relative_to(restore_root).as_posix()
+            for path in restore_root.rglob("*")
+            if path.is_file()
+        )
         if not any(path.endswith("docs/nested/leaf.txt") for path in restored_files):
-            raise SmokeFailure(f"SSH restore did not produce expected files: {restored_files}")
+            raise SmokeFailure(
+                f"SSH restore did not produce expected files: {restored_files}"
+            )
 
         check_response = client.request_ok(
             "POST",
@@ -117,14 +144,30 @@ def main() -> int:
         )
         check_job_id = check_response.json().get("job_id")
         if not isinstance(check_job_id, int):
-            raise SmokeFailure(f"Unexpected SSH check response: {check_response.json()}")
-        client.wait_for_job("/api/repositories/check-jobs", check_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+            raise SmokeFailure(
+                f"Unexpected SSH check response: {check_response.json()}"
+            )
+        client.wait_for_job(
+            "/api/repositories/check-jobs",
+            check_job_id,
+            expected={"completed", "completed_with_warnings"},
+            timeout=120,
+        )
 
-        compact_response = client.request_ok("POST", f"/api/repositories/{repo_id}/compact")
+        compact_response = client.request_ok(
+            "POST", f"/api/repositories/{repo_id}/compact"
+        )
         compact_job_id = compact_response.json().get("job_id")
         if not isinstance(compact_job_id, int):
-            raise SmokeFailure(f"Unexpected SSH compact response: {compact_response.json()}")
-        client.wait_for_job("/api/repositories/compact-jobs", compact_job_id, expected={"completed", "completed_with_warnings"}, timeout=120)
+            raise SmokeFailure(
+                f"Unexpected SSH compact response: {compact_response.json()}"
+            )
+        client.wait_for_job(
+            "/api/repositories/compact-jobs",
+            compact_job_id,
+            expected={"completed", "completed_with_warnings"},
+            timeout=120,
+        )
 
         prune_response = client.request_ok(
             "POST",
@@ -146,7 +189,9 @@ def main() -> int:
 
         archives_after_prune = client.list_archives(repo_path)
         if len(archives_after_prune) != 1:
-            raise SmokeFailure(f"Expected SSH prune to leave exactly one archive, got {archives_after_prune}")
+            raise SmokeFailure(
+                f"Expected SSH prune to leave exactly one archive, got {archives_after_prune}"
+            )
 
         final_archive = archives_after_prune[0]["name"]
         delete_response = client.request_ok(
@@ -156,12 +201,21 @@ def main() -> int:
         )
         delete_job_id = delete_response.json().get("job_id")
         if not isinstance(delete_job_id, int):
-            raise SmokeFailure(f"Unexpected SSH delete response: {delete_response.json()}")
-        client.wait_for_job("/api/archives/delete-jobs", delete_job_id, expected={"completed"}, timeout=120)
+            raise SmokeFailure(
+                f"Unexpected SSH delete response: {delete_response.json()}"
+            )
+        client.wait_for_job(
+            "/api/archives/delete-jobs",
+            delete_job_id,
+            expected={"completed"},
+            timeout=120,
+        )
 
         remaining_archives = client.list_archives(repo_path)
         if remaining_archives:
-            raise SmokeFailure(f"Expected SSH delete to remove final archive, got {remaining_archives}")
+            raise SmokeFailure(
+                f"Expected SSH delete to remove final archive, got {remaining_archives}"
+            )
 
         client.log("Remote SSH Borg 1 operations smoke passed")
         return 0

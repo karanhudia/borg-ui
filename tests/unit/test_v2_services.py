@@ -13,7 +13,9 @@ from app.services.v2.delete_archive_service import DeleteArchiveV2Service
 
 class AsyncLineStream:
     def __init__(self, lines):
-        self._lines = [line if isinstance(line, bytes) else line.encode("utf-8") for line in lines]
+        self._lines = [
+            line if isinstance(line, bytes) else line.encode("utf-8") for line in lines
+        ]
         self._index = 0
 
     def __aiter__(self):
@@ -103,9 +105,12 @@ class TestCheckV2Service:
         service = CheckV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.check_service.SessionLocal", testing_session_local), patch(
-            "app.services.v2.check_service.asyncio.create_subprocess_exec"
-        ) as mock_exec:
+        with (
+            patch("app.services.v2.check_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.v2.check_service.asyncio.create_subprocess_exec"
+            ) as mock_exec,
+        ):
             await service.execute_check(job.id, borg_v2_repo_for_services.id)
 
         mock_exec.assert_not_called()
@@ -135,20 +140,35 @@ class TestCheckV2Service:
         service = CheckV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.check_service.SessionLocal", testing_session_local), patch(
-            "app.services.v2.check_service.resolve_repo_ssh_key_file", return_value=None
-        ), patch(
-            "app.services.v2.check_service._get_borg2_binary", return_value="borg2"
-        ), patch(
-            "app.services.v2.check_service._get_process_start_time", return_value=123
-        ), patch(
-            "app.services.v2.check_service.asyncio.create_subprocess_exec", return_value=process
+        with (
+            patch("app.services.v2.check_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.v2.check_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.check_service._get_borg2_binary", return_value="borg2"
+            ),
+            patch(
+                "app.services.v2.check_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.check_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ),
         ):
             await service.execute_check(job.id, borg_v2_repo_for_services.id)
 
         verification = testing_session_local()
-        refreshed_job = verification.query(CheckJob).filter(CheckJob.id == job.id).first()
-        refreshed_repo = verification.query(Repository).filter(Repository.id == borg_v2_repo_for_services.id).first()
+        refreshed_job = (
+            verification.query(CheckJob).filter(CheckJob.id == job.id).first()
+        )
+        refreshed_repo = (
+            verification.query(Repository)
+            .filter(Repository.id == borg_v2_repo_for_services.id)
+            .first()
+        )
         assert refreshed_job.status == "completed"
         assert refreshed_job.progress == 100
         assert refreshed_job.has_logs is True
@@ -186,15 +206,24 @@ class TestCheckV2Service:
         service = CheckV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.check_service.SessionLocal", testing_session_local), patch(
-            "app.services.v2.check_service.resolve_repo_ssh_key_file", return_value=None
-        ), patch(
-            "app.services.v2.check_service._get_borg2_binary", return_value="borg2"
-        ), patch(
-            "app.services.v2.check_service._get_process_start_time", return_value=123
-        ), patch(
-            "app.services.v2.check_service.asyncio.create_subprocess_exec", return_value=process
-        ) as mock_exec:
+        with (
+            patch("app.services.v2.check_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.v2.check_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.check_service._get_borg2_binary", return_value="borg2"
+            ),
+            patch(
+                "app.services.v2.check_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.check_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ) as mock_exec,
+        ):
             await service.execute_check(job.id, borg_v2_repo_for_services.id)
 
         cmd = mock_exec.call_args.args
@@ -203,8 +232,13 @@ class TestCheckV2Service:
         assert "3600" in cmd
 
         verification = testing_session_local()
-        refreshed_job = verification.query(CheckJob).filter(CheckJob.id == job.id).first()
-        assert refreshed_job.progress_message == "Partial repository check completed successfully"
+        refreshed_job = (
+            verification.query(CheckJob).filter(CheckJob.id == job.id).first()
+        )
+        assert (
+            refreshed_job.progress_message
+            == "Partial repository check completed successfully"
+        )
         verification.close()
 
     @pytest.mark.unit
@@ -220,15 +254,23 @@ class TestCheckV2Service:
         service = CheckV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.check_service.SessionLocal", testing_session_local), patch(
-            "app.services.v2.check_service.resolve_repo_ssh_key_file", return_value=None
-        ), patch(
-            "app.services.v2.check_service._get_borg2_binary", return_value="borg2"
-        ), patch(
-            "app.services.v2.check_service._get_process_start_time", return_value=123
-        ), patch(
-            "app.services.v2.check_service.asyncio.create_subprocess_exec",
-            return_value=FakeProcess(returncode=1, stderr_lines=["warning"]),
+        with (
+            patch("app.services.v2.check_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.v2.check_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.check_service._get_borg2_binary", return_value="borg2"
+            ),
+            patch(
+                "app.services.v2.check_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.check_service.asyncio.create_subprocess_exec",
+                return_value=FakeProcess(returncode=1, stderr_lines=["warning"]),
+            ),
         ):
             await service.execute_check(job.id, borg_v2_repo_for_services.id)
 
@@ -253,11 +295,15 @@ class TestCompactV2Service:
         service = CompactV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.compact_service.SessionLocal", testing_session_local):
+        with patch(
+            "app.services.v2.compact_service.SessionLocal", testing_session_local
+        ):
             await service.execute_compact(job.id, 999)
 
         verification = testing_session_local()
-        refreshed = verification.query(CompactJob).filter(CompactJob.id == job.id).first()
+        refreshed = (
+            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
+        )
         assert refreshed.status == "failed"
         assert "Repository not found" in refreshed.error_message
         verification.close()
@@ -298,20 +344,33 @@ class TestCompactV2Service:
         service = CompactV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.compact_service.SessionLocal", testing_session_local), patch(
-            "app.services.v2.compact_service.resolve_repo_ssh_key_file", return_value=None
-        ), patch(
-            "app.services.v2.compact_service._get_borg2_binary", return_value="borg2"
-        ), patch(
-            "app.services.v2.compact_service._get_process_start_time", return_value=123
-        ), patch(
-            "app.services.v2.compact_service.asyncio.create_subprocess_exec",
-            return_value=FakeProcess(returncode=0, stderr_lines=lines),
+        with (
+            patch(
+                "app.services.v2.compact_service.SessionLocal", testing_session_local
+            ),
+            patch(
+                "app.services.v2.compact_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.compact_service._get_borg2_binary",
+                return_value="borg2",
+            ),
+            patch(
+                "app.services.v2.compact_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.compact_service.asyncio.create_subprocess_exec",
+                return_value=FakeProcess(returncode=0, stderr_lines=lines),
+            ),
         ):
             await service.execute_compact(job.id, borg_v2_repo_for_services.id)
 
         verification = testing_session_local()
-        refreshed = verification.query(CompactJob).filter(CompactJob.id == job.id).first()
+        refreshed = (
+            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
+        )
         assert refreshed.status == "completed"
         assert refreshed.progress == 100
         assert refreshed.has_logs is True
@@ -330,20 +389,33 @@ class TestCompactV2Service:
         service = CompactV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.compact_service.SessionLocal", testing_session_local), patch(
-            "app.services.v2.compact_service.resolve_repo_ssh_key_file", return_value=None
-        ), patch(
-            "app.services.v2.compact_service._get_borg2_binary", return_value="borg2"
-        ), patch(
-            "app.services.v2.compact_service._get_process_start_time", return_value=123
-        ), patch(
-            "app.services.v2.compact_service.asyncio.create_subprocess_exec",
-            return_value=FakeProcess(returncode=100, stderr_lines=["warn"]),
+        with (
+            patch(
+                "app.services.v2.compact_service.SessionLocal", testing_session_local
+            ),
+            patch(
+                "app.services.v2.compact_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.compact_service._get_borg2_binary",
+                return_value="borg2",
+            ),
+            patch(
+                "app.services.v2.compact_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.compact_service.asyncio.create_subprocess_exec",
+                return_value=FakeProcess(returncode=100, stderr_lines=["warn"]),
+            ),
         ):
             await service.execute_compact(job.id, borg_v2_repo_for_services.id)
 
         verification = testing_session_local()
-        refreshed = verification.query(CompactJob).filter(CompactJob.id == job.id).first()
+        refreshed = (
+            verification.query(CompactJob).filter(CompactJob.id == job.id).first()
+        )
         assert refreshed.status == "completed_with_warnings"
         assert "warnings" in refreshed.error_message
         verification.close()
@@ -363,11 +435,17 @@ class TestDeleteArchiveV2Service:
         service = DeleteArchiveV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.delete_archive_service.SessionLocal", testing_session_local):
+        with patch(
+            "app.services.v2.delete_archive_service.SessionLocal", testing_session_local
+        ):
             await service.execute_delete(job.id, 999, "old")
 
         verification = testing_session_local()
-        refreshed = verification.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job.id).first()
+        refreshed = (
+            verification.query(DeleteArchiveJob)
+            .filter(DeleteArchiveJob.id == job.id)
+            .first()
+        )
         assert refreshed.status == "failed"
         assert refreshed.error_message == "Repository not found"
         verification.close()
@@ -390,14 +468,24 @@ class TestDeleteArchiveV2Service:
         service = DeleteArchiveV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.delete_archive_service.SessionLocal", testing_session_local), patch(
-            "app.services.v2.delete_archive_service.borg2.delete_archive",
-            return_value={"success": False, "stderr": "cannot delete"},
+        with (
+            patch(
+                "app.services.v2.delete_archive_service.SessionLocal",
+                testing_session_local,
+            ),
+            patch(
+                "app.services.v2.delete_archive_service.borg2.delete_archive",
+                return_value={"success": False, "stderr": "cannot delete"},
+            ),
         ):
             await service.execute_delete(job.id, borg_v2_repo_for_services.id, "old")
 
         verification = testing_session_local()
-        refreshed = verification.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job.id).first()
+        refreshed = (
+            verification.query(DeleteArchiveJob)
+            .filter(DeleteArchiveJob.id == job.id)
+            .first()
+        )
         assert refreshed.status == "failed"
         assert refreshed.error_message == "cannot delete"
         verification.close()
@@ -420,17 +508,28 @@ class TestDeleteArchiveV2Service:
         service = DeleteArchiveV2Service()
         service.log_dir = tmp_path
 
-        with patch("app.services.v2.delete_archive_service.SessionLocal", testing_session_local), patch(
-            "app.services.v2.delete_archive_service.borg2.delete_archive",
-            return_value={"success": True, "stderr": ""},
-        ), patch(
-            "app.services.v2.delete_archive_service.borg2.compact",
-            return_value={"success": False, "stderr": "compact warning"},
+        with (
+            patch(
+                "app.services.v2.delete_archive_service.SessionLocal",
+                testing_session_local,
+            ),
+            patch(
+                "app.services.v2.delete_archive_service.borg2.delete_archive",
+                return_value={"success": True, "stderr": ""},
+            ),
+            patch(
+                "app.services.v2.delete_archive_service.borg2.compact",
+                return_value={"success": False, "stderr": "compact warning"},
+            ),
         ):
             await service.execute_delete(job.id, borg_v2_repo_for_services.id, "old")
 
         verification = testing_session_local()
-        refreshed = verification.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job.id).first()
+        refreshed = (
+            verification.query(DeleteArchiveJob)
+            .filter(DeleteArchiveJob.id == job.id)
+            .first()
+        )
         assert refreshed.status == "completed"
         assert refreshed.progress == 100
         verification.close()

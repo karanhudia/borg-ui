@@ -16,10 +16,12 @@ logger = structlog.get_logger()
 def upgrade(db):
     # ── repositories.borg_version ─────────────────────────────────────────────
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE repositories
             ADD COLUMN borg_version INTEGER DEFAULT 1
-        """))
+        """)
+        )
         logger.info("Added borg_version column to repositories")
     except Exception as e:
         if "duplicate column" in str(e).lower():
@@ -29,10 +31,12 @@ def upgrade(db):
 
     # ── system_settings.borg1_binary_path ────────────────────────────────────
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN borg1_binary_path VARCHAR DEFAULT 'borg'
-        """))
+        """)
+        )
         logger.info("Added borg1_binary_path column to system_settings")
     except Exception as e:
         if "duplicate column" in str(e).lower():
@@ -42,10 +46,12 @@ def upgrade(db):
 
     # ── system_settings.borg2_binary_path ────────────────────────────────────
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN borg2_binary_path VARCHAR DEFAULT 'borg2'
-        """))
+        """)
+        )
         logger.info("Added borg2_binary_path column to system_settings")
     except Exception as e:
         if "duplicate column" in str(e).lower():

@@ -40,9 +40,10 @@ def test_break_repository_lock_uses_v2_command_shape():
         remote_path="/usr/bin/borg2",
     )
 
-    with patch("app.core.borg2.borg2.borg_cmd", "borg2"), patch(
-        "app.utils.process_utils.subprocess.run"
-    ) as mock_run:
+    with (
+        patch("app.core.borg2.borg2.borg_cmd", "borg2"),
+        patch("app.utils.process_utils.subprocess.run") as mock_run,
+    ):
         mock_run.return_value = SimpleNamespace(returncode=0, stderr="")
 
         result = break_repository_lock(repository)
@@ -50,6 +51,12 @@ def test_break_repository_lock_uses_v2_command_shape():
     assert result is True
     cmd = mock_run.call_args.args[0]
     env = mock_run.call_args.kwargs["env"]
-    assert cmd == ["borg2", "-r", "/repo/path", "break-lock", "--remote-path", "/usr/bin/borg2"]
+    assert cmd == [
+        "borg2",
+        "-r",
+        "/repo/path",
+        "break-lock",
+        "--remote-path",
+        "/usr/bin/borg2",
+    ]
     assert env["BORG_PASSPHRASE"] == "secret"
-

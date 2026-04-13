@@ -94,7 +94,9 @@ class TestMaintenanceJobsHelpers:
 
     def test_get_job_with_repository_checks_access(self, test_db, admin_user):
         repo = _create_repo(test_db)
-        job = create_maintenance_job(test_db, CheckJob, repo, extra_fields={"max_duration": 60})
+        job = create_maintenance_job(
+            test_db, CheckJob, repo, extra_fields={"max_duration": 60}
+        )
 
         loaded_job, loaded_repo = get_job_with_repository(
             test_db,
@@ -107,17 +109,23 @@ class TestMaintenanceJobsHelpers:
         assert loaded_job.id == job.id
         assert loaded_repo.id == repo.id
 
-    def test_get_repository_jobs_returns_empty_for_missing_repo(self, test_db, admin_user):
+    def test_get_repository_jobs_returns_empty_for_missing_repo(
+        self, test_db, admin_user
+    ):
         jobs = get_repository_jobs(test_db, admin_user, 9999, CheckJob, limit=5)
 
         assert jobs == []
 
-    def test_read_job_logs_prefers_file_and_falls_back_to_legacy_logs(self, test_db, tmp_path):
+    def test_read_job_logs_prefers_file_and_falls_back_to_legacy_logs(
+        self, test_db, tmp_path
+    ):
         repo = _create_repo(test_db)
         log_path = tmp_path / "check.log"
         log_path.write_text("from file\n", encoding="utf-8")
 
-        file_job = CheckJob(repository_id=repo.id, log_file_path=str(log_path), logs="legacy")
+        file_job = CheckJob(
+            repository_id=repo.id, log_file_path=str(log_path), logs="legacy"
+        )
         legacy_job = CheckJob(repository_id=repo.id, logs="legacy only")
 
         assert read_job_logs(file_job) == "from file\n"

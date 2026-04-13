@@ -2,8 +2,8 @@ import os
 import secrets
 from typing import List, Union, Optional
 from pathlib import Path
-from pydantic import field_validator
 from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
     """Application settings"""
@@ -23,12 +23,18 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 1440  # 24 hours
 
     # Proxy authentication settings
-    disable_authentication: bool = False  # Disable built-in auth, trust reverse proxy headers
-    proxy_auth_header: str = "X-Forwarded-User"  # Header containing authenticated username
+    disable_authentication: bool = (
+        False  # Disable built-in auth, trust reverse proxy headers
+    )
+    proxy_auth_header: str = (
+        "X-Forwarded-User"  # Header containing authenticated username
+    )
 
     # Licensing / activation settings
     activation_service_url: Optional[str] = "https://license.borgui.com"
-    activation_public_key: Optional[str] = "MCowBQYDK2VwAyEATF7UOvYKrNF6M8hZCrGwTRQjj7nhygMUr84AOYE7Zf8="
+    activation_public_key: Optional[str] = (
+        "MCowBQYDK2VwAyEATF7UOvYKrNF6M8hZCrGwTRQjj7nhygMUr84AOYE7Zf8="
+    )
     activation_timeout_seconds: int = 10
     activation_refresh_interval_hours: int = 24
     enable_startup_license_sync: bool = False
@@ -49,7 +55,11 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> List[str]:
         """Get CORS origins as list"""
-        return [origin.strip() for origin in self._cors_origins_str.split(",") if origin.strip()]
+        return [
+            origin.strip()
+            for origin in self._cors_origins_str.split(",")
+            if origin.strip()
+        ]
 
     @cors_origins.setter
     def cors_origins(self, value: Union[str, List[str]]):
@@ -63,13 +73,15 @@ class Settings(BaseSettings):
         """Get local mount points as list"""
         if not self.local_mount_points:
             return []
-        return [path.strip() for path in self.local_mount_points.split(",") if path.strip()]
+        return [
+            path.strip() for path in self.local_mount_points.split(",") if path.strip()
+        ]
 
     # Server settings
     host: str = "0.0.0.0"
     port: int = 8081
     workers: int = 2
-    
+
     # Cache settings (legacy browse.py, being replaced by Redis cache)
     cache_enabled: bool = True
     cache_ttl: int = 300  # 5 minutes
@@ -96,13 +108,23 @@ class Settings(BaseSettings):
 
     # Borg operation timeouts (in seconds)
     # These can be increased for very large repositories (e.g., 830TB with 166 min cache build)
-    borg_mount_timeout: int = 120     # 2 minutes - for borg mount operations (archive browsing)
-    borg_info_timeout: int = 600      # 10 minutes - for borg info operations (repo verification, stats)
-    borg_list_timeout: int = 600      # 10 minutes - for borg list operations (archives, files)
-    borg_init_timeout: int = 300      # 5 minutes - for borg init operations (new repo creation)
+    borg_mount_timeout: int = (
+        120  # 2 minutes - for borg mount operations (archive browsing)
+    )
+    borg_info_timeout: int = (
+        600  # 10 minutes - for borg info operations (repo verification, stats)
+    )
+    borg_list_timeout: int = (
+        600  # 10 minutes - for borg list operations (archives, files)
+    )
+    borg_init_timeout: int = (
+        300  # 5 minutes - for borg init operations (new repo creation)
+    )
     borg_extract_timeout: int = 3600  # 1 hour - for borg extract operations (restore)
-    script_timeout: int = 120         # 2 minutes - for pre/post backup scripts
-    source_size_timeout: int = 3600   # 1 hour - for du-based source size calculation (large datasets)
+    script_timeout: int = 120  # 2 minutes - for pre/post backup scripts
+    source_size_timeout: int = (
+        3600  # 1 hour - for du-based source size calculation (large datasets)
+    )
 
     # Health check settings
     health_check_interval: int = 30
@@ -118,11 +140,8 @@ class Settings(BaseSettings):
         case_sensitive = False
         extra = "ignore"
         # Map CORS_ORIGINS env var to _cors_origins_str field
-        fields = {
-            "_cors_origins_str": {
-                "env": "CORS_ORIGINS"
-            }
-        }
+        fields = {"_cors_origins_str": {"env": "CORS_ORIGINS"}}
+
 
 # Create settings instance
 settings = Settings()
@@ -165,6 +184,7 @@ else:
     secret_key_file.write_text(settings.secret_key)
     secret_key_file.chmod(0o600)  # Secure permissions
     import logging
+
     logger = logging.getLogger(__name__)
     logger.info(f"Auto-generated SECRET_KEY and saved to {secret_key_file}")
 
@@ -172,7 +192,9 @@ else:
 settings.environment = os.getenv("ENVIRONMENT", settings.environment)
 settings.log_level = os.getenv("LOG_LEVEL", settings.log_level)
 settings.port = int(os.getenv("PORT", settings.port))
-settings.activation_service_url = os.getenv("ACTIVATION_SERVICE_URL", settings.activation_service_url)
+settings.activation_service_url = os.getenv(
+    "ACTIVATION_SERVICE_URL", settings.activation_service_url
+)
 settings.activation_public_key = os.getenv(
     "ACTIVATION_PUBLIC_KEY", settings.activation_public_key
 )
@@ -183,6 +205,7 @@ settings.enable_startup_license_sync = os.getenv(
     "ENABLE_STARTUP_LICENSE_SYNC",
     "true" if settings.environment == "production" else "false",
 ).strip().lower() in {"1", "true", "yes", "on"}
+
 
 def get_runtime_app_version() -> str:
     version_file = Path("/app/VERSION")
@@ -198,12 +221,14 @@ def get_runtime_app_version() -> str:
 
     return os.getenv("APP_VERSION", settings.app_version)
 
+
 # Environment-specific overrides
 if settings.environment == "production":
     settings.debug = False
 elif settings.environment == "development":
     settings.debug = True
     settings.log_level = os.getenv("LOG_LEVEL", "DEBUG")
+
 
 # Security validation
 def validate_security_settings():
@@ -227,9 +252,11 @@ def validate_security_settings():
     # Log warnings
     if issues:
         import logging
+
         logger = logging.getLogger(__name__)
         for issue in issues:
             logger.warning(issue)
 
+
 # Run validation
-validate_security_settings() 
+validate_security_settings()

@@ -15,10 +15,12 @@ logger = structlog.get_logger()
 def upgrade(db):
     """Add show_restore_tab to system_settings"""
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN show_restore_tab BOOLEAN DEFAULT 0 NOT NULL
-        """))
+        """)
+        )
         logger.info("Added show_restore_tab column to system_settings")
     except Exception as e:
         if "duplicate column" in str(e).lower():

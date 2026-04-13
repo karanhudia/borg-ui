@@ -3,20 +3,25 @@ Integration tests for repositories API with real borg operations
 
 These tests use actual borg repositories to verify end-to-end functionality.
 """
+
 import pytest
-import json
 import shutil
 import subprocess
 from fastapi.testclient import TestClient
 from app.database.models import Repository
-from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
+from tests.integration.test_helpers import (
+    parse_archives_payload,
+    wait_for_job_terminal_status,
+)
 from tests.utils.borg import create_archive, make_borg_test_env
 
 
 def _require_borg2_binary() -> str:
     borg2_path = shutil.which("borg2")
     if not borg2_path:
-        pytest.skip("Borg 2 binary not found. Install borg2 to run this integration test.")
+        pytest.skip(
+            "Borg 2 binary not found. Install borg2 to run this integration test."
+        )
     return borg2_path
 
 
@@ -55,7 +60,9 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     (source_path / "file1.txt").write_text("borg2 prune file 1\n", encoding="utf-8")
     create_archive(borg2_binary, repo_path, "test-archive-1", [source_path], env=env)
 
-    (source_path / "file1.txt").write_text("borg2 prune file 1 updated\n", encoding="utf-8")
+    (source_path / "file1.txt").write_text(
+        "borg2 prune file 1 updated\n", encoding="utf-8"
+    )
     (source_path / "file2.txt").write_text("borg2 prune file 2\n", encoding="utf-8")
     create_archive(borg2_binary, repo_path, "test-archive-2", [source_path], env=env)
 
@@ -140,7 +147,9 @@ def _run_prune_contract_assertions(
         assert archive_names_after == [archive_names[-1]]
 
 
-def _assert_borg2_job_start_contract(payload: dict, *, expected_status: str, expected_message: str) -> int:
+def _assert_borg2_job_start_contract(
+    payload: dict, *, expected_status: str, expected_message: str
+) -> int:
     assert set(payload.keys()) == {"job_id", "status", "message"}
     assert isinstance(payload["job_id"], int)
     assert payload["status"] == expected_status
@@ -154,11 +163,7 @@ class TestRepositoryInitialization:
     """Test repository initialization with real borg"""
 
     def test_initialize_unencrypted_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        test_db,
-        tmp_path
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):
         """Test initializing a new unencrypted borg repository"""
         repo_path = tmp_path / "new-repo"
@@ -172,9 +177,9 @@ class TestRepositoryInitialization:
                 "encryption": "none",
                 "compression": "lz4",
                 "repository_type": "local",
-                "source_directories": ["/tmp/test-source"]
+                "source_directories": ["/tmp/test-source"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -190,11 +195,7 @@ class TestRepositoryInitialization:
         assert repo_data["encryption"] == "none"
 
     def test_initialize_encrypted_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        test_db,
-        tmp_path
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):
         """Test initializing a new encrypted borg repository"""
         repo_path = tmp_path / "encrypted-new-repo"
@@ -208,9 +209,9 @@ class TestRepositoryInitialization:
                 "passphrase": "test-password-123",
                 "compression": "lz4",
                 "repository_type": "local",
-                "source_directories": ["/tmp/test-source"]
+                "source_directories": ["/tmp/test-source"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -242,7 +243,9 @@ class TestRepositoryInitializationV2:
         repo_path = tmp_path / "borg2-create-repo"
         source_path = tmp_path / "borg2-create-source"
         source_path.mkdir()
-        (source_path / "hello.txt").write_text("borg2 integration create\n", encoding="utf-8")
+        (source_path / "hello.txt").write_text(
+            "borg2 integration create\n", encoding="utf-8"
+        )
 
         response = test_client.post(
             "/api/repositories/",
@@ -291,7 +294,9 @@ class TestRepositoryInitializationV2:
         repo_path = tmp_path / "borg2-import-repo"
         source_path = tmp_path / "borg2-import-source"
         source_path.mkdir()
-        (source_path / "notes.txt").write_text("borg2 integration import\n", encoding="utf-8")
+        (source_path / "notes.txt").write_text(
+            "borg2 integration import\n", encoding="utf-8"
+        )
 
         create_result = subprocess.run(
             [borg2_binary, "-r", str(repo_path), "repo-create", "--encryption", "none"],
@@ -333,17 +338,13 @@ class TestRepositoryStats:
     """Test getting repository statistics from real repos"""
 
     def test_get_stats_from_real_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test getting stats from a repository with archives"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
-            f"/api/repositories/{repo.id}/stats",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}/stats", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -357,17 +358,13 @@ class TestRepositoryStats:
         assert "total_size" in stats or "original_size" in stats
 
     def test_get_stats_from_empty_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """Test getting stats from an empty repository"""
         repo, repo_path, test_data_path = db_borg_repo
 
         response = test_client.get(
-            f"/api/repositories/{repo.id}/stats",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}/stats", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -376,17 +373,13 @@ class TestRepositoryStats:
         assert isinstance(stats, dict)
 
     def test_get_stats_encrypted_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_encrypted_borg_repo
+        self, test_client: TestClient, admin_headers, db_encrypted_borg_repo
     ):
         """Test getting stats from encrypted repository"""
         repo, repo_path, test_data_path, passphrase = db_encrypted_borg_repo
 
         response = test_client.get(
-            f"/api/repositories/{repo.id}/stats",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}/stats", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -402,17 +395,13 @@ class TestRepositoryInfo:
     """Test getting repository info from real repos"""
 
     def test_get_info_from_real_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test getting info from a repository with archives"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
-            f"/api/repositories/{repo.id}/info",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}/info", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -427,17 +416,13 @@ class TestRepositoryInfo:
         assert "id" in info["repository"] or "location" in info["repository"]
 
     def test_get_info_encrypted_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_encrypted_borg_repo
+        self, test_client: TestClient, admin_headers, db_encrypted_borg_repo
     ):
         """Test getting info from encrypted repository"""
         repo, repo_path, test_data_path, passphrase = db_encrypted_borg_repo
 
         response = test_client.get(
-            f"/api/repositories/{repo.id}/info",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}/info", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -449,7 +434,11 @@ class TestRepositoryInfo:
 
         # Should show encryption info
         if "encryption" in info:
-            assert info["encryption"]["mode"] in ["repokey", "keyfile", "repokey-blake2"]
+            assert info["encryption"]["mode"] in [
+                "repokey",
+                "keyfile",
+                "repokey-blake2",
+            ]
 
 
 @pytest.mark.integration
@@ -458,17 +447,13 @@ class TestRepositoryWithArchives:
     """Test repository operations that involve archives"""
 
     def test_get_repository_by_id_includes_archive_count(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test that getting a repository includes archive count"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
-            f"/api/repositories/{repo.id}",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -480,18 +465,12 @@ class TestRepositoryWithArchives:
             assert repo_data["archive_count"] >= 2  # We created 2 archives
 
     def test_list_repositories_shows_archive_counts(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test that listing repositories includes archive counts"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
-        response = test_client.get(
-            "/api/repositories/",
-            headers=admin_headers
-        )
+        response = test_client.get("/api/repositories/", headers=admin_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -504,17 +483,14 @@ class TestRepositoryWithArchives:
                 assert our_repo["archive_count"] >= 2
 
     def test_list_archive_files_uses_api_for_real_archive_contents(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test listing archive files through the repository API."""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
             f"/api/repositories/{repo.id}/archives/{archive_names[1]}/files",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -532,17 +508,14 @@ class TestRepositoryWithArchives:
         assert any(path.endswith("/subdir/file4.log") for path in file_paths)
 
     def test_list_archive_files_honors_limit_parameter(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test archive file listing limit is applied by the API."""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
             f"/api/repositories/{repo.id}/archives/{archive_names[1]}/files?limit=2",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -554,10 +527,7 @@ class TestRepositoryWithArchives:
         assert len(data["files"]) == 2
 
     def test_list_repository_archives_returns_real_borg_archives(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test listing repository archives through FastAPI."""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -577,10 +547,7 @@ class TestRepositoryWithArchives:
         assert returned_names == archive_names
 
     def test_get_repository_archive_info_returns_stats_and_files(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test repository archive info includes stats and file details."""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -608,10 +575,7 @@ class TestImportExistingRepository:
     """Test importing existing borg repositories"""
 
     def test_import_existing_unencrypted_repo(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, borg_repo_with_archives
     ):
         """Test importing an existing borg repository"""
         repo_path, test_data_path, archive_names = borg_repo_with_archives
@@ -622,9 +586,9 @@ class TestImportExistingRepository:
                 "name": "Imported Repo",
                 "path": str(repo_path),
                 "encryption": "none",
-                "source_directories": ["/tmp/test-source"]
+                "source_directories": ["/tmp/test-source"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Should successfully import or return appropriate error
@@ -635,10 +599,7 @@ class TestImportExistingRepository:
         assert repo_data["path"] == str(repo_path)
 
     def test_import_existing_encrypted_repo(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        encrypted_borg_repo
+        self, test_client: TestClient, admin_headers, encrypted_borg_repo
     ):
         """Test importing an existing encrypted repository"""
         repo_path, test_data_path, passphrase = encrypted_borg_repo
@@ -650,9 +611,9 @@ class TestImportExistingRepository:
                 "path": str(repo_path),
                 "encryption": "repokey",
                 "passphrase": passphrase,
-                "source_directories": ["/tmp/test-source"]
+                "source_directories": ["/tmp/test-source"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Should successfully import
@@ -669,18 +630,14 @@ class TestRepositoryDeletion:
     """Test deleting repositories with archives"""
 
     def test_delete_repository_with_archives(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test deleting a repository that has archives"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         # Delete the repository
         response = test_client.delete(
-            f"/api/repositories/{repo.id}",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}", headers=admin_headers
         )
 
         # Should successfully delete
@@ -688,8 +645,7 @@ class TestRepositoryDeletion:
 
         # Verify repository is deleted
         get_response = test_client.get(
-            f"/api/repositories/{repo.id}",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}", headers=admin_headers
         )
         assert get_response.status_code == 404
 
@@ -700,11 +656,7 @@ class TestRepositoryOperationsWithCompression:
     """Test repository compression settings"""
 
     def test_repository_with_different_compressions(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        test_db,
-        tmp_path
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):
         """Test creating repositories with different compression algorithms"""
         compressions = ["none", "lz4", "zstd"]
@@ -720,9 +672,9 @@ class TestRepositoryOperationsWithCompression:
                     "encryption": "none",
                     "compression": comp,
                     "repository_type": "local",
-                    "source_directories": ["/tmp/test-source"]
+                    "source_directories": ["/tmp/test-source"],
                 },
-                headers=admin_headers
+                headers=admin_headers,
             )
 
             # Should successfully create with any compression
@@ -735,10 +687,7 @@ class TestRepositoryMaintenanceOperations:
     """Test maintenance operations (check, compact, prune) with real borg"""
 
     def test_repository_check_operation(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """
         Test repository check operation
@@ -750,8 +699,7 @@ class TestRepositoryMaintenanceOperations:
 
         # Start check operation
         response = test_client.post(
-            f"/api/repositories/{repo.id}/check",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}/check", headers=admin_headers
         )
 
         # Check should start successfully
@@ -788,10 +736,7 @@ class TestRepositoryMaintenanceOperations:
         assert running_response.json()["check_job"] is None
 
     def test_repository_compact_operation(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """
         Test repository compact operation
@@ -803,8 +748,7 @@ class TestRepositoryMaintenanceOperations:
 
         # Start compact operation
         response = test_client.post(
-            f"/api/repositories/{repo.id}/compact",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}/compact", headers=admin_headers
         )
 
         # Compact should start
@@ -833,15 +777,16 @@ class TestRepositoryMaintenanceOperations:
             f"/api/archives/list?repository={repo.path}",
             headers=admin_headers,
         )
-        assert list_response.status_code == 200, "Repository not accessible after compact"
-        archive_names_after = [archive["name"] for archive in parse_archives_payload(list_response.json())]
+        assert list_response.status_code == 200, (
+            "Repository not accessible after compact"
+        )
+        archive_names_after = [
+            archive["name"] for archive in parse_archives_payload(list_response.json())
+        ]
         assert archive_names_after == archive_names
 
     def test_repository_prune_operation(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo_with_archives
+        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """
         Test repository prune operation
@@ -852,8 +797,7 @@ class TestRepositoryMaintenanceOperations:
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         list_before = test_client.get(
-            f"/api/archives/list?repository={repo.path}",
-            headers=admin_headers
+            f"/api/archives/list?repository={repo.path}", headers=admin_headers
         )
         assert list_before.status_code == 200
         assert len(parse_archives_payload(list_before.json())) == 2
@@ -868,7 +812,7 @@ class TestRepositoryMaintenanceOperations:
                 "keep_quarterly": 0,
                 "keep_yearly": 0,
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200, f"Prune failed: {response.json()}"
@@ -877,8 +821,7 @@ class TestRepositoryMaintenanceOperations:
         assert data["prune_result"]["success"] is True
 
         list_after = test_client.get(
-            f"/api/archives/list?repository={repo.path}",
-            headers=admin_headers
+            f"/api/archives/list?repository={repo.path}", headers=admin_headers
         )
         assert list_after.status_code == 200
         remaining_archives = parse_archives_payload(list_after.json())
@@ -922,7 +865,9 @@ class TestRepositoryMaintenanceOperations:
         test_db,
         tmp_path,
     ):
-        repo, _repo_path, _test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, _repo_path, _test_data_path, archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
         _run_prune_contract_assertions(
             test_client,
             admin_headers,
@@ -938,7 +883,9 @@ class TestRepositoryMaintenanceOperations:
         test_db,
         tmp_path,
     ):
-        repo, _repo_path, _test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, _repo_path, _test_data_path, archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
         _run_prune_contract_assertions(
             test_client,
             admin_headers,
@@ -954,7 +901,9 @@ class TestRepositoryMaintenanceOperations:
         test_db,
         tmp_path,
     ):
-        repo, _repo_path, _test_data_path, _archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, _repo_path, _test_data_path, _archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
 
         response = test_client.post(
             "/api/v2/backup/check",
@@ -985,7 +934,9 @@ class TestRepositoryMaintenanceOperations:
         test_db,
         tmp_path,
     ):
-        repo, _repo_path, _test_data_path, _archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, _repo_path, _test_data_path, _archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
 
         response = test_client.post(
             "/api/v2/backup/compact",
@@ -1010,11 +961,7 @@ class TestRepositoryMaintenanceOperations:
         assert job_data["id"] == job_id
 
     def test_repository_break_lock_operation(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo,
-        borg_binary
+        self, test_client: TestClient, admin_headers, db_borg_repo, borg_binary
     ):
         """
         Test break-lock operation
@@ -1034,8 +981,7 @@ class TestRepositoryMaintenanceOperations:
 
         # Call break-lock endpoint
         response = test_client.post(
-            f"/api/repositories/{repo.id}/break-lock",
-            headers=admin_headers
+            f"/api/repositories/{repo.id}/break-lock", headers=admin_headers
         )
 
         # Break-lock should succeed
@@ -1043,19 +989,20 @@ class TestRepositoryMaintenanceOperations:
 
         # Verify lock was removed
         import time
+
         time.sleep(1)  # Give it time to remove lock
 
         # Verify repository is now accessible (no lock error)
         import subprocess
+
         info_result = subprocess.run(
-            [borg_binary, "info", str(repo_path)],
-            capture_output=True,
-            text=True
+            [borg_binary, "info", str(repo_path)], capture_output=True, text=True
         )
 
         # Should not have lock error
-        assert info_result.returncode == 0 or "lock" not in info_result.stderr.lower(), \
-            "Repository should be accessible after break-lock"
+        assert (
+            info_result.returncode == 0 or "lock" not in info_result.stderr.lower()
+        ), "Repository should be accessible after break-lock"
 
 
 @pytest.mark.integration
@@ -1064,9 +1011,7 @@ class TestRepositoryValidation:
     """Test repository validation and error handling"""
 
     def test_create_repository_invalid_path(
-        self,
-        test_client: TestClient,
-        admin_headers
+        self, test_client: TestClient, admin_headers
     ):
         """
         Test repository creation with invalid path
@@ -1082,18 +1027,15 @@ class TestRepositoryValidation:
                 "encryption": "none",
                 "compression": "lz4",
                 "repository_type": "local",
-                "source_directories": ["/tmp"]
+                "source_directories": ["/tmp"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 400
 
     def test_create_repository_duplicate_path(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """
         Test cannot create repository with duplicate path
@@ -1112,14 +1054,16 @@ class TestRepositoryValidation:
                 "encryption": "none",
                 "compression": "lz4",
                 "repository_type": "local",
-                "source_directories": ["/tmp"]
+                "source_directories": ["/tmp"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Should reject duplicate path
-        assert response.status_code == 400, \
+        assert response.status_code == 400, (
             "Duplicate repository path should be rejected"
+        )
+
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -1133,11 +1077,7 @@ class TestKeyfileEncryption:
     """
 
     def test_create_repository_with_keyfile_encryption(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        test_db,
-        tmp_path
+        self, test_client: TestClient, admin_headers, test_db, tmp_path
     ):
         """
         Test creating a new repository with keyfile encryption
@@ -1156,12 +1096,14 @@ class TestKeyfileEncryption:
                 "passphrase": "strong-keyfile-password-789",
                 "compression": "lz4",
                 "repository_type": "local",
-                "source_directories": ["/tmp/test-source"]
+                "source_directories": ["/tmp/test-source"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
-        assert response.status_code == 200, f"Failed to create keyfile repo: {response.json()}"
+        assert response.status_code == 200, (
+            f"Failed to create keyfile repo: {response.json()}"
+        )
         data = response.json()
         repo_data = data.get("repository", data)
 
@@ -1170,15 +1112,13 @@ class TestKeyfileEncryption:
         # Verify Borg keyfile directory exists at the standard location.
         # In Docker, entrypoint.sh symlinks ~/.config/borg/keys -> /data/borg_keys.
         import os
+
         borg_keys_dir = os.path.expanduser("~/.config/borg/keys")
         os.makedirs(borg_keys_dir, exist_ok=True)  # Ensure it exists for test
         assert os.path.exists(borg_keys_dir), "Borg keys directory should exist"
 
     def test_import_repository_with_keyfile_upload(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        keyfile_borg_repo
+        self, test_client: TestClient, admin_headers, keyfile_borg_repo
     ):
         """
         Test importing existing keyfile repository and uploading keyfile
@@ -1197,9 +1137,9 @@ class TestKeyfileEncryption:
                 "path": str(repo_path),
                 "encryption": "keyfile",
                 "passphrase": passphrase,
-                "source_directories": ["/tmp/test-source"]
+                "source_directories": ["/tmp/test-source"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200, f"Import failed: {response.json()}"
@@ -1208,12 +1148,12 @@ class TestKeyfileEncryption:
         repo_id = repo_data["id"]
 
         # Step 2: Upload the keyfile (this was the missing piece that caused the bug!)
-        with open(keyfile_path, 'rb') as f:
-            files = {'keyfile': ('exported-key.txt', f, 'application/octet-stream')}
+        with open(keyfile_path, "rb") as f:
+            files = {"keyfile": ("exported-key.txt", f, "application/octet-stream")}
             response = test_client.post(
                 f"/api/repositories/{repo_id}/keyfile",
                 files=files,
-                headers=admin_headers
+                headers=admin_headers,
             )
 
         assert response.status_code == 200, f"Keyfile upload failed: {response.json()}"
@@ -1223,22 +1163,20 @@ class TestKeyfileEncryption:
         # Step 3: Verify we can now access the repository
         # This would have failed before the bug fix with "No key file found"
         info_response = test_client.get(
-            f"/api/repositories/{repo_id}/info",
-            headers=admin_headers
+            f"/api/repositories/{repo_id}/info", headers=admin_headers
         )
 
-        assert info_response.status_code == 200, \
+        assert info_response.status_code == 200, (
             "Should be able to access repository after keyfile upload"
+        )
 
         info_data = info_response.json()
-        assert "info" in info_data or "repository" in info_data, \
+        assert "info" in info_data or "repository" in info_data, (
             "Should get repository info with uploaded keyfile"
+        )
 
     def test_keyfile_stored_in_correct_location(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        keyfile_borg_repo
+        self, test_client: TestClient, admin_headers, keyfile_borg_repo
     ):
         """
         Verify keyfile is stored in ~/.config/borg/keys/ (standard Borg keyfile location).
@@ -1259,30 +1197,35 @@ class TestKeyfileEncryption:
                 "path": str(repo_path),
                 "encryption": "keyfile",
                 "passphrase": passphrase,
-                "source_directories": ["/tmp"]
+                "source_directories": ["/tmp"],
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200, f"Import failed: {response.json()}"
         repo_id = response.json().get("repository", response.json())["id"]
 
         # Upload keyfile
-        with open(keyfile_path, 'rb') as f:
-            files = {'keyfile': ('test.key', f, 'application/octet-stream')}
+        with open(keyfile_path, "rb") as f:
+            files = {"keyfile": ("test.key", f, "application/octet-stream")}
             upload_response = test_client.post(
                 f"/api/repositories/{repo_id}/keyfile",
                 files=files,
-                headers=admin_headers
+                headers=admin_headers,
             )
 
-        assert upload_response.status_code == 200, f"Upload failed: {upload_response.json()}"
+        assert upload_response.status_code == 200, (
+            f"Upload failed: {upload_response.json()}"
+        )
 
         # Verify keyfile exists in ~/.config/borg/keys/ (no file extension, path-based name)
         import os
+
         borg_keys_dir = os.path.expanduser("~/.config/borg/keys")
 
-        assert os.path.exists(borg_keys_dir), f"Borg keys directory should exist at {borg_keys_dir}"
+        assert os.path.exists(borg_keys_dir), (
+            f"Borg keys directory should exist at {borg_keys_dir}"
+        )
 
         keyfiles = [
             os.path.join(borg_keys_dir, f)
@@ -1299,10 +1242,7 @@ class TestKeyfileEncryption:
             assert mode == "600", f"Keyfile should have 600 permissions, got {mode}"
 
     def test_download_uploaded_keyfile_returns_export_data(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        keyfile_borg_repo
+        self, test_client: TestClient, admin_headers, keyfile_borg_repo
     ):
         """Uploaded keyfiles should be downloadable through the repository API."""
         repo_path, test_data_path, passphrase, keyfile_path = keyfile_borg_repo
@@ -1325,7 +1265,9 @@ class TestKeyfileEncryption:
         with open(keyfile_path, "rb") as handle:
             upload_response = test_client.post(
                 f"/api/repositories/{repo_id}/keyfile",
-                files={"keyfile": ("download-test.key", handle, "application/octet-stream")},
+                files={
+                    "keyfile": ("download-test.key", handle, "application/octet-stream")
+                },
                 headers=admin_headers,
             )
 

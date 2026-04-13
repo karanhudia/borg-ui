@@ -6,7 +6,10 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database.models import CheckJob, Repository, SystemSettings
 from app.services.check_scheduler import CheckScheduler
-from app.services.mqtt_sync_scheduler import periodic_mqtt_sync, start_mqtt_sync_scheduler
+from app.services.mqtt_sync_scheduler import (
+    periodic_mqtt_sync,
+    start_mqtt_sync_scheduler,
+)
 from app.services.stats_refresh_scheduler import StatsRefreshScheduler
 
 
@@ -29,11 +32,15 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
     scheduler = CheckScheduler()
     fake_router = MagicMock()
     fake_router.check.return_value = AsyncMock()
-    testing_session_local = sessionmaker(bind=db_session.get_bind(), autocommit=False, autoflush=False)
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
 
     with patch("app.services.check_scheduler.SessionLocal", testing_session_local):
         with patch("app.services.check_scheduler.BorgRouter", return_value=fake_router):
-            with patch("app.services.check_scheduler.start_background_maintenance_job") as mock_start:
+            with patch(
+                "app.services.check_scheduler.start_background_maintenance_job"
+            ) as mock_start:
                 mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
                     id=42,
                     repository_id=repo.id,
@@ -44,7 +51,9 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
                 await scheduler.run_scheduled_checks()
 
     verification_session = testing_session_local()
-    repo = verification_session.query(Repository).filter(Repository.id == repo.id).first()
+    repo = (
+        verification_session.query(Repository).filter(Repository.id == repo.id).first()
+    )
     assert repo.last_scheduled_check is not None
     assert repo.next_scheduled_check is not None
     mock_start.assert_called_once()
@@ -69,11 +78,15 @@ async def test_check_scheduler_ignores_invalid_cron_expression(db_session):
     scheduler = CheckScheduler()
     fake_router = MagicMock()
     fake_router.check.return_value = AsyncMock()
-    testing_session_local = sessionmaker(bind=db_session.get_bind(), autocommit=False, autoflush=False)
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
 
     with patch("app.services.check_scheduler.SessionLocal", testing_session_local):
         with patch("app.services.check_scheduler.BorgRouter", return_value=fake_router):
-            with patch("app.services.check_scheduler.start_background_maintenance_job") as mock_start:
+            with patch(
+                "app.services.check_scheduler.start_background_maintenance_job"
+            ) as mock_start:
                 mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
                     id=43,
                     repository_id=repo.id,
@@ -82,7 +95,9 @@ async def test_check_scheduler_ignores_invalid_cron_expression(db_session):
                 await scheduler.run_scheduled_checks()
 
     verification_session = testing_session_local()
-    repo = verification_session.query(Repository).filter(Repository.id == repo.id).first()
+    repo = (
+        verification_session.query(Repository).filter(Repository.id == repo.id).first()
+    )
     assert repo.last_scheduled_check is not None
     assert repo.next_scheduled_check is None
     verification_session.close()
@@ -112,7 +127,9 @@ async def test_stats_refresh_scheduler_updates_repositories_and_settings(db_sess
     scheduler = StatsRefreshScheduler()
     update_results = [True, False]
     sync_state_with_db = MagicMock()
-    testing_session_local = sessionmaker(bind=db_session.get_bind(), autocommit=False, autoflush=False)
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
 
     class FakeRouter:
         def __init__(self, repo):
@@ -121,9 +138,16 @@ async def test_stats_refresh_scheduler_updates_repositories_and_settings(db_sess
         async def update_stats(self, db):
             return update_results.pop(0)
 
-    with patch("app.services.stats_refresh_scheduler.SessionLocal", testing_session_local):
-        with patch("app.services.stats_refresh_scheduler.BorgRouter", side_effect=FakeRouter):
-            with patch("app.services.mqtt_service.mqtt_service.sync_state_with_db", sync_state_with_db):
+    with patch(
+        "app.services.stats_refresh_scheduler.SessionLocal", testing_session_local
+    ):
+        with patch(
+            "app.services.stats_refresh_scheduler.BorgRouter", side_effect=FakeRouter
+        ):
+            with patch(
+                "app.services.mqtt_service.mqtt_service.sync_state_with_db",
+                sync_state_with_db,
+            ):
                 await scheduler.refresh_all_repository_stats()
 
     verification_session = testing_session_local()
@@ -139,9 +163,13 @@ def test_stats_refresh_scheduler_reads_interval_from_settings(db_session):
     db_session.commit()
 
     scheduler = StatsRefreshScheduler()
-    testing_session_local = sessionmaker(bind=db_session.get_bind(), autocommit=False, autoflush=False)
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
 
-    with patch("app.services.stats_refresh_scheduler.SessionLocal", testing_session_local):
+    with patch(
+        "app.services.stats_refresh_scheduler.SessionLocal", testing_session_local
+    ):
         assert scheduler._get_refresh_interval_minutes() == 15
 
 
@@ -154,7 +182,10 @@ async def test_periodic_mqtt_sync_runs_once_before_cancellation():
         raise asyncio.CancelledError
 
     with patch("app.services.mqtt_sync_scheduler.mqtt_service.sync_state", sync_state):
-        with patch("app.services.mqtt_sync_scheduler.asyncio.sleep", side_effect=stop_after_first_sleep):
+        with patch(
+            "app.services.mqtt_sync_scheduler.asyncio.sleep",
+            side_effect=stop_after_first_sleep,
+        ):
             with pytest.raises(asyncio.CancelledError):
                 await periodic_mqtt_sync(interval_minutes=1)
 
@@ -164,7 +195,9 @@ async def test_periodic_mqtt_sync_runs_once_before_cancellation():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_start_mqtt_sync_scheduler_delegates_to_periodic_sync():
-    with patch("app.services.mqtt_sync_scheduler.periodic_mqtt_sync", new=AsyncMock()) as mock_periodic:
+    with patch(
+        "app.services.mqtt_sync_scheduler.periodic_mqtt_sync", new=AsyncMock()
+    ) as mock_periodic:
         await start_mqtt_sync_scheduler()
 
     mock_periodic.assert_awaited_once_with(5)

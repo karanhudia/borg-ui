@@ -63,27 +63,35 @@ def upgrade(connection):
 
         # ── Copy using explicit column names (avoids SELECT * count mismatch) ─
         col_names = ", ".join(row[1] for row in col_rows)
-        connection.execute(text(
-            f"INSERT INTO ssh_connections_new ({col_names})"
-            f" SELECT {col_names} FROM ssh_connections"
-        ))
+        connection.execute(
+            text(
+                f"INSERT INTO ssh_connections_new ({col_names})"
+                f" SELECT {col_names} FROM ssh_connections"
+            )
+        )
 
         # ── Swap tables ───────────────────────────────────────────────────────
         connection.execute(text("DROP TABLE ssh_connections"))
-        connection.execute(text("ALTER TABLE ssh_connections_new RENAME TO ssh_connections"))
+        connection.execute(
+            text("ALTER TABLE ssh_connections_new RENAME TO ssh_connections")
+        )
 
         # ── Recreate index ────────────────────────────────────────────────────
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE INDEX IF NOT EXISTS ix_ssh_connections_ssh_key_id
             ON ssh_connections(ssh_key_id)
-        """))
+        """)
+        )
 
         print("✓ SSH connection foreign key constraint fixed")
         print("✓ Connections will now be preserved when SSH keys are deleted")
 
     except Exception as e:
         print(f"✗ Error fixing foreign key constraint: {e}")
-        print("  Note: If this fails, connections may still be deleted when keys are removed")
+        print(
+            "  Note: If this fails, connections may still be deleted when keys are removed"
+        )
         # Don't raise - allow migration to continue
 
 

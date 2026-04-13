@@ -36,13 +36,17 @@ def upgrade(connection):
         text("PRAGMA foreign_key_list(script_executions)")
     ).fetchall()
 
-    already_fixed = any(row[3] == "repository_id" and row[6] == "SET NULL" for row in fk_rows)
+    already_fixed = any(
+        row[3] == "repository_id" and row[6] == "SET NULL" for row in fk_rows
+    )
 
     if already_fixed:
         print("✓ script_executions FK actions already fixed — skipping migration 077")
         return
 
-    print("⚠️  Fixing script_executions FK actions (script_id CASCADE, repository_id/triggered_by_user_id SET NULL)...")
+    print(
+        "⚠️  Fixing script_executions FK actions (script_id CASCADE, repository_id/triggered_by_user_id SET NULL)..."
+    )
 
     try:
         # ── Build new table DDL from the live schema ──────────────────────────
@@ -76,49 +80,69 @@ def upgrade(connection):
             "    FOREIGN KEY (triggered_by_user_id) REFERENCES users (id) ON DELETE SET NULL"
         )
 
-        new_ddl = "CREATE TABLE script_executions_new (\n" + ",\n".join(col_defs) + "\n)"
+        new_ddl = (
+            "CREATE TABLE script_executions_new (\n" + ",\n".join(col_defs) + "\n)"
+        )
 
         # ── Clean up orphaned rows to prevent INSERT failures ─────────────────
         # FK enforcement is ON; rows referencing deleted parents cause INSERT errors.
         # NULL out orphaned repository_id references
-        orphan_repos = connection.execute(text(
-            "SELECT COUNT(*) FROM script_executions"
-            " WHERE repository_id IS NOT NULL"
-            " AND repository_id NOT IN (SELECT id FROM repositories)"
-        )).scalar()
-        if orphan_repos:
-            connection.execute(text(
-                "UPDATE script_executions SET repository_id = NULL"
+        orphan_repos = connection.execute(
+            text(
+                "SELECT COUNT(*) FROM script_executions"
                 " WHERE repository_id IS NOT NULL"
                 " AND repository_id NOT IN (SELECT id FROM repositories)"
-            ))
-            print(f"  Nulled {orphan_repos} orphaned repository_id reference(s) in script_executions")
+            )
+        ).scalar()
+        if orphan_repos:
+            connection.execute(
+                text(
+                    "UPDATE script_executions SET repository_id = NULL"
+                    " WHERE repository_id IS NOT NULL"
+                    " AND repository_id NOT IN (SELECT id FROM repositories)"
+                )
+            )
+            print(
+                f"  Nulled {orphan_repos} orphaned repository_id reference(s) in script_executions"
+            )
 
         # NULL out orphaned triggered_by_user_id references
-        orphan_users = connection.execute(text(
-            "SELECT COUNT(*) FROM script_executions"
-            " WHERE triggered_by_user_id IS NOT NULL"
-            " AND triggered_by_user_id NOT IN (SELECT id FROM users)"
-        )).scalar()
-        if orphan_users:
-            connection.execute(text(
-                "UPDATE script_executions SET triggered_by_user_id = NULL"
+        orphan_users = connection.execute(
+            text(
+                "SELECT COUNT(*) FROM script_executions"
                 " WHERE triggered_by_user_id IS NOT NULL"
                 " AND triggered_by_user_id NOT IN (SELECT id FROM users)"
-            ))
-            print(f"  Nulled {orphan_users} orphaned triggered_by_user_id reference(s) in script_executions")
+            )
+        ).scalar()
+        if orphan_users:
+            connection.execute(
+                text(
+                    "UPDATE script_executions SET triggered_by_user_id = NULL"
+                    " WHERE triggered_by_user_id IS NOT NULL"
+                    " AND triggered_by_user_id NOT IN (SELECT id FROM users)"
+                )
+            )
+            print(
+                f"  Nulled {orphan_users} orphaned triggered_by_user_id reference(s) in script_executions"
+            )
 
         # Delete rows with orphaned script_id (script was deleted, row should go too)
-        orphan_scripts = connection.execute(text(
-            "SELECT COUNT(*) FROM script_executions"
-            " WHERE script_id NOT IN (SELECT id FROM scripts)"
-        )).scalar()
-        if orphan_scripts:
-            connection.execute(text(
-                "DELETE FROM script_executions"
+        orphan_scripts = connection.execute(
+            text(
+                "SELECT COUNT(*) FROM script_executions"
                 " WHERE script_id NOT IN (SELECT id FROM scripts)"
-            ))
-            print(f"  Deleted {orphan_scripts} orphaned script_executions row(s) with no matching script")
+            )
+        ).scalar()
+        if orphan_scripts:
+            connection.execute(
+                text(
+                    "DELETE FROM script_executions"
+                    " WHERE script_id NOT IN (SELECT id FROM scripts)"
+                )
+            )
+            print(
+                f"  Deleted {orphan_scripts} orphaned script_executions row(s) with no matching script"
+            )
 
         # ── Guard against stale temp table ────────────────────────────────────
         connection.execute(text("DROP TABLE IF EXISTS script_executions_new"))
@@ -126,42 +150,58 @@ def upgrade(connection):
 
         # ── Copy using explicit column names ──────────────────────────────────
         col_names = ", ".join(row[1] for row in col_rows)
-        connection.execute(text(
-            f"INSERT INTO script_executions_new ({col_names})"
-            f" SELECT {col_names} FROM script_executions"
-        ))
+        connection.execute(
+            text(
+                f"INSERT INTO script_executions_new ({col_names})"
+                f" SELECT {col_names} FROM script_executions"
+            )
+        )
 
         # ── Swap tables ───────────────────────────────────────────────────────
         connection.execute(text("DROP TABLE script_executions"))
-        connection.execute(text("ALTER TABLE script_executions_new RENAME TO script_executions"))
+        connection.execute(
+            text("ALTER TABLE script_executions_new RENAME TO script_executions")
+        )
 
         # ── Recreate indexes ──────────────────────────────────────────────────
-        connection.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_script_executions_script_id"
-            " ON script_executions (script_id)"
-        ))
-        connection.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_script_executions_repository_id"
-            " ON script_executions (repository_id)"
-        ))
-        connection.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_script_executions_backup_job_id"
-            " ON script_executions (backup_job_id)"
-        ))
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_script_executions_script_id"
+                " ON script_executions (script_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_script_executions_repository_id"
+                " ON script_executions (repository_id)"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_script_executions_backup_job_id"
+                " ON script_executions (backup_job_id)"
+            )
+        )
 
         print("✓ script_executions FK actions fixed")
         print("  - script_id: ON DELETE CASCADE")
         print("  - repository_id: ON DELETE SET NULL")
         print("  - backup_job_id: ON DELETE CASCADE (preserved)")
         print("  - triggered_by_user_id: ON DELETE SET NULL")
-        print("✓ Repositories and users can now be deleted without IntegrityError from script_executions")
+        print(
+            "✓ Repositories and users can now be deleted without IntegrityError from script_executions"
+        )
 
     except Exception as e:
         print(f"✗ Error fixing script_executions FK actions: {e}")
-        print("  Note: Deleting repositories/users with script execution history may still fail")
+        print(
+            "  Note: Deleting repositories/users with script execution history may still fail"
+        )
         # Don't raise - allow migration to continue
 
 
 def downgrade(connection):
     """No downgrade action - reverting would restore IntegrityError bugs"""
-    print("✓ Downgrade skipped — reverting FK actions would restore IntegrityError bugs")
+    print(
+        "✓ Downgrade skipped — reverting FK actions would restore IntegrityError bugs"
+    )

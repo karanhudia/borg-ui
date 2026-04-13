@@ -5,8 +5,6 @@ These tests verify that compression options selected in the UI
 are correctly converted to Borg compression specification strings.
 """
 
-import pytest
-
 
 class TestCompressionStringBuilding:
     """Test building Borg compression strings from UI selections."""
@@ -16,7 +14,7 @@ class TestCompressionStringBuilding:
         test_cases = [
             # (algorithm, level, auto_detect, obfuscate) -> expected_string
             ("none", "", False, ""),  # "none"
-            ("lz4", "", False, ""),   # "lz4"
+            ("lz4", "", False, ""),  # "lz4"
             ("zstd", "", False, ""),  # "zstd"
             ("zlib", "", False, ""),  # "zlib"
             ("lzma", "", False, ""),  # "lzma"
@@ -29,13 +27,13 @@ class TestCompressionStringBuilding:
     def test_algorithms_with_levels(self):
         """Test compression algorithms with custom levels."""
         test_cases = [
-            ("zstd", "3", False, ""),    # "zstd,3"
-            ("zstd", "10", False, ""),   # "zstd,10"
-            ("zstd", "22", False, ""),   # "zstd,22"
-            ("zlib", "6", False, ""),    # "zlib,6"
-            ("zlib", "9", False, ""),    # "zlib,9"
-            ("lzma", "6", False, ""),    # "lzma,6"
-            ("lzma", "9", False, ""),    # "lzma,9"
+            ("zstd", "3", False, ""),  # "zstd,3"
+            ("zstd", "10", False, ""),  # "zstd,10"
+            ("zstd", "22", False, ""),  # "zstd,22"
+            ("zlib", "6", False, ""),  # "zlib,6"
+            ("zlib", "9", False, ""),  # "zlib,9"
+            ("lzma", "6", False, ""),  # "lzma,6"
+            ("lzma", "9", False, ""),  # "lzma,9"
         ]
 
         for algo, level, auto, obf in test_cases:
@@ -46,10 +44,10 @@ class TestCompressionStringBuilding:
     def test_auto_detect_compression(self):
         """Test auto-detect compression feature."""
         test_cases = [
-            ("lz4", "", True, ""),       # "auto,lz4"
-            ("zstd", "", True, ""),      # "auto,zstd"
-            ("zstd", "10", True, ""),    # "auto,zstd,10"
-            ("lzma", "6", True, ""),     # "auto,lzma,6"
+            ("lz4", "", True, ""),  # "auto,lz4"
+            ("zstd", "", True, ""),  # "auto,zstd"
+            ("zstd", "10", True, ""),  # "auto,zstd,10"
+            ("lzma", "6", True, ""),  # "auto,lzma,6"
         ]
 
         for algo, level, auto, obf in test_cases:
@@ -68,9 +66,9 @@ class TestCompressionStringBuilding:
     def test_obfuscate_with_compression(self):
         """Test obfuscation with compression algorithms."""
         test_cases = [
-            ("zstd", "", False, "110"),    # "obfuscate,110,zstd"
-            ("zstd", "3", False, "250"),   # "obfuscate,250,zstd,3"
-            ("lzma", "6", False, "110"),   # "obfuscate,110,lzma,6"
+            ("zstd", "", False, "110"),  # "obfuscate,110,zstd"
+            ("zstd", "3", False, "250"),  # "obfuscate,250,zstd,3"
+            ("lzma", "6", False, "110"),  # "obfuscate,110,lzma,6"
         ]
 
         for algo, level, auto, obf in test_cases:
@@ -84,9 +82,9 @@ class TestCompressionStringBuilding:
     def test_obfuscate_with_auto_detect(self):
         """Test obfuscation combined with auto-detect."""
         test_cases = [
-            ("zstd", "", True, "110"),     # "obfuscate,110,auto,zstd"
-            ("zstd", "10", True, "250"),   # "obfuscate,250,auto,zstd,10"
-            ("lzma", "6", True, "110"),    # "obfuscate,110,auto,lzma,6"
+            ("zstd", "", True, "110"),  # "obfuscate,110,auto,zstd"
+            ("zstd", "10", True, "250"),  # "obfuscate,250,auto,zstd,10"
+            ("lzma", "6", True, "110"),  # "obfuscate,110,auto,lzma,6"
         ]
 
         for algo, level, auto, obf in test_cases:
@@ -104,11 +102,46 @@ class TestCompressionStringParsing:
     def test_parse_basic_algorithms(self):
         """Test parsing basic compression algorithms."""
         test_cases = [
-            ("none", {"algorithm": "none", "level": "", "autoDetect": False, "obfuscate": ""}),
-            ("lz4", {"algorithm": "lz4", "level": "", "autoDetect": False, "obfuscate": ""}),
-            ("zstd", {"algorithm": "zstd", "level": "", "autoDetect": False, "obfuscate": ""}),
-            ("zlib", {"algorithm": "zlib", "level": "", "autoDetect": False, "obfuscate": ""}),
-            ("lzma", {"algorithm": "lzma", "level": "", "autoDetect": False, "obfuscate": ""}),
+            (
+                "none",
+                {
+                    "algorithm": "none",
+                    "level": "",
+                    "autoDetect": False,
+                    "obfuscate": "",
+                },
+            ),
+            (
+                "lz4",
+                {"algorithm": "lz4", "level": "", "autoDetect": False, "obfuscate": ""},
+            ),
+            (
+                "zstd",
+                {
+                    "algorithm": "zstd",
+                    "level": "",
+                    "autoDetect": False,
+                    "obfuscate": "",
+                },
+            ),
+            (
+                "zlib",
+                {
+                    "algorithm": "zlib",
+                    "level": "",
+                    "autoDetect": False,
+                    "obfuscate": "",
+                },
+            ),
+            (
+                "lzma",
+                {
+                    "algorithm": "lzma",
+                    "level": "",
+                    "autoDetect": False,
+                    "obfuscate": "",
+                },
+            ),
         ]
 
         for compression_str, expected in test_cases:
@@ -118,10 +151,42 @@ class TestCompressionStringParsing:
     def test_parse_algorithms_with_levels(self):
         """Test parsing compression algorithms with levels."""
         test_cases = [
-            ("zstd,3", {"algorithm": "zstd", "level": "3", "autoDetect": False, "obfuscate": ""}),
-            ("zstd,10", {"algorithm": "zstd", "level": "10", "autoDetect": False, "obfuscate": ""}),
-            ("zlib,6", {"algorithm": "zlib", "level": "6", "autoDetect": False, "obfuscate": ""}),
-            ("lzma,6", {"algorithm": "lzma", "level": "6", "autoDetect": False, "obfuscate": ""}),
+            (
+                "zstd,3",
+                {
+                    "algorithm": "zstd",
+                    "level": "3",
+                    "autoDetect": False,
+                    "obfuscate": "",
+                },
+            ),
+            (
+                "zstd,10",
+                {
+                    "algorithm": "zstd",
+                    "level": "10",
+                    "autoDetect": False,
+                    "obfuscate": "",
+                },
+            ),
+            (
+                "zlib,6",
+                {
+                    "algorithm": "zlib",
+                    "level": "6",
+                    "autoDetect": False,
+                    "obfuscate": "",
+                },
+            ),
+            (
+                "lzma,6",
+                {
+                    "algorithm": "lzma",
+                    "level": "6",
+                    "autoDetect": False,
+                    "obfuscate": "",
+                },
+            ),
         ]
 
         for compression_str, expected in test_cases:
@@ -131,10 +196,32 @@ class TestCompressionStringParsing:
     def test_parse_auto_detect(self):
         """Test parsing auto-detect compression."""
         test_cases = [
-            ("auto,lz4", {"algorithm": "lz4", "level": "", "autoDetect": True, "obfuscate": ""}),
-            ("auto,zstd", {"algorithm": "zstd", "level": "", "autoDetect": True, "obfuscate": ""}),
-            ("auto,zstd,10", {"algorithm": "zstd", "level": "10", "autoDetect": True, "obfuscate": ""}),
-            ("auto,lzma,6", {"algorithm": "lzma", "level": "6", "autoDetect": True, "obfuscate": ""}),
+            (
+                "auto,lz4",
+                {"algorithm": "lz4", "level": "", "autoDetect": True, "obfuscate": ""},
+            ),
+            (
+                "auto,zstd",
+                {"algorithm": "zstd", "level": "", "autoDetect": True, "obfuscate": ""},
+            ),
+            (
+                "auto,zstd,10",
+                {
+                    "algorithm": "zstd",
+                    "level": "10",
+                    "autoDetect": True,
+                    "obfuscate": "",
+                },
+            ),
+            (
+                "auto,lzma,6",
+                {
+                    "algorithm": "lzma",
+                    "level": "6",
+                    "autoDetect": True,
+                    "obfuscate": "",
+                },
+            ),
         ]
 
         for compression_str, expected in test_cases:
@@ -144,9 +231,33 @@ class TestCompressionStringParsing:
     def test_parse_obfuscate(self):
         """Test parsing obfuscation settings."""
         test_cases = [
-            ("obfuscate,110,none", {"algorithm": "none", "level": "", "autoDetect": False, "obfuscate": "110"}),
-            ("obfuscate,110,zstd", {"algorithm": "zstd", "level": "", "autoDetect": False, "obfuscate": "110"}),
-            ("obfuscate,250,zstd,3", {"algorithm": "zstd", "level": "3", "autoDetect": False, "obfuscate": "250"}),
+            (
+                "obfuscate,110,none",
+                {
+                    "algorithm": "none",
+                    "level": "",
+                    "autoDetect": False,
+                    "obfuscate": "110",
+                },
+            ),
+            (
+                "obfuscate,110,zstd",
+                {
+                    "algorithm": "zstd",
+                    "level": "",
+                    "autoDetect": False,
+                    "obfuscate": "110",
+                },
+            ),
+            (
+                "obfuscate,250,zstd,3",
+                {
+                    "algorithm": "zstd",
+                    "level": "3",
+                    "autoDetect": False,
+                    "obfuscate": "250",
+                },
+            ),
         ]
 
         for compression_str, expected in test_cases:
@@ -156,8 +267,24 @@ class TestCompressionStringParsing:
     def test_parse_obfuscate_with_auto_detect(self):
         """Test parsing obfuscation combined with auto-detect."""
         test_cases = [
-            ("obfuscate,110,auto,zstd", {"algorithm": "zstd", "level": "", "autoDetect": True, "obfuscate": "110"}),
-            ("obfuscate,250,auto,zstd,10", {"algorithm": "zstd", "level": "10", "autoDetect": True, "obfuscate": "250"}),
+            (
+                "obfuscate,110,auto,zstd",
+                {
+                    "algorithm": "zstd",
+                    "level": "",
+                    "autoDetect": True,
+                    "obfuscate": "110",
+                },
+            ),
+            (
+                "obfuscate,250,auto,zstd,10",
+                {
+                    "algorithm": "zstd",
+                    "level": "10",
+                    "autoDetect": True,
+                    "obfuscate": "250",
+                },
+            ),
         ]
 
         for compression_str, expected in test_cases:
@@ -186,14 +313,18 @@ class TestRoundTripConversion:
                 parsed["algorithm"],
                 parsed["level"],
                 parsed["autoDetect"],
-                parsed["obfuscate"]
+                parsed["obfuscate"],
             )
             # Should match original
-            assert compression_str == rebuilt, f"Round-trip failed: {compression_str} != {rebuilt}"
+            assert compression_str == rebuilt, (
+                f"Round-trip failed: {compression_str} != {rebuilt}"
+            )
 
 
 # Helper functions matching the TypeScript implementation
-def build_compression_string(algorithm: str, level: str, auto_detect: bool, obfuscate: str) -> str:
+def build_compression_string(
+    algorithm: str, level: str, auto_detect: bool, obfuscate: str
+) -> str:
     """Build Borg compression string from UI selections."""
     parts = []
 
@@ -253,5 +384,5 @@ def parse_compression_string(compression: str) -> dict:
         "algorithm": algorithm,
         "level": level,
         "autoDetect": auto_detect,
-        "obfuscate": obfuscate
+        "obfuscate": obfuscate,
     }

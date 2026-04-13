@@ -2,15 +2,12 @@ import asyncio
 import structlog
 import json
 import os
-import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
-from sqlalchemy.orm import Session
 from typing import Optional
-import shutil
 from types import SimpleNamespace
 
-from app.database.models import RestoreJob, Repository, SSHConnection, SSHKey
+from app.database.models import RestoreJob, Repository, SSHConnection
 from app.database.database import SessionLocal
 from app.core.borg_router import BorgRouter
 from app.services.notification_service import notification_service
@@ -32,10 +29,10 @@ class RestoreService:
         archive_name: str,
         destination: str,
         paths: list = None,
-        repository_type: str = 'local',
-        destination_type: str = 'local',
+        repository_type: str = "local",
+        destination_type: str = "local",
         destination_connection_id: Optional[int] = None,
-        ssh_connection_id: Optional[int] = None
+        ssh_connection_id: Optional[int] = None,
     ):
         """
         Execute a restore operation with progress tracking
@@ -55,11 +52,13 @@ class RestoreService:
         # Determine execution mode and route to appropriate method
         execution_mode = f"{repository_type}_to_{destination_type}"
 
-        logger.info("Routing restore operation",
-                   job_id=job_id,
-                   execution_mode=execution_mode,
-                   repository_type=repository_type,
-                   destination_type=destination_type)
+        logger.info(
+            "Routing restore operation",
+            job_id=job_id,
+            execution_mode=execution_mode,
+            repository_type=repository_type,
+            destination_type=destination_type,
+        )
 
         if execution_mode == "local_to_local":
             await self._execute_local_to_local(
@@ -71,21 +70,37 @@ class RestoreService:
             )
         elif execution_mode == "local_to_ssh":
             await self._execute_local_to_ssh(
-                job_id, repository_path, archive_name, destination, paths, destination_connection_id
+                job_id,
+                repository_path,
+                archive_name,
+                destination,
+                paths,
+                destination_connection_id,
             )
         else:
             # This should never happen due to API validation, but handle it gracefully
             db_session = SessionLocal()
             try:
-                job = db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                job = (
+                    db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                )
                 if job:
                     job.status = "failed"
-                    job.error_message = json.dumps({"key": "backend.errors.service.unsupportedExecutionMode", "params": {"mode": execution_mode}})
+                    job.error_message = json.dumps(
+                        {
+                            "key": "backend.errors.service.unsupportedExecutionMode",
+                            "params": {"mode": execution_mode},
+                        }
+                    )
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
             finally:
                 db_session.close()
-            logger.error("Unsupported execution mode", execution_mode=execution_mode, job_id=job_id)
+            logger.error(
+                "Unsupported execution mode",
+                execution_mode=execution_mode,
+                job_id=job_id,
+            )
 
     async def _execute_local_to_local(
         self,
@@ -93,7 +108,7 @@ class RestoreService:
         repository_path: str,
         archive_name: str,
         destination: str,
-        paths: list = None
+        paths: list = None,
     ):
         """
         Execute restore from local repository to local destination
@@ -111,7 +126,11 @@ class RestoreService:
                 return
 
             # Get repository details for passphrase and remote_path
-            repository = db_session.query(Repository).filter(Repository.path == repository_path).first()
+            repository = (
+                db_session.query(Repository)
+                .filter(Repository.path == repository_path)
+                .first()
+            )
 
             # Update job status to running - may fail if job was deleted after we queried it
             try:
@@ -120,16 +139,21 @@ class RestoreService:
                 db_session.commit()
             except Exception as status_error:
                 # Job was deleted while starting - exit gracefully
-                logger.warning("Could not update job to running status (job may have been deleted)",
-                              job_id=job_id, error=str(status_error))
+                logger.warning(
+                    "Could not update job to running status (job may have been deleted)",
+                    job_id=job_id,
+                    error=str(status_error),
+                )
                 return
 
-            logger.info("Starting restore operation",
-                       job_id=job_id,
-                       repository=repository_path,
-                       archive=archive_name,
-                       destination=destination,
-                       paths=paths)
+            logger.info(
+                "Starting restore operation",
+                job_id=job_id,
+                repository=repository_path,
+                archive=archive_name,
+                destination=destination,
+                paths=paths,
+            )
 
             # Ensure destination directory exists
             dest_path = Path(destination)
@@ -140,7 +164,12 @@ class RestoreService:
                 except Exception as e:
                     logger.error("Failed to create destination directory", error=str(e))
                     job.status = "failed"
-                    job.error_message = json.dumps({"key": "backend.errors.service.failedCreateDestinationDir", "params": {"error": str(e)}})
+                    job.error_message = json.dumps(
+                        {
+                            "key": "backend.errors.service.failedCreateDestinationDir",
+                            "params": {"error": str(e)},
+                        }
+                    )
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
                     return
@@ -163,16 +192,22 @@ class RestoreService:
 
                 # Set up environment
                 if repository:
-                    env, temp_key_file = build_repository_borg_env(repository, db_session)
+                    env, temp_key_file = build_repository_borg_env(
+                        repository, db_session
+                    )
                 else:
                     env = os.environ.copy()
                     env["BORG_LOCK_WAIT"] = "180"
                     env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
                     env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
                     env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-                    env["BORG_RSH"] = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o RequestTTY=no -o PermitLocalCommand=no"
+                    env["BORG_RSH"] = (
+                        "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o RequestTTY=no -o PermitLocalCommand=no"
+                    )
 
-                logger.info("Executing restore command", command=" ".join(cmd), cwd=destination)
+                logger.info(
+                    "Executing restore command", command=" ".join(cmd), cwd=destination
+                )
 
                 # Execute command with progress tracking
                 # Extract directly to destination (no temp directory)
@@ -182,9 +217,9 @@ class RestoreService:
                     stderr=asyncio.subprocess.PIPE,
                     stdin=asyncio.subprocess.PIPE,  # Pipe stdin so we can close it
                     cwd=destination,
-                    env=env
+                    env=env,
                 )
-                
+
                 # Close stdin immediately to prevent hanging on prompts
                 if process.stdin:
                     process.stdin.close()
@@ -208,7 +243,7 @@ class RestoreService:
                 # With --log-json, we get JSON progress messages
                 async def read_stderr():
                     nonlocal current_file, last_update_time, nfiles, speed_tracking
-                    buffer = b''
+                    buffer = b""
 
                     while True:
                         chunk = await process.stderr.read(8192)  # Read in chunks
@@ -218,10 +253,10 @@ class RestoreService:
                         buffer += chunk
 
                         # Split on both \r and \n to handle progress updates
-                        while b'\r' in buffer or b'\n' in buffer:
+                        while b"\r" in buffer or b"\n" in buffer:
                             # Find the next separator
-                            r_pos = buffer.find(b'\r')
-                            n_pos = buffer.find(b'\n')
+                            r_pos = buffer.find(b"\r")
+                            n_pos = buffer.find(b"\n")
 
                             # Use whichever comes first
                             if r_pos == -1:
@@ -238,29 +273,36 @@ class RestoreService:
                                 break
 
                             line_bytes = buffer[:pos]
-                            buffer = buffer[pos + sep_len:]
+                            buffer = buffer[pos + sep_len :]
 
                             if not line_bytes:
                                 continue
 
-                            line_text = line_bytes.decode('utf-8', errors='replace').strip()
+                            line_text = line_bytes.decode(
+                                "utf-8", errors="replace"
+                            ).strip()
                             if line_text:
                                 stderr_lines.append(line_text)
 
                                 # Parse JSON progress messages from stderr
                                 try:
                                     # Check if line is JSON (starts with {)
-                                    if line_text and line_text[0] == '{':
+                                    if line_text and line_text[0] == "{":
                                         json_msg = json.loads(line_text)
-                                        msg_type = json_msg.get('type')
+                                        msg_type = json_msg.get("type")
 
                                         # Parse progress_percent messages for restore progress
-                                        if msg_type == 'progress_percent' and not json_msg.get('finished'):
+                                        if (
+                                            msg_type == "progress_percent"
+                                            and not json_msg.get("finished")
+                                        ):
                                             # Extract byte counts and current file
-                                            restored_size = json_msg.get('current', 0)
-                                            original_size = json_msg.get('total', 0)
-                                            file_info = json_msg.get('info', [])
-                                            current_file = file_info[0] if file_info else ""
+                                            restored_size = json_msg.get("current", 0)
+                                            original_size = json_msg.get("total", 0)
+                                            file_info = json_msg.get("info", [])
+                                            current_file = (
+                                                file_info[0] if file_info else ""
+                                            )
 
                                             # Update job with size stats
                                             job.restored_size = restored_size
@@ -268,10 +310,17 @@ class RestoreService:
 
                                             # Calculate progress percentage
                                             if original_size > 0:
-                                                job.progress_percent = min(100.0, (restored_size / original_size) * 100.0)
+                                                job.progress_percent = min(
+                                                    100.0,
+                                                    (restored_size / original_size)
+                                                    * 100.0,
+                                                )
 
                                             # Count unique files
-                                            if current_file and current_file not in seen_files:
+                                            if (
+                                                current_file
+                                                and current_file not in seen_files
+                                            ):
                                                 seen_files.add(current_file)
                                                 nfiles = len(seen_files)
 
@@ -280,56 +329,95 @@ class RestoreService:
 
                                             # Calculate restore speed using moving average (30-second window)
                                             if restored_size > 0:
-                                                current_time = asyncio.get_event_loop().time()
+                                                current_time = (
+                                                    asyncio.get_event_loop().time()
+                                                )
 
                                                 # Add current data point
-                                                speed_tracking.append((current_time, restored_size))
+                                                speed_tracking.append(
+                                                    (current_time, restored_size)
+                                                )
 
                                                 # Remove data points older than window
-                                                speed_tracking[:] = [(t, s) for t, s in speed_tracking
-                                                                   if current_time - t <= SPEED_WINDOW_SECONDS]
+                                                speed_tracking[:] = [
+                                                    (t, s)
+                                                    for t, s in speed_tracking
+                                                    if current_time - t
+                                                    <= SPEED_WINDOW_SECONDS
+                                                ]
 
                                                 # Calculate speed from moving average (need at least 2 data points)
                                                 if len(speed_tracking) >= 2:
-                                                    time_diff = speed_tracking[-1][0] - speed_tracking[0][0]
-                                                    size_diff = speed_tracking[-1][1] - speed_tracking[0][1]
+                                                    time_diff = (
+                                                        speed_tracking[-1][0]
+                                                        - speed_tracking[0][0]
+                                                    )
+                                                    size_diff = (
+                                                        speed_tracking[-1][1]
+                                                        - speed_tracking[0][1]
+                                                    )
 
                                                     if time_diff > 0 and size_diff > 0:
                                                         # Speed in MB/s
-                                                        job.restore_speed = (size_diff / (1024 * 1024)) / time_diff
+                                                        job.restore_speed = (
+                                                            size_diff / (1024 * 1024)
+                                                        ) / time_diff
                                                     elif time_diff > 0:
                                                         # No size change yet
                                                         job.restore_speed = 0.0
 
                                                     # Calculate estimated time remaining (in seconds)
-                                                    remaining_bytes = original_size - restored_size
-                                                    if remaining_bytes > 0 and job.restore_speed > 0:
+                                                    remaining_bytes = (
+                                                        original_size - restored_size
+                                                    )
+                                                    if (
+                                                        remaining_bytes > 0
+                                                        and job.restore_speed > 0
+                                                    ):
                                                         # Speed is in MB/s, convert remaining bytes to MB
-                                                        remaining_mb = remaining_bytes / (1024 * 1024)
-                                                        job.estimated_time_remaining = int(remaining_mb / job.restore_speed)
+                                                        remaining_mb = (
+                                                            remaining_bytes
+                                                            / (1024 * 1024)
+                                                        )
+                                                        job.estimated_time_remaining = (
+                                                            int(
+                                                                remaining_mb
+                                                                / job.restore_speed
+                                                            )
+                                                        )
                                                     else:
                                                         job.estimated_time_remaining = 0
 
                                             # Commit every 2 seconds to reduce database load
                                             now = datetime.now(timezone.utc)
-                                            if (now - last_update_time).total_seconds() >= 2.0:
+                                            if (
+                                                now - last_update_time
+                                            ).total_seconds() >= 2.0:
                                                 try:
                                                     db_session.commit()
                                                     last_update_time = now
-                                                    logger.info("Restore progress update",
-                                                              job_id=job_id,
-                                                              percent=job.progress_percent,
-                                                              nfiles=nfiles,
-                                                              speed_mb_s=job.restore_speed,
-                                                              eta_seconds=job.estimated_time_remaining,
-                                                              file=current_file[:50] if current_file else '')
+                                                    logger.info(
+                                                        "Restore progress update",
+                                                        job_id=job_id,
+                                                        percent=job.progress_percent,
+                                                        nfiles=nfiles,
+                                                        speed_mb_s=job.restore_speed,
+                                                        eta_seconds=job.estimated_time_remaining,
+                                                        file=current_file[:50]
+                                                        if current_file
+                                                        else "",
+                                                    )
                                                 except:
                                                     db_session.rollback()
                                 except json.JSONDecodeError:
                                     # Not JSON, ignore (might be non-JSON log messages)
                                     pass
                                 except Exception as e:
-                                    logger.debug("Failed to parse progress line", line=line_text[:100], error=str(e))
+                                    logger.debug(
+                                        "Failed to parse progress line",
+                                        line=line_text[:100],
+                                        error=str(e),
+                                    )
 
                 # Read stdout for any output
                 async def read_stdout():
@@ -353,20 +441,29 @@ class RestoreService:
                     job.completed_at = datetime.now(timezone.utc)
                     job.logs = f"STDOUT:\n{chr(10).join(stdout_lines) if stdout_lines else '(no output)'}\n\nSTDERR:\n{chr(10).join(stderr_lines) if stderr_lines else '(no output)'}"
 
-                    logger.info("Restore completed successfully",
-                               job_id=job_id,
-                               repository=repository_path,
-                               archive=archive_name,
-                               destination=destination,
-                               nfiles=nfiles)
+                    logger.info(
+                        "Restore completed successfully",
+                        job_id=job_id,
+                        repository=repository_path,
+                        archive=archive_name,
+                        destination=destination,
+                        nfiles=nfiles,
+                    )
 
                     # Send success notification
                     try:
                         await notification_service.send_restore_success(
-                            db_session, repository_path, archive_name, destination, None, None
+                            db_session,
+                            repository_path,
+                            archive_name,
+                            destination,
+                            None,
+                            None,
                         )
                     except Exception as e:
-                        logger.warning("Failed to send restore success notification", error=str(e))
+                        logger.warning(
+                            "Failed to send restore success notification", error=str(e)
+                        )
                 elif process.returncode == 1 or (100 <= process.returncode <= 127):
                     # Exit code 1 or 100-127 can be warnings OR errors
                     # If no files were restored, treat as failure (likely permission/path error)
@@ -393,27 +490,39 @@ class RestoreService:
                             _restore_key = "restoreFailedZeroFilesNoOutput"
                         else:
                             _restore_key = "restoreFailedZeroFiles"
-                        job.error_message = json.dumps({"key": f"backend.errors.service.{_restore_key}", "params": {"exitCode": process.returncode}})
+                        job.error_message = json.dumps(
+                            {
+                                "key": f"backend.errors.service.{_restore_key}",
+                                "params": {"exitCode": process.returncode},
+                            }
+                        )
                         job.completed_at = datetime.now(timezone.utc)
                         job.logs = f"STDOUT:\n{chr(10).join(stdout_lines) if stdout_lines else '(no output)'}\n\nSTDERR:\n{stderr_output if stderr_output else '(no output)'}"
 
-                        logger.error("Restore failed - no files extracted",
-                                   job_id=job_id,
-                                   repository=repository_path,
-                                   archive=archive_name,
-                                   destination=destination,
-                                   exit_code=process.returncode,
-                                   nfiles=nfiles)
+                        logger.error(
+                            "Restore failed - no files extracted",
+                            job_id=job_id,
+                            repository=repository_path,
+                            archive=archive_name,
+                            destination=destination,
+                            exit_code=process.returncode,
+                            nfiles=nfiles,
+                        )
 
                         # Send failure notification
                         try:
                             await notification_service.send_restore_failure(
-                                db_session, repository_path, archive_name,
+                                db_session,
+                                repository_path,
+                                archive_name,
                                 f"0 files restored. Exit code {process.returncode}. Likely permission or path error.",
-                                None
+                                None,
                             )
                         except Exception as e:
-                            logger.warning("Failed to send restore failure notification", error=str(e))
+                            logger.warning(
+                                "Failed to send restore failure notification",
+                                error=str(e),
+                            )
                     else:
                         # Files were restored, but with warnings
                         job.status = "completed_with_warnings"
@@ -422,65 +531,99 @@ class RestoreService:
                         job.completed_at = datetime.now(timezone.utc)
 
                         stderr_output = "\n".join(stderr_lines)
-                        job.error_message = json.dumps({"key": "backend.errors.service.restoreCompletedWithWarnings", "params": {"exitCode": process.returncode}})
+                        job.error_message = json.dumps(
+                            {
+                                "key": "backend.errors.service.restoreCompletedWithWarnings",
+                                "params": {"exitCode": process.returncode},
+                            }
+                        )
                         job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
 
-                        logger.warning("Restore completed with warnings",
-                                   job_id=job_id,
-                                   repository=repository_path,
-                                   archive=archive_name,
-                                   destination=destination,
-                                   exit_code=process.returncode,
-                                   nfiles=nfiles)
+                        logger.warning(
+                            "Restore completed with warnings",
+                            job_id=job_id,
+                            repository=repository_path,
+                            archive=archive_name,
+                            destination=destination,
+                            exit_code=process.returncode,
+                            nfiles=nfiles,
+                        )
 
                         # Send warning notification (use success notification with note about warnings)
                         try:
                             await notification_service.send_restore_success(
-                                db_session, repository_path, archive_name, destination, None, None
+                                db_session,
+                                repository_path,
+                                archive_name,
+                                destination,
+                                None,
+                                None,
                             )
                         except Exception as e:
-                            logger.warning("Failed to send restore warning notification", error=str(e))
+                            logger.warning(
+                                "Failed to send restore warning notification",
+                                error=str(e),
+                            )
                 else:
                     job.status = "failed"
                     stderr_output = "\n".join(stderr_lines)
-                    job.error_message = json.dumps({"key": "backend.errors.service.restoreFailedExitCode", "params": {"exitCode": process.returncode}})
+                    job.error_message = json.dumps(
+                        {
+                            "key": "backend.errors.service.restoreFailedExitCode",
+                            "params": {"exitCode": process.returncode},
+                        }
+                    )
                     job.completed_at = datetime.now(timezone.utc)
                     job.logs = f"STDOUT:\n{chr(10).join(stdout_lines)}\n\nSTDERR:\n{stderr_output}"
 
-                    logger.error("Restore failed",
-                                job_id=job_id,
-                                return_code=process.returncode,
-                            error=stderr_output)
+                    logger.error(
+                        "Restore failed",
+                        job_id=job_id,
+                        return_code=process.returncode,
+                        error=stderr_output,
+                    )
 
                     # Send failure notification
                     try:
                         await notification_service.send_restore_failure(
-                            db_session, repository_path, archive_name, job.error_message, None
+                            db_session,
+                            repository_path,
+                            archive_name,
+                            job.error_message,
+                            None,
                         )
                     except Exception as e:
-                        logger.warning("Failed to send restore failure notification", error=str(e))
+                        logger.warning(
+                            "Failed to send restore failure notification", error=str(e)
+                        )
 
                 db_session.commit()
 
             except Exception as e:
                 # Handle any unexpected errors during extraction
-                logger.error("Unexpected error during extraction", job_id=job_id, error=str(e))
+                logger.error(
+                    "Unexpected error during extraction", job_id=job_id, error=str(e)
+                )
                 job.status = "failed"
-                job.error_message = json.dumps({"key": "backend.errors.service.restoreFailed"})
+                job.error_message = json.dumps(
+                    {"key": "backend.errors.service.restoreFailed"}
+                )
                 job.completed_at = datetime.now(timezone.utc)
                 db_session.commit()
 
         except Exception as e:
-            logger.error("Restore execution failed",
-                        job_id=job_id,
-                        error=str(e))
+            logger.error("Restore execution failed", job_id=job_id, error=str(e))
 
             # Update job status to failed
             try:
-                job = db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                job = (
+                    db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                )
                 if job:
                     job.status = "failed"
-                    job.error_message = json.dumps({"key": "backend.errors.service.restoreFailed"})
+                    job.error_message = json.dumps(
+                        {"key": "backend.errors.service.restoreFailed"}
+                    )
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
 
@@ -490,13 +633,22 @@ class RestoreService:
                             db_session, repository_path, archive_name, str(e), None
                         )
                     except Exception as notif_error:
-                        logger.warning("Failed to send restore failure notification", error=str(notif_error))
+                        logger.warning(
+                            "Failed to send restore failure notification",
+                            error=str(notif_error),
+                        )
                 else:
-                    logger.warning("Could not update job status - job was deleted during execution", job_id=job_id)
+                    logger.warning(
+                        "Could not update job status - job was deleted during execution",
+                        job_id=job_id,
+                    )
             except Exception as update_error:
                 # Job may have been deleted while running - that's okay
-                logger.warning("Could not update job status (job may have been deleted during execution)",
-                              job_id=job_id, error=str(update_error))
+                logger.warning(
+                    "Could not update job status (job may have been deleted during execution)",
+                    job_id=job_id,
+                    error=str(update_error),
+                )
                 db_session.rollback()
         finally:
             # Remove from running processes
@@ -526,7 +678,9 @@ class RestoreService:
         try:
             # Try to terminate the process gracefully first
             process.terminate()
-            logger.info("Sent SIGTERM to restore process", job_id=job_id, pid=process.pid)
+            logger.info(
+                "Sent SIGTERM to restore process", job_id=job_id, pid=process.pid
+            )
 
             # Wait up to 5 seconds for graceful termination
             try:
@@ -535,12 +689,18 @@ class RestoreService:
             except asyncio.TimeoutError:
                 # Force kill if it doesn't terminate gracefully
                 process.kill()
-                logger.warning("Force killed restore process (SIGKILL)", job_id=job_id, pid=process.pid)
+                logger.warning(
+                    "Force killed restore process (SIGKILL)",
+                    job_id=job_id,
+                    pid=process.pid,
+                )
                 await process.wait()
 
             return True
         except Exception as e:
-            logger.error("Failed to cancel restore process", job_id=job_id, error=str(e))
+            logger.error(
+                "Failed to cancel restore process", job_id=job_id, error=str(e)
+            )
             return False
 
     async def _execute_ssh_to_local(
@@ -549,7 +709,7 @@ class RestoreService:
         repository_path: str,
         archive_name: str,
         destination: str,
-        paths: list = None
+        paths: list = None,
     ):
         """
         Execute restore from SSH repository to local destination
@@ -558,7 +718,9 @@ class RestoreService:
         """
         # This is essentially the same as local_to_local since borg handles SSH repos natively
         # The repository_path should already be in SSH URL format (ssh://user@host/path)
-        await self._execute_local_to_local(job_id, repository_path, archive_name, destination, paths)
+        await self._execute_local_to_local(
+            job_id, repository_path, archive_name, destination, paths
+        )
 
     async def _execute_local_to_ssh(
         self,
@@ -567,7 +729,7 @@ class RestoreService:
         archive_name: str,
         destination: str,
         paths: list = None,
-        destination_connection_id: int = None
+        destination_connection_id: int = None,
     ):
         """
         Execute restore from local repository to SSH destination using SSHFS.
@@ -587,17 +749,25 @@ class RestoreService:
                 return
 
             # Get repository details
-            repository = db_session.query(Repository).filter(Repository.path == repository_path).first()
+            repository = (
+                db_session.query(Repository)
+                .filter(Repository.path == repository_path)
+                .first()
+            )
 
             # Get SSH connection details
             if not destination_connection_id:
                 raise ValueError("SSH destination requires destination_connection_id")
 
-            ssh_connection = db_session.query(SSHConnection).filter(
-                SSHConnection.id == destination_connection_id
-            ).first()
+            ssh_connection = (
+                db_session.query(SSHConnection)
+                .filter(SSHConnection.id == destination_connection_id)
+                .first()
+            )
             if not ssh_connection:
-                raise ValueError(f"SSH connection {destination_connection_id} not found")
+                raise ValueError(
+                    f"SSH connection {destination_connection_id} not found"
+                )
 
             # Update job status to running
             try:
@@ -605,14 +775,20 @@ class RestoreService:
                 job.started_at = datetime.now(timezone.utc)
                 db_session.commit()
             except Exception as status_error:
-                logger.warning("Could not update job to running status", job_id=job_id, error=str(status_error))
+                logger.warning(
+                    "Could not update job to running status",
+                    job_id=job_id,
+                    error=str(status_error),
+                )
                 return
 
-            logger.info("Starting local→SSH restore via SSHFS",
-                       job_id=job_id,
-                       repository=repository_path,
-                       archive=archive_name,
-                       ssh_destination=f"{ssh_connection.username}@{ssh_connection.host}:{destination}")
+            logger.info(
+                "Starting local→SSH restore via SSHFS",
+                job_id=job_id,
+                repository=repository_path,
+                archive=archive_name,
+                ssh_destination=f"{ssh_connection.username}@{ssh_connection.host}:{destination}",
+            )
 
             # Mount SSH destination via SSHFS
             job.current_file = "Mounting SSH destination..."
@@ -623,7 +799,7 @@ class RestoreService:
             temp_root, mount_info_list = await mount_service.mount_ssh_paths_shared(
                 connection_id=destination_connection_id,
                 remote_paths=[destination],
-                job_id=job_id
+                job_id=job_id,
             )
 
             if not mount_info_list:
@@ -632,10 +808,12 @@ class RestoreService:
             mount_id, relative_path = mount_info_list[0]
             mount_path = os.path.join(temp_root, relative_path)
 
-            logger.info("SSH destination mounted",
-                       mount_path=mount_path,
-                       mount_id=mount_id,
-                       destination=destination)
+            logger.info(
+                "SSH destination mounted",
+                mount_path=mount_path,
+                mount_id=mount_id,
+                destination=destination,
+            )
 
             # Ensure mount directory exists
             os.makedirs(mount_path, exist_ok=True)
@@ -664,9 +842,15 @@ class RestoreService:
                 env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
                 env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
                 env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
-                env["BORG_RSH"] = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o RequestTTY=no -o PermitLocalCommand=no"
+                env["BORG_RSH"] = (
+                    "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o RequestTTY=no -o PermitLocalCommand=no"
+                )
 
-            logger.info("Executing extraction to SSHFS mount", command=" ".join(cmd), cwd=mount_path)
+            logger.info(
+                "Executing extraction to SSHFS mount",
+                command=" ".join(cmd),
+                cwd=mount_path,
+            )
 
             # Execute extraction (same logic as local restore)
             process = await asyncio.create_subprocess_exec(
@@ -675,7 +859,7 @@ class RestoreService:
                 stderr=asyncio.subprocess.PIPE,
                 stdin=asyncio.subprocess.PIPE,
                 cwd=mount_path,
-                env=env
+                env=env,
             )
 
             if process.stdin:
@@ -694,7 +878,7 @@ class RestoreService:
 
             async def read_stderr():
                 nonlocal current_file, last_update_time, nfiles, speed_tracking
-                buffer = b''
+                buffer = b""
 
                 while True:
                     chunk = await process.stderr.read(8192)
@@ -703,9 +887,9 @@ class RestoreService:
 
                     buffer += chunk
 
-                    while b'\r' in buffer or b'\n' in buffer:
-                        r_pos = buffer.find(b'\r')
-                        n_pos = buffer.find(b'\n')
+                    while b"\r" in buffer or b"\n" in buffer:
+                        r_pos = buffer.find(b"\r")
+                        n_pos = buffer.find(b"\n")
 
                         if r_pos == -1:
                             pos = n_pos
@@ -721,33 +905,42 @@ class RestoreService:
                             break
 
                         line_bytes = buffer[:pos]
-                        buffer = buffer[pos + sep_len:]
+                        buffer = buffer[pos + sep_len :]
 
                         if not line_bytes:
                             continue
 
-                        line_text = line_bytes.decode('utf-8', errors='replace').strip()
+                        line_text = line_bytes.decode("utf-8", errors="replace").strip()
                         if line_text:
                             stderr_lines.append(line_text)
 
                             try:
-                                if line_text and line_text[0] == '{':
+                                if line_text and line_text[0] == "{":
                                     json_msg = json.loads(line_text)
-                                    msg_type = json_msg.get('type')
+                                    msg_type = json_msg.get("type")
 
-                                    if msg_type == 'progress_percent' and not json_msg.get('finished'):
-                                        restored_size = json_msg.get('current', 0)
-                                        original_size = json_msg.get('total', 0)
-                                        file_info = json_msg.get('info', [])
+                                    if (
+                                        msg_type == "progress_percent"
+                                        and not json_msg.get("finished")
+                                    ):
+                                        restored_size = json_msg.get("current", 0)
+                                        original_size = json_msg.get("total", 0)
+                                        file_info = json_msg.get("info", [])
                                         current_file = file_info[0] if file_info else ""
 
                                         job.restored_size = restored_size
                                         job.original_size = original_size
 
                                         if original_size > 0:
-                                            job.progress_percent = min(100.0, (restored_size / original_size) * 100.0)
+                                            job.progress_percent = min(
+                                                100.0,
+                                                (restored_size / original_size) * 100.0,
+                                            )
 
-                                        if current_file and current_file not in seen_files:
+                                        if (
+                                            current_file
+                                            and current_file not in seen_files
+                                        ):
                                             seen_files.add(current_file)
                                             nfiles = len(seen_files)
 
@@ -756,34 +949,65 @@ class RestoreService:
 
                                         # Calculate speed
                                         if restored_size > 0:
-                                            current_time = asyncio.get_event_loop().time()
-                                            speed_tracking.append((current_time, restored_size))
-                                            speed_tracking[:] = [(t, s) for t, s in speed_tracking
-                                                               if current_time - t <= SPEED_WINDOW_SECONDS]
+                                            current_time = (
+                                                asyncio.get_event_loop().time()
+                                            )
+                                            speed_tracking.append(
+                                                (current_time, restored_size)
+                                            )
+                                            speed_tracking[:] = [
+                                                (t, s)
+                                                for t, s in speed_tracking
+                                                if current_time - t
+                                                <= SPEED_WINDOW_SECONDS
+                                            ]
 
                                             if len(speed_tracking) >= 2:
-                                                time_diff = speed_tracking[-1][0] - speed_tracking[0][0]
-                                                size_diff = speed_tracking[-1][1] - speed_tracking[0][1]
+                                                time_diff = (
+                                                    speed_tracking[-1][0]
+                                                    - speed_tracking[0][0]
+                                                )
+                                                size_diff = (
+                                                    speed_tracking[-1][1]
+                                                    - speed_tracking[0][1]
+                                                )
 
                                                 if time_diff > 0 and size_diff > 0:
-                                                    job.restore_speed = (size_diff / (1024 * 1024)) / time_diff
+                                                    job.restore_speed = (
+                                                        size_diff / (1024 * 1024)
+                                                    ) / time_diff
 
-                                                remaining_bytes = original_size - restored_size
-                                                if remaining_bytes > 0 and job.restore_speed > 0:
-                                                    remaining_mb = remaining_bytes / (1024 * 1024)
-                                                    job.estimated_time_remaining = int(remaining_mb / job.restore_speed)
+                                                remaining_bytes = (
+                                                    original_size - restored_size
+                                                )
+                                                if (
+                                                    remaining_bytes > 0
+                                                    and job.restore_speed > 0
+                                                ):
+                                                    remaining_mb = remaining_bytes / (
+                                                        1024 * 1024
+                                                    )
+                                                    job.estimated_time_remaining = int(
+                                                        remaining_mb / job.restore_speed
+                                                    )
                                                 else:
                                                     job.estimated_time_remaining = 0
 
                                         now = datetime.now(timezone.utc)
-                                        if (now - last_update_time).total_seconds() >= 2.0:
+                                        if (
+                                            now - last_update_time
+                                        ).total_seconds() >= 2.0:
                                             try:
                                                 db_session.commit()
                                                 last_update_time = now
-                                                logger.info("Restore progress",
-                                                          job_id=job_id,
-                                                          percent=job.progress_percent,
-                                                          file=current_file[:50] if current_file else '')
+                                                logger.info(
+                                                    "Restore progress",
+                                                    job_id=job_id,
+                                                    percent=job.progress_percent,
+                                                    file=current_file[:50]
+                                                    if current_file
+                                                    else "",
+                                                )
                                             except:
                                                 db_session.rollback()
                             except (json.JSONDecodeError, Exception) as e:
@@ -797,62 +1021,93 @@ class RestoreService:
             await process.wait()
 
             # Check exit code (same logic as local restore)
-            if process.returncode == 0 or process.returncode == 1 or (100 <= process.returncode <= 127):
+            if (
+                process.returncode == 0
+                or process.returncode == 1
+                or (100 <= process.returncode <= 127)
+            ):
                 if process.returncode == 1:
                     warning_msgs = [
-                        line for line in stderr_lines
-                        if not line.strip().startswith('{') and line.strip()
+                        line
+                        for line in stderr_lines
+                        if not line.strip().startswith("{") and line.strip()
                     ]
                     if warning_msgs:
                         logger.warning(
                             "Restore completed with warnings",
                             mount_path=mount_path,
                             nfiles=nfiles,
-                            warnings=warning_msgs[-5:]
+                            warnings=warning_msgs[-5:],
                         )
-                logger.info("Restore extraction successful", mount_path=mount_path, nfiles=nfiles)
+                logger.info(
+                    "Restore extraction successful",
+                    mount_path=mount_path,
+                    nfiles=nfiles,
+                )
             else:
                 error_msgs = [
-                    line for line in stderr_lines
-                    if not line.strip().startswith('{') and line.strip()
+                    line
+                    for line in stderr_lines
+                    if not line.strip().startswith("{") and line.strip()
                 ]
-                raise Exception(f"Extraction failed with code {process.returncode}: {' '.join(error_msgs[-10:])}")
+                raise Exception(
+                    f"Extraction failed with code {process.returncode}: {' '.join(error_msgs[-10:])}"
+                )
 
             # Mark as completed
-            job.status = "completed" if process.returncode == 0 else "completed_with_warnings"
+            job.status = (
+                "completed" if process.returncode == 0 else "completed_with_warnings"
+            )
             if process.returncode == 1:
-                job.error_message = json.dumps({"key": "backend.errors.service.restoreCompletedWithWarnings", "params": {"exitCode": 1}})
+                job.error_message = json.dumps(
+                    {
+                        "key": "backend.errors.service.restoreCompletedWithWarnings",
+                        "params": {"exitCode": 1},
+                    }
+                )
             job.progress = 100
             job.progress_percent = 100.0
             job.completed_at = datetime.now(timezone.utc)
             job.current_file = "Restore completed"
-            job.logs = '\n'.join(stderr_lines[-100:])
+            job.logs = "\n".join(stderr_lines[-100:])
             db_session.commit()
 
-            logger.info("Local→SSH restore completed successfully via SSHFS",
-                       job_id=job_id,
-                       repository=repository_path,
-                       archive=archive_name,
-                       destination=f"{ssh_connection.host}:{destination}",
-                       nfiles=nfiles)
+            logger.info(
+                "Local→SSH restore completed successfully via SSHFS",
+                job_id=job_id,
+                repository=repository_path,
+                archive=archive_name,
+                destination=f"{ssh_connection.host}:{destination}",
+                nfiles=nfiles,
+            )
 
             # Send success notification
             try:
                 await notification_service.send_restore_success(
-                    db_session, repository_path, archive_name,
-                    f"{ssh_connection.host}:{destination}", None, None
+                    db_session,
+                    repository_path,
+                    archive_name,
+                    f"{ssh_connection.host}:{destination}",
+                    None,
+                    None,
                 )
             except Exception as e:
-                logger.warning("Failed to send restore success notification", error=str(e))
+                logger.warning(
+                    "Failed to send restore success notification", error=str(e)
+                )
 
         except Exception as e:
             logger.error("Local→SSH restore failed", job_id=job_id, error=str(e))
 
             try:
-                job = db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                job = (
+                    db_session.query(RestoreJob).filter(RestoreJob.id == job_id).first()
+                )
                 if job:
                     job.status = "failed"
-                    job.error_message = json.dumps({"key": "backend.errors.service.restoreFailed"})
+                    job.error_message = json.dumps(
+                        {"key": "backend.errors.service.restoreFailed"}
+                    )
                     job.completed_at = datetime.now(timezone.utc)
                     db_session.commit()
 
@@ -862,9 +1117,16 @@ class RestoreService:
                             db_session, repository_path, archive_name, str(e), None
                         )
                     except Exception as notif_error:
-                        logger.warning("Failed to send restore failure notification", error=str(notif_error))
+                        logger.warning(
+                            "Failed to send restore failure notification",
+                            error=str(notif_error),
+                        )
             except Exception as update_error:
-                logger.warning("Could not update job status", job_id=job_id, error=str(update_error))
+                logger.warning(
+                    "Could not update job status",
+                    job_id=job_id,
+                    error=str(update_error),
+                )
                 db_session.rollback()
 
         finally:
@@ -874,9 +1136,11 @@ class RestoreService:
                     logger.info("Unmounting SSH destination", mount_id=mount_id)
                     await mount_service.unmount(mount_id)
                 except Exception as unmount_error:
-                    logger.error("Failed to unmount SSH destination",
-                               mount_id=mount_id,
-                               error=str(unmount_error))
+                    logger.error(
+                        "Failed to unmount SSH destination",
+                        mount_id=mount_id,
+                        error=str(unmount_error),
+                    )
 
             # Remove from running processes
             cleanup_temp_key_file(temp_key_file)

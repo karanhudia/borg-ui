@@ -19,7 +19,14 @@ class RestoreV2Service:
         remote_path: Optional[str] = None,
         bypass_lock: bool = False,
     ) -> List[str]:
-        cmd = [borg2.borg_cmd, "-r", repository_path, "extract", "--log-json", archive_name]
+        cmd = [
+            borg2.borg_cmd,
+            "-r",
+            repository_path,
+            "extract",
+            "--log-json",
+            archive_name,
+        ]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:

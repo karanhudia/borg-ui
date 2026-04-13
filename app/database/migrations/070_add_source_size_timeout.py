@@ -15,10 +15,12 @@ logger = structlog.get_logger()
 def upgrade(db):
     """Add source_size_timeout to system_settings"""
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE system_settings
             ADD COLUMN source_size_timeout INTEGER DEFAULT NULL
-        """))
+        """)
+        )
         logger.info("Added source_size_timeout column to system_settings")
     except Exception as e:
         if "duplicate column" in str(e).lower():

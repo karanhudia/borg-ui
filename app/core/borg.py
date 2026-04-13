@@ -1,14 +1,14 @@
 import asyncio
 import subprocess
 import json
-import yaml
 import os
 import structlog
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 from datetime import datetime, timezone
 from app.config import settings
 
 logger = structlog.get_logger()
+
 
 class BorgInterface:
     """Interface for interacting with Borg CLI"""
@@ -26,17 +26,22 @@ class BorgInterface:
     def _validate_borg_installation(self):
         """Validate that borg is installed and accessible"""
         try:
-            result = subprocess.run([self.borg_cmd, "--version"],
-                                  capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                [self.borg_cmd, "--version"], capture_output=True, text=True, timeout=10
+            )
             if result.returncode == 0:
                 logger.info("Borg found", version=result.stdout.strip())
             else:
-                raise RuntimeError(f"Borg command failed with return code {result.returncode}")
+                raise RuntimeError(
+                    f"Borg command failed with return code {result.returncode}"
+                )
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             logger.error("Borg not available", error=str(e))
             raise RuntimeError(f"Borg not available: {str(e)}")
 
-    async def _execute_command(self, cmd: List[str], timeout: int = 3600, cwd: str = None, env: dict = None) -> Dict:
+    async def _execute_command(
+        self, cmd: List[str], timeout: int = 3600, cwd: str = None, env: dict = None
+    ) -> Dict:
         """Execute a command with real-time output capture"""
         logger.info("Executing command", command=" ".join(cmd), cwd=cwd)
 
@@ -58,11 +63,14 @@ class BorgInterface:
         # Add SSH options to disable host key checking for remote repos
         # This allows automatic connection to new hosts without manual intervention
         ssh_opts = [
-            "-o", "StrictHostKeyChecking=no",  # Don't check host keys
-            "-o", "UserKnownHostsFile=/dev/null",  # Don't save host keys
-            "-o", "LogLevel=ERROR"  # Reduce SSH verbosity
+            "-o",
+            "StrictHostKeyChecking=no",  # Don't check host keys
+            "-o",
+            "UserKnownHostsFile=/dev/null",  # Don't save host keys
+            "-o",
+            "LogLevel=ERROR",  # Reduce SSH verbosity
         ]
-        exec_env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+        exec_env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
 
         # Merge any additional environment variables
         if env:
@@ -74,28 +82,29 @@ class BorgInterface:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
-                env=exec_env
+                env=exec_env,
             )
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout
+                process.communicate(), timeout=timeout
             )
 
             result = {
                 "return_code": process.returncode,
                 "stdout": stdout.decode() if stdout else "",
                 "stderr": stderr.decode() if stderr else "",
-                "success": process.returncode == 0
+                "success": process.returncode == 0,
             }
 
             if result["success"]:
                 logger.info("Command executed successfully", command=" ".join(cmd))
             else:
-                logger.error("Command failed",
-                           command=" ".join(cmd),
-                           return_code=process.returncode,
-                           stderr=result["stderr"])
+                logger.error(
+                    "Command failed",
+                    command=" ".join(cmd),
+                    return_code=process.returncode,
+                    stderr=result["stderr"],
+                )
 
             return result
 
@@ -105,19 +114,22 @@ class BorgInterface:
                 "return_code": -1,
                 "stdout": "",
                 "stderr": f"Command timed out after {timeout} seconds",
-                "success": False
+                "success": False,
             }
         except Exception as e:
-            logger.error("Command execution failed", command=" ".join(cmd), error=str(e))
-            return {
-                "return_code": -1,
-                "stdout": "",
-                "stderr": str(e),
-                "success": False
-            }
+            logger.error(
+                "Command execution failed", command=" ".join(cmd), error=str(e)
+            )
+            return {"return_code": -1, "stdout": "", "stderr": str(e), "success": False}
 
-    async def _execute_command_streaming(self, cmd: List[str], max_lines: int = 1_000_000,
-                                        timeout: int = 3600, cwd: str = None, env: dict = None) -> Dict:
+    async def _execute_command_streaming(
+        self,
+        cmd: List[str],
+        max_lines: int = 1_000_000,
+        timeout: int = 3600,
+        cwd: str = None,
+        env: dict = None,
+    ) -> Dict:
         """Execute a command with line-by-line streaming and size limits
 
         This prevents OOM by counting lines as they arrive and terminating early if limits are exceeded.
@@ -133,10 +145,12 @@ class BorgInterface:
         Returns:
             Dict with return_code, stdout (joined lines), stderr, success, and line_count_exceeded flag
         """
-        logger.info("Executing command with streaming",
-                   command=" ".join(cmd),
-                   max_lines=max_lines,
-                   cwd=cwd)
+        logger.info(
+            "Executing command with streaming",
+            command=" ".join(cmd),
+            max_lines=max_lines,
+            cwd=cwd,
+        )
 
         # Set up environment with SSH options for remote repositories
         exec_env = os.environ.copy()
@@ -144,11 +158,14 @@ class BorgInterface:
         exec_env["BORG_HOSTNAME_IS_UNIQUE"] = "yes"
 
         ssh_opts = [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR"
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "LogLevel=ERROR",
         ]
-        exec_env['BORG_RSH'] = f"ssh {' '.join(ssh_opts)}"
+        exec_env["BORG_RSH"] = f"ssh {' '.join(ssh_opts)}"
 
         # Merge any additional environment variables
         if env:
@@ -160,7 +177,7 @@ class BorgInterface:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd,
-                env=exec_env
+                env=exec_env,
             )
 
             # Stream stdout line by line with limit enforcement
@@ -173,9 +190,11 @@ class BorgInterface:
                 async for line in process.stdout:
                     # Check timeout
                     if asyncio.get_event_loop().time() - start_time > timeout:
-                        logger.error("Command timed out during streaming",
-                                   command=" ".join(cmd),
-                                   lines_read=line_count)
+                        logger.error(
+                            "Command timed out during streaming",
+                            command=" ".join(cmd),
+                            lines_read=line_count,
+                        )
                         process.kill()
                         await process.wait()
                         return {
@@ -184,17 +203,19 @@ class BorgInterface:
                             "stderr": f"Command timed out after {timeout} seconds (read {line_count:,} lines)",
                             "success": False,
                             "line_count_exceeded": False,
-                            "lines_read": line_count
+                            "lines_read": line_count,
                         }
 
                     line_count += 1
 
                     # Check if we've exceeded the line limit
                     if line_count > max_lines:
-                        logger.error("Line limit exceeded, terminating command",
-                                   command=" ".join(cmd),
-                                   line_count=line_count,
-                                   max_lines=max_lines)
+                        logger.error(
+                            "Line limit exceeded, terminating command",
+                            command=" ".join(cmd),
+                            line_count=line_count,
+                            max_lines=max_lines,
+                        )
                         line_count_exceeded = True
                         # Kill the process to prevent further memory consumption
                         process.kill()
@@ -202,23 +223,31 @@ class BorgInterface:
                         break
 
                     # Decode and store line (keep in memory only up to limit)
-                    stdout_lines.append(line.decode('utf-8', errors='replace').rstrip('\n'))
+                    stdout_lines.append(
+                        line.decode("utf-8", errors="replace").rstrip("\n")
+                    )
 
                     # Log progress every 100k lines
                     if line_count % 100_000 == 0:
-                        logger.info("Streaming progress",
-                                   command=" ".join(cmd),
-                                   lines_read=line_count)
+                        logger.info(
+                            "Streaming progress",
+                            command=" ".join(cmd),
+                            lines_read=line_count,
+                        )
 
             except Exception as e:
-                logger.error("Error during streaming", command=" ".join(cmd), error=str(e))
+                logger.error(
+                    "Error during streaming", command=" ".join(cmd), error=str(e)
+                )
                 process.kill()
                 await process.wait()
                 raise
 
             # Read stderr (should be small for list commands)
             stderr_data = await process.stderr.read()
-            stderr = stderr_data.decode('utf-8', errors='replace') if stderr_data else ""
+            stderr = (
+                stderr_data.decode("utf-8", errors="replace") if stderr_data else ""
+            )
 
             # Wait for process to complete (if not already killed)
             if process.returncode is None:
@@ -230,24 +259,30 @@ class BorgInterface:
                 "stderr": stderr,
                 "success": process.returncode == 0 and not line_count_exceeded,
                 "line_count_exceeded": line_count_exceeded,
-                "lines_read": line_count
+                "lines_read": line_count,
             }
 
             if result["success"]:
-                logger.info("Command executed successfully with streaming",
-                           command=" ".join(cmd),
-                           lines_read=line_count)
+                logger.info(
+                    "Command executed successfully with streaming",
+                    command=" ".join(cmd),
+                    lines_read=line_count,
+                )
             else:
                 if line_count_exceeded:
-                    logger.warning("Command terminated due to line limit",
-                                 command=" ".join(cmd),
-                                 lines_read=line_count,
-                                 max_lines=max_lines)
+                    logger.warning(
+                        "Command terminated due to line limit",
+                        command=" ".join(cmd),
+                        lines_read=line_count,
+                        max_lines=max_lines,
+                    )
                 else:
-                    logger.error("Command failed",
-                               command=" ".join(cmd),
-                               return_code=process.returncode,
-                               stderr=stderr[:500])  # Limit stderr logging
+                    logger.error(
+                        "Command failed",
+                        command=" ".join(cmd),
+                        return_code=process.returncode,
+                        stderr=stderr[:500],
+                    )  # Limit stderr logging
 
             return result
 
@@ -259,20 +294,28 @@ class BorgInterface:
                 "stderr": f"Command timed out after {timeout} seconds",
                 "success": False,
                 "line_count_exceeded": False,
-                "lines_read": 0
+                "lines_read": 0,
             }
         except Exception as e:
-            logger.error("Command execution failed", command=" ".join(cmd), error=str(e))
+            logger.error(
+                "Command execution failed", command=" ".join(cmd), error=str(e)
+            )
             return {
                 "return_code": -1,
                 "stdout": "",
                 "stderr": str(e),
                 "success": False,
                 "line_count_exceeded": False,
-                "lines_read": 0
+                "lines_read": 0,
             }
 
-    async def break_lock(self, repository: str, remote_path: str = None, passphrase: str = None, env: dict = None) -> Dict:
+    async def break_lock(
+        self,
+        repository: str,
+        remote_path: str = None,
+        passphrase: str = None,
+        env: dict = None,
+    ) -> Dict:
         """Break a stale lock on a repository and its cache"""
         logger.warning("Breaking stale lock", repository=repository)
 
@@ -290,7 +333,9 @@ class BorgInterface:
             exec_env["BORG_PASSPHRASE"] = passphrase
 
         # Break repository lock
-        result = await self._execute_command(cmd, timeout=30, env=exec_env if exec_env else None)
+        result = await self._execute_command(
+            cmd, timeout=30, env=exec_env if exec_env else None
+        )
 
         # Also try to break cache lock by deleting cache lock files
         # This handles the case where cache locks remain after repository locks are broken
@@ -304,23 +349,27 @@ class BorgInterface:
                 info_cmd.extend(["--remote-path", remote_path])
             info_cmd.append(repository)
 
-            info_result = await self._execute_command(info_cmd, timeout=30, env=exec_env if exec_env else None)
+            info_result = await self._execute_command(
+                info_cmd, timeout=30, env=exec_env if exec_env else None
+            )
 
             if info_result.get("success"):
                 info_data = json.loads(info_result["stdout"])
                 repo_id = info_data.get("repository", {}).get("id")
 
                 if repo_id:
-                    logger.info("Found repository ID for cache cleanup", repo_id=repo_id)
+                    logger.info(
+                        "Found repository ID for cache cleanup", repo_id=repo_id
+                    )
                     cache_dir = os.path.expanduser(f"~/.cache/borg/{repo_id}")
 
                     if os.path.exists(cache_dir):
                         # Remove all types of lock files/directories in cache directory
                         # Borg 1.4+ uses: lock.exclusive, lock.roster, and lock.* patterns
                         lock_patterns = [
-                            f"{cache_dir}/lock.*",           # Legacy lock files
-                            f"{cache_dir}/lock.exclusive",   # Borg 1.4+ exclusive lock
-                            f"{cache_dir}/lock.roster"       # Borg 1.4+ roster lock
+                            f"{cache_dir}/lock.*",  # Legacy lock files
+                            f"{cache_dir}/lock.exclusive",  # Borg 1.4+ exclusive lock
+                            f"{cache_dir}/lock.roster",  # Borg 1.4+ roster lock
                         ]
 
                         all_locks = []
@@ -331,39 +380,76 @@ class BorgInterface:
                         all_locks = list(set(all_locks))
 
                         if all_locks:
-                            logger.info("Breaking cache locks", cache_dir=cache_dir, count=len(all_locks), locks=all_locks)
+                            logger.info(
+                                "Breaking cache locks",
+                                cache_dir=cache_dir,
+                                count=len(all_locks),
+                                locks=all_locks,
+                            )
                             for lock_path in all_locks:
                                 try:
                                     if os.path.isfile(lock_path):
                                         os.unlink(lock_path)
-                                        logger.info("Removed cache lock file", file=lock_path)
+                                        logger.info(
+                                            "Removed cache lock file", file=lock_path
+                                        )
                                     elif os.path.isdir(lock_path):
                                         import shutil
+
                                         shutil.rmtree(lock_path)
-                                        logger.info("Removed cache lock directory", dir=lock_path)
+                                        logger.info(
+                                            "Removed cache lock directory",
+                                            dir=lock_path,
+                                        )
                                 except Exception as e:
-                                    logger.warning("Failed to remove cache lock", path=lock_path, error=str(e))
+                                    logger.warning(
+                                        "Failed to remove cache lock",
+                                        path=lock_path,
+                                        error=str(e),
+                                    )
                         else:
                             logger.info("No cache locks found", cache_dir=cache_dir)
                     else:
-                        logger.info("Cache directory does not exist", cache_dir=cache_dir)
+                        logger.info(
+                            "Cache directory does not exist", cache_dir=cache_dir
+                        )
                 else:
                     logger.warning("Could not extract repository ID from borg info")
             else:
-                logger.warning("Could not get repository info for cache cleanup", error=info_result.get("stderr"))
+                logger.warning(
+                    "Could not get repository info for cache cleanup",
+                    error=info_result.get("stderr"),
+                )
         except Exception as e:
             logger.warning("Failed to clean cache locks", error=str(e))
 
         return result
 
-    async def run_backup(self, repository: str, source_paths: List[str],
-                        compression: str = "lz4", archive_name: str = None, remote_path: str = None, passphrase: str = None) -> Dict:
+    async def run_backup(
+        self,
+        repository: str,
+        source_paths: List[str],
+        compression: str = "lz4",
+        archive_name: str = None,
+        remote_path: str = None,
+        passphrase: str = None,
+    ) -> Dict:
         """Execute backup operation with direct parameters"""
         if not repository:
-            return {"success": False, "error": "Repository is required", "stdout": "", "stderr": ""}
+            return {
+                "success": False,
+                "error": "Repository is required",
+                "stdout": "",
+                "stderr": "",
+            }
 
         if not source_paths:
-            return {"success": False, "error": "Source paths are required", "stdout": "", "stderr": ""}
+            return {
+                "success": False,
+                "error": "Source paths are required",
+                "stdout": "",
+                "stderr": "",
+            }
 
         # Build borg create command
         cmd = [self.borg_cmd, "create"]
@@ -391,7 +477,9 @@ class BorgInterface:
         if passphrase:
             env["BORG_PASSPHRASE"] = passphrase
 
-        return await self._execute_command(cmd, timeout=settings.backup_timeout, env=env if env else None)
+        return await self._execute_command(
+            cmd, timeout=settings.backup_timeout, env=env if env else None
+        )
 
     async def list_archives(
         self,
@@ -438,10 +526,17 @@ class BorgInterface:
 
         return await self._execute_command(cmd, env=exec_env if exec_env else None)
 
-    async def list_archive_contents(self, repository: str, archive: str, path: str = "",
-                                   remote_path: str = None, passphrase: str = None,
-                                   max_lines: int = 1_000_000, bypass_lock: bool = False,
-                                   env: dict = None) -> Dict:
+    async def list_archive_contents(
+        self,
+        repository: str,
+        archive: str,
+        path: str = "",
+        remote_path: str = None,
+        passphrase: str = None,
+        max_lines: int = 1_000_000,
+        bypass_lock: bool = False,
+        env: dict = None,
+    ) -> Dict:
         """List contents of an archive with streaming to prevent OOM
 
         Note: borg list doesn't support path filtering as an argument,
@@ -472,7 +567,9 @@ class BorgInterface:
             exec_env["BORG_PASSPHRASE"] = passphrase
 
         # Use streaming execution to prevent OOM on large archives
-        return await self._execute_command_streaming(cmd, max_lines=max_lines, env=exec_env if exec_env else None)
+        return await self._execute_command_streaming(
+            cmd, max_lines=max_lines, env=exec_env if exec_env else None
+        )
 
     async def extract_archive(
         self,
@@ -521,7 +618,13 @@ class BorgInterface:
             env=exec_env if exec_env else None,
         )
 
-    async def delete_archive(self, repository: str, archive: str, remote_path: str = None, passphrase: str = None) -> Dict:
+    async def delete_archive(
+        self,
+        repository: str,
+        archive: str,
+        remote_path: str = None,
+        passphrase: str = None,
+    ) -> Dict:
         """Delete an archive"""
         cmd = [self.borg_cmd, "delete"]
         if remote_path:
@@ -534,10 +637,19 @@ class BorgInterface:
 
         return await self._execute_command(cmd, env=env)
 
-    async def prune_archives(self, repository: str, keep_hourly: int = 0, keep_daily: int = 7,
-                           keep_weekly: int = 4, keep_monthly: int = 6, keep_quarterly: int = 0,
-                           keep_yearly: int = 1, dry_run: bool = False,
-                           remote_path: str = None, passphrase: str = None) -> Dict:
+    async def prune_archives(
+        self,
+        repository: str,
+        keep_hourly: int = 0,
+        keep_daily: int = 7,
+        keep_weekly: int = 4,
+        keep_monthly: int = 6,
+        keep_quarterly: int = 0,
+        keep_yearly: int = 1,
+        dry_run: bool = False,
+        remote_path: str = None,
+        passphrase: str = None,
+    ) -> Dict:
         """Prune old archives
 
         Args:
@@ -587,7 +699,9 @@ class BorgInterface:
 
         return await self._execute_command(cmd, env=env if env else None)
 
-    async def check_repository(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
+    async def check_repository(
+        self, repository: str, remote_path: str = None, passphrase: str = None
+    ) -> Dict:
         """Check repository integrity"""
         cmd = [self.borg_cmd, "check"]
         if remote_path:
@@ -600,7 +714,9 @@ class BorgInterface:
 
         return await self._execute_command(cmd, env=env if env else None)
 
-    async def compact_repository(self, repository: str, remote_path: str = None, passphrase: str = None) -> Dict:
+    async def compact_repository(
+        self, repository: str, remote_path: str = None, passphrase: str = None
+    ) -> Dict:
         """Compact repository to save space"""
         cmd = [self.borg_cmd, "compact"]
         if remote_path:
@@ -613,8 +729,9 @@ class BorgInterface:
 
         return await self._execute_command(cmd, env=env if env else None)
 
-
-    async def get_repository_info(self, repository_path: str, remote_path: str = None, bypass_lock: bool = False) -> Dict:
+    async def get_repository_info(
+        self, repository_path: str, remote_path: str = None, bypass_lock: bool = False
+    ) -> Dict:
         """Get detailed information about a specific repository"""
         try:
             # Get repository info using borg info
@@ -635,7 +752,7 @@ class BorgInterface:
                     "total_size": 0,
                     "compression_ratio": 0,
                     "integrity_check": False,
-                    "disk_usage": 0
+                    "disk_usage": 0,
                 }
 
             # Parse JSON output
@@ -644,7 +761,9 @@ class BorgInterface:
                 archives = info_data.get("archives", [])
 
                 # Calculate total size
-                total_size = sum(archive.get("stats", {}).get("size", 0) for archive in archives)
+                total_size = sum(
+                    archive.get("stats", {}).get("size", 0) for archive in archives
+                )
 
                 # Get compression ratio (average)
                 compression_ratios = []
@@ -654,19 +773,26 @@ class BorgInterface:
                         ratio = stats["csize"] / stats["size"]
                         compression_ratios.append(ratio)
 
-                avg_compression_ratio = sum(compression_ratios) / len(compression_ratios) if compression_ratios else 0
+                avg_compression_ratio = (
+                    sum(compression_ratios) / len(compression_ratios)
+                    if compression_ratios
+                    else 0
+                )
 
                 # Get last backup time
                 last_backup = None
                 if archives:
                     latest_archive = max(archives, key=lambda x: x.get("time", 0))
                     # Convert Unix timestamp to timezone-aware UTC datetime, then to ISO format
-                    last_backup = datetime.fromtimestamp(latest_archive["time"], tz=timezone.utc).isoformat()
+                    last_backup = datetime.fromtimestamp(
+                        latest_archive["time"], tz=timezone.utc
+                    ).isoformat()
 
                 # Check disk usage
                 disk_usage = 0
                 try:
                     import psutil
+
                     disk = psutil.disk_usage(os.path.dirname(repository_path))
                     disk_usage = disk.percent
                 except:
@@ -679,7 +805,7 @@ class BorgInterface:
                     "total_size": total_size,
                     "compression_ratio": avg_compression_ratio,
                     "integrity_check": True,  # If we can read the repo, it's likely intact
-                    "disk_usage": disk_usage
+                    "disk_usage": disk_usage,
                 }
 
             except json.JSONDecodeError as e:
@@ -692,11 +818,15 @@ class BorgInterface:
                     "total_size": 0,
                     "compression_ratio": 0,
                     "integrity_check": False,
-                    "disk_usage": 0
+                    "disk_usage": 0,
                 }
 
         except Exception as e:
-            logger.error("Failed to get repository info", repository=repository_path, error=str(e))
+            logger.error(
+                "Failed to get repository info",
+                repository=repository_path,
+                error=str(e),
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -705,14 +835,15 @@ class BorgInterface:
                 "total_size": 0,
                 "compression_ratio": 0,
                 "integrity_check": False,
-                "disk_usage": 0
+                "disk_usage": 0,
             }
-
 
     def get_version(self) -> str:
         """Get Borg version"""
         try:
-            result = subprocess.run([self.borg_cmd, "--version"], capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                [self.borg_cmd, "--version"], capture_output=True, text=True, timeout=10
+            )
             if result.returncode == 0:
                 return result.stdout.strip()
             else:
@@ -730,7 +861,11 @@ class BorgInterface:
 
             # Get borg version (only once)
             version_result = await self._execute_command([self.borg_cmd, "--version"])
-            borg_version = version_result["stdout"].strip() if version_result["success"] else "Unknown"
+            borg_version = (
+                version_result["stdout"].strip()
+                if version_result["success"]
+                else "Unknown"
+            )
 
             # Get available commands (only once)
             help_result = await self._execute_command([self.borg_cmd, "--help"])
@@ -740,7 +875,7 @@ class BorgInterface:
                 "success": True,
                 "borg_version": borg_version,
                 "data_dir": settings.data_dir,
-                "help_available": help_result["success"]
+                "help_available": help_result["success"],
             }
 
             logger.info("Cached borg system info", version=borg_version)
@@ -749,6 +884,7 @@ class BorgInterface:
         except Exception as e:
             logger.error("Failed to get system info", error=str(e))
             return {"success": False, "error": str(e)}
+
 
 # Global instance
 borg = BorgInterface()

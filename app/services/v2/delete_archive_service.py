@@ -4,7 +4,6 @@ Mirrors delete_archive_service.py but uses borg2 for the delete command and
 automatically runs compact() afterwards — required in Borg 2 to free space.
 """
 
-import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 import structlog
@@ -19,18 +18,20 @@ logger = structlog.get_logger()
 
 
 class DeleteArchiveV2Service:
-
     def __init__(self):
         self.log_dir = Path(settings.data_dir) / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
-    async def execute_delete(self, job_id: int, repository_id: int,
-                             archive_name: str, _db=None):
+    async def execute_delete(
+        self, job_id: int, repository_id: int, archive_name: str, _db=None
+    ):
         """Delete a Borg 2 archive and compact the repository to free space."""
         db = SessionLocal()
         temp_key_file = None
         try:
-            job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
+            job = (
+                db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
+            )
             if not job:
                 logger.error("Borg2 delete job not found", job_id=job_id)
                 return
@@ -64,8 +65,11 @@ class DeleteArchiveV2Service:
                 job.error_message = delete_result["stderr"]
                 job.completed_at = datetime.now(timezone.utc)
                 db.commit()
-                logger.error("Borg2 delete archive failed",
-                             job_id=job_id, stderr=delete_result["stderr"])
+                logger.error(
+                    "Borg2 delete archive failed",
+                    job_id=job_id,
+                    stderr=delete_result["stderr"],
+                )
                 return
 
             # Step 2: compact (mandatory in borg2 to reclaim space)
@@ -82,8 +86,11 @@ class DeleteArchiveV2Service:
 
             if not compact_result["success"]:
                 # Compact failure is non-fatal — archive was deleted successfully
-                logger.warning("Borg2 post-delete compact failed",
-                               job_id=job_id, stderr=compact_result["stderr"])
+                logger.warning(
+                    "Borg2 post-delete compact failed",
+                    job_id=job_id,
+                    stderr=compact_result["stderr"],
+                )
 
             job.status = "completed"
             job.progress = 100
@@ -91,14 +98,22 @@ class DeleteArchiveV2Service:
             job.completed_at = datetime.now(timezone.utc)
             db.commit()
 
-            logger.info("Borg2 archive deleted successfully",
-                        job_id=job_id, archive=archive_name)
+            logger.info(
+                "Borg2 archive deleted successfully",
+                job_id=job_id,
+                archive=archive_name,
+            )
 
         except Exception as e:
-            logger.error("Borg2 delete archive service error",
-                         job_id=job_id, error=str(e))
+            logger.error(
+                "Borg2 delete archive service error", job_id=job_id, error=str(e)
+            )
             try:
-                job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
+                job = (
+                    db.query(DeleteArchiveJob)
+                    .filter(DeleteArchiveJob.id == job_id)
+                    .first()
+                )
                 if job:
                     job.status = "failed"
                     job.error_message = str(e)

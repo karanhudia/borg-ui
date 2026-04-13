@@ -17,8 +17,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
         ("frontend/src/pages/Backup.tsx", ["backupAPI.startBackup("]),
     ],
 )
-def test_shared_paths_do_not_hardcode_version_sensitive_borg_dispatch(relative_path, forbidden_snippets):
+def test_shared_paths_do_not_hardcode_version_sensitive_borg_dispatch(
+    relative_path, forbidden_snippets
+):
     source = (REPO_ROOT / relative_path).read_text()
 
     for snippet in forbidden_snippets:
-        assert snippet not in source, f"{relative_path} still contains forbidden snippet: {snippet}"
+        assert snippet not in source, (
+            f"{relative_path} still contains forbidden snippet: {snippet}"
+        )

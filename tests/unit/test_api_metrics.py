@@ -11,13 +11,16 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
-from sqlalchemy.orm import Session
+from datetime import timedelta
 
 from app.database.models import (
-    Repository, BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob,
+    Repository,
+    BackupJob,
+    RestoreJob,
+    CheckJob,
     SystemSettings,
-    ScheduledJob, utc_now
+    ScheduledJob,
+    utc_now,
 )
 
 
@@ -78,10 +81,14 @@ class TestMetricsEndpoint:
         response = test_client.get("/metrics")
         assert response.status_code == 401
 
-        response = test_client.get("/metrics", headers={"X-Borg-Metrics-Token": "wrong-token"})
+        response = test_client.get(
+            "/metrics", headers={"X-Borg-Metrics-Token": "wrong-token"}
+        )
         assert response.status_code == 401
 
-        response = test_client.get("/metrics", headers={"X-Borg-Metrics-Token": "secret-token"})
+        response = test_client.get(
+            "/metrics", headers={"X-Borg-Metrics-Token": "secret-token"}
+        )
         assert response.status_code == 200
 
     def test_endpoint_accepts_bearer_token_for_metrics_auth(self, test_client, test_db):
@@ -92,7 +99,9 @@ class TestMetricsEndpoint:
         settings.metrics_token = "secret-token"
         test_db.commit()
 
-        response = test_client.get("/metrics", headers={"Authorization": "Bearer secret-token"})
+        response = test_client.get(
+            "/metrics", headers={"Authorization": "Bearer secret-token"}
+        )
         assert response.status_code == 200
 
 
@@ -114,29 +123,31 @@ class TestPrometheusFormat:
         content = response.text
 
         # Extract metric names (lines without # and with values)
-        metric_lines = [line for line in content.split('\n')
-                       if line and not line.startswith('#')]
+        metric_lines = [
+            line for line in content.split("\n") if line and not line.startswith("#")
+        ]
 
         for line in metric_lines:
-            if '{' in line:
-                metric_name = line.split('{')[0]
+            if "{" in line:
+                metric_name = line.split("{")[0]
             else:
-                metric_name = line.split(' ')[0]
+                metric_name = line.split(" ")[0]
 
             # Metric names should be lowercase with underscores
-            assert metric_name.islower() or '_' in metric_name
+            assert metric_name.islower() or "_" in metric_name
             # Should start with borg_
-            assert metric_name.startswith('borg_')
+            assert metric_name.startswith("borg_")
 
     def test_metric_types_valid(self, test_client, test_db):
         """Metric types should be gauge, counter, histogram, or summary"""
         response = test_client.get("/metrics")
         content = response.text
 
-        type_lines = [line for line in content.split('\n')
-                     if line.startswith('# TYPE ')]
+        type_lines = [
+            line for line in content.split("\n") if line.startswith("# TYPE ")
+        ]
 
-        valid_types = ['gauge', 'counter', 'histogram', 'summary']
+        valid_types = ["gauge", "counter", "histogram", "summary"]
         for line in type_lines:
             metric_type = line.split()[-1]
             assert metric_type in valid_types, f"Invalid type: {metric_type}"
@@ -144,11 +155,7 @@ class TestPrometheusFormat:
     def test_labels_properly_quoted(self, test_client, test_db):
         """Label values should be properly quoted"""
         # Create a repository with special characters
-        repo = Repository(
-            name='Test "Repo" Name',
-            path='/test/path',
-            total_size='1 GB'
-        )
+        repo = Repository(name='Test "Repo" Name', path="/test/path", total_size="1 GB")
         test_db.add(repo)
         test_db.commit()
 
@@ -156,7 +163,7 @@ class TestPrometheusFormat:
         content = response.text
 
         # Check that quotes in labels are handled
-        assert 'repository=' in content
+        assert "repository=" in content
 
 
 class TestRepositoryMetrics:
@@ -165,10 +172,7 @@ class TestRepositoryMetrics:
     def test_repository_info_metric(self, test_client, test_db):
         """borg_repository_info should include all repository metadata"""
         repo = Repository(
-            name="Test Repo",
-            path="/test/path",
-            repository_type="local",
-            mode="full"
+            name="Test Repo", path="/test/path", repository_type="local", mode="full"
         )
         test_db.add(repo)
         test_db.commit()
@@ -176,12 +180,12 @@ class TestRepositoryMetrics:
         response = test_client.get("/metrics")
         content = response.text
 
-        assert 'borg_repository_info{' in content
+        assert "borg_repository_info{" in content
         assert 'repository="Test Repo"' in content
         assert 'path="/test/path"' in content
         assert 'type="local"' in content
         assert 'mode="full"' in content
-        assert '} 1' in content
+        assert "} 1" in content
 
     def test_repository_size_parsing(self, test_client, test_db):
         """Repository sizes should be converted to bytes correctly"""
@@ -196,9 +200,7 @@ class TestRepositoryMetrics:
 
         for size_str, expected_bytes in test_cases:
             repo = Repository(
-                name=f"Repo {size_str}",
-                path=f"/test/{size_str}",
-                total_size=size_str
+                name=f"Repo {size_str}", path=f"/test/{size_str}", total_size=size_str
             )
             test_db.add(repo)
 
@@ -208,8 +210,8 @@ class TestRepositoryMetrics:
         content = response.text
 
         # Check that sizes are present and in bytes
-        assert 'borg_repository_size_bytes' in content
-        assert '1073741824' in content  # 1 GB
+        assert "borg_repository_size_bytes" in content
+        assert "1073741824" in content  # 1 GB
 
     def test_repository_timestamps(self, test_client, test_db):
         """Repository timestamps should be Unix timestamps"""
@@ -219,7 +221,7 @@ class TestRepositoryMetrics:
             path="/test/path",
             last_backup=now,
             last_check=now - timedelta(days=1),
-            last_compact=now - timedelta(days=7)
+            last_compact=now - timedelta(days=7),
         )
         test_db.add(repo)
         test_db.commit()
@@ -228,13 +230,16 @@ class TestRepositoryMetrics:
         content = response.text
 
         # Check that timestamps are present
-        assert 'borg_repository_last_backup_timestamp' in content
-        assert 'borg_repository_last_check_timestamp' in content
-        assert 'borg_repository_last_compact_timestamp' in content
+        assert "borg_repository_last_backup_timestamp" in content
+        assert "borg_repository_last_check_timestamp" in content
+        assert "borg_repository_last_compact_timestamp" in content
 
         # Timestamps should be integers
         import re
-        timestamps = re.findall(r'borg_repository_last_backup_timestamp\{[^}]+\} (\d+)', content)
+
+        timestamps = re.findall(
+            r"borg_repository_last_backup_timestamp\{[^}]+\} (\d+)", content
+        )
         assert len(timestamps) > 0
         assert all(ts.isdigit() for ts in timestamps)
 
@@ -245,7 +250,7 @@ class TestRepositoryMetrics:
             path="/new/path",
             last_backup=None,
             last_check=None,
-            last_compact=None
+            last_compact=None,
         )
         test_db.add(repo)
         test_db.commit()
@@ -253,7 +258,9 @@ class TestRepositoryMetrics:
         response = test_client.get("/metrics")
         content = response.text
 
-        assert 'borg_repository_last_backup_timestamp{repository="New Repo"} 0' in content
+        assert (
+            'borg_repository_last_backup_timestamp{repository="New Repo"} 0' in content
+        )
 
 
 class TestBackupJobMetrics:
@@ -270,9 +277,7 @@ class TestBackupJobMetrics:
         for status in statuses:
             for _ in range(3):
                 job = BackupJob(
-                    repository=repo.path,
-                    status=status,
-                    started_at=utc_now()
+                    repository=repo.path, status=status, started_at=utc_now()
                 )
                 test_db.add(job)
 
@@ -282,7 +287,9 @@ class TestBackupJobMetrics:
         content = response.text
 
         # Check that all statuses are present
-        assert 'borg_backup_jobs_total{repository="Test",status="completed"} 3' in content
+        assert (
+            'borg_backup_jobs_total{repository="Test",status="completed"} 3' in content
+        )
         assert 'borg_backup_jobs_total{repository="Test",status="failed"} 3' in content
         assert 'borg_backup_jobs_total{repository="Test",status="running"} 3' in content
 
@@ -295,16 +302,10 @@ class TestBackupJobMetrics:
 
         # Successful backup
         job1 = BackupJob(
-            repository=repo1.path,
-            status="completed",
-            started_at=utc_now()
+            repository=repo1.path, status="completed", started_at=utc_now()
         )
         # Failed backup
-        job2 = BackupJob(
-            repository=repo2.path,
-            status="failed",
-            started_at=utc_now()
-        )
+        job2 = BackupJob(repository=repo2.path, status="failed", started_at=utc_now())
         test_db.add_all([job1, job2])
         test_db.commit()
 
@@ -324,10 +325,7 @@ class TestBackupJobMetrics:
         end = start + timedelta(seconds=125)  # 2 min 5 sec
 
         job = BackupJob(
-            repository=repo.path,
-            status="completed",
-            started_at=start,
-            completed_at=end
+            repository=repo.path, status="completed", started_at=start, completed_at=end
         )
         test_db.add(job)
         test_db.commit()
@@ -348,7 +346,7 @@ class TestBackupJobMetrics:
             repository=repo.path,
             status="completed",
             original_size=1000000000,  # 1 GB
-            deduplicated_size=500000000  # 500 MB
+            deduplicated_size=500000000,  # 500 MB
         )
         test_db.add(job)
         test_db.commit()
@@ -356,16 +354,20 @@ class TestBackupJobMetrics:
         response = test_client.get("/metrics")
         content = response.text
 
-        assert 'borg_backup_last_original_size_bytes{repository="Test"} 1000000000' in content
-        assert 'borg_backup_last_deduplicated_size_bytes{repository="Test"} 500000000' in content
+        assert (
+            'borg_backup_last_original_size_bytes{repository="Test"} 1000000000'
+            in content
+        )
+        assert (
+            'borg_backup_last_deduplicated_size_bytes{repository="Test"} 500000000'
+            in content
+        )
 
     def test_orphaned_backup_jobs(self, test_client, test_db):
         """Backup jobs without matching repos should appear in orphaned metric"""
         # Create a job without a matching repository
         job = BackupJob(
-            repository="/orphaned/path",
-            status="completed",
-            started_at=utc_now()
+            repository="/orphaned/path", status="completed", started_at=utc_now()
         )
         test_db.add(job)
         test_db.commit()
@@ -374,7 +376,7 @@ class TestBackupJobMetrics:
         content = response.text
 
         # Should show in orphaned jobs metric with repository_path label
-        assert 'borg_backup_orphaned_jobs_total' in content
+        assert "borg_backup_orphaned_jobs_total" in content
         assert 'repository_path="/orphaned/path"' in content
         assert 'status="completed"' in content
 
@@ -384,10 +386,7 @@ class TestLabelConsistency:
 
     def test_all_metrics_use_same_repository_label(self, test_client, test_db):
         """All metrics should use repository name, not path"""
-        repo = Repository(
-            name="Consistent Repo",
-            path="/different/path"
-        )
+        repo = Repository(name="Consistent Repo", path="/different/path")
         test_db.add(repo)
         test_db.commit()
 
@@ -396,13 +395,13 @@ class TestLabelConsistency:
             repository=repo.path,
             status="completed",
             started_at=utc_now(),
-            completed_at=utc_now()
+            completed_at=utc_now(),
         )
         check_job = CheckJob(
             repository_id=repo.id,
             status="completed",
             started_at=utc_now(),
-            completed_at=utc_now()
+            completed_at=utc_now(),
         )
         test_db.add_all([backup_job, check_job])
         test_db.commit()
@@ -432,7 +431,7 @@ class TestSystemMetrics:
         response = test_client.get("/metrics")
         content = response.text
 
-        assert 'borg_ui_repositories_total 5' in content
+        assert "borg_ui_repositories_total 5" in content
 
     def test_scheduled_jobs_metrics(self, test_client, test_db):
         """Scheduled job metrics should show total and enabled counts"""
@@ -440,7 +439,7 @@ class TestSystemMetrics:
             job = ScheduledJob(
                 name=f"Job {i}",
                 cron_expression="0 2 * * *",
-                enabled=(i < 2)  # 2 enabled, 1 disabled
+                enabled=(i < 2),  # 2 enabled, 1 disabled
             )
             test_db.add(job)
         test_db.commit()
@@ -448,8 +447,8 @@ class TestSystemMetrics:
         response = test_client.get("/metrics")
         content = response.text
 
-        assert 'borg_ui_scheduled_jobs_total 3' in content
-        assert 'borg_ui_scheduled_jobs_enabled 2' in content
+        assert "borg_ui_scheduled_jobs_total 3" in content
+        assert "borg_ui_scheduled_jobs_enabled 2" in content
 
     def test_active_jobs_by_type(self, test_client, test_db):
         """borg_ui_active_jobs should show running jobs by type"""
@@ -459,7 +458,9 @@ class TestSystemMetrics:
 
         # Create running jobs of different types
         backup = BackupJob(repository=repo.path, status="running")
-        restore = RestoreJob(repository=repo.path, archive="test", destination="/dest", status="running")
+        restore = RestoreJob(
+            repository=repo.path, archive="test", destination="/dest", status="running"
+        )
         check = CheckJob(repository_id=repo.id, status="running")
 
         test_db.add_all([backup, restore, check])
@@ -478,17 +479,13 @@ class TestEdgeCases:
 
     def test_very_large_numbers(self, test_client, test_db):
         """Should handle very large size values"""
-        repo = Repository(
-            name="Huge Repo",
-            path="/huge",
-            total_size="999 TB"
-        )
+        repo = Repository(name="Huge Repo", path="/huge", total_size="999 TB")
         test_db.add(repo)
 
         job = BackupJob(
             repository=repo.path,
             status="completed",
-            original_size=999999999999999  # ~1 PB
+            original_size=999999999999999,  # ~1 PB
         )
         test_db.add(job)
         test_db.commit()
@@ -496,15 +493,15 @@ class TestEdgeCases:
         response = test_client.get("/metrics")
         assert response.status_code == 200
         content = response.text
-        assert '999999999999999' in content
+        assert "999999999999999" in content
 
     def test_special_characters_in_names(self, test_client, test_db):
         """Should handle special characters in repository names"""
         special_names = [
-            'Repo with spaces',
-            'Repo-with-dashes',
-            'Repo_with_underscores',
-            'Repo.with.dots'
+            "Repo with spaces",
+            "Repo-with-dashes",
+            "Repo_with_underscores",
+            "Repo.with.dots",
         ]
 
         for name in special_names:
@@ -561,7 +558,7 @@ class TestEdgeCases:
                 repository=repo.path,
                 status="completed",
                 started_at=utc_now(),
-                completed_at=utc_now()
+                completed_at=utc_now(),
             )
             test_db.add(job)
 
@@ -587,9 +584,7 @@ class TestMetricValues:
         test_db.commit()
 
         job = BackupJob(
-            repository=repo.path,
-            status="completed_with_warnings",
-            started_at=utc_now()
+            repository=repo.path, status="completed_with_warnings", started_at=utc_now()
         )
         test_db.add(job)
         test_db.commit()
@@ -603,10 +598,7 @@ class TestMetricValues:
     def test_zero_values_explicitly_shown(self, test_client, test_db):
         """Zero values should be explicitly shown, not omitted"""
         repo = Repository(
-            name="Empty Repo",
-            path="/empty",
-            archive_count=0,
-            total_size="0"
+            name="Empty Repo", path="/empty", archive_count=0, total_size="0"
         )
         test_db.add(repo)
         test_db.commit()
@@ -624,9 +616,11 @@ class TestMetricValues:
 
         # Extract metric names
         def get_metric_names(content):
-            return [line.split('{')[0].split(' ')[0]
-                   for line in content.split('\n')
-                   if line and not line.startswith('#')]
+            return [
+                line.split("{")[0].split(" ")[0]
+                for line in content.split("\n")
+                if line and not line.startswith("#")
+            ]
 
         names1 = get_metric_names(response1.text)
         names2 = get_metric_names(response2.text)

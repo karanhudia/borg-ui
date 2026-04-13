@@ -13,10 +13,12 @@ logger = structlog.get_logger()
 def upgrade(db):
     """Add bypass_lock to repositories"""
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE repositories
             ADD COLUMN bypass_lock BOOLEAN DEFAULT 0
-        """))
+        """)
+        )
         logger.info("Added bypass_lock column to repositories")
     except Exception as e:
         if "duplicate column" in str(e).lower():

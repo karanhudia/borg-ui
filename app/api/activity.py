@@ -7,17 +7,25 @@ Provides a unified view of all operations (backups, restores, checks, compacts, 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
-from pathlib import Path
 import os
 import structlog
 import tempfile
 
 from app.database.database import get_db
-from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob, PackageInstallJob, Repository, InstalledPackage, ScheduledJob
+from app.database.models import (
+    BackupJob,
+    RestoreJob,
+    CheckJob,
+    CompactJob,
+    PruneJob,
+    PackageInstallJob,
+    Repository,
+    InstalledPackage,
+    ScheduledJob,
+)
 from app.api.auth import get_current_user, User
 from app.core.security import get_current_download_user
 from app.utils.datetime_utils import serialize_datetime
@@ -31,13 +39,15 @@ router = APIRouter(prefix="/api/activity", tags=["activity"])
 class ActivityItem(BaseModel):
     id: int
     type: str  # 'backup', 'restore', 'check', 'compact', 'package'
-    status: str  # 'pending', 'running', 'completed', 'failed', 'completed_with_warnings'
+    status: (
+        str  # 'pending', 'running', 'completed', 'failed', 'completed_with_warnings'
+    )
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     error_message: Optional[str]
     repository: Optional[str]  # Repository path/name (if applicable)
     log_file_path: Optional[str]  # Path to streaming log file
-    triggered_by: str = 'manual'  # 'manual' or 'schedule'
+    triggered_by: str = "manual"  # 'manual' or 'schedule'
     schedule_id: Optional[int] = None  # ScheduledJob ID if triggered_by schedule
     schedule_name: Optional[str] = None  # Schedule name if triggered_by schedule
 
@@ -45,13 +55,13 @@ class ActivityItem(BaseModel):
     archive_name: Optional[str] = None  # For backup/restore
     package_name: Optional[str] = None  # For package installs
     has_logs: bool = False  # Whether logs are available for download
-    repository_path: Optional[str] = None  # Full repository path (for mapping to friendly name)
+    repository_path: Optional[str] = (
+        None  # Full repository path (for mapping to friendly name)
+    )
 
     class Config:
         from_attributes = True
-        json_encoders = {
-            datetime: lambda v: serialize_datetime(v)
-        }
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
 @router.get("/recent", response_model=List[ActivityItem])
@@ -60,7 +70,7 @@ async def list_recent_activity(
     job_type: Optional[str] = None,  # Filter by type: 'backup', 'restore', etc.
     status: Optional[str] = None,  # Filter by status: 'running', 'completed', 'failed'
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Get recent activity across all job types.
@@ -72,188 +82,247 @@ async def list_recent_activity(
     activities = []
 
     # Fetch backup jobs
-    if not job_type or job_type == 'backup':
-        backup_jobs = db.query(BackupJob).order_by(BackupJob.started_at.desc()).limit(limit).all()
+    if not job_type or job_type == "backup":
+        backup_jobs = (
+            db.query(BackupJob).order_by(BackupJob.started_at.desc()).limit(limit).all()
+        )
         for job in backup_jobs:
             if status and job.status != status:
                 continue
             # Get repository name from path
-            repo = db.query(Repository).filter(Repository.path == job.repository).first()
+            repo = (
+                db.query(Repository).filter(Repository.path == job.repository).first()
+            )
             repo_name = repo.name if repo else job.repository
 
             # Determine trigger type
-            triggered_by = 'schedule' if job.scheduled_job_id else 'manual'
+            triggered_by = "schedule" if job.scheduled_job_id else "manual"
 
             # Get schedule name if this is a scheduled backup
             schedule_name = None
             if job.scheduled_job_id:
-                scheduled_job = db.query(ScheduledJob).filter(ScheduledJob.id == job.scheduled_job_id).first()
+                scheduled_job = (
+                    db.query(ScheduledJob)
+                    .filter(ScheduledJob.id == job.scheduled_job_id)
+                    .first()
+                )
                 if scheduled_job:
                     schedule_name = scheduled_job.name
 
-            activities.append({
-                'id': job.id,
-                'type': 'backup',
-                'status': job.status,
-                'started_at': job.started_at,
-                'completed_at': job.completed_at,
-                'error_message': job.error_message,
-                'repository': repo_name,
-                'repository_path': job.repository,  # Always include the path
-                'log_file_path': job.log_file_path,
-                'triggered_by': triggered_by,
-                'schedule_id': job.scheduled_job_id,
-                'schedule_name': schedule_name,
-                'archive_name': getattr(job, 'archive_name', None),
-                'package_name': None,
-                'has_logs': bool(job.log_file_path or job.logs)
-            })
+            activities.append(
+                {
+                    "id": job.id,
+                    "type": "backup",
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
+                    "error_message": job.error_message,
+                    "repository": repo_name,
+                    "repository_path": job.repository,  # Always include the path
+                    "log_file_path": job.log_file_path,
+                    "triggered_by": triggered_by,
+                    "schedule_id": job.scheduled_job_id,
+                    "schedule_name": schedule_name,
+                    "archive_name": getattr(job, "archive_name", None),
+                    "package_name": None,
+                    "has_logs": bool(job.log_file_path or job.logs),
+                }
+            )
 
     # Fetch restore jobs
-    if not job_type or job_type == 'restore':
-        restore_jobs = db.query(RestoreJob).order_by(RestoreJob.started_at.desc()).limit(limit).all()
+    if not job_type or job_type == "restore":
+        restore_jobs = (
+            db.query(RestoreJob)
+            .order_by(RestoreJob.started_at.desc())
+            .limit(limit)
+            .all()
+        )
         for job in restore_jobs:
             if status and job.status != status:
                 continue
             # Get repository name from path
-            repo = db.query(Repository).filter(Repository.path == job.repository).first()
+            repo = (
+                db.query(Repository).filter(Repository.path == job.repository).first()
+            )
             repo_name = repo.name if repo else job.repository
 
-            activities.append({
-                'id': job.id,
-                'type': 'restore',
-                'status': job.status,
-                'started_at': job.started_at,
-                'completed_at': job.completed_at,
-                'error_message': job.error_message,
-                'repository': repo_name,
-                'repository_path': job.repository,  # Always include the path
-                'log_file_path': None,  # Restore jobs store logs in DB, not file
-                'triggered_by': 'manual',  # Restore jobs are always manual
-                'schedule_id': None,
-                'archive_name': job.archive,
-                'package_name': None,
-                'has_logs': bool(job.logs)  # Check logs field instead of log_file_path
-            })
+            activities.append(
+                {
+                    "id": job.id,
+                    "type": "restore",
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
+                    "error_message": job.error_message,
+                    "repository": repo_name,
+                    "repository_path": job.repository,  # Always include the path
+                    "log_file_path": None,  # Restore jobs store logs in DB, not file
+                    "triggered_by": "manual",  # Restore jobs are always manual
+                    "schedule_id": None,
+                    "archive_name": job.archive,
+                    "package_name": None,
+                    "has_logs": bool(
+                        job.logs
+                    ),  # Check logs field instead of log_file_path
+                }
+            )
 
     # Fetch check jobs
-    if not job_type or job_type == 'check':
-        check_jobs = db.query(CheckJob).order_by(CheckJob.started_at.desc()).limit(limit).all()
+    if not job_type or job_type == "check":
+        check_jobs = (
+            db.query(CheckJob).order_by(CheckJob.started_at.desc()).limit(limit).all()
+        )
         for job in check_jobs:
             if status and job.status != status:
                 continue
             # Get repository name from repository_id, with fallback to stored path
-            repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+            repo = (
+                db.query(Repository).filter(Repository.id == job.repository_id).first()
+            )
             repo_name = repo.name if repo else f"Repository #{job.repository_id}"
             repo_path = repo.path if repo else job.repository_path
 
-            activities.append({
-                'id': job.id,
-                'type': 'check',
-                'status': job.status,
-                'started_at': job.started_at,
-                'completed_at': job.completed_at,
-                'error_message': job.error_message,
-                'repository': repo_name,
-                'repository_path': repo_path,
-                'log_file_path': getattr(job, 'log_file_path', None),
-                'triggered_by': 'manual',  # Check jobs are always manual
-                'schedule_id': None,
-                'archive_name': None,
-                'package_name': None,
-                'has_logs': bool(getattr(job, 'log_file_path', None))
-            })
+            activities.append(
+                {
+                    "id": job.id,
+                    "type": "check",
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
+                    "error_message": job.error_message,
+                    "repository": repo_name,
+                    "repository_path": repo_path,
+                    "log_file_path": getattr(job, "log_file_path", None),
+                    "triggered_by": "manual",  # Check jobs are always manual
+                    "schedule_id": None,
+                    "archive_name": None,
+                    "package_name": None,
+                    "has_logs": bool(getattr(job, "log_file_path", None)),
+                }
+            )
 
     # Fetch compact jobs
-    if not job_type or job_type == 'compact':
-        compact_jobs = db.query(CompactJob).order_by(CompactJob.started_at.desc()).limit(limit).all()
+    if not job_type or job_type == "compact":
+        compact_jobs = (
+            db.query(CompactJob)
+            .order_by(CompactJob.started_at.desc())
+            .limit(limit)
+            .all()
+        )
         for job in compact_jobs:
             if status and job.status != status:
                 continue
             # Get repository name from repository_id, with fallback to stored path
-            repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+            repo = (
+                db.query(Repository).filter(Repository.id == job.repository_id).first()
+            )
             repo_name = repo.name if repo else f"Repository #{job.repository_id}"
             repo_path = repo.path if repo else job.repository_path
 
             # Determine trigger type based on scheduled_compact field
-            triggered_by = 'schedule' if getattr(job, 'scheduled_compact', False) else 'manual'
+            triggered_by = (
+                "schedule" if getattr(job, "scheduled_compact", False) else "manual"
+            )
 
-            activities.append({
-                'id': job.id,
-                'type': 'compact',
-                'status': job.status,
-                'started_at': job.started_at,
-                'completed_at': job.completed_at,
-                'error_message': job.error_message,
-                'repository': repo_name,
-                'repository_path': repo_path,
-                'log_file_path': getattr(job, 'log_file_path', None),
-                'triggered_by': triggered_by,
-                'schedule_id': None,
-                'archive_name': None,
-                'package_name': None,
-                'has_logs': bool(getattr(job, 'log_file_path', None))
-            })
+            activities.append(
+                {
+                    "id": job.id,
+                    "type": "compact",
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
+                    "error_message": job.error_message,
+                    "repository": repo_name,
+                    "repository_path": repo_path,
+                    "log_file_path": getattr(job, "log_file_path", None),
+                    "triggered_by": triggered_by,
+                    "schedule_id": None,
+                    "archive_name": None,
+                    "package_name": None,
+                    "has_logs": bool(getattr(job, "log_file_path", None)),
+                }
+            )
 
     # Fetch prune jobs
-    if not job_type or job_type == 'prune':
-        prune_jobs = db.query(PruneJob).order_by(PruneJob.started_at.desc()).limit(limit).all()
+    if not job_type or job_type == "prune":
+        prune_jobs = (
+            db.query(PruneJob).order_by(PruneJob.started_at.desc()).limit(limit).all()
+        )
         for job in prune_jobs:
             if status and job.status != status:
                 continue
             # Get repository name from repository_id, with fallback to stored path
-            repo = db.query(Repository).filter(Repository.id == job.repository_id).first()
+            repo = (
+                db.query(Repository).filter(Repository.id == job.repository_id).first()
+            )
             repo_name = repo.name if repo else f"Repository #{job.repository_id}"
             repo_path = repo.path if repo else job.repository_path
 
             # Determine trigger type based on scheduled_prune field
-            triggered_by = 'schedule' if getattr(job, 'scheduled_prune', False) else 'manual'
+            triggered_by = (
+                "schedule" if getattr(job, "scheduled_prune", False) else "manual"
+            )
 
-            activities.append({
-                'id': job.id,
-                'type': 'prune',
-                'status': job.status,
-                'started_at': job.started_at,
-                'completed_at': job.completed_at,
-                'error_message': job.error_message,
-                'repository': repo_name,
-                'repository_path': repo_path,
-                'log_file_path': getattr(job, 'log_file_path', None),
-                'triggered_by': triggered_by,
-                'schedule_id': None,
-                'archive_name': None,
-                'package_name': None,
-                'has_logs': bool(job.logs)
-            })
+            activities.append(
+                {
+                    "id": job.id,
+                    "type": "prune",
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
+                    "error_message": job.error_message,
+                    "repository": repo_name,
+                    "repository_path": repo_path,
+                    "log_file_path": getattr(job, "log_file_path", None),
+                    "triggered_by": triggered_by,
+                    "schedule_id": None,
+                    "archive_name": None,
+                    "package_name": None,
+                    "has_logs": bool(job.logs),
+                }
+            )
 
     # Fetch package install jobs
-    if not job_type or job_type == 'package':
-        package_jobs = db.query(PackageInstallJob).order_by(PackageInstallJob.started_at.desc()).limit(limit).all()
+    if not job_type or job_type == "package":
+        package_jobs = (
+            db.query(PackageInstallJob)
+            .order_by(PackageInstallJob.started_at.desc())
+            .limit(limit)
+            .all()
+        )
         for job in package_jobs:
             if status and job.status != status:
                 continue
             # Get package name from package_id
-            package = db.query(InstalledPackage).filter(InstalledPackage.id == job.package_id).first()
+            package = (
+                db.query(InstalledPackage)
+                .filter(InstalledPackage.id == job.package_id)
+                .first()
+            )
             package_name = package.name if package else f"Package #{job.package_id}"
 
-            activities.append({
-                'id': job.id,
-                'type': 'package',
-                'status': job.status,
-                'started_at': job.started_at,
-                'completed_at': job.completed_at,
-                'error_message': job.error_message,
-                'repository': None,
-                'log_file_path': getattr(job, 'log_file_path', None),
-                'triggered_by': 'manual',  # Package jobs are always manual
-                'schedule_id': None,
-                'archive_name': None,
-                'package_name': package_name,
-                'has_logs': bool(getattr(job, 'log_file_path', None))
-            })
+            activities.append(
+                {
+                    "id": job.id,
+                    "type": "package",
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
+                    "error_message": job.error_message,
+                    "repository": None,
+                    "log_file_path": getattr(job, "log_file_path", None),
+                    "triggered_by": "manual",  # Package jobs are always manual
+                    "schedule_id": None,
+                    "archive_name": None,
+                    "package_name": package_name,
+                    "has_logs": bool(getattr(job, "log_file_path", None)),
+                }
+            )
 
     # Sort by started_at (most recent first)
-    activities.sort(key=lambda x: x['started_at'] if x['started_at'] else datetime.min, reverse=True)
+    activities.sort(
+        key=lambda x: x["started_at"] if x["started_at"] else datetime.min, reverse=True
+    )
 
     # Apply limit to combined results
     activities = activities[:limit]
@@ -268,7 +337,7 @@ async def get_job_logs(
     offset: int = 0,
     limit: int = 500,  # Default to 500 lines per request
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Get logs for a specific job.
@@ -279,30 +348,42 @@ async def get_job_logs(
 
     # Map job type to model
     job_models = {
-        'backup': BackupJob,
-        'restore': RestoreJob,
-        'check': CheckJob,
-        'compact': CompactJob,
-        'prune': PruneJob,
-        'package': PackageInstallJob
+        "backup": BackupJob,
+        "restore": RestoreJob,
+        "check": CheckJob,
+        "compact": CompactJob,
+        "prune": PruneJob,
+        "package": PackageInstallJob,
     }
 
     if job_type not in job_models:
-        raise HTTPException(status_code=400, detail={"key": "backend.errors.activity.invalidJobType", "params": {"jobType": job_type}})
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.activity.invalidJobType",
+                "params": {"jobType": job_type},
+            },
+        )
 
     job_model = job_models[job_type]
     job = db.query(job_model).filter(job_model.id == job_id).first()
 
     if not job:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.activity.jobNotFound", "params": {"jobType": job_type}})
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "key": "backend.errors.activity.jobNotFound",
+                "params": {"jobType": job_type},
+            },
+        )
 
     # For completed/failed jobs, prefer log_file_path (full borg output) over logs (hooks only)
-    if job.status in ['completed', 'failed', 'completed_with_warnings']:
+    if job.status in ["completed", "failed", "completed_with_warnings"]:
         # First try reading from log file (contains all borg output)
-        log_file_path = getattr(job, 'log_file_path', None)
+        log_file_path = getattr(job, "log_file_path", None)
         if log_file_path and os.path.exists(log_file_path):
             try:
-                with open(log_file_path, 'r') as f:
+                with open(log_file_path, "r") as f:
                     # EFFICIENT: Count total lines first without loading into memory
                     f.seek(0)
                     total_lines = sum(1 for _ in f)
@@ -322,18 +403,25 @@ async def get_job_logs(
                     end_offset = offset + len(chunk)
 
                     return {
-                        'lines': [{'line_number': offset + i + 1, 'content': line} for i, line in enumerate(chunk)],
-                        'total_lines': total_lines,
-                        'has_more': end_offset < total_lines
+                        "lines": [
+                            {"line_number": offset + i + 1, "content": line}
+                            for i, line in enumerate(chunk)
+                        ],
+                        "total_lines": total_lines,
+                        "has_more": end_offset < total_lines,
                     }
             except Exception as e:
                 # If file read fails, fall through to stored logs
-                logger.warning("Failed to read log file, falling back to stored logs",
-                             job_type=job_type, job_id=job_id, error=str(e))
+                logger.warning(
+                    "Failed to read log file, falling back to stored logs",
+                    job_type=job_type,
+                    job_id=job_id,
+                    error=str(e),
+                )
 
         # Fallback to stored logs in database (hooks or error messages)
         if job.logs:
-            lines = job.logs.split('\n')
+            lines = job.logs.split("\n")
             total_lines = len(lines)
 
             # Apply offset and limit
@@ -341,23 +429,28 @@ async def get_job_logs(
             chunk = lines[offset:end_offset]
 
             return {
-                'lines': [{'line_number': offset + i + 1, 'content': line} for i, line in enumerate(chunk)],
-                'total_lines': total_lines,
-                'has_more': end_offset < total_lines
+                "lines": [
+                    {"line_number": offset + i + 1, "content": line}
+                    for i, line in enumerate(chunk)
+                ],
+                "total_lines": total_lines,
+                "has_more": end_offset < total_lines,
             }
 
     # For running jobs without log files (backup, check, compact), show progress message
-    if job.status == 'running':
-        if job_type == 'backup':
+    if job.status == "running":
+        if job_type == "backup":
             # For running backups, try to get log buffer (last 500 lines)
-            log_buffer, buffer_exists = backup_service.get_log_buffer(job_id, tail_lines=500)
+            log_buffer, buffer_exists = backup_service.get_log_buffer(
+                job_id, tail_lines=500
+            )
 
             logger.info(
                 "Retrieved log buffer for running backup",
                 job_id=job_id,
                 buffer_exists=buffer_exists,
                 buffer_length=len(log_buffer),
-                buffer_type=type(log_buffer).__name__
+                buffer_type=type(log_buffer).__name__,
             )
 
             # Check if buffer exists (True means buffer was created, even if empty)
@@ -366,72 +459,82 @@ async def get_job_logs(
                 if len(log_buffer) > 0:
                     # Return last 500 lines from in-memory buffer
                     response = {
-                        'lines': [{'line_number': i + 1, 'content': line} for i, line in enumerate(log_buffer)],
-                        'total_lines': len(log_buffer),
-                        'has_more': False  # Always show tail for running jobs
+                        "lines": [
+                            {"line_number": i + 1, "content": line}
+                            for i, line in enumerate(log_buffer)
+                        ],
+                        "total_lines": len(log_buffer),
+                        "has_more": False,  # Always show tail for running jobs
                     }
                     logger.info(
                         "Returning log buffer data",
                         job_id=job_id,
-                        lines_count=len(response['lines']),
-                        first_line=log_buffer[0] if log_buffer else None
+                        lines_count=len(response["lines"]),
+                        first_line=log_buffer[0] if log_buffer else None,
                     )
                     return response
                 else:
                     # Buffer exists but empty - backup command started, waiting for first output
                     if offset > 0:
-                        return {'lines': [], 'total_lines': 0, 'has_more': False}
-                    logger.info("Buffer exists but empty, returning processing message", job_id=job_id)
+                        return {"lines": [], "total_lines": 0, "has_more": False}
+                    logger.info(
+                        "Buffer exists but empty, returning processing message",
+                        job_id=job_id,
+                    )
                     lines = [
                         "Backup is running...",
                         "",
                         "Processing started, waiting for first log output...",
                         "",
-                        "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk."
+                        "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk.",
                     ]
             else:
                 # Buffer not created yet - backup job hasn't started borg command
                 if offset > 0:
-                    return {'lines': [], 'total_lines': 0, 'has_more': False}
-                logger.info("Buffer not created yet, returning waiting message", job_id=job_id)
+                    return {"lines": [], "total_lines": 0, "has_more": False}
+                logger.info(
+                    "Buffer not created yet, returning waiting message", job_id=job_id
+                )
                 lines = [
                     "Backup is currently running...",
                     "",
                     "Waiting for logs...",
                     "",
-                    "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk."
+                    "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk.",
                 ]
-        elif job_type in ['check', 'compact']:
+        elif job_type in ["check", "compact"]:
             # Check/compact show progress message
-            progress_msg = getattr(job, 'progress_message', None)
+            progress_msg = getattr(job, "progress_message", None)
             if progress_msg:
                 lines = [
                     f"Job is currently running...",
                     f"",
                     f"Current progress: {progress_msg}",
                     f"",
-                    f"Full logs will be available after the job completes."
+                    f"Full logs will be available after the job completes.",
                 ]
             else:
                 lines = [
                     f"Job is currently running...",
                     f"",
-                    f"Full logs will be available after the job completes."
+                    f"Full logs will be available after the job completes.",
                 ]
         else:
             lines = ["Job is currently running..."]
 
         return {
-            'lines': [{'line_number': i + 1, 'content': line} for i, line in enumerate(lines)],
-            'total_lines': len(lines),
-            'has_more': False
+            "lines": [
+                {"line_number": i + 1, "content": line} for i, line in enumerate(lines)
+            ],
+            "total_lines": len(lines),
+            "has_more": False,
         }
 
     # If job is running and has log file, stream from file
-    log_file_path = getattr(job, 'log_file_path', None)
+    log_file_path = getattr(job, "log_file_path", None)
     if log_file_path and os.path.exists(log_file_path):
         try:
-            with open(log_file_path, 'r') as f:
+            with open(log_file_path, "r") as f:
                 lines = f.readlines()
                 total_lines = len(lines)
 
@@ -441,9 +544,15 @@ async def get_job_logs(
                     start_offset = total_lines - limit
                     chunk = lines[start_offset:]
                     return {
-                        'lines': [{'line_number': start_offset + i + 1, 'content': line.rstrip()} for i, line in enumerate(chunk)],
-                        'total_lines': total_lines,
-                        'has_more': False  # For running jobs, we only show tail
+                        "lines": [
+                            {
+                                "line_number": start_offset + i + 1,
+                                "content": line.rstrip(),
+                            }
+                            for i, line in enumerate(chunk)
+                        ],
+                        "total_lines": total_lines,
+                        "has_more": False,  # For running jobs, we only show tail
                     }
 
                 # Normal pagination
@@ -451,19 +560,20 @@ async def get_job_logs(
                 chunk = lines[offset:end_offset]
 
                 return {
-                    'lines': [{'line_number': offset + i + 1, 'content': line.rstrip()} for i, line in enumerate(chunk)],
-                    'total_lines': total_lines,
-                    'has_more': end_offset < total_lines
+                    "lines": [
+                        {"line_number": offset + i + 1, "content": line.rstrip()}
+                        for i, line in enumerate(chunk)
+                    ],
+                    "total_lines": total_lines,
+                    "has_more": end_offset < total_lines,
                 }
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to read log file: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Failed to read log file: {str(e)}"
+            )
 
     # No logs available
-    return {
-        'lines': [],
-        'total_lines': 0,
-        'has_more': False
-    }
+    return {"lines": [], "total_lines": 0, "has_more": False}
 
 
 @router.get("/{job_type}/{job_id}/logs/download")
@@ -471,48 +581,60 @@ async def download_job_logs(
     job_type: str,
     job_id: int,
     current_user: User = Depends(get_current_download_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Download logs for a specific job as a file."""
     # Map job type to model
     job_models = {
-        'backup': BackupJob,
-        'restore': RestoreJob,
-        'check': CheckJob,
-        'compact': CompactJob,
-        'prune': PruneJob,
-        'package': PackageInstallJob
+        "backup": BackupJob,
+        "restore": RestoreJob,
+        "check": CheckJob,
+        "compact": CompactJob,
+        "prune": PruneJob,
+        "package": PackageInstallJob,
     }
 
     if job_type not in job_models:
-        raise HTTPException(status_code=400, detail={"key": "backend.errors.activity.invalidJobType", "params": {"jobType": job_type}})
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.activity.invalidJobType",
+                "params": {"jobType": job_type},
+            },
+        )
 
     job_model = job_models[job_type]
     job = db.query(job_model).filter(job_model.id == job_id).first()
 
     if not job:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.activity.jobNotFound", "params": {"jobType": job_type}})
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "key": "backend.errors.activity.jobNotFound",
+                "params": {"jobType": job_type},
+            },
+        )
 
     # Don't allow downloading logs for running jobs
-    if job.status == 'running':
+    if job.status == "running":
         raise HTTPException(
             status_code=400,
-            detail={"key": "backend.errors.activity.cannotDownloadLogsForRunningJob"}
+            detail={"key": "backend.errors.activity.cannotDownloadLogsForRunningJob"},
         )
 
     # Try to get logs from log file first
-    log_file_path = getattr(job, 'log_file_path', None)
+    log_file_path = getattr(job, "log_file_path", None)
     if log_file_path and os.path.exists(log_file_path):
         return FileResponse(
             path=log_file_path,
             filename=f"{job_type}_job_{job_id}_logs.txt",
-            media_type="text/plain"
+            media_type="text/plain",
         )
 
     # Fallback to database logs
-    if hasattr(job, 'logs') and job.logs:
+    if hasattr(job, "logs") and job.logs:
         # Create temp file with logs
-        temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt')
+        temp_file = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
         try:
             temp_file.write(job.logs)
             temp_file.flush()
@@ -521,7 +643,7 @@ async def download_job_logs(
             return FileResponse(
                 path=temp_file.name,
                 filename=f"{job_type}_job_{job_id}_logs.txt",
-                media_type="text/plain"
+                media_type="text/plain",
             )
         except Exception as e:
             if os.path.exists(temp_file.name):
@@ -530,8 +652,7 @@ async def download_job_logs(
 
     # No logs available
     raise HTTPException(
-        status_code=404,
-        detail={"key": "backend.errors.activity.noLogsAvailableForJob"}
+        status_code=404, detail={"key": "backend.errors.activity.noLogsAvailableForJob"}
     )
 
 
@@ -540,7 +661,7 @@ async def delete_job(
     job_type: str,
     job_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Delete a job entry and its associated log files.
@@ -553,63 +674,79 @@ async def delete_job(
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"key": "backend.errors.activity.adminOnlyDelete"}
+            detail={"key": "backend.errors.activity.adminOnlyDelete"},
         )
 
     # Map job type to model
     job_models = {
-        'backup': BackupJob,
-        'restore': RestoreJob,
-        'check': CheckJob,
-        'compact': CompactJob,
-        'prune': PruneJob,
-        'package': PackageInstallJob
+        "backup": BackupJob,
+        "restore": RestoreJob,
+        "check": CheckJob,
+        "compact": CompactJob,
+        "prune": PruneJob,
+        "package": PackageInstallJob,
     }
 
     if job_type not in job_models:
-        raise HTTPException(status_code=400, detail={"key": "backend.errors.activity.invalidJobType", "params": {"jobType": job_type}})
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.activity.invalidJobType",
+                "params": {"jobType": job_type},
+            },
+        )
 
     job_model = job_models[job_type]
     job = db.query(job_model).filter(job_model.id == job_id).first()
 
     if not job:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.activity.jobNotFound", "params": {"jobType": job_type.capitalize()}})
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "key": "backend.errors.activity.jobNotFound",
+                "params": {"jobType": job_type.capitalize()},
+            },
+        )
 
     # Prevent deletion of running jobs (allow pending to clean up stuck jobs)
-    if job.status == 'running':
+    if job.status == "running":
         raise HTTPException(
             status_code=400,
-            detail={"key": "backend.errors.activity.cannotDeleteRunningJob"}
+            detail={"key": "backend.errors.activity.cannotDeleteRunningJob"},
         )
 
     # Delete log file if it exists
-    log_file_path = getattr(job, 'log_file_path', None)
+    log_file_path = getattr(job, "log_file_path", None)
     if log_file_path and os.path.exists(log_file_path):
         try:
             os.remove(log_file_path)
-            logger.info(f"Deleted log file for {job_type} job {job_id}", path=log_file_path)
+            logger.info(
+                f"Deleted log file for {job_type} job {job_id}", path=log_file_path
+            )
         except Exception as e:
-            logger.warning(f"Failed to delete log file for {job_type} job {job_id}",
-                         path=log_file_path, error=str(e))
+            logger.warning(
+                f"Failed to delete log file for {job_type} job {job_id}",
+                path=log_file_path,
+                error=str(e),
+            )
             # Continue with job deletion even if log file deletion fails
 
     # Delete the job from database
     try:
         db.delete(job)
         db.commit()
-        logger.info(f"Deleted {job_type} job {job_id} by admin user",
-                   admin_user=current_user.username)
+        logger.info(
+            f"Deleted {job_type} job {job_id} by admin user",
+            admin_user=current_user.username,
+        )
 
         return {
             "success": True,
             "message": "backend.success.activity.jobDeleted",
             "job_id": job_id,
-            "job_type": job_type
+            "job_type": job_type,
         }
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to delete {job_type} job {job_id}", error=str(e))
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete job: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to delete job: {str(e)}")

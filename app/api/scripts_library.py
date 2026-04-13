@@ -4,6 +4,7 @@ API endpoints for script library management (Phase 2)
 Provides CRUD operations for scripts, script assignment to repositories,
 and script execution history.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
@@ -14,16 +15,28 @@ import os
 import hashlib
 
 from app.database.database import get_db
-from app.database.models import Script, RepositoryScript, ScriptExecution, Repository, ScheduledJob, User
+from app.database.models import (
+    Script,
+    RepositoryScript,
+    ScriptExecution,
+    Repository,
+    ScheduledJob,
+    User,
+)
 from app.core.security import get_current_user, encrypt_secret
 from app.config import settings
 from app.services.script_executor import execute_script
-from app.utils.script_params import parse_script_parameters, mask_password_values, filter_system_variables_from_params
+from app.utils.script_params import (
+    parse_script_parameters,
+    mask_password_values,
+    filter_system_variables_from_params,
+)
 import structlog
 import json
 
 logger = structlog.get_logger()
 router = APIRouter()
+
 
 # Pydantic schemas
 class ScriptCreate(BaseModel):
@@ -35,6 +48,7 @@ class ScriptCreate(BaseModel):
     category: str = "custom"  # 'custom', 'template'
     parameters: Optional[List[dict]] = None  # User-configured parameter definitions
 
+
 class ScriptUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
@@ -42,6 +56,7 @@ class ScriptUpdate(BaseModel):
     timeout: Optional[int] = None
     run_on: Optional[str] = None
     parameters: Optional[List[dict]] = None  # User-configured parameter definitions
+
 
 class ScriptResponse(BaseModel):
     id: int
@@ -57,10 +72,12 @@ class ScriptResponse(BaseModel):
     updated_at: datetime
     parameters: Optional[List[dict]] = None  # Parameter definitions
 
+
 class ScriptDetailResponse(ScriptResponse):
     content: str  # Include script content in detail view
     repositories: List[dict]  # List of repos using this script
     recent_executions: List[dict]  # Last 5 executions
+
 
 class RepositoryScriptAssignment(BaseModel):
     script_id: int
@@ -71,12 +88,18 @@ class RepositoryScriptAssignment(BaseModel):
     custom_run_on: Optional[str] = None
     continue_on_error: Optional[bool] = True
     skip_on_failure: Optional[bool] = False
-    parameter_values: Optional[dict] = None  # Parameter values (passwords will be encrypted)
+    parameter_values: Optional[dict] = (
+        None  # Parameter values (passwords will be encrypted)
+    )
+
 
 class ScriptTestRequest(BaseModel):
     parameter_values: Optional[dict] = None  # Optional parameter values for testing
     timeout: Optional[int] = None
-    repository_id: Optional[int] = None  # When set, inject real BORG_UI_ context for that repo
+    repository_id: Optional[int] = (
+        None  # When set, inject real BORG_UI_ context for that repo
+    )
+
 
 class RepositoryScriptUpdate(BaseModel):
     execution_order: Optional[float] = None
@@ -85,7 +108,10 @@ class RepositoryScriptUpdate(BaseModel):
     custom_run_on: Optional[str] = None
     continue_on_error: Optional[bool] = None
     skip_on_failure: Optional[bool] = None
-    parameter_values: Optional[dict] = None  # Parameter values (passwords will be encrypted)
+    parameter_values: Optional[dict] = (
+        None  # Parameter values (passwords will be encrypted)
+    )
+
 
 def ensure_scripts_directory():
     """Ensure /data/scripts/library directory exists"""
@@ -93,10 +119,13 @@ def ensure_scripts_directory():
     scripts_dir.mkdir(parents=True, exist_ok=True)
     return scripts_dir
 
+
 def generate_script_filename(name: str, script_id: Optional[int] = None) -> str:
     """Generate a safe filename from script name"""
     # Create safe filename from name
-    safe_name = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in name.lower())
+    safe_name = "".join(
+        c if c.isalnum() or c in ("-", "_") else "_" for c in name.lower()
+    )
     safe_name = safe_name[:50]  # Limit length
 
     # Add hash for uniqueness if ID provided
@@ -108,26 +137,32 @@ def generate_script_filename(name: str, script_id: Optional[int] = None) -> str:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"{safe_name}_{timestamp}.sh"
 
+
 def write_script_file(file_path: Path, content: str) -> None:
     """Write script content to file with proper permissions"""
     file_path.write_text(content)
     file_path.chmod(0o755)  # Make executable
 
+
 def read_script_file(file_path: Path) -> str:
     """Read script content from file"""
     full_path = Path(settings.data_dir) / "scripts" / file_path
     if not full_path.exists():
-        raise HTTPException(status_code=404, detail=f"Script file not found: {file_path}")
+        raise HTTPException(
+            status_code=404, detail=f"Script file not found: {file_path}"
+        )
     return full_path.read_text()
 
+
 # API Endpoints
+
 
 @router.get("/scripts", response_model=List[ScriptResponse])
 async def list_scripts(
     category: Optional[str] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     List all scripts
@@ -144,8 +179,8 @@ async def list_scripts(
     if search:
         search_pattern = f"%{search}%"
         query = query.filter(
-            (Script.name.like(search_pattern)) |
-            (Script.description.like(search_pattern))
+            (Script.name.like(search_pattern))
+            | (Script.description.like(search_pattern))
         )
 
     scripts = query.order_by(Script.created_at.desc()).all()
@@ -165,21 +200,25 @@ async def list_scripts(
             updated_at=script.updated_at,
             parameters=filter_system_variables_from_params(
                 json.loads(script.parameters) if script.parameters else []
-            ) or None
+            )
+            or None,
         )
         for script in scripts
     ]
+
 
 @router.get("/scripts/{script_id}", response_model=ScriptDetailResponse)
 async def get_script(
     script_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Get script details including content and usage"""
     script = db.query(Script).filter(Script.id == script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"}
+        )
 
     # Read script content from file
     try:
@@ -189,9 +228,12 @@ async def get_script(
         content = f"# Error reading script file: {str(e)}"
 
     # Get repositories using this script
-    repo_scripts = db.query(RepositoryScript).filter(
-        RepositoryScript.script_id == script_id
-    ).options(joinedload(RepositoryScript.repository)).all()
+    repo_scripts = (
+        db.query(RepositoryScript)
+        .filter(RepositoryScript.script_id == script_id)
+        .options(joinedload(RepositoryScript.repository))
+        .all()
+    )
 
     # Filter out orphaned associations (where repository was deleted)
     # and clean them up from the database
@@ -205,24 +247,34 @@ async def get_script(
 
     # Clean up orphaned associations
     if orphaned_ids:
-        db.query(RepositoryScript).filter(RepositoryScript.id.in_(orphaned_ids)).delete(synchronize_session=False)
+        db.query(RepositoryScript).filter(RepositoryScript.id.in_(orphaned_ids)).delete(
+            synchronize_session=False
+        )
         db.commit()
-        logger.info("Cleaned up orphaned script associations", script_id=script_id, count=len(orphaned_ids))
+        logger.info(
+            "Cleaned up orphaned script associations",
+            script_id=script_id,
+            count=len(orphaned_ids),
+        )
 
     repositories = [
         {
             "id": rs.repository_id,
             "name": rs.repository.name,
             "hook_type": rs.hook_type,
-            "enabled": rs.enabled
+            "enabled": rs.enabled,
         }
         for rs in valid_repo_scripts
     ]
 
     # Get recent executions
-    executions = db.query(ScriptExecution).filter(
-        ScriptExecution.script_id == script_id
-    ).order_by(ScriptExecution.started_at.desc()).limit(5).all()
+    executions = (
+        db.query(ScriptExecution)
+        .filter(ScriptExecution.script_id == script_id)
+        .order_by(ScriptExecution.started_at.desc())
+        .limit(5)
+        .all()
+    )
 
     recent_executions = [
         {
@@ -231,7 +283,7 @@ async def get_script(
             "status": ex.status,
             "started_at": ex.started_at.isoformat() if ex.started_at else None,
             "exit_code": ex.exit_code,
-            "execution_time": ex.execution_time
+            "execution_time": ex.execution_time,
         }
         for ex in executions
     ]
@@ -250,28 +302,37 @@ async def get_script(
         updated_at=script.updated_at,
         parameters=filter_system_variables_from_params(
             json.loads(script.parameters) if script.parameters else []
-        ) or None,
+        )
+        or None,
         content=content,
         repositories=repositories,
-        recent_executions=recent_executions
+        recent_executions=recent_executions,
     )
 
-@router.post("/scripts", response_model=ScriptResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/scripts", response_model=ScriptResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_script(
     script_data: ScriptCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Create a new script"""
     # Check if name already exists
     existing = db.query(Script).filter(Script.name == script_data.name).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Script with name '{script_data.name}' already exists")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Script with name '{script_data.name}' already exists",
+        )
 
     # Validate run_on value
-    valid_run_on = ['success', 'failure', 'always', 'warning']
+    valid_run_on = ["success", "failure", "always", "warning"]
     if script_data.run_on not in valid_run_on:
-        raise HTTPException(status_code=400, detail=f"run_on must be one of: {', '.join(valid_run_on)}")
+        raise HTTPException(
+            status_code=400, detail=f"run_on must be one of: {', '.join(valid_run_on)}"
+        )
 
     # Ensure scripts directory exists
     scripts_dir = ensure_scripts_directory()
@@ -287,7 +348,9 @@ async def create_script(
         logger.info("Script file created", filename=filename, path=str(file_path))
     except Exception as e:
         logger.error("Failed to write script file", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to write script file: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to write script file: {str(e)}"
+        )
 
     # Use user-provided parameters if available, otherwise parse from content
     if script_data.parameters:
@@ -295,7 +358,7 @@ async def create_script(
         logger.info(
             "Using user-provided parameters",
             param_count=len(parameters),
-            parameters=parameters
+            parameters=parameters,
         )
     else:
         # Fallback to auto-parsing (for backward compatibility)
@@ -303,9 +366,9 @@ async def create_script(
         logger.info(
             "Auto-parsed parameters (no user config provided)",
             param_count=len(parameters),
-            parameters=parameters
+            parameters=parameters,
         )
-    
+
     parameters_json = json.dumps(parameters) if parameters else None
 
     # Create database record
@@ -319,7 +382,7 @@ async def create_script(
         parameters=parameters_json,
         created_by_user_id=current_user.id,
         created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        updated_at=datetime.utcnow(),
     )
 
     db.add(script)
@@ -332,13 +395,16 @@ async def create_script(
         name=script.name,
         user_id=current_user.id,
         param_count=len(parameters),
-        stored_params=script.parameters
+        stored_params=script.parameters,
     )
 
     # Parse from database to ensure consistency and filter system variables
-    response_parameters = filter_system_variables_from_params(
-        json.loads(script.parameters) if script.parameters else []
-    ) or None
+    response_parameters = (
+        filter_system_variables_from_params(
+            json.loads(script.parameters) if script.parameters else []
+        )
+        or None
+    )
 
     return ScriptResponse(
         id=script.id,
@@ -352,34 +418,44 @@ async def create_script(
         is_template=False,
         created_at=script.created_at,
         updated_at=script.updated_at,
-        parameters=response_parameters
+        parameters=response_parameters,
     )
+
 
 @router.put("/scripts/{script_id}", response_model=ScriptResponse)
 async def update_script(
     script_id: int,
     script_data: ScriptUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Update an existing script"""
     script = db.query(Script).filter(Script.id == script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"}
+        )
 
     # Don't allow editing templates
     if script.is_template:
-        raise HTTPException(status_code=400, detail={"key": "backend.errors.scripts.cannotEditTemplateScript"})
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.scripts.cannotEditTemplateScript"},
+        )
 
     # Update name if provided
     if script_data.name is not None:
         # Check for duplicate name
-        existing = db.query(Script).filter(
-            Script.name == script_data.name,
-            Script.id != script_id
-        ).first()
+        existing = (
+            db.query(Script)
+            .filter(Script.name == script_data.name, Script.id != script_id)
+            .first()
+        )
         if existing:
-            raise HTTPException(status_code=400, detail=f"Script with name '{script_data.name}' already exists")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Script with name '{script_data.name}' already exists",
+            )
         script.name = script_data.name
 
     # Update other fields
@@ -390,9 +466,12 @@ async def update_script(
         script.timeout = script_data.timeout
 
     if script_data.run_on is not None:
-        valid_run_on = ['success', 'failure', 'always', 'warning']
+        valid_run_on = ["success", "failure", "always", "warning"]
         if script_data.run_on not in valid_run_on:
-            raise HTTPException(status_code=400, detail=f"run_on must be one of: {', '.join(valid_run_on)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"run_on must be one of: {', '.join(valid_run_on)}",
+            )
         script.run_on = script_data.run_on
 
     # Update content if provided
@@ -401,7 +480,7 @@ async def update_script(
         try:
             write_script_file(file_path, script_data.content)
             logger.info("Script file updated", script_id=script_id, path=str(file_path))
-            
+
             # Use user-provided parameters if available, otherwise re-parse
             if script_data.parameters is not None:
                 parameters = script_data.parameters
@@ -409,7 +488,7 @@ async def update_script(
                     "Using user-provided parameters for updated script",
                     script_id=script_id,
                     param_count=len(parameters),
-                    parameters=parameters
+                    parameters=parameters,
                 )
             else:
                 # Re-parse parameters when content changes (backward compatibility)
@@ -418,27 +497,35 @@ async def update_script(
                     "Auto-parsed parameters for updated script",
                     script_id=script_id,
                     param_count=len(parameters),
-                    parameters=parameters
+                    parameters=parameters,
                 )
-            
+
             script.parameters = json.dumps(parameters) if parameters else None
         except Exception as e:
-            logger.error("Failed to update script file", script_id=script_id, error=str(e))
-            raise HTTPException(status_code=500, detail=f"Failed to update script file: {str(e)}")
+            logger.error(
+                "Failed to update script file", script_id=script_id, error=str(e)
+            )
+            raise HTTPException(
+                status_code=500, detail=f"Failed to update script file: {str(e)}"
+            )
     elif script_data.parameters is not None:
         # Update parameters without changing content
-        script.parameters = json.dumps(script_data.parameters) if script_data.parameters else None
+        script.parameters = (
+            json.dumps(script_data.parameters) if script_data.parameters else None
+        )
         logger.info(
             "Updated parameters without content change",
             script_id=script_id,
-            param_count=len(script_data.parameters)
+            param_count=len(script_data.parameters),
         )
 
     script.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(script)
 
-    logger.info("Script updated", script_id=script.id, name=script.name, user_id=current_user.id)
+    logger.info(
+        "Script updated", script_id=script.id, name=script.name, user_id=current_user.id
+    )
 
     return ScriptResponse(
         id=script.id,
@@ -454,28 +541,38 @@ async def update_script(
         updated_at=script.updated_at,
         parameters=filter_system_variables_from_params(
             json.loads(script.parameters) if script.parameters else []
-        ) or None
+        )
+        or None,
     )
+
 
 @router.delete("/scripts/{script_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_script(
     script_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Delete a script"""
     script = db.query(Script).filter(Script.id == script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"}
+        )
 
     # Don't allow deleting templates
     if script.is_template:
-        raise HTTPException(status_code=400, detail={"key": "backend.errors.scripts.cannotDeleteTemplateScript"})
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.scripts.cannotDeleteTemplateScript"},
+        )
 
     # Check if script is in use (only count associations with existing repositories)
-    repo_scripts = db.query(RepositoryScript).filter(
-        RepositoryScript.script_id == script_id
-    ).options(joinedload(RepositoryScript.repository)).all()
+    repo_scripts = (
+        db.query(RepositoryScript)
+        .filter(RepositoryScript.script_id == script_id)
+        .options(joinedload(RepositoryScript.repository))
+        .all()
+    )
 
     # Filter out orphaned associations and clean them up
     valid_repo_scripts = []
@@ -488,9 +585,15 @@ async def delete_script(
 
     # Clean up orphaned associations
     if orphaned_ids:
-        db.query(RepositoryScript).filter(RepositoryScript.id.in_(orphaned_ids)).delete(synchronize_session=False)
+        db.query(RepositoryScript).filter(RepositoryScript.id.in_(orphaned_ids)).delete(
+            synchronize_session=False
+        )
         db.commit()
-        logger.info("Cleaned up orphaned script associations during delete check", script_id=script_id, count=len(orphaned_ids))
+        logger.info(
+            "Cleaned up orphaned script associations during delete check",
+            script_id=script_id,
+            count=len(orphaned_ids),
+        )
 
     if len(valid_repo_scripts) > 0:
         # Group associations by repository to show hook types
@@ -512,14 +615,25 @@ async def delete_script(
         places_text = "place" if len(valid_repo_scripts) == 1 else "places"
         raise HTTPException(
             status_code=400,
-            detail={"key": "backend.errors.scripts.scriptInUse", "params": {"count": len(valid_repo_scripts), "places": places_text, "repos": ', '.join(repo_details)}}
+            detail={
+                "key": "backend.errors.scripts.scriptInUse",
+                "params": {
+                    "count": len(valid_repo_scripts),
+                    "places": places_text,
+                    "repos": ", ".join(repo_details),
+                },
+            },
         )
 
     # Clear schedule-level script references (ScheduledJob.pre/post_backup_script_id have no DB cascade)
-    schedules_using_script = db.query(ScheduledJob).filter(
-        (ScheduledJob.pre_backup_script_id == script_id) |
-        (ScheduledJob.post_backup_script_id == script_id)
-    ).all()
+    schedules_using_script = (
+        db.query(ScheduledJob)
+        .filter(
+            (ScheduledJob.pre_backup_script_id == script_id)
+            | (ScheduledJob.post_backup_script_id == script_id)
+        )
+        .all()
+    )
     for schedule in schedules_using_script:
         if schedule.pre_backup_script_id == script_id:
             schedule.pre_backup_script_id = None
@@ -527,7 +641,11 @@ async def delete_script(
             schedule.post_backup_script_id = None
     if schedules_using_script:
         db.flush()
-        logger.info("Cleared script reference from schedules", script_id=script_id, count=len(schedules_using_script))
+        logger.info(
+            "Cleared script reference from schedules",
+            script_id=script_id,
+            count=len(schedules_using_script),
+        )
 
     # Delete script file
     file_path = Path(settings.data_dir) / "scripts" / script.file_path
@@ -536,7 +654,9 @@ async def delete_script(
             file_path.unlink()
             logger.info("Script file deleted", script_id=script_id, path=str(file_path))
     except Exception as e:
-        logger.warning("Failed to delete script file", script_id=script_id, error=str(e))
+        logger.warning(
+            "Failed to delete script file", script_id=script_id, error=str(e)
+        )
         # Continue with database deletion even if file deletion fails
 
     # Delete from database (cascade will handle repository_scripts and script_executions)
@@ -545,23 +665,28 @@ async def delete_script(
 
     logger.info("Script deleted", script_id=script_id, user_id=current_user.id)
 
+
 @router.post("/scripts/{script_id}/test")
 async def test_script(
     script_id: int,
     test_data: ScriptTestRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Test execute a script (doesn't save execution to history)"""
     script = db.query(Script).filter(Script.id == script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"}
+        )
 
     # Read script content
     try:
         content = read_script_file(script.file_path)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read script file: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to read script file: {str(e)}"
+        )
 
     # Prepare environment variables with parameters and system vars
     from app.services.template_service import get_system_variables
@@ -571,16 +696,22 @@ async def test_script(
 
     # Inject BORG_UI_ system variables. Use real repository context when available.
     if test_data.repository_id:
-        repo = db.query(Repository).filter(Repository.id == test_data.repository_id).first()
+        repo = (
+            db.query(Repository)
+            .filter(Repository.id == test_data.repository_id)
+            .first()
+        )
     else:
         repo = None
 
     if repo:
         source_connection = None
         if repo.source_ssh_connection_id:
-            source_connection = db.query(SSHConnection).filter(
-                SSHConnection.id == repo.source_ssh_connection_id
-            ).first()
+            source_connection = (
+                db.query(SSHConnection)
+                .filter(SSHConnection.id == repo.source_ssh_connection_id)
+                .first()
+            )
 
         system_vars = get_system_variables(
             repository_id=repo.id,
@@ -612,24 +743,34 @@ async def test_script(
             # Add user-provided test parameter values to environment
             # Test values aren't encrypted, so use them directly
             for param in parameters:
-                param_name = param['name']
+                param_name = param["name"]
                 if param_name in test_data.parameter_values:
                     script_env[param_name] = test_data.parameter_values[param_name]
-                elif 'default' in param and param['default']:
-                    script_env[param_name] = param['default']
+                elif "default" in param and param["default"]:
+                    script_env[param_name] = param["default"]
 
-            logger.info("Prepared test script environment with parameters",
-                       script_id=script_id,
-                       param_count=len(parameters),
-                       env_vars=len(script_env))
+            logger.info(
+                "Prepared test script environment with parameters",
+                script_id=script_id,
+                param_count=len(parameters),
+                env_vars=len(script_env),
+            )
         except Exception as e:
-            logger.error("Failed to prepare test script parameters", script_id=script_id, error=str(e))
-            raise HTTPException(status_code=400, detail=f"Failed to prepare script parameters: {str(e)}")
+            logger.error(
+                "Failed to prepare test script parameters",
+                script_id=script_id,
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=400, detail=f"Failed to prepare script parameters: {str(e)}"
+            )
 
-    logger.info("Test script environment prepared",
-               script_id=script_id,
-               system_vars=list(system_vars.keys()),
-               total_env_vars=len(script_env))
+    logger.info(
+        "Test script environment prepared",
+        script_id=script_id,
+        system_vars=list(system_vars.keys()),
+        total_env_vars=len(script_env),
+    )
 
     # Execute script with environment (ALWAYS pass env, not conditionally)
     test_timeout = test_data.timeout or script.timeout
@@ -638,7 +779,7 @@ async def test_script(
             script=content,
             timeout=float(test_timeout),
             context=f"test:{script.name}",
-            env=script_env  # Always pass environment with system variables
+            env=script_env,  # Always pass environment with system variables
         )
 
         return {
@@ -646,36 +787,54 @@ async def test_script(
             "exit_code": result["exit_code"],
             "stdout": result["stdout"],
             "stderr": result["stderr"],
-            "execution_time": result["execution_time"]
+            "execution_time": result["execution_time"],
         }
     except Exception as e:
         logger.error("Script test execution failed", script_id=script_id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Script execution failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Script execution failed: {str(e)}"
+        )
+
 
 # Repository Script Assignment Endpoints
+
 
 @router.get("/repositories/{repository_id}/scripts")
 async def get_repository_scripts(
     repository_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Get all scripts assigned to a repository"""
     repository = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repository:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
+        )
 
     # Get pre-backup scripts
-    pre_scripts = db.query(RepositoryScript).filter(
-        RepositoryScript.repository_id == repository_id,
-        RepositoryScript.hook_type == "pre-backup"
-    ).options(joinedload(RepositoryScript.script)).order_by(RepositoryScript.execution_order).all()
+    pre_scripts = (
+        db.query(RepositoryScript)
+        .filter(
+            RepositoryScript.repository_id == repository_id,
+            RepositoryScript.hook_type == "pre-backup",
+        )
+        .options(joinedload(RepositoryScript.script))
+        .order_by(RepositoryScript.execution_order)
+        .all()
+    )
 
     # Get post-backup scripts
-    post_scripts = db.query(RepositoryScript).filter(
-        RepositoryScript.repository_id == repository_id,
-        RepositoryScript.hook_type == "post-backup"
-    ).options(joinedload(RepositoryScript.script)).order_by(RepositoryScript.execution_order).all()
+    post_scripts = (
+        db.query(RepositoryScript)
+        .filter(
+            RepositoryScript.repository_id == repository_id,
+            RepositoryScript.hook_type == "post-backup",
+        )
+        .options(joinedload(RepositoryScript.script))
+        .order_by(RepositoryScript.execution_order)
+        .all()
+    )
 
     def format_script(rs):
         # Get script parameters and filter out system variables
@@ -684,7 +843,9 @@ async def get_repository_scripts(
 
         # Get parameter values and mask passwords
         param_values = json.loads(rs.parameter_values) if rs.parameter_values else {}
-        masked_values = mask_password_values(script_params, param_values) if param_values else None
+        masked_values = (
+            mask_password_values(script_params, param_values) if param_values else None
+        )
 
         return {
             "id": rs.id,
@@ -700,47 +861,61 @@ async def get_repository_scripts(
             "default_timeout": rs.script.timeout,
             "default_run_on": rs.script.run_on,
             "parameters": script_params,
-            "parameter_values": masked_values
+            "parameter_values": masked_values,
         }
 
     return {
         "pre_backup": [format_script(rs) for rs in pre_scripts],
-        "post_backup": [format_script(rs) for rs in post_scripts]
+        "post_backup": [format_script(rs) for rs in post_scripts],
     }
+
 
 @router.post("/repositories/{repository_id}/scripts")
 async def assign_script_to_repository(
     repository_id: int,
     assignment: RepositoryScriptAssignment,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Assign a script to a repository"""
     # Validate repository exists
     repository = db.query(Repository).filter(Repository.id == repository_id).first()
     if not repository:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"}
+        )
 
     # Validate script exists
     script = db.query(Script).filter(Script.id == assignment.script_id).first()
     if not script:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.scripts.scriptNotFound"}
+        )
 
     # Validate hook_type
     if assignment.hook_type not in ["pre-backup", "post-backup"]:
-        raise HTTPException(status_code=400, detail={"key": "backend.errors.scripts.hookTypeMustBe"})
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.scripts.hookTypeMustBe"}
+        )
 
     # Check if already assigned
-    existing = db.query(RepositoryScript).filter(
-        RepositoryScript.repository_id == repository_id,
-        RepositoryScript.script_id == assignment.script_id,
-        RepositoryScript.hook_type == assignment.hook_type
-    ).first()
+    existing = (
+        db.query(RepositoryScript)
+        .filter(
+            RepositoryScript.repository_id == repository_id,
+            RepositoryScript.script_id == assignment.script_id,
+            RepositoryScript.hook_type == assignment.hook_type,
+        )
+        .first()
+    )
 
     if existing:
         raise HTTPException(
             status_code=400,
-            detail={"key": "backend.errors.scripts.scriptAlreadyAssigned", "params": {"name": script.name, "hookType": assignment.hook_type}}
+            detail={
+                "key": "backend.errors.scripts.scriptAlreadyAssigned",
+                "params": {"name": script.name, "hookType": assignment.hook_type},
+            },
         )
 
     # Process parameter values - validate and encrypt password-type parameters
@@ -756,8 +931,8 @@ async def assign_script_to_repository(
         processed_values = {}
 
         for param_def in script_params:
-            param_name = param_def['name']
-            param_type = param_def.get('type', 'text')
+            param_name = param_def["name"]
+            param_type = param_def.get("type", "text")
 
             # Get value from assignment
             if param_name in assignment.parameter_values:
@@ -769,21 +944,29 @@ async def assign_script_to_repository(
                     raise HTTPException(status_code=400, detail=error_msg)
 
                 # Encrypt password-type parameters
-                if param_type == 'password' and value:
+                if param_type == "password" and value:
                     try:
                         processed_values[param_name] = encrypt_secret(value)
-                        logger.debug("Encrypted password parameter", param_name=param_name)
+                        logger.debug(
+                            "Encrypted password parameter", param_name=param_name
+                        )
                     except Exception as e:
-                        logger.error("Failed to encrypt parameter", param_name=param_name, error=str(e))
+                        logger.error(
+                            "Failed to encrypt parameter",
+                            param_name=param_name,
+                            error=str(e),
+                        )
                         raise HTTPException(
                             status_code=500,
-                            detail=f"Failed to encrypt parameter '{param_name}': {str(e)}"
+                            detail=f"Failed to encrypt parameter '{param_name}': {str(e)}",
                         )
                 else:
                     # Plain text parameter
                     processed_values[param_name] = value
 
-        parameter_values_json = json.dumps(processed_values) if processed_values else None
+        parameter_values_json = (
+            json.dumps(processed_values) if processed_values else None
+        )
 
     # Create assignment
     repo_script = RepositoryScript(
@@ -794,30 +977,39 @@ async def assign_script_to_repository(
         enabled=assignment.enabled,
         custom_timeout=assignment.custom_timeout,
         custom_run_on=assignment.custom_run_on,
-        continue_on_error=assignment.continue_on_error if assignment.continue_on_error is not None else True,
-        skip_on_failure=assignment.skip_on_failure if assignment.skip_on_failure is not None else False,
+        continue_on_error=assignment.continue_on_error
+        if assignment.continue_on_error is not None
+        else True,
+        skip_on_failure=assignment.skip_on_failure
+        if assignment.skip_on_failure is not None
+        else False,
         parameter_values=parameter_values_json,
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
     )
 
     db.add(repo_script)
     db.flush()  # Flush to ensure the new assignment is visible to the count query
 
     # Update script usage count (count total associations/places used)
-    script.usage_count = db.query(RepositoryScript).filter(
-        RepositoryScript.script_id == assignment.script_id
-    ).count()
+    script.usage_count = (
+        db.query(RepositoryScript)
+        .filter(RepositoryScript.script_id == assignment.script_id)
+        .count()
+    )
     script.last_used_at = datetime.utcnow()
 
     db.commit()
     db.refresh(repo_script)
 
-    logger.info("Script assigned to repository",
-                script_id=assignment.script_id,
-                repository_id=repository_id,
-                hook_type=assignment.hook_type)
+    logger.info(
+        "Script assigned to repository",
+        script_id=assignment.script_id,
+        repository_id=repository_id,
+        hook_type=assignment.hook_type,
+    )
 
     return {"success": True, "id": repo_script.id}
+
 
 @router.put("/repositories/{repository_id}/scripts/{repo_script_id}")
 async def update_repository_script_assignment(
@@ -825,16 +1017,24 @@ async def update_repository_script_assignment(
     repo_script_id: int,
     update_data: RepositoryScriptUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Update script assignment settings"""
-    repo_script = db.query(RepositoryScript).filter(
-        RepositoryScript.id == repo_script_id,
-        RepositoryScript.repository_id == repository_id
-    ).options(joinedload(RepositoryScript.script)).first()
+    repo_script = (
+        db.query(RepositoryScript)
+        .filter(
+            RepositoryScript.id == repo_script_id,
+            RepositoryScript.repository_id == repository_id,
+        )
+        .options(joinedload(RepositoryScript.script))
+        .first()
+    )
 
     if not repo_script:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptAssignmentNotFound"})
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.scripts.scriptAssignmentNotFound"},
+        )
 
     if update_data.execution_order is not None:
         repo_script.execution_order = update_data.execution_order
@@ -846,9 +1046,12 @@ async def update_repository_script_assignment(
         repo_script.custom_timeout = update_data.custom_timeout
 
     if update_data.custom_run_on is not None:
-        valid_run_on = ['success', 'failure', 'always', 'warning']
+        valid_run_on = ["success", "failure", "always", "warning"]
         if update_data.custom_run_on not in valid_run_on:
-            raise HTTPException(status_code=400, detail=f"custom_run_on must be one of: {', '.join(valid_run_on)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"custom_run_on must be one of: {', '.join(valid_run_on)}",
+            )
         repo_script.custom_run_on = update_data.custom_run_on
 
     if update_data.continue_on_error is not None:
@@ -862,13 +1065,17 @@ async def update_repository_script_assignment(
         from app.utils.script_params import validate_parameter_value
 
         # Get script parameter definitions
-        script_params = json.loads(repo_script.script.parameters) if repo_script.script.parameters else []
+        script_params = (
+            json.loads(repo_script.script.parameters)
+            if repo_script.script.parameters
+            else []
+        )
 
         # Process and encrypt password-type parameters
         processed_values = {}
         for param_def in script_params:
-            param_name = param_def['name']
-            param_type = param_def.get('type', 'text')
+            param_name = param_def["name"]
+            param_type = param_def.get("type", "text")
 
             if param_name in update_data.parameter_values:
                 value = update_data.parameter_values[param_name]
@@ -879,45 +1086,64 @@ async def update_repository_script_assignment(
                     raise HTTPException(status_code=400, detail=error_msg)
 
                 # Encrypt password-type parameters
-                if param_type == 'password' and value:
+                if param_type == "password" and value:
                     try:
                         processed_values[param_name] = encrypt_secret(value)
                     except Exception as e:
-                        logger.error("Failed to encrypt parameter", param_name=param_name, error=str(e))
+                        logger.error(
+                            "Failed to encrypt parameter",
+                            param_name=param_name,
+                            error=str(e),
+                        )
                         raise HTTPException(
                             status_code=500,
-                            detail=f"Failed to encrypt parameter '{param_name}': {str(e)}"
+                            detail=f"Failed to encrypt parameter '{param_name}': {str(e)}",
                         )
                 else:
                     # Plain text parameter
                     processed_values[param_name] = value
 
-        repo_script.parameter_values = json.dumps(processed_values) if processed_values else None
+        repo_script.parameter_values = (
+            json.dumps(processed_values) if processed_values else None
+        )
 
     db.commit()
     db.refresh(repo_script)
 
-    logger.info("Repository script assignment updated",
-                repo_script_id=repo_script_id,
-                repository_id=repository_id)
+    logger.info(
+        "Repository script assignment updated",
+        repo_script_id=repo_script_id,
+        repository_id=repository_id,
+    )
 
     return {"success": True}
 
-@router.delete("/repositories/{repository_id}/scripts/{repo_script_id}", status_code=status.HTTP_204_NO_CONTENT)
+
+@router.delete(
+    "/repositories/{repository_id}/scripts/{repo_script_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def remove_script_from_repository(
     repository_id: int,
     repo_script_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Remove a script assignment from a repository"""
-    repo_script = db.query(RepositoryScript).filter(
-        RepositoryScript.id == repo_script_id,
-        RepositoryScript.repository_id == repository_id
-    ).first()
+    repo_script = (
+        db.query(RepositoryScript)
+        .filter(
+            RepositoryScript.id == repo_script_id,
+            RepositoryScript.repository_id == repository_id,
+        )
+        .first()
+    )
 
     if not repo_script:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.scripts.scriptAssignmentNotFound"})
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.scripts.scriptAssignmentNotFound"},
+        )
 
     script_id = repo_script.script_id
 
@@ -928,34 +1154,42 @@ async def remove_script_from_repository(
     # Update script usage count (count total associations/places used)
     script = db.query(Script).filter(Script.id == script_id).first()
     if script:
-        script.usage_count = db.query(RepositoryScript).filter(
-            RepositoryScript.script_id == script_id
-        ).count()
+        script.usage_count = (
+            db.query(RepositoryScript)
+            .filter(RepositoryScript.script_id == script_id)
+            .count()
+        )
 
     db.commit()
 
-    logger.info("Script removed from repository",
-                repo_script_id=repo_script_id,
-                repository_id=repository_id,
-                script_id=script_id)
+    logger.info(
+        "Script removed from repository",
+        repo_script_id=repo_script_id,
+        repository_id=repository_id,
+        script_id=script_id,
+    )
 
 
 @router.post("/scripts/cleanup-orphans")
 async def cleanup_orphaned_script_associations(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Clean up orphaned script associations (admin only)
 
     This removes RepositoryScript entries that reference deleted repositories.
     Useful for fixing database inconsistencies."""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.scripts.adminAccessRequired"})
+        raise HTTPException(
+            status_code=403,
+            detail={"key": "backend.errors.scripts.adminAccessRequired"},
+        )
 
     # Find all script associations
-    all_repo_scripts = db.query(RepositoryScript).options(
-        joinedload(RepositoryScript.repository)
-    ).all()
+    all_repo_scripts = (
+        db.query(RepositoryScript)
+        .options(joinedload(RepositoryScript.repository))
+        .all()
+    )
 
     # Filter out orphaned associations
     orphaned_ids = []
@@ -965,19 +1199,25 @@ async def cleanup_orphaned_script_associations(
 
     # Delete orphaned associations
     if orphaned_ids:
-        db.query(RepositoryScript).filter(RepositoryScript.id.in_(orphaned_ids)).delete(synchronize_session=False)
+        db.query(RepositoryScript).filter(RepositoryScript.id.in_(orphaned_ids)).delete(
+            synchronize_session=False
+        )
         db.commit()
-        logger.info("Cleaned up orphaned script associations", count=len(orphaned_ids), user=current_user.username)
+        logger.info(
+            "Cleaned up orphaned script associations",
+            count=len(orphaned_ids),
+            user=current_user.username,
+        )
 
         return {
             "success": True,
             "cleaned_up": len(orphaned_ids),
             "count": len(orphaned_ids),
-            "message": "backend.success.scripts.cleanupCompleted"
+            "message": "backend.success.scripts.cleanupCompleted",
         }
 
     return {
         "success": True,
         "cleaned_up": 0,
-        "message": "backend.success.scripts.noOrphanedAssociations"
+        "message": "backend.success.scripts.noOrphanedAssociations",
     }

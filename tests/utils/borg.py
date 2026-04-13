@@ -20,7 +20,9 @@ def require_borg_binary() -> str:
     """Return the Borg binary path or skip the test if unavailable."""
     borg_path = shutil.which("borg")
     if not borg_path:
-        pytest.skip("Borg binary not found. Install borgbackup to run integration tests.")
+        pytest.skip(
+            "Borg binary not found. Install borgbackup to run integration tests."
+        )
     return borg_path
 
 
@@ -74,9 +76,15 @@ def init_borg_repo(
     repo_path.mkdir(parents=True, exist_ok=True)
     borg_name = Path(borg_binary).name
     if borg_name.startswith("borg2"):
-        run_borg(borg_binary, ["-r", str(repo_path), "repo-create", "--encryption", encryption], env=env)
+        run_borg(
+            borg_binary,
+            ["-r", str(repo_path), "repo-create", "--encryption", encryption],
+            env=env,
+        )
     else:
-        run_borg(borg_binary, ["init", f"--encryption={encryption}", str(repo_path)], env=env)
+        run_borg(
+            borg_binary, ["init", f"--encryption={encryption}", str(repo_path)], env=env
+        )
     return repo_path
 
 
@@ -91,9 +99,19 @@ def create_archive(
     """Create an archive from one or more source paths."""
     borg_name = Path(borg_binary).name
     if borg_name.startswith("borg2"):
-        args = ["-r", str(repo_path), "create", archive_name, *[str(path) for path in source_paths]]
+        args = [
+            "-r",
+            str(repo_path),
+            "create",
+            archive_name,
+            *[str(path) for path in source_paths],
+        ]
     else:
-        args = ["create", f"{repo_path}::{archive_name}", *[str(path) for path in source_paths]]
+        args = [
+            "create",
+            f"{repo_path}::{archive_name}",
+            *[str(path) for path in source_paths],
+        ]
     return run_borg(borg_binary, args, env=env)
 
 

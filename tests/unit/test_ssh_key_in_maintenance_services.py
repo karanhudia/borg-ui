@@ -6,11 +6,11 @@ Backups correctly injected -i <key> into BORG_RSH; the three maintenance
 services did not, causing borg to fall back to password auth and triggering
 IP bans on providers that block repeated failed login attempts.
 """
+
 import base64
-import os
 import pytest
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 from cryptography.fernet import Fernet
 
 from app.database.models import (
@@ -29,6 +29,7 @@ from app.services.prune_service import PruneService
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_encrypted_key(secret_key: str) -> str:
     """Return an encrypted fake private key using the app's encryption scheme."""
@@ -84,6 +85,7 @@ def _mock_process(returncode=0):
 # Shared assertion
 # ---------------------------------------------------------------------------
 
+
 def assert_borg_rsh_has_identity(captured_env: dict):
     """Assert that BORG_RSH contains an -i flag pointing to a key file."""
     borg_rsh = captured_env.get("BORG_RSH", "")
@@ -96,6 +98,7 @@ def assert_borg_rsh_has_identity(captured_env: dict):
 # ---------------------------------------------------------------------------
 # PruneService
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestPruneServiceSSHKey:
@@ -144,16 +147,24 @@ class TestPruneServiceSSHKey:
             return proc
 
         with patch("app.services.prune_service.SessionLocal", return_value=mock_db):
-            with patch("app.services.prune_service.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            with patch(
+                "app.services.prune_service.asyncio.create_subprocess_exec",
+                side_effect=fake_exec,
+            ):
                 with patch("app.services.prune_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret
                     with patch("app.utils.ssh_utils.settings") as ssh_utils_settings:
                         ssh_utils_settings.secret_key = secret
                         await service.execute_prune(
-                            job_id=1, repository_id=1,
-                            keep_hourly=0, keep_daily=7, keep_weekly=4,
-                            keep_monthly=6, keep_quarterly=0, keep_yearly=1,
+                            job_id=1,
+                            repository_id=1,
+                            keep_hourly=0,
+                            keep_daily=7,
+                            keep_weekly=4,
+                            keep_monthly=6,
+                            keep_quarterly=0,
+                            keep_yearly=1,
                         )
 
         assert_borg_rsh_has_identity(captured_env)
@@ -188,14 +199,22 @@ class TestPruneServiceSSHKey:
             return proc
 
         with patch("app.services.prune_service.SessionLocal", return_value=mock_db):
-            with patch("app.services.prune_service.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            with patch(
+                "app.services.prune_service.asyncio.create_subprocess_exec",
+                side_effect=fake_exec,
+            ):
                 with patch("app.services.prune_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = "testsecretkey1234567890123456789"
                     await service.execute_prune(
-                        job_id=1, repository_id=1,
-                        keep_hourly=0, keep_daily=7, keep_weekly=4,
-                        keep_monthly=6, keep_quarterly=0, keep_yearly=1,
+                        job_id=1,
+                        repository_id=1,
+                        keep_hourly=0,
+                        keep_daily=7,
+                        keep_weekly=4,
+                        keep_monthly=6,
+                        keep_quarterly=0,
+                        keep_yearly=1,
                     )
 
         borg_rsh = captured_env.get("BORG_RSH", "")
@@ -205,6 +224,7 @@ class TestPruneServiceSSHKey:
 # ---------------------------------------------------------------------------
 # CompactService
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestCompactServiceSSHKey:
@@ -247,7 +267,10 @@ class TestCompactServiceSSHKey:
             return proc
 
         with patch("app.services.compact_service.SessionLocal", return_value=mock_db):
-            with patch("app.services.compact_service.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            with patch(
+                "app.services.compact_service.asyncio.create_subprocess_exec",
+                side_effect=fake_exec,
+            ):
                 with patch("app.services.compact_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret
@@ -263,7 +286,9 @@ class TestCompactServiceSSHKey:
         """BORG_RSH must include -i <key> for legacy repos using ssh_key_id directly."""
         secret = "testsecretkey1234567890123456789"
         ssh_key = _make_ssh_key(secret)
-        repo = _make_repo(connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh")
+        repo = _make_repo(
+            connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh"
+        )
 
         captured_env = {}
         job = MagicMock(spec=CompactJob)
@@ -292,7 +317,10 @@ class TestCompactServiceSSHKey:
             return proc
 
         with patch("app.services.compact_service.SessionLocal", return_value=mock_db):
-            with patch("app.services.compact_service.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            with patch(
+                "app.services.compact_service.asyncio.create_subprocess_exec",
+                side_effect=fake_exec,
+            ):
                 with patch("app.services.compact_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret
@@ -307,6 +335,7 @@ class TestCompactServiceSSHKey:
 # ---------------------------------------------------------------------------
 # CheckService
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestCheckServiceSSHKey:
@@ -350,7 +379,10 @@ class TestCheckServiceSSHKey:
             return proc
 
         with patch("app.services.check_service.SessionLocal", return_value=mock_db):
-            with patch("app.services.check_service.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            with patch(
+                "app.services.check_service.asyncio.create_subprocess_exec",
+                side_effect=fake_exec,
+            ):
                 with patch("app.services.check_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret
@@ -367,7 +399,9 @@ class TestCheckServiceSSHKey:
         """BORG_RSH must include -i <key> for legacy repos using ssh_key_id directly."""
         secret = "testsecretkey1234567890123456789"
         ssh_key = _make_ssh_key(secret)
-        repo = _make_repo(connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh")
+        repo = _make_repo(
+            connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh"
+        )
         job = MagicMock(spec=CheckJob)
         job.id = 1
         job.status = "pending"
@@ -397,7 +431,10 @@ class TestCheckServiceSSHKey:
             return proc
 
         with patch("app.services.check_service.SessionLocal", return_value=mock_db):
-            with patch("app.services.check_service.asyncio.create_subprocess_exec", side_effect=fake_exec):
+            with patch(
+                "app.services.check_service.asyncio.create_subprocess_exec",
+                side_effect=fake_exec,
+            ):
                 with patch("app.services.check_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
                     mock_settings.secret_key = secret

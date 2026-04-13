@@ -30,10 +30,12 @@ def upgrade(db):
     try:
         # Add use_sftp_mode column (idempotent)
         if not column_exists(db, "ssh_connections", "use_sftp_mode"):
-            db.execute(text("""
+            db.execute(
+                text("""
                 ALTER TABLE ssh_connections
                 ADD COLUMN use_sftp_mode BOOLEAN NOT NULL DEFAULT TRUE
-            """))
+            """)
+            )
             print("  ✓ Added use_sftp_mode column (default: TRUE)")
         else:
             print("  ℹ Column use_sftp_mode already exists, skipping")
@@ -52,10 +54,12 @@ def downgrade(db):
     print("Running downgrade for migration 059")
 
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             ALTER TABLE ssh_connections
             DROP COLUMN IF EXISTS use_sftp_mode
-        """))
+        """)
+        )
         print("  ✓ Removed use_sftp_mode column")
 
         db.commit()

@@ -3,6 +3,7 @@
 Add role column to users (replacing is_admin boolean),
 and create api_tokens table.
 """
+
 from sqlalchemy import text
 import structlog
 
@@ -27,23 +28,30 @@ def upgrade(db):
 
     # 2. Migrate is_admin → role (only if no operator/admin roles exist yet,
     #    meaning this is the first run after adding the role column)
-    result = db.execute(text(
-        "SELECT COUNT(*) FROM users WHERE role IN ('admin', 'operator')"
-    ))
+    result = db.execute(
+        text("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'operator')")
+    )
     has_roles = result.scalar() > 0
     if not has_roles:
         if _column_exists(db, "users", "is_admin"):
             db.execute(text("UPDATE users SET role = 'admin' WHERE is_admin = 1"))
-            db.execute(text("UPDATE users SET role = 'viewer' WHERE is_admin = 0 OR is_admin IS NULL"))
+            db.execute(
+                text(
+                    "UPDATE users SET role = 'viewer' WHERE is_admin = 0 OR is_admin IS NULL"
+                )
+            )
             logger.info("Migrated is_admin values to role column")
         else:
-            logger.info("users.is_admin column not present, leaving default role values in place")
+            logger.info(
+                "users.is_admin column not present, leaving default role values in place"
+            )
     else:
         logger.info("Role column already populated, skipping is_admin migration")
 
     # 3. Create api_tokens table
     try:
-        db.execute(text("""
+        db.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS api_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -53,7 +61,8 @@ def upgrade(db):
                 created_at DATETIME NOT NULL,
                 last_used_at DATETIME
             )
-        """))
+        """)
+        )
         logger.info("Created api_tokens table")
     except Exception as e:
         if "already exists" in str(e).lower():

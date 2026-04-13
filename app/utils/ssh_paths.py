@@ -20,7 +20,9 @@ def resolve_sshfs_source_path(path: str, default_path: Optional[str] = None) -> 
     elif raw_path.startswith("/"):
         resolved_path = posixpath.normpath(raw_path)
     else:
-        resolved_path = posixpath.normpath(posixpath.join(normalized_default_path, raw_path))
+        resolved_path = posixpath.normpath(
+            posixpath.join(normalized_default_path, raw_path)
+        )
 
     if not resolved_path.startswith("/"):
         return f"/{resolved_path}"
@@ -46,7 +48,11 @@ def apply_ssh_command_prefix(path: str, ssh_path_prefix: Optional[str] = None) -
         normalized_prefix = f"/{normalized_prefix}"
     normalized_prefix = posixpath.normpath(normalized_prefix)
 
-    if normalized_path == normalized_prefix or normalized_path.startswith(f"{normalized_prefix}/"):
+    if normalized_path == normalized_prefix or normalized_path.startswith(
+        f"{normalized_prefix}/"
+    ):
         return normalized_path
 
-    return posixpath.normpath(posixpath.join(normalized_prefix, normalized_path.lstrip("/")))
+    return posixpath.normpath(
+        posixpath.join(normalized_prefix, normalized_path.lstrip("/"))
+    )

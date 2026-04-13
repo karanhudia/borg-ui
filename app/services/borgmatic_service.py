@@ -9,11 +9,10 @@ This service handles:
 
 import json
 import yaml
-from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 
-from app.database.models import Repository, ScheduledJob, ScheduledJobRepository, SSHKey, SSHConnection
+from app.database.models import Repository, ScheduledJob, ScheduledJobRepository
 
 
 class BorgmaticExportService:
@@ -23,9 +22,7 @@ class BorgmaticExportService:
         self.db = db
 
     def export_repository(
-        self,
-        repository: Repository,
-        include_schedule: bool = True
+        self, repository: Repository, include_schedule: bool = True
     ) -> Dict[str, Any]:
         """
         Export a single repository to borgmatic format.
@@ -43,30 +40,30 @@ class BorgmaticExportService:
         if repository.source_directories:
             try:
                 source_dirs = json.loads(repository.source_directories)
-                config['source_directories'] = source_dirs
+                config["source_directories"] = source_dirs
             except (json.JSONDecodeError, TypeError):
                 pass
 
         # Repositories (top-level in new format)
         repo_path = self._build_repository_path(repository)
         if repo_path:
-            config['repositories'] = [repo_path]
+            config["repositories"] = [repo_path]
 
         # Exclude patterns (top-level in new format)
         if repository.exclude_patterns:
             try:
                 exclude_patterns = json.loads(repository.exclude_patterns)
-                config['exclude_patterns'] = exclude_patterns
+                config["exclude_patterns"] = exclude_patterns
             except (json.JSONDecodeError, TypeError):
                 pass
 
         # Compression (top-level in new format)
         if repository.compression:
-            config['compression'] = repository.compression
+            config["compression"] = repository.compression
 
         # Encryption passphrase (top-level in new format)
         if repository.passphrase:
-            config['encryption_passphrase'] = repository.passphrase
+            config["encryption_passphrase"] = repository.passphrase
 
         # Retention (top-level in new format - from scheduled job if exists)
         if include_schedule:
@@ -81,23 +78,21 @@ class BorgmaticExportService:
 
         # Hooks (using deprecated but still supported format for maximum compatibility)
         if repository.pre_backup_script:
-            config['before_backup'] = [repository.pre_backup_script]
+            config["before_backup"] = [repository.pre_backup_script]
         if repository.post_backup_script:
-            config['after_backup'] = [repository.post_backup_script]
+            config["after_backup"] = [repository.post_backup_script]
 
         # Borg UI metadata fields (ignored by standard borgmatic — forward compatible)
         # borg_ui_name: preserves the custom display name for round-trip imports
-        config['borg_ui_name'] = repository.name
+        config["borg_ui_name"] = repository.name
         # borg_ui_type: preserves observability-only mode (omit for 'full' which is the default)
-        if repository.mode == 'observe':
-            config['borg_ui_type'] = 'observability'
+        if repository.mode == "observe":
+            config["borg_ui_type"] = "observability"
 
         return config
 
     def export_all_repositories(
-        self,
-        repository_ids: Optional[List[int]] = None,
-        include_schedules: bool = True
+        self, repository_ids: Optional[List[int]] = None, include_schedules: bool = True
     ) -> List[tuple]:
         """
         Export multiple repositories to borgmatic format.
@@ -125,9 +120,7 @@ class BorgmaticExportService:
         return configs
 
     def export_to_yaml(
-        self,
-        repository_ids: Optional[List[int]] = None,
-        include_schedules: bool = True
+        self, repository_ids: Optional[List[int]] = None, include_schedules: bool = True
     ) -> str:
         """
         Export configurations to YAML string.
@@ -168,20 +161,20 @@ class BorgmaticExportService:
         if repository.source_directories:
             try:
                 source_dirs = json.loads(repository.source_directories)
-                location['source_directories'] = source_dirs
+                location["source_directories"] = source_dirs
             except (json.JSONDecodeError, TypeError):
                 pass
 
         # Repository path
         repo_path = self._build_repository_path(repository)
         if repo_path:
-            location['repositories'] = [repo_path]
+            location["repositories"] = [repo_path]
 
         # Exclude patterns
         if repository.exclude_patterns:
             try:
                 exclude_patterns = json.loads(repository.exclude_patterns)
-                location['exclude_patterns'] = exclude_patterns
+                location["exclude_patterns"] = exclude_patterns
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -193,11 +186,11 @@ class BorgmaticExportService:
 
         # Compression
         if repository.compression:
-            storage['compression'] = repository.compression
+            storage["compression"] = repository.compression
 
         # Encryption passphrase
         if repository.passphrase:
-            storage['encryption_passphrase'] = repository.passphrase
+            storage["encryption_passphrase"] = repository.passphrase
 
         # Note: SSH keys in Borg UI are stored encrypted in DB, not as files
         # Users need to configure SSH authentication separately (ssh-agent, ssh config, etc.)
@@ -212,15 +205,15 @@ class BorgmaticExportService:
         # Borgmatic treats 0 as "don't keep any" which is valid
         # Note: keep_quarterly is NOT a valid borgmatic field, so we exclude it
         if scheduled_job.prune_keep_hourly is not None:
-            retention['keep_hourly'] = scheduled_job.prune_keep_hourly
+            retention["keep_hourly"] = scheduled_job.prune_keep_hourly
         if scheduled_job.prune_keep_daily is not None:
-            retention['keep_daily'] = scheduled_job.prune_keep_daily
+            retention["keep_daily"] = scheduled_job.prune_keep_daily
         if scheduled_job.prune_keep_weekly is not None:
-            retention['keep_weekly'] = scheduled_job.prune_keep_weekly
+            retention["keep_weekly"] = scheduled_job.prune_keep_weekly
         if scheduled_job.prune_keep_monthly is not None:
-            retention['keep_monthly'] = scheduled_job.prune_keep_monthly
+            retention["keep_monthly"] = scheduled_job.prune_keep_monthly
         if scheduled_job.prune_keep_yearly is not None:
-            retention['keep_yearly'] = scheduled_job.prune_keep_yearly
+            retention["keep_yearly"] = scheduled_job.prune_keep_yearly
 
         return retention
 
@@ -238,10 +231,10 @@ class BorgmaticExportService:
         hooks = {}
 
         if repository.pre_backup_script:
-            hooks['before_backup'] = [repository.pre_backup_script]
+            hooks["before_backup"] = [repository.pre_backup_script]
 
         if repository.post_backup_script:
-            hooks['after_backup'] = [repository.post_backup_script]
+            hooks["after_backup"] = [repository.post_backup_script]
 
         return hooks if hooks else None
 
@@ -251,7 +244,9 @@ class BorgmaticExportService:
         # Borgmatic supports SSH URLs directly, so just return the path as-is
         return repository.path
 
-    def _get_scheduled_job_for_repository(self, repository: Repository) -> Optional[ScheduledJob]:
+    def _get_scheduled_job_for_repository(
+        self, repository: Repository
+    ) -> Optional[ScheduledJob]:
         """Get scheduled job associated with repository.
 
         Checks for scheduled jobs in three formats:
@@ -260,36 +255,43 @@ class BorgmaticExportService:
         3. Multi-repo: via junction table (ScheduledJobRepository)
         """
         # Check legacy format (by path)
-        job = self.db.query(ScheduledJob).filter(
-            ScheduledJob.repository == repository.path
-        ).first()
+        job = (
+            self.db.query(ScheduledJob)
+            .filter(ScheduledJob.repository == repository.path)
+            .first()
+        )
 
         if job:
             return job
 
         # Check single-repo by ID format
-        job = self.db.query(ScheduledJob).filter(
-            ScheduledJob.repository_id == repository.id
-        ).first()
+        job = (
+            self.db.query(ScheduledJob)
+            .filter(ScheduledJob.repository_id == repository.id)
+            .first()
+        )
 
         if job:
             return job
 
         # Check multi-repo format (via junction table)
-        job_link = self.db.query(ScheduledJobRepository).filter(
-            ScheduledJobRepository.repository_id == repository.id
-        ).first()
+        job_link = (
+            self.db.query(ScheduledJobRepository)
+            .filter(ScheduledJobRepository.repository_id == repository.id)
+            .first()
+        )
 
         if job_link:
-            return self.db.query(ScheduledJob).filter(
-                ScheduledJob.id == job_link.scheduled_job_id
-            ).first()
+            return (
+                self.db.query(ScheduledJob)
+                .filter(ScheduledJob.id == job_link.scheduled_job_id)
+                .first()
+            )
 
         return None
 
     def _merge_configs_to_borgmatic(
-        self,
-        configs: List[Dict[str, Any]]
+        self, configs: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
         Merge multiple repository configs into single borgmatic-compatible format.
@@ -309,8 +311,8 @@ class BorgmaticExportService:
 
         # For multiple repositories, create proper structure
         merged = {
-            'location': {},
-            'storage': {},
+            "location": {},
+            "storage": {},
         }
 
         # Collect all repositories
@@ -320,41 +322,43 @@ class BorgmaticExportService:
 
         # Merge location sections
         for config in configs:
-            location = config.get('location', {})
+            location = config.get("location", {})
 
             # Add repository paths
-            repos = location.get('repositories', [])
+            repos = location.get("repositories", [])
             all_repositories.extend(repos)
 
             # Merge source directories
-            source_dirs = location.get('source_directories', [])
+            source_dirs = location.get("source_directories", [])
             all_source_directories.update(source_dirs)
 
             # Merge exclude patterns
-            exclude_patterns = location.get('exclude_patterns', [])
+            exclude_patterns = location.get("exclude_patterns", [])
             all_exclude_patterns.update(exclude_patterns)
 
         # Build merged location section
         if all_source_directories:
-            merged['location']['source_directories'] = sorted(list(all_source_directories))
-        merged['location']['repositories'] = all_repositories
+            merged["location"]["source_directories"] = sorted(
+                list(all_source_directories)
+            )
+        merged["location"]["repositories"] = all_repositories
         if all_exclude_patterns:
-            merged['location']['exclude_patterns'] = sorted(list(all_exclude_patterns))
+            merged["location"]["exclude_patterns"] = sorted(list(all_exclude_patterns))
 
         # Use storage settings from first repository
         if configs:
-            merged['storage'] = configs[0].get('storage', {}).copy()
+            merged["storage"] = configs[0].get("storage", {}).copy()
 
         # Use retention settings from first repository that has them
         for config in configs:
-            if 'retention' in config:
-                merged['retention'] = config['retention']
+            if "retention" in config:
+                merged["retention"] = config["retention"]
                 break
 
         # Use consistency settings from first repository that has them
         for config in configs:
-            if 'consistency' in config:
-                merged['consistency'] = config['consistency']
+            if "consistency" in config:
+                merged["consistency"] = config["consistency"]
                 break
 
         # Merge hooks from all repositories
@@ -362,16 +366,16 @@ class BorgmaticExportService:
         all_after_backup = []
 
         for config in configs:
-            hooks = config.get('hooks', {})
-            all_before_backup.extend(hooks.get('before_backup', []))
-            all_after_backup.extend(hooks.get('after_backup', []))
+            hooks = config.get("hooks", {})
+            all_before_backup.extend(hooks.get("before_backup", []))
+            all_after_backup.extend(hooks.get("after_backup", []))
 
         if all_before_backup or all_after_backup:
-            merged['hooks'] = {}
+            merged["hooks"] = {}
             if all_before_backup:
-                merged['hooks']['before_backup'] = all_before_backup
+                merged["hooks"]["before_backup"] = all_before_backup
             if all_after_backup:
-                merged['hooks']['after_backup'] = all_after_backup
+                merged["hooks"]["after_backup"] = all_after_backup
 
         return merged
 
@@ -385,8 +389,8 @@ class BorgmaticImportService:
     def import_from_yaml(
         self,
         yaml_content: str,
-        merge_strategy: str = 'skip_duplicates',
-        dry_run: bool = False
+        merge_strategy: str = "skip_duplicates",
+        dry_run: bool = False,
     ) -> Dict[str, Any]:
         """
         Import borgmatic configuration from YAML.
@@ -405,13 +409,10 @@ class BorgmaticImportService:
         try:
             data = yaml.safe_load(yaml_content)
         except yaml.YAMLError as e:
-            return {
-                'success': False,
-                'error': f'Invalid YAML: {str(e)}'
-            }
+            return {"success": False, "error": f"Invalid YAML: {str(e)}"}
 
         # Check if this is a Borg UI export (old format with borg_ui_export wrapper)
-        is_old_borg_ui_export = 'borg_ui_export' in data and 'configurations' in data
+        is_old_borg_ui_export = "borg_ui_export" in data and "configurations" in data
 
         if is_old_borg_ui_export:
             return self._import_borg_ui_export(data, merge_strategy, dry_run)
@@ -419,92 +420,86 @@ class BorgmaticImportService:
             return self._import_borgmatic_config(data, merge_strategy, dry_run)
 
     def _import_borg_ui_export(
-        self,
-        data: Dict[str, Any],
-        merge_strategy: str,
-        dry_run: bool
+        self, data: Dict[str, Any], merge_strategy: str, dry_run: bool
     ) -> Dict[str, Any]:
         """Import Borg UI export format (round-trip)."""
         summary = {
-            'success': True,
-            'repositories_created': 0,
-            'repositories_updated': 0,
-            'schedules_created': 0,
-            'schedules_updated': 0,
-            'warnings': [],
-            'errors': []
+            "success": True,
+            "repositories_created": 0,
+            "repositories_updated": 0,
+            "schedules_created": 0,
+            "schedules_updated": 0,
+            "warnings": [],
+            "errors": [],
         }
 
-        configurations = data.get('configurations', [])
+        configurations = data.get("configurations", [])
 
         for config in configurations:
             try:
                 result = self._import_single_repository(config, merge_strategy, dry_run)
-                summary['repositories_created'] += result.get('repository_created', 0)
-                summary['repositories_updated'] += result.get('repository_updated', 0)
-                summary['schedules_created'] += result.get('schedule_created', 0)
-                summary['schedules_updated'] += result.get('schedule_updated', 0)
-                summary['warnings'].extend(result.get('warnings', []))
+                summary["repositories_created"] += result.get("repository_created", 0)
+                summary["repositories_updated"] += result.get("repository_updated", 0)
+                summary["schedules_created"] += result.get("schedule_created", 0)
+                summary["schedules_updated"] += result.get("schedule_updated", 0)
+                summary["warnings"].extend(result.get("warnings", []))
             except Exception as e:
-                summary['errors'].append(f"Failed to import repository: {str(e)}")
+                summary["errors"].append(f"Failed to import repository: {str(e)}")
 
-        if not dry_run and summary['repositories_created'] + summary['repositories_updated'] > 0:
+        if (
+            not dry_run
+            and summary["repositories_created"] + summary["repositories_updated"] > 0
+        ):
             self.db.commit()
 
         return summary
 
     def _import_borgmatic_config(
-        self,
-        data: Dict[str, Any],
-        merge_strategy: str,
-        dry_run: bool
+        self, data: Dict[str, Any], merge_strategy: str, dry_run: bool
     ) -> Dict[str, Any]:
         """Import standard borgmatic configuration (supports both old nested and new flat formats)."""
         summary = {
-            'success': True,
-            'repositories_created': 0,
-            'repositories_updated': 0,
-            'schedules_created': 0,
-            'schedules_updated': 0,
-            'warnings': [],
-            'errors': []
+            "success": True,
+            "repositories_created": 0,
+            "repositories_updated": 0,
+            "schedules_created": 0,
+            "schedules_updated": 0,
+            "warnings": [],
+            "errors": [],
         }
 
         # Detect format: old nested (location:, storage:, etc.) or new flat (source_directories at top-level)
-        has_location_section = 'location' in data
-        has_toplevel_repos = 'repositories' in data and not has_location_section
+        has_location_section = "location" in data
+        has_toplevel_repos = "repositories" in data and not has_location_section
 
         if has_toplevel_repos:
             # NEW FORMAT (v1.8.0+): flat structure
-            repos_raw = data.get('repositories', [])
+            repos_raw = data.get("repositories", [])
             # Handle both simple list format and object format
             repo_paths = []
             for repo in repos_raw:
                 if isinstance(repo, dict):
                     # Object format: {'path': '...', 'label': '...'}
-                    repo_paths.append(repo.get('path', ''))
+                    repo_paths.append(repo.get("path", ""))
                 else:
                     # Simple string format
                     repo_paths.append(repo)
-            source_directories = data.get('source_directories', [])
-            exclude_patterns = data.get('exclude_patterns', [])
+            source_directories = data.get("source_directories", [])
+            exclude_patterns = data.get("exclude_patterns", [])
         else:
             # OLD FORMAT (< v1.8.0): nested sections
-            location = data.get('location', {})
-            repo_paths = location.get('repositories', [])
-            source_directories = location.get('source_directories', [])
-            exclude_patterns = location.get('exclude_patterns', [])
+            location = data.get("location", {})
+            repo_paths = location.get("repositories", [])
+            source_directories = location.get("source_directories", [])
+            exclude_patterns = location.get("exclude_patterns", [])
 
         if not repo_paths:
-            return {
-                'success': False,
-                'error': 'No repositories found in configuration'
-            }
+            return {"success": False, "error": "No repositories found in configuration"}
 
         # Borg UI metadata fields — only meaningful for single-repo YAMLs
         # (ambiguous when multiple repositories share one config file)
-        borg_ui_name = data.get('borg_ui_name') if len(repo_paths) == 1 else None
-        borg_ui_type = data.get('borg_ui_type') if len(repo_paths) == 1 else None
+        borg_ui_name = data.get("borg_ui_name") if len(repo_paths) == 1 else None
+        borg_ui_type = data.get("borg_ui_type") if len(repo_paths) == 1 else None
 
         # Import each repository
         for repo_path in repo_paths:
@@ -512,10 +507,10 @@ class BorgmaticImportService:
                 # Build a config for this single repository in old nested format
                 # (for compatibility with _import_single_repository)
                 single_config = {
-                    'location': {
-                        'repositories': [repo_path],
-                        'source_directories': source_directories,
-                        'exclude_patterns': exclude_patterns
+                    "location": {
+                        "repositories": [repo_path],
+                        "source_directories": source_directories,
+                        "exclude_patterns": exclude_patterns,
                     }
                 }
 
@@ -523,40 +518,52 @@ class BorgmaticImportService:
                 if has_toplevel_repos:
                     # New format: top-level keys
                     storage = {}
-                    if 'compression' in data:
-                        storage['compression'] = data['compression']
-                    if 'encryption_passphrase' in data:
-                        storage['encryption_passphrase'] = data['encryption_passphrase']
+                    if "compression" in data:
+                        storage["compression"] = data["compression"]
+                    if "encryption_passphrase" in data:
+                        storage["encryption_passphrase"] = data["encryption_passphrase"]
                     if storage:
-                        single_config['storage'] = storage
+                        single_config["storage"] = storage
                 else:
                     # Old format: storage section
-                    if 'storage' in data:
-                        single_config['storage'] = data['storage']
+                    if "storage" in data:
+                        single_config["storage"] = data["storage"]
 
                 # Add retention
                 if has_toplevel_repos:
                     # New format: top-level keep_* keys
                     retention = {}
-                    for key in ['keep_hourly', 'keep_daily', 'keep_weekly', 'keep_monthly', 'keep_quarterly', 'keep_yearly']:
+                    for key in [
+                        "keep_hourly",
+                        "keep_daily",
+                        "keep_weekly",
+                        "keep_monthly",
+                        "keep_quarterly",
+                        "keep_yearly",
+                    ]:
                         if key in data:
                             retention[key] = data[key]
                     if retention:
-                        single_config['retention'] = retention
+                        single_config["retention"] = retention
                 else:
                     # Old format: retention section
-                    if 'retention' in data:
-                        single_config['retention'] = data['retention']
+                    if "retention" in data:
+                        single_config["retention"] = data["retention"]
 
                 # Add consistency/checks
                 if has_toplevel_repos:
                     # New format: checks list
-                    if 'checks' in data:
-                        single_config['consistency'] = {'checks': [c.get('name', c) if isinstance(c, dict) else c for c in data['checks']]}
+                    if "checks" in data:
+                        single_config["consistency"] = {
+                            "checks": [
+                                c.get("name", c) if isinstance(c, dict) else c
+                                for c in data["checks"]
+                            ]
+                        }
                 else:
                     # Old format: consistency section
-                    if 'consistency' in data:
-                        single_config['consistency'] = data['consistency']
+                    if "consistency" in data:
+                        single_config["consistency"] = data["consistency"]
 
                 # Add hooks
                 hooks = {}
@@ -566,72 +573,92 @@ class BorgmaticImportService:
                     # 2. Modern: commands list with name/command dicts
 
                     # Handle deprecated before_backup/after_backup (most common)
-                    if 'before_backup' in data:
-                        hooks['before_backup'] = data['before_backup'] if isinstance(data['before_backup'], list) else [data['before_backup']]
-                    if 'after_backup' in data:
-                        hooks['after_backup'] = data['after_backup'] if isinstance(data['after_backup'], list) else [data['after_backup']]
+                    if "before_backup" in data:
+                        hooks["before_backup"] = (
+                            data["before_backup"]
+                            if isinstance(data["before_backup"], list)
+                            else [data["before_backup"]]
+                        )
+                    if "after_backup" in data:
+                        hooks["after_backup"] = (
+                            data["after_backup"]
+                            if isinstance(data["after_backup"], list)
+                            else [data["after_backup"]]
+                        )
 
                     # Also handle modern hooks list format
-                    if 'hooks' in data and isinstance(data['hooks'], list):
-                        for hook in data['hooks']:
+                    if "hooks" in data and isinstance(data["hooks"], list):
+                        for hook in data["hooks"]:
                             if isinstance(hook, dict):
-                                name = hook.get('name', '')
-                                command = hook.get('command', '')
-                                if 'before_backup' in name.lower():
-                                    hooks['before_backup'] = command if isinstance(command, list) else [command]
-                                elif 'after_backup' in name.lower():
-                                    hooks['after_backup'] = command if isinstance(command, list) else [command]
+                                name = hook.get("name", "")
+                                command = hook.get("command", "")
+                                if "before_backup" in name.lower():
+                                    hooks["before_backup"] = (
+                                        command
+                                        if isinstance(command, list)
+                                        else [command]
+                                    )
+                                elif "after_backup" in name.lower():
+                                    hooks["after_backup"] = (
+                                        command
+                                        if isinstance(command, list)
+                                        else [command]
+                                    )
                 else:
                     # Old format: hooks section
-                    if 'hooks' in data:
-                        single_config['hooks'] = data['hooks']
+                    if "hooks" in data:
+                        single_config["hooks"] = data["hooks"]
 
                 if hooks:
-                    single_config['hooks'] = hooks
+                    single_config["hooks"] = hooks
 
                 # Pass borg_ui metadata fields for round-trip fidelity
                 if borg_ui_name:
-                    single_config['borg_ui_name'] = borg_ui_name
+                    single_config["borg_ui_name"] = borg_ui_name
                 if borg_ui_type:
-                    single_config['borg_ui_type'] = borg_ui_type
+                    single_config["borg_ui_type"] = borg_ui_type
 
-                result = self._import_single_repository(single_config, merge_strategy, dry_run)
-                summary['repositories_created'] += result.get('repository_created', 0)
-                summary['repositories_updated'] += result.get('repository_updated', 0)
-                summary['schedules_created'] += result.get('schedule_created', 0)
-                summary['schedules_updated'] += result.get('schedule_updated', 0)
-                summary['warnings'].extend(result.get('warnings', []))
+                result = self._import_single_repository(
+                    single_config, merge_strategy, dry_run
+                )
+                summary["repositories_created"] += result.get("repository_created", 0)
+                summary["repositories_updated"] += result.get("repository_updated", 0)
+                summary["schedules_created"] += result.get("schedule_created", 0)
+                summary["schedules_updated"] += result.get("schedule_updated", 0)
+                summary["warnings"].extend(result.get("warnings", []))
             except Exception as e:
-                summary['errors'].append(f"Failed to import repository {repo_path}: {str(e)}")
+                summary["errors"].append(
+                    f"Failed to import repository {repo_path}: {str(e)}"
+                )
 
-        if not dry_run and summary['repositories_created'] + summary['repositories_updated'] > 0:
+        if (
+            not dry_run
+            and summary["repositories_created"] + summary["repositories_updated"] > 0
+        ):
             self.db.commit()
 
         return summary
 
     def _import_single_repository(
-        self,
-        config: Dict[str, Any],
-        merge_strategy: str,
-        dry_run: bool
+        self, config: Dict[str, Any], merge_strategy: str, dry_run: bool
     ) -> Dict[str, Any]:
         """Import a single repository configuration."""
         result = {
-            'repository_created': 0,
-            'repository_updated': 0,
-            'schedule_created': 0,
-            'schedule_updated': 0,
-            'warnings': []
+            "repository_created": 0,
+            "repository_updated": 0,
+            "schedule_created": 0,
+            "schedule_updated": 0,
+            "warnings": [],
         }
 
         # Extract repository information
-        location = config.get('location', {})
-        storage = config.get('storage', {})
-        retention = config.get('retention', {})
-        hooks = config.get('hooks', {})
+        location = config.get("location", {})
+        storage = config.get("storage", {})
+        retention = config.get("retention", {})
+        hooks = config.get("hooks", {})
 
         # Parse repository path
-        repo_paths = location.get('repositories', [])
+        repo_paths = location.get("repositories", [])
         if not repo_paths:
             raise ValueError("No repository path found in configuration")
 
@@ -639,74 +666,77 @@ class BorgmaticImportService:
 
         # Build metadata: borg_ui_name overrides the name derived from the path
         path_metadata = {}
-        borg_ui_name = config.get('borg_ui_name')
-        borg_ui_type = config.get('borg_ui_type')
+        borg_ui_name = config.get("borg_ui_name")
+        borg_ui_type = config.get("borg_ui_type")
         if borg_ui_name:
-            path_metadata['name'] = borg_ui_name
+            path_metadata["name"] = borg_ui_name
 
         repo_name, repo_path, repo_type, ssh_info = self._parse_repository_path(
-            repo_path_str,
-            path_metadata
+            repo_path_str, path_metadata
         )
 
         # Check for existing repository
-        existing_repo = self.db.query(Repository).filter(
-            (Repository.name == repo_name) | (Repository.path == repo_path)
-        ).first()
+        existing_repo = (
+            self.db.query(Repository)
+            .filter((Repository.name == repo_name) | (Repository.path == repo_path))
+            .first()
+        )
 
         if existing_repo:
-            if merge_strategy == 'skip_duplicates':
-                result['warnings'].append(f"Skipped duplicate repository: {repo_name}")
+            if merge_strategy == "skip_duplicates":
+                result["warnings"].append(f"Skipped duplicate repository: {repo_name}")
                 return result
-            elif merge_strategy == 'rename':
+            elif merge_strategy == "rename":
                 repo_name = self._generate_unique_name(repo_name)
-            elif merge_strategy == 'replace':
+            elif merge_strategy == "replace":
                 repository = existing_repo
-                result['repository_updated'] = 1
+                result["repository_updated"] = 1
 
-        if not existing_repo or merge_strategy != 'replace':
+        if not existing_repo or merge_strategy != "replace":
             # Create new repository
             repository = Repository()
-            result['repository_created'] = 1
+            result["repository_created"] = 1
 
         # Set repository fields
         repository.name = repo_name
         repository.path = repo_path
-        repository.encryption = 'repokey'  # Default encryption
-        repository.compression = storage.get('compression', 'lz4')
+        repository.encryption = "repokey"  # Default encryption
+        repository.compression = storage.get("compression", "lz4")
         # borg_ui_type: 'observability' → observe mode; anything else (or absent) → full
-        repository.mode = 'observe' if borg_ui_type == 'observability' else 'full'
+        repository.mode = "observe" if borg_ui_type == "observability" else "full"
 
         # Passphrase from storage section
-        if storage.get('encryption_passphrase'):
-            repository.passphrase = storage['encryption_passphrase']
+        if storage.get("encryption_passphrase"):
+            repository.passphrase = storage["encryption_passphrase"]
         else:
-            result['warnings'].append(f"No passphrase found for repository: {repo_name} - please set manually")
+            result["warnings"].append(
+                f"No passphrase found for repository: {repo_name} - please set manually"
+            )
 
         # Source directories
-        if location.get('source_directories'):
-            repository.source_directories = json.dumps(location['source_directories'])
+        if location.get("source_directories"):
+            repository.source_directories = json.dumps(location["source_directories"])
 
         # Exclude patterns
-        if location.get('exclude_patterns'):
-            repository.exclude_patterns = json.dumps(location['exclude_patterns'])
+        if location.get("exclude_patterns"):
+            repository.exclude_patterns = json.dumps(location["exclude_patterns"])
 
         # Hooks
-        if hooks.get('before_backup'):
-            repository.pre_backup_script = '\n'.join(hooks['before_backup'])
-        if hooks.get('after_backup'):
-            repository.post_backup_script = '\n'.join(hooks['after_backup'])
+        if hooks.get("before_backup"):
+            repository.pre_backup_script = "\n".join(hooks["before_backup"])
+        if hooks.get("after_backup"):
+            repository.post_backup_script = "\n".join(hooks["after_backup"])
 
         repository.hook_timeout = 300  # Default timeout
         repository.continue_on_hook_failure = False  # Default: fail on hook failure
 
         # SSH settings
-        if repo_type == 'ssh':
+        if repo_type == "ssh":
             # SSH repositories imported from borgmatic need SSH connection configured manually
             repository.connection_id = None
-            if ssh_info and ssh_info.get('remote_path'):
-                repository.remote_path = ssh_info['remote_path']
-            result['warnings'].append(
+            if ssh_info and ssh_info.get("remote_path"):
+                repository.remote_path = ssh_info["remote_path"]
+            result["warnings"].append(
                 f"SSH repository '{repo_name}' imported but SSH connection must be configured manually in Borg UI. "
                 f"Original connection: {ssh_info.get('username', 'user')}@{ssh_info.get('host', 'host')}:{ssh_info.get('port', 22)}"
             )
@@ -714,22 +744,22 @@ class BorgmaticImportService:
         # Check settings - defaults only (no metadata)
 
         if not dry_run:
-            if result['repository_created']:
+            if result["repository_created"]:
                 self.db.add(repository)
                 self.db.flush()  # Get repository ID
 
         # Import scheduled job if retention settings exist
-        if retention and result['repository_created']:
+        if retention and result["repository_created"]:
             schedule_result = self._import_schedule(
                 repository,
                 retention,
                 {},  # No schedule metadata
                 merge_strategy,
-                dry_run
+                dry_run,
             )
-            result['schedule_created'] = schedule_result.get('created', 0)
-            result['schedule_updated'] = schedule_result.get('updated', 0)
-            result['warnings'].extend(schedule_result.get('warnings', []))
+            result["schedule_created"] = schedule_result.get("created", 0)
+            result["schedule_updated"] = schedule_result.get("updated", 0)
+            result["warnings"].extend(schedule_result.get("warnings", []))
 
         return result
 
@@ -739,58 +769,68 @@ class BorgmaticImportService:
         retention: Dict[str, Any],
         schedule_metadata: Dict[str, Any],
         merge_strategy: str,
-        dry_run: bool
+        dry_run: bool,
     ) -> Dict[str, Any]:
         """Import backup schedule for repository."""
-        result = {'created': 0, 'updated': 0, 'warnings': []}
+        result = {"created": 0, "updated": 0, "warnings": []}
 
         # Generate schedule name
-        schedule_name = schedule_metadata.get('name') or f"{repository.name}-backup"
+        schedule_name = schedule_metadata.get("name") or f"{repository.name}-backup"
 
         # Check for existing schedule
-        existing_schedule = self.db.query(ScheduledJob).filter(
-            ScheduledJob.name == schedule_name
-        ).first()
+        existing_schedule = (
+            self.db.query(ScheduledJob)
+            .filter(ScheduledJob.name == schedule_name)
+            .first()
+        )
 
         if existing_schedule:
-            if merge_strategy == 'skip_duplicates':
-                result['warnings'].append(f"Skipped duplicate schedule: {schedule_name}")
+            if merge_strategy == "skip_duplicates":
+                result["warnings"].append(
+                    f"Skipped duplicate schedule: {schedule_name}"
+                )
                 return result
-            elif merge_strategy == 'rename':
-                schedule_name = self._generate_unique_name(schedule_name, model=ScheduledJob)
-            elif merge_strategy == 'replace':
+            elif merge_strategy == "rename":
+                schedule_name = self._generate_unique_name(
+                    schedule_name, model=ScheduledJob
+                )
+            elif merge_strategy == "replace":
                 scheduled_job = existing_schedule
-                result['updated'] = 1
+                result["updated"] = 1
 
-        if not existing_schedule or merge_strategy != 'replace':
+        if not existing_schedule or merge_strategy != "replace":
             scheduled_job = ScheduledJob()
-            result['created'] = 1
+            result["created"] = 1
 
         # Set schedule fields
         scheduled_job.name = schedule_name
         scheduled_job.repository = repository.path
-        scheduled_job.cron_expression = schedule_metadata.get('cron_expression', '0 2 * * *')
-        scheduled_job.enabled = schedule_metadata.get('enabled', True)
-        scheduled_job.archive_name_template = schedule_metadata.get('archive_name_template', '{hostname}-{now}')
-        scheduled_job.run_prune_after = schedule_metadata.get('run_prune_after', True)
-        scheduled_job.run_compact_after = schedule_metadata.get('run_compact_after', False)
+        scheduled_job.cron_expression = schedule_metadata.get(
+            "cron_expression", "0 2 * * *"
+        )
+        scheduled_job.enabled = schedule_metadata.get("enabled", True)
+        scheduled_job.archive_name_template = schedule_metadata.get(
+            "archive_name_template", "{hostname}-{now}"
+        )
+        scheduled_job.run_prune_after = schedule_metadata.get("run_prune_after", True)
+        scheduled_job.run_compact_after = schedule_metadata.get(
+            "run_compact_after", False
+        )
 
         # Retention settings
-        scheduled_job.prune_keep_hourly = retention.get('keep_hourly', 0)
-        scheduled_job.prune_keep_daily = retention.get('keep_daily', 7)
-        scheduled_job.prune_keep_weekly = retention.get('keep_weekly', 4)
-        scheduled_job.prune_keep_monthly = retention.get('keep_monthly', 6)
-        scheduled_job.prune_keep_yearly = retention.get('keep_yearly', 1)
+        scheduled_job.prune_keep_hourly = retention.get("keep_hourly", 0)
+        scheduled_job.prune_keep_daily = retention.get("keep_daily", 7)
+        scheduled_job.prune_keep_weekly = retention.get("keep_weekly", 4)
+        scheduled_job.prune_keep_monthly = retention.get("keep_monthly", 6)
+        scheduled_job.prune_keep_yearly = retention.get("keep_yearly", 1)
 
-        if not dry_run and result['created']:
+        if not dry_run and result["created"]:
             self.db.add(scheduled_job)
 
         return result
 
     def _parse_repository_path(
-        self,
-        repo_path: str,
-        metadata: Dict[str, Any]
+        self, repo_path: str, metadata: Dict[str, Any]
     ) -> Tuple[str, str, str, Optional[Dict[str, Any]]]:
         """
         Parse repository path and extract information.
@@ -801,64 +841,73 @@ class BorgmaticImportService:
         # Check if SSH repository - support both formats:
         # 1. ssh://user@host:port/path (full SSH URL)
         # 2. user@host:path (short format)
-        if repo_path.startswith('ssh://'):
+        if repo_path.startswith("ssh://"):
             # Full SSH URL format: ssh://user@host:port/path or ssh://user@host/path
             from urllib.parse import urlparse
+
             parsed = urlparse(repo_path)
 
-            username = parsed.username or ''
-            host = parsed.hostname or ''
+            username = parsed.username or ""
+            host = parsed.hostname or ""
             port = parsed.port or 22
-            path = parsed.path or ''
+            path = parsed.path or ""
 
             # Prefer name from metadata, fallback to extracting from path
-            name = metadata.get('name') or path.rstrip('/').split('/')[-1].replace('.borg', '')
+            name = metadata.get("name") or path.rstrip("/").split("/")[-1].replace(
+                ".borg", ""
+            )
 
             ssh_info = {
-                'host': host,
-                'username': username,
-                'port': port,
-                'remote_path': metadata.get('ssh', {}).get('remote_path')
+                "host": host,
+                "username": username,
+                "port": port,
+                "remote_path": metadata.get("ssh", {}).get("remote_path"),
             }
 
-            return name, repo_path, 'ssh', ssh_info
+            return name, repo_path, "ssh", ssh_info
 
-        elif '@' in repo_path and ':' in repo_path:
+        elif "@" in repo_path and ":" in repo_path:
             # Short SSH format: user@host:path
-            user_host, path = repo_path.split(':', 1)
-            username, host = user_host.split('@', 1)
+            user_host, path = repo_path.split(":", 1)
+            username, host = user_host.split("@", 1)
 
             # Prefer name from metadata, fallback to extracting from path
-            name = metadata.get('name') or path.rstrip('/').split('/')[-1].replace('.borg', '')
+            name = metadata.get("name") or path.rstrip("/").split("/")[-1].replace(
+                ".borg", ""
+            )
 
             ssh_info = {
-                'host': host,
-                'username': username,
-                'port': metadata.get('ssh', {}).get('port', 22),
-                'remote_path': metadata.get('ssh', {}).get('remote_path')
+                "host": host,
+                "username": username,
+                "port": metadata.get("ssh", {}).get("port", 22),
+                "remote_path": metadata.get("ssh", {}).get("remote_path"),
             }
 
-            return name, repo_path, 'ssh', ssh_info
+            return name, repo_path, "ssh", ssh_info
         else:
             # Local repository
             # Prefer name from metadata, fallback to extracting from path
-            name = metadata.get('name') or repo_path.rstrip('/').split('/')[-1].replace('.borg', '')
-            return name, repo_path, 'local', None
+            name = metadata.get("name") or repo_path.rstrip("/").split("/")[-1].replace(
+                ".borg", ""
+            )
+            return name, repo_path, "local", None
 
-    def _generate_unique_name(
-        self,
-        base_name: str,
-        model=Repository
-    ) -> str:
+    def _generate_unique_name(self, base_name: str, model=Repository) -> str:
         """Generate a unique name by appending a number."""
         counter = 1
         name = base_name
 
         while True:
             if model == Repository:
-                existing = self.db.query(Repository).filter(Repository.name == name).first()
+                existing = (
+                    self.db.query(Repository).filter(Repository.name == name).first()
+                )
             else:
-                existing = self.db.query(ScheduledJob).filter(ScheduledJob.name == name).first()
+                existing = (
+                    self.db.query(ScheduledJob)
+                    .filter(ScheduledJob.name == name)
+                    .first()
+                )
 
             if not existing:
                 return name

@@ -22,9 +22,15 @@ def mount_prerequisites_available() -> bool:
         return False
     system = platform.system()
     if system == "Linux":
-        return shutil.which("fusermount") is not None or shutil.which("fusermount3") is not None
+        return (
+            shutil.which("fusermount") is not None
+            or shutil.which("fusermount3") is not None
+        )
     if system == "Darwin":
-        return shutil.which("mount_macfuse") is not None or shutil.which("mount_osxfuse") is not None
+        return (
+            shutil.which("mount_macfuse") is not None
+            or shutil.which("mount_osxfuse") is not None
+        )
     return shutil.which("umount") is not None
 
 
@@ -79,13 +85,24 @@ def main() -> int:
                 detail = mount_response.json().get("detail", {})
             except Exception:
                 detail = {}
-            if mount_response.status_code == 503 or detail.get("key") == "backend.errors.mounts.mountUnavailable":
-                print(f"Mount smoke skipped: borg mount unavailable in this environment: {mount_response.text}", flush=True)
+            if (
+                mount_response.status_code == 503
+                or detail.get("key") == "backend.errors.mounts.mountUnavailable"
+            ):
+                print(
+                    f"Mount smoke skipped: borg mount unavailable in this environment: {mount_response.text}",
+                    flush=True,
+                )
                 return 0
-            print(f"Mount smoke skipped: borg mount failed in this environment: {mount_response.text}", flush=True)
+            print(
+                f"Mount smoke skipped: borg mount failed in this environment: {mount_response.text}",
+                flush=True,
+            )
             return 0
         if mount_response.status_code != 200:
-            raise SmokeFailure(f"Mount request failed: {mount_response.status_code} {mount_response.text}")
+            raise SmokeFailure(
+                f"Mount request failed: {mount_response.status_code} {mount_response.text}"
+            )
 
         payload = mount_response.json()
         mount_id = payload["mount_id"]
@@ -98,7 +115,9 @@ def main() -> int:
             time.sleep(0.5)
 
         if not mount_point.exists() or not any(mount_point.iterdir()):
-            raise SmokeFailure(f"Mounted archive did not expose filesystem contents at {mount_point}")
+            raise SmokeFailure(
+                f"Mounted archive did not expose filesystem contents at {mount_point}"
+            )
 
         mounts = client.request_ok("GET", "/api/mounts").json()
         if mount_id not in [item["mount_id"] for item in mounts]:

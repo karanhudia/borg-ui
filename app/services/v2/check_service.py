@@ -7,17 +7,15 @@ CheckJob table so the existing frontend polling endpoints work unchanged.
 
 import asyncio
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 import structlog
 
 from app.database.models import CheckJob, Repository
 from app.database.database import SessionLocal
-from app.core.borg2 import borg2, _get_borg2_binary
+from app.core.borg2 import _get_borg2_binary
 from app.config import settings
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
-from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 
@@ -65,8 +63,11 @@ class CheckV2Service:
             # If the job was somehow already completed/cancelled (race), bail out.
             db.refresh(job)
             if job.status not in ("running", "pending"):
-                logger.warning("Check job already in terminal state, skipping",
-                               job_id=job_id, status=job.status)
+                logger.warning(
+                    "Check job already in terminal state, skipping",
+                    job_id=job_id,
+                    status=job.status,
+                )
                 return
 
             env, temp_key_file = build_repository_borg_env(
@@ -77,14 +78,28 @@ class CheckV2Service:
             )
 
             borg_cmd = _get_borg2_binary()
-            cmd = [borg_cmd, "--info", "-r", repo.path, "check", "--progress", "--log-json"]
+            cmd = [
+                borg_cmd,
+                "--info",
+                "-r",
+                repo.path,
+                "check",
+                "--progress",
+                "--log-json",
+            ]
             if job.max_duration and job.max_duration > 0:
-                cmd.extend(["--repository-only", "--max-duration", str(job.max_duration)])
+                cmd.extend(
+                    ["--repository-only", "--max-duration", str(job.max_duration)]
+                )
             if repo.remote_path:
                 cmd.extend(["--remote-path", repo.remote_path])
 
-            logger.info("Starting borg2 check", job_id=job_id, repository=repo.path,
-                        command=" ".join(cmd))
+            logger.info(
+                "Starting borg2 check",
+                job_id=job_id,
+                repository=repo.path,
+                command=" ".join(cmd),
+            )
 
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -145,7 +160,9 @@ class CheckV2Service:
                                         job.progress_message = message
                                         if not first_progress_committed:
                                             db.commit()
-                                            last_commit_time = asyncio.get_event_loop().time()
+                                            last_commit_time = (
+                                                asyncio.get_event_loop().time()
+                                            )
                                             first_progress_committed = True
 
                                 elif msg_type == "progress_percent":
@@ -157,7 +174,11 @@ class CheckV2Service:
 
                                     if message:
                                         progress_msg = f"{message} ({current}/{total})"
-                                        if now - last_progress_update.get(progress_msg, 0) >= PROGRESS_THROTTLE:
+                                        if (
+                                            now
+                                            - last_progress_update.get(progress_msg, 0)
+                                            >= PROGRESS_THROTTLE
+                                        ):
                                             job.progress_message = progress_msg
                                             last_progress_update[progress_msg] = now
 
@@ -179,8 +200,9 @@ class CheckV2Service:
                     db.commit()
 
             try:
-                await asyncio.gather(check_cancellation(), stream_logs(),
-                                     return_exceptions=True)
+                await asyncio.gather(
+                    check_cancellation(), stream_logs(), return_exceptions=True
+                )
             except asyncio.CancelledError:
                 cancelled = True
                 process.terminate()
@@ -196,7 +218,9 @@ class CheckV2Service:
                 job.status = "completed"
                 job.progress = 100
                 if job.max_duration and job.max_duration > 0:
-                    job.progress_message = "Partial repository check completed successfully"
+                    job.progress_message = (
+                        "Partial repository check completed successfully"
+                    )
                 else:
                     job.progress_message = "Check completed successfully"
                 job.completed_at = datetime.utcnow()
@@ -205,22 +229,28 @@ class CheckV2Service:
             elif process.returncode == 1 or (100 <= process.returncode <= 127):
                 job.status = "completed_with_warnings"
                 job.progress = 100
-                job.progress_message = f"Check completed with warnings (exit code {process.returncode})"
+                job.progress_message = (
+                    f"Check completed with warnings (exit code {process.returncode})"
+                )
                 job.error_message = job.progress_message
                 job.completed_at = datetime.utcnow()
                 repo.last_check = datetime.utcnow()
-                logger.warning("Borg2 check warnings", job_id=job_id,
-                               exit_code=process.returncode)
+                logger.warning(
+                    "Borg2 check warnings", job_id=job_id, exit_code=process.returncode
+                )
             else:
                 job.status = "failed"
                 job.error_message = f"Check failed with exit code {process.returncode}"
                 job.completed_at = datetime.utcnow()
-                logger.error("Borg2 check failed", job_id=job_id,
-                             exit_code=process.returncode)
+                logger.error(
+                    "Borg2 check failed", job_id=job_id, exit_code=process.returncode
+                )
 
             if log_buffer:
-                log_file = (self.log_dir /
-                            f"check_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                log_file = (
+                    self.log_dir
+                    / f"check_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                )
                 try:
                     log_file.write_text("\n".join(log_buffer))
                     job.log_file_path = str(log_file)
@@ -229,7 +259,9 @@ class CheckV2Service:
                 except Exception as e:
                     job.has_logs = False
                     job.logs = f"Failed to save logs: {e}"
-                    logger.error("Failed to save borg2 check logs", job_id=job_id, error=str(e))
+                    logger.error(
+                        "Failed to save borg2 check logs", job_id=job_id, error=str(e)
+                    )
 
             db.commit()
 

@@ -2,13 +2,14 @@
 Database migrations package
 Automatically discovers and runs numbered migration files
 """
+
 import sys
 import structlog
 from pathlib import Path
-from sqlalchemy import text
 from app.database.database import engine
 
 logger = structlog.get_logger()
+
 
 def run_migrations():
     """
@@ -32,11 +33,14 @@ def run_migrations():
             try:
                 # Import the migration module
                 import importlib
+
                 migration_module = importlib.import_module(module_name)
 
                 # Check if migration has upgrade function
-                if not hasattr(migration_module, 'upgrade'):
-                    logger.warning(f"Migration {migration_name} has no upgrade function, skipping")
+                if not hasattr(migration_module, "upgrade"):
+                    logger.warning(
+                        f"Migration {migration_name} has no upgrade function, skipping"
+                    )
                     continue
 
                 logger.info(f"Running migration: {migration_name}")

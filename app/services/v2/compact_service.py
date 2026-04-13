@@ -11,7 +11,6 @@ Both phases emit progress_percent on stderr with --progress --log-json.
 
 import asyncio
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -21,7 +20,6 @@ from app.database.database import SessionLocal
 from app.core.borg2 import _get_borg2_binary
 from app.config import settings
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
-from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 
@@ -68,8 +66,11 @@ class CompactV2Service:
             # If the job was somehow already completed/cancelled (race), bail out.
             db.refresh(job)
             if job.status not in ("running", "pending"):
-                logger.warning("Compact job already in terminal state, skipping",
-                               job_id=job_id, status=job.status)
+                logger.warning(
+                    "Compact job already in terminal state, skipping",
+                    job_id=job_id,
+                    status=job.status,
+                )
                 return
 
             env, temp_key_file = build_repository_borg_env(
@@ -84,8 +85,12 @@ class CompactV2Service:
             if repo.remote_path:
                 cmd.extend(["--remote-path", repo.remote_path])
 
-            logger.info("Starting borg2 compact", job_id=job_id, repository=repo.path,
-                        command=" ".join(cmd))
+            logger.info(
+                "Starting borg2 compact",
+                job_id=job_id,
+                repository=repo.path,
+                command=" ".join(cmd),
+            )
 
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -114,7 +119,9 @@ class CompactV2Service:
                     await asyncio.sleep(3)
                     db.refresh(job)
                     if job.status == "cancelled":
-                        logger.info("Borg2 compact cancelled, terminating", job_id=job_id)
+                        logger.info(
+                            "Borg2 compact cancelled, terminating", job_id=job_id
+                        )
                         cancelled = True
                         process.terminate()
                         try:
@@ -136,7 +143,11 @@ class CompactV2Service:
                             log_buffer.pop(0)
 
                         if line_str:
-                            logger.info("Borg2 compact output", job_id=job_id, line=line_str[:200])
+                            logger.info(
+                                "Borg2 compact output",
+                                job_id=job_id,
+                                line=line_str[:200],
+                            )
 
                         try:
                             if line_str and line_str[0] == "{":
@@ -153,7 +164,11 @@ class CompactV2Service:
 
                                     if message:
                                         progress_msg = f"{message} ({current}/{total})"
-                                        if now - last_progress_update.get(progress_msg, 0) >= PROGRESS_THROTTLE:
+                                        if (
+                                            now
+                                            - last_progress_update.get(progress_msg, 0)
+                                            >= PROGRESS_THROTTLE
+                                        ):
                                             job.progress_message = progress_msg
                                             last_progress_update[progress_msg] = now
 
@@ -183,8 +198,9 @@ class CompactV2Service:
                     db.commit()
 
             try:
-                await asyncio.gather(check_cancellation(), stream_logs(),
-                                     return_exceptions=True)
+                await asyncio.gather(
+                    check_cancellation(), stream_logs(), return_exceptions=True
+                )
             except asyncio.CancelledError:
                 cancelled = True
                 process.terminate()
@@ -205,21 +221,31 @@ class CompactV2Service:
             elif process.returncode == 1 or (100 <= process.returncode <= 127):
                 job.status = "completed_with_warnings"
                 job.progress = 100
-                job.progress_message = f"Compact completed with warnings (exit code {process.returncode})"
+                job.progress_message = (
+                    f"Compact completed with warnings (exit code {process.returncode})"
+                )
                 job.error_message = job.progress_message
                 job.completed_at = datetime.utcnow()
-                logger.warning("Borg2 compact warnings", job_id=job_id,
-                               exit_code=process.returncode)
+                logger.warning(
+                    "Borg2 compact warnings",
+                    job_id=job_id,
+                    exit_code=process.returncode,
+                )
             else:
                 job.status = "failed"
-                job.error_message = f"Compact failed with exit code {process.returncode}"
+                job.error_message = (
+                    f"Compact failed with exit code {process.returncode}"
+                )
                 job.completed_at = datetime.utcnow()
-                logger.error("Borg2 compact failed", job_id=job_id,
-                             exit_code=process.returncode)
+                logger.error(
+                    "Borg2 compact failed", job_id=job_id, exit_code=process.returncode
+                )
 
             if log_buffer:
-                log_file = (self.log_dir /
-                            f"compact_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                log_file = (
+                    self.log_dir
+                    / f"compact_job_{job_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                )
                 try:
                     log_file.write_text("\n".join(log_buffer))
                     job.log_file_path = str(log_file)
@@ -228,7 +254,9 @@ class CompactV2Service:
                 except Exception as e:
                     job.has_logs = False
                     job.logs = f"Failed to save logs: {e}"
-                    logger.error("Failed to save borg2 compact logs", job_id=job_id, error=str(e))
+                    logger.error(
+                        "Failed to save borg2 compact logs", job_id=job_id, error=str(e)
+                    )
 
             db.commit()
 

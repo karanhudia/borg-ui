@@ -101,11 +101,15 @@ class BorgRouter:
         cmd.append(f"{repository_path}::{archive_name}")
         return cmd
 
-    def build_archive_info_command(self, repository_path: str, archive_name: str) -> List[str]:
+    def build_archive_info_command(
+        self, repository_path: str, archive_name: str
+    ) -> List[str]:
         if self.is_v2:
             from app.services.v2.backup_service import backup_v2_service
 
-            return backup_v2_service.build_archive_info_command(repository_path, archive_name)
+            return backup_v2_service.build_archive_info_command(
+                repository_path, archive_name
+            )
         return ["borg", "info", "--json", f"{repository_path}::{archive_name}"]
 
     def build_repo_list_command(self, repository_path: str) -> List[str]:
@@ -151,7 +155,9 @@ class BorgRouter:
             cmd.extend(paths)
         return cmd
 
-    def build_break_lock_command(self, repository_path: str, remote_path: str = None) -> List[str]:
+    def build_break_lock_command(
+        self, repository_path: str, remote_path: str = None
+    ) -> List[str]:
         """Build the version-aware break-lock command."""
         if self.is_v2:
             from app.core.borg2 import borg2
@@ -190,7 +196,9 @@ class BorgRouter:
         cmd = ["borg", "mount"]
         if remote_path:
             cmd.extend(["--remote-path", remote_path])
-        cmd.append(f"{repository_path}::{archive_name}" if archive_name else repository_path)
+        cmd.append(
+            f"{repository_path}::{archive_name}" if archive_name else repository_path
+        )
         if mount_point:
             cmd.append(mount_point)
         cmd.extend(["-o", "allow_other", "-f"])
@@ -229,7 +237,9 @@ class BorgRouter:
             kwargs["env"] = env
         return await borg.break_lock(self.repo.path, **kwargs)
 
-    async def preview_restore(self, archive: str, paths: List[str], destination: str, env: dict = None) -> dict:
+    async def preview_restore(
+        self, archive: str, paths: List[str], destination: str, env: dict = None
+    ) -> dict:
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
@@ -253,7 +263,9 @@ class BorgRouter:
         }
         if env is not None:
             kwargs["env"] = env
-        return await borg.extract_archive(self.repo.path, archive, paths, destination, **kwargs)
+        return await borg.extract_archive(
+            self.repo.path, archive, paths, destination, **kwargs
+        )
 
     async def list_archive_contents(
         self,
@@ -292,6 +304,7 @@ class BorgRouter:
         v1: delegates to the existing update_repository_stats helper.
         """
         from app.api.repositories import update_repository_stats
+
         return await update_repository_stats(self.repo, db)
 
     async def calculate_total_size_bytes(
@@ -337,9 +350,11 @@ class BorgRouter:
         """
         if self.is_v2:
             from app.services.v2.check_service import check_v2_service
+
             await check_v2_service.execute_check(job_id, self.repo.id)
         else:
             from app.services.check_service import check_service
+
             await check_service.execute_check(job_id, self.repo.id)
 
     async def compact(self, job_id: int) -> None:
@@ -399,11 +414,15 @@ class BorgRouter:
         if self.is_v2:
             from app.services.v2.delete_archive_service import delete_archive_v2_service
 
-            await delete_archive_v2_service.execute_delete(job_id, self.repo.id, archive_name)
+            await delete_archive_v2_service.execute_delete(
+                job_id, self.repo.id, archive_name
+            )
         else:
             from app.services.delete_archive_service import delete_archive_service
 
-            await delete_archive_service.execute_delete(job_id, self.repo.id, archive_name)
+            await delete_archive_service.execute_delete(
+                job_id, self.repo.id, archive_name
+            )
 
     async def list_archives(self, env: dict = None) -> list:
         """Return the list of archives for this repository.
@@ -415,6 +434,7 @@ class BorgRouter:
         if self.is_v2:
             import json
             from app.core.borg2 import borg2
+
             result = await borg2.list_archives(
                 self.repo.path,
                 passphrase=self.repo.passphrase,
@@ -431,6 +451,7 @@ class BorgRouter:
                 return []
         else:
             from app.core.borg import borg
+
             result = await borg.list_archives(
                 self.repo.path,
                 remote_path=self.repo.remote_path,
@@ -442,7 +463,9 @@ class BorgRouter:
                 return []
             return result.get("stdout") or []
 
-    async def verify_repository(self, ssh_key_id: int = None, timeout: int = 60) -> dict:
+    async def verify_repository(
+        self, ssh_key_id: int = None, timeout: int = 60
+    ) -> dict:
         """Verify repository accessibility through the version-aware service layer."""
         if self.is_v2:
             from app.services.v2.repository_service import repository_v2_service
@@ -467,7 +490,9 @@ class BorgRouter:
             bypass_lock=getattr(self.repo, "bypass_lock", False),
         )
 
-    async def initialize_repository(self, ssh_key_id: int = None, init_timeout: int = 300) -> dict:
+    async def initialize_repository(
+        self, ssh_key_id: int = None, init_timeout: int = 300
+    ) -> dict:
         """Initialize repository through the version-aware service layer."""
         if self.is_v2:
             from app.services.v2.repository_service import repository_v2_service

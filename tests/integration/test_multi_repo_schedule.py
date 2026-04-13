@@ -14,10 +14,13 @@ try:
 except ImportError:
     from test_helpers import make_borg_env
 
+
 @pytest.mark.integration
 @pytest.mark.requires_borg
 @pytest.mark.asyncio
-async def test_multi_repo_schedule_execution_real(db_session: Session, tmp_path, borg_binary):
+async def test_multi_repo_schedule_execution_real(
+    db_session: Session, tmp_path, borg_binary
+):
     """
     Test execute_multi_repo_schedule with REAL borg repositories.
     This ensures that the session handling is correct throughout the entire lifecycle.
@@ -49,15 +52,19 @@ async def test_multi_repo_schedule_execution_real(db_session: Session, tmp_path,
         name="Real Multi Repo Job",
         cron_expression="* * * * *",
         enabled=True,
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(timezone.utc),
     )
     db_session.add(job)
     db_session.commit()
     db_session.refresh(job)
 
     # 3. Setup: Link repositories
-    link1 = ScheduledJobRepository(scheduled_job_id=job.id, repository_id=repo1.id, execution_order=0)
-    link2 = ScheduledJobRepository(scheduled_job_id=job.id, repository_id=repo2.id, execution_order=1)
+    link1 = ScheduledJobRepository(
+        scheduled_job_id=job.id, repository_id=repo1.id, execution_order=0
+    )
+    link2 = ScheduledJobRepository(
+        scheduled_job_id=job.id, repository_id=repo2.id, execution_order=1
+    )
     db_session.add(link1)
     db_session.add(link2)
     db_session.commit()
@@ -94,7 +101,9 @@ async def test_multi_repo_schedule_execution_real(db_session: Session, tmp_path,
     print(f"[TEST] Repo 2 has backup: {repo2_has_backup}")
 
     assert repo1_has_backup, "Repository 1 should have a backup"
-    assert repo2_has_backup, "Repository 2 should have a backup (failed due to session closure bug?)"
+    assert repo2_has_backup, (
+        "Repository 2 should have a backup (failed due to session closure bug?)"
+    )
 
     # 6. Verify session usage after execution
     try:

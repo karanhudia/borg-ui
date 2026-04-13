@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime
 import structlog
-from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from croniter import croniter
 from app.api.maintenance_jobs import start_background_maintenance_job
@@ -30,22 +29,28 @@ class CheckScheduler:
             # Find repositories that:
             # 1. Have check_cron_expression set (not NULL and not empty)
             # 2. Either never checked (next_scheduled_check is NULL) or due for check (next_scheduled_check <= now)
-            repos = db.query(Repository).filter(
-                Repository.check_cron_expression.isnot(None),
-                Repository.check_cron_expression != "",
-                or_(
-                    Repository.next_scheduled_check.is_(None),
-                    Repository.next_scheduled_check <= now
+            repos = (
+                db.query(Repository)
+                .filter(
+                    Repository.check_cron_expression.isnot(None),
+                    Repository.check_cron_expression != "",
+                    or_(
+                        Repository.next_scheduled_check.is_(None),
+                        Repository.next_scheduled_check <= now,
+                    ),
                 )
-            ).all()
+                .all()
+            )
 
             if not repos:
                 logger.debug("No repositories due for scheduled checks", time=now)
                 return
 
-            logger.info("Found repositories due for scheduled checks",
-                       count=len(repos),
-                       repositories=[r.name for r in repos])
+            logger.info(
+                "Found repositories due for scheduled checks",
+                count=len(repos),
+                repositories=[r.name for r in repos],
+            )
 
             for repo in repos:
                 try:
@@ -61,11 +66,13 @@ class CheckScheduler:
                         },
                     )
 
-                    logger.info("Created scheduled check job",
-                               repo_id=repo.id,
-                               repo_name=repo.name,
-                               check_job_id=check_job.id,
-                               max_duration=check_job.max_duration)
+                    logger.info(
+                        "Created scheduled check job",
+                        repo_id=repo.id,
+                        repo_name=repo.name,
+                        check_job_id=check_job.id,
+                        max_duration=check_job.max_duration,
+                    )
 
                     # Update schedule timestamps BEFORE executing (in case execution fails)
                     repo.last_scheduled_check = now
@@ -75,31 +82,39 @@ class CheckScheduler:
                         cron = croniter(repo.check_cron_expression, now)
                         repo.next_scheduled_check = cron.get_next(datetime)
                     except Exception as e:
-                        logger.error("Failed to calculate next check time",
-                                   repo_id=repo.id,
-                                   cron_expression=repo.check_cron_expression,
-                                   error=str(e))
+                        logger.error(
+                            "Failed to calculate next check time",
+                            repo_id=repo.id,
+                            cron_expression=repo.check_cron_expression,
+                            error=str(e),
+                        )
                         repo.next_scheduled_check = None
 
                     db.commit()
 
-                    logger.info("Updated check schedule",
-                               repo_id=repo.id,
-                               repo_name=repo.name,
-                               next_check=repo.next_scheduled_check,
-                               cron_expression=repo.check_cron_expression)
+                    logger.info(
+                        "Updated check schedule",
+                        repo_id=repo.id,
+                        repo_name=repo.name,
+                        next_check=repo.next_scheduled_check,
+                        cron_expression=repo.check_cron_expression,
+                    )
 
-                    logger.info("Scheduled check started",
-                               repo_id=repo.id,
-                               repo_name=repo.name,
-                               check_job_id=check_job.id,
-                               next_check=repo.next_scheduled_check)
+                    logger.info(
+                        "Scheduled check started",
+                        repo_id=repo.id,
+                        repo_name=repo.name,
+                        check_job_id=check_job.id,
+                        next_check=repo.next_scheduled_check,
+                    )
 
                 except Exception as e:
-                    logger.error("Failed to create scheduled check",
-                                repo_id=repo.id,
-                                repo_name=repo.name if repo else "Unknown",
-                                error=str(e))
+                    logger.error(
+                        "Failed to create scheduled check",
+                        repo_id=repo.id,
+                        repo_name=repo.name if repo else "Unknown",
+                        error=str(e),
+                    )
                     # Continue with other repositories even if one fails
                     continue
 

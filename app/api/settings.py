@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Optional
 from datetime import datetime
 import secrets
 import structlog
 
-from app.database.database import get_db, engine
-from app.database.models import User, SSHKey, SSHConnection, Repository, BackupJob, SystemSettings
+from app.database.database import get_db
+from app.database.models import User, Repository, SystemSettings
 from app.core.authorization import authorize_request
 from app.core.security import (
     get_current_user,
@@ -18,7 +18,6 @@ from app.core.permissions import (
     default_repository_role_for_global_role,
     normalize_repository_role_for_global_role,
 )
-from sqlalchemy import text
 from app.core.borg import BorgInterface
 from app.config import get_runtime_app_version, settings as app_settings
 from app.services.cache_service import archive_cache
@@ -39,6 +38,7 @@ DEFAULT_TIMEOUTS = {
     "backup_timeout": 3600,
     "source_size_timeout": 3600,
 }
+
 
 def get_effective_timeout(db_value, env_value, default_value):
     """
@@ -65,15 +65,18 @@ def get_effective_timeout(db_value, env_value, default_value):
         # Use default
         return (default_value, None)
 
+
 # Pydantic models for request/response
 from pydantic import BaseModel
+
 
 class UserCreate(BaseModel):
     username: str
     password: str
     email: Optional[str] = None
-    role: str = 'viewer'
+    role: str = "viewer"
     full_name: Optional[str] = None
+
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -87,12 +90,15 @@ class PasswordChange(BaseModel):
     current_password: str
     new_password: str
 
+
 class PasswordReset(BaseModel):
     new_password: str
+
 
 class UserPreferencesUpdate(BaseModel):
     analytics_enabled: Optional[bool] = None
     analytics_consent_given: Optional[bool] = None
+
 
 class SystemSettingsUpdate(BaseModel):
     # Operation timeouts (in seconds)
@@ -113,10 +119,18 @@ class SystemSettingsUpdate(BaseModel):
     auto_cleanup: Optional[bool] = None
     cleanup_retention_days: Optional[int] = None
     use_new_wizard: Optional[bool] = None
-    bypass_lock_on_info: Optional[bool] = None  # Use --bypass-lock for all borg info commands (beta)
-    bypass_lock_on_list: Optional[bool] = None  # Use --bypass-lock for all borg list commands (beta)
-    show_restore_tab: Optional[bool] = None  # Show legacy Restore tab in navigation (beta)
-    stats_refresh_interval_minutes: Optional[int] = None  # How often to refresh repository stats (0 = disabled)
+    bypass_lock_on_info: Optional[bool] = (
+        None  # Use --bypass-lock for all borg info commands (beta)
+    )
+    bypass_lock_on_list: Optional[bool] = (
+        None  # Use --bypass-lock for all borg list commands (beta)
+    )
+    show_restore_tab: Optional[bool] = (
+        None  # Show legacy Restore tab in navigation (beta)
+    )
+    stats_refresh_interval_minutes: Optional[int] = (
+        None  # How often to refresh repository stats (0 = disabled)
+    )
 
     # MQTT settings
     mqtt_enabled: Optional[bool] = None
@@ -143,10 +157,10 @@ class SystemSettingsUpdate(BaseModel):
     deployment_type: Optional[str] = None
     enterprise_name: Optional[str] = None
 
+
 @router.get("/system")
 async def get_system_settings(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get system settings"""
     try:
@@ -163,7 +177,7 @@ async def get_system_settings(
                 auto_cleanup=True,
                 cleanup_retention_days=90,
                 use_new_wizard=False,  # Beta features disabled by default
-                show_restore_tab=False  # Legacy Restore tab hidden by default
+                show_restore_tab=False,  # Legacy Restore tab hidden by default
             )
             db.add(settings)
             db.commit()
@@ -171,19 +185,30 @@ async def get_system_settings(
 
         # Get log storage statistics
         from app.services.log_manager import log_manager
+
         try:
             log_storage = log_manager.calculate_log_storage()
             usage_percent = 0
             if settings.log_max_total_size_mb and settings.log_max_total_size_mb > 0:
-                usage_percent = min(100, int((log_storage["total_size_mb"] / settings.log_max_total_size_mb) * 100))
+                usage_percent = min(
+                    100,
+                    int(
+                        (log_storage["total_size_mb"] / settings.log_max_total_size_mb)
+                        * 100
+                    ),
+                )
 
             log_storage_info = {
                 "total_size_mb": log_storage["total_size_mb"],
                 "file_count": log_storage["file_count"],
-                "oldest_log_date": log_storage["oldest_log_date"].isoformat() if log_storage["oldest_log_date"] else None,
-                "newest_log_date": log_storage["newest_log_date"].isoformat() if log_storage["newest_log_date"] else None,
+                "oldest_log_date": log_storage["oldest_log_date"].isoformat()
+                if log_storage["oldest_log_date"]
+                else None,
+                "newest_log_date": log_storage["newest_log_date"].isoformat()
+                if log_storage["newest_log_date"]
+                else None,
                 "usage_percent": usage_percent,
-                "files_by_type": log_storage["files_by_type"]
+                "files_by_type": log_storage["files_by_type"],
             }
         except Exception as e:
             logger.warning("Failed to calculate log storage", error=str(e))
@@ -193,39 +218,39 @@ async def get_system_settings(
                 "oldest_log_date": None,
                 "newest_log_date": None,
                 "usage_percent": 0,
-                "files_by_type": {}
+                "files_by_type": {},
             }
 
         # Calculate effective timeout values and their sources
         mount_timeout, mount_source = get_effective_timeout(
             settings.mount_timeout,
             app_settings.borg_mount_timeout,
-            DEFAULT_TIMEOUTS["mount_timeout"]
+            DEFAULT_TIMEOUTS["mount_timeout"],
         )
         info_timeout, info_source = get_effective_timeout(
             settings.info_timeout,
             app_settings.borg_info_timeout,
-            DEFAULT_TIMEOUTS["info_timeout"]
+            DEFAULT_TIMEOUTS["info_timeout"],
         )
         list_timeout, list_source = get_effective_timeout(
             settings.list_timeout,
             app_settings.borg_list_timeout,
-            DEFAULT_TIMEOUTS["list_timeout"]
+            DEFAULT_TIMEOUTS["list_timeout"],
         )
         init_timeout, init_source = get_effective_timeout(
             settings.init_timeout,
             app_settings.borg_init_timeout,
-            DEFAULT_TIMEOUTS["init_timeout"]
+            DEFAULT_TIMEOUTS["init_timeout"],
         )
         backup_timeout, backup_source = get_effective_timeout(
             settings.backup_timeout,
             app_settings.backup_timeout,
-            DEFAULT_TIMEOUTS["backup_timeout"]
+            DEFAULT_TIMEOUTS["backup_timeout"],
         )
         source_size_timeout, source_size_source = get_effective_timeout(
             settings.source_size_timeout,
             app_settings.source_size_timeout,
-            DEFAULT_TIMEOUTS["source_size_timeout"]
+            DEFAULT_TIMEOUTS["source_size_timeout"],
         )
 
         return {
@@ -261,11 +286,12 @@ async def get_system_settings(
                 "bypass_lock_on_info": settings.bypass_lock_on_info,
                 "bypass_lock_on_list": settings.bypass_lock_on_list,
                 "show_restore_tab": settings.show_restore_tab,
-                "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes if settings.stats_refresh_interval_minutes is not None else 60,
+                "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes
+                if settings.stats_refresh_interval_minutes is not None
+                else 60,
                 "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
                 "borg_version": borg.get_version(),
                 "app_version": get_runtime_app_version(),
-
                 # MQTT settings
                 "mqtt_enabled": settings.mqtt_enabled,
                 "mqtt_broker_url": settings.mqtt_broker_url,
@@ -279,22 +305,35 @@ async def get_system_settings(
                 "mqtt_tls_client_cert": settings.mqtt_tls_client_cert,
                 "mqtt_tls_client_key": settings.mqtt_tls_client_key,
                 "mqtt_beta_enabled": settings.mqtt_beta_enabled,
-                "mqtt_password_set": bool(settings.mqtt_password),  # Indicate if password is set (without exposing it)
-                "metrics_enabled": settings.metrics_enabled if settings.metrics_enabled is not None else False,
-                "metrics_require_auth": settings.metrics_require_auth if settings.metrics_require_auth is not None else False,
+                "mqtt_password_set": bool(
+                    settings.mqtt_password
+                ),  # Indicate if password is set (without exposing it)
+                "metrics_enabled": settings.metrics_enabled
+                if settings.metrics_enabled is not None
+                else False,
+                "metrics_require_auth": settings.metrics_require_auth
+                if settings.metrics_require_auth is not None
+                else False,
                 "metrics_token_set": bool(settings.metrics_token),
             },
-            "log_storage": log_storage_info
+            "log_storage": log_storage_info,
         }
     except Exception as e:
         logger.error("Failed to get system settings", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedRetrieveSystemSettings", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedRetrieveSystemSettings",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.put("/system")
 async def update_system_settings(
     settings_update: SystemSettingsUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Update system settings (admin only)"""
     try:
@@ -306,18 +345,22 @@ async def update_system_settings(
             if settings_update.log_save_policy not in valid_policies:
                 raise HTTPException(
                     status_code=400,
-                    detail={"key": "backend.errors.settings.invalidLogSavePolicy", "params": {"policies": ', '.join(valid_policies)}}
+                    detail={
+                        "key": "backend.errors.settings.invalidLogSavePolicy",
+                        "params": {"policies": ", ".join(valid_policies)},
+                    },
                 )
 
         if settings_update.log_max_total_size_mb is not None:
             if settings_update.log_max_total_size_mb < 10:
                 raise HTTPException(
                     status_code=400,
-                    detail={"key": "backend.errors.settings.logSizeTooSmall"}
+                    detail={"key": "backend.errors.settings.logSizeTooSmall"},
                 )
 
             # Check if new limit is below current usage
             from app.services.log_manager import log_manager
+
             try:
                 log_storage = log_manager.calculate_log_storage()
                 if log_storage["total_size_mb"] > settings_update.log_max_total_size_mb:
@@ -326,7 +369,9 @@ async def update_system_settings(
                         f"({settings_update.log_max_total_size_mb} MB). Consider running log cleanup."
                     )
             except Exception as e:
-                logger.warning("Failed to check log storage for validation", error=str(e))
+                logger.warning(
+                    "Failed to check log storage for validation", error=str(e)
+                )
 
         settings = db.query(SystemSettings).first()
         if not settings:
@@ -337,32 +382,50 @@ async def update_system_settings(
         # Operation timeouts - save NULL if value equals default OR env value (so env/default can be used)
         # This ensures "from env" shows correctly when value matches env var
         if settings_update.mount_timeout is not None:
-            if settings_update.mount_timeout in (DEFAULT_TIMEOUTS["mount_timeout"], app_settings.borg_mount_timeout):
+            if settings_update.mount_timeout in (
+                DEFAULT_TIMEOUTS["mount_timeout"],
+                app_settings.borg_mount_timeout,
+            ):
                 settings.mount_timeout = None
             else:
                 settings.mount_timeout = settings_update.mount_timeout
         if settings_update.info_timeout is not None:
-            if settings_update.info_timeout in (DEFAULT_TIMEOUTS["info_timeout"], app_settings.borg_info_timeout):
+            if settings_update.info_timeout in (
+                DEFAULT_TIMEOUTS["info_timeout"],
+                app_settings.borg_info_timeout,
+            ):
                 settings.info_timeout = None
             else:
                 settings.info_timeout = settings_update.info_timeout
         if settings_update.list_timeout is not None:
-            if settings_update.list_timeout in (DEFAULT_TIMEOUTS["list_timeout"], app_settings.borg_list_timeout):
+            if settings_update.list_timeout in (
+                DEFAULT_TIMEOUTS["list_timeout"],
+                app_settings.borg_list_timeout,
+            ):
                 settings.list_timeout = None
             else:
                 settings.list_timeout = settings_update.list_timeout
         if settings_update.init_timeout is not None:
-            if settings_update.init_timeout in (DEFAULT_TIMEOUTS["init_timeout"], app_settings.borg_init_timeout):
+            if settings_update.init_timeout in (
+                DEFAULT_TIMEOUTS["init_timeout"],
+                app_settings.borg_init_timeout,
+            ):
                 settings.init_timeout = None
             else:
                 settings.init_timeout = settings_update.init_timeout
         if settings_update.backup_timeout is not None:
-            if settings_update.backup_timeout in (DEFAULT_TIMEOUTS["backup_timeout"], app_settings.backup_timeout):
+            if settings_update.backup_timeout in (
+                DEFAULT_TIMEOUTS["backup_timeout"],
+                app_settings.backup_timeout,
+            ):
                 settings.backup_timeout = None
             else:
                 settings.backup_timeout = settings_update.backup_timeout
         if settings_update.source_size_timeout is not None:
-            if settings_update.source_size_timeout in (DEFAULT_TIMEOUTS["source_size_timeout"], app_settings.source_size_timeout):
+            if settings_update.source_size_timeout in (
+                DEFAULT_TIMEOUTS["source_size_timeout"],
+                app_settings.source_size_timeout,
+            ):
                 settings.source_size_timeout = None
             else:
                 settings.source_size_timeout = settings_update.source_size_timeout
@@ -394,7 +457,9 @@ async def update_system_settings(
         if settings_update.show_restore_tab is not None:
             settings.show_restore_tab = settings_update.show_restore_tab
         if settings_update.stats_refresh_interval_minutes is not None:
-            settings.stats_refresh_interval_minutes = settings_update.stats_refresh_interval_minutes
+            settings.stats_refresh_interval_minutes = (
+                settings_update.stats_refresh_interval_minutes
+            )
 
         # MQTT settings
         if settings_update.mqtt_beta_enabled is not None:
@@ -443,10 +508,7 @@ async def update_system_settings(
         if settings_update.rotate_metrics_token:
             settings.metrics_token = secrets.token_urlsafe(32)
             generated_metrics_token = settings.metrics_token
-        elif (
-            settings.metrics_require_auth
-            and not settings.metrics_token
-        ):
+        elif settings.metrics_require_auth and not settings.metrics_token:
             settings.metrics_token = secrets.token_urlsafe(32)
             generated_metrics_token = settings.metrics_token
 
@@ -455,10 +517,10 @@ async def update_system_settings(
             settings.metrics_require_auth = False
 
         if settings_update.deployment_type is not None:
-            if settings_update.deployment_type not in ('individual', 'enterprise'):
+            if settings_update.deployment_type not in ("individual", "enterprise"):
                 raise HTTPException(
                     status_code=400,
-                    detail={"key": "backend.errors.settings.invalidDeploymentType"}
+                    detail={"key": "backend.errors.settings.invalidDeploymentType"},
                 )
             settings.deployment_type = settings_update.deployment_type
 
@@ -472,7 +534,10 @@ async def update_system_settings(
         # Reconfigure MQTT runtime immediately so in-memory enabled state tracks
         # changes to both mqtt_enabled and mqtt_beta_enabled without restart.
         try:
-            from app.services.mqtt_service import mqtt_service, build_mqtt_runtime_config
+            from app.services.mqtt_service import (
+                mqtt_service,
+                build_mqtt_runtime_config,
+            )
 
             mqtt_config = build_mqtt_runtime_config(settings)
             mqtt_service.configure(mqtt_config)
@@ -480,13 +545,15 @@ async def update_system_settings(
             if mqtt_config["enabled"]:
                 mqtt_service.sync_state_with_db(db, reason="settings_update")
         except Exception as mqtt_error:
-            logger.warning("Failed to apply MQTT runtime reconfiguration", error=str(mqtt_error))
+            logger.warning(
+                "Failed to apply MQTT runtime reconfiguration", error=str(mqtt_error)
+            )
 
         logger.info("System settings updated", user=current_user.username)
 
         response = {
             "success": True,
-            "message": "backend.success.settings.systemSettingsUpdated"
+            "message": "backend.success.settings.systemSettingsUpdated",
         }
         if generated_metrics_token:
             response["generated_metrics_token"] = generated_metrics_token
@@ -499,7 +566,14 @@ async def update_system_settings(
         raise
     except Exception as e:
         logger.error("Failed to update system settings", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdateSystemSettings", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedUpdateSystemSettings",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 async def _run_stats_refresh_background(repo_ids: list, username: str):
     """Background task to refresh stats for all repositories"""
@@ -522,10 +596,12 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
                 else:
                     error_count += 1
             except Exception as e:
-                logger.error("Error refreshing stats for repository",
-                           repo_id=repo.id,
-                           repo_name=repo.name,
-                           error=str(e))
+                logger.error(
+                    "Error refreshing stats for repository",
+                    repo_id=repo.id,
+                    repo_name=repo.name,
+                    error=str(e),
+                )
                 error_count += 1
 
         # Update last_stats_refresh timestamp
@@ -534,10 +610,12 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
             settings.last_stats_refresh = datetime.utcnow()
             db.commit()
 
-        logger.info("Background stats refresh completed",
-                   user=username,
-                   success=success_count,
-                   errors=error_count)
+        logger.info(
+            "Background stats refresh completed",
+            user=username,
+            success=success_count,
+            errors=error_count,
+        )
     except Exception as e:
         logger.error("Background stats refresh failed", error=str(e))
     finally:
@@ -546,8 +624,7 @@ async def _run_stats_refresh_background(repo_ids: list, username: str):
 
 @router.post("/refresh-stats")
 async def refresh_all_stats(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Manually trigger a refresh of all repository statistics.
@@ -567,28 +644,35 @@ async def refresh_all_stats(
             return {
                 "success": True,
                 "message": "backend.success.settings.noRepositoriesToRefresh",
-                "repository_count": 0
+                "repository_count": 0,
             }
 
         # Start background task
-        asyncio.create_task(_run_stats_refresh_background(repo_ids, current_user.username))
+        asyncio.create_task(
+            _run_stats_refresh_background(repo_ids, current_user.username)
+        )
 
         return {
             "success": True,
             "message": {
                 "key": "backend.success.settings.statsRefreshStarted",
-                "params": {"count": len(repo_ids)}
+                "params": {"count": len(repo_ids)},
             },
-            "repository_count": len(repo_ids)
+            "repository_count": len(repo_ids),
         }
     except Exception as e:
         logger.error("Failed to start stats refresh", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedStartStatsRefresh", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedStartStatsRefresh",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.get("/users")
-async def get_users(
-    db: Session = Depends(get_db)
-):
+async def get_users(db: Session = Depends(get_db)):
     """Get all users (admin only)"""
     try:
         users = db.query(User).all()
@@ -604,20 +688,27 @@ async def get_users(
                     "role": user.role,
                     "all_repositories_role": user.all_repositories_role,
                     "created_at": user.created_at,
-                    "last_login": user.last_login
+                    "last_login": user.last_login,
                 }
                 for user in users
-            ]
+            ],
         }
     except Exception as e:
         logger.error("Failed to get users", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedRetrieveUsers", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedRetrieveUsers",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.post("/users")
 async def create_user(
     user_data: UserCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Create a new user (admin only)"""
     try:
@@ -632,18 +723,26 @@ async def create_user(
                     "key": "backend.errors.plan.userLimitReached",
                     "current": current_plan.value,
                     "limit": limit,
-                }
+                },
             )
 
         # Check if username already exists
-        existing_user = db.query(User).filter(User.username == user_data.username).first()
+        existing_user = (
+            db.query(User).filter(User.username == user_data.username).first()
+        )
         if existing_user:
-            raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.usernameAlreadyExists"})
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.settings.usernameAlreadyExists"},
+            )
 
         # Check if email already exists
         existing_email = db.query(User).filter(User.email == user_data.email).first()
         if existing_email:
-            raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.emailAlreadyExists"})
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.settings.emailAlreadyExists"},
+            )
 
         # Create new user
         hashed_password = get_password_hash(user_data.password)
@@ -653,7 +752,9 @@ async def create_user(
             email=user_data.email,
             password_hash=hashed_password,
             role=user_data.role,
-            all_repositories_role=default_repository_role_for_global_role(user_data.role),
+            all_repositories_role=default_repository_role_for_global_role(
+                user_data.role
+            ),
             is_active=True,
         )
 
@@ -661,7 +762,11 @@ async def create_user(
         db.commit()
         db.refresh(new_user)
 
-        logger.info("User created", username=user_data.username, created_by=current_user.username)
+        logger.info(
+            "User created",
+            username=user_data.username,
+            created_by=current_user.username,
+        )
 
         return {
             "success": True,
@@ -674,36 +779,49 @@ async def create_user(
                 "is_active": new_user.is_active,
                 "role": new_user.role,
                 "all_repositories_role": new_user.all_repositories_role,
-            }
+            },
         }
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to create user", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedCreateUser", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedCreateUser",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.put("/users/{user_id}")
 async def update_user(
     user_id: int,
     user_data: UserUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Update user (admin only)"""
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.settings.userNotFound"})
+            raise HTTPException(
+                status_code=404, detail={"key": "backend.errors.settings.userNotFound"}
+            )
 
         # Update user fields
         if user_data.username is not None:
             # Check if username already exists
-            existing_user = db.query(User).filter(
-                User.username == user_data.username,
-                User.id != user_id
-            ).first()
+            existing_user = (
+                db.query(User)
+                .filter(User.username == user_data.username, User.id != user_id)
+                .first()
+            )
             if existing_user:
-                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.usernameAlreadyExists"})
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.settings.usernameAlreadyExists"},
+                )
             user.username = user_data.username
 
         if user_data.full_name is not None:
@@ -711,12 +829,16 @@ async def update_user(
 
         if user_data.email is not None:
             # Check if email already exists
-            existing_email = db.query(User).filter(
-                User.email == user_data.email,
-                User.id != user_id
-            ).first()
+            existing_email = (
+                db.query(User)
+                .filter(User.email == user_data.email, User.id != user_id)
+                .first()
+            )
             if existing_email:
-                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.emailAlreadyExists"})
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.settings.emailAlreadyExists"},
+                )
             user.email = user_data.email
 
         if user_data.is_active is not None:
@@ -734,113 +856,148 @@ async def update_user(
 
         logger.info("User updated", user_id=user_id, updated_by=current_user.username)
 
-        return {
-            "success": True,
-            "message": "backend.success.settings.userUpdated"
-        }
+        return {"success": True, "message": "backend.success.settings.userUpdated"}
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to update user", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdateUser", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedUpdateUser",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.delete("/users/{user_id}")
 async def delete_user(
     user_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Delete user (admin only)"""
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.settings.userNotFound"})
+            raise HTTPException(
+                status_code=404, detail={"key": "backend.errors.settings.userNotFound"}
+            )
 
         # Prevent deleting the last admin user
         if user.is_admin:
-            admin_count = db.query(User).filter(User.role == 'admin').count()
+            admin_count = db.query(User).filter(User.role == "admin").count()
             if admin_count <= 1:
-                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.cannotDeleteLastAdmin"})
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.settings.cannotDeleteLastAdmin"},
+                )
 
         # Prevent deleting yourself
         if user.id == current_user.id:
-            raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.cannotDeleteOwnAccount"})
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.settings.cannotDeleteOwnAccount"},
+            )
 
         db.delete(user)
         db.commit()
 
         logger.info("User deleted", user_id=user_id, deleted_by=current_user.username)
 
-        return {
-            "success": True,
-            "message": "backend.success.settings.userDeleted"
-        }
+        return {"success": True, "message": "backend.success.settings.userDeleted"}
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to delete user", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedDeleteUser", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedDeleteUser",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.post("/users/{user_id}/reset-password")
 async def reset_user_password(
     user_id: int,
     password_data: PasswordReset,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Reset user password (admin only)"""
     try:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.settings.userNotFound"})
+            raise HTTPException(
+                status_code=404, detail={"key": "backend.errors.settings.userNotFound"}
+            )
 
         hashed_password = get_password_hash(password_data.new_password)
         user.password_hash = hashed_password
         user.updated_at = datetime.utcnow()
         db.commit()
 
-        logger.info("User password reset", user_id=user_id, reset_by=current_user.username)
+        logger.info(
+            "User password reset", user_id=user_id, reset_by=current_user.username
+        )
 
-        return {
-            "success": True,
-            "message": "backend.success.settings.passwordReset"
-        }
+        return {"success": True, "message": "backend.success.settings.passwordReset"}
     except HTTPException:
         raise  # Re-raise HTTP exceptions to preserve status codes
     except Exception as e:
         logger.error("Failed to reset user password", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedResetPassword", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedResetPassword",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.post("/change-password")
 async def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Change current user's password"""
     try:
         # Verify current password
-        if not verify_password(password_data.current_password, current_user.password_hash):
-            raise HTTPException(status_code=400, detail={"key": "backend.errors.auth.currentPasswordIncorrect"})
+        if not verify_password(
+            password_data.current_password, current_user.password_hash
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
+            )
 
         # Update password
         hashed_password = get_password_hash(password_data.new_password)
         current_user.password_hash = hashed_password
-        current_user.must_change_password = False  # Clear the flag after password change
+        current_user.must_change_password = (
+            False  # Clear the flag after password change
+        )
         current_user.updated_at = datetime.utcnow()
         db.commit()
 
         logger.info("Password changed", username=current_user.username)
 
-        return {
-            "success": True,
-            "message": "backend.success.settings.passwordChanged"
-        }
+        return {"success": True, "message": "backend.success.settings.passwordChanged"}
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to change password", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedChangePassword", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedChangePassword",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.get("/profile")
 async def get_profile(
@@ -849,7 +1006,7 @@ async def get_profile(
 ):
     """Get current user's profile"""
     settings = db.query(SystemSettings).first()
-    deployment_type = settings.deployment_type if settings else 'individual'
+    deployment_type = settings.deployment_type if settings else "individual"
     enterprise_name = settings.enterprise_name if settings else None
 
     return {
@@ -867,26 +1024,33 @@ async def get_profile(
             "last_login": current_user.last_login,
             "deployment_type": deployment_type,
             "enterprise_name": enterprise_name,
-        }
+        },
     }
+
 
 @router.put("/profile")
 async def update_profile(
     profile_data: UserUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Update current user's profile"""
     try:
         # Update user fields
         if profile_data.username is not None:
             # Check if username already exists
-            existing_user = db.query(User).filter(
-                User.username == profile_data.username,
-                User.id != current_user.id
-            ).first()
+            existing_user = (
+                db.query(User)
+                .filter(
+                    User.username == profile_data.username, User.id != current_user.id
+                )
+                .first()
+            )
             if existing_user:
-                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.usernameAlreadyExists"})
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.settings.usernameAlreadyExists"},
+                )
             current_user.username = profile_data.username
 
         if profile_data.full_name is not None:
@@ -894,12 +1058,16 @@ async def update_profile(
 
         if profile_data.email is not None:
             # Check if email already exists
-            existing_email = db.query(User).filter(
-                User.email == profile_data.email,
-                User.id != current_user.id
-            ).first()
+            existing_email = (
+                db.query(User)
+                .filter(User.email == profile_data.email, User.id != current_user.id)
+                .first()
+            )
             if existing_email:
-                raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.emailAlreadyExists"})
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.settings.emailAlreadyExists"},
+                )
             current_user.email = profile_data.email
 
         current_user.updated_at = datetime.utcnow()
@@ -907,15 +1075,19 @@ async def update_profile(
 
         logger.info("Profile updated", username=current_user.username)
 
-        return {
-            "success": True,
-            "message": "backend.success.settings.profileUpdated"
-        }
+        return {"success": True, "message": "backend.success.settings.profileUpdated"}
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to update profile", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdateProfile", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedUpdateProfile",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.get("/preferences")
 async def get_preferences(current_user: User = Depends(get_current_user)):
@@ -923,16 +1095,21 @@ async def get_preferences(current_user: User = Depends(get_current_user)):
     return {
         "success": True,
         "preferences": {
-            "analytics_enabled": current_user.analytics_enabled if hasattr(current_user, 'analytics_enabled') else True,
-            "analytics_consent_given": current_user.analytics_consent_given if hasattr(current_user, 'analytics_consent_given') else False
-        }
+            "analytics_enabled": current_user.analytics_enabled
+            if hasattr(current_user, "analytics_enabled")
+            else True,
+            "analytics_consent_given": current_user.analytics_consent_given
+            if hasattr(current_user, "analytics_consent_given")
+            else False,
+        },
     }
+
 
 @router.put("/preferences")
 async def update_preferences(
     preferences: UserPreferencesUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Update current user's preferences"""
     try:
@@ -944,22 +1121,31 @@ async def update_preferences(
         current_user.updated_at = datetime.utcnow()
         db.commit()
 
-        logger.info("User preferences updated", username=current_user.username,
-                   analytics_enabled=preferences.analytics_enabled,
-                   analytics_consent_given=preferences.analytics_consent_given)
+        logger.info(
+            "User preferences updated",
+            username=current_user.username,
+            analytics_enabled=preferences.analytics_enabled,
+            analytics_consent_given=preferences.analytics_consent_given,
+        )
 
         return {
             "success": True,
-            "message": "backend.success.settings.preferencesUpdated"
+            "message": "backend.success.settings.preferencesUpdated",
         }
     except Exception as e:
         logger.error("Failed to update preferences", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdatePreferences", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedUpdatePreferences",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.post("/system/cleanup")
 async def cleanup_system(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Run system cleanup (admin only)"""
     try:
@@ -974,7 +1160,7 @@ async def cleanup_system(
                 email_notifications=False,
                 webhook_url="",
                 auto_cleanup=True,
-                cleanup_retention_days=90
+                cleanup_retention_days=90,
             )
             db.add(settings)
             db.commit()
@@ -984,7 +1170,7 @@ async def cleanup_system(
         cleanup_results = {
             "logs_cleaned": 0,
             "old_backups_removed": 0,
-            "temp_files_cleaned": 0
+            "temp_files_cleaned": 0,
         }
 
         # TODO: Implement actual cleanup logic
@@ -992,22 +1178,32 @@ async def cleanup_system(
         # - Remove old backup archives based on cleanup_retention_days
         # - Clean temporary files
 
-        logger.info("System cleanup completed", user=current_user.username, results=cleanup_results)
+        logger.info(
+            "System cleanup completed",
+            user=current_user.username,
+            results=cleanup_results,
+        )
 
         return {
             "success": True,
             "message": "backend.success.settings.systemCleanupCompleted",
-            "results": cleanup_results
+            "results": cleanup_results,
         }
     except Exception as e:
         error_msg = str(e) if str(e) else "Unknown error occurred"
         logger.error("Failed to run system cleanup", error=error_msg)
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedRunSystemCleanup", "params": {"error": error_msg}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedRunSystemCleanup",
+                "params": {"error": error_msg},
+            },
+        )
+
 
 @router.get("/system/logs/storage")
 async def get_log_storage_stats(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Get detailed log storage statistics.
@@ -1034,7 +1230,13 @@ async def get_log_storage_stats(
         # Calculate usage percentage
         usage_percent = 0
         if settings.log_max_total_size_mb and settings.log_max_total_size_mb > 0:
-            usage_percent = min(100, int((log_storage["total_size_mb"] / settings.log_max_total_size_mb) * 100))
+            usage_percent = min(
+                100,
+                int(
+                    (log_storage["total_size_mb"] / settings.log_max_total_size_mb)
+                    * 100
+                ),
+            )
 
         return {
             "success": True,
@@ -1042,22 +1244,32 @@ async def get_log_storage_stats(
                 "total_size_bytes": log_storage["total_size_bytes"],
                 "total_size_mb": log_storage["total_size_mb"],
                 "file_count": log_storage["file_count"],
-                "oldest_log_date": log_storage["oldest_log_date"].isoformat() if log_storage["oldest_log_date"] else None,
-                "newest_log_date": log_storage["newest_log_date"].isoformat() if log_storage["newest_log_date"] else None,
+                "oldest_log_date": log_storage["oldest_log_date"].isoformat()
+                if log_storage["oldest_log_date"]
+                else None,
+                "newest_log_date": log_storage["newest_log_date"].isoformat()
+                if log_storage["newest_log_date"]
+                else None,
                 "files_by_type": log_storage["files_by_type"],
                 "usage_percent": usage_percent,
                 "limit_mb": settings.log_max_total_size_mb,
-                "retention_days": settings.log_retention_days
-            }
+                "retention_days": settings.log_retention_days,
+            },
         }
     except Exception as e:
         logger.error("Failed to get log storage stats", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedGetLogStorageStats", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedGetLogStorageStats",
+                "params": {"error": str(e)},
+            },
+        )
+
 
 @router.post("/system/logs/cleanup")
 async def manual_log_cleanup(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Manually trigger log cleanup based on current settings.
@@ -1082,26 +1294,30 @@ async def manual_log_cleanup(
         max_age_days = settings.log_retention_days or 30
         max_total_size_mb = settings.log_max_total_size_mb or 500
 
-        logger.info("Manual log cleanup triggered",
-                   user=current_user.username,
-                   max_age_days=max_age_days,
-                   max_total_size_mb=max_total_size_mb)
+        logger.info(
+            "Manual log cleanup triggered",
+            user=current_user.username,
+            max_age_days=max_age_days,
+            max_total_size_mb=max_total_size_mb,
+        )
 
         # Run cleanup
         result = log_manager.cleanup_logs_combined(
             db=db,
             max_age_days=max_age_days,
             max_total_size_mb=max_total_size_mb,
-            dry_run=False
+            dry_run=False,
         )
 
         # Get updated storage stats
         log_storage = log_manager.calculate_log_storage()
 
-        logger.info("Manual log cleanup completed",
-                   user=current_user.username,
-                   deleted_count=result["total_deleted_count"],
-                   size_freed_mb=result["total_deleted_size_mb"])
+        logger.info(
+            "Manual log cleanup completed",
+            user=current_user.username,
+            deleted_count=result["total_deleted_count"],
+            size_freed_mb=result["total_deleted_size_mb"],
+        )
 
         return {
             "success": result["success"],
@@ -1110,36 +1326,44 @@ async def manual_log_cleanup(
                 "age_cleanup": {
                     "deleted_count": result["age_cleanup"]["deleted_count"],
                     "deleted_size_mb": result["age_cleanup"]["deleted_size_mb"],
-                    "skipped_count": result["age_cleanup"]["skipped_count"]
+                    "skipped_count": result["age_cleanup"]["skipped_count"],
                 },
                 "size_cleanup": {
                     "deleted_count": result["size_cleanup"]["deleted_count"],
                     "deleted_size_mb": result["size_cleanup"]["deleted_size_mb"],
                     "skipped_count": result["size_cleanup"]["skipped_count"],
-                    "final_size_mb": result["size_cleanup"]["final_size_mb"]
+                    "final_size_mb": result["size_cleanup"]["final_size_mb"],
                 },
                 "total_deleted_count": result["total_deleted_count"],
                 "total_deleted_size_mb": result["total_deleted_size_mb"],
-                "errors": result["total_errors"]
+                "errors": result["total_errors"],
             },
             "current_storage": {
                 "total_size_mb": log_storage["total_size_mb"],
-                "file_count": log_storage["file_count"]
-            }
+                "file_count": log_storage["file_count"],
+            },
         }
     except Exception as e:
-        logger.error("Failed to run manual log cleanup", user=current_user.username, error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedRunLogCleanup", "params": {"error": str(e)}})
+        logger.error(
+            "Failed to run manual log cleanup", user=current_user.username, error=str(e)
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedRunLogCleanup",
+                "params": {"error": str(e)},
+            },
+        )
 
 
 # ============================================================================
 # Cache Management Endpoints
 # ============================================================================
 
+
 @router.get("/cache/stats")
 async def get_cache_stats(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Get cache statistics and configuration.
@@ -1174,14 +1398,22 @@ async def get_cache_stats(
 
     except Exception as e:
         logger.error("Failed to get cache stats", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedGetCacheStats", "params": {"error": str(e)}})
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedGetCacheStats",
+                "params": {"error": str(e)},
+            },
+        )
 
 
 @router.post("/cache/clear")
 async def clear_cache(
-    repository_id: Optional[int] = Query(None, description="Repository ID to clear cache for (or None for all)"),
+    repository_id: Optional[int] = Query(
+        None, description="Repository ID to clear cache for (or None for all)"
+    ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Clear archive cache.
@@ -1197,54 +1429,87 @@ async def clear_cache(
     try:
         if repository_id is not None:
             # Validate repository exists
-            repository = db.query(Repository).filter(Repository.id == repository_id).first()
+            repository = (
+                db.query(Repository).filter(Repository.id == repository_id).first()
+            )
             if not repository:
-                raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.repositoryNotFound"})
+                raise HTTPException(
+                    status_code=404,
+                    detail={"key": "backend.errors.repo.repositoryNotFound"},
+                )
 
             # Clear cache for specific repository
             cleared_count = await archive_cache.clear_repository(repository_id)
-            logger.info("Cache cleared for repository",
-                       user=current_user.username,
-                       repository_id=repository_id,
-                       cleared_count=cleared_count)
+            logger.info(
+                "Cache cleared for repository",
+                user=current_user.username,
+                repository_id=repository_id,
+                cleared_count=cleared_count,
+            )
 
             return {
                 "cleared_count": cleared_count,
                 "repository_id": repository_id,
-                "message": "backend.success.settings.cacheCleared"
+                "message": "backend.success.settings.cacheCleared",
             }
         else:
             # Clear all cache
             cleared_count = await archive_cache.clear_all()
-            logger.info("Cache cleared (all repositories)",
-                       user=current_user.username,
-                       cleared_count=cleared_count)
+            logger.info(
+                "Cache cleared (all repositories)",
+                user=current_user.username,
+                cleared_count=cleared_count,
+            )
 
             return {
                 "cleared_count": cleared_count,
                 "repository_id": None,
-                "message": "backend.success.settings.allCacheCleared"
+                "message": "backend.success.settings.allCacheCleared",
             }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to clear cache",
-                    user=current_user.username,
-                    repository_id=repository_id,
-                    error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedClearCache", "params": {"error": str(e)}})
+        logger.error(
+            "Failed to clear cache",
+            user=current_user.username,
+            repository_id=repository_id,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedClearCache",
+                "params": {"error": str(e)},
+            },
+        )
 
 
 @router.put("/cache/settings")
 async def update_cache_settings(
-    cache_ttl_minutes: Optional[int] = Query(None, ge=1, le=10080, description="Cache TTL in minutes (1-10080)"),
-    cache_max_size_mb: Optional[int] = Query(None, ge=100, le=10240, description="Max cache size in MB (100-10240)"),
-    redis_url: Optional[str] = Query(None, description="External Redis URL (e.g., redis://host:6379/0)"),
-    browse_max_items: Optional[int] = Query(None, ge=100_000, le=50_000_000, description="Max items to load when browsing archives (100k-50M)"),
-    browse_max_memory_mb: Optional[int] = Query(None, ge=100, le=16384, description="Max memory for archive browsing in MB (100MB-16GB)"),
+    cache_ttl_minutes: Optional[int] = Query(
+        None, ge=1, le=10080, description="Cache TTL in minutes (1-10080)"
+    ),
+    cache_max_size_mb: Optional[int] = Query(
+        None, ge=100, le=10240, description="Max cache size in MB (100-10240)"
+    ),
+    redis_url: Optional[str] = Query(
+        None, description="External Redis URL (e.g., redis://host:6379/0)"
+    ),
+    browse_max_items: Optional[int] = Query(
+        None,
+        ge=100_000,
+        le=50_000_000,
+        description="Max items to load when browsing archives (100k-50M)",
+    ),
+    browse_max_memory_mb: Optional[int] = Query(
+        None,
+        ge=100,
+        le=16384,
+        description="Max memory for archive browsing in MB (100MB-16GB)",
+    ),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Update cache settings.
@@ -1265,8 +1530,17 @@ async def update_cache_settings(
     - Updated settings
     - Redis connection result if redis_url was changed
     """
-    if cache_ttl_minutes is None and cache_max_size_mb is None and redis_url is None and browse_max_items is None and browse_max_memory_mb is None:
-        raise HTTPException(status_code=400, detail={"key": "backend.errors.settings.atLeastOneSettingRequired"})
+    if (
+        cache_ttl_minutes is None
+        and cache_max_size_mb is None
+        and redis_url is None
+        and browse_max_items is None
+        and browse_max_memory_mb is None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.settings.atLeastOneSettingRequired"},
+        )
 
     try:
         # Get or create system settings
@@ -1283,29 +1557,33 @@ async def update_cache_settings(
         if redis_url is not None:
             old_url = settings.redis_url
             settings.redis_url = redis_url if redis_url.strip() else None
-            changes["redis_url"] = {
-                "old": old_url,
-                "new": settings.redis_url
-            }
+            changes["redis_url"] = {"old": old_url, "new": settings.redis_url}
 
             # Reconfigure cache service with new Redis URL
             try:
                 reconfigure_result = archive_cache.reconfigure(
                     redis_url=settings.redis_url,
-                    cache_max_size_mb=cache_max_size_mb or settings.cache_max_size_mb
+                    cache_max_size_mb=cache_max_size_mb or settings.cache_max_size_mb,
                 )
 
                 if not reconfigure_result["success"]:
-                    logger.warning("Redis reconfiguration failed, using fallback",
-                                 redis_url=settings.redis_url,
-                                 backend=reconfigure_result["backend"])
+                    logger.warning(
+                        "Redis reconfiguration failed, using fallback",
+                        redis_url=settings.redis_url,
+                        backend=reconfigure_result["backend"],
+                    )
             except Exception as reconfig_error:
-                logger.error("Failed to reconfigure cache service",
-                           redis_url=settings.redis_url,
-                           error=str(reconfig_error))
+                logger.error(
+                    "Failed to reconfigure cache service",
+                    redis_url=settings.redis_url,
+                    error=str(reconfig_error),
+                )
                 raise HTTPException(
                     status_code=500,
-                    detail={"key": "backend.errors.settings.failedConnectRedis", "params": {"error": str(reconfig_error)}}
+                    detail={
+                        "key": "backend.errors.settings.failedConnectRedis",
+                        "params": {"error": str(reconfig_error)},
+                    },
                 )
 
         # Update TTL
@@ -1333,8 +1611,9 @@ async def update_cache_settings(
                         cache_max_size_mb=cache_max_size_mb
                     )
                 except Exception as reconfig_error:
-                    logger.warning("Failed to reconfigure cache size",
-                                 error=str(reconfig_error))
+                    logger.warning(
+                        "Failed to reconfigure cache size", error=str(reconfig_error)
+                    )
 
         # Update browse limits
         if browse_max_items is not None:
@@ -1345,13 +1624,16 @@ async def update_cache_settings(
         if browse_max_memory_mb is not None:
             old_memory = settings.browse_max_memory_mb
             settings.browse_max_memory_mb = browse_max_memory_mb
-            changes["browse_max_memory_mb"] = {"old": old_memory, "new": browse_max_memory_mb}
+            changes["browse_max_memory_mb"] = {
+                "old": old_memory,
+                "new": browse_max_memory_mb,
+            }
 
         db.commit()
 
-        logger.info("Cache settings updated",
-                   user=current_user.username,
-                   changes=changes)
+        logger.info(
+            "Cache settings updated", user=current_user.username, changes=changes
+        )
 
         response = {
             "cache_ttl_minutes": settings.cache_ttl_minutes,
@@ -1359,7 +1641,7 @@ async def update_cache_settings(
             "redis_url": settings.redis_url,
             "browse_max_items": settings.browse_max_items,
             "browse_max_memory_mb": settings.browse_max_memory_mb,
-            "message": "backend.success.settings.cacheSettingsUpdated"
+            "message": "backend.success.settings.cacheSettingsUpdated",
         }
 
         # Add reconfiguration result if available
@@ -1373,7 +1655,13 @@ async def update_cache_settings(
         raise
     except Exception as e:
         db.rollback()
-        logger.error("Failed to update cache settings",
-                    user=current_user.username,
-                    error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.settings.failedUpdateCacheSettings", "params": {"error": str(e)}})
+        logger.error(
+            "Failed to update cache settings", user=current_user.username, error=str(e)
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.settings.failedUpdateCacheSettings",
+                "params": {"error": str(e)},
+            },
+        )

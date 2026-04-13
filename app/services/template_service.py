@@ -41,30 +41,30 @@ def get_system_variables(
     system_vars = {}
 
     if repository_id is not None:
-        system_vars['BORG_UI_REPOSITORY_ID'] = str(repository_id)
+        system_vars["BORG_UI_REPOSITORY_ID"] = str(repository_id)
 
     if repository_name:
-        system_vars['BORG_UI_REPOSITORY_NAME'] = repository_name
+        system_vars["BORG_UI_REPOSITORY_NAME"] = repository_name
 
     if repository_path:
-        system_vars['BORG_UI_REPOSITORY_PATH'] = repository_path
+        system_vars["BORG_UI_REPOSITORY_PATH"] = repository_path
 
     if backup_status:
-        system_vars['BORG_UI_BACKUP_STATUS'] = backup_status
+        system_vars["BORG_UI_BACKUP_STATUS"] = backup_status
 
     if hook_type:
-        system_vars['BORG_UI_HOOK_TYPE'] = hook_type
+        system_vars["BORG_UI_HOOK_TYPE"] = hook_type
 
     if job_id is not None:
-        system_vars['BORG_UI_JOB_ID'] = str(job_id)
+        system_vars["BORG_UI_JOB_ID"] = str(job_id)
 
     if source_host:
-        system_vars['BORG_UI_REMOTE_HOST'] = source_host
+        system_vars["BORG_UI_REMOTE_HOST"] = source_host
 
     if source_port is not None:
-        system_vars['BORG_UI_REMOTE_PORT'] = str(source_port)
+        system_vars["BORG_UI_REMOTE_PORT"] = str(source_port)
 
     if source_username:
-        system_vars['BORG_UI_REMOTE_USERNAME'] = source_username
+        system_vars["BORG_UI_REMOTE_USERNAME"] = source_username
 
     return system_vars

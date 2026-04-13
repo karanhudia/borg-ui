@@ -10,10 +10,10 @@ import tempfile
 import time
 from pathlib import Path
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 
 from app.services.log_manager import LogManager, log_manager
-from app.database.models import BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob, PackageInstallJob
+from app.database.models import BackupJob, RestoreJob
 
 
 @pytest.fixture
@@ -34,6 +34,7 @@ def log_manager_with_temp_dir(temp_log_dir):
 @pytest.fixture
 def create_test_log_file(temp_log_dir):
     """Helper fixture to create test log files"""
+
     def _create(name: str, content: str = "test log", age_days: int = 0):
         filepath = temp_log_dir / name
         filepath.write_text(content)
@@ -76,7 +77,9 @@ class TestCalculateLogStorage:
         assert result["newest_log_date"] is not None
         assert result["files_by_type"]["backup"] == 1
 
-    def test_multiple_log_files_different_types(self, log_manager_with_temp_dir, create_test_log_file):
+    def test_multiple_log_files_different_types(
+        self, log_manager_with_temp_dir, create_test_log_file
+    ):
         """Should count files by type correctly"""
         create_test_log_file("backup_job_1.log", "backup")
         create_test_log_file("backup_job_2.log", "backup")
@@ -218,8 +221,7 @@ class TestCleanupLogsByAge:
         recent_log = create_test_log_file("recent_log.log", age_days=10)
 
         result = log_manager_with_temp_dir.cleanup_logs_by_age(
-            max_age_days=30,
-            protected_paths=set()
+            max_age_days=30, protected_paths=set()
         )
 
         assert result["deleted_count"] == 1
@@ -237,21 +239,21 @@ class TestCleanupLogsByAge:
         create_test_log_file("log3.log", age_days=20)
 
         result = log_manager_with_temp_dir.cleanup_logs_by_age(
-            max_age_days=30,
-            protected_paths=set()
+            max_age_days=30, protected_paths=set()
         )
 
         assert result["deleted_count"] == 0
         assert len(list(log_manager_with_temp_dir.log_dir.glob("*.log"))) == 3
 
-    def test_protect_running_job_logs(self, log_manager_with_temp_dir, create_test_log_file):
+    def test_protect_running_job_logs(
+        self, log_manager_with_temp_dir, create_test_log_file
+    ):
         """Should skip deletion of protected logs"""
         old_log = create_test_log_file("old_log.log", age_days=40)
         protected_log = create_test_log_file("protected_log.log", age_days=40)
 
         result = log_manager_with_temp_dir.cleanup_logs_by_age(
-            max_age_days=30,
-            protected_paths={str(protected_log)}
+            max_age_days=30, protected_paths={str(protected_log)}
         )
 
         assert result["deleted_count"] == 1
@@ -266,9 +268,7 @@ class TestCleanupLogsByAge:
         create_test_log_file("old_log.log", age_days=40)
 
         result = log_manager_with_temp_dir.cleanup_logs_by_age(
-            max_age_days=30,
-            protected_paths=set(),
-            dry_run=True
+            max_age_days=30, protected_paths=set(), dry_run=True
         )
 
         assert result["deleted_count"] == 1
@@ -279,19 +279,22 @@ class TestCleanupLogsByAge:
 class TestCleanupLogsBySize:
     """Test size-based log cleanup"""
 
-    def test_cleanup_when_under_limit(self, log_manager_with_temp_dir, create_test_log_file):
+    def test_cleanup_when_under_limit(
+        self, log_manager_with_temp_dir, create_test_log_file
+    ):
         """Should not delete anything when under limit"""
         create_test_log_file("log1.log", "small content")
 
         result = log_manager_with_temp_dir.cleanup_logs_by_size(
-            max_total_size_mb=10,
-            protected_paths=set()
+            max_total_size_mb=10, protected_paths=set()
         )
 
         assert result["deleted_count"] == 0
         assert result["final_size_mb"] < 10
 
-    def test_cleanup_when_over_limit(self, log_manager_with_temp_dir, create_test_log_file):
+    def test_cleanup_when_over_limit(
+        self, log_manager_with_temp_dir, create_test_log_file
+    ):
         """Should delete oldest logs when over limit"""
         # Create files with substantial content
         large_content = "X" * (1024 * 1024)  # 1 MB
@@ -304,8 +307,7 @@ class TestCleanupLogsBySize:
 
         # Set limit to 2 MB (should delete oldest file)
         result = log_manager_with_temp_dir.cleanup_logs_by_size(
-            max_total_size_mb=2,
-            protected_paths=set()
+            max_total_size_mb=2, protected_paths=set()
         )
 
         assert result["deleted_count"] > 0
@@ -314,7 +316,9 @@ class TestCleanupLogsBySize:
         # Oldest file should be deleted
         assert not (log_manager_with_temp_dir.log_dir / "old.log").exists()
 
-    def test_protect_running_jobs_size_cleanup(self, log_manager_with_temp_dir, create_test_log_file):
+    def test_protect_running_jobs_size_cleanup(
+        self, log_manager_with_temp_dir, create_test_log_file
+    ):
         """Should skip protected logs during size cleanup"""
         large_content = "X" * (1024 * 1024)  # 1 MB
 
@@ -324,7 +328,7 @@ class TestCleanupLogsBySize:
 
         result = log_manager_with_temp_dir.cleanup_logs_by_size(
             max_total_size_mb=1,  # Very small limit - should trigger cleanup
-            protected_paths={str(protected_log)}
+            protected_paths={str(protected_log)},
         )
 
         # Should attempt to delete old.log and skip protected.log
@@ -364,14 +368,16 @@ class TestCleanupLogsCombined:
             db=mock_db,
             max_age_days=30,
             max_total_size_mb=2,  # Should trigger size cleanup
-            dry_run=False
+            dry_run=False,
         )
 
         assert result["total_deleted_count"] > 0
         assert result["age_cleanup"]["deleted_count"] >= 1  # very_old.log
         assert result["success"] is True
 
-    def test_combined_cleanup_respects_protected_paths(self, log_manager_with_temp_dir, create_test_log_file):
+    def test_combined_cleanup_respects_protected_paths(
+        self, log_manager_with_temp_dir, create_test_log_file
+    ):
         """Should protect running job logs in combined cleanup"""
         large_content = "X" * (1024 * 1024)  # 1 MB
 
@@ -396,10 +402,7 @@ class TestCleanupLogsCombined:
         create_test_log_file("old.log", large_content, age_days=40)
 
         result = log_manager_with_temp_dir.cleanup_logs_combined(
-            db=mock_db,
-            max_age_days=30,
-            max_total_size_mb=10,
-            dry_run=False
+            db=mock_db, max_age_days=30, max_total_size_mb=10, dry_run=False
         )
 
         # Old.log should be deleted, but running.log should be protected
@@ -407,8 +410,10 @@ class TestCleanupLogsCombined:
         assert protected_log.exists()
 
         # Should have skipped the protected log
-        total_skipped = (result["age_cleanup"]["skipped_count"] +
-                        result["size_cleanup"]["skipped_count"])
+        total_skipped = (
+            result["age_cleanup"]["skipped_count"]
+            + result["size_cleanup"]["skipped_count"]
+        )
         assert total_skipped >= 1
 
 

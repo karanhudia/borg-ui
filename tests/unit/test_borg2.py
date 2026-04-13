@@ -21,7 +21,17 @@ async def test_list_archive_contents_uses_absolute_depth_for_browse():
         )
 
     mock_run.assert_awaited_once_with(
-        ["borg2", "-r", "/repo", "list", "--json-lines", "--depth", "3", "archive-1", "docs/sub"],
+        [
+            "borg2",
+            "-r",
+            "/repo",
+            "list",
+            "--json-lines",
+            "--depth",
+            "3",
+            "archive-1",
+            "docs/sub",
+        ],
         max_lines=1_000_000,
         env=None,
     )

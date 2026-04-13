@@ -55,7 +55,9 @@ class BackupV2Service:
         cmd.append(archive_name)
         return cmd
 
-    def build_archive_info_command(self, repository_path: str, archive_name: str) -> List[str]:
+    def build_archive_info_command(
+        self, repository_path: str, archive_name: str
+    ) -> List[str]:
         return [borg2.borg_cmd, "-r", repository_path, "info", "--json", archive_name]
 
     def build_repo_list_command(self, repository_path: str) -> List[str]:

@@ -19,11 +19,17 @@ class SSHSmokeConfig(argparse.Namespace):
     remote_root: str
 
 
-def add_ssh_smoke_args(parser: argparse.ArgumentParser, *, default_url: str = "http://localhost:8082") -> None:
+def add_ssh_smoke_args(
+    parser: argparse.ArgumentParser, *, default_url: str = "http://localhost:8082"
+) -> None:
     parser.add_argument("--url", default=default_url)
     parser.add_argument("--host", default=os.environ.get("SSH_SMOKE_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("SSH_SMOKE_PORT", "2222")))
-    parser.add_argument("--username", default=os.environ.get("SSH_SMOKE_USER", "borgsmoke"))
+    parser.add_argument(
+        "--port", type=int, default=int(os.environ.get("SSH_SMOKE_PORT", "2222"))
+    )
+    parser.add_argument(
+        "--username", default=os.environ.get("SSH_SMOKE_USER", "borgsmoke")
+    )
     parser.add_argument(
         "--authorized-keys",
         default=os.environ.get("SSH_SMOKE_AUTH_KEYS"),
@@ -47,7 +53,11 @@ def ensure_public_key_authorized(auth_keys_path: Path, public_key: str) -> None:
     """Append the generated key to authorized_keys, using sudo when needed."""
     auth_keys_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        existing = auth_keys_path.read_text(encoding="utf-8") if auth_keys_path.exists() else ""
+        existing = (
+            auth_keys_path.read_text(encoding="utf-8")
+            if auth_keys_path.exists()
+            else ""
+        )
         if public_key not in existing:
             with auth_keys_path.open("a", encoding="utf-8") as handle:
                 if existing and not existing.endswith("\n"):
@@ -80,4 +90,3 @@ if public_key not in existing:
         )
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(f"Unable to update authorized_keys via sudo: {exc}") from exc
-

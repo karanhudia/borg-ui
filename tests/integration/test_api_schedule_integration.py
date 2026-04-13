@@ -4,6 +4,7 @@ Integration tests for scheduled jobs API with real borg execution
 These tests verify scheduled job functionality end-to-end.
 Focus on timezone handling and cron expression correctness.
 """
+
 import json
 import shutil
 import subprocess
@@ -11,10 +12,20 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
-from app.database.models import BackupJob, CompactJob, PruneJob, Repository, ScheduledJob, ScheduledJobRepository
+from app.database.models import (
+    BackupJob,
+    CompactJob,
+    PruneJob,
+    Repository,
+    ScheduledJob,
+    ScheduledJobRepository,
+)
 from datetime import datetime, timedelta
 
-from tests.integration.test_helpers import parse_archives_payload, wait_for_job_terminal_status
+from tests.integration.test_helpers import (
+    parse_archives_payload,
+    wait_for_job_terminal_status,
+)
 from tests.utils.borg import make_borg_test_env
 from tests.utils.borg import create_registered_local_repository
 
@@ -33,7 +44,9 @@ def _create_registered_borg_repo(test_db, borg_binary, tmp_path, name: str, slug
 def _require_borg2_binary() -> str:
     borg2_path = shutil.which("borg2")
     if not borg2_path:
-        pytest.skip("Borg 2 binary not found. Install borg2 to run this integration test.")
+        pytest.skip(
+            "Borg 2 binary not found. Install borg2 to run this integration test."
+        )
     return borg2_path
 
 
@@ -95,10 +108,7 @@ class TestScheduledJobCreation:
     """Test scheduled job creation with cron validation"""
 
     def test_create_scheduled_job_daily(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """
         Test creating daily scheduled backup
@@ -115,12 +125,14 @@ class TestScheduledJobCreation:
                 "cron_expression": "0 2 * * *",  # Daily at 2 AM
                 "enabled": True,
                 "name": "Daily Backup",
-                "timezone": "UTC"
+                "timezone": "UTC",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
-        assert response.status_code == 200, f"Failed to create schedule: {response.json()}"
+        assert response.status_code == 200, (
+            f"Failed to create schedule: {response.json()}"
+        )
         data = response.json()
 
         # Verify schedule was created
@@ -136,10 +148,7 @@ class TestScheduledJobCreation:
         assert schedule_data["name"] == "Daily Backup"
 
     def test_create_scheduled_job_with_timezone_conversion(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """
         Test timezone is stored for cron conversion
@@ -156,9 +165,9 @@ class TestScheduledJobCreation:
                 "cron_expression": "0 10 * * *",  # 10 AM in user's timezone
                 "enabled": True,
                 "name": "Morning Backup",
-                "timezone": "America/New_York"  # EST/EDT
+                "timezone": "America/New_York",  # EST/EDT
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -167,10 +176,7 @@ class TestScheduledJobCreation:
         assert schedule_data["name"] == "Morning Backup"
 
     def test_create_scheduled_job_invalid_cron_expression(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """
         Test invalid cron expression is rejected
@@ -186,19 +192,16 @@ class TestScheduledJobCreation:
                 "repository_id": repo.id,
                 "cron_expression": "invalid cron",
                 "enabled": True,
-                "name": "Bad Schedule"
+                "name": "Bad Schedule",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Should reject invalid cron
         assert response.status_code == 400, "Invalid cron should be rejected"
 
     def test_create_scheduled_job_with_repository_path(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """
         Test creating schedule using repository path instead of ID
@@ -214,9 +217,9 @@ class TestScheduledJobCreation:
                 "repository": str(repo_path),  # Use path instead of ID
                 "cron_expression": "0 3 * * *",
                 "enabled": True,
-                "name": "Path-based Schedule"
+                "name": "Path-based Schedule",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Should work with either repository or repository_id
@@ -229,10 +232,7 @@ class TestScheduledJobManagement:
     """Test scheduled job management operations"""
 
     def test_list_scheduled_jobs(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """
         Test listing all scheduled jobs
@@ -249,9 +249,9 @@ class TestScheduledJobManagement:
                 "repository_id": repo.id,
                 "cron_expression": "0 2 * * *",
                 "enabled": True,
-                "name": "Test Schedule"
+                "name": "Test Schedule",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert create_response.status_code == 200
@@ -275,11 +275,7 @@ class TestScheduledJobManagement:
         assert len(schedules) > 0, "Should have at least one schedule"
 
     def test_update_scheduled_job(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo,
-        test_db
+        self, test_client: TestClient, admin_headers, db_borg_repo, test_db
     ):
         """
         Test updating scheduled job
@@ -294,7 +290,7 @@ class TestScheduledJobManagement:
             repository=str(repo_path),
             cron_expression="0 2 * * *",
             enabled=True,
-            name="Original Schedule"
+            name="Original Schedule",
         )
         test_db.add(schedule)
         test_db.commit()
@@ -306,20 +302,18 @@ class TestScheduledJobManagement:
             json={
                 "cron_expression": "0 3 * * *",  # Change time
                 "enabled": False,  # Disable
-                "name": "Updated Schedule"
+                "name": "Updated Schedule",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Update should succeed
-        assert update_response.status_code == 200, f"Update failed: {update_response.json()}"
+        assert update_response.status_code == 200, (
+            f"Update failed: {update_response.json()}"
+        )
 
     def test_delete_scheduled_job(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo,
-        test_db
+        self, test_client: TestClient, admin_headers, db_borg_repo, test_db
     ):
         """
         Test deleting scheduled job
@@ -334,7 +328,7 @@ class TestScheduledJobManagement:
             repository=str(repo_path),
             cron_expression="0 2 * * *",
             enabled=True,
-            name="To Be Deleted"
+            name="To Be Deleted",
         )
         test_db.add(schedule)
         test_db.commit()
@@ -342,23 +336,22 @@ class TestScheduledJobManagement:
 
         # Delete the schedule
         delete_response = test_client.delete(
-            f"/api/schedule/{schedule.id}",
-            headers=admin_headers
+            f"/api/schedule/{schedule.id}", headers=admin_headers
         )
 
         # Delete should succeed
-        assert delete_response.status_code == 200, f"Delete failed: {delete_response.json()}"
+        assert delete_response.status_code == 200, (
+            f"Delete failed: {delete_response.json()}"
+        )
 
         # Verify schedule no longer exists
-        get_response = test_client.get(f"/api/schedule/{schedule.id}", headers=admin_headers)
+        get_response = test_client.get(
+            f"/api/schedule/{schedule.id}", headers=admin_headers
+        )
         assert get_response.status_code == 404, "Deleted schedule should not be found"
 
     def test_disable_scheduled_job(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo,
-        test_db
+        self, test_client: TestClient, admin_headers, db_borg_repo, test_db
     ):
         """
         Test disabling scheduled job
@@ -373,7 +366,7 @@ class TestScheduledJobManagement:
             repository=str(repo_path),
             cron_expression="0 2 * * *",
             enabled=True,
-            name="Active Schedule"
+            name="Active Schedule",
         )
         test_db.add(schedule)
         test_db.commit()
@@ -383,7 +376,7 @@ class TestScheduledJobManagement:
         update_response = test_client.put(
             f"/api/schedule/{schedule.id}",
             json={"enabled": False},
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert update_response.status_code == 200
@@ -395,9 +388,7 @@ class TestScheduledJobValidation:
     """Test scheduled job validation"""
 
     def test_create_schedule_for_nonexistent_repository(
-        self,
-        test_client: TestClient,
-        admin_headers
+        self, test_client: TestClient, admin_headers
     ):
         """
         Test schedule creation fails for missing repository
@@ -411,19 +402,16 @@ class TestScheduledJobValidation:
                 "repository_id": 99999,  # Non-existent
                 "cron_expression": "0 2 * * *",
                 "enabled": True,
-                "name": "Orphan Schedule"
+                "name": "Orphan Schedule",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Should reject or warn about missing repository
         assert response.status_code == 404
 
     def test_create_duplicate_schedule_same_repository(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """
         Test multiple schedules can exist for same repository
@@ -440,9 +428,9 @@ class TestScheduledJobValidation:
                 "repository_id": repo.id,
                 "cron_expression": "0 2 * * *",  # Daily
                 "enabled": True,
-                "name": "Daily Backup"
+                "name": "Daily Backup",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response1.status_code == 200
@@ -454,19 +442,16 @@ class TestScheduledJobValidation:
                 "repository_id": repo.id,
                 "cron_expression": "0 3 * * 0",  # Weekly on Sunday
                 "enabled": True,
-                "name": "Weekly Backup"
+                "name": "Weekly Backup",
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Should allow multiple schedules
         assert response2.status_code == 200
 
     def test_cron_expression_validation(
-        self,
-        test_client: TestClient,
-        admin_headers,
-        db_borg_repo
+        self, test_client: TestClient, admin_headers, db_borg_repo
     ):
         """
         Test various cron expressions are validated correctly
@@ -489,9 +474,9 @@ class TestScheduledJobValidation:
                     "repository_id": repo.id,
                     "cron_expression": invalid_cron,
                     "enabled": True,
-                    "name": f"Invalid: {invalid_cron}"
+                    "name": f"Invalid: {invalid_cron}",
                 },
-                headers=admin_headers
+                headers=admin_headers,
             )
 
             # Each invalid cron should be rejected or cause validation error
@@ -512,8 +497,12 @@ class TestMultiRepositorySchedules:
         borg_binary,
         tmp_path,
     ):
-        repo1, _, _ = _create_registered_borg_repo(test_db, borg_binary, tmp_path, "Repo One", "repo-one")
-        repo2, _, _ = _create_registered_borg_repo(test_db, borg_binary, tmp_path, "Repo Two", "repo-two")
+        repo1, _, _ = _create_registered_borg_repo(
+            test_db, borg_binary, tmp_path, "Repo One", "repo-one"
+        )
+        repo2, _, _ = _create_registered_borg_repo(
+            test_db, borg_binary, tmp_path, "Repo Two", "repo-two"
+        )
 
         create_response = test_client.post(
             "/api/schedule/",
@@ -535,10 +524,16 @@ class TestMultiRepositorySchedules:
         )
         schedule_id = schedule_data["id"]
 
-        detail_response = test_client.get(f"/api/schedule/{schedule_id}", headers=admin_headers)
+        detail_response = test_client.get(
+            f"/api/schedule/{schedule_id}", headers=admin_headers
+        )
         assert detail_response.status_code == 200
         detail_payload = detail_response.json()
-        schedule_data = detail_payload.get("schedule") or detail_payload.get("job") or detail_payload
+        schedule_data = (
+            detail_payload.get("schedule")
+            or detail_payload.get("job")
+            or detail_payload
+        )
 
         links = (
             test_db.query(ScheduledJobRepository)
@@ -557,8 +552,12 @@ class TestMultiRepositorySchedules:
         borg_binary,
         tmp_path,
     ):
-        repo1, _, _ = _create_registered_borg_repo(test_db, borg_binary, tmp_path, "Repo Alpha", "repo-alpha")
-        repo2, _, _ = _create_registered_borg_repo(test_db, borg_binary, tmp_path, "Repo Beta", "repo-beta")
+        repo1, _, _ = _create_registered_borg_repo(
+            test_db, borg_binary, tmp_path, "Repo Alpha", "repo-alpha"
+        )
+        repo2, _, _ = _create_registered_borg_repo(
+            test_db, borg_binary, tmp_path, "Repo Beta", "repo-beta"
+        )
 
         create_response = test_client.post(
             "/api/schedule/",
@@ -588,10 +587,16 @@ class TestMultiRepositorySchedules:
         assert duplicate_response.status_code == 200, duplicate_response.json()
         duplicate_id = duplicate_response.json()["job"]["id"]
 
-        detail_response = test_client.get(f"/api/schedule/{duplicate_id}", headers=admin_headers)
+        detail_response = test_client.get(
+            f"/api/schedule/{duplicate_id}", headers=admin_headers
+        )
         assert detail_response.status_code == 200
         detail_payload = detail_response.json()
-        duplicated = detail_payload.get("schedule") or detail_payload.get("job") or detail_payload
+        duplicated = (
+            detail_payload.get("schedule")
+            or detail_payload.get("job")
+            or detail_payload
+        )
 
         assert duplicated["enabled"] is False
         assert duplicated["archive_name_template"] == "{job_name}-{repo_name}-{date}"
@@ -656,12 +661,16 @@ class TestMultiRepositorySchedules:
                 .all()
             )
             if len(matching_jobs) == 2 and all(
-                job.status in ["completed", "completed_with_warnings", "failed"] for job in matching_jobs
+                job.status in ["completed", "completed_with_warnings", "failed"]
+                for job in matching_jobs
             ):
                 break
             time.sleep(0.25)
         assert len(matching_jobs) == 2
-        assert all(job.status in ["completed", "completed_with_warnings"] for job in matching_jobs)
+        assert all(
+            job.status in ["completed", "completed_with_warnings"]
+            for job in matching_jobs
+        )
 
         repo1_archives = test_client.get(
             f"/api/archives/list?repository={repo1_path}",
@@ -705,7 +714,10 @@ class TestMultiRepositorySchedules:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.schedule.observabilityOnlyRepo"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.observabilityOnlyRepo"
+        )
 
     def test_run_now_single_repo_borg2_schedule_exposes_maintenance_contract(
         self,
@@ -765,17 +777,30 @@ class TestMultiRepositorySchedules:
             test_db.expire_all()
             prune_job = (
                 test_db.query(PruneJob)
-                .filter(PruneJob.repository_id == repo.id, PruneJob.scheduled_prune.is_(True))
+                .filter(
+                    PruneJob.repository_id == repo.id,
+                    PruneJob.scheduled_prune.is_(True),
+                )
                 .order_by(PruneJob.id.desc())
                 .first()
             )
             compact_job = (
                 test_db.query(CompactJob)
-                .filter(CompactJob.repository_id == repo.id, CompactJob.scheduled_compact.is_(True))
+                .filter(
+                    CompactJob.repository_id == repo.id,
+                    CompactJob.scheduled_compact.is_(True),
+                )
                 .order_by(CompactJob.id.desc())
                 .first()
             )
-            if prune_job and compact_job and prune_job.status in {"completed", "completed_with_warnings", "failed"} and compact_job.status in {"completed", "completed_with_warnings", "failed"}:
+            if (
+                prune_job
+                and compact_job
+                and prune_job.status
+                in {"completed", "completed_with_warnings", "failed"}
+                and compact_job.status
+                in {"completed", "completed_with_warnings", "failed"}
+            ):
                 break
             time.sleep(0.25)
 

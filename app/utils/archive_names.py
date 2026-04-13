@@ -4,13 +4,14 @@ Utility for building sanitized borg archive names.
 Borg rejects archive names containing whitespace or slashes ("Invalid location format").
 This module centralizes archive name generation and sanitization.
 """
+
 import re
 from typing import Optional
 
 
 def sanitize_archive_component(name: str) -> str:
     """Replace whitespace and slashes with hyphens (consecutive runs collapse to one)."""
-    return re.sub(r'[\s/\\]+', '-', name)
+    return re.sub(r"[\s/\\]+", "-", name)
 
 
 def build_archive_name(
@@ -58,7 +59,7 @@ def build_archive_name(
         if unix_timestamp is not None:
             archive_name = archive_name.replace("{timestamp}", unix_timestamp)
         # Final sanitization for any remaining unsafe chars (e.g. from custom template text)
-        archive_name = re.sub(r'[\s/\\]+', '-', archive_name)
+        archive_name = re.sub(r"[\s/\\]+", "-", archive_name)
     else:
         if safe_repo:
             archive_name = f"{safe_job}-{safe_repo}-{timestamp}"

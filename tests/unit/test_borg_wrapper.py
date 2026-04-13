@@ -1,6 +1,7 @@
 """
 Unit tests for borg wrapper utility
 """
+
 import pytest
 from app.core.borg import BorgInterface
 
@@ -14,7 +15,7 @@ class TestBorgWrapper:
         try:
             borg = BorgInterface()
             assert borg is not None
-            assert hasattr(borg, 'borg_cmd')
+            assert hasattr(borg, "borg_cmd")
             assert borg.borg_cmd == "borg"
         except RuntimeError:
             # Borg might not be installed, which is acceptable
@@ -79,13 +80,12 @@ class TestBorgRepository:
     def test_repository_path_validation(self):
         """Test repository path validation"""
         # Import and test path validation if available
-        from app.core import borg
 
         # Test valid paths
         valid_paths = [
             "/tmp/test-repo",
             "/data/backups/repo",
-            "user@host:/path/to/repo"
+            "user@host:/path/to/repo",
         ]
 
         for path in valid_paths:
@@ -95,11 +95,7 @@ class TestBorgRepository:
     def test_archive_name_validation(self):
         """Test archive name validation"""
         # Test archive name format
-        valid_names = [
-            "backup-2024-01-01",
-            "daily-backup",
-            "archive_name_123"
-        ]
+        valid_names = ["backup-2024-01-01", "daily-backup", "archive_name_123"]
 
         for name in valid_names:
             # Archive names should be strings
@@ -111,7 +107,7 @@ class TestBorgRepository:
         test_urls = [
             "/local/path/repo",
             "ssh://user@host:22/path/repo",
-            "user@host:repo"
+            "user@host:repo",
         ]
 
         for url in test_urls:

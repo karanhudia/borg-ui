@@ -9,7 +9,30 @@ import structlog
 import os
 from dotenv import load_dotenv
 
-from app.api import auth, dashboard, backup, archives, restore, schedule, settings as settings_api, events, repositories, ssh_keys, system, filesystem, browse, notifications, scripts, packages, activity, scripts_library, mounts, metrics, tokens, permissions
+from app.api import (
+    auth,
+    dashboard,
+    backup,
+    archives,
+    restore,
+    schedule,
+    settings as settings_api,
+    events,
+    repositories,
+    ssh_keys,
+    system,
+    filesystem,
+    browse,
+    notifications,
+    scripts,
+    packages,
+    activity,
+    scripts_library,
+    mounts,
+    metrics,
+    tokens,
+    permissions,
+)
 from app.api.v2 import router as v2_router
 from app.routers import config
 from app.database.database import engine
@@ -50,11 +73,11 @@ def _prepare_index_html() -> str | None:
         html = html.replace('href="/logo', f'href="{BASE_PATH}/logo')
         html = html.replace(
             "</head>",
-            f'<script>'
+            f"<script>"
             f'window.__BASE_PATH__="{BASE_PATH}";'
-            f'if(!window.location.pathname.startsWith(window.__BASE_PATH__))'
-            f'{{window.location.replace(window.__BASE_PATH__+window.location.pathname+window.location.search+window.location.hash);}}'
-            f'</script></head>'
+            f"if(!window.location.pathname.startsWith(window.__BASE_PATH__))"
+            f"{{window.location.replace(window.__BASE_PATH__+window.location.pathname+window.location.search+window.location.hash);}}"
+            f"</script></head>",
         )
     return html
 
@@ -68,6 +91,7 @@ def _spawn_background_task(coro):
     if not isinstance(task, asyncio.Task):
         coro.close()
     return task
+
 
 # Configure structured logging
 import logging
@@ -87,7 +111,9 @@ structlog.configure(
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
-        structlog.dev.ConsoleRenderer() if log_level == "DEBUG" else structlog.processors.JSONRenderer()
+        structlog.dev.ConsoleRenderer()
+        if log_level == "DEBUG"
+        else structlog.processors.JSONRenderer(),
     ],
     context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -126,7 +152,9 @@ if os.path.exists("app/static"):
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Include API routers
-app.include_router(metrics.router)  # /metrics endpoint (disabled by default, no API prefix)
+app.include_router(
+    metrics.router
+)  # /metrics endpoint (disabled by default, no API prefix)
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
@@ -136,12 +164,18 @@ app.include_router(restore.router, prefix="/api/restore", tags=["Restore"])
 app.include_router(schedule.router, prefix="/api/schedule", tags=["Schedule"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
-app.include_router(repositories.router, prefix="/api/repositories", tags=["Repositories"])
+app.include_router(
+    repositories.router, prefix="/api/repositories", tags=["Repositories"]
+)
 app.include_router(ssh_keys.router, prefix="/api/ssh-keys", tags=["SSH Keys"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(filesystem.router, prefix="/api/filesystem", tags=["Filesystem"])
-app.include_router(scripts.router, prefix="/api/scripts", tags=["Scripts"])  # Old script test endpoint
-app.include_router(scripts_library.router, prefix="/api", tags=["Script Library"])  # New script management
+app.include_router(
+    scripts.router, prefix="/api/scripts", tags=["Scripts"]
+)  # Old script test endpoint
+app.include_router(
+    scripts_library.router, prefix="/api", tags=["Script Library"]
+)  # New script management
 app.include_router(packages.router, prefix="/api/packages", tags=["Packages"])
 app.include_router(notifications.router)
 app.include_router(activity.router)
@@ -153,6 +187,7 @@ app.include_router(permissions.router, prefix="/api")
 
 app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize application on startup"""
@@ -161,6 +196,7 @@ async def startup_event():
 
     # Run database migrations
     from app.database.migrations import run_migrations
+
     try:
         run_migrations()
     except Exception as e:
@@ -206,6 +242,7 @@ async def startup_event():
     # Load Redis URL from database and reconfigure cache service
     from app.services.cache_service import archive_cache
     from app.database.models import SystemSettings
+
     try:
         db = SessionLocal()
         try:
@@ -213,15 +250,19 @@ async def startup_event():
             if settings_obj and settings_obj.redis_url:
                 result = archive_cache.reconfigure(
                     redis_url=settings_obj.redis_url,
-                    cache_max_size_mb=settings_obj.cache_max_size_mb
+                    cache_max_size_mb=settings_obj.cache_max_size_mb,
                 )
                 if result["success"]:
-                    logger.info("Cache service configured from database",
-                               backend=result["backend"],
-                               connection_info=result.get("connection_info"))
+                    logger.info(
+                        "Cache service configured from database",
+                        backend=result["backend"],
+                        connection_info=result.get("connection_info"),
+                    )
                 else:
-                    logger.warning("Failed to configure Redis from database, using fallback",
-                                 backend=result["backend"])
+                    logger.warning(
+                        "Failed to configure Redis from database, using fallback",
+                        backend=result["backend"],
+                    )
         finally:
             db.close()
     except Exception as e:
@@ -229,6 +270,7 @@ async def startup_event():
 
     # Cache borg system info on startup (prevents repeated borg --version calls)
     from app.core.borg import borg
+
     try:
         await borg.get_system_info()
         logger.info("Borg system info cached")
@@ -239,6 +281,7 @@ async def startup_event():
     from app.services.backup_service import backup_service
     from app.database.database import SessionLocal
     from app.database.models import SystemSettings
+
     try:
         db = SessionLocal()
         try:
@@ -256,6 +299,7 @@ async def startup_event():
 
     # Cleanup orphaned jobs from container restarts
     from app.utils.process_utils import cleanup_orphaned_jobs, cleanup_orphaned_mounts
+
     try:
         db = SessionLocal()
         cleanup_orphaned_jobs(db)
@@ -287,12 +331,14 @@ async def startup_event():
 
     # Start check scheduler (background task)
     from app.services.check_scheduler import check_scheduler
+
     task2 = asyncio.create_task(check_scheduler.start())
     app.state.background_tasks.append(task2)
     logger.info("Check scheduler started")
 
     # Start stats refresh scheduler (background task)
     from app.services.stats_refresh_scheduler import stats_refresh_scheduler
+
     task3 = asyncio.create_task(stats_refresh_scheduler.start())
     app.state.background_tasks.append(task3)
     logger.info("Stats refresh scheduler started")
@@ -301,6 +347,7 @@ async def startup_event():
     from app.services.mqtt_service import mqtt_service, build_mqtt_runtime_config
     from app.database.database import SessionLocal
     from app.database.models import SystemSettings
+
     try:
         db = SessionLocal()
         try:
@@ -308,27 +355,32 @@ async def startup_event():
             if settings_obj:
                 mqtt_config = build_mqtt_runtime_config(settings_obj)
                 mqtt_service.configure(mqtt_config)
-                logger.info("MQTT service configured from database", 
-                          enabled=settings_obj.mqtt_enabled,
-                          broker_url=settings_obj.mqtt_broker_url)
-                
+                logger.info(
+                    "MQTT service configured from database",
+                    enabled=settings_obj.mqtt_enabled,
+                    broker_url=settings_obj.mqtt_broker_url,
+                )
+
                 # If MQTT is enabled (and beta toggle on), publish ...
                 if settings_obj.mqtt_enabled and settings_obj.mqtt_beta_enabled:
                     try:
                         mqtt_service.sync_state_with_db(db, reason="startup")
                         logger.info("Published MQTT DB-derived state on startup")
                     except Exception as sync_error:
-                        logger.warning("Failed to publish MQTT DB-derived state on startup", 
-                                     error=str(sync_error))
+                        logger.warning(
+                            "Failed to publish MQTT DB-derived state on startup",
+                            error=str(sync_error),
+                        )
             else:
                 logger.info("No system settings found, MQTT service not configured")
         finally:
             db.close()
     except Exception as e:
         logger.warning("Failed to configure MQTT service from database", error=str(e))
-    
+
     # Start MQTT sync scheduler (background task)
     from app.services.mqtt_sync_scheduler import start_mqtt_sync_scheduler
+
     task4 = asyncio.create_task(start_mqtt_sync_scheduler())
     app.state.background_tasks.append(task4)
     logger.info("MQTT sync scheduler started")
@@ -366,18 +418,23 @@ async def shutdown_event():
 
         # Cleanup MQTT service on shutdown
         from app.services.mqtt_service import mqtt_service
+
         try:
             mqtt_service.disconnect()
             logger.info("MQTT service disconnected")
         except Exception as e:
             logger.warning("Error disconnecting MQTT service", error=str(e))
 
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the main application"""
     if _cached_index_html is not None:
         return HTMLResponse(content=_cached_index_html)
-    return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
+    return HTMLResponse(
+        content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>"
+    )
+
 
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def catch_all(full_path: str):
@@ -400,12 +457,16 @@ async def catch_all(full_path: str):
     # Serve index.html for all other routes (frontend routes)
     if _cached_index_html is not None:
         return HTMLResponse(content=_cached_index_html)
-    return HTMLResponse(content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>")
+    return HTMLResponse(
+        content="<h1>Borg Web UI</h1><p>Frontend not built yet. Please run the build process.</p>"
+    )
+
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint for container orchestration and startup scripts"""
     return {"status": "healthy", "service": "borg-web-ui"}
+
 
 @app.get("/api")
 async def api_info():
@@ -414,8 +475,9 @@ async def api_info():
         "name": "Borg Web UI API",
         "version": get_runtime_app_version(),
         "docs": "/api/docs",
-        "status": "running"
+        "status": "running",
     }
+
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -429,7 +491,7 @@ async def log_requests(request: Request, call_next):
             "request_received",
             method=request.method,
             path=request.url.path,
-            client_ip=request.client.host if request.client else None
+            client_ip=request.client.host if request.client else None,
         )
 
     response = await call_next(request)
@@ -441,14 +503,14 @@ async def log_requests(request: Request, call_next):
                 "request_failed",
                 method=request.method,
                 path=request.url.path,
-                status_code=response.status_code
+                status_code=response.status_code,
             )
         else:
             logger.info(
                 "request_completed",
                 method=request.method,
                 path=request.url.path,
-                status_code=response.status_code
+                status_code=response.status_code,
             )
 
-    return response 
+    return response

@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import json
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -59,7 +58,9 @@ class SmokeClient:
             headers["Content-Type"] = "application/json"
         return headers
 
-    def request(self, method: str, path: str, *, token: Optional[str] = None, **kwargs) -> requests.Response:
+    def request(
+        self, method: str, path: str, *, token: Optional[str] = None, **kwargs
+    ) -> requests.Response:
         headers = kwargs.pop("headers", {})
         auth_headers = self._headers(token=token)
         auth_headers.update(headers)
@@ -72,10 +73,20 @@ class SmokeClient:
         )
         return response
 
-    def request_ok(self, method: str, path: str, *, expected: Iterable[int] = (200,), token: Optional[str] = None, **kwargs):
+    def request_ok(
+        self,
+        method: str,
+        path: str,
+        *,
+        expected: Iterable[int] = (200,),
+        token: Optional[str] = None,
+        **kwargs,
+    ):
         response = self.request(method, path, token=token, **kwargs)
         if response.status_code not in set(expected):
-            raise SmokeFailure(f"{method} {path} returned {response.status_code}: {response.text}")
+            raise SmokeFailure(
+                f"{method} {path} returned {response.status_code}: {response.text}"
+            )
         return response
 
     def authenticate(self, username: str = "admin", password: str = "admin123") -> str:
@@ -85,7 +96,9 @@ class SmokeClient:
             timeout=20,
         )
         if response.status_code != 200:
-            raise SmokeFailure(f"Authentication failed for {username}: {response.status_code} {response.text}")
+            raise SmokeFailure(
+                f"Authentication failed for {username}: {response.status_code} {response.text}"
+            )
         token = response.json()["access_token"]
         if username == "admin":
             self.token = token
@@ -124,11 +137,16 @@ class SmokeClient:
     ) -> tuple[int, str]:
         payload = {
             "name": name,
-            "path": self.container_path(repo_path) if isinstance(repo_path, Path) else str(repo_path),
+            "path": self.container_path(repo_path)
+            if isinstance(repo_path, Path)
+            else str(repo_path),
             "encryption": encryption,
             "compression": "lz4",
             "repository_type": "local",
-            "source_directories": [self.container_path(path) if isinstance(path, Path) else str(path) for path in source_dirs],
+            "source_directories": [
+                self.container_path(path) if isinstance(path, Path) else str(path)
+                for path in source_dirs
+            ],
             "exclude_patterns": [],
         }
         if passphrase:
@@ -160,11 +178,16 @@ class SmokeClient:
     ) -> tuple[int, str]:
         payload = {
             "name": name,
-            "path": self.container_path(repo_path) if isinstance(repo_path, Path) else str(repo_path),
+            "path": self.container_path(repo_path)
+            if isinstance(repo_path, Path)
+            else str(repo_path),
             "borg_version": 2,
             "encryption": encryption,
             "compression": "lz4",
-            "source_directories": [self.container_path(path) if isinstance(path, Path) else str(path) for path in source_dirs],
+            "source_directories": [
+                self.container_path(path) if isinstance(path, Path) else str(path)
+                for path in source_dirs
+            ],
             "exclude_patterns": [],
         }
         if passphrase:
@@ -196,9 +219,14 @@ class SmokeClient:
     ) -> tuple[int, str]:
         payload = {
             "name": name,
-            "path": self.container_path(repo_path) if isinstance(repo_path, Path) else str(repo_path),
+            "path": self.container_path(repo_path)
+            if isinstance(repo_path, Path)
+            else str(repo_path),
             "encryption": encryption,
-            "source_directories": [self.container_path(path) if isinstance(path, Path) else str(path) for path in source_dirs],
+            "source_directories": [
+                self.container_path(path) if isinstance(path, Path) else str(path)
+                for path in source_dirs
+            ],
         }
         if passphrase:
             payload["passphrase"] = passphrase
@@ -231,10 +259,15 @@ class SmokeClient:
     ) -> tuple[int, str]:
         payload = {
             "name": name,
-            "path": self.container_path(repo_path) if isinstance(repo_path, Path) else str(repo_path),
+            "path": self.container_path(repo_path)
+            if isinstance(repo_path, Path)
+            else str(repo_path),
             "borg_version": 2,
             "encryption": encryption,
-            "source_directories": [self.container_path(path) if isinstance(path, Path) else str(path) for path in source_dirs],
+            "source_directories": [
+                self.container_path(path) if isinstance(path, Path) else str(path)
+                for path in source_dirs
+            ],
         }
         if passphrase:
             payload["passphrase"] = passphrase
@@ -254,7 +287,14 @@ class SmokeClient:
         self.log(f"Imported Borg 2 repository {repo_id} ({name})")
         return repo_id, payload["path"]
 
-    def create_user(self, *, username: str, password: str, role: str = "viewer", full_name: Optional[str] = None) -> int:
+    def create_user(
+        self,
+        *,
+        username: str,
+        password: str,
+        role: str = "viewer",
+        full_name: Optional[str] = None,
+    ) -> int:
         payload = {"username": username, "password": password, "role": role}
         if full_name:
             payload["full_name"] = full_name
@@ -277,7 +317,9 @@ class SmokeClient:
             json={"all_repositories_role": role},
         )
 
-    def assign_repository_permission(self, user_id: int, repo_id: int, role: str) -> None:
+    def assign_repository_permission(
+        self, user_id: int, repo_id: int, role: str
+    ) -> None:
         self.request_ok(
             "POST",
             f"/api/settings/users/{user_id}/permissions",
@@ -299,7 +341,9 @@ class SmokeClient:
         self.log(f"Started backup job {job_id}")
         return job_id
 
-    def start_backup_v2(self, repository_id: int, *, token: Optional[str] = None) -> dict:
+    def start_backup_v2(
+        self, repository_id: int, *, token: Optional[str] = None
+    ) -> dict:
         response = self.request_ok(
             "POST",
             "/api/v2/backup/run",
@@ -405,7 +449,14 @@ class SmokeClient:
         except TimeoutError as exc:
             raise SmokeFailure(str(exc)) from exc
 
-    def wait_for_running(self, endpoint: str, job_id: int, *, token: Optional[str] = None, timeout: float = 30.0) -> dict:
+    def wait_for_running(
+        self,
+        endpoint: str,
+        job_id: int,
+        *,
+        token: Optional[str] = None,
+        timeout: float = 30.0,
+    ) -> dict:
         def fetch_payload():
             response = self.request_ok("GET", f"{endpoint}/{job_id}", token=token)
             return response.json()
@@ -422,7 +473,9 @@ class SmokeClient:
         except TimeoutError as exc:
             raise SmokeFailure(str(exc)) from exc
 
-    def list_archives(self, repository: int | str, *, token: Optional[str] = None) -> list[dict]:
+    def list_archives(
+        self, repository: int | str, *, token: Optional[str] = None
+    ) -> list[dict]:
         response = self.request_ok(
             "GET",
             "/api/archives/list",
@@ -431,7 +484,9 @@ class SmokeClient:
         )
         return parse_archives_payload(response.json())
 
-    def list_archives_v2(self, repository: int | str, *, token: Optional[str] = None) -> list[dict]:
+    def list_archives_v2(
+        self, repository: int | str, *, token: Optional[str] = None
+    ) -> list[dict]:
         response = self.request_ok(
             "GET",
             "/api/v2/archives/list",
@@ -485,7 +540,9 @@ class SmokeClient:
         return response.json()["connection"]
 
     def verify_ssh_connection_borg(self, connection_id: int) -> dict:
-        response = self.request_ok("POST", f"/api/ssh-keys/connections/{connection_id}/verify-borg")
+        response = self.request_ok(
+            "POST", f"/api/ssh-keys/connections/{connection_id}/verify-borg"
+        )
         return response.json()
 
     def browse_archive_contents_v2(
@@ -507,21 +564,46 @@ class SmokeClient:
         )
         return response.json()["items"]
 
-    def get_archive_info(self, archive_name: str, repository: int | str, *, token: Optional[str] = None, include_files: bool = False) -> dict:
+    def get_archive_info(
+        self,
+        archive_name: str,
+        repository: int | str,
+        *,
+        token: Optional[str] = None,
+        include_files: bool = False,
+    ) -> dict:
         params = {"repository": str(repository)}
         if include_files:
             params["include_files"] = "true"
-        response = self.request_ok("GET", f"/api/archives/{archive_name}/info", token=token, params=params)
+        response = self.request_ok(
+            "GET", f"/api/archives/{archive_name}/info", token=token, params=params
+        )
         return response.json()["info"]
 
-    def get_archive_info_v2(self, archive_id: str, repository: int | str, *, token: Optional[str] = None, include_files: bool = False) -> dict:
+    def get_archive_info_v2(
+        self,
+        archive_id: str,
+        repository: int | str,
+        *,
+        token: Optional[str] = None,
+        include_files: bool = False,
+    ) -> dict:
         params = {"repository": str(repository)}
         if include_files:
             params["include_files"] = "true"
-        response = self.request_ok("GET", f"/api/v2/archives/{archive_id}/info", token=token, params=params)
+        response = self.request_ok(
+            "GET", f"/api/v2/archives/{archive_id}/info", token=token, params=params
+        )
         return response.json()["info"]
 
-    def restore_contents(self, repo_id: int, archive_name: str, *, path: Optional[str] = None, token: Optional[str] = None) -> list[dict]:
+    def restore_contents(
+        self,
+        repo_id: int,
+        archive_name: str,
+        *,
+        path: Optional[str] = None,
+        token: Optional[str] = None,
+    ) -> list[dict]:
         params = {"path": path} if path else None
         response = self.request_ok(
             "GET",
@@ -547,7 +629,9 @@ class SmokeClient:
             "repository": str(repository),
             "archive": archive_name,
             "paths": paths,
-            "destination": self.container_path(destination) if isinstance(destination, Path) else str(destination),
+            "destination": self.container_path(destination)
+            if isinstance(destination, Path)
+            else str(destination),
             "repository_id": repository_id,
             "destination_type": destination_type,
         }
@@ -562,21 +646,43 @@ class SmokeClient:
         )
         return response.json()["preview"]
 
-    def download_archive_file(self, repository: int | str, archive_name: str, file_path: str, *, token: Optional[str] = None) -> bytes:
+    def download_archive_file(
+        self,
+        repository: int | str,
+        archive_name: str,
+        file_path: str,
+        *,
+        token: Optional[str] = None,
+    ) -> bytes:
         response = self.request_ok(
             "GET",
             "/api/archives/download",
             token=token,
-            params={"repository": str(repository), "archive": archive_name, "file_path": file_path},
+            params={
+                "repository": str(repository),
+                "archive": archive_name,
+                "file_path": file_path,
+            },
         )
         return response.content
 
-    def download_archive_file_v2(self, repository: int | str, archive_name: str, file_path: str, *, token: Optional[str] = None) -> bytes:
+    def download_archive_file_v2(
+        self,
+        repository: int | str,
+        archive_name: str,
+        file_path: str,
+        *,
+        token: Optional[str] = None,
+    ) -> bytes:
         response = self.request_ok(
             "GET",
             "/api/v2/archives/download",
             token=token,
-            params={"repository": str(repository), "archive": archive_name, "file_path": file_path},
+            params={
+                "repository": str(repository),
+                "archive": archive_name,
+                "file_path": file_path,
+            },
         )
         return response.content
 
@@ -596,7 +702,9 @@ class SmokeClient:
             "repository": str(repository),
             "archive": archive_name,
             "paths": paths,
-            "destination": self.container_path(destination) if isinstance(destination, Path) else str(destination),
+            "destination": self.container_path(destination)
+            if isinstance(destination, Path)
+            else str(destination),
             "repository_id": repository_id,
             "destination_type": destination_type,
         }
@@ -611,7 +719,15 @@ class SmokeClient:
         )
         return response.json()["job_id"]
 
-    def create_schedule(self, *, name: str, cron_expression: str, repository_ids: list[int], token: Optional[str] = None, extra: Optional[dict] = None) -> int:
+    def create_schedule(
+        self,
+        *,
+        name: str,
+        cron_expression: str,
+        repository_ids: list[int],
+        token: Optional[str] = None,
+        extra: Optional[dict] = None,
+    ) -> int:
         payload = {
             "name": name,
             "cron_expression": cron_expression,
@@ -634,7 +750,9 @@ class SmokeClient:
         schedule = data.get("schedule") or data.get("job") or data
         return schedule["id"]
 
-    def run_schedule_now(self, schedule_id: int, *, token: Optional[str] = None) -> None:
+    def run_schedule_now(
+        self, schedule_id: int, *, token: Optional[str] = None
+    ) -> None:
         self.request_ok("POST", f"/api/schedule/{schedule_id}/run-now", token=token)
 
     def download_keyfile(self, repo_id: int) -> bytes:
@@ -646,12 +764,18 @@ class SmokeClient:
             response = self.request_ok(
                 "POST",
                 f"/api/repositories/{repo_id}/keyfile",
-                files={"keyfile": (keyfile_path.name, handle, "application/octet-stream")},
+                files={
+                    "keyfile": (keyfile_path.name, handle, "application/octet-stream")
+                },
             )
         if response.status_code != 200:
-            raise SmokeFailure(f"Failed to upload keyfile for repo {repo_id}: {response.text}")
+            raise SmokeFailure(
+                f"Failed to upload keyfile for repo {repo_id}: {response.text}"
+            )
 
-    def create_borg_key_export(self, repo_path: Path, passphrase: str, output_path: Path) -> None:
+    def create_borg_key_export(
+        self, repo_path: Path, passphrase: str, output_path: Path
+    ) -> None:
         env = {
             **os.environ.copy(),
             "BORG_PASSPHRASE": passphrase,
@@ -666,7 +790,9 @@ class SmokeClient:
             env=env,
         )
 
-    def run_borg(self, args: list[str], *, env: Optional[dict[str, str]] = None) -> subprocess.CompletedProcess:
+    def run_borg(
+        self, args: list[str], *, env: Optional[dict[str, str]] = None
+    ) -> subprocess.CompletedProcess:
         merged_env = os.environ.copy()
         merged_env["BORG_UNKNOWN_UNENCRYPTED_REPO_ACCESS_IS_OK"] = "yes"
         merged_env["BORG_RELOCATED_REPO_ACCESS_IS_OK"] = "yes"
@@ -680,7 +806,9 @@ class SmokeClient:
             env=merged_env,
         )
 
-    def wait_for_job_record_count(self, path: str, count: int, *, timeout: float = 60.0) -> dict:
+    def wait_for_job_record_count(
+        self, path: str, count: int, *, timeout: float = 60.0
+    ) -> dict:
         deadline = time.time() + timeout
         last_payload = None
         while time.time() < deadline:
@@ -690,7 +818,9 @@ class SmokeClient:
             if len(jobs) >= count:
                 return last_payload
             time.sleep(0.5)
-        raise SmokeFailure(f"Timed out waiting for {count} jobs at {path}: {last_payload}")
+        raise SmokeFailure(
+            f"Timed out waiting for {count} jobs at {path}: {last_payload}"
+        )
 
     def wait_for_backup_job(
         self,
@@ -713,7 +843,8 @@ class SmokeClient:
             matches = [
                 job
                 for job in last_payload.get("jobs", [])
-                if job.get("repository") == repository_path and job.get("status") in statuses
+                if job.get("repository") == repository_path
+                and job.get("status") in statuses
             ]
             if matches:
                 return max(matches, key=lambda job: int(job.get("id", 0)))

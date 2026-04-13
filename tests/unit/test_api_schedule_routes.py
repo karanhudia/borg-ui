@@ -3,19 +3,30 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.models import BackupJob, Repository, ScheduledJob, ScheduledJobRepository
+from app.database.models import (
+    BackupJob,
+    Repository,
+    ScheduledJob,
+    ScheduledJobRepository,
+)
 
 
 def _create_repo(test_db, name: str, path: str) -> Repository:
-    repo = Repository(name=name, path=path, encryption="none", repository_type="local", mode="full")
+    repo = Repository(
+        name=name, path=path, encryption="none", repository_type="local", mode="full"
+    )
     test_db.add(repo)
     test_db.commit()
     test_db.refresh(repo)
     return repo
 
 
-def _create_schedule(test_db, name: str, cron_expression: str = "0 2 * * *", **kwargs) -> ScheduledJob:
-    schedule = ScheduledJob(name=name, cron_expression=cron_expression, enabled=True, **kwargs)
+def _create_schedule(
+    test_db, name: str, cron_expression: str = "0 2 * * *", **kwargs
+) -> ScheduledJob:
+    schedule = ScheduledJob(
+        name=name, cron_expression=cron_expression, enabled=True, **kwargs
+    )
     test_db.add(schedule)
     test_db.commit()
     test_db.refresh(schedule)
@@ -24,14 +35,24 @@ def _create_schedule(test_db, name: str, cron_expression: str = "0 2 * * *", **k
 
 @pytest.mark.unit
 class TestScheduleRouteContracts:
-    def test_list_schedules_includes_deduped_repository_ids(self, test_client: TestClient, admin_headers, test_db):
+    def test_list_schedules_includes_deduped_repository_ids(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         repo_a = _create_repo(test_db, "Repo A", "/repos/a")
         repo_b = _create_repo(test_db, "Repo B", "/repos/b")
         schedule = _create_schedule(test_db, "Nightly")
         test_db.add_all(
             [
-                ScheduledJobRepository(scheduled_job_id=schedule.id, repository_id=repo_b.id, execution_order=0),
-                ScheduledJobRepository(scheduled_job_id=schedule.id, repository_id=repo_a.id, execution_order=1),
+                ScheduledJobRepository(
+                    scheduled_job_id=schedule.id,
+                    repository_id=repo_b.id,
+                    execution_order=0,
+                ),
+                ScheduledJobRepository(
+                    scheduled_job_id=schedule.id,
+                    repository_id=repo_a.id,
+                    execution_order=1,
+                ),
             ]
         )
         test_db.commit()
@@ -46,13 +67,21 @@ class TestScheduleRouteContracts:
     def test_upcoming_jobs_returns_enabled_jobs_sorted_and_filtered(
         self, test_client: TestClient, admin_headers, test_db
     ):
-        soon = _create_schedule(test_db, "Soon", cron_expression="*/15 * * * *", repository="/repos/a")
-        _create_schedule(test_db, "Tomorrow", cron_expression="0 0 * * *", repository="/repos/b")
-        disabled = _create_schedule(test_db, "Disabled", cron_expression="*/10 * * * *", repository="/repos/c")
+        soon = _create_schedule(
+            test_db, "Soon", cron_expression="*/15 * * * *", repository="/repos/a"
+        )
+        _create_schedule(
+            test_db, "Tomorrow", cron_expression="0 0 * * *", repository="/repos/b"
+        )
+        disabled = _create_schedule(
+            test_db, "Disabled", cron_expression="*/10 * * * *", repository="/repos/c"
+        )
         disabled.enabled = False
         test_db.commit()
 
-        response = test_client.get("/api/schedule/upcoming-jobs?hours=1", headers=admin_headers)
+        response = test_client.get(
+            "/api/schedule/upcoming-jobs?hours=1", headers=admin_headers
+        )
 
         assert response.status_code == 200
         body = response.json()
@@ -60,10 +89,14 @@ class TestScheduleRouteContracts:
         assert "Soon" in names
         assert "Tomorrow" not in names
         assert "Disabled" not in names
-        assert body["upcoming_jobs"] == sorted(body["upcoming_jobs"], key=lambda item: item["next_run"])
+        assert body["upcoming_jobs"] == sorted(
+            body["upcoming_jobs"], key=lambda item: item["next_run"]
+        )
         assert any(job["id"] == soon.id for job in body["upcoming_jobs"])
 
-    def test_update_schedule_rejects_duplicate_name(self, test_client: TestClient, admin_headers, test_db):
+    def test_update_schedule_rejects_duplicate_name(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         existing = _create_schedule(test_db, "Existing", repository="/repos/existing")
         target = _create_schedule(test_db, "Target", repository="/repos/target")
 
@@ -74,16 +107,24 @@ class TestScheduleRouteContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.schedule.jobNameExists"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.schedule.jobNameExists"
+        )
 
-    def test_toggle_schedule_enable_recomputes_stale_next_run(self, test_client: TestClient, admin_headers, test_db):
-        schedule = _create_schedule(test_db, "Re-enable Me", repository="/repos/re-enable")
+    def test_toggle_schedule_enable_recomputes_stale_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        schedule = _create_schedule(
+            test_db, "Re-enable Me", repository="/repos/re-enable"
+        )
         schedule.enabled = False
         schedule.next_run = datetime.now(timezone.utc) - timedelta(hours=12)
         test_db.commit()
         stale_next_run = schedule.next_run
 
-        response = test_client.post(f"/api/schedule/{schedule.id}/toggle", headers=admin_headers)
+        response = test_client.post(
+            f"/api/schedule/{schedule.id}/toggle", headers=admin_headers
+        )
 
         assert response.status_code == 200
         test_db.refresh(schedule)
@@ -91,14 +132,22 @@ class TestScheduleRouteContracts:
         assert schedule.next_run is not None
         assert schedule.next_run > stale_next_run
 
-        due_jobs = test_db.query(ScheduledJob).filter(
-            ScheduledJob.enabled == True,
-            ScheduledJob.next_run <= datetime.now(timezone.utc)
-        ).all()
+        due_jobs = (
+            test_db.query(ScheduledJob)
+            .filter(
+                ScheduledJob.enabled == True,
+                ScheduledJob.next_run <= datetime.now(timezone.utc),
+            )
+            .all()
+        )
         assert schedule.id not in {job.id for job in due_jobs}
 
-    def test_update_schedule_enable_recomputes_stale_next_run(self, test_client: TestClient, admin_headers, test_db):
-        schedule = _create_schedule(test_db, "Enable Via Update", repository="/repos/update-enable")
+    def test_update_schedule_enable_recomputes_stale_next_run(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        schedule = _create_schedule(
+            test_db, "Enable Via Update", repository="/repos/update-enable"
+        )
         schedule.enabled = False
         schedule.next_run = datetime.now(timezone.utc) - timedelta(hours=6)
         test_db.commit()
@@ -116,20 +165,32 @@ class TestScheduleRouteContracts:
         assert schedule.next_run is not None
         assert schedule.next_run > stale_next_run
 
-        due_jobs = test_db.query(ScheduledJob).filter(
-            ScheduledJob.enabled == True,
-            ScheduledJob.next_run <= datetime.now(timezone.utc)
-        ).all()
+        due_jobs = (
+            test_db.query(ScheduledJob)
+            .filter(
+                ScheduledJob.enabled == True,
+                ScheduledJob.next_run <= datetime.now(timezone.utc),
+            )
+            .all()
+        )
         assert schedule.id not in {job.id for job in due_jobs}
 
-    def test_delete_schedule_nulls_backup_job_links(self, test_client: TestClient, admin_headers, test_db):
+    def test_delete_schedule_nulls_backup_job_links(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         schedule = _create_schedule(test_db, "Delete Me", repository="/repos/delete-me")
-        backup_job = BackupJob(repository="/repos/delete-me", status="completed", scheduled_job_id=schedule.id)
+        backup_job = BackupJob(
+            repository="/repos/delete-me",
+            status="completed",
+            scheduled_job_id=schedule.id,
+        )
         test_db.add(backup_job)
         test_db.commit()
         test_db.refresh(backup_job)
 
-        response = test_client.delete(f"/api/schedule/{schedule.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/schedule/{schedule.id}", headers=admin_headers
+        )
 
         assert response.status_code == 200
         test_db.refresh(backup_job)
@@ -153,13 +214,23 @@ class TestScheduleRouteContracts:
         )
         test_db.add_all(
             [
-                ScheduledJobRepository(scheduled_job_id=original.id, repository_id=repo_b.id, execution_order=0),
-                ScheduledJobRepository(scheduled_job_id=original.id, repository_id=repo_a.id, execution_order=1),
+                ScheduledJobRepository(
+                    scheduled_job_id=original.id,
+                    repository_id=repo_b.id,
+                    execution_order=0,
+                ),
+                ScheduledJobRepository(
+                    scheduled_job_id=original.id,
+                    repository_id=repo_a.id,
+                    execution_order=1,
+                ),
             ]
         )
         test_db.commit()
 
-        response = test_client.post(f"/api/schedule/{original.id}/duplicate", headers=admin_headers)
+        response = test_client.post(
+            f"/api/schedule/{original.id}/duplicate", headers=admin_headers
+        )
 
         assert response.status_code == 200
         duplicated_id = response.json()["job"]["id"]
@@ -179,18 +250,27 @@ class TestScheduleRouteContracts:
         )
         assert [link.repository_id for link in links] == [repo_b.id, repo_a.id]
 
-    def test_run_now_requires_configured_repositories(self, test_client: TestClient, admin_headers, test_db):
+    def test_run_now_requires_configured_repositories(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
         schedule = _create_schedule(test_db, "Empty")
         schedule.repository = None
         schedule.repository_id = None
         test_db.commit()
 
-        response = test_client.post(f"/api/schedule/{schedule.id}/run-now", headers=admin_headers)
+        response = test_client.post(
+            f"/api/schedule/{schedule.id}/run-now", headers=admin_headers
+        )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.schedule.noRepositoriesConfigured"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.noRepositoriesConfigured"
+        )
 
-    def test_validate_cron_returns_preview_for_valid_expression(self, test_client: TestClient, admin_headers):
+    def test_validate_cron_returns_preview_for_valid_expression(
+        self, test_client: TestClient, admin_headers
+    ):
         response = test_client.post(
             "/api/schedule/validate-cron",
             json={

@@ -23,24 +23,22 @@ def _sanitize_ssh_url(url: str) -> str:
 
     Example: ssh://user@host:23/path -> ssh://host:23/path
     """
-    return re.sub(r'://([^@]+)@', r'://', url)
+    return re.sub(r"://([^@]+)@", r"://", url)
 
 
 def _get_repository(db: Session, name_or_path: str) -> Optional[Repository]:
     """Get repository by name or path."""
     from sqlalchemy import or_
-    return db.query(Repository).filter(
-        or_(
-            Repository.name == name_or_path,
-            Repository.path == name_or_path
-        )
-    ).first()
+
+    return (
+        db.query(Repository)
+        .filter(or_(Repository.name == name_or_path, Repository.path == name_or_path))
+        .first()
+    )
 
 
 def _notification_applies_to_repository(
-    db: Session,
-    setting: NotificationSettings,
-    repository_name_or_path: str
+    db: Session, setting: NotificationSettings, repository_name_or_path: str
 ) -> bool:
     """
     Check if a notification setting applies to the given repository.
@@ -63,7 +61,7 @@ def _notification_applies_to_repository(
 
     # Get repository by name OR path to check if it's in the filtered list
     repo = _get_repository(db, repository_name_or_path)
-    
+
     if not repo:
         # Try finding by partial path matching if exact match fails (common for SSH repos)
         # But for now let's stick to exact match and basic robust checks
@@ -77,7 +75,7 @@ def _notification_applies_to_repository(
 
 def _format_bytes(bytes_value: int) -> str:
     """Format bytes into human-readable size."""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
         if bytes_value < 1024.0:
             return f"{bytes_value:.2f} {unit}"
         bytes_value /= 1024.0
@@ -135,7 +133,7 @@ def _calculate_backup_speed(total_bytes: int, duration_seconds: int) -> str:
     bytes_per_second = total_bytes / duration_seconds
 
     # Convert to appropriate unit
-    for unit in ['B/s', 'KB/s', 'MB/s', 'GB/s']:
+    for unit in ["B/s", "KB/s", "MB/s", "GB/s"]:
         if bytes_per_second < 1024.0:
             return f"{bytes_per_second:.1f} {unit}"
         bytes_per_second /= 1024.0
@@ -155,20 +153,20 @@ def _get_status_badge(status_type: str, is_html: bool = False) -> str:
         Professional status badge like "[SUCCESS]" or HTML colored badge
     """
     badge_configs = {
-        'success': {'text': '[SUCCESS]', 'color': '#28a745'},
-        'failed': {'text': '[FAILED]', 'color': '#dc3545'},
-        'error': {'text': '[ERROR]', 'color': '#dc3545'},
-        'warning': {'text': '[WARNING]', 'color': '#ffc107'},
-        'info': {'text': '[INFO]', 'color': '#17a2b8'},
-        'started': {'text': '[STARTED]', 'color': '#007bff'},
+        "success": {"text": "[SUCCESS]", "color": "#28a745"},
+        "failed": {"text": "[FAILED]", "color": "#dc3545"},
+        "error": {"text": "[ERROR]", "color": "#dc3545"},
+        "warning": {"text": "[WARNING]", "color": "#ffc107"},
+        "info": {"text": "[INFO]", "color": "#17a2b8"},
+        "started": {"text": "[STARTED]", "color": "#007bff"},
     }
 
-    config = badge_configs.get(status_type.lower(), badge_configs['info'])
+    config = badge_configs.get(status_type.lower(), badge_configs["info"])
 
     if is_html:
         return f'<span style="background-color: {config["color"]}; color: white; padding: 3px 8px; border-radius: 3px; font-weight: 600; font-size: 12px;">{config["text"]}</span>'
     else:
-        return config['text']
+        return config["text"]
 
 
 def _get_repository_type(repo) -> str:
@@ -185,23 +183,25 @@ def _get_repository_type(repo) -> str:
         return "Unknown"
 
     # Check for SSH connection
-    if hasattr(repo, 'ssh_connection_id') and repo.ssh_connection_id:
+    if hasattr(repo, "ssh_connection_id") and repo.ssh_connection_id:
         return "SSH"
 
     # Check path patterns
-    if hasattr(repo, 'path'):
+    if hasattr(repo, "path"):
         path = repo.path
-        if path.startswith('ssh://'):
+        if path.startswith("ssh://"):
             return "SSH"
-        elif path.startswith('sftp://'):
+        elif path.startswith("sftp://"):
             return "SFTP"
-        elif '/' in path or '\\' in path:
+        elif "/" in path or "\\" in path:
             return "Local"
 
     return "Unknown"
 
 
-def _create_markdown_message(title: str, content_blocks: list, footer: str = None) -> str:
+def _create_markdown_message(
+    title: str, content_blocks: list, footer: str = None
+) -> str:
     """
     Create a well-formatted Markdown message for chat services (Slack, Discord, Telegram, etc.).
 
@@ -218,9 +218,9 @@ def _create_markdown_message(title: str, content_blocks: list, footer: str = Non
     lines = []
 
     for block in content_blocks:
-        if 'label' in block and 'value' in block:
+        if "label" in block and "value" in block:
             lines.append(f"**{block['label']}:** {block['value']}")
-        elif 'html' in block:
+        elif "html" in block:
             # Skip HTML blocks - these are statistics that we'll format differently
             # Extract stats from the HTML if needed, or just skip for now
             pass
@@ -234,7 +234,7 @@ def _create_markdown_message(title: str, content_blocks: list, footer: str = Non
 
 def _is_email_service(service_url: str) -> bool:
     """Check if the service URL is for an email service."""
-    email_prefixes = ['mailto://', 'mailtos://', 'smtp://', 'smtps://']
+    email_prefixes = ["mailto://", "mailtos://", "smtp://", "smtps://"]
     return any(service_url.lower().startswith(prefix) for prefix in email_prefixes)
 
 
@@ -250,7 +250,8 @@ def _create_html_email(title: str, content_blocks: list, footer: str = None) -> 
     Returns:
         HTML string
     """
-    html_parts = ['''
+    html_parts = [
+        """
 <!DOCTYPE html>
 <html>
 <head>
@@ -358,49 +359,56 @@ def _create_html_email(title: str, content_blocks: list, footer: str = None) -> 
 <body>
     <div class="email-container">
         <div class="email-header">
-            <h1>''' + title + '''</h1>
+            <h1>"""
+        + title
+        + """</h1>
         </div>
         <div class="email-body">
-''']
+"""
+    ]
 
     for block in content_blocks:
-        if 'html' in block:
-            html_parts.append(block['html'])
-        elif 'label' in block and 'value' in block:
-            html_parts.append(f'''
+        if "html" in block:
+            html_parts.append(block["html"])
+        elif "label" in block and "value" in block:
+            html_parts.append(f"""
             <div class="info-row">
-                <div class="info-label">{block['label']}:</div>
-                <div class="info-value">{block['value']}</div>
+                <div class="info-label">{block["label"]}:</div>
+                <div class="info-value">{block["value"]}</div>
             </div>
-''')
+""")
 
-    html_parts.append('''
+    html_parts.append("""
         </div>
-''')
+""")
 
     if footer:
-        html_parts.append(f'''
+        html_parts.append(f"""
         <div class="email-footer">
             {footer}
         </div>
-''')
+""")
 
-    html_parts.append('''
+    html_parts.append("""
     </div>
 </body>
 </html>
-''')
+""")
 
-    return ''.join(html_parts)
+    return "".join(html_parts)
 
 
 def _is_webhook_service(service_url: str) -> bool:
     """Check if the service URL is for a webhook service."""
     webhook_prefixes = [
-        'http://', 'https://',  # Generic webhooks
-        'json://', 'jsons://',  # Apprise JSON webhooks
-        'form://', 'forms://',  # Apprise form webhooks
-        'xml://', 'xmls://'     # Apprise XML webhooks
+        "http://",
+        "https://",  # Generic webhooks
+        "json://",
+        "jsons://",  # Apprise JSON webhooks
+        "form://",
+        "forms://",  # Apprise form webhooks
+        "xml://",
+        "xmls://",  # Apprise XML webhooks
     ]
     # Exclude email services that use HTTPS (like mailgun)
     if _is_email_service(service_url):
@@ -410,7 +418,7 @@ def _is_webhook_service(service_url: str) -> bool:
 
 def _is_json_webhook(service_url: str) -> bool:
     """Check if the service URL is specifically for a JSON webhook."""
-    json_prefixes = ['json://', 'jsons://']
+    json_prefixes = ["json://", "jsons://"]
     return any(service_url.lower().startswith(prefix) for prefix in json_prefixes)
 
 
@@ -447,7 +455,7 @@ def _build_json_data(event_type: str, data: dict, compact: bool = False) -> str:
     json_data = {
         "event_type": event_type,
         "timestamp": datetime.now().isoformat(),
-        **data
+        **data,
     }
 
     if compact:
@@ -456,7 +464,9 @@ def _build_json_data(event_type: str, data: dict, compact: bool = False) -> str:
         return json.dumps(json_data, indent=2)
 
 
-def _append_json_to_body(body: str, json_data: str, is_html: bool, service_url: str = '') -> str:
+def _append_json_to_body(
+    body: str, json_data: str, is_html: bool, service_url: str = ""
+) -> str:
     """
     Append or replace body with JSON data based on service type.
 
@@ -479,7 +489,7 @@ def _append_json_to_body(body: str, json_data: str, is_html: bool, service_url: 
     # For other services: append formatted JSON
     if is_html:
         # For email: use collapsible <details> section
-        json_section = f'''
+        json_section = f"""
         <div style="margin-top: 20px; padding: 12px; background-color: #f8f9fa; border-radius: 4px;">
             <details>
                 <summary style="cursor: pointer; font-weight: 600; color: #667eea;">
@@ -490,9 +500,9 @@ def _append_json_to_body(body: str, json_data: str, is_html: bool, service_url: 
         </div>
     </div>
 </body>
-</html>'''
+</html>"""
         # Replace the closing tags with JSON section + closing tags
-        body = body.replace('</div>\n</body>\n</html>', json_section)
+        body = body.replace("</div>\n</body>\n</html>", json_section)
     else:
         # For chat: use markdown code block
         body += f"\n\n**JSON Data (for automation)**\n```json\n{json_data}\n```"
@@ -510,7 +520,7 @@ class NotificationService:
         archive_name: str,
         source_directories: Optional[list] = None,
         expected_size: Optional[int] = None,
-        job_name: Optional[str] = None
+        job_name: Optional[str] = None,
     ) -> None:
         """
         Send notification when backup starts.
@@ -523,10 +533,14 @@ class NotificationService:
             expected_size: Expected total size in bytes (optional)
             job_name: Name of the job/schedule (optional, for enhanced titles)
         """
-        settings = db.query(NotificationSettings).filter(
-            NotificationSettings.enabled == True,
-            NotificationSettings.notify_on_backup_start == True
-        ).all()
+        settings = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_backup_start == True,
+            )
+            .all()
+        )
 
         if not settings:
             return
@@ -539,33 +553,40 @@ class NotificationService:
 
         # Build content blocks
         content_blocks = [
-            {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {"label": "Archive", "value": archive_name},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            content_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
 
         # Add source directories if provided
         if source_directories:
             sources_text = "\n".join(f"• {src}" for src in source_directories)
-            content_blocks.append({'label': 'Sources', 'value': sources_text})
+            content_blocks.append({"label": "Sources", "value": sources_text})
 
         # Add expected size if provided
         if expected_size:
-            content_blocks.append({'label': 'Expected Size', 'value': _format_bytes(expected_size)})
+            content_blocks.append(
+                {"label": "Expected Size", "value": _format_bytes(expected_size)}
+            )
 
         # Create timestamp
         start_time = datetime.now()
-        timestamp_str = start_time.strftime('%Y-%m-%d %H:%M:%S')
+        timestamp_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
 
         # Create HTML body for email with professional badge
         html_title = f"{_get_status_badge('started', is_html=True)} Backup Started"
         html_body = _create_html_email(
             title=html_title,
             content_blocks=content_blocks,
-            footer=f"Started at {timestamp_str}"
+            footer=f"Started at {timestamp_str}",
         )
 
         # Create markdown body for chat services with professional badge
@@ -573,7 +594,7 @@ class NotificationService:
         markdown_body = _create_markdown_message(
             title=markdown_title,
             content_blocks=content_blocks,
-            footer=f"Started at {timestamp_str}"
+            footer=f"Started at {timestamp_str}",
         )
 
         # Send to all enabled services with this event trigger
@@ -583,7 +604,7 @@ class NotificationService:
                 continue
 
             # Build title with optional job name and professional badge
-            status_badge_text = _get_status_badge('started', is_html=False)
+            status_badge_text = _get_status_badge("started", is_html=False)
 
             title = f"{status_badge_text} Backup Started"
             if setting.include_job_name_in_title and job_name:
@@ -597,19 +618,32 @@ class NotificationService:
 
             # Add JSON data if enabled
             if _should_include_json(setting):
-                json_data = _build_json_data("backup_start", {
-                    "repository_name": repo.name if repo else repository_name,
-                    "repository_path": repo.path if repo else repository_name,
-                    "archive_name": archive_name,
-                    "job_name": job_name,
-                    "source_directories": source_directories,
-                    "expected_size": expected_size,
-                    "started_at": start_time.isoformat()
-                }, compact=_is_json_webhook(setting.service_url))
-                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
-                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+                json_data = _build_json_data(
+                    "backup_start",
+                    {
+                        "repository_name": repo.name if repo else repository_name,
+                        "repository_path": repo.path if repo else repository_name,
+                        "archive_name": archive_name,
+                        "job_name": job_name,
+                        "source_directories": source_directories,
+                        "expected_size": expected_size,
+                        "started_at": start_time.isoformat(),
+                    },
+                    compact=_is_json_webhook(setting.service_url),
+                )
+                final_html_body = _append_json_to_body(
+                    html_body, json_data, is_html=True, service_url=setting.service_url
+                )
+                final_markdown_body = _append_json_to_body(
+                    markdown_body,
+                    json_data,
+                    is_html=False,
+                    service_url=setting.service_url,
+                )
 
-            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
+            await NotificationService._send_to_service(
+                db, setting, title, final_html_body, final_markdown_body
+            )
 
     @staticmethod
     async def send_backup_success(
@@ -620,7 +654,7 @@ class NotificationService:
         completion_time: Optional[datetime] = None,
         job_name: Optional[str] = None,
         started_at: Optional[datetime] = None,
-        nfiles: Optional[int] = None
+        nfiles: Optional[int] = None,
     ) -> None:
         """
         Send notification for successful backup.
@@ -633,10 +667,14 @@ class NotificationService:
             completion_time: When the backup completed (optional, defaults to now)
             job_name: Name of the job/schedule (optional, for enhanced titles)
         """
-        settings = db.query(NotificationSettings).filter(
-            NotificationSettings.enabled == True,
-            NotificationSettings.notify_on_backup_success == True
-        ).all()
+        settings = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_backup_success == True,
+            )
+            .all()
+        )
 
         if not settings:
             return
@@ -649,13 +687,18 @@ class NotificationService:
 
         # Build content blocks for HTML email and markdown
         content_blocks = [
-            {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {"label": "Archive", "value": archive_name},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            content_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
 
         # Calculate derived metrics
         elapsed_time_str = None
@@ -666,25 +709,31 @@ class NotificationService:
             elapsed_time_str = _format_duration(started_at, completion_time)
 
         if stats:
-            original_size = stats.get('original_size', 0)
-            compressed_size = stats.get('compressed_size', 0)
+            original_size = stats.get("original_size", 0)
+            compressed_size = stats.get("compressed_size", 0)
 
             if original_size and compressed_size:
-                compression_ratio_str = _calculate_compression_ratio(original_size, compressed_size)
+                compression_ratio_str = _calculate_compression_ratio(
+                    original_size, compressed_size
+                )
 
                 if started_at and completion_time:
                     duration_seconds = (completion_time - started_at).total_seconds()
-                    backup_speed_str = _calculate_backup_speed(original_size, duration_seconds)
+                    backup_speed_str = _calculate_backup_speed(
+                        original_size, duration_seconds
+                    )
 
         # Add performance metrics before stats
         if elapsed_time_str:
-            content_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
+            content_blocks.append({"label": "Duration", "value": elapsed_time_str})
         if nfiles:
-            content_blocks.append({'label': 'Files Processed', 'value': f"{nfiles:,}"})
+            content_blocks.append({"label": "Files Processed", "value": f"{nfiles:,}"})
         if backup_speed_str:
-            content_blocks.append({'label': 'Average Speed', 'value': backup_speed_str})
+            content_blocks.append({"label": "Average Speed", "value": backup_speed_str})
         if compression_ratio_str:
-            content_blocks.append({'label': 'Compression Ratio', 'value': compression_ratio_str})
+            content_blocks.append(
+                {"label": "Compression Ratio", "value": compression_ratio_str}
+            )
 
         # Add statistics as a grid for HTML, and as simple blocks for markdown
         stats_blocks = []
@@ -692,35 +741,50 @@ class NotificationService:
             stats_html = '<div class="stats-grid">'
 
             if "original_size" in stats and stats["original_size"]:
-                stats_html += f'''
+                stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Original Size</div>
-                    <div class="stat-value">{_format_bytes(stats['original_size'])}</div>
-                </div>'''
-                stats_blocks.append({'label': 'Original Size', 'value': _format_bytes(stats['original_size'])})
+                    <div class="stat-value">{_format_bytes(stats["original_size"])}</div>
+                </div>"""
+                stats_blocks.append(
+                    {
+                        "label": "Original Size",
+                        "value": _format_bytes(stats["original_size"]),
+                    }
+                )
 
             if "compressed_size" in stats and stats["compressed_size"]:
-                stats_html += f'''
+                stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Compressed</div>
-                    <div class="stat-value">{_format_bytes(stats['compressed_size'])}</div>
-                </div>'''
-                stats_blocks.append({'label': 'Compressed', 'value': _format_bytes(stats['compressed_size'])})
+                    <div class="stat-value">{_format_bytes(stats["compressed_size"])}</div>
+                </div>"""
+                stats_blocks.append(
+                    {
+                        "label": "Compressed",
+                        "value": _format_bytes(stats["compressed_size"]),
+                    }
+                )
 
             if "deduplicated_size" in stats and stats["deduplicated_size"] is not None:
-                stats_html += f'''
+                stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Deduplicated</div>
-                    <div class="stat-value">{_format_bytes(stats['deduplicated_size'])}</div>
-                </div>'''
-                stats_blocks.append({'label': 'Deduplicated', 'value': _format_bytes(stats['deduplicated_size'])})
+                    <div class="stat-value">{_format_bytes(stats["deduplicated_size"])}</div>
+                </div>"""
+                stats_blocks.append(
+                    {
+                        "label": "Deduplicated",
+                        "value": _format_bytes(stats["deduplicated_size"]),
+                    }
+                )
 
-            stats_html += '</div>'
-            content_blocks.append({'html': stats_html})
+            stats_html += "</div>"
+            content_blocks.append({"html": stats_html})
 
         # Use provided completion time or current time as fallback
         completed_at = completion_time or datetime.now()
-        timestamp_str = completed_at.strftime('%Y-%m-%d %H:%M:%S')
+        timestamp_str = completed_at.strftime("%Y-%m-%d %H:%M:%S")
 
         # Build footer with elapsed time if available
         footer = f"Completed at {timestamp_str}"
@@ -729,35 +793,42 @@ class NotificationService:
 
         # Create content blocks for markdown (including stats and performance metrics)
         markdown_blocks = [
-            {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {"label": "Archive", "value": archive_name},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            markdown_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
         if elapsed_time_str:
-            markdown_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
+            markdown_blocks.append({"label": "Duration", "value": elapsed_time_str})
         if nfiles:
-            markdown_blocks.append({'label': 'Files Processed', 'value': f"{nfiles:,}"})
+            markdown_blocks.append({"label": "Files Processed", "value": f"{nfiles:,}"})
         if backup_speed_str:
-            markdown_blocks.append({'label': 'Average Speed', 'value': backup_speed_str})
+            markdown_blocks.append(
+                {"label": "Average Speed", "value": backup_speed_str}
+            )
         if compression_ratio_str:
-            markdown_blocks.append({'label': 'Compression Ratio', 'value': compression_ratio_str})
+            markdown_blocks.append(
+                {"label": "Compression Ratio", "value": compression_ratio_str}
+            )
         markdown_blocks.extend(stats_blocks)
 
         # Create HTML body for email with professional badge
         html_title = f"{_get_status_badge('success', is_html=True)} Backup Successful"
         html_body = _create_html_email(
-            title=html_title,
-            content_blocks=content_blocks,
-            footer=footer
+            title=html_title, content_blocks=content_blocks, footer=footer
         )
 
         # Create Markdown body for chat services with professional badge
-        markdown_title = f"{_get_status_badge('success', is_html=False)} Backup Successful"
+        markdown_title = (
+            f"{_get_status_badge('success', is_html=False)} Backup Successful"
+        )
         markdown_body = _create_markdown_message(
-            title=markdown_title,
-            content_blocks=markdown_blocks,
-            footer=footer
+            title=markdown_title, content_blocks=markdown_blocks, footer=footer
         )
 
         for setting in settings:
@@ -766,7 +837,7 @@ class NotificationService:
                 continue
 
             # Build title with optional job name and professional badge
-            status_badge_text = _get_status_badge('success', is_html=False)
+            status_badge_text = _get_status_badge("success", is_html=False)
 
             title = f"{status_badge_text} Backup Successful"
             if setting.include_job_name_in_title and job_name:
@@ -780,18 +851,33 @@ class NotificationService:
 
             # Add JSON data if enabled
             if _should_include_json(setting):
-                json_data = _build_json_data("backup_success", {
-                    "repository_name": repo.name if repo else repository_name,
-                    "repository_path": repo.path if repo else repository_name,
-                    "archive_name": archive_name,
-                    "job_name": job_name,
-                    "stats": stats,
-                    "completed_at": completed_at.isoformat() if completed_at else None
-                }, compact=_is_json_webhook(setting.service_url))
-                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
-                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+                json_data = _build_json_data(
+                    "backup_success",
+                    {
+                        "repository_name": repo.name if repo else repository_name,
+                        "repository_path": repo.path if repo else repository_name,
+                        "archive_name": archive_name,
+                        "job_name": job_name,
+                        "stats": stats,
+                        "completed_at": completed_at.isoformat()
+                        if completed_at
+                        else None,
+                    },
+                    compact=_is_json_webhook(setting.service_url),
+                )
+                final_html_body = _append_json_to_body(
+                    html_body, json_data, is_html=True, service_url=setting.service_url
+                )
+                final_markdown_body = _append_json_to_body(
+                    markdown_body,
+                    json_data,
+                    is_html=False,
+                    service_url=setting.service_url,
+                )
 
-            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
+            await NotificationService._send_to_service(
+                db, setting, title, final_html_body, final_markdown_body
+            )
 
     @staticmethod
     async def send_backup_failure(
@@ -799,7 +885,7 @@ class NotificationService:
         repository_name: str,
         error_message: str,
         job_id: Optional[int] = None,
-        job_name: Optional[str] = None
+        job_name: Optional[str] = None,
     ) -> None:
         """
         Send notification for failed backup.
@@ -811,10 +897,14 @@ class NotificationService:
             job_id: Backup job ID (optional)
             job_name: Name of the job/schedule (optional, for enhanced titles)
         """
-        settings = db.query(NotificationSettings).filter(
-            NotificationSettings.enabled == True,
-            NotificationSettings.notify_on_backup_failure == True
-        ).all()
+        settings = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_backup_failure == True,
+            )
+            .all()
+        )
 
         if not settings:
             return
@@ -827,23 +917,28 @@ class NotificationService:
 
         # Build content blocks
         content_blocks = [
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            content_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
 
         if job_id:
-            content_blocks.append({'label': 'Job ID', 'value': str(job_id)})
+            content_blocks.append({"label": "Job ID", "value": str(job_id)})
 
         # Add error box for HTML
-        error_html = f'''
+        error_html = f"""
         <div class="error-box">
             <strong>Error Details:</strong>
             <pre>{error_message}</pre>
-        </div>'''
-        content_blocks.append({'html': error_html})
+        </div>"""
+        content_blocks.append({"html": error_html})
 
         # Capture failure time
         failure_time = datetime.now()
@@ -853,24 +948,31 @@ class NotificationService:
         html_body = _create_html_email(
             title=html_title,
             content_blocks=content_blocks,
-            footer=f"Failed at {failure_time.strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=f"Failed at {failure_time.strftime('%Y-%m-%d %H:%M:%S')}",
         )
 
         # Create markdown body with professional badge (without HTML error box)
         markdown_blocks = [
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            markdown_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
         if job_id:
-            markdown_blocks.append({'label': 'Job ID', 'value': str(job_id)})
-        markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
+            markdown_blocks.append({"label": "Job ID", "value": str(job_id)})
+        markdown_blocks.append(
+            {"label": "Error", "value": f"```\n{error_message}\n```"}
+        )
 
         markdown_title = f"{_get_status_badge('failed', is_html=False)} Backup Failed"
         markdown_body = _create_markdown_message(
             title=markdown_title,
             content_blocks=markdown_blocks,
-            footer=f"Failed at {failure_time.strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=f"Failed at {failure_time.strftime('%Y-%m-%d %H:%M:%S')}",
         )
 
         for setting in settings:
@@ -879,7 +981,7 @@ class NotificationService:
                 continue
 
             # Build title with optional job name and professional badge
-            status_badge_text = _get_status_badge('failed', is_html=False)
+            status_badge_text = _get_status_badge("failed", is_html=False)
 
             title = f"{status_badge_text} Backup Failed"
             if setting.include_job_name_in_title and job_name:
@@ -893,18 +995,31 @@ class NotificationService:
 
             # Add JSON data if enabled
             if _should_include_json(setting):
-                json_data = _build_json_data("backup_failure", {
-                    "repository_name": repo.name if repo else repository_name,
-                    "repository_path": repo.path if repo else repository_name,
-                    "job_name": job_name,
-                    "job_id": job_id,
-                    "error_message": error_message,
-                    "failed_at": failure_time.isoformat()
-                }, compact=_is_json_webhook(setting.service_url))
-                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
-                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+                json_data = _build_json_data(
+                    "backup_failure",
+                    {
+                        "repository_name": repo.name if repo else repository_name,
+                        "repository_path": repo.path if repo else repository_name,
+                        "job_name": job_name,
+                        "job_id": job_id,
+                        "error_message": error_message,
+                        "failed_at": failure_time.isoformat(),
+                    },
+                    compact=_is_json_webhook(setting.service_url),
+                )
+                final_html_body = _append_json_to_body(
+                    html_body, json_data, is_html=True, service_url=setting.service_url
+                )
+                final_markdown_body = _append_json_to_body(
+                    markdown_body,
+                    json_data,
+                    is_html=False,
+                    service_url=setting.service_url,
+                )
 
-            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
+            await NotificationService._send_to_service(
+                db, setting, title, final_html_body, final_markdown_body
+            )
 
     @staticmethod
     async def send_backup_warning(
@@ -916,7 +1031,7 @@ class NotificationService:
         completion_time: Optional[datetime] = None,
         job_name: Optional[str] = None,
         started_at: Optional[datetime] = None,
-        nfiles: Optional[int] = None
+        nfiles: Optional[int] = None,
     ) -> None:
         """
         Send notification for backup completed with warnings.
@@ -932,10 +1047,15 @@ class NotificationService:
             started_at: When the backup started (optional, for elapsed time calculation)
             nfiles: Number of files processed (optional)
         """
-        settings = db.query(NotificationSettings).filter(
-            NotificationSettings.enabled == True,
-            NotificationSettings.notify_on_backup_success == True  # Use success setting for warnings
-        ).all()
+        settings = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_backup_success
+                == True,  # Use success setting for warnings
+            )
+            .all()
+        )
 
         if not settings:
             return
@@ -948,13 +1068,18 @@ class NotificationService:
 
         # Build content blocks for HTML email and markdown
         content_blocks = [
-            {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {"label": "Archive", "value": archive_name},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            content_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
 
         # Calculate derived metrics
         elapsed_time_str = None
@@ -965,25 +1090,31 @@ class NotificationService:
             elapsed_time_str = _format_duration(started_at, completion_time)
 
         if stats:
-            original_size = stats.get('original_size', 0)
-            compressed_size = stats.get('compressed_size', 0)
+            original_size = stats.get("original_size", 0)
+            compressed_size = stats.get("compressed_size", 0)
 
             if original_size and compressed_size:
-                compression_ratio_str = _calculate_compression_ratio(original_size, compressed_size)
+                compression_ratio_str = _calculate_compression_ratio(
+                    original_size, compressed_size
+                )
 
                 if started_at and completion_time:
                     duration_seconds = (completion_time - started_at).total_seconds()
-                    backup_speed_str = _calculate_backup_speed(original_size, duration_seconds)
+                    backup_speed_str = _calculate_backup_speed(
+                        original_size, duration_seconds
+                    )
 
         # Add performance metrics before stats
         if elapsed_time_str:
-            content_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
+            content_blocks.append({"label": "Duration", "value": elapsed_time_str})
         if nfiles:
-            content_blocks.append({'label': 'Files Processed', 'value': f"{nfiles:,}"})
+            content_blocks.append({"label": "Files Processed", "value": f"{nfiles:,}"})
         if backup_speed_str:
-            content_blocks.append({'label': 'Average Speed', 'value': backup_speed_str})
+            content_blocks.append({"label": "Average Speed", "value": backup_speed_str})
         if compression_ratio_str:
-            content_blocks.append({'label': 'Compression Ratio', 'value': compression_ratio_str})
+            content_blocks.append(
+                {"label": "Compression Ratio", "value": compression_ratio_str}
+            )
 
         # Add statistics as a grid for HTML, and as simple blocks for markdown
         stats_blocks = []
@@ -991,39 +1122,54 @@ class NotificationService:
             stats_html = '<div class="stats-grid">'
 
             if "original_size" in stats and stats["original_size"]:
-                stats_html += f'''
+                stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Original Size</div>
-                    <div class="stat-value">{_format_bytes(stats['original_size'])}</div>
-                </div>'''
-                stats_blocks.append({'label': 'Original Size', 'value': _format_bytes(stats['original_size'])})
+                    <div class="stat-value">{_format_bytes(stats["original_size"])}</div>
+                </div>"""
+                stats_blocks.append(
+                    {
+                        "label": "Original Size",
+                        "value": _format_bytes(stats["original_size"]),
+                    }
+                )
 
             if "compressed_size" in stats and stats["compressed_size"]:
-                stats_html += f'''
+                stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Compressed Size</div>
-                    <div class="stat-value">{_format_bytes(stats['compressed_size'])}</div>
-                </div>'''
-                stats_blocks.append({'label': 'Compressed Size', 'value': _format_bytes(stats['compressed_size'])})
+                    <div class="stat-value">{_format_bytes(stats["compressed_size"])}</div>
+                </div>"""
+                stats_blocks.append(
+                    {
+                        "label": "Compressed Size",
+                        "value": _format_bytes(stats["compressed_size"]),
+                    }
+                )
 
             if "deduplicated_size" in stats and stats["deduplicated_size"]:
-                stats_html += f'''
+                stats_html += f"""
                 <div class="stat-card">
                     <div class="stat-label">Deduplicated Size</div>
-                    <div class="stat-value">{_format_bytes(stats['deduplicated_size'])}</div>
-                </div>'''
-                stats_blocks.append({'label': 'Deduplicated Size', 'value': _format_bytes(stats['deduplicated_size'])})
+                    <div class="stat-value">{_format_bytes(stats["deduplicated_size"])}</div>
+                </div>"""
+                stats_blocks.append(
+                    {
+                        "label": "Deduplicated Size",
+                        "value": _format_bytes(stats["deduplicated_size"]),
+                    }
+                )
 
-            stats_html += '</div>'
-            content_blocks.append({'html': stats_html})
+            stats_html += "</div>"
+            content_blocks.append({"html": stats_html})
 
         # Add warning box for HTML
-        warning_html = f'''
+        warning_html = f"""
         <div class="warning-box" style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 10px 0; border-radius: 4px;">
             <strong style="color: #856404;">Warning Details:</strong>
             <pre style="margin: 8px 0 0 0; color: #856404;">{warning_message}</pre>
-        </div>'''
-        content_blocks.append({'html': warning_html})
+        </div>"""
+        content_blocks.append({"html": warning_html})
 
         # Capture completion time
         completed_at = completion_time or datetime.now()
@@ -1036,34 +1182,41 @@ class NotificationService:
         # Create HTML body with professional badge
         html_title = f"{_get_status_badge('warning', is_html=True)} Backup Completed with Warnings"
         html_body = _create_html_email(
-            title=html_title,
-            content_blocks=content_blocks,
-            footer=footer
+            title=html_title, content_blocks=content_blocks, footer=footer
         )
 
         # Create markdown body with professional badge
         markdown_blocks = [
-            {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {"label": "Archive", "value": archive_name},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            markdown_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
         if elapsed_time_str:
-            markdown_blocks.append({'label': 'Duration', 'value': elapsed_time_str})
+            markdown_blocks.append({"label": "Duration", "value": elapsed_time_str})
         if nfiles:
-            markdown_blocks.append({'label': 'Files Processed', 'value': f"{nfiles:,}"})
+            markdown_blocks.append({"label": "Files Processed", "value": f"{nfiles:,}"})
         if backup_speed_str:
-            markdown_blocks.append({'label': 'Average Speed', 'value': backup_speed_str})
+            markdown_blocks.append(
+                {"label": "Average Speed", "value": backup_speed_str}
+            )
         if compression_ratio_str:
-            markdown_blocks.append({'label': 'Compression Ratio', 'value': compression_ratio_str})
+            markdown_blocks.append(
+                {"label": "Compression Ratio", "value": compression_ratio_str}
+            )
         markdown_blocks.extend(stats_blocks)
-        markdown_blocks.append({'label': 'Warning', 'value': f"```\n{warning_message}\n```"})
+        markdown_blocks.append(
+            {"label": "Warning", "value": f"```\n{warning_message}\n```"}
+        )
 
         markdown_title = f"{_get_status_badge('warning', is_html=False)} Backup Completed with Warnings"
         markdown_body = _create_markdown_message(
-            title=markdown_title,
-            content_blocks=markdown_blocks,
-            footer=footer
+            title=markdown_title, content_blocks=markdown_blocks, footer=footer
         )
 
         for setting in settings:
@@ -1072,11 +1225,13 @@ class NotificationService:
                 continue
 
             # Build title with optional job name and professional badge
-            status_badge_text = _get_status_badge('warning', is_html=False)
+            status_badge_text = _get_status_badge("warning", is_html=False)
 
             title = f"{status_badge_text} Backup Completed with Warnings"
             if setting.include_job_name_in_title and job_name:
-                title = f"{status_badge_text} Backup Completed with Warnings - {job_name}"
+                title = (
+                    f"{status_badge_text} Backup Completed with Warnings - {job_name}"
+                )
             if setting.title_prefix:
                 title = f"{setting.title_prefix} {title}"
 
@@ -1086,19 +1241,32 @@ class NotificationService:
 
             # Add JSON data if enabled
             if _should_include_json(setting):
-                json_data = _build_json_data("backup_warning", {
-                    "repository_name": repo.name if repo else repository_name,
-                    "repository_path": repo.path if repo else repository_name,
-                    "archive_name": archive_name,
-                    "job_name": job_name,
-                    "warning_message": warning_message,
-                    "stats": stats,
-                    "completed_at": completed_at.isoformat()
-                }, compact=_is_json_webhook(setting.service_url))
-                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
-                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+                json_data = _build_json_data(
+                    "backup_warning",
+                    {
+                        "repository_name": repo.name if repo else repository_name,
+                        "repository_path": repo.path if repo else repository_name,
+                        "archive_name": archive_name,
+                        "job_name": job_name,
+                        "warning_message": warning_message,
+                        "stats": stats,
+                        "completed_at": completed_at.isoformat(),
+                    },
+                    compact=_is_json_webhook(setting.service_url),
+                )
+                final_html_body = _append_json_to_body(
+                    html_body, json_data, is_html=True, service_url=setting.service_url
+                )
+                final_markdown_body = _append_json_to_body(
+                    markdown_body,
+                    json_data,
+                    is_html=False,
+                    service_url=setting.service_url,
+                )
 
-            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
+            await NotificationService._send_to_service(
+                db, setting, title, final_html_body, final_markdown_body
+            )
 
     @staticmethod
     async def send_restore_success(
@@ -1107,7 +1275,7 @@ class NotificationService:
         archive_name: str,
         target_path: str,
         completion_time: Optional[datetime] = None,
-        job_name: Optional[str] = None
+        job_name: Optional[str] = None,
     ) -> None:
         """
         Send notification for successful restore.
@@ -1120,10 +1288,14 @@ class NotificationService:
             completion_time: When the restore completed (optional, defaults to now)
             job_name: Name of the job/schedule (optional, for enhanced titles)
         """
-        settings = db.query(NotificationSettings).filter(
-            NotificationSettings.enabled == True,
-            NotificationSettings.notify_on_restore_success == True
-        ).all()
+        settings = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_restore_success == True,
+            )
+            .all()
+        )
 
         if not settings:
             return
@@ -1136,31 +1308,38 @@ class NotificationService:
 
         # Build content blocks
         content_blocks = [
-            {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {"label": "Archive", "value": archive_name},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            content_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
 
-        content_blocks.append({'label': 'Destination', 'value': target_path})
+        content_blocks.append({"label": "Destination", "value": target_path})
 
         # Use provided completion time or current time as fallback
         completed_at = completion_time or datetime.now()
-        timestamp_str = completed_at.strftime('%Y-%m-%d %H:%M:%S')
+        timestamp_str = completed_at.strftime("%Y-%m-%d %H:%M:%S")
 
         html_title = f"{_get_status_badge('success', is_html=True)} Restore Successful"
         html_body = _create_html_email(
             title=html_title,
             content_blocks=content_blocks,
-            footer=f"Completed at {timestamp_str}"
+            footer=f"Completed at {timestamp_str}",
         )
 
-        markdown_title = f"{_get_status_badge('success', is_html=False)} Restore Successful"
+        markdown_title = (
+            f"{_get_status_badge('success', is_html=False)} Restore Successful"
+        )
         markdown_body = _create_markdown_message(
             title=markdown_title,
             content_blocks=content_blocks,
-            footer=f"Completed at {timestamp_str}"
+            footer=f"Completed at {timestamp_str}",
         )
 
         for setting in settings:
@@ -1169,7 +1348,7 @@ class NotificationService:
                 continue
 
             # Build title with optional job name and professional badge
-            status_badge_text = _get_status_badge('success', is_html=False)
+            status_badge_text = _get_status_badge("success", is_html=False)
 
             title = f"{status_badge_text} Restore Successful"
             if setting.include_job_name_in_title and job_name:
@@ -1183,18 +1362,31 @@ class NotificationService:
 
             # Add JSON data if enabled
             if _should_include_json(setting):
-                json_data = _build_json_data("restore_success", {
-                    "repository_name": repo.name if repo else repository_name,
-                    "repository_path": repo.path if repo else repository_name,
-                    "archive_name": archive_name,
-                    "job_name": job_name,
-                    "target_path": target_path,
-                    "completed_at": completed_at.isoformat()
-                }, compact=_is_json_webhook(setting.service_url))
-                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
-                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+                json_data = _build_json_data(
+                    "restore_success",
+                    {
+                        "repository_name": repo.name if repo else repository_name,
+                        "repository_path": repo.path if repo else repository_name,
+                        "archive_name": archive_name,
+                        "job_name": job_name,
+                        "target_path": target_path,
+                        "completed_at": completed_at.isoformat(),
+                    },
+                    compact=_is_json_webhook(setting.service_url),
+                )
+                final_html_body = _append_json_to_body(
+                    html_body, json_data, is_html=True, service_url=setting.service_url
+                )
+                final_markdown_body = _append_json_to_body(
+                    markdown_body,
+                    json_data,
+                    is_html=False,
+                    service_url=setting.service_url,
+                )
 
-            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
+            await NotificationService._send_to_service(
+                db, setting, title, final_html_body, final_markdown_body
+            )
 
     @staticmethod
     async def send_restore_failure(
@@ -1202,7 +1394,7 @@ class NotificationService:
         repository_name: str,
         archive_name: str,
         error_message: str,
-        job_name: Optional[str] = None
+        job_name: Optional[str] = None,
     ) -> None:
         """
         Send notification for failed restore.
@@ -1214,10 +1406,14 @@ class NotificationService:
             error_message: Error description
             job_name: Name of the job/schedule (optional, for enhanced titles)
         """
-        settings = db.query(NotificationSettings).filter(
-            NotificationSettings.enabled == True,
-            NotificationSettings.notify_on_restore_failure == True
-        ).all()
+        settings = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_restore_failure == True,
+            )
+            .all()
+        )
 
         if not settings:
             return
@@ -1230,43 +1426,55 @@ class NotificationService:
 
         # Build content blocks
         content_blocks = [
-            {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {"label": "Archive", "value": archive_name},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
 
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            content_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
 
-        error_html = f'''
+        error_html = f"""
         <div class="error-box">
             <strong>Error Details:</strong>
             <pre>{error_message}</pre>
-        </div>'''
-        content_blocks.append({'html': error_html})
+        </div>"""
+        content_blocks.append({"html": error_html})
 
         html_title = f"{_get_status_badge('failed', is_html=True)} Restore Failed"
         html_body = _create_html_email(
             title=html_title,
             content_blocks=content_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         )
 
         # Create markdown body
         markdown_blocks = [
-            {'label': 'Archive', 'value': archive_name},
-            {'label': 'Repository', 'value': f"{repo.name if repo else repository_name} ({repo_type})"},
+            {"label": "Archive", "value": archive_name},
+            {
+                "label": "Repository",
+                "value": f"{repo.name if repo else repository_name} ({repo_type})",
+            },
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            markdown_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
 
-        markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
+        markdown_blocks.append(
+            {"label": "Error", "value": f"```\n{error_message}\n```"}
+        )
 
         markdown_title = f"{_get_status_badge('failed', is_html=False)} Restore Failed"
         markdown_body = _create_markdown_message(
             title=markdown_title,
             content_blocks=markdown_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         )
 
         # Capture failure time for JSON
@@ -1278,7 +1486,7 @@ class NotificationService:
                 continue
 
             # Build title with optional job name and professional badge
-            status_badge_text = _get_status_badge('failed', is_html=False)
+            status_badge_text = _get_status_badge("failed", is_html=False)
 
             title = f"{status_badge_text} Restore Failed"
             if setting.include_job_name_in_title and job_name:
@@ -1292,25 +1500,35 @@ class NotificationService:
 
             # Add JSON data if enabled
             if _should_include_json(setting):
-                json_data = _build_json_data("restore_failure", {
-                    "repository_name": repo.name if repo else repository_name,
-                    "repository_path": repo.path if repo else repository_name,
-                    "archive_name": archive_name,
-                    "job_name": job_name,
-                    "error_message": error_message,
-                    "failed_at": failure_time.isoformat()
-                }, compact=_is_json_webhook(setting.service_url))
-                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
-                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+                json_data = _build_json_data(
+                    "restore_failure",
+                    {
+                        "repository_name": repo.name if repo else repository_name,
+                        "repository_path": repo.path if repo else repository_name,
+                        "archive_name": archive_name,
+                        "job_name": job_name,
+                        "error_message": error_message,
+                        "failed_at": failure_time.isoformat(),
+                    },
+                    compact=_is_json_webhook(setting.service_url),
+                )
+                final_html_body = _append_json_to_body(
+                    html_body, json_data, is_html=True, service_url=setting.service_url
+                )
+                final_markdown_body = _append_json_to_body(
+                    markdown_body,
+                    json_data,
+                    is_html=False,
+                    service_url=setting.service_url,
+                )
 
-            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
+            await NotificationService._send_to_service(
+                db, setting, title, final_html_body, final_markdown_body
+            )
 
     @staticmethod
     async def send_schedule_failure(
-        db: Session,
-        schedule_name: str,
-        repository_name: str,
-        error_message: str
+        db: Session, schedule_name: str, repository_name: str, error_message: str
     ) -> None:
         """
         Send notification for failed scheduled backup.
@@ -1321,10 +1539,14 @@ class NotificationService:
             repository_name: Name of repository
             error_message: Error description
         """
-        settings = db.query(NotificationSettings).filter(
-            NotificationSettings.enabled == True,
-            NotificationSettings.notify_on_schedule_failure == True
-        ).all()
+        settings = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_schedule_failure == True,
+            )
+            .all()
+        )
 
         if not settings:
             return
@@ -1334,42 +1556,52 @@ class NotificationService:
 
         # Build content blocks
         content_blocks = [
-            {'label': 'Schedule', 'value': schedule_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {"label": "Schedule", "value": schedule_name},
+            {"label": "Repository", "value": repo.name if repo else repository_name},
         ]
         # Add path if repository found
         if repo:
-            content_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
+            content_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
 
-        error_html = f'''
+        error_html = f"""
         <div class="error-box">
             <strong>Error Details:</strong>
             <pre>{error_message}</pre>
-        </div>'''
-        content_blocks.append({'html': error_html})
+        </div>"""
+        content_blocks.append({"html": error_html})
 
-        html_title = f"{_get_status_badge('failed', is_html=True)} Scheduled Backup Failed"
+        html_title = (
+            f"{_get_status_badge('failed', is_html=True)} Scheduled Backup Failed"
+        )
         html_body = _create_html_email(
             title=html_title,
             content_blocks=content_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         )
 
         # Create markdown body
         markdown_blocks = [
-            {'label': 'Schedule', 'value': schedule_name},
-            {'label': 'Repository', 'value': repo.name if repo else repository_name},
+            {"label": "Schedule", "value": schedule_name},
+            {"label": "Repository", "value": repo.name if repo else repository_name},
         ]
         if repo:
-            markdown_blocks.append({'label': 'Location', 'value': _sanitize_ssh_url(repo.path)})
-            
-        markdown_blocks.append({'label': 'Error', 'value': f"```\n{error_message}\n```"})
+            markdown_blocks.append(
+                {"label": "Location", "value": _sanitize_ssh_url(repo.path)}
+            )
 
-        markdown_title = f"{_get_status_badge('failed', is_html=False)} Scheduled Backup Failed"
+        markdown_blocks.append(
+            {"label": "Error", "value": f"```\n{error_message}\n```"}
+        )
+
+        markdown_title = (
+            f"{_get_status_badge('failed', is_html=False)} Scheduled Backup Failed"
+        )
         markdown_body = _create_markdown_message(
             title=markdown_title,
             content_blocks=markdown_blocks,
-            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            footer=f"Failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         )
 
         # Capture failure time for JSON
@@ -1381,7 +1613,7 @@ class NotificationService:
                 continue
 
             # Build title with optional schedule name and professional badge
-            status_badge_text = _get_status_badge('failed', is_html=False)
+            status_badge_text = _get_status_badge("failed", is_html=False)
 
             title = f"{status_badge_text} Scheduled Backup Failed"
             if setting.include_job_name_in_title and schedule_name:
@@ -1395,17 +1627,30 @@ class NotificationService:
 
             # Add JSON data if enabled
             if _should_include_json(setting):
-                json_data = _build_json_data("schedule_failure", {
-                    "schedule_name": schedule_name,
-                    "repository_name": repo.name if repo else repository_name,
-                    "repository_path": repo.path if repo else repository_name,
-                    "error_message": error_message,
-                    "failed_at": failure_time.isoformat()
-                }, compact=_is_json_webhook(setting.service_url))
-                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
-                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+                json_data = _build_json_data(
+                    "schedule_failure",
+                    {
+                        "schedule_name": schedule_name,
+                        "repository_name": repo.name if repo else repository_name,
+                        "repository_path": repo.path if repo else repository_name,
+                        "error_message": error_message,
+                        "failed_at": failure_time.isoformat(),
+                    },
+                    compact=_is_json_webhook(setting.service_url),
+                )
+                final_html_body = _append_json_to_body(
+                    html_body, json_data, is_html=True, service_url=setting.service_url
+                )
+                final_markdown_body = _append_json_to_body(
+                    markdown_body,
+                    json_data,
+                    is_html=False,
+                    service_url=setting.service_url,
+                )
 
-            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
+            await NotificationService._send_to_service(
+                db, setting, title, final_html_body, final_markdown_body
+            )
 
     @staticmethod
     async def test_notification(service_url: str) -> dict:
@@ -1424,18 +1669,23 @@ class NotificationService:
 
             if not result:
                 # Try to provide helpful error message based on URL prefix
-                service_type = service_url.split(':')[0] if ':' in service_url else 'unknown'
+                service_type = (
+                    service_url.split(":")[0] if ":" in service_url else "unknown"
+                )
                 return {
                     "success": False,
-                    "message": f"Invalid URL format for '{service_type}' service. Please check the URL syntax. Example formats:\n" +
-                               "• Email: mailtos://user:password@smtp.gmail.com\n" +
-                               "• Slack: slack://TokenA/TokenB/TokenC/\n" +
-                               "• Discord: discord://webhook_id/webhook_token\n" +
-                               "• Telegram: telegram://bot_token/chat_id"
+                    "message": f"Invalid URL format for '{service_type}' service. Please check the URL syntax. Example formats:\n"
+                    + "• Email: mailtos://user:password@smtp.gmail.com\n"
+                    + "• Slack: slack://TokenA/TokenB/TokenC/\n"
+                    + "• Discord: discord://webhook_id/webhook_token\n"
+                    + "• Telegram: telegram://bot_token/chat_id",
                 }
 
             # Send test notification with detailed logging
-            logger.info("Attempting to send test notification", service_url_prefix=service_url.split(':')[0])
+            logger.info(
+                "Attempting to send test notification",
+                service_url_prefix=service_url.split(":")[0],
+            )
 
             # Use longer timeout for slow services like Signal (60 seconds)
             # Temporarily set socket timeout since Apprise plugins use it for HTTP connections
@@ -1444,7 +1694,7 @@ class NotificationService:
             try:
                 success = apobj.notify(
                     title="🔔 Borg UI Test Notification",
-                    body="This is a test notification from Borg Web UI. If you received this, your notification service is configured correctly!"
+                    body="This is a test notification from Borg Web UI. If you received this, your notification service is configured correctly!",
                 )
             finally:
                 socket.setdefaulttimeout(old_timeout)
@@ -1453,25 +1703,25 @@ class NotificationService:
                 logger.info("Test notification sent successfully")
                 return {
                     "success": True,
-                    "message": "Test notification sent successfully! Check your inbox/service."
+                    "message": "Test notification sent successfully! Check your inbox/service.",
                 }
             else:
-                logger.error("Test notification failed to send", service_url_prefix=service_url.split(':')[0])
+                logger.error(
+                    "Test notification failed to send",
+                    service_url_prefix=service_url.split(":")[0],
+                )
                 return {
                     "success": False,
-                    "message": "Failed to send test notification. Possible causes:\n" +
-                               "• For Gmail: Check App Password is correct (16 chars, no spaces)\n" +
-                               "• For Gmail: Ensure 2-Step Verification is enabled\n" +
-                               "• Check SMTP server is reachable (firewall/network)\n" +
-                               "• Verify credentials are correct"
+                    "message": "Failed to send test notification. Possible causes:\n"
+                    + "• For Gmail: Check App Password is correct (16 chars, no spaces)\n"
+                    + "• For Gmail: Ensure 2-Step Verification is enabled\n"
+                    + "• Check SMTP server is reachable (firewall/network)\n"
+                    + "• Verify credentials are correct",
                 }
 
         except Exception as e:
             logger.error("notification_test_failed", error=str(e))
-            return {
-                "success": False,
-                "message": f"Error: {str(e)}"
-            }
+            return {"success": False, "message": f"Error: {str(e)}"}
 
     @staticmethod
     async def _send_to_service(
@@ -1479,7 +1729,7 @@ class NotificationService:
         setting: NotificationSettings,
         title: str,
         html_body: str,
-        markdown_body: str
+        markdown_body: str,
     ) -> None:
         """
         Send notification to a single service.
@@ -1510,14 +1760,14 @@ class NotificationService:
                     success = apobj.notify(
                         title=title,
                         body=html_body,
-                        body_format=apprise.NotifyFormat.HTML
+                        body_format=apprise.NotifyFormat.HTML,
                     )
                 else:
                     # Chat service - use Markdown format
                     success = apobj.notify(
                         title=title,
                         body=markdown_body,
-                        body_format=apprise.NotifyFormat.MARKDOWN
+                        body_format=apprise.NotifyFormat.MARKDOWN,
                     )
             finally:
                 socket.setdefaulttimeout(old_timeout)
@@ -1526,31 +1776,16 @@ class NotificationService:
                 # Update last_used_at timestamp
                 setting.last_used_at = datetime.utcnow()
                 db.commit()
-                logger.info(
-                    "notification_sent",
-                    service=setting.name,
-                    title=title
-                )
+                logger.info("notification_sent", service=setting.name, title=title)
             else:
-                logger.warning(
-                    "notification_failed",
-                    service=setting.name,
-                    title=title
-                )
+                logger.warning("notification_failed", service=setting.name, title=title)
 
         except Exception as e:
-            logger.error(
-                "notification_error",
-                service=setting.name,
-                error=str(e)
-            )
+            logger.error("notification_error", service=setting.name, error=str(e))
 
     @staticmethod
     async def _send_to_services(
-        db: Session,
-        settings: List[NotificationSettings],
-        title: str,
-        body: str
+        db: Session, settings: List[NotificationSettings], title: str, body: str
     ) -> None:
         """
         Send notification to multiple services (legacy).
@@ -1573,7 +1808,7 @@ class NotificationService:
         duration_seconds: Optional[int] = None,
         error_message: Optional[str] = None,
         check_type: str = "manual",  # "manual" or "scheduled"
-        job_name: Optional[str] = None
+        job_name: Optional[str] = None,
     ) -> None:
         """
         Send notification for check completion (success or failure).
@@ -1590,24 +1825,32 @@ class NotificationService:
         """
         # Determine which settings to use
         if status == "completed":
-            settings = db.query(NotificationSettings).filter(
-                NotificationSettings.enabled == True,
-                NotificationSettings.notify_on_check_success == True
-            ).all()
+            settings = (
+                db.query(NotificationSettings)
+                .filter(
+                    NotificationSettings.enabled == True,
+                    NotificationSettings.notify_on_check_success == True,
+                )
+                .all()
+            )
         else:  # failed
-            settings = db.query(NotificationSettings).filter(
-                NotificationSettings.enabled == True,
-                NotificationSettings.notify_on_check_failure == True
-            ).all()
+            settings = (
+                db.query(NotificationSettings)
+                .filter(
+                    NotificationSettings.enabled == True,
+                    NotificationSettings.notify_on_check_failure == True,
+                )
+                .all()
+            )
 
         if not settings:
             return
 
         # Build content blocks
         content_blocks = [
-            {'label': 'Repository', 'value': repository_name},
-            {'label': 'Path', 'value': _sanitize_ssh_url(repository_path)},
-            {'label': 'Type', 'value': check_type.capitalize()},
+            {"label": "Repository", "value": repository_name},
+            {"label": "Path", "value": _sanitize_ssh_url(repository_path)},
+            {"label": "Type", "value": check_type.capitalize()},
         ]
 
         # Add duration if provided
@@ -1620,17 +1863,21 @@ class NotificationService:
                 hours = duration_seconds // 3600
                 mins = (duration_seconds % 3600) // 60
                 duration_str = f"{hours}h {mins}m"
-            content_blocks.append({'label': 'Duration', 'value': duration_str})
+            content_blocks.append({"label": "Duration", "value": duration_str})
 
         # Add error message if failed
         if status == "failed" and error_message:
             # Truncate long error messages
-            error_display = error_message if len(error_message) <= 200 else error_message[:200] + "..."
-            content_blocks.append({'label': 'Error', 'value': error_display})
+            error_display = (
+                error_message
+                if len(error_message) <= 200
+                else error_message[:200] + "..."
+            )
+            content_blocks.append({"label": "Error", "value": error_display})
 
         # Create timestamp
         completion_time = datetime.now()
-        timestamp_str = completion_time.strftime('%Y-%m-%d %H:%M:%S')
+        timestamp_str = completion_time.strftime("%Y-%m-%d %H:%M:%S")
 
         # Choose title and badge based on status
         if status == "completed":
@@ -1641,19 +1888,23 @@ class NotificationService:
             title_text = "Check Failed"
 
         # Create HTML body for email with professional badge
-        html_title = f"{_get_status_badge(badge_type, is_html=True)} Repository {title_text}"
+        html_title = (
+            f"{_get_status_badge(badge_type, is_html=True)} Repository {title_text}"
+        )
         html_body = _create_html_email(
             title=html_title,
             content_blocks=content_blocks,
-            footer=f"Completed at {timestamp_str}"
+            footer=f"Completed at {timestamp_str}",
         )
 
         # Create markdown body for chat services with professional badge
-        markdown_title = f"{_get_status_badge(badge_type, is_html=False)} Repository {title_text}"
+        markdown_title = (
+            f"{_get_status_badge(badge_type, is_html=False)} Repository {title_text}"
+        )
         markdown_body = _create_markdown_message(
             title=markdown_title,
             content_blocks=content_blocks,
-            footer=f"Completed at {timestamp_str}"
+            footer=f"Completed at {timestamp_str}",
         )
 
         # Send to all enabled services with this event trigger
@@ -1678,20 +1929,33 @@ class NotificationService:
             # Add JSON data if enabled
             if _should_include_json(setting):
                 event_type = f"check_{status}"  # "check_completed" or "check_failed"
-                json_data = _build_json_data(event_type, {
-                    "repository_name": repository_name,
-                    "repository_path": repository_path,
-                    "job_name": job_name,
-                    "check_type": check_type,
-                    "status": status,
-                    "duration_seconds": duration_seconds,
-                    "error_message": error_message if status == "failed" else None,
-                    "completed_at": completion_time.isoformat()
-                }, compact=_is_json_webhook(setting.service_url))
-                final_html_body = _append_json_to_body(html_body, json_data, is_html=True, service_url=setting.service_url)
-                final_markdown_body = _append_json_to_body(markdown_body, json_data, is_html=False, service_url=setting.service_url)
+                json_data = _build_json_data(
+                    event_type,
+                    {
+                        "repository_name": repository_name,
+                        "repository_path": repository_path,
+                        "job_name": job_name,
+                        "check_type": check_type,
+                        "status": status,
+                        "duration_seconds": duration_seconds,
+                        "error_message": error_message if status == "failed" else None,
+                        "completed_at": completion_time.isoformat(),
+                    },
+                    compact=_is_json_webhook(setting.service_url),
+                )
+                final_html_body = _append_json_to_body(
+                    html_body, json_data, is_html=True, service_url=setting.service_url
+                )
+                final_markdown_body = _append_json_to_body(
+                    markdown_body,
+                    json_data,
+                    is_html=False,
+                    service_url=setting.service_url,
+                )
 
-            await NotificationService._send_to_service(db, setting, title, final_html_body, final_markdown_body)
+            await NotificationService._send_to_service(
+                db, setting, title, final_html_body, final_markdown_body
+            )
 
 
 # Global instance

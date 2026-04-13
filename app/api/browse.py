@@ -2,17 +2,20 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 import structlog
 import json
-import hashlib
-import os
-from datetime import datetime, timedelta
 
 from app.database.models import User, Repository, SystemSettings
 from app.database.database import get_db
 from app.api.auth import get_current_user
 from app.core.borg_router import BorgRouter
 from app.services.cache_service import archive_cache
-from app.utils.borg_env import get_standard_ssh_opts, setup_borg_env, cleanup_temp_key_file
-from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
+from app.utils.borg_env import (
+    get_standard_ssh_opts,
+    setup_borg_env,
+    cleanup_temp_key_file,
+)
+from app.utils.ssh_utils import (
+    resolve_repo_ssh_key_file,
+)  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger(__name__)
 
@@ -20,8 +23,8 @@ router = APIRouter()
 
 # Memory safety limits
 MAX_ITEMS_IN_MEMORY = 1_000_000  # Maximum number of items to load into memory
-MAX_ESTIMATED_MEMORY_MB = 1024   # Maximum estimated memory usage (1GB)
-ITEM_SIZE_ESTIMATE = 200         # Average bytes per item in memory (conservative estimate)
+MAX_ESTIMATED_MEMORY_MB = 1024  # Maximum estimated memory usage (1GB)
+ITEM_SIZE_ESTIMATE = 200  # Average bytes per item in memory (conservative estimate)
 
 
 def _build_repo_env(repo: Repository, db: Session):
@@ -30,32 +33,46 @@ def _build_repo_env(repo: Repository, db: Session):
     env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
     return env, temp_key_file
 
+
 @router.get("/{repository_id}/{archive_name}")
 async def browse_archive_contents(
     repository_id: int,
     archive_name: str,
     path: str = Query("", description="Path within archive to browse"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Browse contents of an archive at a specific path (directory-by-directory)"""
     try:
         repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.restore.repositoryNotFound"},
+            )
 
         # Get memory limit settings from database
         settings = db.query(SystemSettings).first()
-        max_items = settings.browse_max_items if settings and settings.browse_max_items else MAX_ITEMS_IN_MEMORY
-        max_memory_mb = settings.browse_max_memory_mb if settings and settings.browse_max_memory_mb else MAX_ESTIMATED_MEMORY_MB
+        max_items = (
+            settings.browse_max_items
+            if settings and settings.browse_max_items
+            else MAX_ITEMS_IN_MEMORY
+        )
+        max_memory_mb = (
+            settings.browse_max_memory_mb
+            if settings and settings.browse_max_memory_mb
+            else MAX_ESTIMATED_MEMORY_MB
+        )
 
         # Check cache first
         all_items = await archive_cache.get(repository_id, archive_name)
 
         if all_items is not None:
-            logger.info("Using cached archive contents",
-                       archive=archive_name,
-                       items_count=len(all_items))
+            logger.info(
+                "Using cached archive contents",
+                archive=archive_name,
+                items_count=len(all_items),
+            )
         else:
             # If not in cache, fetch from borg with streaming (prevents OOM)
             # Pass max_items as max_lines to ensure borg process is killed if limit exceeded
@@ -73,13 +90,18 @@ async def browse_archive_contents(
             # Check if line limit was exceeded (borg process was killed to prevent OOM)
             if result.get("line_count_exceeded"):
                 lines_read = result.get("lines_read", 0)
-                logger.error("Archive too large for safe browsing - terminated early",
-                           archive=archive_name,
-                           lines_read=lines_read,
-                           max_allowed=max_items)
+                logger.error(
+                    "Archive too large for safe browsing - terminated early",
+                    archive=archive_name,
+                    lines_read=lines_read,
+                    max_allowed=max_items,
+                )
                 raise HTTPException(
                     status_code=413,
-                    detail={"key": "backend.errors.browse.archiveTooLarge", "params": {"linesRead": lines_read, "maxItems": max_items}}
+                    detail={
+                        "key": "backend.errors.browse.archiveTooLarge",
+                        "params": {"linesRead": lines_read, "maxItems": max_items},
+                    },
                 )
 
             # Parse all items
@@ -91,21 +113,31 @@ async def browse_archive_contents(
                 # Memory safety check: Estimate memory usage
                 estimated_memory_mb = (total_lines * ITEM_SIZE_ESTIMATE) / (1024 * 1024)
 
-                logger.info("Fetching archive contents",
-                           archive=archive_name,
-                           total_lines=total_lines,
-                           estimated_memory_mb=round(estimated_memory_mb, 2))
+                logger.info(
+                    "Fetching archive contents",
+                    archive=archive_name,
+                    total_lines=total_lines,
+                    estimated_memory_mb=round(estimated_memory_mb, 2),
+                )
 
                 # Secondary check: Verify memory estimate is within bounds
                 # (This should rarely trigger now that streaming enforces line limits)
                 if estimated_memory_mb > max_memory_mb:
-                    logger.error("Estimated memory usage too high",
-                               archive=archive_name,
-                               estimated_memory_mb=round(estimated_memory_mb, 2),
-                               max_allowed_mb=max_memory_mb)
+                    logger.error(
+                        "Estimated memory usage too high",
+                        archive=archive_name,
+                        estimated_memory_mb=round(estimated_memory_mb, 2),
+                        max_allowed_mb=max_memory_mb,
+                    )
                     raise HTTPException(
                         status_code=413,
-                        detail={"key": "backend.errors.browse.archiveMemoryTooHigh", "params": {"estimatedMb": round(estimated_memory_mb), "maxMb": max_memory_mb}}
+                        detail={
+                            "key": "backend.errors.browse.archiveMemoryTooHigh",
+                            "params": {
+                                "estimatedMb": round(estimated_memory_mb),
+                                "maxMb": max_memory_mb,
+                            },
+                        },
                     )
 
                 # Process items
@@ -115,25 +147,35 @@ async def browse_archive_contents(
                             item_data = json.loads(line)
                             item_path = item_data.get("path", "")
                             if item_path:
-                                all_items.append({
-                                    "path": item_path,
-                                    "type": item_data.get("type", ""),
-                                    "size": item_data.get("size"),
-                                    "mtime": item_data.get("mtime")  # Modification time
-                                })
+                                all_items.append(
+                                    {
+                                        "path": item_path,
+                                        "type": item_data.get("type", ""),
+                                        "size": item_data.get("size"),
+                                        "mtime": item_data.get(
+                                            "mtime"
+                                        ),  # Modification time
+                                    }
+                                )
                         except json.JSONDecodeError:
                             continue
 
                 # Store in cache (cache service will enforce its own size limits)
-                cache_success = await archive_cache.set(repository_id, archive_name, all_items)
+                cache_success = await archive_cache.set(
+                    repository_id, archive_name, all_items
+                )
                 if cache_success:
-                    logger.info("Cached archive contents",
-                               archive=archive_name,
-                               items_count=len(all_items))
+                    logger.info(
+                        "Cached archive contents",
+                        archive=archive_name,
+                        items_count=len(all_items),
+                    )
                 else:
-                    logger.warning("Failed to cache archive (too large or cache full)",
-                                 archive=archive_name,
-                                 items_count=len(all_items))
+                    logger.warning(
+                        "Failed to cache archive (too large or cache full)",
+                        archive=archive_name,
+                        items_count=len(all_items),
+                    )
 
         # Helper function to calculate directory size
         def calculate_directory_size(dir_path: str) -> int:
@@ -158,11 +200,13 @@ async def browse_archive_contents(
                         total_size += item.get("size", 0)
                         file_count += 1
 
-            logger.debug("Directory size calculated",
-                        dir_path=dir_path,
-                        total_size=total_size,
-                        file_count=file_count,
-                        search_prefix=search_prefix)
+            logger.debug(
+                "Directory size calculated",
+                dir_path=dir_path,
+                total_size=total_size,
+                file_count=file_count,
+                search_prefix=search_prefix,
+            )
             return total_size
 
         # Now filter the cached items for the requested path
@@ -179,7 +223,7 @@ async def browse_archive_contents(
             if path:
                 # If we're in a subdirectory, only show items under that path
                 if item_path.startswith(path + "/"):
-                    relative_path = item_path[len(path) + 1:]
+                    relative_path = item_path[len(path) + 1 :]
                 elif item_path == path:
                     # Skip the directory itself
                     continue
@@ -206,12 +250,14 @@ async def browse_archive_contents(
                     full_dir_path = f"{path}/{dir_name}" if path else dir_name
                     # Calculate directory size
                     dir_size = calculate_directory_size(full_dir_path)
-                    items.append({
-                        "name": dir_name,
-                        "type": "directory",
-                        "size": dir_size,
-                        "path": full_dir_path
-                    })
+                    items.append(
+                        {
+                            "name": dir_name,
+                            "type": "directory",
+                            "size": dir_size,
+                            "path": full_dir_path,
+                        }
+                    )
             else:
                 # This is an immediate child
                 if relative_path not in seen_paths:
@@ -221,40 +267,55 @@ async def browse_archive_contents(
                     # For directories, calculate their size
                     if item_type == "d":
                         dir_size = calculate_directory_size(full_path)
-                        items.append({
-                            "name": relative_path,
-                            "type": "directory",
-                            "size": dir_size,
-                            "mtime": item_mtime,
-                            "path": full_path
-                        })
+                        items.append(
+                            {
+                                "name": relative_path,
+                                "type": "directory",
+                                "size": dir_size,
+                                "mtime": item_mtime,
+                                "path": full_path,
+                            }
+                        )
                     else:
                         # For files, use the actual size
-                        items.append({
-                            "name": relative_path,
-                            "type": "file",
-                            "size": item_size,
-                            "mtime": item_mtime,
-                            "path": full_path
-                        })
+                        items.append(
+                            {
+                                "name": relative_path,
+                                "type": "file",
+                                "size": item_size,
+                                "mtime": item_mtime,
+                                "path": full_path,
+                            }
+                        )
 
         # Sort: directories first, then by name
         items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
 
-        logger.info("Archive contents parsed for browsing",
-                   archive=archive_name,
-                   path=path,
-                   items_count=len(items),
-                   first_few_items=[item["name"] for item in items[:10]],
-                   directory_sizes=[(item["name"], item.get("size")) for item in items[:5] if item["type"] == "directory"])
+        logger.info(
+            "Archive contents parsed for browsing",
+            archive=archive_name,
+            path=path,
+            items_count=len(items),
+            first_few_items=[item["name"] for item in items[:10]],
+            directory_sizes=[
+                (item["name"], item.get("size"))
+                for item in items[:5]
+                if item["type"] == "directory"
+            ],
+        )
 
         return {"items": items}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to browse archive contents", repository_id=repository_id,
-                    archive_name=archive_name, path=path, error=str(e))
+        logger.error(
+            "Failed to browse archive contents",
+            repository_id=repository_id,
+            archive_name=archive_name,
+            path=path,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to browse archive: {str(e)}"
+            detail=f"Failed to browse archive: {str(e)}",
         )

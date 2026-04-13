@@ -8,13 +8,20 @@ from fastapi.testclient import TestClient
 
 from app.database.models import Repository
 from tests.integration.test_helpers import wait_for_job_terminal_status
-from tests.utils.borg import create_archive, create_source_tree, init_borg_repo, make_borg_test_env
+from tests.utils.borg import (
+    create_archive,
+    create_source_tree,
+    init_borg_repo,
+    make_borg_test_env,
+)
 
 
 def _require_borg2_binary() -> str:
     borg2_path = shutil.which("borg2")
     if not borg2_path:
-        pytest.skip("Borg 2 binary not found. Install borg2 to run this integration test.")
+        pytest.skip(
+            "Borg 2 binary not found. Install borg2 to run this integration test."
+        )
     return borg2_path
 
 
@@ -80,7 +87,9 @@ class TestBorg2ArchivesIntegration:
         test_db,
         tmp_path,
     ):
-        repo, _repo_path, _source_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, _repo_path, _source_path, archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
 
         response = test_client.get(
             f"/api/v2/archives/list?repository={repo.id}",
@@ -101,7 +110,9 @@ class TestBorg2ArchivesIntegration:
         test_db,
         tmp_path,
     ):
-        repo, _repo_path, _source_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, _repo_path, _source_path, archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
 
         delete_response = test_client.delete(
             f"/api/v2/archives/{archive_names[0]}?repository={repo.id}",
@@ -125,7 +136,9 @@ class TestBorg2ArchivesIntegration:
 
         assert job_data["status"] == "completed"
         assert job_data["archive_name"] == archive_names[0]
-        assert job_data["progress_message"] == "Archive deleted and repository compacted"
+        assert (
+            job_data["progress_message"] == "Archive deleted and repository compacted"
+        )
 
         list_response = test_client.get(
             f"/api/v2/archives/list?repository={repo.path}",

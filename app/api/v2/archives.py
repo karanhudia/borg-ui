@@ -45,16 +45,20 @@ def _get_v2_repo(repository: str, db: Session) -> Repository:
     repo = None
     try:
         repo_id = int(repository)
-        repo = db.query(Repository).filter(
-            Repository.id == repo_id, Repository.borg_version == 2
-        ).first()
+        repo = (
+            db.query(Repository)
+            .filter(Repository.id == repo_id, Repository.borg_version == 2)
+            .first()
+        )
     except (ValueError, TypeError):
         pass
 
     if repo is None:
-        repo = db.query(Repository).filter(
-            Repository.path == repository, Repository.borg_version == 2
-        ).first()
+        repo = (
+            db.query(Repository)
+            .filter(Repository.path == repository, Repository.borg_version == 2)
+            .first()
+        )
 
     if not repo:
         raise HTTPException(
@@ -156,6 +160,7 @@ def _get_browse_depth(repo: Repository, path: str) -> int:
 
 # ── List archives ──────────────────────────────────────────────────────────────
 
+
 @router.get("/list")
 async def list_archives(
     repository: str,
@@ -190,6 +195,7 @@ async def list_archives(
 
 # ── Archive info ───────────────────────────────────────────────────────────────
 
+
 @router.get("/{archive_id}/info")
 async def get_archive_info(
     repository: str,
@@ -205,7 +211,8 @@ async def get_archive_info(
     if _repo_needs_custom_env(repo):
         with repository_borg_env(repo, db) as env:
             result = await borg2.info_archive(
-                repo.path, archive_selector,
+                repo.path,
+                archive_selector,
                 passphrase=repo.passphrase,
                 remote_path=repo.remote_path,
                 bypass_lock=repo.bypass_lock,
@@ -213,7 +220,8 @@ async def get_archive_info(
             )
     else:
         result = await borg2.info_archive(
-            repo.path, archive_selector,
+            repo.path,
+            archive_selector,
             passphrase=repo.passphrase,
             remote_path=repo.remote_path,
             bypass_lock=repo.bypass_lock,
@@ -251,7 +259,8 @@ async def get_archive_info(
             if _repo_needs_custom_env(repo):
                 with repository_borg_env(repo, db) as env:
                     list_result = await borg2.list_archive_contents(
-                        repo.path, archive_selector,
+                        repo.path,
+                        archive_selector,
                         passphrase=repo.passphrase,
                         remote_path=repo.remote_path,
                         bypass_lock=repo.bypass_lock,
@@ -259,7 +268,8 @@ async def get_archive_info(
                     )
             else:
                 list_result = await borg2.list_archive_contents(
-                    repo.path, archive_selector,
+                    repo.path,
+                    archive_selector,
                     passphrase=repo.passphrase,
                     remote_path=repo.remote_path,
                     bypass_lock=repo.bypass_lock,
@@ -270,16 +280,18 @@ async def get_archive_info(
                     if line and len(files) < file_limit:
                         try:
                             f = json.loads(line)
-                            files.append({
-                                "path": f.get("path"),
-                                "type": f.get("type"),
-                                "mode": f.get("mode"),
-                                "user": f.get("user"),
-                                "group": f.get("group"),
-                                "size": f.get("size"),
-                                "mtime": f.get("mtime"),
-                                "healthy": f.get("healthy", True),
-                            })
+                            files.append(
+                                {
+                                    "path": f.get("path"),
+                                    "type": f.get("type"),
+                                    "mode": f.get("mode"),
+                                    "user": f.get("user"),
+                                    "group": f.get("group"),
+                                    "size": f.get("size"),
+                                    "mtime": f.get("mtime"),
+                                    "healthy": f.get("healthy", True),
+                                }
+                            )
                         except json.JSONDecodeError:
                             continue
                 enhanced_info["files"] = files
@@ -294,6 +306,7 @@ async def get_archive_info(
 
 
 # ── Archive contents ───────────────────────────────────────────────────────────
+
 
 @router.get("/{archive_id}/contents")
 async def get_archive_contents(
@@ -326,7 +339,8 @@ async def get_archive_contents(
     if _repo_needs_custom_env(repo):
         with repository_borg_env(repo, db) as env:
             result = await borg2.list_archive_contents(
-                repo.path, archive_selector,
+                repo.path,
+                archive_selector,
                 path=path,
                 passphrase=repo.passphrase,
                 remote_path=repo.remote_path,
@@ -336,7 +350,8 @@ async def get_archive_contents(
             )
     else:
         result = await borg2.list_archive_contents(
-            repo.path, archive_selector,
+            repo.path,
+            archive_selector,
             path=path,
             passphrase=repo.passphrase,
             remote_path=repo.remote_path,
@@ -346,12 +361,15 @@ async def get_archive_contents(
     # borg2 list exits with 1 on warnings but stdout is still valid JSONL —
     # treat any result that produced stdout as usable.
     stdout = result.get("stdout", "")
-    logger.info("borg2 list_archive_contents result",
-                archive=archive_selector, path=path,
-                return_code=result.get("return_code"),
-                success=result.get("success"),
-                stdout_len=len(stdout),
-                stderr=result.get("stderr", "")[:200])
+    logger.info(
+        "borg2 list_archive_contents result",
+        archive=archive_selector,
+        path=path,
+        return_code=result.get("return_code"),
+        success=result.get("success"),
+        stdout_len=len(stdout),
+        stderr=result.get("stderr", "")[:200],
+    )
     if not stdout and not result["success"]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -371,12 +389,14 @@ async def get_archive_contents(
         entry_path = entry.get("path", "").strip("/")
         if not entry_path:
             continue
-        all_items.append({
-            "path": entry_path,
-            "type": entry.get("type", ""),
-            "size": entry.get("size", 0) or 0,
-            "mtime": entry.get("mtime", ""),
-        })
+        all_items.append(
+            {
+                "path": entry_path,
+                "type": entry.get("type", ""),
+                "size": entry.get("size", 0) or 0,
+                "mtime": entry.get("mtime", ""),
+            }
+        )
 
     def calculate_directory_size(dir_path: str) -> int:
         """Sum sizes of all files recursively under dir_path."""
@@ -402,7 +422,7 @@ async def get_archive_contents(
                 continue  # skip the directory itself
             if not item_path.startswith(base_path + "/"):
                 continue
-            relative = item_path[len(base_path) + 1:]
+            relative = item_path[len(base_path) + 1 :]
         else:
             relative = item_path
 
@@ -418,34 +438,40 @@ async def get_archive_contents(
             entry_type = item["type"]
             is_dir = entry_type == "d"
             if is_dir:
-                items.append({
-                    "name": parts[0],
-                    "path": item_path,
-                    "size": calculate_directory_size(item_path),
-                    "type": "directory",
-                    "mtime": item["mtime"],
-                })
+                items.append(
+                    {
+                        "name": parts[0],
+                        "path": item_path,
+                        "size": calculate_directory_size(item_path),
+                        "type": "directory",
+                        "mtime": item["mtime"],
+                    }
+                )
             else:
-                items.append({
-                    "name": parts[0],
-                    "path": item_path,
-                    "size": item["size"],
-                    "type": "file",
-                    "mtime": item["mtime"],
-                })
+                items.append(
+                    {
+                        "name": parts[0],
+                        "path": item_path,
+                        "size": item["size"],
+                        "type": "file",
+                        "mtime": item["mtime"],
+                    }
+                )
         else:
             # Deeper descendant — surface the intermediate directory once
             dir_name = parts[0]
             dir_path = (base_path + "/" + dir_name).strip("/")
             if dir_path not in seen_dirs:
                 seen_dirs.add(dir_path)
-                items.append({
-                    "name": dir_name,
-                    "path": dir_path,
-                    "size": calculate_directory_size(dir_path),
-                    "type": "directory",
-                    "mtime": "",
-                })
+                items.append(
+                    {
+                        "name": dir_name,
+                        "path": dir_path,
+                        "size": calculate_directory_size(dir_path),
+                        "type": "directory",
+                        "mtime": "",
+                    }
+                )
 
     cache_success = await archive_cache.set(repo.id, cache_key, items)
     if cache_success:
@@ -470,6 +496,7 @@ async def get_archive_contents(
 
 # ── Delete archive ─────────────────────────────────────────────────────────────
 
+
 @router.delete("/{archive_id}")
 async def delete_archive(
     repository: str,
@@ -483,21 +510,30 @@ async def delete_archive(
     The scheduled compact after prune/delete handles this automatically.
     """
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.archives.adminAccessRequired"})
+        raise HTTPException(
+            status_code=403,
+            detail={"key": "backend.errors.archives.adminAccessRequired"},
+        )
 
     repo = _get_v2_repo(repository, db)
     archive_name = await _resolve_archive_name(repo, archive_id, db)
 
-    running_job = db.query(DeleteArchiveJob).filter(
-        DeleteArchiveJob.repository_id == repo.id,
-        DeleteArchiveJob.archive_name == archive_name,
-        DeleteArchiveJob.status == "running",
-    ).first()
+    running_job = (
+        db.query(DeleteArchiveJob)
+        .filter(
+            DeleteArchiveJob.repository_id == repo.id,
+            DeleteArchiveJob.archive_name == archive_name,
+            DeleteArchiveJob.status == "running",
+        )
+        .first()
+    )
     if running_job:
         raise HTTPException(
             status_code=409,
-            detail={"key": "backend.errors.archives.deleteAlreadyRunning",
-                    "params": {"jobId": running_job.id}},
+            detail={
+                "key": "backend.errors.archives.deleteAlreadyRunning",
+                "params": {"jobId": running_job.id},
+            },
         )
 
     delete_job = DeleteArchiveJob(
@@ -511,14 +547,19 @@ async def delete_archive(
     db.refresh(delete_job)
 
     from app.services.v2.delete_archive_service import delete_archive_v2_service
+
     asyncio.create_task(
         delete_archive_v2_service.execute_delete(
             delete_job.id, repo.id, archive_name, None
         )
     )
 
-    logger.info("Borg2 delete archive job created",
-                job_id=delete_job.id, repository_id=repo.id, archive=archive_name)
+    logger.info(
+        "Borg2 delete archive job created",
+        job_id=delete_job.id,
+        repository_id=repo.id,
+        archive=archive_name,
+    )
     return {
         "job_id": delete_job.id,
         "status": "pending",
@@ -528,6 +569,7 @@ async def delete_archive(
 
 
 # ── Download file from archive ─────────────────────────────────────────────────
+
 
 @router.get("/download")
 async def download_file_from_archive(
@@ -541,6 +583,7 @@ async def download_file_from_archive(
     repo = _get_v2_repo(repository, db)
     archive_selector = _get_archive_selector(archive)
     try:
+
         async def extract(temp_dir: str):
             if _repo_needs_custom_env(repo):
                 with repository_borg_env(repo, db) as env:
@@ -568,10 +611,13 @@ async def download_file_from_archive(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to download file: {str(e)}"
+        )
 
 
 # ── Delete job status ──────────────────────────────────────────────────────────
+
 
 @router.get("/delete-jobs/{job_id}")
 async def get_delete_job_status(
@@ -582,7 +628,9 @@ async def get_delete_job_status(
     """Get status of a Borg 2 archive delete job."""
     job = db.query(DeleteArchiveJob).filter(DeleteArchiveJob.id == job_id).first()
     if not job:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.archives.deleteJobNotFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.archives.deleteJobNotFound"}
+        )
 
     logs = None
     if job.log_file_path and os.path.exists(job.log_file_path):

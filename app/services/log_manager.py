@@ -8,14 +8,18 @@ Supports all job types: backup, restore, check, compact, prune, package
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Set, Optional
+from typing import Dict, Set, Optional
 import structlog
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.models import (
-    BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob, PackageInstallJob
+    BackupJob,
+    RestoreJob,
+    CheckJob,
+    CompactJob,
+    PruneJob,
+    PackageInstallJob,
 )
 
 logger = structlog.get_logger()
@@ -35,7 +39,7 @@ class LogManager:
             "check_job_",
             "compact_job_",
             "prune_job_",
-            "package_job_"
+            "package_job_",
         ]
 
     def calculate_log_storage(self) -> Dict:
@@ -62,7 +66,7 @@ class LogManager:
                 "check": 0,
                 "compact": 0,
                 "prune": 0,
-                "package": 0
+                "package": 0,
             }
 
             # Use os.scandir() for performance (faster than glob)
@@ -73,12 +77,12 @@ class LogManager:
                     "file_count": 0,
                     "oldest_log_date": None,
                     "newest_log_date": None,
-                    "files_by_type": files_by_type
+                    "files_by_type": files_by_type,
                 }
 
             with os.scandir(self.log_dir) as entries:
                 for entry in entries:
-                    if entry.is_file() and entry.name.endswith('.log'):
+                    if entry.is_file() and entry.name.endswith(".log"):
                         try:
                             stat = entry.stat()
                             total_size += stat.st_size
@@ -97,16 +101,22 @@ class LogManager:
                                     break
 
                         except OSError as e:
-                            logger.warning("Failed to stat log file", file=entry.name, error=str(e))
+                            logger.warning(
+                                "Failed to stat log file", file=entry.name, error=str(e)
+                            )
                             continue
 
             return {
                 "total_size_bytes": total_size,
                 "total_size_mb": round(total_size / (1024 * 1024), 2),
                 "file_count": file_count,
-                "oldest_log_date": datetime.fromtimestamp(oldest_mtime) if oldest_mtime else None,
-                "newest_log_date": datetime.fromtimestamp(newest_mtime) if newest_mtime else None,
-                "files_by_type": files_by_type
+                "oldest_log_date": datetime.fromtimestamp(oldest_mtime)
+                if oldest_mtime
+                else None,
+                "newest_log_date": datetime.fromtimestamp(newest_mtime)
+                if newest_mtime
+                else None,
+                "files_by_type": files_by_type,
             }
 
         except Exception as e:
@@ -126,17 +136,26 @@ class LogManager:
             protected_paths = set()
 
             # Query all job types for running status
-            job_models = [BackupJob, RestoreJob, CheckJob, CompactJob, PruneJob, PackageInstallJob]
+            job_models = [
+                BackupJob,
+                RestoreJob,
+                CheckJob,
+                CompactJob,
+                PruneJob,
+                PackageInstallJob,
+            ]
 
             for model in job_models:
-                running_jobs = db.query(model).filter(model.status == 'running').all()
+                running_jobs = db.query(model).filter(model.status == "running").all()
                 for job in running_jobs:
-                    if hasattr(job, 'log_file_path') and job.log_file_path:
+                    if hasattr(job, "log_file_path") and job.log_file_path:
                         protected_paths.add(str(job.log_file_path))
 
-            logger.info("Found running job logs to protect",
-                       count=len(protected_paths),
-                       paths=list(protected_paths))
+            logger.info(
+                "Found running job logs to protect",
+                count=len(protected_paths),
+                paths=list(protected_paths),
+            )
 
             return protected_paths
 
@@ -149,7 +168,7 @@ class LogManager:
         self,
         max_age_days: int,
         protected_paths: Optional[Set[str]] = None,
-        dry_run: bool = False
+        dry_run: bool = False,
     ) -> Dict:
         """
         Delete log files older than max_age_days.
@@ -183,12 +202,12 @@ class LogManager:
                     "deleted_count": 0,
                     "deleted_size_mb": 0.0,
                     "skipped_count": 0,
-                    "errors": []
+                    "errors": [],
                 }
 
             with os.scandir(self.log_dir) as entries:
                 for entry in entries:
-                    if entry.is_file() and entry.name.endswith('.log'):
+                    if entry.is_file() and entry.name.endswith(".log"):
                         try:
                             # Skip protected files (running jobs)
                             if entry.path in protected_paths:
@@ -202,10 +221,15 @@ class LogManager:
                             if stat.st_mtime < cutoff_timestamp:
                                 if not dry_run:
                                     os.remove(entry.path)
-                                    logger.info("Deleted old log file",
-                                              file=entry.name,
-                                              age_days=(datetime.now() - datetime.fromtimestamp(stat.st_mtime)).days,
-                                              size_kb=round(stat.st_size / 1024, 2))
+                                    logger.info(
+                                        "Deleted old log file",
+                                        file=entry.name,
+                                        age_days=(
+                                            datetime.now()
+                                            - datetime.fromtimestamp(stat.st_mtime)
+                                        ).days,
+                                        size_kb=round(stat.st_size / 1024, 2),
+                                    )
 
                                 deleted_count += 1
                                 deleted_size += stat.st_size
@@ -213,14 +237,18 @@ class LogManager:
                         except OSError as e:
                             error_msg = f"Failed to delete {entry.name}: {str(e)}"
                             errors.append(error_msg)
-                            logger.warning("Failed to delete log file", file=entry.name, error=str(e))
+                            logger.warning(
+                                "Failed to delete log file",
+                                file=entry.name,
+                                error=str(e),
+                            )
                             continue
 
             return {
                 "deleted_count": deleted_count,
                 "deleted_size_mb": round(deleted_size / (1024 * 1024), 2),
                 "skipped_count": skipped_count,
-                "errors": errors
+                "errors": errors,
             }
 
         except Exception as e:
@@ -231,7 +259,7 @@ class LogManager:
         self,
         max_total_size_mb: int,
         protected_paths: Optional[Set[str]] = None,
-        dry_run: bool = False
+        dry_run: bool = False,
     ) -> Dict:
         """
         Delete oldest log files until total size is under max_total_size_mb.
@@ -269,37 +297,43 @@ class LogManager:
                     "deleted_size_mb": 0.0,
                     "skipped_count": 0,
                     "final_size_mb": 0.0,
-                    "errors": []
+                    "errors": [],
                 }
 
             with os.scandir(self.log_dir) as entries:
                 for entry in entries:
-                    if entry.is_file() and entry.name.endswith('.log'):
+                    if entry.is_file() and entry.name.endswith(".log"):
                         try:
                             stat = entry.stat()
-                            log_files.append({
-                                "path": entry.path,
-                                "name": entry.name,
-                                "size": stat.st_size,
-                                "mtime": stat.st_mtime,
-                                "protected": entry.path in protected_paths
-                            })
+                            log_files.append(
+                                {
+                                    "path": entry.path,
+                                    "name": entry.name,
+                                    "size": stat.st_size,
+                                    "mtime": stat.st_mtime,
+                                    "protected": entry.path in protected_paths,
+                                }
+                            )
                             current_total_size += stat.st_size
                         except OSError as e:
-                            logger.warning("Failed to stat log file", file=entry.name, error=str(e))
+                            logger.warning(
+                                "Failed to stat log file", file=entry.name, error=str(e)
+                            )
                             continue
 
             # If current size is under limit, nothing to do
             if current_total_size <= max_size_bytes:
-                logger.info("Log storage within limits",
-                          current_mb=round(current_total_size / (1024 * 1024), 2),
-                          limit_mb=max_total_size_mb)
+                logger.info(
+                    "Log storage within limits",
+                    current_mb=round(current_total_size / (1024 * 1024), 2),
+                    limit_mb=max_total_size_mb,
+                )
                 return {
                     "deleted_count": 0,
                     "deleted_size_mb": 0.0,
                     "skipped_count": 0,
                     "final_size_mb": round(current_total_size / (1024 * 1024), 2),
-                    "errors": []
+                    "errors": [],
                 }
 
             # Sort by mtime (oldest first)
@@ -323,9 +357,11 @@ class LogManager:
                 try:
                     if not dry_run:
                         os.remove(log_file["path"])
-                        logger.info("Deleted log file to free space",
-                                  file=log_file["name"],
-                                  size_kb=round(log_file["size"] / 1024, 2))
+                        logger.info(
+                            "Deleted log file to free space",
+                            file=log_file["name"],
+                            size_kb=round(log_file["size"] / 1024, 2),
+                        )
 
                     deleted_count += 1
                     deleted_size += log_file["size"]
@@ -334,7 +370,9 @@ class LogManager:
                 except OSError as e:
                     error_msg = f"Failed to delete {log_file['name']}: {str(e)}"
                     errors.append(error_msg)
-                    logger.warning("Failed to delete log file", file=log_file["name"], error=str(e))
+                    logger.warning(
+                        "Failed to delete log file", file=log_file["name"], error=str(e)
+                    )
                     continue
 
             return {
@@ -342,7 +380,7 @@ class LogManager:
                 "deleted_size_mb": round(deleted_size / (1024 * 1024), 2),
                 "skipped_count": skipped_count,
                 "final_size_mb": round(remaining_size / (1024 * 1024), 2),
-                "errors": errors
+                "errors": errors,
             }
 
         except Exception as e:
@@ -354,7 +392,7 @@ class LogManager:
         db: Session,
         max_age_days: int,
         max_total_size_mb: int,
-        dry_run: bool = False
+        dry_run: bool = False,
     ) -> Dict:
         """
         Combined cleanup: First delete by age, then by size if needed.
@@ -382,40 +420,48 @@ class LogManager:
             # Get protected paths (running jobs)
             protected_paths = self.get_running_job_log_paths(db)
 
-            logger.info("Starting combined log cleanup",
-                       max_age_days=max_age_days,
-                       max_total_size_mb=max_total_size_mb,
-                       protected_count=len(protected_paths),
-                       dry_run=dry_run)
+            logger.info(
+                "Starting combined log cleanup",
+                max_age_days=max_age_days,
+                max_total_size_mb=max_total_size_mb,
+                protected_count=len(protected_paths),
+                dry_run=dry_run,
+            )
 
             # Step 1: Cleanup by age
             age_result = self.cleanup_logs_by_age(
                 max_age_days=max_age_days,
                 protected_paths=protected_paths,
-                dry_run=dry_run
+                dry_run=dry_run,
             )
 
-            logger.info("Age-based cleanup completed",
-                       deleted=age_result["deleted_count"],
-                       size_mb=age_result["deleted_size_mb"],
-                       skipped=age_result["skipped_count"])
+            logger.info(
+                "Age-based cleanup completed",
+                deleted=age_result["deleted_count"],
+                size_mb=age_result["deleted_size_mb"],
+                skipped=age_result["skipped_count"],
+            )
 
             # Step 2: Cleanup by size (if needed)
             size_result = self.cleanup_logs_by_size(
                 max_total_size_mb=max_total_size_mb,
                 protected_paths=protected_paths,
-                dry_run=dry_run
+                dry_run=dry_run,
             )
 
-            logger.info("Size-based cleanup completed",
-                       deleted=size_result["deleted_count"],
-                       size_mb=size_result["deleted_size_mb"],
-                       skipped=size_result["skipped_count"],
-                       final_size_mb=size_result["final_size_mb"])
+            logger.info(
+                "Size-based cleanup completed",
+                deleted=size_result["deleted_count"],
+                size_mb=size_result["deleted_size_mb"],
+                skipped=size_result["skipped_count"],
+                final_size_mb=size_result["final_size_mb"],
+            )
 
             # Combine results
             total_deleted = age_result["deleted_count"] + size_result["deleted_count"]
-            total_size_freed = age_result["deleted_size_mb"] + size_result["deleted_size_mb"]
+            total_size_freed = (
+                age_result["deleted_size_mb"] + size_result["deleted_size_mb"]
+            )
             total_errors = age_result["errors"] + size_result["errors"]
 
             return {
@@ -424,7 +470,7 @@ class LogManager:
                 "total_deleted_count": total_deleted,
                 "total_deleted_size_mb": round(total_size_freed, 2),
                 "total_errors": total_errors,
-                "success": len(total_errors) == 0
+                "success": len(total_errors) == 0,
             }
 
         except Exception as e:

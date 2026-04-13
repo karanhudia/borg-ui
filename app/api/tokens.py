@@ -37,6 +37,7 @@ class TokenCreatedResponse(BaseModel):
     prefix: str
     created_at: datetime
 
+
 @router.get("/settings/tokens", response_model=list[TokenResponse])
 async def list_tokens(
     current_user: User = Depends(get_current_user),
@@ -73,7 +74,9 @@ async def create_token(
     db.commit()
     db.refresh(token)
 
-    logger.info("API token created", user=current_user.username, token_name=payload.name)
+    logger.info(
+        "API token created", user=current_user.username, token_name=payload.name
+    )
 
     return TokenCreatedResponse(
         id=token.id,
@@ -92,8 +95,10 @@ async def revoke_token(
 ):
     token = db.query(ApiToken).filter(ApiToken.id == token_id).first()
     if not token:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.tokens.notFound"})
-    if token.user_id != current_user.id and current_user.role != 'admin':
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.tokens.notFound"}
+        )
+    if token.user_id != current_user.id and current_user.role != "admin":
         raise HTTPException(
             status_code=403,
             detail={"key": "backend.errors.tokens.cannotRevokeOtherUsersToken"},

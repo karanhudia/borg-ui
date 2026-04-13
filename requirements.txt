@@ -11,6 +11,7 @@ httpx==0.28.1
 psutil==7.2.2
 pydantic-settings==2.13.1
 pydantic==2.12.5
+pre-commit==4.5.0
 pytest-asyncio==1.3.0
 pytest-cov==7.1.0
 pytest==9.0.3
@@ -20,6 +21,7 @@ python-multipart==0.0.24
 pyyaml==6.0.3
 redis==7.4.0
 requests==2.33.1
+ruff==0.14.0
 sqlalchemy==2.0.49
 structlog==25.5.0
 uvicorn[standard]==0.44.0

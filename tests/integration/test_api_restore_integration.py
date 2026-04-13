@@ -1,4 +1,5 @@
 """Integration tests for restore API with real borg execution."""
+
 import shutil
 import time
 
@@ -12,7 +13,9 @@ from tests.utils.jobs import wait_for_payload_status
 def _require_borg2_binary() -> str:
     borg2_path = shutil.which("borg2")
     if not borg2_path:
-        pytest.skip("Borg 2 binary not found. Install borg2 to run this integration test.")
+        pytest.skip(
+            "Borg 2 binary not found. Install borg2 to run this integration test."
+        )
     return borg2_path
 
 
@@ -32,7 +35,12 @@ def _enable_borg_v2(test_db) -> None:
 
 def _create_borg2_repo_with_archives(test_db, tmp_path):
     from app.database.models import Repository
-    from tests.utils.borg import create_archive, create_source_tree, init_borg_repo, make_borg_test_env
+    from tests.utils.borg import (
+        create_archive,
+        create_source_tree,
+        init_borg_repo,
+        make_borg_test_env,
+    )
 
     borg2_binary = _require_borg2_binary()
     _enable_borg_v2(test_db)
@@ -69,6 +77,7 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
     test_db.commit()
     test_db.refresh(repo)
     return repo, repo_path, source_path, ["test-archive-1", "test-archive-2"]
+
 
 @pytest.mark.integration
 @pytest.mark.requires_borg
@@ -211,7 +220,11 @@ class TestRestoreOperation:
         )
 
         assert job_data["status"] == "completed"
-        restored_files = {path.relative_to(restore_dest).as_posix() for path in restore_dest.rglob("*") if path.is_file()}
+        restored_files = {
+            path.relative_to(restore_dest).as_posix()
+            for path in restore_dest.rglob("*")
+            if path.is_file()
+        }
         assert any(name.endswith("file1.txt") for name in restored_files)
         assert any(name.endswith("file5.txt") for name in restored_files)
 
@@ -252,7 +265,11 @@ class TestRestoreOperation:
         )
 
         assert job_data["status"] == "completed"
-        restored_files = {path.relative_to(restore_dest).as_posix() for path in restore_dest.rglob("*") if path.is_file()}
+        restored_files = {
+            path.relative_to(restore_dest).as_posix()
+            for path in restore_dest.rglob("*")
+            if path.is_file()
+        }
         assert any(name.endswith("file1.txt") for name in restored_files)
         assert any(name.endswith("file5.txt") for name in restored_files)
 
@@ -319,7 +336,9 @@ class TestRestoreOperationBorg2:
         test_db,
         tmp_path,
     ):
-        repo, repo_path, _test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, repo_path, _test_data_path, archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
         preview_dest = tmp_path / "borg2-preview-destination"
         preview_dest.mkdir()
 
@@ -347,7 +366,9 @@ class TestRestoreOperationBorg2:
         test_db,
         tmp_path,
     ):
-        repo, repo_path, test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, repo_path, test_data_path, archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
         archive_root_path = test_data_path.as_posix().lstrip("/")
 
         root_response = test_client.get(
@@ -382,7 +403,9 @@ class TestRestoreOperationBorg2:
         test_db,
         tmp_path,
     ):
-        repo, repo_path, _test_data_path, archive_names = _create_borg2_repo_with_archives(test_db, tmp_path)
+        repo, repo_path, _test_data_path, archive_names = (
+            _create_borg2_repo_with_archives(test_db, tmp_path)
+        )
         restore_dest = tmp_path / "borg2-restored-data"
         restore_dest.mkdir()
 
@@ -422,6 +445,7 @@ class TestRestoreOperationBorg2:
         assert any(name.endswith("file1.txt") for name in restored_files)
         assert any(name.endswith("file3.txt") for name in restored_files)
 
+
 @pytest.mark.integration
 @pytest.mark.requires_borg
 class TestRestoreSpeedETAIntegration:
@@ -429,8 +453,11 @@ class TestRestoreSpeedETAIntegration:
 
     def wait_for_running_status(self, test_client, job_id, admin_headers, timeout=10):
         """Poll job status until it starts running"""
+
         def fetch_payload():
-            response = test_client.get(f"/api/restore/status/{job_id}", headers=admin_headers)
+            response = test_client.get(
+                f"/api/restore/status/{job_id}", headers=admin_headers
+            )
             response.raise_for_status()
             return response.json()
 
@@ -452,7 +479,7 @@ class TestRestoreSpeedETAIntegration:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        tmp_path
+        tmp_path,
     ):
         """Test that restore job reports speed (MB/s) during execution"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -468,17 +495,17 @@ class TestRestoreSpeedETAIntegration:
                 "archive": latest_archive,
                 "paths": [],
                 "destination": str(restore_dest),
-                "repository_id": repo.id
+                "repository_id": repo.id,
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
-        
+
         assert response.status_code == 200
         job_id = response.json()["job_id"]
 
         # Wait for job to start running
         running_data = self.wait_for_running_status(test_client, job_id, admin_headers)
-        
+
         if running_data:
             # Verify progress_details includes speed
             assert "progress_details" in running_data
@@ -495,7 +522,7 @@ class TestRestoreSpeedETAIntegration:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        tmp_path
+        tmp_path,
     ):
         """Test that restore job calculates ETA"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -511,27 +538,29 @@ class TestRestoreSpeedETAIntegration:
                 "archive": latest_archive,
                 "paths": [],
                 "destination": str(restore_dest),
-                "repository_id": repo.id
+                "repository_id": repo.id,
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
-        
+
         assert response.status_code == 200
         job_id = response.json()["job_id"]
 
         # Poll for progress with ETA
         start_time = time.time()
         found_eta = False
-        
+
         while time.time() - start_time < 15:  # 15 second timeout
-            response = test_client.get(f"/api/restore/status/{job_id}", headers=admin_headers)
+            response = test_client.get(
+                f"/api/restore/status/{job_id}", headers=admin_headers
+            )
             if response.status_code == 200:
                 data = response.json()
                 if data.get("status") == "running":
                     progress = data.get("progress_details", {})
                     eta = progress.get("estimated_time_remaining", 0)
                     speed = progress.get("restore_speed", 0.0)
-                    
+
                     # If we have speed > 0 and ETA > 0, test passes
                     if speed > 0 and eta > 0:
                         found_eta = True
@@ -539,12 +568,14 @@ class TestRestoreSpeedETAIntegration:
                 elif data.get("status") in ["completed", "failed"]:
                     break
             time.sleep(0.3)
-        
+
         # Test passes if we either found ETA during restore or restore completed.
         # "pending" is also valid: TestClient runs the ASGI app via an anyio portal in a
         # background thread, and asyncio.create_task() background jobs are not guaranteed
         # to execute between synchronous test-client calls.
-        response = test_client.get(f"/api/restore/status/{job_id}", headers=admin_headers)
+        response = test_client.get(
+            f"/api/restore/status/{job_id}", headers=admin_headers
+        )
         final_data = response.json()
         assert final_data.get("status") in ["pending", "running", "completed", "failed"]
 
@@ -554,7 +585,7 @@ class TestRestoreSpeedETAIntegration:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        tmp_path
+        tmp_path,
     ):
         """Test that restore jobs list includes speed and ETA fields"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -570,11 +601,11 @@ class TestRestoreSpeedETAIntegration:
                 "archive": latest_archive,
                 "paths": [],
                 "destination": str(restore_dest),
-                "repository_id": repo.id
+                "repository_id": repo.id,
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
-        
+
         assert response.status_code == 200
         job_id = response.json()["job_id"]
 
@@ -583,20 +614,20 @@ class TestRestoreSpeedETAIntegration:
 
         # Get jobs list
         response = test_client.get("/api/restore/jobs", headers=admin_headers)
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "jobs" in data
-        
+
         # Find our job
         our_job = None
         for job in data["jobs"]:
             if job["id"] == job_id:
                 our_job = job
                 break
-        
+
         assert our_job is not None, "Created job not found in jobs list"
-        
+
         # Verify speed and ETA fields exist
         assert "progress_details" in our_job
         progress = our_job["progress_details"]
@@ -609,7 +640,7 @@ class TestRestoreSpeedETAIntegration:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        tmp_path
+        tmp_path,
     ):
         """Test that restore tracks original_size and restored_size"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -625,34 +656,34 @@ class TestRestoreSpeedETAIntegration:
                 "archive": latest_archive,
                 "paths": [],
                 "destination": str(restore_dest),
-                "repository_id": repo.id
+                "repository_id": repo.id,
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
-        
+
         assert response.status_code == 200
         job_id = response.json()["job_id"]
 
         # Wait for job to start and check database
         time.sleep(1.0)
-        
+
         from app.database.models import RestoreJob
         from app.database.database import SessionLocal
-        
+
         db = SessionLocal()
         try:
             job = db.query(RestoreJob).filter(RestoreJob.id == job_id).first()
             assert job is not None
-            
+
             # Check that size fields are being tracked
             # original_size should be set (total bytes to restore)
             # restored_size should be updating during restore
             if job.status == "running":
                 # If still running, we should have some size data
-                assert hasattr(job, 'original_size')
-                assert hasattr(job, 'restored_size')
-                assert hasattr(job, 'restore_speed')
-                assert hasattr(job, 'estimated_time_remaining')
+                assert hasattr(job, "original_size")
+                assert hasattr(job, "restored_size")
+                assert hasattr(job, "restore_speed")
+                assert hasattr(job, "estimated_time_remaining")
         finally:
             db.close()
 
@@ -662,7 +693,9 @@ class TestRestoreSpeedETAIntegration:
 class TestRestoreLogsIntegration:
     """Integration tests for restore job logs capture and retrieval"""
 
-    def _start_real_restore(self, test_client, admin_headers, repo, repo_path, archive_name, restore_dest):
+    def _start_real_restore(
+        self, test_client, admin_headers, repo, repo_path, archive_name, restore_dest
+    ):
         response = test_client.post(
             "/api/restore/start",
             json={
@@ -684,7 +717,7 @@ class TestRestoreLogsIntegration:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        tmp_path
+        tmp_path,
     ):
         """Test that completed restore job has logs stored in database"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -730,7 +763,7 @@ class TestRestoreLogsIntegration:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        tmp_path
+        tmp_path,
     ):
         """Test that restore logs are accessible via /api/restore/jobs"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -770,7 +803,7 @@ class TestRestoreLogsIntegration:
         test_client: TestClient,
         admin_headers,
         db_borg_repo_with_archives,
-        tmp_path
+        tmp_path,
     ):
         """Test that restore logs are accessible via /api/restore/status/{id}"""
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
@@ -795,7 +828,9 @@ class TestRestoreLogsIntegration:
             timeout=45,
         )
 
-        response = test_client.get(f"/api/restore/status/{job_id}", headers=admin_headers)
+        response = test_client.get(
+            f"/api/restore/status/{job_id}", headers=admin_headers
+        )
         assert response.status_code == 200
         data = response.json()
 

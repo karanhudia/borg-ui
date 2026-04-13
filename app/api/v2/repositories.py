@@ -4,12 +4,11 @@ Handles create (rcreate), import, info, and delete for Borg 2 repositories.
 The borg2 core wrapper is the ONLY borg binary interaction here — never borg.py.
 """
 
-import asyncio
 import json
 import os
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -21,7 +20,6 @@ from app.core.security import get_current_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2, BORG2_ENCRYPTION_MODES
 from app.core.borg_errors import is_lock_error
-from app.config import settings
 from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import repository_borg_env
@@ -31,6 +29,7 @@ router = APIRouter(tags=["Repositories v2"], dependencies=[require_feature("borg
 
 
 # ── Pydantic schemas ───────────────────────────────────────────────────────────
+
 
 class RepositoryV2Create(BaseModel):
     name: str
@@ -79,6 +78,7 @@ class RepositoryV2Import(BaseModel):
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def _get_init_timeout(db: Session) -> int:
     sys_settings = db.query(SystemSettings).first()
     if sys_settings and sys_settings.init_timeout:
@@ -95,21 +95,38 @@ def _get_info_timeout(db: Session) -> int:
 
 def _resolve_bypass_lock(repo: Repository, db: Session, setting_name: str) -> bool:
     system_settings = db.query(SystemSettings).first()
-    return bool(repo.bypass_lock or (system_settings and getattr(system_settings, setting_name, False)))
+    return bool(
+        repo.bypass_lock
+        or (system_settings and getattr(system_settings, setting_name, False))
+    )
 
 
 def _is_borg2_lock_like_failure(result: dict) -> bool:
     stderr = result.get("stderr", "") or ""
-    return is_lock_error(exit_code=result.get("return_code")) or "ObjectNotFound: locks/" in stderr
+    return (
+        is_lock_error(exit_code=result.get("return_code"))
+        or "ObjectNotFound: locks/" in stderr
+    )
 
 
 def _borg_keyfile_name(repo_path: str) -> str:
     """Derive a stable keyfile filename from the repository path."""
-    path = repo_path[len("ssh://"):] if repo_path.startswith("ssh://") else repo_path.lstrip("/")
+    path = (
+        repo_path[len("ssh://") :]
+        if repo_path.startswith("ssh://")
+        else repo_path.lstrip("/")
+    )
     return re.sub(r"[^a-zA-Z0-9]", "_", path)
-async def _rcreate(path: str, encryption: str, passphrase: Optional[str],
-                   ssh_key_id: Optional[int], remote_path: Optional[str],
-                   init_timeout: int) -> dict:
+
+
+async def _rcreate(
+    path: str,
+    encryption: str,
+    passphrase: Optional[str],
+    ssh_key_id: Optional[int],
+    remote_path: Optional[str],
+    init_timeout: int,
+) -> dict:
     """Run borg2 rcreate with proper SSH env if needed."""
     result = await repository_v2_service.initialize_repository(
         path=path,
@@ -123,8 +140,13 @@ async def _rcreate(path: str, encryption: str, passphrase: Optional[str],
     return result
 
 
-async def _rinfo(path: str, passphrase: Optional[str], ssh_key_id: Optional[int],
-                 remote_path: Optional[str], timeout: int) -> dict:
+async def _rinfo(
+    path: str,
+    passphrase: Optional[str],
+    ssh_key_id: Optional[int],
+    remote_path: Optional[str],
+    timeout: int,
+) -> dict:
     """Run borg2 repo-info with proper SSH env if needed."""
     return await repository_v2_service.verify_repository(
         path=path,
@@ -136,6 +158,7 @@ async def _rinfo(path: str, passphrase: Optional[str], ssh_key_id: Optional[int]
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
+
 
 @router.get("/encryption-modes")
 async def list_encryption_modes(current_user: User = Depends(get_current_user)):
@@ -151,33 +174,51 @@ async def create_repository(
 ):
     """Create and initialise a new Borg 2 repository (borg2 rcreate)."""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
+        raise HTTPException(
+            status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"}
+        )
 
     if data.encryption not in BORG2_ENCRYPTION_MODES:
         raise HTTPException(
             status_code=400,
-            detail={"key": "backend.errors.repo.invalidEncryption",
-                    "params": {"mode": data.encryption, "valid": BORG2_ENCRYPTION_MODES}},
+            detail={
+                "key": "backend.errors.repo.invalidEncryption",
+                "params": {"mode": data.encryption, "valid": BORG2_ENCRYPTION_MODES},
+            },
         )
 
     # Resolve SSH connection details if given
     ssh_key_id = None
     if data.connection_id:
         from app.database.models import SSHConnection
-        conn = db.query(SSHConnection).filter(SSHConnection.id == data.connection_id).first()
+
+        conn = (
+            db.query(SSHConnection)
+            .filter(SSHConnection.id == data.connection_id)
+            .first()
+        )
         if not conn:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.sshConnectionNotFound"})
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.repo.sshConnectionNotFound"},
+            )
         ssh_key_id = conn.ssh_key_id
 
     # Check for duplicate name/path
     if db.query(Repository).filter(Repository.name == data.name).first():
-        raise HTTPException(status_code=409, detail={"key": "backend.errors.repo.nameExists"})
+        raise HTTPException(
+            status_code=409, detail={"key": "backend.errors.repo.nameExists"}
+        )
     if db.query(Repository).filter(Repository.path == data.path).first():
-        raise HTTPException(status_code=409, detail={"key": "backend.errors.repo.pathExists"})
+        raise HTTPException(
+            status_code=409, detail={"key": "backend.errors.repo.pathExists"}
+        )
 
     init_timeout = _get_init_timeout(db)
 
-    logger.info("Initialising borg2 repository", path=data.path, encryption=data.encryption)
+    logger.info(
+        "Initialising borg2 repository", path=data.path, encryption=data.encryption
+    )
     result = await _rcreate(
         path=data.path,
         encryption=data.encryption,
@@ -191,11 +232,18 @@ async def create_repository(
         logger.error("borg2 rcreate failed", stderr=result["stderr"])
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.repo.initFailed", "params": {"error": result["stderr"]}},
+            detail={
+                "key": "backend.errors.repo.initFailed",
+                "params": {"error": result["stderr"]},
+            },
         )
 
-    source_dirs_json = json.dumps(data.source_directories) if data.source_directories else None
-    exclude_patterns_json = json.dumps(data.exclude_patterns) if data.exclude_patterns else None
+    source_dirs_json = (
+        json.dumps(data.source_directories) if data.source_directories else None
+    )
+    exclude_patterns_json = (
+        json.dumps(data.exclude_patterns) if data.exclude_patterns else None
+    )
 
     repo = Repository(
         name=data.name,
@@ -224,8 +272,12 @@ async def create_repository(
     db.commit()
     db.refresh(repo)
 
-    logger.info("Borg2 repository created", repo_id=repo.id, path=repo.path,
-                already_existed=result.get("already_existed"))
+    logger.info(
+        "Borg2 repository created",
+        repo_id=repo.id,
+        path=repo.path,
+        already_existed=result.get("already_existed"),
+    )
     return {
         "id": repo.id,
         "name": repo.name,
@@ -244,21 +296,35 @@ async def import_repository(
 ):
     """Import an existing Borg 2 repository (no rcreate — repo already exists)."""
     if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"})
+        raise HTTPException(
+            status_code=403, detail={"key": "backend.errors.repo.adminAccessRequired"}
+        )
 
     # Check for duplicate name/path
     if db.query(Repository).filter(Repository.name == data.name).first():
-        raise HTTPException(status_code=409, detail={"key": "backend.errors.repo.nameExists"})
+        raise HTTPException(
+            status_code=409, detail={"key": "backend.errors.repo.nameExists"}
+        )
     if db.query(Repository).filter(Repository.path == data.path).first():
-        raise HTTPException(status_code=409, detail={"key": "backend.errors.repo.pathExists"})
+        raise HTTPException(
+            status_code=409, detail={"key": "backend.errors.repo.pathExists"}
+        )
 
     # Resolve SSH connection details if given
     ssh_key_id = None
     if data.connection_id:
         from app.database.models import SSHConnection
-        conn = db.query(SSHConnection).filter(SSHConnection.id == data.connection_id).first()
+
+        conn = (
+            db.query(SSHConnection)
+            .filter(SSHConnection.id == data.connection_id)
+            .first()
+        )
         if not conn:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.sshConnectionNotFound"})
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.repo.sshConnectionNotFound"},
+            )
         ssh_key_id = conn.ssh_key_id
 
     keyfile_path = None
@@ -285,12 +351,18 @@ async def import_repository(
         logger.error("borg2 rinfo verification failed", stderr=result["stderr"])
         raise HTTPException(
             status_code=400,
-            detail={"key": "backend.errors.repo.verificationFailed",
-                    "params": {"error": result["stderr"]}},
+            detail={
+                "key": "backend.errors.repo.verificationFailed",
+                "params": {"error": result["stderr"]},
+            },
         )
 
-    source_dirs_json = json.dumps(data.source_directories) if data.source_directories else None
-    exclude_patterns_json = json.dumps(data.exclude_patterns) if data.exclude_patterns else None
+    source_dirs_json = (
+        json.dumps(data.source_directories) if data.source_directories else None
+    )
+    exclude_patterns_json = (
+        json.dumps(data.exclude_patterns) if data.exclude_patterns else None
+    )
 
     repo = Repository(
         name=data.name,
@@ -337,11 +409,15 @@ async def get_repository_info(
     db: Session = Depends(get_db),
 ):
     """Get Borg 2 repository-level information via borg2 rinfo."""
-    repo = db.query(Repository).filter(
-        Repository.id == repo_id, Repository.borg_version == 2
-    ).first()
+    repo = (
+        db.query(Repository)
+        .filter(Repository.id == repo_id, Repository.borg_version == 2)
+        .first()
+    )
     if not repo:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.notFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.repo.notFound"}
+        )
 
     info_timeout = _get_info_timeout(db)
     bypass_lock = _resolve_bypass_lock(repo, db, "bypass_lock_on_info")
@@ -354,7 +430,11 @@ async def get_repository_info(
             timeout=info_timeout,
             env=env,
         )
-    if not result["success"] and not bypass_lock and _is_borg2_lock_like_failure(result):
+    if (
+        not result["success"]
+        and not bypass_lock
+        and _is_borg2_lock_like_failure(result)
+    ):
         logger.warning(
             "Retrying borg2 info_repo with bypass lock after lock-like failure",
             repo_id=repo.id,
@@ -372,7 +452,10 @@ async def get_repository_info(
     if not result["success"]:
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.repo.infoFailed", "params": {"error": result["stderr"]}},
+            detail={
+                "key": "backend.errors.repo.infoFailed",
+                "params": {"error": result["stderr"]},
+            },
         )
 
     try:
@@ -407,7 +490,10 @@ async def get_repository_info(
         try:
             disk_bytes = await calculate_path_size_bytes([repo.path], timeout=30)
             if disk_bytes > 0:
-                info_data["rinfo_stats"] = {"unique_csize": disk_bytes, "unique_size": disk_bytes}
+                info_data["rinfo_stats"] = {
+                    "unique_csize": disk_bytes,
+                    "unique_size": disk_bytes,
+                }
         except Exception:
             pass
 
@@ -421,15 +507,22 @@ async def list_archives(
     db: Session = Depends(get_db),
 ):
     """List all archives in a Borg 2 repository."""
-    repo = db.query(Repository).filter(
-        Repository.id == repo_id, Repository.borg_version == 2
-    ).first()
+    repo = (
+        db.query(Repository)
+        .filter(Repository.id == repo_id, Repository.borg_version == 2)
+        .first()
+    )
     if not repo:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.notFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.repo.notFound"}
+        )
 
     from app.database.models import SystemSettings
+
     system_settings = db.query(SystemSettings).first()
-    bypass_lock = repo.bypass_lock or (system_settings and system_settings.bypass_lock_on_list)
+    bypass_lock = repo.bypass_lock or (
+        system_settings and system_settings.bypass_lock_on_list
+    )
 
     with repository_borg_env(repo, db) as env:
         result = await borg2.list_archives(
@@ -442,7 +535,10 @@ async def list_archives(
     if not result["success"]:
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.repo.listFailed", "params": {"error": result["stderr"]}},
+            detail={
+                "key": "backend.errors.repo.listFailed",
+                "params": {"error": result["stderr"]},
+            },
         )
 
     try:
@@ -460,11 +556,15 @@ async def get_repository_stats(
     db: Session = Depends(get_db),
 ):
     """Get storage statistics for a Borg 2 repository via borg2 rinfo."""
-    repo = db.query(Repository).filter(
-        Repository.id == repo_id, Repository.borg_version == 2
-    ).first()
+    repo = (
+        db.query(Repository)
+        .filter(Repository.id == repo_id, Repository.borg_version == 2)
+        .first()
+    )
     if not repo:
-        raise HTTPException(status_code=404, detail={"key": "backend.errors.repo.notFound"})
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.repo.notFound"}
+        )
 
     info_timeout = _get_info_timeout(db)
     with repository_borg_env(repo, db) as env:
@@ -479,7 +579,10 @@ async def get_repository_stats(
     if not result["success"]:
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.repo.infoFailed", "params": {"error": result["stderr"]}},
+            detail={
+                "key": "backend.errors.repo.infoFailed",
+                "params": {"error": result["stderr"]},
+            },
         )
 
     try:

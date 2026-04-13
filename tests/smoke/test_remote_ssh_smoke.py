@@ -20,7 +20,11 @@ def ensure_public_key_authorized(auth_keys_path: Path, public_key: str) -> None:
     """Append the generated key to authorized_keys, using sudo when needed."""
     auth_keys_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        existing = auth_keys_path.read_text(encoding="utf-8") if auth_keys_path.exists() else ""
+        existing = (
+            auth_keys_path.read_text(encoding="utf-8")
+            if auth_keys_path.exists()
+            else ""
+        )
         if public_key not in existing:
             with auth_keys_path.open("a", encoding="utf-8") as handle:
                 if existing and not existing.endswith("\n"):
@@ -59,8 +63,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run remote SSH smoke test")
     parser.add_argument("--url", default="http://localhost:8082")
     parser.add_argument("--host", default=os.environ.get("SSH_SMOKE_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("SSH_SMOKE_PORT", "2222")))
-    parser.add_argument("--username", default=os.environ.get("SSH_SMOKE_USER", "borgsmoke"))
+    parser.add_argument(
+        "--port", type=int, default=int(os.environ.get("SSH_SMOKE_PORT", "2222"))
+    )
+    parser.add_argument(
+        "--username", default=os.environ.get("SSH_SMOKE_USER", "borgsmoke")
+    )
     parser.add_argument(
         "--authorized-keys",
         default=os.environ.get("SSH_SMOKE_AUTH_KEYS"),
@@ -107,9 +115,13 @@ def main() -> int:
         connection = test_response.json()["connection"]
         connection_id = connection["id"]
         if connection["status"] != "connected":
-            raise SmokeFailure(f"SSH connection test did not connect: {test_response.json()}")
+            raise SmokeFailure(
+                f"SSH connection test did not connect: {test_response.json()}"
+            )
 
-        verify_response = client.request_ok("POST", f"/api/ssh-keys/connections/{connection_id}/verify-borg")
+        verify_response = client.request_ok(
+            "POST", f"/api/ssh-keys/connections/{connection_id}/verify-borg"
+        )
         verify_payload = verify_response.json()
         if not verify_payload.get("installed"):
             raise SmokeFailure(f"Remote Borg verification failed: {verify_payload}")
@@ -154,7 +166,9 @@ def main() -> int:
             raise SmokeFailure(f"Expected one archive in SSH repo, got {archives}")
         archive_name = archives[0]["name"]
 
-        archive_info = client.get_archive_info(archive_name, repo_path, include_files=True)
+        archive_info = client.get_archive_info(
+            archive_name, repo_path, include_files=True
+        )
         if archive_info["name"] != archive_name:
             raise SmokeFailure(f"Unexpected SSH archive info: {archive_info}")
 
@@ -168,7 +182,9 @@ def main() -> int:
             f"{source_root.as_posix().lstrip('/')}/ssh-remote.txt",
         )
         if downloaded != b"ssh remote smoke\n":
-            raise SmokeFailure(f"Unexpected SSH archive download payload: {downloaded!r}")
+            raise SmokeFailure(
+                f"Unexpected SSH archive download payload: {downloaded!r}"
+            )
 
         client.log("Remote SSH smoke passed")
         return 0

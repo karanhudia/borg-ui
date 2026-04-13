@@ -34,7 +34,9 @@ async def calculate_path_size_bytes(
     for path in paths:
         try:
             if path.startswith("ssh://"):
-                path_size = await _du_ssh(path, exclude_patterns, timeout, key_file=key_file)
+                path_size = await _du_ssh(
+                    path, exclude_patterns, timeout, key_file=key_file
+                )
             else:
                 path_size = await _du_local(path, exclude_patterns, timeout)
 
@@ -42,14 +44,18 @@ async def calculate_path_size_bytes(
                 total_size += path_size
 
         except asyncio.TimeoutError:
-            logger.warning("Timeout calculating directory size", path=path, timeout_seconds=timeout)
+            logger.warning(
+                "Timeout calculating directory size", path=path, timeout_seconds=timeout
+            )
         except Exception as e:
             logger.warning("Error calculating directory size", path=path, error=str(e))
 
     return total_size
 
 
-async def _du_local(path: str, exclude_patterns: list[str], timeout: int) -> Optional[int]:
+async def _du_local(
+    path: str, exclude_patterns: list[str], timeout: int
+) -> Optional[int]:
     cmd = ["du", "-s", "-B1"]
     for pattern in exclude_patterns:
         cmd.extend(["--exclude", pattern])
@@ -71,8 +77,9 @@ async def _du_local(path: str, exclude_patterns: list[str], timeout: int) -> Opt
     return None
 
 
-async def _du_ssh(path: str, exclude_patterns: list[str], timeout: int,
-                  key_file: str | None = None) -> Optional[int]:
+async def _du_ssh(
+    path: str, exclude_patterns: list[str], timeout: int, key_file: str | None = None
+) -> Optional[int]:
     match = re.match(r"ssh://([^@]+)@([^:]+):(\d+)(/.*)", path)
     if not match:
         logger.warning("Invalid SSH URL format", path=path)
@@ -88,15 +95,22 @@ async def _du_ssh(path: str, exclude_patterns: list[str], timeout: int,
     cmd = ["ssh"]
     if key_file:
         cmd.extend(["-i", key_file])
-    cmd.extend([
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "UserKnownHostsFile=/dev/null",
-        "-o", "LogLevel=ERROR",
-        "-o", "ConnectTimeout=10",
-        "-p", port,
-        f"{username}@{host}",
-        f"du -sb{du_excludes} {remote_path} 2>/dev/null | cut -f1",
-    ])
+    cmd.extend(
+        [
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "LogLevel=ERROR",
+            "-o",
+            "ConnectTimeout=10",
+            "-p",
+            port,
+            f"{username}@{host}",
+            f"du -sb{du_excludes} {remote_path} 2>/dev/null | cut -f1",
+        ]
+    )
 
     process = await asyncio.create_subprocess_exec(
         *cmd,

@@ -240,7 +240,9 @@ async def test_list_archives_for_v2_returns_parsed_archives():
 
     with patch(
         "app.core.borg2.borg2.list_archives",
-        new=AsyncMock(return_value={"success": True, "stdout": '{"archives":[{"name":"a1"}]}'}),
+        new=AsyncMock(
+            return_value={"success": True, "stdout": '{"archives":[{"name":"a1"}]}'}
+        ),
     ):
         archives = await BorgRouter(repo).list_archives()
 
@@ -350,7 +352,9 @@ async def test_initialize_repository_delegates_to_v1_repository_service():
         "app.services.repository_service.repository_service.initialize_repository",
         new=AsyncMock(return_value={"success": True}),
     ) as mock_init:
-        result = await BorgRouter(repo).initialize_repository(ssh_key_id=3, init_timeout=90)
+        result = await BorgRouter(repo).initialize_repository(
+            ssh_key_id=3, init_timeout=90
+        )
 
     assert result == {"success": True}
     mock_init.assert_awaited_once_with(
@@ -419,7 +423,9 @@ def test_validate_local_repository_access_skips_v1_config_check_for_v2(tmp_path)
 
     repo = SimpleNamespace(borg_version=2, path=str(repo_path))
 
-    with patch("app.services.v2.backup_service.backup_v2_service.validate_local_repository_access") as mock_validate:
+    with patch(
+        "app.services.v2.backup_service.backup_v2_service.validate_local_repository_access"
+    ) as mock_validate:
         BorgRouter(repo).validate_local_repository_access()
 
     mock_validate.assert_called_once_with(repo)
@@ -563,18 +569,26 @@ def test_build_backup_create_command_uses_v1_shape():
 def test_build_stats_commands_use_v2_binaries():
     repo = SimpleNamespace(borg_version=2)
 
-    with patch(
-        "app.services.v2.backup_service.backup_v2_service.build_archive_info_command",
-        return_value=["borg2", "info", "a1"],
-    ) as mock_archive, patch(
-        "app.services.v2.backup_service.backup_v2_service.build_repo_list_command",
-        return_value=["borg2", "repo-list"],
-    ) as mock_list, patch(
-        "app.services.v2.backup_service.backup_v2_service.build_repo_info_command",
-        return_value=["borg2", "info"],
-    ) as mock_info:
+    with (
+        patch(
+            "app.services.v2.backup_service.backup_v2_service.build_archive_info_command",
+            return_value=["borg2", "info", "a1"],
+        ) as mock_archive,
+        patch(
+            "app.services.v2.backup_service.backup_v2_service.build_repo_list_command",
+            return_value=["borg2", "repo-list"],
+        ) as mock_list,
+        patch(
+            "app.services.v2.backup_service.backup_v2_service.build_repo_info_command",
+            return_value=["borg2", "info"],
+        ) as mock_info,
+    ):
         router = BorgRouter(repo)
-        assert router.build_archive_info_command("/repos/v2", "a1") == ["borg2", "info", "a1"]
+        assert router.build_archive_info_command("/repos/v2", "a1") == [
+            "borg2",
+            "info",
+            "a1",
+        ]
         assert router.build_repo_list_command("/repos/v2") == ["borg2", "repo-list"]
         assert router.build_repo_info_command("/repos/v2") == ["borg2", "info"]
 
@@ -612,7 +626,9 @@ async def test_list_archive_contents_delegates_to_v2_restore_service():
         "app.services.v2.restore_service.restore_v2_service.list_archive_contents",
         new=AsyncMock(return_value={"success": True, "stdout": ""}),
     ) as mock_list:
-        result = await BorgRouter(repo).list_archive_contents("a1", path="etc", max_lines=123)
+        result = await BorgRouter(repo).list_archive_contents(
+            "a1", path="etc", max_lines=123
+        )
 
     assert result == {"success": True, "stdout": ""}
     mock_list.assert_awaited_once_with(
@@ -627,7 +643,9 @@ async def test_list_archive_contents_delegates_to_v2_restore_service():
 def test_build_break_lock_command_uses_v1_shape():
     repo = SimpleNamespace(borg_version=1)
 
-    cmd = BorgRouter(repo).build_break_lock_command("/repo/path", remote_path="/usr/bin/borg")
+    cmd = BorgRouter(repo).build_break_lock_command(
+        "/repo/path", remote_path="/usr/bin/borg"
+    )
 
     assert cmd == ["borg", "break-lock", "--remote-path", "/usr/bin/borg", "/repo/path"]
 
@@ -637,9 +655,18 @@ def test_build_break_lock_command_uses_v2_shape():
     repo = SimpleNamespace(borg_version=2)
 
     with patch("app.core.borg2.borg2.borg_cmd", "borg2"):
-        cmd = BorgRouter(repo).build_break_lock_command("/repo/path", remote_path="/usr/bin/borg2")
+        cmd = BorgRouter(repo).build_break_lock_command(
+            "/repo/path", remote_path="/usr/bin/borg2"
+        )
 
-    assert cmd == ["borg2", "-r", "/repo/path", "break-lock", "--remote-path", "/usr/bin/borg2"]
+    assert cmd == [
+        "borg2",
+        "-r",
+        "/repo/path",
+        "break-lock",
+        "--remote-path",
+        "/usr/bin/borg2",
+    ]
 
 
 @pytest.mark.unit

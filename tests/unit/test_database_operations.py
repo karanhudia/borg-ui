@@ -1,6 +1,7 @@
 """
 Unit tests for database CRUD operations
 """
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -20,7 +21,7 @@ class TestRepositoryCRUD:
             path="/tmp/test-repo",
             encryption="repokey",
             compression="lz4",
-            repository_type="local"
+            repository_type="local",
         )
         db_session.add(repo)
         db_session.commit()
@@ -64,9 +65,13 @@ class TestRepositoryCRUD:
         assert len(repos) == 3
         assert all(isinstance(repo, Repository) for repo in repos)
 
-    def test_filter_repositories_by_encryption(self, db_session: Session, multiple_repositories):
+    def test_filter_repositories_by_encryption(
+        self, db_session: Session, multiple_repositories
+    ):
         """Test filtering repositories by encryption type"""
-        encrypted_repos = db_session.query(Repository).filter_by(encryption="repokey").all()
+        encrypted_repos = (
+            db_session.query(Repository).filter_by(encryption="repokey").all()
+        )
 
         assert len(encrypted_repos) > 0
         assert all(repo.encryption == "repokey" for repo in encrypted_repos)
@@ -79,11 +84,7 @@ class TestUserCRUD:
     def test_create_user(self, db_session: Session):
         """Test creating a user"""
         password_hash = get_password_hash("testpassword")
-        user = User(
-            username="newuser",
-            password_hash=password_hash,
-            is_active=True
-        )
+        user = User(username="newuser", password_hash=password_hash, is_active=True)
         db_session.add(user)
         db_session.commit()
         db_session.refresh(user)
@@ -129,7 +130,7 @@ class TestUserCRUD:
         duplicate_user = User(
             username=sample_user.username,  # Same username
             password_hash="different_hash",
-            is_active=True
+            is_active=True,
         )
         db_session.add(duplicate_user)
 
@@ -157,7 +158,9 @@ class TestMigration048:
             poolclass=StaticPool,
         )
         with engine.connect() as conn:
-            conn.execute(text("CREATE TABLE ssh_keys (id INTEGER PRIMARY KEY, name TEXT)"))
+            conn.execute(
+                text("CREATE TABLE ssh_keys (id INTEGER PRIMARY KEY, name TEXT)")
+            )
             conn.execute(text(ddl))
             conn.commit()
         return engine
@@ -165,7 +168,10 @@ class TestMigration048:
     def test_fixes_cascade_to_set_null(self):
         """CASCADE FK is replaced with SET NULL after upgrade runs."""
         import importlib
-        m048 = importlib.import_module("app.database.migrations.048_fix_ssh_connection_cascade")
+
+        m048 = importlib.import_module(
+            "app.database.migrations.048_fix_ssh_connection_cascade"
+        )
 
         engine = self._make_engine("""
             CREATE TABLE ssh_connections (
@@ -183,7 +189,9 @@ class TestMigration048:
         with engine.connect() as conn:
             m048.upgrade(conn)
             conn.commit()
-            fk_rows = conn.execute(text("PRAGMA foreign_key_list(ssh_connections)")).fetchall()
+            fk_rows = conn.execute(
+                text("PRAGMA foreign_key_list(ssh_connections)")
+            ).fetchall()
 
         on_delete_actions = [row[6] for row in fk_rows]
         assert "CASCADE" not in on_delete_actions
@@ -192,7 +200,10 @@ class TestMigration048:
     def test_idempotent_when_already_set_null(self):
         """Running upgrade again after it already ran must not raise."""
         import importlib
-        m048 = importlib.import_module("app.database.migrations.048_fix_ssh_connection_cascade")
+
+        m048 = importlib.import_module(
+            "app.database.migrations.048_fix_ssh_connection_cascade"
+        )
 
         engine = self._make_engine("""
             CREATE TABLE ssh_connections (
@@ -208,7 +219,9 @@ class TestMigration048:
         with engine.connect() as conn:
             m048.upgrade(conn)  # should be a no-op
             conn.commit()
-            fk_rows = conn.execute(text("PRAGMA foreign_key_list(ssh_connections)")).fetchall()
+            fk_rows = conn.execute(
+                text("PRAGMA foreign_key_list(ssh_connections)")
+            ).fetchall()
 
         on_delete_actions = [row[6] for row in fk_rows]
         assert "CASCADE" not in on_delete_actions
@@ -216,7 +229,10 @@ class TestMigration048:
     def test_handles_extra_columns(self):
         """Upgrade works when the table has extra columns added by later migrations."""
         import importlib
-        m048 = importlib.import_module("app.database.migrations.048_fix_ssh_connection_cascade")
+
+        m048 = importlib.import_module(
+            "app.database.migrations.048_fix_ssh_connection_cascade"
+        )
 
         # Simulate the real-world case: table already has use_sftp_mode and
         # ssh_path_prefix (added by migrations 059 and 066) plus CASCADE still present.
@@ -232,24 +248,35 @@ class TestMigration048:
             )
         """)
         with engine.connect() as conn:
-            conn.execute(text(
-                "ALTER TABLE ssh_connections ADD COLUMN use_sftp_mode BOOLEAN NOT NULL DEFAULT 1"
-            ))
-            conn.execute(text(
-                "ALTER TABLE ssh_connections ADD COLUMN ssh_path_prefix TEXT"
-            ))
-            conn.execute(text(
-                "INSERT INTO ssh_connections (host, username) VALUES ('host1', 'user1')"
-            ))
+            conn.execute(
+                text(
+                    "ALTER TABLE ssh_connections ADD COLUMN use_sftp_mode BOOLEAN NOT NULL DEFAULT 1"
+                )
+            )
+            conn.execute(
+                text("ALTER TABLE ssh_connections ADD COLUMN ssh_path_prefix TEXT")
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO ssh_connections (host, username) VALUES ('host1', 'user1')"
+                )
+            )
             conn.commit()
 
         with engine.connect() as conn:
             m048.upgrade(conn)
             conn.commit()
 
-            fk_rows = conn.execute(text("PRAGMA foreign_key_list(ssh_connections)")).fetchall()
+            fk_rows = conn.execute(
+                text("PRAGMA foreign_key_list(ssh_connections)")
+            ).fetchall()
             rows = conn.execute(text("SELECT * FROM ssh_connections")).fetchall()
-            col_names = [d[1] for d in conn.execute(text("PRAGMA table_info(ssh_connections)")).fetchall()]
+            col_names = [
+                d[1]
+                for d in conn.execute(
+                    text("PRAGMA table_info(ssh_connections)")
+                ).fetchall()
+            ]
 
         on_delete_actions = [row[6] for row in fk_rows]
         assert "CASCADE" not in on_delete_actions
@@ -275,9 +302,14 @@ class TestMigration065:
         )
         with engine.connect() as conn:
             conn.execute(text("PRAGMA foreign_keys=OFF"))
-            conn.execute(text("CREATE TABLE scheduled_jobs (id INTEGER PRIMARY KEY, name TEXT)"))
-            conn.execute(text("CREATE TABLE repositories (id INTEGER PRIMARY KEY, name TEXT)"))
-            conn.execute(text("""
+            conn.execute(
+                text("CREATE TABLE scheduled_jobs (id INTEGER PRIMARY KEY, name TEXT)")
+            )
+            conn.execute(
+                text("CREATE TABLE repositories (id INTEGER PRIMARY KEY, name TEXT)")
+            )
+            conn.execute(
+                text("""
                 CREATE TABLE scheduled_job_repositories (
                     id INTEGER PRIMARY KEY,
                     scheduled_job_id INTEGER NOT NULL,
@@ -285,37 +317,50 @@ class TestMigration065:
                     execution_order INTEGER NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
-            """))
-            conn.execute(text("INSERT INTO scheduled_jobs (id, name) VALUES (1, 'job-1')"))
-            conn.execute(text("INSERT INTO repositories (id, name) VALUES (1, 'repo-1')"))
+            """)
+            )
+            conn.execute(
+                text("INSERT INTO scheduled_jobs (id, name) VALUES (1, 'job-1')")
+            )
+            conn.execute(
+                text("INSERT INTO repositories (id, name) VALUES (1, 'repo-1')")
+            )
             conn.commit()
         return engine
 
     def test_upgrade_removes_orphaned_schedule_and_repository_rows(self):
         import importlib
 
-        m065 = importlib.import_module("app.database.migrations.065_cleanup_schedule_duplicates")
+        m065 = importlib.import_module(
+            "app.database.migrations.065_cleanup_schedule_duplicates"
+        )
         engine = self._make_engine()
 
         with engine.connect() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 INSERT INTO scheduled_job_repositories (id, scheduled_job_id, repository_id, execution_order)
                 VALUES
                     (1, 1, 1, 0),
                     (2, 999, 1, 1),
                     (3, 1, 999, 2)
-            """))
+            """)
+            )
             conn.commit()
 
             m065.upgrade(conn)
             conn.commit()
 
-            rows = conn.execute(text("""
+            rows = conn.execute(
+                text("""
                 SELECT id, scheduled_job_id, repository_id
                 FROM scheduled_job_repositories
                 ORDER BY id
-            """)).fetchall()
-            fk_rows = conn.execute(text("PRAGMA foreign_key_list(scheduled_job_repositories)")).fetchall()
+            """)
+            ).fetchall()
+            fk_rows = conn.execute(
+                text("PRAGMA foreign_key_list(scheduled_job_repositories)")
+            ).fetchall()
 
         assert rows == [(1, 1, 1)]
         on_delete_actions = [row[6] for row in fk_rows]
@@ -324,15 +369,20 @@ class TestMigration065:
     def test_upgrade_is_restart_safe_when_temp_table_exists(self):
         import importlib
 
-        m065 = importlib.import_module("app.database.migrations.065_cleanup_schedule_duplicates")
+        m065 = importlib.import_module(
+            "app.database.migrations.065_cleanup_schedule_duplicates"
+        )
         engine = self._make_engine()
 
         with engine.connect() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 INSERT INTO scheduled_job_repositories (id, scheduled_job_id, repository_id, execution_order)
                 VALUES (1, 1, 1, 0)
-            """))
-            conn.execute(text("""
+            """)
+            )
+            conn.execute(
+                text("""
                 CREATE TABLE scheduled_job_repositories_new (
                     id INTEGER PRIMARY KEY,
                     scheduled_job_id INTEGER NOT NULL,
@@ -340,17 +390,22 @@ class TestMigration065:
                     execution_order INTEGER NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
-            """))
+            """)
+            )
             conn.commit()
 
             m065.upgrade(conn)
             conn.commit()
 
-            temp_table = conn.execute(text("""
+            temp_table = conn.execute(
+                text("""
                 SELECT name FROM sqlite_master
                 WHERE type='table' AND name='scheduled_job_repositories_new'
-            """)).fetchall()
-            rows = conn.execute(text("SELECT COUNT(*) FROM scheduled_job_repositories")).scalar_one()
+            """)
+            ).fetchall()
+            rows = conn.execute(
+                text("SELECT COUNT(*) FROM scheduled_job_repositories")
+            ).scalar_one()
 
         assert temp_table == []
         assert rows == 1
@@ -377,7 +432,9 @@ class TestMigration081:
     def test_upgrade_skips_is_admin_backfill_when_column_missing(self):
         import importlib
 
-        m081 = importlib.import_module("app.database.migrations.081_add_role_and_api_tokens")
+        m081 = importlib.import_module(
+            "app.database.migrations.081_add_role_and_api_tokens"
+        )
         engine = self._make_engine("""
             CREATE TABLE users (
                 id INTEGER PRIMARY KEY,
@@ -388,19 +445,28 @@ class TestMigration081:
         """)
 
         with engine.connect() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 INSERT INTO users (id, username, password_hash, is_active)
                 VALUES (1, 'admin', 'hash', 1)
-            """))
+            """)
+            )
             conn.commit()
 
             m081.upgrade(conn)
 
-            columns = [row[1] for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
-            role = conn.execute(text("SELECT role FROM users WHERE id = 1")).scalar_one()
-            token_tables = conn.execute(text("""
+            columns = [
+                row[1]
+                for row in conn.execute(text("PRAGMA table_info(users)")).fetchall()
+            ]
+            role = conn.execute(
+                text("SELECT role FROM users WHERE id = 1")
+            ).scalar_one()
+            token_tables = conn.execute(
+                text("""
                 SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'api_tokens'
-            """)).fetchall()
+            """)
+            ).fetchall()
 
         assert "role" in columns
         assert role == "viewer"
@@ -409,7 +475,9 @@ class TestMigration081:
     def test_upgrade_migrates_legacy_is_admin_values(self):
         import importlib
 
-        m081 = importlib.import_module("app.database.migrations.081_add_role_and_api_tokens")
+        m081 = importlib.import_module(
+            "app.database.migrations.081_add_role_and_api_tokens"
+        )
         engine = self._make_engine("""
             CREATE TABLE users (
                 id INTEGER PRIMARY KEY,
@@ -421,16 +489,20 @@ class TestMigration081:
         """)
 
         with engine.connect() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 INSERT INTO users (id, username, password_hash, is_active, is_admin)
                 VALUES
                     (1, 'admin', 'hash', 1, 1),
                     (2, 'viewer', 'hash', 1, 0)
-            """))
+            """)
+            )
             conn.commit()
 
             m081.upgrade(conn)
 
-            roles = conn.execute(text("SELECT username, role FROM users ORDER BY id")).fetchall()
+            roles = conn.execute(
+                text("SELECT username, role FROM users ORDER BY id")
+            ).fetchall()
 
         assert roles == [("admin", "admin"), ("viewer", "viewer")]

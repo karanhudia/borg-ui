@@ -45,7 +45,9 @@ def main() -> int:
         )
         archives = client.list_archives(repo_path)
         if len(archives) != 1:
-            raise SmokeFailure(f"Expected one archive before restore cancel, got {archives}")
+            raise SmokeFailure(
+                f"Expected one archive before restore cancel, got {archives}"
+            )
         archive_name = archives[0]["name"]
 
         restore_dest = client.temp_dir / "restore-cancel-output"
@@ -61,13 +63,22 @@ def main() -> int:
         try:
             client.wait_for_running("/api/restore/status", restore_job_id, timeout=45)
         except SmokeFailure:
-            status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
+            status_payload = client.request_ok(
+                "GET", f"/api/restore/status/{restore_job_id}"
+            ).json()
             print(
                 "Restore cancel smoke skipped: could not observe a stable cancellation window "
                 f"({status_payload.get('status')})",
                 flush=True,
             )
-            if status_payload.get("status") in {"completed", "completed_with_warnings", "failed", "cancelled", "pending", "running"}:
+            if status_payload.get("status") in {
+                "completed",
+                "completed_with_warnings",
+                "failed",
+                "cancelled",
+                "pending",
+                "running",
+            }:
                 print(
                     f"Restore cancel smoke detail: current restore state is {status_payload.get('status')}",
                     flush=True,
@@ -80,8 +91,15 @@ def main() -> int:
             f"/api/restore/cancel/{restore_job_id}",
         )
         if cancel_response.status_code != 200:
-            status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
-            if status_payload.get("status") in {"completed", "completed_with_warnings", "failed", "cancelled"}:
+            status_payload = client.request_ok(
+                "GET", f"/api/restore/status/{restore_job_id}"
+            ).json()
+            if status_payload.get("status") in {
+                "completed",
+                "completed_with_warnings",
+                "failed",
+                "cancelled",
+            }:
                 print(
                     f"Restore cancel smoke skipped: restore reached terminal state before/during cancellation request "
                     f"({status_payload.get('status')})",
@@ -95,7 +113,9 @@ def main() -> int:
             )
             return 0
         if "cancel" not in str(cancel_response.json()).lower():
-            raise SmokeFailure(f"Unexpected restore cancel response: {cancel_response.text}")
+            raise SmokeFailure(
+                f"Unexpected restore cancel response: {cancel_response.text}"
+            )
 
         try:
             restore_job = client.wait_for_job(
@@ -103,11 +123,23 @@ def main() -> int:
                 restore_job_id,
                 expected={"cancelled"},
                 timeout=60,
-                terminal={"cancelled", "completed", "completed_with_warnings", "failed"},
+                terminal={
+                    "cancelled",
+                    "completed",
+                    "completed_with_warnings",
+                    "failed",
+                },
             )
         except SmokeFailure:
-            status_payload = client.request_ok("GET", f"/api/restore/status/{restore_job_id}").json()
-            if status_payload.get("status") in {"completed", "completed_with_warnings", "failed", "cancelled"}:
+            status_payload = client.request_ok(
+                "GET", f"/api/restore/status/{restore_job_id}"
+            ).json()
+            if status_payload.get("status") in {
+                "completed",
+                "completed_with_warnings",
+                "failed",
+                "cancelled",
+            }:
                 print(
                     f"Restore cancel smoke skipped: restore reached terminal/non-cancellable state after cancellation request "
                     f"({status_payload.get('status')})",

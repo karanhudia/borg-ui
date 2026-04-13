@@ -1,14 +1,11 @@
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import AsyncGenerator, Dict, Any
 import asyncio
 import json
 import structlog
 from datetime import datetime
-from sqlalchemy.orm import Session
-from app.core.security import get_current_user
 from app.database.models import User
-from app.database.database import get_db
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -16,6 +13,7 @@ router = APIRouter(tags=["events"])
 
 # Store active connections for broadcasting
 active_connections: Dict[str, asyncio.Queue] = {}
+
 
 class EventManager:
     """Manages real-time events and broadcasting"""
@@ -36,7 +34,11 @@ class EventManager:
         async with self.lock:
             queue = asyncio.Queue()
             self.connections[user_id] = queue
-            logger.debug("Added SSE connection", user_id=user_id, total_connections=len(self.connections))
+            logger.debug(
+                "Added SSE connection",
+                user_id=user_id,
+                total_connections=len(self.connections),
+            )
             return queue
 
     async def remove_connection(self, user_id: str):
@@ -44,14 +46,20 @@ class EventManager:
         async with self.lock:
             if user_id in self.connections:
                 del self.connections[user_id]
-                logger.debug("Removed SSE connection", user_id=user_id, total_connections=len(self.connections))
+                logger.debug(
+                    "Removed SSE connection",
+                    user_id=user_id,
+                    total_connections=len(self.connections),
+                )
 
-    async def broadcast_event(self, event_type: str, data: Dict[str, Any], user_id: str = None):
+    async def broadcast_event(
+        self, event_type: str, data: Dict[str, Any], user_id: str = None
+    ):
         """Broadcast an event to all connections or a specific user"""
         event = {
             "type": event_type,
             "data": data,
-            "timestamp": serialize_datetime(datetime.utcnow())
+            "timestamp": serialize_datetime(datetime.utcnow()),
         }
 
         async with self.lock:
@@ -61,26 +69,37 @@ class EventManager:
                     try:
                         await self.connections[user_id].put(event)
                     except Exception as e:
-                        logger.error("Failed to send event to user", user_id=user_id, error=str(e))
+                        logger.error(
+                            "Failed to send event to user",
+                            user_id=user_id,
+                            error=str(e),
+                        )
             else:
                 # Broadcast to all users
                 for uid, queue in self.connections.items():
                     try:
                         await queue.put(event)
                     except Exception as e:
-                        logger.error("Failed to broadcast event to user", user_id=uid, error=str(e))
+                        logger.error(
+                            "Failed to broadcast event to user",
+                            user_id=uid,
+                            error=str(e),
+                        )
 
     async def get_connection_count(self) -> int:
         """Get the number of active connections"""
         async with self.lock:
             return len(self.connections)
 
+
 # Global event manager instance
 event_manager = EventManager()
+
 
 def format_sse_event(event: Dict[str, Any]) -> str:
     """Format an event as Server-Sent Event"""
     return f"data: {json.dumps(event)}\n\n"
+
 
 async def event_generator(user_id: str) -> AsyncGenerator[str, None]:
     """Generate SSE events for a user"""
@@ -88,11 +107,13 @@ async def event_generator(user_id: str) -> AsyncGenerator[str, None]:
 
     try:
         # Send initial connection event
-        yield format_sse_event({
-            "type": "connection_established",
-            "data": {"message": "SSE connection established"},
-            "timestamp": serialize_datetime(datetime.utcnow())
-        })
+        yield format_sse_event(
+            {
+                "type": "connection_established",
+                "data": {"message": "SSE connection established"},
+                "timestamp": serialize_datetime(datetime.utcnow()),
+            }
+        )
 
         # Keep connection alive and send events
         while True:
@@ -111,11 +132,9 @@ async def event_generator(user_id: str) -> AsyncGenerator[str, None]:
     finally:
         await event_manager.remove_connection(user_id)
 
+
 @router.get("/stream")
-async def stream_events(
-    request: Request,
-    token: str = None
-):
+async def stream_events(request: Request, token: str = None):
     """Stream real-time events via Server-Sent Events"""
     try:
         # Try to get user from token query parameter (for EventSource)
@@ -129,17 +148,25 @@ async def stream_events(
             token_str = token
         else:
             # Try to get from X-Borg-Authorization header, falling back to Authorization
-            auth_header = request.headers.get("X-Borg-Authorization") or request.headers.get("Authorization")
+            auth_header = request.headers.get(
+                "X-Borg-Authorization"
+            ) or request.headers.get("Authorization")
             if auth_header and auth_header.startswith("Bearer "):
                 token_str = auth_header.split(" ")[1]
 
         if not token_str:
-            raise HTTPException(status_code=401, detail={"key": "backend.errors.events.notAuthenticated"})
+            raise HTTPException(
+                status_code=401,
+                detail={"key": "backend.errors.events.notAuthenticated"},
+            )
 
         # Verify token and get username
         username = verify_token(token_str)
         if not username:
-            raise HTTPException(status_code=401, detail={"key": "backend.errors.events.invalidAuthCredentials"})
+            raise HTTPException(
+                status_code=401,
+                detail={"key": "backend.errors.events.invalidAuthCredentials"},
+            )
 
         # Create a scoped database session just for authentication
         # Close it immediately to avoid holding connections during SSE streaming
@@ -147,7 +174,10 @@ async def stream_events(
         try:
             user = db.query(User).filter(User.username == username).first()
             if not user or not user.is_active:
-                raise HTTPException(status_code=401, detail={"key": "backend.errors.events.userNotFoundOrInactive"})
+                raise HTTPException(
+                    status_code=401,
+                    detail={"key": "backend.errors.events.userNotFoundOrInactive"},
+                )
             user_id = str(user.id)
         finally:
             db.close()  # IMPORTANT: Close DB connection before starting SSE stream
@@ -159,14 +189,18 @@ async def stream_events(
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Cache-Control"
-            }
+                "Access-Control-Allow-Headers": "Cache-Control",
+            },
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to start event stream", error=str(e))
-        raise HTTPException(status_code=500, detail={"key": "backend.errors.events.failedStartEventStream"})
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.events.failedStartEventStream"},
+        )
+
 
 # Background task for monitoring backup jobs
 async def monitor_backup_jobs():
@@ -181,6 +215,7 @@ async def monitor_backup_jobs():
         except Exception as e:
             logger.error("Error in backup job monitoring", error=str(e))
             await asyncio.sleep(5)
+
 
 # Startup event to start background tasks
 @router.on_event("startup")

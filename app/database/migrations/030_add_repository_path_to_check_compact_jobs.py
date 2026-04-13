@@ -8,6 +8,7 @@ the repository information even if the repository is deleted from the system lat
 
 from sqlalchemy import text
 
+
 def upgrade(db):
     """Add repository_path column to check_jobs and compact_jobs"""
     print("Running migration 030: Add Repository Path to Check and Compact Jobs")
@@ -15,7 +16,11 @@ def upgrade(db):
     try:
         # Add repository_path to check_jobs
         try:
-            db.execute(text("ALTER TABLE check_jobs ADD COLUMN repository_path VARCHAR(255) NULL"))
+            db.execute(
+                text(
+                    "ALTER TABLE check_jobs ADD COLUMN repository_path VARCHAR(255) NULL"
+                )
+            )
             print("✓ Added repository_path column to check_jobs table")
         except Exception as e:
             error_str = str(e).lower()
@@ -32,7 +37,11 @@ def upgrade(db):
 
         # Add repository_path to compact_jobs
         try:
-            db.execute(text("ALTER TABLE compact_jobs ADD COLUMN repository_path VARCHAR(255) NULL"))
+            db.execute(
+                text(
+                    "ALTER TABLE compact_jobs ADD COLUMN repository_path VARCHAR(255) NULL"
+                )
+            )
             print("✓ Added repository_path column to compact_jobs table")
         except Exception as e:
             error_str = str(e).lower()
@@ -54,6 +63,7 @@ def upgrade(db):
         print(f"✗ Migration 030 failed: {e}")
         db.rollback()
         raise
+
 
 def downgrade(db):
     """Downgrade migration 030"""

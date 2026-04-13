@@ -33,15 +33,19 @@ def upgrade(connection):
 
     script_fk_cols = {row[3]: row[6] for row in fk_rows if row[2] == "scripts"}
     already_set_null = (
-        script_fk_cols.get("pre_backup_script_id") == "SET NULL" and
-        script_fk_cols.get("post_backup_script_id") == "SET NULL"
+        script_fk_cols.get("pre_backup_script_id") == "SET NULL"
+        and script_fk_cols.get("post_backup_script_id") == "SET NULL"
     )
 
     if already_set_null:
-        print("✓ scheduled_jobs script FKs already have ON DELETE SET NULL — skipping migration 075")
+        print(
+            "✓ scheduled_jobs script FKs already have ON DELETE SET NULL — skipping migration 075"
+        )
         return
 
-    print("⚠️  Fixing scheduled_jobs script FK constraints (adding ON DELETE SET NULL)...")
+    print(
+        "⚠️  Fixing scheduled_jobs script FK constraints (adding ON DELETE SET NULL)..."
+    )
 
     try:
         # ── Build new table DDL from the live schema ─────────────────────────
@@ -64,7 +68,9 @@ def upgrade(connection):
 
         # Append all FK constraints; script FKs get ON DELETE SET NULL
         col_defs.append("    FOREIGN KEY (repository_id) REFERENCES repositories (id)")
-        col_defs.append("    FOREIGN KEY (source_ssh_connection_id) REFERENCES ssh_connections (id)")
+        col_defs.append(
+            "    FOREIGN KEY (source_ssh_connection_id) REFERENCES ssh_connections (id)"
+        )
         col_defs.append(
             "    FOREIGN KEY (pre_backup_script_id) REFERENCES scripts (id) ON DELETE SET NULL"
         )
@@ -86,22 +92,30 @@ def upgrade(connection):
 
             # ── Copy using explicit column names ──────────────────────────────
             col_names = ", ".join(row[1] for row in col_rows)
-            connection.execute(text(
-                f"INSERT INTO scheduled_jobs_new ({col_names})"
-                f" SELECT {col_names} FROM scheduled_jobs"
-            ))
+            connection.execute(
+                text(
+                    f"INSERT INTO scheduled_jobs_new ({col_names})"
+                    f" SELECT {col_names} FROM scheduled_jobs"
+                )
+            )
 
             # ── Swap tables ───────────────────────────────────────────────────
             connection.execute(text("DROP TABLE scheduled_jobs"))
-            connection.execute(text("ALTER TABLE scheduled_jobs_new RENAME TO scheduled_jobs"))
+            connection.execute(
+                text("ALTER TABLE scheduled_jobs_new RENAME TO scheduled_jobs")
+            )
 
             # ── Recreate indexes ──────────────────────────────────────────────
-            connection.execute(text(
-                "CREATE UNIQUE INDEX IF NOT EXISTS ix_scheduled_jobs_name ON scheduled_jobs (name)"
-            ))
-            connection.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_scheduled_jobs_id ON scheduled_jobs (id)"
-            ))
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_scheduled_jobs_name ON scheduled_jobs (name)"
+                )
+            )
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_scheduled_jobs_id ON scheduled_jobs (id)"
+                )
+            )
         finally:
             connection.execute(text("PRAGMA foreign_keys = ON"))
 
@@ -111,10 +125,14 @@ def upgrade(connection):
 
     except Exception as e:
         print(f"✗ Error fixing scheduled_jobs script FK constraints: {e}")
-        print("  Note: Deleting scripts referenced by schedules may still fail at DB level")
+        print(
+            "  Note: Deleting scripts referenced by schedules may still fail at DB level"
+        )
         # Don't raise - allow migration to continue
 
 
 def downgrade(connection):
     """No downgrade action - removing SET NULL would re-introduce the IntegrityError bug"""
-    print("✓ Downgrade skipped — reverting ON DELETE SET NULL would restore the IntegrityError bug")
+    print(
+        "✓ Downgrade skipped — reverting ON DELETE SET NULL would restore the IntegrityError bug"
+    )

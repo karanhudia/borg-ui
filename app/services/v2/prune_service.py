@@ -90,7 +90,9 @@ class PruneV2Service:
 
             stdout = result.get("stdout", "") or ""
             stderr = result.get("stderr", "") or ""
-            combined_output = "\n".join(part for part in [stdout, stderr] if part).strip()
+            combined_output = "\n".join(
+                part for part in [stdout, stderr] if part
+            ).strip()
 
             if combined_output:
                 log_file = self.log_dir / f"prune_job_{job_id}.log"

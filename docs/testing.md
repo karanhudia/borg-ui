@@ -47,3 +47,9 @@ Extended smoke covers slower Borg-heavy black-box checks:
 - Exercise the same FastAPI endpoints the frontend uses
 - Run real Borg commands against temporary repositories whenever the feature ends in a real Borg operation
 - Verify both the API response and the resulting repository or filesystem state
+
+## Backend Linting
+
+- Backend CI runs `ruff check app tests` for linting and `ruff format --check app tests` for formatting
+- The current lint ruleset is scoped to unused imports (`F401`)
+- `tests/fixtures/database.py` is intentionally exempt because the import registers SQLAlchemy models with metadata as a side effect

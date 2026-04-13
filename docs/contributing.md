@@ -33,10 +33,14 @@ git checkout -b feature/your-feature-name
 - Follow the existing code style
 - Add tests for new features
 - Update documentation as needed
+- Install git hooks with `pre-commit install --hook-type pre-commit --hook-type pre-push`
 
 ### Test Your Changes
 
 ```bash
+# Run repository hooks
+pre-commit run --all-files
+
 # Backend tests
 pytest
 

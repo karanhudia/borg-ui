@@ -9,7 +9,9 @@ from app.services.script_library_executor import ScriptLibraryExecutor, build_sc
 @pytest.mark.unit
 def test_build_script_env_returns_only_string_values():
     repository = Repository(id=7, name="Repo", path="/backups/repo")
-    source_connection = SSHConnection(host="backup.example.com", port=2222, username="borg")
+    source_connection = SSHConnection(
+        host="backup.example.com", port=2222, username="borg"
+    )
 
     env = build_script_env(
         repository=repository,
@@ -35,7 +37,9 @@ def test_build_script_env_returns_only_string_values():
 def test_build_script_env_rejects_non_string_environment_values():
     repository = Repository(id=7, name="Repo", path="/backups/repo")
 
-    with pytest.raises(TypeError, match="Invalid environment value for BORG_UI_BACKUP_STATUS"):
+    with pytest.raises(
+        TypeError, match="Invalid environment value for BORG_UI_BACKUP_STATUS"
+    ):
         build_script_env(
             repository=repository,
             hook_type="post-backup",
@@ -44,7 +48,9 @@ def test_build_script_env_rejects_non_string_environment_values():
         )
 
 
-def _create_post_backup_script_matrix(db_session) -> tuple[Repository, dict[str, Script]]:
+def _create_post_backup_script_matrix(
+    db_session,
+) -> tuple[Repository, dict[str, Script]]:
     repository = Repository(
         name="Matrix Repo",
         path="/backups/matrix",
@@ -67,7 +73,9 @@ def _create_post_backup_script_matrix(db_session) -> tuple[Repository, dict[str,
     db_session.add_all(scripts.values())
     db_session.commit()
 
-    for order, run_on in enumerate(("always", "success", "warning", "failure"), start=1):
+    for order, run_on in enumerate(
+        ("always", "success", "warning", "failure"), start=1
+    ):
         db_session.add(
             RepositoryScript(
                 repository_id=repository.id,
@@ -91,12 +99,16 @@ def _create_post_backup_script_matrix(db_session) -> tuple[Repository, dict[str,
         ("failure", {"always", "failure"}),
     ],
 )
-async def test_execute_hooks_filters_post_backup_scripts_by_status(db_session, backup_result, expected_run_on):
+async def test_execute_hooks_filters_post_backup_scripts_by_status(
+    db_session, backup_result, expected_run_on
+):
     repository, scripts = _create_post_backup_script_matrix(db_session)
     executor = ScriptLibraryExecutor(db_session)
     executed_script_ids: list[int] = []
 
-    async def fake_execute_script_and_record(self, repo_script, repository, backup_job_id, hook_type, backup_result=None):
+    async def fake_execute_script_and_record(
+        self, repo_script, repository, backup_job_id, hook_type, backup_result=None
+    ):
         executed_script_ids.append(repo_script.script_id)
         return {"success": True, "logs": [], "exit_code": 0}
 
@@ -121,12 +133,16 @@ async def test_execute_hooks_filters_post_backup_scripts_by_status(db_session, b
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_hooks_treats_cancelled_as_failure_for_run_on_filtering(db_session):
+async def test_execute_hooks_treats_cancelled_as_failure_for_run_on_filtering(
+    db_session,
+):
     repository, scripts = _create_post_backup_script_matrix(db_session)
     executor = ScriptLibraryExecutor(db_session)
     executed_script_ids: list[int] = []
 
-    async def fake_execute_script_and_record(self, repo_script, repository, backup_job_id, hook_type, backup_result=None):
+    async def fake_execute_script_and_record(
+        self, repo_script, repository, backup_job_id, hook_type, backup_result=None
+    ):
         executed_script_ids.append(repo_script.script_id)
         return {"success": True, "logs": [], "exit_code": 0}
 
@@ -167,7 +183,9 @@ async def test_execute_inline_script_injects_repository_parameter_values(db_sess
         captured["context"] = context
         return {"success": True, "exit_code": 0, "stdout": "", "stderr": ""}
 
-    with patch("app.services.script_library_executor.execute_script", new=fake_execute_script):
+    with patch(
+        "app.services.script_library_executor.execute_script", new=fake_execute_script
+    ):
         result = await executor.execute_inline_script(
             script_content="echo test",
             script_type="pre-backup",

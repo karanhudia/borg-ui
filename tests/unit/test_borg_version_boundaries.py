@@ -24,7 +24,9 @@ def test_shared_backend_boundaries_do_not_hardcode_borg_v1_commands():
         if '["borg"' in text or "['borg'" in text:
             offenders.append(path.relative_to(REPO_ROOT).as_posix())
 
-    assert offenders == [], f"shared version-aware files must route through BorgRouter: {offenders}"
+    assert offenders == [], (
+        f"shared version-aware files must route through BorgRouter: {offenders}"
+    )
 
 
 @pytest.mark.unit
@@ -36,8 +38,13 @@ def test_frontend_versioned_archive_and_backup_routes_live_in_borg_api_client():
     assert "/browse/" in borg_client
 
     forbidden_calls = {
-        "frontend/src/pages/Archives.tsx": ["archivesAPI.deleteArchive", "repositoriesAPI.listRepositoryArchives"],
-        "frontend/src/pages/Repositories.tsx": ["repositoriesAPI.listRepositoryArchives"],
+        "frontend/src/pages/Archives.tsx": [
+            "archivesAPI.deleteArchive",
+            "repositoriesAPI.listRepositoryArchives",
+        ],
+        "frontend/src/pages/Repositories.tsx": [
+            "repositoriesAPI.listRepositoryArchives"
+        ],
     }
 
     offenders = []
@@ -47,7 +54,9 @@ def test_frontend_versioned_archive_and_backup_routes_live_in_borg_api_client():
             if pattern in text:
                 offenders.append(f"{relative_path}:{pattern}")
 
-    assert offenders == [], f"versioned archive routing must go through BorgApiClient: {offenders}"
+    assert offenders == [], (
+        f"versioned archive routing must go through BorgApiClient: {offenders}"
+    )
 
 
 @pytest.mark.unit
@@ -70,4 +79,6 @@ def test_direct_borg_v1_command_construction_is_confined_to_known_boundaries():
         if pattern.search(path.read_text()) and relative_path not in allowed_files:
             offenders.append(relative_path)
 
-    assert offenders == [], f"new direct borg command construction needs routing review: {offenders}"
+    assert offenders == [], (
+        f"new direct borg command construction needs routing review: {offenders}"
+    )

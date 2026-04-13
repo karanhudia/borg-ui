@@ -1,14 +1,18 @@
 import json
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import Mock, patch, mock_open, MagicMock
+from unittest.mock import patch, mock_open, MagicMock
 from app.utils.datetime_utils import serialize_datetime
-from app.utils.process_utils import is_process_alive, break_repository_lock, cleanup_orphaned_jobs
+from app.utils.process_utils import (
+    is_process_alive,
+    break_repository_lock,
+    cleanup_orphaned_jobs,
+)
 from app.database.models import Repository, BackupJob
 
 # ==========================================
 # Datetime Utils Tests
 # ==========================================
+
 
 class TestDatetimeUtils:
     def test_serialize_none(self):
@@ -25,6 +29,7 @@ class TestDatetimeUtils:
         """Test aware datetime is converted to UTC"""
         # Let's use a manual offset for clarity +01:00
         from datetime import timedelta
+
         tz_plus_1 = timezone(timedelta(hours=1))
 
         dt = datetime(2025, 1, 1, 13, 0, 0, tzinfo=tz_plus_1)
@@ -32,9 +37,11 @@ class TestDatetimeUtils:
         # 13:00 +01:00 is 12:00 UTC
         assert serialized == "2025-01-01T12:00:00+00:00"
 
+
 # ==========================================
 # Process Utils Tests
 # ==========================================
+
 
 class TestProcessUtils:
     def test_is_process_alive_no_pid(self):
@@ -81,10 +88,7 @@ class TestProcessUtils:
     def test_break_repository_lock_local_success(self, mock_run):
         """Test breaking lock for local repo"""
         repo = Repository(
-            id=1,
-            path="/tmp/repo",
-            repository_type="local",
-            passphrase="secret"
+            id=1, path="/tmp/repo", repository_type="local", passphrase="secret"
         )
 
         mock_run.return_value.returncode = 0
@@ -106,7 +110,7 @@ class TestProcessUtils:
             id=1,
             path="ssh://user@host/repo",
             connection_id=1,  # SSH repo has connection_id
-            remote_path="/usr/bin/borg"
+            remote_path="/usr/bin/borg",
         )
 
         mock_run.return_value.returncode = 0
@@ -146,10 +150,10 @@ class TestProcessUtils:
         # This is simplified; in a real scenario we'd check the model passed to query()
         # But for this test, returning [job] for the first call (backup) and [] for others works
         mock_query.all.side_effect = [
-            [mock_backup_job], # BackupJob
-            [], # RestoreJob
-            [], # CheckJob
-            [], # CompactJob
+            [mock_backup_job],  # BackupJob
+            [],  # RestoreJob
+            [],  # CheckJob
+            [],  # CompactJob
         ]
 
         # Execute
@@ -157,7 +161,10 @@ class TestProcessUtils:
 
         # Verify backup job was marked failed
         assert mock_backup_job.status == "failed"
-        assert json.loads(mock_backup_job.error_message)["key"] == "backend.errors.service.containerRestartedDuringBackup"
+        assert (
+            json.loads(mock_backup_job.error_message)["key"]
+            == "backend.errors.service.containerRestartedDuringBackup"
+        )
         assert mock_backup_job.completed_at is not None
 
         # Verify commit was called

@@ -1,5 +1,6 @@
 from sqlalchemy import text
 
+
 def upgrade(connection):
     """Add mode column to repositories table
 
@@ -15,24 +16,29 @@ def upgrade(connection):
     result = connection.execute(text("PRAGMA table_info(repositories)"))
     columns = [row[1] for row in result]
 
-    if 'mode' not in columns:
+    if "mode" not in columns:
         # Add mode column with default value 'full'
-        connection.execute(text("""
+        connection.execute(
+            text("""
             ALTER TABLE repositories ADD COLUMN mode VARCHAR DEFAULT 'full'
-        """))
+        """)
+        )
 
         # Set existing repositories with source_directories to 'full'
-        connection.execute(text("""
+        connection.execute(
+            text("""
             UPDATE repositories
             SET mode = 'full'
             WHERE source_directories IS NOT NULL
-        """))
+        """)
+        )
 
         print("✓ Migration 020: Added mode column to repositories")
     else:
         print("⊘ Migration 020: mode column already exists, skipping")
 
     connection.commit()
+
 
 def downgrade(connection):
     """Remove mode column from repositories table"""
@@ -41,10 +47,11 @@ def downgrade(connection):
     result = connection.execute(text("PRAGMA table_info(repositories)"))
     columns = [row[1] for row in result]
 
-    if 'mode' in columns:
+    if "mode" in columns:
         # SQLite doesn't support DROP COLUMN directly, need to recreate table
         # Get current table schema to preserve all fields except mode
-        connection.execute(text("""
+        connection.execute(
+            text("""
             CREATE TABLE repositories_new (
                 id INTEGER PRIMARY KEY,
                 name VARCHAR UNIQUE NOT NULL,
@@ -76,9 +83,11 @@ def downgrade(connection):
                 continue_on_hook_failure BOOLEAN DEFAULT 0,
                 FOREIGN KEY (ssh_key_id) REFERENCES ssh_keys (id)
             )
-        """))
+        """)
+        )
 
-        connection.execute(text("""
+        connection.execute(
+            text("""
             INSERT INTO repositories_new
             SELECT id, name, path, encryption, compression, passphrase,
                    source_directories, exclude_patterns, last_backup, last_check,
@@ -88,7 +97,8 @@ def downgrade(connection):
                    pre_backup_script, post_backup_script, hook_timeout,
                    continue_on_hook_failure
             FROM repositories
-        """))
+        """)
+        )
 
         connection.execute(text("DROP TABLE repositories"))
         connection.execute(text("ALTER TABLE repositories_new RENAME TO repositories"))

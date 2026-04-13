@@ -20,7 +20,6 @@ import json
 import os
 import tempfile
 import shutil
-from pathlib import Path
 
 # Handle both pytest (relative import) and direct script execution (absolute import)
 try:
@@ -28,13 +27,15 @@ try:
 except ImportError:
     from test_helpers import DockerPathHelper
 
+
 class Colors:
-    GREEN = '\033[92m'
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    BOLD = '\033[1m'
-    END = '\033[0m'
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    BOLD = "\033[1m"
+    END = "\033[0m"
+
 
 class MultipleSourceDirTester:
     def __init__(self, base_url="http://localhost:8082"):
@@ -49,7 +50,7 @@ class MultipleSourceDirTester:
             "INFO": Colors.BLUE,
             "SUCCESS": Colors.GREEN,
             "ERROR": Colors.RED,
-            "WARNING": Colors.YELLOW
+            "WARNING": Colors.YELLOW,
         }
         color = colors.get(level, "")
         print(f"{color}{message}{Colors.END}")
@@ -93,7 +94,7 @@ class MultipleSourceDirTester:
             response = self.session.post(
                 f"{self.base_url}/api/auth/login",
                 data={"username": "admin", "password": "admin123"},
-                timeout=10
+                timeout=10,
             )
             if response.status_code == 200:
                 self.auth_token = response.json().get("access_token")
@@ -115,7 +116,7 @@ class MultipleSourceDirTester:
         try:
             headers = {
                 "X-Borg-Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
             # Convert paths for Docker backend if needed
@@ -129,20 +130,30 @@ class MultipleSourceDirTester:
                 "encryption": "none",
                 "compression": "lz4",
                 "repository_type": "local",
-                "source_directories": [container_source1, container_source2],  # TWO DIRECTORIES
-                "exclude_patterns": []
+                "source_directories": [
+                    container_source1,
+                    container_source2,
+                ],  # TWO DIRECTORIES
+                "exclude_patterns": [],
             }
 
             self.log(f"\n📤 Creating repository with 2 source directories:", "INFO")
-            self.log(f"  1. Host: {self.source1} -> Container: {container_source1}", "INFO")
-            self.log(f"  2. Host: {self.source2} -> Container: {container_source2}", "INFO")
-            self.log(f"  Repo: Host: {self.repo_path} -> Container: {container_repo_path}", "INFO")
+            self.log(
+                f"  1. Host: {self.source1} -> Container: {container_source1}", "INFO"
+            )
+            self.log(
+                f"  2. Host: {self.source2} -> Container: {container_source2}", "INFO"
+            )
+            self.log(
+                f"  Repo: Host: {self.repo_path} -> Container: {container_repo_path}",
+                "INFO",
+            )
 
             response = self.session.post(
                 f"{self.base_url}/api/repositories/",
                 headers=headers,
                 json=repo_data,
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code == 200:
@@ -151,7 +162,9 @@ class MultipleSourceDirTester:
                 self.log(f"✓ Repository created with ID: {repo_id}", "SUCCESS")
                 return (repo_id, container_repo_path)
             else:
-                self.log(f"✗ Repository creation failed: {response.status_code}", "ERROR")
+                self.log(
+                    f"✗ Repository creation failed: {response.status_code}", "ERROR"
+                )
                 self.log(f"  Response: {response.text}", "ERROR")
                 return (None, None)
 
@@ -165,9 +178,7 @@ class MultipleSourceDirTester:
             headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
 
             response = self.session.get(
-                f"{self.base_url}/api/repositories/",
-                headers=headers,
-                timeout=10
+                f"{self.base_url}/api/repositories/", headers=headers, timeout=10
             )
 
             if response.status_code == 200:
@@ -183,19 +194,27 @@ class MultipleSourceDirTester:
 
                     if len(source_dirs) == 2:
                         if self.source1 in source_dirs and self.source2 in source_dirs:
-                            self.log(f"✓ Both source directories stored correctly!", "SUCCESS")
+                            self.log(
+                                f"✓ Both source directories stored correctly!",
+                                "SUCCESS",
+                            )
                             return True
                         else:
                             self.log(f"✗ Wrong directories stored!", "ERROR")
                             return False
                     else:
-                        self.log(f"✗ Expected 2 source directories, got {len(source_dirs)}", "ERROR")
+                        self.log(
+                            f"✗ Expected 2 source directories, got {len(source_dirs)}",
+                            "ERROR",
+                        )
                         return False
                 else:
                     self.log(f"✗ Repository not found", "ERROR")
                     return False
             else:
-                self.log(f"✗ Failed to fetch repositories: {response.status_code}", "ERROR")
+                self.log(
+                    f"✗ Failed to fetch repositories: {response.status_code}", "ERROR"
+                )
                 return False
 
         except Exception as e:
@@ -211,14 +230,14 @@ class MultipleSourceDirTester:
         try:
             headers = {
                 "X-Borg-Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
             response = self.session.post(
                 f"{self.base_url}/api/backup/start",
                 headers=headers,
                 json={"repository": repo_path},
-                timeout=10
+                timeout=10,
             )
 
             if response.status_code == 200:
@@ -247,7 +266,7 @@ class MultipleSourceDirTester:
                 response = self.session.get(
                     f"{self.base_url}/api/backup/status/{job_id}",
                     headers=headers,
-                    timeout=10
+                    timeout=10,
                 )
 
                 if response.status_code == 200:
@@ -284,7 +303,7 @@ class MultipleSourceDirTester:
                 ["borg", "list", self.repo_path],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
 
             if result.returncode != 0:
@@ -292,7 +311,7 @@ class MultipleSourceDirTester:
                 return False
 
             # Get the first archive name
-            lines = result.stdout.strip().split('\n')
+            lines = result.stdout.strip().split("\n")
             if not lines or not lines[0]:
                 self.log(f"✗ No archives found", "ERROR")
                 return False
@@ -305,7 +324,7 @@ class MultipleSourceDirTester:
                 ["borg", "list", "--json-lines", f"{self.repo_path}::{archive_name}"],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
 
             if result.returncode != 0:
@@ -314,11 +333,11 @@ class MultipleSourceDirTester:
 
             # Check which files are in the archive
             paths_in_archive = []
-            for line in result.stdout.strip().split('\n'):
+            for line in result.stdout.strip().split("\n"):
                 if line:
                     try:
                         item = json.loads(line)
-                        path = item.get('path', '')
+                        path = item.get("path", "")
                         if path:
                             paths_in_archive.append(path)
                     except json.JSONDecodeError:
@@ -336,10 +355,14 @@ class MultipleSourceDirTester:
                 self.log(f"✓ Both source directories are in the archive!", "SUCCESS")
                 return True
             elif len(source1_files) > 0:
-                self.log(f"✗ BUG DETECTED: Only source1 backed up, source2 missing!", "ERROR")
+                self.log(
+                    f"✗ BUG DETECTED: Only source1 backed up, source2 missing!", "ERROR"
+                )
                 return False
             elif len(source2_files) > 0:
-                self.log(f"✗ BUG DETECTED: Only source2 backed up, source1 missing!", "ERROR")
+                self.log(
+                    f"✗ BUG DETECTED: Only source2 backed up, source1 missing!", "ERROR"
+                )
                 return False
             else:
                 self.log(f"✗ No files from either source in archive!", "ERROR")
@@ -351,9 +374,9 @@ class MultipleSourceDirTester:
 
     def run_test(self):
         """Run the complete test"""
-        self.log(f"\n{'='*70}", "INFO")
+        self.log(f"\n{'=' * 70}", "INFO")
         self.log(f"TEST: Multiple Source Directories Bug", "INFO")
-        self.log(f"{'='*70}\n", "INFO")
+        self.log(f"{'=' * 70}\n", "INFO")
 
         # Log environment detection
         self.path_helper.log_environment(lambda msg: self.log(msg, "INFO"))
@@ -374,7 +397,10 @@ class MultipleSourceDirTester:
 
             # Verify config stored correctly
             if not self.verify_repository_config(repo_id):
-                self.log(f"\n⚠️  CONFIG BUG: Both directories not stored in database!", "ERROR")
+                self.log(
+                    f"\n⚠️  CONFIG BUG: Both directories not stored in database!",
+                    "ERROR",
+                )
                 return False
 
             # Run backup (pass path, not ID)
@@ -388,16 +414,23 @@ class MultipleSourceDirTester:
 
             # Verify archive contents
             if not self.verify_archive_contents():
-                self.log(f"\n⚠️  BACKUP BUG: Not all source directories were backed up!", "ERROR")
+                self.log(
+                    f"\n⚠️  BACKUP BUG: Not all source directories were backed up!",
+                    "ERROR",
+                )
                 return False
 
-            self.log(f"\n{'='*70}", "INFO")
-            self.log(f"✓ TEST PASSED: Both source directories backed up correctly!", "SUCCESS")
-            self.log(f"{'='*70}\n", "INFO")
+            self.log(f"\n{'=' * 70}", "INFO")
+            self.log(
+                f"✓ TEST PASSED: Both source directories backed up correctly!",
+                "SUCCESS",
+            )
+            self.log(f"{'=' * 70}\n", "INFO")
             return True
 
         finally:
             self.cleanup()
+
 
 def main():
     import argparse
@@ -410,6 +443,7 @@ def main():
     success = tester.run_test()
 
     exit(0 if success else 1)
+
 
 if __name__ == "__main__":
     main()

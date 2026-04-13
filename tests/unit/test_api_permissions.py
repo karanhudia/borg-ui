@@ -2,6 +2,7 @@
 """
 Unit tests for per-repository permission endpoints.
 """
+
 import pytest
 from fastapi.testclient import TestClient
 from app.database.models import User, Repository
@@ -16,7 +17,7 @@ def _make_repo(db, name="test-repo"):
     return repo
 
 
-def _make_user(db, username, role='viewer'):
+def _make_user(db, username, role="viewer"):
     user = User(
         username=username,
         password_hash=get_password_hash("pass"),
@@ -31,15 +32,20 @@ def _make_user(db, username, role='viewer'):
 
 @pytest.mark.unit
 class TestPermissions:
-
     def test_get_my_permissions_empty(self, test_client: TestClient, admin_headers):
         """Admin with no per-repo permissions returns empty list"""
-        response = test_client.get("/api/settings/permissions/me", headers=admin_headers)
+        response = test_client.get(
+            "/api/settings/permissions/me", headers=admin_headers
+        )
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_get_my_permission_scope_defaults_to_none(self, test_client: TestClient, admin_headers):
-        response = test_client.get("/api/settings/permissions/me/scope", headers=admin_headers)
+    def test_get_my_permission_scope_defaults_to_none(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.get(
+            "/api/settings/permissions/me/scope", headers=admin_headers
+        )
         assert response.status_code == 200
         assert response.json()["all_repositories_role"] is None
 
@@ -58,7 +64,9 @@ class TestPermissions:
         assert data["role"] == "operator"
         assert data["repository_name"] == "test-repo"
 
-    def test_assign_invalid_role_returns_422(self, test_client: TestClient, test_db, admin_headers):
+    def test_assign_invalid_role_returns_422(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
         """Invalid role value is rejected"""
         user = _make_user(test_db, "viewer2")
         repo = _make_repo(test_db, "repo2")
@@ -70,7 +78,9 @@ class TestPermissions:
         )
         assert response.status_code == 422
 
-    def test_assign_duplicate_permission_returns_409(self, test_client: TestClient, test_db, admin_headers):
+    def test_assign_duplicate_permission_returns_409(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
         """Cannot assign a second permission for the same user+repo pair"""
         user = _make_user(test_db, "viewer3")
         repo = _make_repo(test_db, "repo3")
@@ -121,16 +131,22 @@ class TestPermissions:
         )
         assert response.status_code == 204
 
-    def test_non_admin_cannot_manage_permissions(self, test_client: TestClient, test_db):
+    def test_non_admin_cannot_manage_permissions(
+        self, test_client: TestClient, test_db
+    ):
         """Non-admin user gets 403 on admin-only permission endpoints"""
         viewer = _make_user(test_db, "viewer6")
         token = create_access_token(data={"sub": viewer.username})
         headers = {"Authorization": f"Bearer {token}"}
 
-        response = test_client.get(f"/api/settings/users/{viewer.id}/permissions", headers=headers)
+        response = test_client.get(
+            f"/api/settings/users/{viewer.id}/permissions", headers=headers
+        )
         assert response.status_code == 403
 
-    def test_get_my_permissions_shows_assigned_repos(self, test_client: TestClient, test_db, admin_headers, admin_user):
+    def test_get_my_permissions_shows_assigned_repos(
+        self, test_client: TestClient, test_db, admin_headers, admin_user
+    ):
         """GET /settings/permissions/me returns the user's own permissions"""
         repo = _make_repo(test_db, "my-repo")
         test_client.post(
@@ -139,14 +155,18 @@ class TestPermissions:
             headers=admin_headers,
         )
 
-        response = test_client.get("/api/settings/permissions/me", headers=admin_headers)
+        response = test_client.get(
+            "/api/settings/permissions/me", headers=admin_headers
+        )
         assert response.status_code == 200
         perms = response.json()
         assert len(perms) == 1
         assert perms[0]["repository_name"] == "my-repo"
         assert perms[0]["role"] == "operator"
 
-    def test_admin_can_set_user_wildcard_repository_role(self, test_client: TestClient, test_db, admin_headers):
+    def test_admin_can_set_user_wildcard_repository_role(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
         user = _make_user(test_db, "viewer7")
 
         response = test_client.put(
@@ -157,7 +177,9 @@ class TestPermissions:
         assert response.status_code == 200
         assert response.json()["all_repositories_role"] == "viewer"
 
-    def test_admin_can_clear_user_wildcard_repository_role(self, test_client: TestClient, test_db, admin_headers):
+    def test_admin_can_clear_user_wildcard_repository_role(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
         user = _make_user(test_db, "viewer8")
         user.all_repositories_role = "operator"
         test_db.commit()
@@ -170,7 +192,9 @@ class TestPermissions:
         assert response.status_code == 200
         assert response.json()["all_repositories_role"] is None
 
-    def test_admin_can_get_user_wildcard_repository_role(self, test_client: TestClient, test_db, admin_headers):
+    def test_admin_can_get_user_wildcard_repository_role(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
         user = _make_user(test_db, "viewer9")
         user.all_repositories_role = "operator"
         test_db.commit()
@@ -182,7 +206,9 @@ class TestPermissions:
         assert response.status_code == 200
         assert response.json()["all_repositories_role"] == "operator"
 
-    def test_admin_cannot_set_user_wildcard_role_above_global_role(self, test_client: TestClient, test_db, admin_headers):
+    def test_admin_cannot_set_user_wildcard_role_above_global_role(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
         user = _make_user(test_db, "viewer10", role="viewer")
 
         response = test_client.put(

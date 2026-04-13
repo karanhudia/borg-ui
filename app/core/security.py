@@ -5,7 +5,7 @@ from jwt.exceptions import PyJWTError as JWTError
 import bcrypt
 import hashlib
 from fastapi import HTTPException, status, Depends, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 import structlog
 from cryptography.fernet import Fernet
@@ -25,13 +25,18 @@ REPO_ROLE_RANK = REPOSITORY_ROLE_RANK
 # JWT token security
 security = HTTPBearer()
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+    )
+
 
 def get_password_hash(password: str) -> str:
     """Hash a password"""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create a JWT access token"""
@@ -39,16 +44,23 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
-    
+        expire = datetime.utcnow() + timedelta(
+            minutes=settings.access_token_expire_minutes
+        )
+
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.secret_key, algorithm=settings.algorithm
+    )
     return encoded_jwt
+
 
 def verify_token(token: str) -> Optional[str]:
     """Verify and decode a JWT token"""
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm]
+        )
         username: str = payload.get("sub")
         if username is None:
             return None
@@ -56,10 +68,8 @@ def verify_token(token: str) -> Optional[str]:
     except JWTError:
         return None
 
-async def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db)
-) -> User:
+
+async def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """Get the current authenticated user (supports both JWT and proxy auth)"""
     cached_user = getattr(request.state, "current_user", None)
     if cached_user is not None:
@@ -80,7 +90,9 @@ async def get_current_user(
     )
 
     # Prefer X-Borg-Authorization so reverse proxies can still use Authorization.
-    auth_header = request.headers.get("X-Borg-Authorization") or request.headers.get("Authorization")
+    auth_header = request.headers.get("X-Borg-Authorization") or request.headers.get(
+        "Authorization"
+    )
     if not auth_header or not auth_header.startswith("Bearer "):
         raise credentials_exception
 
@@ -90,10 +102,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_user_proxy(
-    request: Request,
-    db: Session
-) -> User:
+async def get_current_user_proxy(request: Request, db: Session) -> User:
     """
     Get the current authenticated user from reverse proxy headers.
     Used when DISABLE_AUTHENTICATION is enabled.
@@ -107,7 +116,12 @@ async def get_current_user_proxy(
 
     # Try alternative headers if configured one isn't present
     if not username:
-        alternative_headers = ["X-Remote-User", "Remote-User", "X-authentik-username", "X-Forwarded-User"]
+        alternative_headers = [
+            "X-Remote-User",
+            "Remote-User",
+            "X-authentik-username",
+            "X-Forwarded-User",
+        ]
         for header in alternative_headers:
             if header != settings.proxy_auth_header:
                 username = request.headers.get(header)
@@ -126,7 +140,7 @@ async def get_current_user_proxy(
     if not username:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Empty username in proxy header"
+            detail="Empty username in proxy header",
         )
 
     # Check if user exists
@@ -140,9 +154,9 @@ async def get_current_user_proxy(
             username=username,
             password_hash="",  # No password for proxy auth users
             email=f"{username}@proxy.local",
-            role='viewer',
+            role="viewer",
             is_active=True,
-            must_change_password=False
+            must_change_password=False,
         )
         db.add(user)
         db.commit()
@@ -153,21 +167,20 @@ async def get_current_user_proxy(
     # Check if user is active
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled"
+            status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled"
         )
 
     # Update last login timestamp
     from datetime import timezone
+
     user.last_login = datetime.now(timezone.utc)
     db.commit()
 
     return user
 
+
 def _get_active_user_from_token(
-    token: Optional[str],
-    db: Session,
-    invalid_exception: HTTPException
+    token: Optional[str], db: Session, invalid_exception: HTTPException
 ) -> User:
     """Resolve an active user from a JWT token."""
     if not token:
@@ -184,21 +197,22 @@ def _get_active_user_from_token(
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"key": "backend.errors.auth.inactiveUser"}
+            detail={"key": "backend.errors.auth.inactiveUser"},
         )
 
     return user
 
 
 async def get_current_download_user(
-    request: Request,
-    db: Session = Depends(get_db)
+    request: Request, db: Session = Depends(get_db)
 ) -> User:
     """Authenticate download endpoints for both JWT and proxy-auth modes."""
     if settings.disable_authentication:
         return await get_current_user_proxy(request, db)
 
-    auth_header = request.headers.get("X-Borg-Authorization") or request.headers.get("Authorization")
+    auth_header = request.headers.get("X-Borg-Authorization") or request.headers.get(
+        "Authorization"
+    )
     token: Optional[str] = None
 
     if auth_header and auth_header.startswith("Bearer "):
@@ -212,49 +226,47 @@ async def get_current_download_user(
     )
     return _get_active_user_from_token(token, db, invalid_exception)
 
+
 async def get_current_active_user(
-    request: Request,
-    db: Session = Depends(get_db)
+    request: Request, db: Session = Depends(get_db)
 ) -> User:
     """Get the current active user"""
     current_user = await get_current_user(request, db)
     if not current_user.is_active:
-        raise HTTPException(status_code=400, detail={"key": "backend.errors.auth.inactiveUser"})
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.auth.inactiveUser"}
+        )
     return current_user
 
 
 async def get_current_admin_user(
-    request: Request,
-    db: Session = Depends(get_db)
+    request: Request, db: Session = Depends(get_db)
 ) -> User:
     """Get the current admin user"""
     current_user = await get_current_user(request, db)
     require_any_role(current_user, "admin")
     return current_user
 
+
 def require_any_role(
     user: User,
     *allowed_roles: str,
-    detail_key: str = "backend.errors.auth.notEnoughPermissions"
+    detail_key: str = "backend.errors.auth.notEnoughPermissions",
 ) -> User:
     """Raise HTTP 403 unless the user has one of the allowed roles."""
     if user.role not in allowed_roles:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"key": detail_key}
+            status_code=status.HTTP_403_FORBIDDEN, detail={"key": detail_key}
         )
     return user
 
 
 def require_role_dependency(
-    *allowed_roles: str,
-    detail_key: str = "backend.errors.auth.notEnoughPermissions"
+    *allowed_roles: str, detail_key: str = "backend.errors.auth.notEnoughPermissions"
 ):
     """Create a FastAPI dependency that resolves the user and enforces role membership."""
-    async def dependency(
-        request: Request,
-        db: Session = Depends(get_db)
-    ) -> User:
+
+    async def dependency(request: Request, db: Session = Depends(get_db)) -> User:
         current_user = await get_current_user(request, db)
         return require_any_role(current_user, *allowed_roles, detail_key=detail_key)
 
@@ -267,23 +279,27 @@ def check_repo_access(db: Session, user: User, repo, required_role: str) -> None
     Admin users always pass. For operator/viewer, checks UserRepositoryPermission.
     required_role is 'viewer' or 'operator'.
     """
-    if user.role == 'admin':
+    if user.role == "admin":
         return
 
     effective_role = getattr(user, "all_repositories_role", None)
-    perm = db.query(UserRepositoryPermission).filter_by(
-        user_id=user.id, repository_id=repo.id
-    ).first()
+    perm = (
+        db.query(UserRepositoryPermission)
+        .filter_by(user_id=user.id, repository_id=repo.id)
+        .first()
+    )
     if perm and (
         effective_role is None
         or REPO_ROLE_RANK.get(perm.role, 0) > REPO_ROLE_RANK.get(effective_role, 0)
     ):
         effective_role = perm.role
 
-    if effective_role is None or REPO_ROLE_RANK.get(effective_role, 0) < REPO_ROLE_RANK.get(required_role, 0):
+    if effective_role is None or REPO_ROLE_RANK.get(
+        effective_role, 0
+    ) < REPO_ROLE_RANK.get(required_role, 0):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"key": "backend.errors.auth.notEnoughPermissions"}
+            detail={"key": "backend.errors.auth.notEnoughPermissions"},
         )
 
 
@@ -305,7 +321,9 @@ def get_repository_by_path_or_404(
             repo = db.query(Repository).filter(Repository.id == repo_id).first()
 
         if repo is None:
-            repo = db.query(Repository).filter(Repository.path == repository_path).first()
+            repo = (
+                db.query(Repository).filter(Repository.path == repository_path).first()
+            )
     if repo is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -328,7 +346,9 @@ def require_repository_access_by_path(
     return repo
 
 
-async def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+async def authenticate_user(
+    db: Session, username: str, password: str
+) -> Optional[User]:
     """Authenticate a user with username and password"""
     user = db.query(User).filter(User.username == username).first()
     if not user:
@@ -336,6 +356,7 @@ async def authenticate_user(db: Session, username: str, password: str) -> Option
     if not verify_password(password, user.password_hash):
         return None
     return user
+
 
 async def create_first_user():
     """Create the first admin user if no users exist"""
@@ -346,25 +367,26 @@ async def create_first_user():
         if admin_user:
             logger.info("Admin user already exists", username="admin")
             return
-        
+
         # Check if any users exist
         user_count = db.query(User).count()
         if user_count == 0:
             # Create default admin user
             # Use environment variable if set, otherwise use default
             import os
+
             default_password = os.getenv("INITIAL_ADMIN_PASSWORD", "admin123")
             hashed_password = get_password_hash(default_password)
-            
+
             admin_user = User(
                 username="admin",
                 password_hash=hashed_password,
                 email="admin@borg.local",
                 is_active=True,
-                role='admin',
-                must_change_password=True  # Force password change on first login
+                role="admin",
+                must_change_password=True,  # Force password change on first login
             )
-            
+
             db.add(admin_user)
             db.commit()
 
@@ -373,24 +395,29 @@ async def create_first_user():
                 logger.warning(
                     "⚠️  SECURITY: Using default admin password 'admin123'. "
                     "CHANGE IT IMMEDIATELY or set INITIAL_ADMIN_PASSWORD env var!",
-                    username="admin"
+                    username="admin",
                 )
             else:
                 logger.info(
                     "Using custom initial admin password from INITIAL_ADMIN_PASSWORD env var",
-                    username="admin"
+                    username="admin",
                 )
     except Exception as e:
         # Check if it's a duplicate key error
         if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e).lower():
-            logger.info("Admin user already exists (caught constraint error)", username="admin")
+            logger.info(
+                "Admin user already exists (caught constraint error)", username="admin"
+            )
         else:
             logger.error("Failed to create first user", error=str(e))
         db.rollback()
     finally:
         db.close()
 
-def create_user(db: Session, username: str, password: str, email: str = None, role: str = 'viewer') -> User:
+
+def create_user(
+    db: Session, username: str, password: str, email: str = None, role: str = "viewer"
+) -> User:
     """Create a new user"""
     hashed_password = get_password_hash(password)
     user = User(
@@ -404,12 +431,13 @@ def create_user(db: Session, username: str, password: str, email: str = None, ro
     db.refresh(user)
     return user
 
+
 def update_user_password(db: Session, user_id: int, new_password: str) -> bool:
     """Update a user's password"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return False
-    
+
     user.password_hash = get_password_hash(new_password)
     db.commit()
     return True
@@ -417,6 +445,7 @@ def update_user_password(db: Session, user_id: int, new_password: str) -> bool:
 
 # Secret encryption/decryption utilities
 # Uses Fernet symmetric encryption (same mechanism as SSH keys)
+
 
 def _build_fernet_from_secret(secret: str) -> Fernet:
     """Build a stable Fernet instance from any SECRET_KEY length."""
@@ -436,22 +465,23 @@ def get_secret_fernet() -> Fernet:
     """Return the current Fernet cipher for app secret encryption."""
     return _build_fernet_from_secret(settings.secret_key)
 
+
 def encrypt_secret(value: str) -> str:
     """
     Encrypt a secret value (e.g., password, token, API key).
-    
+
     Args:
         value: Plain text secret to encrypt
-        
+
     Returns:
         Base64-encoded encrypted string
-        
+
     Raises:
         ValueError: If value is empty or None
     """
     if not value:
         raise ValueError("Cannot encrypt empty or None value")
-    
+
     cipher = get_secret_fernet()
     encrypted_value = cipher.encrypt(value.encode()).decode()
     return encrypted_value
@@ -460,20 +490,20 @@ def encrypt_secret(value: str) -> str:
 def decrypt_secret(encrypted_value: str) -> str:
     """
     Decrypt a secret value that was encrypted with encrypt_secret().
-    
+
     Args:
         encrypted_value: Base64-encoded encrypted string
-        
+
     Returns:
         Decrypted plain text string
-        
+
     Raises:
         ValueError: If encrypted_value is empty or None
         cryptography.fernet.InvalidToken: If decryption fails (wrong key or corrupted data)
     """
     if not encrypted_value:
         raise ValueError("Cannot decrypt empty or None value")
-    
+
     cipher = get_secret_fernet()
     try:
         decrypted_value = cipher.decrypt(encrypted_value.encode()).decode()

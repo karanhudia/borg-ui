@@ -3,8 +3,8 @@
 Deploy SSH keys from database to filesystem on container startup.
 This ensures SSH keys are always available for borg operations.
 """
+
 import os
-import stat
 import sqlite3
 import base64
 import hashlib
@@ -36,7 +36,9 @@ def deploy_ssh_keys():
         # Get SSH keys from database
         conn = sqlite3.connect("/data/borg.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT private_key, key_type, public_key FROM ssh_keys WHERE is_system_key = 1")
+        cursor.execute(
+            "SELECT private_key, key_type, public_key FROM ssh_keys WHERE is_system_key = 1"
+        )
         row = cursor.fetchone()
 
         if not row:
@@ -66,8 +68,8 @@ def deploy_ssh_keys():
 
         # Change ownership to borg user
         try:
-            borg_uid = pwd.getpwnam('borg').pw_uid
-            borg_gid = grp.getgrnam('borg').gr_gid
+            borg_uid = pwd.getpwnam("borg").pw_uid
+            borg_gid = grp.getgrnam("borg").gr_gid
             os.chown(ssh_dir, borg_uid, borg_gid)
             os.chown(key_file, borg_uid, borg_gid)
             os.chown(pub_key_file, borg_uid, borg_gid)

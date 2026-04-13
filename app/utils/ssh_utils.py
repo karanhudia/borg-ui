@@ -1,4 +1,5 @@
 """Shared SSH key resolution for borg repository operations."""
+
 import base64
 import os
 import tempfile
@@ -40,12 +41,18 @@ def resolve_repo_ssh_key_file(repository, db) -> Optional[str]:
     ssh_key = None
 
     if repository.connection_id:
-        connection = db.query(SSHConnection).filter(
-            SSHConnection.id == repository.connection_id
-        ).first()
+        connection = (
+            db.query(SSHConnection)
+            .filter(SSHConnection.id == repository.connection_id)
+            .first()
+        )
         if connection and connection.ssh_key_id:
-            ssh_key = db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
-    elif getattr(repository, "repository_type", None) == "ssh" and getattr(repository, "ssh_key_id", None):
+            ssh_key = (
+                db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+            )
+    elif getattr(repository, "repository_type", None) == "ssh" and getattr(
+        repository, "ssh_key_id", None
+    ):
         ssh_key = db.query(SSHKey).filter(SSHKey.id == repository.ssh_key_id).first()
 
     if not ssh_key:

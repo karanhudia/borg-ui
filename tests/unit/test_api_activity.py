@@ -4,7 +4,6 @@ Unit tests for activity API - log buffer functionality.
 
 import pytest
 from datetime import datetime, timedelta
-from app.services.backup_service import BackupService
 
 
 class TestBackupServiceLogBuffer:
@@ -80,7 +79,9 @@ class TestBackupServiceLogBuffer:
 class TestActivityLogDownloads:
     """Test download authentication and retrieval for activity logs."""
 
-    def test_activity_log_download_accepts_bearer_header(self, test_client, admin_headers, test_db):
+    def test_activity_log_download_accepts_bearer_header(
+        self, test_client, admin_headers, test_db
+    ):
         """Activity log download should reuse standard bearer auth."""
         from app.database.models import BackupJob
 
@@ -89,15 +90,14 @@ class TestActivityLogDownloads:
             status="failed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
-            logs="line 1\nline 2"
+            logs="line 1\nline 2",
         )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
         response = test_client.get(
-            f"/api/activity/backup/{job.id}/logs/download",
-            headers=admin_headers
+            f"/api/activity/backup/{job.id}/logs/download", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -108,7 +108,9 @@ class TestActivityLogDownloads:
 class TestRecentActivityEndpoint:
     """Test the aggregated recent activity feed."""
 
-    def test_recent_activity_aggregates_job_types_and_schedule_metadata(self, test_client, admin_headers, test_db):
+    def test_recent_activity_aggregates_job_types_and_schedule_metadata(
+        self, test_client, admin_headers, test_db
+    ):
         from app.database.models import (
             BackupJob,
             CheckJob,
@@ -215,7 +217,9 @@ class TestRecentActivityEndpoint:
         assert activity[-1]["type"] == "package"
         assert activity[-1]["package_name"] == package.name
 
-    def test_recent_activity_filters_by_type_and_status(self, test_client, admin_headers, test_db):
+    def test_recent_activity_filters_by_type_and_status(
+        self, test_client, admin_headers, test_db
+    ):
         from app.database.models import (
             BackupJob,
             CheckJob,
@@ -287,15 +291,17 @@ class TestRecentActivityEndpoint:
             status="pending",
             started_at=datetime(2024, 1, 1, 9, 20, 0),
         )
-        test_db.add_all([
-            completed_job,
-            pending_job,
-            restore_pending,
-            check_pending,
-            compact_pending,
-            prune_pending,
-            package_pending,
-        ])
+        test_db.add_all(
+            [
+                completed_job,
+                pending_job,
+                restore_pending,
+                check_pending,
+                compact_pending,
+                prune_pending,
+                package_pending,
+            ]
+        )
         test_db.commit()
 
         response = test_client.get(
@@ -322,9 +328,13 @@ class TestActivityLogContracts:
         )
 
         assert response.status_code == 400
-        assert response.json()["detail"]["key"] == "backend.errors.activity.invalidJobType"
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.activity.invalidJobType"
+        )
 
-    def test_get_job_logs_uses_file_backed_pagination(self, test_client, admin_headers, test_db, tmp_path):
+    def test_get_job_logs_uses_file_backed_pagination(
+        self, test_client, admin_headers, test_db, tmp_path
+    ):
         from app.database.models import BackupJob
 
         log_file = tmp_path / "activity-log.txt"
@@ -353,7 +363,9 @@ class TestActivityLogContracts:
         assert [line["content"] for line in payload["lines"]] == ["line-2", "line-3"]
         assert [line["line_number"] for line in payload["lines"]] == [2, 3]
 
-    def test_download_job_logs_without_logs_returns_404(self, test_client, admin_headers, test_db):
+    def test_download_job_logs_without_logs_returns_404(
+        self, test_client, admin_headers, test_db
+    ):
         from app.database.models import BackupJob
 
         job = BackupJob(
@@ -372,9 +384,14 @@ class TestActivityLogContracts:
         )
 
         assert response.status_code == 404
-        assert response.json()["detail"]["key"] == "backend.errors.activity.noLogsAvailableForJob"
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.activity.noLogsAvailableForJob"
+        )
 
-    def test_get_job_logs_uses_database_log_fallback(self, test_client, admin_headers, test_db):
+    def test_get_job_logs_uses_database_log_fallback(
+        self, test_client, admin_headers, test_db
+    ):
         from app.database.models import BackupJob
 
         job = BackupJob(
@@ -399,7 +416,9 @@ class TestActivityLogContracts:
         assert payload["has_more"] is True
         assert payload["lines"][0]["content"] == "db line 2"
 
-    def test_download_job_logs_uses_database_logs_when_no_file(self, test_client, admin_headers, test_db):
+    def test_download_job_logs_uses_database_logs_when_no_file(
+        self, test_client, admin_headers, test_db
+    ):
         from app.database.models import BackupJob
 
         job = BackupJob(
@@ -421,7 +440,9 @@ class TestActivityLogContracts:
         assert response.status_code == 200
         assert "text/plain" in response.headers.get("content-type", "")
 
-    def test_activity_log_download_accepts_proxy_auth(self, test_client, test_db, monkeypatch):
+    def test_activity_log_download_accepts_proxy_auth(
+        self, test_client, test_db, monkeypatch
+    ):
         """Activity log download should work in proxy-auth mode without a token query param."""
         from app import config
         from app.database.models import BackupJob
@@ -433,7 +454,7 @@ class TestActivityLogContracts:
             status="failed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
-            logs="proxy log output"
+            logs="proxy log output",
         )
         test_db.add(job)
         test_db.commit()
@@ -441,7 +462,7 @@ class TestActivityLogContracts:
 
         response = test_client.get(
             f"/api/activity/backup/{job.id}/logs/download",
-            headers={"X-Forwarded-User": "proxyuser"}
+            headers={"X-Forwarded-User": "proxyuser"},
         )
 
         assert response.status_code == 200
@@ -462,7 +483,7 @@ class TestDeleteJobEndpoint:
             repository="/test/repo",
             status="completed",
             started_at=datetime.now(),
-            completed_at=datetime.now()
+            completed_at=datetime.now(),
         )
         test_db.add(job)
         test_db.commit()
@@ -471,8 +492,7 @@ class TestDeleteJobEndpoint:
 
         # Delete the job
         response = test_client.delete(
-            f"/api/activity/backup/{job_id}",
-            headers=admin_headers
+            f"/api/activity/backup/{job_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -496,7 +516,7 @@ class TestDeleteJobEndpoint:
             repository="/test/repo",
             status="completed",
             started_at=datetime.now(),
-            completed_at=datetime.now()
+            completed_at=datetime.now(),
         )
         test_db.add(job)
         test_db.commit()
@@ -504,8 +524,7 @@ class TestDeleteJobEndpoint:
 
         # Try to delete as non-admin
         response = test_client.delete(
-            f"/api/activity/backup/{job.id}",
-            headers=auth_headers
+            f"/api/activity/backup/{job.id}", headers=auth_headers
         )
 
         assert response.status_code == 403
@@ -513,7 +532,9 @@ class TestDeleteJobEndpoint:
         assert data["detail"]["key"] == "backend.errors.activity.adminOnlyDelete"
 
         # Verify job is NOT deleted
-        job_still_exists = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
+        job_still_exists = (
+            test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
+        )
         assert job_still_exists is not None
 
     def test_delete_running_job_fails(self, test_client, admin_headers, test_db):
@@ -523,9 +544,7 @@ class TestDeleteJobEndpoint:
 
         # Create a running backup job
         job = BackupJob(
-            repository="/test/repo",
-            status="running",
-            started_at=datetime.now()
+            repository="/test/repo", status="running", started_at=datetime.now()
         )
         test_db.add(job)
         test_db.commit()
@@ -533,8 +552,7 @@ class TestDeleteJobEndpoint:
 
         # Try to delete running job
         response = test_client.delete(
-            f"/api/activity/backup/{job.id}",
-            headers=admin_headers
+            f"/api/activity/backup/{job.id}", headers=admin_headers
         )
 
         assert response.status_code == 400
@@ -542,7 +560,9 @@ class TestDeleteJobEndpoint:
         assert data["detail"]["key"] == "backend.errors.activity.cannotDeleteRunningJob"
 
         # Verify job is NOT deleted
-        job_still_exists = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
+        job_still_exists = (
+            test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
+        )
         assert job_still_exists is not None
 
     def test_delete_pending_job_succeeds(self, test_client, admin_headers, test_db):
@@ -552,9 +572,7 @@ class TestDeleteJobEndpoint:
 
         # Create a pending backup job
         job = BackupJob(
-            repository="/test/repo",
-            status="pending",
-            started_at=datetime.now()
+            repository="/test/repo", status="pending", started_at=datetime.now()
         )
         test_db.add(job)
         test_db.commit()
@@ -562,8 +580,7 @@ class TestDeleteJobEndpoint:
 
         # Delete pending job (should succeed now)
         response = test_client.delete(
-            f"/api/activity/backup/{job.id}",
-            headers=admin_headers
+            f"/api/activity/backup/{job.id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -585,7 +602,7 @@ class TestDeleteJobEndpoint:
             status="failed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
-            error_message="Backup failed"
+            error_message="Backup failed",
         )
         test_db.add(job)
         test_db.commit()
@@ -594,8 +611,7 @@ class TestDeleteJobEndpoint:
 
         # Delete the job
         response = test_client.delete(
-            f"/api/activity/backup/{job_id}",
-            headers=admin_headers
+            f"/api/activity/backup/{job_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -607,8 +623,7 @@ class TestDeleteJobEndpoint:
     def test_delete_nonexistent_job_fails(self, test_client, admin_headers):
         """Test deleting non-existent job returns 404"""
         response = test_client.delete(
-            "/api/activity/backup/99999",
-            headers=admin_headers
+            "/api/activity/backup/99999", headers=admin_headers
         )
 
         assert response.status_code == 404
@@ -618,8 +633,7 @@ class TestDeleteJobEndpoint:
     def test_delete_invalid_job_type(self, test_client, admin_headers):
         """Test deleting with invalid job type returns 400"""
         response = test_client.delete(
-            "/api/activity/invalid_type/123",
-            headers=admin_headers
+            "/api/activity/invalid_type/123", headers=admin_headers
         )
 
         assert response.status_code == 400
@@ -638,7 +652,7 @@ class TestDeleteJobEndpoint:
             destination="/restore/path",
             status="completed",
             started_at=datetime.now(),
-            completed_at=datetime.now()
+            completed_at=datetime.now(),
         )
         test_db.add(job)
         test_db.commit()
@@ -647,8 +661,7 @@ class TestDeleteJobEndpoint:
 
         # Delete the job
         response = test_client.delete(
-            f"/api/activity/restore/{job_id}",
-            headers=admin_headers
+            f"/api/activity/restore/{job_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -667,7 +680,7 @@ class TestDeleteJobEndpoint:
             repository_id=1,
             status="completed",
             started_at=datetime.now(),
-            completed_at=datetime.now()
+            completed_at=datetime.now(),
         )
         test_db.add(job)
         test_db.commit()
@@ -676,8 +689,7 @@ class TestDeleteJobEndpoint:
 
         # Delete the job
         response = test_client.delete(
-            f"/api/activity/check/{job_id}",
-            headers=admin_headers
+            f"/api/activity/check/{job_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -696,7 +708,7 @@ class TestDeleteJobEndpoint:
             repository_id=1,
             status="completed",
             started_at=datetime.now(),
-            completed_at=datetime.now()
+            completed_at=datetime.now(),
         )
         test_db.add(job)
         test_db.commit()
@@ -705,8 +717,7 @@ class TestDeleteJobEndpoint:
 
         # Delete the job
         response = test_client.delete(
-            f"/api/activity/compact/{job_id}",
-            headers=admin_headers
+            f"/api/activity/compact/{job_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -725,7 +736,7 @@ class TestDeleteJobEndpoint:
             repository_id=1,
             status="completed",
             started_at=datetime.now(),
-            completed_at=datetime.now()
+            completed_at=datetime.now(),
         )
         test_db.add(job)
         test_db.commit()
@@ -734,8 +745,7 @@ class TestDeleteJobEndpoint:
 
         # Delete the job
         response = test_client.delete(
-            f"/api/activity/prune/{job_id}",
-            headers=admin_headers
+            f"/api/activity/prune/{job_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -744,11 +754,12 @@ class TestDeleteJobEndpoint:
         deleted_job = test_db.query(PruneJob).filter(PruneJob.id == job_id).first()
         assert deleted_job is None
 
-    def test_delete_job_with_log_file(self, test_client, admin_headers, test_db, tmp_path):
+    def test_delete_job_with_log_file(
+        self, test_client, admin_headers, test_db, tmp_path
+    ):
         """Test deleting job also deletes log file"""
         from app.database.models import BackupJob
         from datetime import datetime
-        import os
 
         # Create a temporary log file
         log_file = tmp_path / "test_log.txt"
@@ -761,7 +772,7 @@ class TestDeleteJobEndpoint:
             status="completed",
             started_at=datetime.now(),
             completed_at=datetime.now(),
-            log_file_path=str(log_file)
+            log_file_path=str(log_file),
         )
         test_db.add(job)
         test_db.commit()
@@ -770,8 +781,7 @@ class TestDeleteJobEndpoint:
 
         # Delete the job
         response = test_client.delete(
-            f"/api/activity/backup/{job_id}",
-            headers=admin_headers
+            f"/api/activity/backup/{job_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -793,7 +803,7 @@ class TestDeleteJobEndpoint:
             repository="/test/repo",
             status="cancelled",
             started_at=datetime.now(),
-            completed_at=datetime.now()
+            completed_at=datetime.now(),
         )
         test_db.add(job)
         test_db.commit()
@@ -802,8 +812,7 @@ class TestDeleteJobEndpoint:
 
         # Delete the job
         response = test_client.delete(
-            f"/api/activity/backup/{job_id}",
-            headers=admin_headers
+            f"/api/activity/backup/{job_id}", headers=admin_headers
         )
 
         assert response.status_code == 200
@@ -822,7 +831,7 @@ class TestDeleteJobEndpoint:
             repository="/test/repo",
             status="completed",
             started_at=datetime.now(),
-            completed_at=datetime.now()
+            completed_at=datetime.now(),
         )
         test_db.add(job)
         test_db.commit()
@@ -834,7 +843,9 @@ class TestDeleteJobEndpoint:
         assert response.status_code == 401  # No authentication provided
 
         # Verify job is NOT deleted
-        job_still_exists = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
+        job_still_exists = (
+            test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
+        )
         assert job_still_exists is not None
 
 
@@ -843,146 +854,157 @@ class TestGetJobLogsPlaceholderOffset:
 
     def _make_running_backup_job(self):
         """Create a minimal fake job object with status='running'."""
+
         class FakeJob:
             id = 42
-            status = 'running'
+            status = "running"
             log_file_path = None
             logs = None
 
         return FakeJob()
 
-    def test_a_no_buffer_offset_0_returns_placeholder(self, test_client, auth_headers, test_db):
+    def test_a_no_buffer_offset_0_returns_placeholder(
+        self, test_client, auth_headers, test_db
+    ):
         """Test A: buffer_exists=False, offset=0 -> returns 5-line placeholder."""
         from unittest.mock import patch
         from app.database.models import BackupJob
         from datetime import datetime
 
         job = BackupJob(
-            repository="/test/repo",
-            status="running",
-            started_at=datetime.now()
+            repository="/test/repo", status="running", started_at=datetime.now()
         )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
-        with patch('app.api.activity.backup_service.get_log_buffer', return_value=([], False)):
+        with patch(
+            "app.api.activity.backup_service.get_log_buffer", return_value=([], False)
+        ):
             response = test_client.get(
-                f"/api/activity/backup/{job.id}/logs?offset=0",
-                headers=auth_headers
+                f"/api/activity/backup/{job.id}/logs?offset=0", headers=auth_headers
             )
 
         assert response.status_code == 200
         data = response.json()
-        assert data['total_lines'] == 5
-        assert len(data['lines']) == 5
+        assert data["total_lines"] == 5
+        assert len(data["lines"]) == 5
 
-    def test_b_no_buffer_offset_5_returns_empty(self, test_client, auth_headers, test_db):
+    def test_b_no_buffer_offset_5_returns_empty(
+        self, test_client, auth_headers, test_db
+    ):
         """Test B: buffer_exists=False, offset=5 -> returns empty response."""
         from unittest.mock import patch
         from app.database.models import BackupJob
         from datetime import datetime
 
         job = BackupJob(
-            repository="/test/repo",
-            status="running",
-            started_at=datetime.now()
+            repository="/test/repo", status="running", started_at=datetime.now()
         )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
-        with patch('app.api.activity.backup_service.get_log_buffer', return_value=([], False)):
+        with patch(
+            "app.api.activity.backup_service.get_log_buffer", return_value=([], False)
+        ):
             response = test_client.get(
-                f"/api/activity/backup/{job.id}/logs?offset=5",
-                headers=auth_headers
+                f"/api/activity/backup/{job.id}/logs?offset=5", headers=auth_headers
             )
 
         assert response.status_code == 200
         data = response.json()
-        assert data['lines'] == []
-        assert data['total_lines'] == 0
-        assert data['has_more'] is False
+        assert data["lines"] == []
+        assert data["total_lines"] == 0
+        assert data["has_more"] is False
 
-    def test_c_empty_buffer_offset_0_returns_placeholder(self, test_client, auth_headers, test_db):
+    def test_c_empty_buffer_offset_0_returns_placeholder(
+        self, test_client, auth_headers, test_db
+    ):
         """Test C: buffer_exists=True but empty, offset=0 -> returns 5-line placeholder."""
         from unittest.mock import patch
         from app.database.models import BackupJob
         from datetime import datetime
 
         job = BackupJob(
-            repository="/test/repo",
-            status="running",
-            started_at=datetime.now()
+            repository="/test/repo", status="running", started_at=datetime.now()
         )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
-        with patch('app.api.activity.backup_service.get_log_buffer', return_value=([], True)):
+        with patch(
+            "app.api.activity.backup_service.get_log_buffer", return_value=([], True)
+        ):
             response = test_client.get(
-                f"/api/activity/backup/{job.id}/logs?offset=0",
-                headers=auth_headers
+                f"/api/activity/backup/{job.id}/logs?offset=0", headers=auth_headers
             )
 
         assert response.status_code == 200
         data = response.json()
-        assert data['total_lines'] == 5
-        assert len(data['lines']) == 5
+        assert data["total_lines"] == 5
+        assert len(data["lines"]) == 5
 
-    def test_d_empty_buffer_offset_5_returns_empty(self, test_client, auth_headers, test_db):
+    def test_d_empty_buffer_offset_5_returns_empty(
+        self, test_client, auth_headers, test_db
+    ):
         """Test D: buffer_exists=True but empty, offset=5 -> returns empty response."""
         from unittest.mock import patch
         from app.database.models import BackupJob
         from datetime import datetime
 
         job = BackupJob(
-            repository="/test/repo",
-            status="running",
-            started_at=datetime.now()
+            repository="/test/repo", status="running", started_at=datetime.now()
         )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
-        with patch('app.api.activity.backup_service.get_log_buffer', return_value=([], True)):
+        with patch(
+            "app.api.activity.backup_service.get_log_buffer", return_value=([], True)
+        ):
             response = test_client.get(
-                f"/api/activity/backup/{job.id}/logs?offset=5",
-                headers=auth_headers
+                f"/api/activity/backup/{job.id}/logs?offset=5", headers=auth_headers
             )
 
         assert response.status_code == 200
         data = response.json()
-        assert data['lines'] == []
-        assert data['total_lines'] == 0
-        assert data['has_more'] is False
+        assert data["lines"] == []
+        assert data["total_lines"] == 0
+        assert data["has_more"] is False
 
-    def test_e_buffer_with_lines_offset_0_returns_lines(self, test_client, auth_headers, test_db):
+    def test_e_buffer_with_lines_offset_0_returns_lines(
+        self, test_client, auth_headers, test_db
+    ):
         """Test E: buffer_exists=True, buffer has lines, offset=0 -> returns those lines."""
         from unittest.mock import patch
         from app.database.models import BackupJob
         from datetime import datetime
 
         job = BackupJob(
-            repository="/test/repo",
-            status="running",
-            started_at=datetime.now()
+            repository="/test/repo", status="running", started_at=datetime.now()
         )
         test_db.add(job)
         test_db.commit()
         test_db.refresh(job)
 
-        real_lines = ["Creating archive...", "Files: 100 new, 0 changed", "Duration: 2.34 seconds"]
-        with patch('app.api.activity.backup_service.get_log_buffer', return_value=(real_lines, True)):
+        real_lines = [
+            "Creating archive...",
+            "Files: 100 new, 0 changed",
+            "Duration: 2.34 seconds",
+        ]
+        with patch(
+            "app.api.activity.backup_service.get_log_buffer",
+            return_value=(real_lines, True),
+        ):
             response = test_client.get(
-                f"/api/activity/backup/{job.id}/logs?offset=0",
-                headers=auth_headers
+                f"/api/activity/backup/{job.id}/logs?offset=0", headers=auth_headers
             )
 
         assert response.status_code == 200
         data = response.json()
-        assert data['total_lines'] == 3
-        assert len(data['lines']) == 3
-        assert data['lines'][0]['content'] == "Creating archive..."
-        assert data['lines'][1]['content'] == "Files: 100 new, 0 changed"
-        assert data['lines'][2]['content'] == "Duration: 2.34 seconds"
+        assert data["total_lines"] == 3
+        assert len(data["lines"]) == 3
+        assert data["lines"][0]["content"] == "Creating archive..."
+        assert data["lines"][1]["content"] == "Files: 100 new, 0 changed"
+        assert data["lines"][2]["content"] == "Duration: 2.34 seconds"

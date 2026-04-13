@@ -10,6 +10,7 @@ Tests cover:
  - decrypted key gets trailing newline appended if missing
  - temp file has 0o600 permissions
 """
+
 import base64
 import os
 import pytest
@@ -22,6 +23,7 @@ from app.database.models import Repository, SSHConnection, SSHKey
 # ---------------------------------------------------------------------------
 # Helpers (mirror the style used in test_ssh_key_in_maintenance_services.py)
 # ---------------------------------------------------------------------------
+
 
 def _make_encrypted_key(secret_key: str, trailing_newline: bool = True) -> str:
     """Return an encrypted fake private key using the app's encryption scheme."""
@@ -66,6 +68,7 @@ def _make_connection(ssh_key_id=None) -> MagicMock:
 # ---------------------------------------------------------------------------
 # Tests for resolve_repo_ssh_key_file
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestResolveRepoSshKeyFile:
@@ -113,7 +116,9 @@ class TestResolveRepoSshKeyFile:
         from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
         ssh_key = _make_ssh_key(self.SECRET)
-        repo = _make_repo(connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh")
+        repo = _make_repo(
+            connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh"
+        )
         db = self._make_db(ssh_key=ssh_key)
 
         with patch("app.utils.ssh_utils.settings") as mock_settings:
@@ -160,7 +165,9 @@ class TestResolveRepoSshKeyFile:
 
         # Key stored without trailing newline
         ssh_key = _make_ssh_key(self.SECRET, trailing_newline=False)
-        repo = _make_repo(connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh")
+        repo = _make_repo(
+            connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh"
+        )
         db = self._make_db(ssh_key=ssh_key)
 
         with patch("app.utils.ssh_utils.settings") as mock_settings:
@@ -171,7 +178,9 @@ class TestResolveRepoSshKeyFile:
             assert result is not None
             with open(result, "r") as f:
                 content = f.read()
-            assert content.endswith("\n"), "Trailing newline was not appended to the key file"
+            assert content.endswith("\n"), (
+                "Trailing newline was not appended to the key file"
+            )
         finally:
             if result and os.path.exists(result):
                 os.unlink(result)
@@ -181,7 +190,9 @@ class TestResolveRepoSshKeyFile:
         from app.utils.ssh_utils import resolve_repo_ssh_key_file
 
         ssh_key = _make_ssh_key(self.SECRET)
-        repo = _make_repo(connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh")
+        repo = _make_repo(
+            connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh"
+        )
         db = self._make_db(ssh_key=ssh_key)
 
         with patch("app.utils.ssh_utils.settings") as mock_settings:
@@ -200,6 +211,7 @@ class TestResolveRepoSshKeyFile:
 # ---------------------------------------------------------------------------
 # Tests for write_ssh_key_to_tempfile
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestWriteSshKeyToTempfile:

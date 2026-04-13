@@ -56,13 +56,17 @@ async def test_scheduled_maintenance_dispatches_v2_repo_through_borg_router(db_s
 
     fake_router = SimpleNamespace(prune=AsyncMock(), compact=AsyncMock())
 
-    with patch(
-        "app.services.backup_service.backup_service.execute_backup",
-        new=mark_backup_complete,
-    ), patch("app.api.schedule.BorgRouter", return_value=fake_router), patch(
-        "app.api.schedule.get_db", return_value=iter([db_session])
+    with (
+        patch(
+            "app.services.backup_service.backup_service.execute_backup",
+            new=mark_backup_complete,
+        ),
+        patch("app.api.schedule.BorgRouter", return_value=fake_router),
+        patch("app.api.schedule.get_db", return_value=iter([db_session])),
     ):
-        await execute_scheduled_backup_with_maintenance(backup_job.id, repo.path, schedule.id)
+        await execute_scheduled_backup_with_maintenance(
+            backup_job.id, repo.path, schedule.id
+        )
 
     fake_router.prune.assert_awaited_once()
     fake_router.compact.assert_awaited_once()

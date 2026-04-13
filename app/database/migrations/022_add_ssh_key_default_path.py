@@ -1,5 +1,6 @@
 from sqlalchemy import text
 
+
 def upgrade(connection):
     """Add default_path column to ssh_connections table
 
@@ -12,17 +13,22 @@ def upgrade(connection):
     result = connection.execute(text("PRAGMA table_info(ssh_connections)"))
     columns = [row[1] for row in result]
 
-    if 'default_path' not in columns:
+    if "default_path" not in columns:
         # Add default_path column to ssh_connections
-        connection.execute(text("""
+        connection.execute(
+            text("""
             ALTER TABLE ssh_connections ADD COLUMN default_path TEXT
-        """))
+        """)
+        )
 
         print("✓ Migration 022: Added default_path column to ssh_connections")
     else:
-        print("⊘ Migration 022: default_path column already exists in ssh_connections, skipping")
+        print(
+            "⊘ Migration 022: default_path column already exists in ssh_connections, skipping"
+        )
 
     connection.commit()
+
 
 def downgrade(connection):
     """Remove default_path column from ssh_connections table"""

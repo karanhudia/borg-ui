@@ -14,8 +14,12 @@ REPOSITORY_ROLES: List[dict[str, object]] = [
     {"id": "operator", "rank": 2, "scope": "repository"},
 ]
 
-GLOBAL_ROLE_RANK: Dict[str, int] = {role["id"]: int(role["rank"]) for role in GLOBAL_ROLES}
-REPOSITORY_ROLE_RANK: Dict[str, int] = {role["id"]: int(role["rank"]) for role in REPOSITORY_ROLES}
+GLOBAL_ROLE_RANK: Dict[str, int] = {
+    role["id"]: int(role["rank"]) for role in GLOBAL_ROLES
+}
+REPOSITORY_ROLE_RANK: Dict[str, int] = {
+    role["id"]: int(role["rank"]) for role in REPOSITORY_ROLES
+}
 
 # Minimum global role required to use a system-wide capability.
 GLOBAL_PERMISSION_RULES: Dict[str, str] = {
@@ -101,7 +105,9 @@ def can_repository_role_perform(role: str, action: str) -> bool:
     required_role = REPOSITORY_ACTION_RULES.get(action)
     if not required_role:
         return False
-    return REPOSITORY_ROLE_RANK.get(role, 0) >= REPOSITORY_ROLE_RANK.get(required_role, 0)
+    return REPOSITORY_ROLE_RANK.get(role, 0) >= REPOSITORY_ROLE_RANK.get(
+        required_role, 0
+    )
 
 
 def serialize_authorization_model() -> dict:

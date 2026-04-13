@@ -5,7 +5,8 @@ from sqlalchemy import text
 
 def upgrade(connection):
     """Create delete_archive_jobs table"""
-    connection.execute(text("""
+    connection.execute(
+        text("""
         CREATE TABLE IF NOT EXISTS delete_archive_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             repository_id INTEGER NOT NULL,
@@ -25,7 +26,8 @@ def upgrade(connection):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (repository_id) REFERENCES repositories (id)
         )
-    """))
+    """)
+    )
 
     print("✓ Created delete_archive_jobs table")
 

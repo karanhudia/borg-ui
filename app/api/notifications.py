@@ -21,11 +21,22 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
 # Pydantic models
 class NotificationSettingsCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255, description="User-friendly name")
-    service_url: str = Field(..., description="Apprise service URL (e.g., slack://token/). Use json:// or jsons:// for JSON webhooks.")
+    name: str = Field(
+        ..., min_length=1, max_length=255, description="User-friendly name"
+    )
+    service_url: str = Field(
+        ...,
+        description="Apprise service URL (e.g., slack://token/). Use json:// or jsons:// for JSON webhooks.",
+    )
     enabled: bool = Field(default=True)
-    title_prefix: Optional[str] = Field(default=None, max_length=100, description="Optional prefix for notification titles (e.g., '[Production]')")
-    include_job_name_in_title: bool = Field(default=False, description="Include job/schedule name in notification title")
+    title_prefix: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="Optional prefix for notification titles (e.g., '[Production]')",
+    )
+    include_job_name_in_title: bool = Field(
+        default=False, description="Include job/schedule name in notification title"
+    )
     notify_on_backup_start: bool = Field(default=False)
     notify_on_backup_success: bool = Field(default=False)
     notify_on_backup_failure: bool = Field(default=True)
@@ -34,8 +45,13 @@ class NotificationSettingsCreate(BaseModel):
     notify_on_check_success: bool = Field(default=False)
     notify_on_check_failure: bool = Field(default=True)
     notify_on_schedule_failure: bool = Field(default=True)
-    monitor_all_repositories: bool = Field(default=True, description="If True, applies to all repositories")
-    repository_ids: Optional[List[int]] = Field(default=None, description="List of repository IDs to monitor (only used if monitor_all_repositories is False)")
+    monitor_all_repositories: bool = Field(
+        default=True, description="If True, applies to all repositories"
+    )
+    repository_ids: Optional[List[int]] = Field(
+        default=None,
+        description="List of repository IDs to monitor (only used if monitor_all_repositories is False)",
+    )
 
 
 class NotificationSettingsUpdate(BaseModel):
@@ -87,9 +103,7 @@ class NotificationSettingsResponse(BaseModel):
 
     class Config:
         from_attributes = True
-        json_encoders = {
-            datetime: lambda v: serialize_datetime(v)
-        }
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
 class TestNotificationRequest(BaseModel):
@@ -99,8 +113,7 @@ class TestNotificationRequest(BaseModel):
 # Endpoints
 @router.get("", response_model=List[NotificationSettingsResponse])
 async def list_notification_settings(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """List all notification settings."""
     settings = db.query(NotificationSettings).all()
@@ -111,32 +124,36 @@ async def list_notification_settings(
 async def get_notification_setting(
     setting_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Get notification setting by ID."""
-    setting = db.query(NotificationSettings).filter(
-        NotificationSettings.id == setting_id
-    ).first()
+    setting = (
+        db.query(NotificationSettings)
+        .filter(NotificationSettings.id == setting_id)
+        .first()
+    )
 
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"key": "backend.errors.notifications.settingNotFound"}
+            detail={"key": "backend.errors.notifications.settingNotFound"},
         )
 
     return setting
 
 
-@router.post("", response_model=NotificationSettingsResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=NotificationSettingsResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_notification_setting(
     setting_data: NotificationSettingsCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Create new notification setting."""
     # Extract repository_ids before creating setting
     data_dict = setting_data.model_dump()
-    repository_ids = data_dict.pop('repository_ids', None)
+    repository_ids = data_dict.pop("repository_ids", None)
 
     # Create setting
     setting = NotificationSettings(**data_dict)
@@ -145,7 +162,9 @@ async def create_notification_setting(
 
     # Associate repositories if monitor_all_repositories is False
     if not setting.monitor_all_repositories and repository_ids:
-        repositories = db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
+        repositories = (
+            db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
+        )
         setting.repositories = repositories
 
     db.commit()
@@ -159,22 +178,24 @@ async def update_notification_setting(
     setting_id: int,
     setting_data: NotificationSettingsUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Update notification setting."""
-    setting = db.query(NotificationSettings).filter(
-        NotificationSettings.id == setting_id
-    ).first()
+    setting = (
+        db.query(NotificationSettings)
+        .filter(NotificationSettings.id == setting_id)
+        .first()
+    )
 
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"key": "backend.errors.notifications.settingNotFound"}
+            detail={"key": "backend.errors.notifications.settingNotFound"},
         )
 
     # Update fields
     update_data = setting_data.model_dump(exclude_unset=True)
-    repository_ids = update_data.pop('repository_ids', None)
+    repository_ids = update_data.pop("repository_ids", None)
 
     for key, value in update_data.items():
         setattr(setting, key, value)
@@ -182,7 +203,9 @@ async def update_notification_setting(
     # Update repository associations if provided
     if repository_ids is not None:
         if not setting.monitor_all_repositories and repository_ids:
-            repositories = db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
+            repositories = (
+                db.query(Repository).filter(Repository.id.in_(repository_ids)).all()
+            )
             setting.repositories = repositories
         else:
             # Clear repository associations if monitoring all or no repos specified
@@ -198,17 +221,19 @@ async def update_notification_setting(
 async def delete_notification_setting(
     setting_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Delete notification setting."""
-    setting = db.query(NotificationSettings).filter(
-        NotificationSettings.id == setting_id
-    ).first()
+    setting = (
+        db.query(NotificationSettings)
+        .filter(NotificationSettings.id == setting_id)
+        .first()
+    )
 
     if not setting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"key": "backend.errors.notifications.settingNotFound"}
+            detail={"key": "backend.errors.notifications.settingNotFound"},
         )
 
     db.delete(setting)
@@ -217,8 +242,7 @@ async def delete_notification_setting(
 
 @router.post("/test")
 async def test_notification(
-    request: TestNotificationRequest,
-    current_user: User = Depends(get_current_user)
+    request: TestNotificationRequest, current_user: User = Depends(get_current_user)
 ):
     """Test a notification service URL."""
     result = await notification_service.test_notification(request.service_url)

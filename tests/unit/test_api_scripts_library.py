@@ -19,7 +19,9 @@ class TestScriptUsageCount:
     If a script is assigned as both pre and post on same repo, that's 2 places.
     """
 
-    def test_usage_count_single_repository_one_hook(self, test_client, admin_headers, test_db):
+    def test_usage_count_single_repository_one_hook(
+        self, test_client, admin_headers, test_db
+    ):
         """Script used once on one repository shows usage_count = 1"""
         # Create repository
         repo = Repository(
@@ -27,7 +29,7 @@ class TestScriptUsageCount:
             path="/backups/test",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add(repo)
         test_db.commit()
@@ -40,7 +42,7 @@ class TestScriptUsageCount:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=0
+            usage_count=0,
         )
         test_db.add(script)
         test_db.commit()
@@ -50,15 +52,17 @@ class TestScriptUsageCount:
             repository_id=repo.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         test_db.add(assoc)
         test_db.commit()
 
         # Manually update usage_count (simulating the assign endpoint logic)
-        script.usage_count = test_db.query(RepositoryScript).filter(
-            RepositoryScript.script_id == script.id
-        ).count()
+        script.usage_count = (
+            test_db.query(RepositoryScript)
+            .filter(RepositoryScript.script_id == script.id)
+            .count()
+        )
         test_db.commit()
 
         # Get script and verify usage_count
@@ -70,7 +74,9 @@ class TestScriptUsageCount:
         assert test_script is not None
         assert test_script["usage_count"] == 1
 
-    def test_usage_count_single_repository_two_hooks(self, test_client, admin_headers, test_db):
+    def test_usage_count_single_repository_two_hooks(
+        self, test_client, admin_headers, test_db
+    ):
         """
         Script used twice on ONE repository (pre + post) shows usage_count = 2 (2 places used)
         Each hook assignment is one "place used"
@@ -81,7 +87,7 @@ class TestScriptUsageCount:
             path="/backups/test",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add(repo)
         test_db.commit()
@@ -94,7 +100,7 @@ class TestScriptUsageCount:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=0
+            usage_count=0,
         )
         test_db.add(script)
         test_db.commit()
@@ -104,13 +110,13 @@ class TestScriptUsageCount:
             repository_id=repo.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         assoc2 = RepositoryScript(
             repository_id=repo.id,
             script_id=script.id,
             hook_type="post-backup",
-            enabled=True
+            enabled=True,
         )
         test_db.add(assoc1)
         test_db.add(assoc2)
@@ -118,9 +124,11 @@ class TestScriptUsageCount:
 
         # Manually update usage_count (simulating the assign endpoint logic)
         # Count all associations, not unique repositories
-        script.usage_count = test_db.query(RepositoryScript).filter(
-            RepositoryScript.script_id == script.id
-        ).count()
+        script.usage_count = (
+            test_db.query(RepositoryScript)
+            .filter(RepositoryScript.script_id == script.id)
+            .count()
+        )
         test_db.commit()
 
         # Get script and verify usage_count
@@ -132,8 +140,9 @@ class TestScriptUsageCount:
         assert test_script is not None
 
         # Should be 2 (2 places used: pre-backup + post-backup)
-        assert test_script["usage_count"] == 2, \
+        assert test_script["usage_count"] == 2, (
             f"Expected usage_count=2 for script used in 2 places (pre+post hooks), got {test_script['usage_count']}"
+        )
 
     def test_usage_count_two_repositories(self, test_client, admin_headers, test_db):
         """Script used on two different repositories shows usage_count = 2"""
@@ -143,14 +152,14 @@ class TestScriptUsageCount:
             path="/backups/test1",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         repo2 = Repository(
             name="test-repo-2",
             path="/backups/test2",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add_all([repo1, repo2])
         test_db.commit()
@@ -163,7 +172,7 @@ class TestScriptUsageCount:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=0
+            usage_count=0,
         )
         test_db.add(script)
         test_db.commit()
@@ -173,21 +182,23 @@ class TestScriptUsageCount:
             repository_id=repo1.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         assoc2 = RepositoryScript(
             repository_id=repo2.id,
             script_id=script.id,
             hook_type="post-backup",
-            enabled=True
+            enabled=True,
         )
         test_db.add_all([assoc1, assoc2])
         test_db.commit()
 
         # Manually update usage_count
-        script.usage_count = test_db.query(RepositoryScript).filter(
-            RepositoryScript.script_id == script.id
-        ).count()
+        script.usage_count = (
+            test_db.query(RepositoryScript)
+            .filter(RepositoryScript.script_id == script.id)
+            .count()
+        )
         test_db.commit()
 
         # Get script and verify usage_count
@@ -212,14 +223,14 @@ class TestScriptUsageCount:
             path="/backups/test1",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         repo2 = Repository(
             name="test-repo-2",
             path="/backups/test2",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add_all([repo1, repo2])
         test_db.commit()
@@ -232,7 +243,7 @@ class TestScriptUsageCount:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=0
+            usage_count=0,
         )
         test_db.add(script)
         test_db.commit()
@@ -242,27 +253,29 @@ class TestScriptUsageCount:
             repository_id=repo1.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         assoc2 = RepositoryScript(
             repository_id=repo1.id,
             script_id=script.id,
             hook_type="post-backup",
-            enabled=True
+            enabled=True,
         )
         assoc3 = RepositoryScript(
             repository_id=repo2.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         test_db.add_all([assoc1, assoc2, assoc3])
         test_db.commit()
 
         # Verify database state
-        total_associations = test_db.query(RepositoryScript).filter(
-            RepositoryScript.script_id == script.id
-        ).count()
+        total_associations = (
+            test_db.query(RepositoryScript)
+            .filter(RepositoryScript.script_id == script.id)
+            .count()
+        )
         assert total_associations == 3, "Should have 3 associations"
 
         # Update usage_count
@@ -278,15 +291,18 @@ class TestScriptUsageCount:
         assert test_script is not None
 
         # Should be 3 (total associations/places used)
-        assert test_script["usage_count"] == 3, \
+        assert test_script["usage_count"] == 3, (
             f"Expected usage_count=3 for 3 places used across 2 repos, got {test_script['usage_count']}"
+        )
 
 
 @pytest.mark.unit
 class TestScriptOrphanedAssociations:
     """Test cleanup of orphaned script associations when repository is deleted"""
 
-    def test_delete_repository_cleans_up_associations(self, test_client, admin_headers, test_db):
+    def test_delete_repository_cleans_up_associations(
+        self, test_client, admin_headers, test_db
+    ):
         """Deleting a repository should clean up its script associations"""
         # Create repository with script
         repo = Repository(
@@ -294,7 +310,7 @@ class TestScriptOrphanedAssociations:
             path="/backups/test",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add(repo)
         test_db.commit()
@@ -306,7 +322,7 @@ class TestScriptOrphanedAssociations:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=0
+            usage_count=0,
         )
         test_db.add(script)
         test_db.commit()
@@ -316,7 +332,7 @@ class TestScriptOrphanedAssociations:
             repository_id=repo.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         test_db.add(assoc)
         test_db.commit()
@@ -338,16 +354,20 @@ class TestScriptOrphanedAssociations:
         test_db.commit()
 
         # Verify associations are gone
-        remaining_assocs = test_db.query(RepositoryScript).filter(
-            RepositoryScript.script_id == script_id
-        ).count()
+        remaining_assocs = (
+            test_db.query(RepositoryScript)
+            .filter(RepositoryScript.script_id == script_id)
+            .count()
+        )
         assert remaining_assocs == 0
 
         # Update usage_count after cleanup
         script_obj = test_db.query(Script).filter(Script.id == script_id).first()
-        script_obj.usage_count = test_db.query(RepositoryScript).filter(
-            RepositoryScript.script_id == script_id
-        ).count()
+        script_obj.usage_count = (
+            test_db.query(RepositoryScript)
+            .filter(RepositoryScript.script_id == script_id)
+            .count()
+        )
         test_db.commit()
 
         # Verify usage_count is now 0
@@ -358,7 +378,9 @@ class TestScriptOrphanedAssociations:
 class TestScriptDeleteErrorMessages:
     """Test that delete error messages are clear and informative"""
 
-    def test_delete_error_message_single_place(self, test_client, admin_headers, test_db):
+    def test_delete_error_message_single_place(
+        self, test_client, admin_headers, test_db
+    ):
         """Error message for script used in one place is clear"""
         # Create repository with script
         repo = Repository(
@@ -366,7 +388,7 @@ class TestScriptDeleteErrorMessages:
             path="/backups/test",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add(repo)
         test_db.commit()
@@ -378,7 +400,7 @@ class TestScriptDeleteErrorMessages:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=1
+            usage_count=1,
         )
         test_db.add(script)
         test_db.commit()
@@ -388,18 +410,22 @@ class TestScriptDeleteErrorMessages:
             repository_id=repo.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         test_db.add(assoc)
         test_db.commit()
 
         # Try to delete - should fail with clear message
-        response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/scripts/{script.id}", headers=admin_headers
+        )
         assert response.status_code == 400
         assert response.json()["detail"]["key"] == "backend.errors.scripts.scriptInUse"
         assert response.json()["detail"]["params"]["repos"] == "test-repo (pre-backup)"
 
-    def test_delete_error_message_multiple_hooks_same_repo(self, test_client, admin_headers, test_db):
+    def test_delete_error_message_multiple_hooks_same_repo(
+        self, test_client, admin_headers, test_db
+    ):
         """Error message shows both hook types when script used twice on same repo"""
         # Create repository with script
         repo = Repository(
@@ -407,7 +433,7 @@ class TestScriptDeleteErrorMessages:
             path="/backups/downloads",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add(repo)
         test_db.commit()
@@ -419,7 +445,7 @@ class TestScriptDeleteErrorMessages:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=2
+            usage_count=2,
         )
         test_db.add(script)
         test_db.commit()
@@ -429,19 +455,21 @@ class TestScriptDeleteErrorMessages:
             repository_id=repo.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         assoc2 = RepositoryScript(
             repository_id=repo.id,
             script_id=script.id,
             hook_type="post-backup",
-            enabled=True
+            enabled=True,
         )
         test_db.add_all([assoc1, assoc2])
         test_db.commit()
 
         # Try to delete - should fail with clear message
-        response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/scripts/{script.id}", headers=admin_headers
+        )
         assert response.status_code == 400
         detail = response.json()["detail"]
 
@@ -456,7 +484,9 @@ class TestScriptDeleteErrorMessages:
         # Should NOT show "Downloads, Downloads"
         assert detail["params"]["repos"].count("Downloads") == 1
 
-    def test_delete_error_message_multiple_repos(self, test_client, admin_headers, test_db):
+    def test_delete_error_message_multiple_repos(
+        self, test_client, admin_headers, test_db
+    ):
         """Error message lists all repositories when used in multiple places"""
         # Create two repositories
         repo1 = Repository(
@@ -464,14 +494,14 @@ class TestScriptDeleteErrorMessages:
             path="/backups/downloads",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         repo2 = Repository(
             name="Documents",
             path="/backups/docs",
             encryption="none",
             compression="lz4",
-            mode="full"
+            mode="full",
         )
         test_db.add_all([repo1, repo2])
         test_db.commit()
@@ -483,7 +513,7 @@ class TestScriptDeleteErrorMessages:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=3
+            usage_count=3,
         )
         test_db.add(script)
         test_db.commit()
@@ -493,25 +523,27 @@ class TestScriptDeleteErrorMessages:
             repository_id=repo1.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         assoc2 = RepositoryScript(
             repository_id=repo1.id,
             script_id=script.id,
             hook_type="post-backup",
-            enabled=True
+            enabled=True,
         )
         assoc3 = RepositoryScript(
             repository_id=repo2.id,
             script_id=script.id,
             hook_type="pre-backup",
-            enabled=True
+            enabled=True,
         )
         test_db.add_all([assoc1, assoc2, assoc3])
         test_db.commit()
 
         # Try to delete
-        response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/scripts/{script.id}", headers=admin_headers
+        )
         assert response.status_code == 400
         detail = response.json()["detail"]
 
@@ -529,7 +561,9 @@ class TestScriptDeleteErrorMessages:
 class TestScriptDeleteScheduleReference:
     """Test that deleting a script clears schedule-level script references"""
 
-    def test_delete_script_clears_schedule_pre_backup_reference(self, test_client, admin_headers, test_db):
+    def test_delete_script_clears_schedule_pre_backup_reference(
+        self, test_client, admin_headers, test_db
+    ):
         """Deleting a script used as a schedule pre-backup script succeeds and clears the reference"""
         script = Script(
             name="pre-backup-script",
@@ -538,7 +572,7 @@ class TestScriptDeleteScheduleReference:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=0
+            usage_count=0,
         )
         test_db.add(script)
         test_db.commit()
@@ -552,13 +586,17 @@ class TestScriptDeleteScheduleReference:
         test_db.add(schedule)
         test_db.commit()
 
-        response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/scripts/{script.id}", headers=admin_headers
+        )
         assert response.status_code == 204
 
         test_db.refresh(schedule)
         assert schedule.pre_backup_script_id is None
 
-    def test_delete_script_clears_schedule_post_backup_reference(self, test_client, admin_headers, test_db):
+    def test_delete_script_clears_schedule_post_backup_reference(
+        self, test_client, admin_headers, test_db
+    ):
         """Deleting a script used as a schedule post-backup script succeeds and clears the reference"""
         script = Script(
             name="post-backup-script",
@@ -567,7 +605,7 @@ class TestScriptDeleteScheduleReference:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=0
+            usage_count=0,
         )
         test_db.add(script)
         test_db.commit()
@@ -581,13 +619,17 @@ class TestScriptDeleteScheduleReference:
         test_db.add(schedule)
         test_db.commit()
 
-        response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/scripts/{script.id}", headers=admin_headers
+        )
         assert response.status_code == 204
 
         test_db.refresh(schedule)
         assert schedule.post_backup_script_id is None
 
-    def test_delete_script_clears_both_schedule_references(self, test_client, admin_headers, test_db):
+    def test_delete_script_clears_both_schedule_references(
+        self, test_client, admin_headers, test_db
+    ):
         """Deleting a script used as both pre and post backup in different schedules clears all references"""
         script = Script(
             name="shared-script",
@@ -596,7 +638,7 @@ class TestScriptDeleteScheduleReference:
             category="custom",
             timeout=300,
             run_on="always",
-            usage_count=0
+            usage_count=0,
         )
         test_db.add(script)
         test_db.commit()
@@ -616,7 +658,9 @@ class TestScriptDeleteScheduleReference:
         test_db.add_all([schedule1, schedule2])
         test_db.commit()
 
-        response = test_client.delete(f"/api/scripts/{script.id}", headers=admin_headers)
+        response = test_client.delete(
+            f"/api/scripts/{script.id}", headers=admin_headers
+        )
         assert response.status_code == 204
 
         test_db.refresh(schedule1)

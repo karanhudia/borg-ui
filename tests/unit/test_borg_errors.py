@@ -1,6 +1,7 @@
 """
 Unit tests for Borg error handling
 """
+
 import pytest
 import json
 
@@ -124,7 +125,10 @@ def test_is_lock_error_detects_lock_exit_codes(exit_code):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("msgid", ["LockError", "LockErrorT", "LockFailed", "LockTimeout", "NotLocked", "NotMyLock"])
+@pytest.mark.parametrize(
+    "msgid",
+    ["LockError", "LockErrorT", "LockFailed", "LockTimeout", "NotLocked", "NotMyLock"],
+)
 def test_is_lock_error_detects_lock_message_ids(msgid):
     assert is_lock_error(msgid=msgid) is True
 
@@ -138,7 +142,9 @@ def test_is_lock_error_rejects_non_lock_cases():
 
 @pytest.mark.unit
 def test_format_error_message_prefers_msgid_locale_key():
-    payload = json.loads(format_error_message(msgid="Repository.DoesNotExist", exit_code=13))
+    payload = json.loads(
+        format_error_message(msgid="Repository.DoesNotExist", exit_code=13)
+    )
 
     assert payload == {"key": "backend.errors.borg.repositoryDoesNotExist"}
 

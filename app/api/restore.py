@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import structlog
 from typing import List, Optional
 import json
-import os
 from datetime import timezone
 import asyncio
 
@@ -19,14 +18,22 @@ from app.core.security import (
 from app.services.restore_service import restore_service
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
-from app.utils.borg_env import get_standard_ssh_opts, setup_borg_env, cleanup_temp_key_file
-from app.utils.ssh_utils import resolve_repo_ssh_key_file  # Backward-compatible patch target for tests
+from app.utils.borg_env import (
+    get_standard_ssh_opts,
+    setup_borg_env,
+    cleanup_temp_key_file,
+)
+from app.utils.ssh_utils import (
+    resolve_repo_ssh_key_file,
+)  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 router = APIRouter()
 
 
-def _get_restore_job_repository(db: Session, repository_path: Optional[str]) -> Optional[Repository]:
+def _get_restore_job_repository(
+    db: Session, repository_path: Optional[str]
+) -> Optional[Repository]:
     if not repository_path:
         return None
     return db.query(Repository).filter(Repository.path == repository_path).first()
@@ -38,6 +45,7 @@ def _build_repo_env(repo: Repository, db: Session):
     env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
     return env, temp_key_file
 
+
 class RestoreRequest(BaseModel):
     repository: str
     archive: str
@@ -45,14 +53,17 @@ class RestoreRequest(BaseModel):
     destination: str
     dry_run: bool = False
     repository_id: int  # Repository ID for fetching repository details
-    destination_type: str = 'local'  # 'local' or 'ssh'
-    destination_connection_id: Optional[int] = None  # SSH connection ID for SSH destinations
+    destination_type: str = "local"  # 'local' or 'ssh'
+    destination_connection_id: Optional[int] = (
+        None  # SSH connection ID for SSH destinations
+    )
+
 
 @router.post("/preview")
 async def preview_restore(
     restore_request: RestoreRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Preview a restore operation"""
     try:
@@ -61,10 +72,14 @@ async def preview_restore(
             db,
             current_user,
             restore_request.repository,
-            'viewer',
+            "viewer",
         )
 
-        if repo.repository_type == "ssh" or repo.path.startswith("ssh://") or repo.connection_id:
+        if (
+            repo.repository_type == "ssh"
+            or repo.path.startswith("ssh://")
+            or repo.connection_id
+        ):
             env, temp_key_file = _build_repo_env(repo, db)
             try:
                 result = await BorgRouter(repo).preview_restore(
@@ -88,42 +103,61 @@ async def preview_restore(
         logger.error("Failed to preview restore", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.restore.failedPreviewRestore"}
+            detail={"key": "backend.errors.restore.failedPreviewRestore"},
         )
+
 
 @router.post("/start")
 async def start_restore(
     restore_request: RestoreRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Start a restore operation and return job ID"""
     try:
         # Fetch repository to determine repository_type
-        repository = db.query(Repository).filter(Repository.id == restore_request.repository_id).first()
+        repository = (
+            db.query(Repository)
+            .filter(Repository.id == restore_request.repository_id)
+            .first()
+        )
         if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
-        check_repo_access(db, current_user, repository, 'viewer')
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.restore.repositoryNotFound"},
+            )
+        check_repo_access(db, current_user, repository, "viewer")
         repository_path = repository.path
 
         # Validate scenario: SSH repository → SSH destination is not supported
-        if repository.repository_type == 'ssh' and restore_request.destination_type == 'ssh':
+        if (
+            repository.repository_type == "ssh"
+            and restore_request.destination_type == "ssh"
+        ):
             raise HTTPException(
                 status_code=400,
-                detail={"key": "backend.errors.restore.sshToSshNotSupported"}
+                detail={"key": "backend.errors.restore.sshToSshNotSupported"},
             )
 
         # Determine execution_mode based on repository_type + destination_type
-        execution_mode = f"{repository.repository_type}_to_{restore_request.destination_type}"
+        execution_mode = (
+            f"{repository.repository_type}_to_{restore_request.destination_type}"
+        )
 
         # Fetch destination hostname if SSH destination
         destination_hostname = None
         destination_connection = None
-        if restore_request.destination_type == 'ssh' and restore_request.destination_connection_id:
+        if (
+            restore_request.destination_type == "ssh"
+            and restore_request.destination_connection_id
+        ):
             from app.database.models import SSHConnection
-            destination_connection = db.query(SSHConnection).filter(
-                SSHConnection.id == restore_request.destination_connection_id
-            ).first()
+
+            destination_connection = (
+                db.query(SSHConnection)
+                .filter(SSHConnection.id == restore_request.destination_connection_id)
+                .first()
+            )
             if destination_connection:
                 destination_hostname = destination_connection.host
 
@@ -137,7 +171,7 @@ async def start_restore(
             destination_connection_id=restore_request.destination_connection_id,
             execution_mode=execution_mode,
             destination_hostname=destination_hostname,
-            repository_type=repository.repository_type
+            repository_type=repository.repository_type,
         )
         db.add(restore_job)
         db.commit()
@@ -155,19 +189,23 @@ async def start_restore(
                 repository_type=repository.repository_type,
                 destination_type=restore_request.destination_type,
                 destination_connection_id=restore_request.destination_connection_id,
-                ssh_connection_id=repository.connection_id if repository.repository_type == 'ssh' else None
+                ssh_connection_id=repository.connection_id
+                if repository.repository_type == "ssh"
+                else None,
             )
         )
 
-        logger.info("Restore job created",
-                   job_id=restore_job.id,
-                   user=current_user.username,
-                   execution_mode=execution_mode)
+        logger.info(
+            "Restore job created",
+            job_id=restore_job.id,
+            user=current_user.username,
+            execution_mode=execution_mode,
+        )
 
         return {
             "job_id": restore_job.id,
             "status": "pending",
-            "message": "backend.success.restore.restoreJobStarted"
+            "message": "backend.success.restore.restoreJobStarted",
         }
     except HTTPException:
         raise
@@ -175,13 +213,16 @@ async def start_restore(
         logger.error("Failed to start restore", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.restore.failedStartRestore", "params": {"error": str(e)}}
+            detail={
+                "key": "backend.errors.restore.failedStartRestore",
+                "params": {"error": str(e)},
+            },
         )
+
 
 @router.get("/repositories")
 async def get_repositories(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get all repositories available for restore"""
     try:
@@ -189,7 +230,7 @@ async def get_repositories(
         visible_repositories = []
         for repo in repositories:
             try:
-                check_repo_access(db, current_user, repo, 'viewer')
+                check_repo_access(db, current_user, repo, "viewer")
                 visible_repositories.append(repo)
             except HTTPException:
                 continue
@@ -199,7 +240,7 @@ async def get_repositories(
                     "id": repo.id,
                     "name": repo.name,
                     "path": repo.path,
-                    "repository_type": repo.repository_type
+                    "repository_type": repo.repository_type,
                 }
                 for repo in visible_repositories
             ]
@@ -208,28 +249,36 @@ async def get_repositories(
         logger.error("Failed to fetch repositories", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.restore.failedFetchRepositories"}
+            detail={"key": "backend.errors.restore.failedFetchRepositories"},
         )
+
 
 @router.get("/archives/{repository_id}")
 async def get_archives(
     repository_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get all archives for a repository - delegates to repositories API"""
     try:
         # Use the existing repositories API implementation
         from app.api.repositories import list_repository_archives
+
         return await list_repository_archives(repository_id, current_user, db)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to fetch archives", repository_id=repository_id, error=str(e))
+        logger.error(
+            "Failed to fetch archives", repository_id=repository_id, error=str(e)
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.restore.failedFetchArchives", "params": {"error": str(e)}}
+            detail={
+                "key": "backend.errors.restore.failedFetchArchives",
+                "params": {"error": str(e)},
+            },
         )
+
 
 @router.get("/contents/{repository_id}/{archive_name}")
 async def get_archive_contents(
@@ -237,22 +286,27 @@ async def get_archive_contents(
     archive_name: str,
     path: str = Query("", description="Path within archive to browse"),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get contents of an archive at a specific path"""
     try:
         repository = db.query(Repository).filter(Repository.id == repository_id).first()
         if not repository:
-            raise HTTPException(status_code=404, detail={"key": "backend.errors.restore.repositoryNotFound"})
-        check_repo_access(db, current_user, repository, 'viewer')
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.restore.repositoryNotFound"},
+            )
+        check_repo_access(db, current_user, repository, "viewer")
 
         # Check cache first
         all_items = await archive_cache.get(repository_id, archive_name)
 
         if all_items is not None:
-            logger.info("Using cached archive contents",
-                       archive=archive_name,
-                       items_count=len(all_items))
+            logger.info(
+                "Using cached archive contents",
+                archive=archive_name,
+                items_count=len(all_items),
+            )
         else:
             # If not in cache, fetch from borg (fetch ALL items, not just the requested path)
             env, temp_key_file = _build_repo_env(repository, db)
@@ -272,9 +326,11 @@ async def get_archive_contents(
             all_items = []
             if result.get("stdout"):
                 lines = result["stdout"].strip().split("\n")
-                logger.info("Fetching and caching archive contents",
-                           archive=archive_name,
-                           total_lines=len(lines))
+                logger.info(
+                    "Fetching and caching archive contents",
+                    archive=archive_name,
+                    total_lines=len(lines),
+                )
 
                 for line in lines:
                     if line:
@@ -282,19 +338,23 @@ async def get_archive_contents(
                             item_data = json.loads(line)
                             item_path = item_data.get("path", "")
                             if item_path:
-                                all_items.append({
-                                    "path": item_path,
-                                    "type": item_data.get("type", ""),
-                                    "size": item_data.get("size"),
-                                })
+                                all_items.append(
+                                    {
+                                        "path": item_path,
+                                        "type": item_data.get("type", ""),
+                                        "size": item_data.get("size"),
+                                    }
+                                )
                         except json.JSONDecodeError:
                             continue
 
                 # Store in cache
                 await archive_cache.set(repository_id, archive_name, all_items)
-                logger.info("Cached archive contents",
-                           archive=archive_name,
-                           items_count=len(all_items))
+                logger.info(
+                    "Cached archive contents",
+                    archive=archive_name,
+                    items_count=len(all_items),
+                )
 
         # Helper function to calculate directory size
         def calculate_directory_size(dir_path: str) -> int:
@@ -308,7 +368,10 @@ async def get_archive_contents(
                 norm_item_path = item["path"].lstrip("/")
                 # Check if this item is under the directory
                 if search_prefix:
-                    if norm_item_path.startswith(search_prefix) or norm_item_path == norm_dir_path:
+                    if (
+                        norm_item_path.startswith(search_prefix)
+                        or norm_item_path == norm_dir_path
+                    ):
                         # Only count files, not directories themselves
                         if item.get("type") != "d" and item.get("size") is not None:
                             total_size += item.get("size", 0)
@@ -346,7 +409,7 @@ async def get_archive_contents(
                     continue
                 elif norm_item_path.startswith(norm_path + "/"):
                     # It's a child item
-                    relative_path = norm_item_path[len(norm_path) + 1:]
+                    relative_path = norm_item_path[len(norm_path) + 1 :]
                 else:
                     # Item is not inside the requested path
                     # This prevents the "phantom folder" bug where mismatched paths
@@ -369,12 +432,14 @@ async def get_archive_contents(
                     full_dir_path = f"{path}/{dir_name}" if path else dir_name
                     # Calculate directory size
                     dir_size = calculate_directory_size(full_dir_path)
-                    items.append({
-                        "name": dir_name,
-                        "type": "directory",
-                        "size": dir_size,
-                        "path": full_dir_path
-                    })
+                    items.append(
+                        {
+                            "name": dir_name,
+                            "type": "directory",
+                            "size": dir_size,
+                            "path": full_dir_path,
+                        }
+                    )
             else:
                 # This is an immediate child
                 if relative_path not in seen_paths:
@@ -384,46 +449,61 @@ async def get_archive_contents(
                     # For directories, calculate their size
                     if item_type == "d":
                         dir_size = calculate_directory_size(full_path)
-                        items.append({
-                            "name": relative_path,
-                            "type": "directory",
-                            "size": dir_size,
-                            "path": full_path
-                        })
+                        items.append(
+                            {
+                                "name": relative_path,
+                                "type": "directory",
+                                "size": dir_size,
+                                "path": full_path,
+                            }
+                        )
                     else:
                         # For files, use the actual size
-                        items.append({
-                            "name": relative_path,
-                            "type": "file",
-                            "size": item_size,
-                            "path": full_path
-                        })
+                        items.append(
+                            {
+                                "name": relative_path,
+                                "type": "file",
+                                "size": item_size,
+                                "path": full_path,
+                            }
+                        )
 
         # Sort: directories first, then by name
         items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
 
-        logger.info("Archive contents parsed",
-                   archive=archive_name,
-                   path=path,
-                   items_count=len(items),
-                   first_few_items=[item["name"] for item in items[:10]])
+        logger.info(
+            "Archive contents parsed",
+            archive=archive_name,
+            path=path,
+            items_count=len(items),
+            first_few_items=[item["name"] for item in items[:10]],
+        )
 
         return {"items": items}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to fetch archive contents", repository_id=repository_id,
-                    archive_name=archive_name, path=path, error=str(e))
+        logger.error(
+            "Failed to fetch archive contents",
+            repository_id=repository_id,
+            archive_name=archive_name,
+            path=path,
+            error=str(e),
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.restore.failedFetchArchiveContents", "params": {"error": str(e)}}
+            detail={
+                "key": "backend.errors.restore.failedFetchArchiveContents",
+                "params": {"error": str(e)},
+            },
         )
+
 
 @router.get("/jobs")
 async def get_restore_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-    limit: int = 50
+    limit: int = 50,
 ):
     """Get all restore jobs (most recent first)"""
     try:
@@ -436,7 +516,7 @@ async def get_restore_jobs(
                     visible_jobs.append(job)
                 continue
             try:
-                check_repo_access(db, current_user, repo, 'viewer')
+                check_repo_access(db, current_user, repo, "viewer")
                 visible_jobs.append(job)
             except HTTPException:
                 continue
@@ -460,7 +540,7 @@ async def get_restore_jobs(
                         "progress_percent": job.progress_percent or 0.0,
                         "restore_speed": job.restore_speed or 0.0,
                         "estimated_time_remaining": job.estimated_time_remaining or 0,
-                    }
+                    },
                 }
                 for job in visible_jobs
             ]
@@ -469,14 +549,15 @@ async def get_restore_jobs(
         logger.error("Failed to get restore jobs", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.restore.failedGetRestoreJobs"}
+            detail={"key": "backend.errors.restore.failedGetRestoreJobs"},
         )
+
 
 @router.get("/status/{job_id}")
 async def get_restore_status(
     job_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Get restore job status"""
     try:
@@ -484,11 +565,11 @@ async def get_restore_status(
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail={"key": "backend.errors.restore.restoreJobNotFound"}
+                detail={"key": "backend.errors.restore.restoreJobNotFound"},
             )
         repo = _get_restore_job_repository(db, job.repository)
         if repo:
-            check_repo_access(db, current_user, repo, 'operator')
+            check_repo_access(db, current_user, repo, "operator")
 
         return {
             "id": job.id,
@@ -507,7 +588,7 @@ async def get_restore_status(
                 "progress_percent": job.progress_percent or 0.0,
                 "restore_speed": job.restore_speed or 0.0,
                 "estimated_time_remaining": job.estimated_time_remaining or 0,
-            }
+            },
         }
     except HTTPException:
         raise
@@ -515,14 +596,15 @@ async def get_restore_status(
         logger.error("Failed to get restore status", job_id=job_id, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.restore.failedGetRestoreStatus"}
+            detail={"key": "backend.errors.restore.failedGetRestoreStatus"},
         )
+
 
 @router.post("/cancel/{job_id}")
 async def cancel_restore(
     job_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """Cancel a running restore job"""
     try:
@@ -530,35 +612,45 @@ async def cancel_restore(
         if not job:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail={"key": "backend.errors.restore.restoreJobNotFound"}
+                detail={"key": "backend.errors.restore.restoreJobNotFound"},
             )
         repo = _get_restore_job_repository(db, job.repository)
         if repo:
-            check_repo_access(db, current_user, repo, 'viewer')
+            check_repo_access(db, current_user, repo, "viewer")
 
         if job.status != "running":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"key": "backend.errors.restore.canOnlyCancelRunningJobs"}
+                detail={"key": "backend.errors.restore.canOnlyCancelRunningJobs"},
             )
 
         # Try to terminate the actual process
         from datetime import datetime
+
         process_killed = await restore_service.cancel_restore(job_id)
 
         # Update job status in database
         job.status = "cancelled"
         job.completed_at = datetime.now(timezone.utc)
         if process_killed:
-            job.error_message = json.dumps({"key": "backend.errors.restore.cancelledByUser"})
+            job.error_message = json.dumps(
+                {"key": "backend.errors.restore.cancelledByUser"}
+            )
         else:
-            job.error_message = json.dumps({"key": "backend.errors.restore.cancelledByUserProcessNotFound"})
+            job.error_message = json.dumps(
+                {"key": "backend.errors.restore.cancelledByUserProcessNotFound"}
+            )
         db.commit()
 
-        logger.info("Restore cancelled", job_id=job_id, user=current_user.username, process_killed=process_killed)
+        logger.info(
+            "Restore cancelled",
+            job_id=job_id,
+            user=current_user.username,
+            process_killed=process_killed,
+        )
         return {
             "message": "backend.success.restore.restoreCancelled",
-            "process_terminated": process_killed
+            "process_terminated": process_killed,
         }
     except HTTPException:
         raise  # Re-raise HTTP exceptions to preserve status codes
@@ -566,5 +658,5 @@ async def cancel_restore(
         logger.error("Failed to cancel restore", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.restore.failedCancelRestore"}
+            detail={"key": "backend.errors.restore.failedCancelRestore"},
         )

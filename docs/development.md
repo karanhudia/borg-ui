@@ -172,6 +172,19 @@ borg --version    # Borg 1.x
 borg2 --version   # Borg 2.x
 ```
 
+### Pre-commit Hooks
+
+Install the git hooks once per clone:
+
+```bash
+pre-commit install --hook-type pre-commit --hook-type pre-push
+```
+
+The configured hooks do this automatically:
+
+- On `pre-commit`: `ruff format`, `ruff check --fix`, and Prettier writes for frontend source files
+- On `pre-push`: backend Ruff lint/format checks plus frontend locale parity, typecheck, and ESLint
+
 ---
 
 ## Running Tests
@@ -184,6 +197,18 @@ pytest
 
 # With coverage
 pytest --cov=app --cov-report=html
+
+# Lint
+ruff check app tests
+
+# Format
+ruff format app tests
+
+# Verify formatting without changing files
+ruff format --check app tests
+
+# Run all configured git hooks manually
+pre-commit run --all-files
 ```
 
 Production-critical Borg work is tested primarily through API-driven flows. The current focus is real Borg 1 coverage for repository lifecycle, backup execution, archive operations, restore, maintenance, and schedule-triggered runs.

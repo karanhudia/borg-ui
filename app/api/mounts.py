@@ -18,12 +18,15 @@ from app.services.mount_service import mount_service, MountType, MountUnavailabl
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/api/mounts", tags=["mounts"], dependencies=[Depends(authorize_request)])
+router = APIRouter(
+    prefix="/api/mounts", tags=["mounts"], dependencies=[Depends(authorize_request)]
+)
 
 
 # Request/Response models
 class MountBorgRequest(BaseModel):
     """Request to mount a Borg repository or archive"""
+
     repository_id: int
     archive_name: Optional[str] = None
     mount_point: Optional[str] = None
@@ -31,6 +34,7 @@ class MountBorgRequest(BaseModel):
 
 class MountResponse(BaseModel):
     """Response after mounting"""
+
     mount_id: str
     mount_point: str
     mount_type: str
@@ -39,11 +43,13 @@ class MountResponse(BaseModel):
 
 class UnmountRequest(BaseModel):
     """Request to unmount"""
+
     force: bool = False
 
 
 class MountListItem(BaseModel):
     """Mount list item"""
+
     mount_id: str
     mount_point: str
     mount_type: str
@@ -62,7 +68,7 @@ def serialize_mount(mount_info) -> Dict[str, Any]:
         "created_at": serialize_datetime(mount_info.created_at),
         "job_id": mount_info.job_id,
         "repository_id": mount_info.repository_id,
-        "connection_id": mount_info.connection_id
+        "connection_id": mount_info.connection_id,
     }
 
 
@@ -70,7 +76,7 @@ def serialize_mount(mount_info) -> Dict[str, Any]:
 async def mount_borg_archive(
     request: MountBorgRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Mount a Borg repository or specific archive for browsing
@@ -95,14 +101,14 @@ async def mount_borg_archive(
             username=current_user.username,
             repository_id=request.repository_id,
             archive_name=request.archive_name,
-            mount_point=request.mount_point
+            mount_point=request.mount_point,
         )
 
         # Mount the archive
         mount_point, mount_id = await mount_service.mount_borg_archive(
             repository_id=request.repository_id,
             archive_name=request.archive_name,
-            mount_point=request.mount_point
+            mount_point=request.mount_point,
         )
 
         # Get mount info
@@ -110,21 +116,21 @@ async def mount_borg_archive(
         if not mount_info:
             raise HTTPException(
                 status_code=500,
-                detail={"key": "backend.errors.mounts.mountInfoNotFound"}
+                detail={"key": "backend.errors.mounts.mountInfoNotFound"},
             )
 
         logger.info(
             "Successfully mounted Borg archive for user",
             user_id=current_user.id,
             mount_id=mount_id,
-            mount_point=mount_point
+            mount_point=mount_point,
         )
 
         return MountResponse(
             mount_id=mount_id,
             mount_point=mount_point,
             mount_type=mount_info.mount_type.value,
-            source=mount_info.source
+            source=mount_info.source,
         )
 
     except MountUnavailableError as e:
@@ -132,30 +138,30 @@ async def mount_borg_archive(
             "Archive mounting unavailable",
             user_id=current_user.id,
             repository_id=request.repository_id,
-            error=str(e)
+            error=str(e),
         )
         raise HTTPException(
-            status_code=503,
-            detail={"key": e.error_key, "params": {"error": str(e)}}
+            status_code=503, detail={"key": e.error_key, "params": {"error": str(e)}}
         )
     except Exception as e:
         logger.error(
             "Failed to mount Borg archive",
             user_id=current_user.id,
             repository_id=request.repository_id,
-            error=str(e)
+            error=str(e),
         )
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.mounts.failedMountArchive", "params": {"error": str(e)}}
+            detail={
+                "key": "backend.errors.mounts.failedMountArchive",
+                "params": {"error": str(e)},
+            },
         )
 
 
 @router.post("/borg/unmount/{mount_id}")
 async def unmount_borg_archive(
-    mount_id: str,
-    force: bool = False,
-    current_user: User = Depends(get_current_user)
+    mount_id: str, force: bool = False, current_user: User = Depends(get_current_user)
 ):
     """
     Unmount a Borg archive
@@ -173,7 +179,7 @@ async def unmount_borg_archive(
             user_id=current_user.id,
             username=current_user.username,
             mount_id=mount_id,
-            force=force
+            force=force,
         )
 
         # Verify mount exists
@@ -181,14 +187,17 @@ async def unmount_borg_archive(
         if not mount_info:
             raise HTTPException(
                 status_code=404,
-                detail={"key": "backend.errors.mounts.mountNotFound", "params": {"mountId": mount_id}}
+                detail={
+                    "key": "backend.errors.mounts.mountNotFound",
+                    "params": {"mountId": mount_id},
+                },
             )
 
         # Only allow unmounting Borg mounts (not backup job SSHFS mounts)
         if mount_info.mount_type != MountType.BORG_ARCHIVE:
             raise HTTPException(
                 status_code=400,
-                detail={"key": "backend.errors.mounts.canOnlyUnmountBorgMounts"}
+                detail={"key": "backend.errors.mounts.canOnlyUnmountBorgMounts"},
             )
 
         # Unmount
@@ -197,13 +206,16 @@ async def unmount_borg_archive(
         if not success:
             raise HTTPException(
                 status_code=500,
-                detail={"key": "backend.errors.mounts.unmountFailed", "params": {"mountId": mount_id}}
+                detail={
+                    "key": "backend.errors.mounts.unmountFailed",
+                    "params": {"mountId": mount_id},
+                },
             )
 
         logger.info(
             "Successfully unmounted for user",
             user_id=current_user.id,
-            mount_id=mount_id
+            mount_id=mount_id,
         )
 
         return {"success": True, "mount_id": mount_id}
@@ -215,18 +227,20 @@ async def unmount_borg_archive(
             "Failed to unmount",
             user_id=current_user.id,
             mount_id=mount_id,
-            error=str(e)
+            error=str(e),
         )
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.mounts.failedUnmount", "params": {"error": str(e)}}
+            detail={
+                "key": "backend.errors.mounts.failedUnmount",
+                "params": {"error": str(e)},
+            },
         )
 
 
 @router.get("", response_model=List[MountListItem])
 async def list_mounts(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     List all active mounts
@@ -238,7 +252,7 @@ async def list_mounts(
         logger.info(
             "User listing mounts",
             user_id=current_user.id,
-            username=current_user.username
+            username=current_user.username,
         )
 
         from app.database.models import Repository
@@ -246,10 +260,7 @@ async def list_mounts(
         mounts = mount_service.list_mounts()
 
         # Filter to only user-facing mounts (Borg archives, not backup job SSHFS mounts)
-        user_mounts = [
-            m for m in mounts
-            if m.mount_type == MountType.BORG_ARCHIVE
-        ]
+        user_mounts = [m for m in mounts if m.mount_type == MountType.BORG_ARCHIVE]
 
         # Fetch repository names
         repo_ids = [m.repository_id for m in user_mounts if m.repository_id]
@@ -264,7 +275,7 @@ async def list_mounts(
             source = m.source
             if m.repository_id and m.repository_id in repositories:
                 # Replace path with repo name in source
-                parts = source.split('::')
+                parts = source.split("::")
                 if len(parts) > 1:
                     source = f"{repositories[m.repository_id]}::{parts[1]}"
 
@@ -275,29 +286,25 @@ async def list_mounts(
                     mount_type=m.mount_type.value,
                     source=source,
                     created_at=serialize_datetime(m.created_at),
-                    job_id=m.job_id
+                    job_id=m.job_id,
                 )
             )
 
         return result
 
     except Exception as e:
-        logger.error(
-            "Failed to list mounts",
-            user_id=current_user.id,
-            error=str(e)
-        )
+        logger.error("Failed to list mounts", user_id=current_user.id, error=str(e))
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.mounts.failedListMounts", "params": {"error": str(e)}}
+            detail={
+                "key": "backend.errors.mounts.failedListMounts",
+                "params": {"error": str(e)},
+            },
         )
 
 
 @router.get("/{mount_id}")
-async def get_mount_info(
-    mount_id: str,
-    current_user: User = Depends(get_current_user)
-):
+async def get_mount_info(mount_id: str, current_user: User = Depends(get_current_user)):
     """
     Get information about a specific mount
 
@@ -313,14 +320,20 @@ async def get_mount_info(
         if not mount_info:
             raise HTTPException(
                 status_code=404,
-                detail={"key": "backend.errors.mounts.mountNotFound", "params": {"mountId": mount_id}}
+                detail={
+                    "key": "backend.errors.mounts.mountNotFound",
+                    "params": {"mountId": mount_id},
+                },
             )
 
         # Only show user-facing mounts
         if mount_info.mount_type != MountType.BORG_ARCHIVE:
             raise HTTPException(
                 status_code=404,
-                detail={"key": "backend.errors.mounts.mountNotFound", "params": {"mountId": mount_id}}
+                detail={
+                    "key": "backend.errors.mounts.mountNotFound",
+                    "params": {"mountId": mount_id},
+                },
             )
 
         return serialize_mount(mount_info)
@@ -332,9 +345,12 @@ async def get_mount_info(
             "Failed to get mount info",
             user_id=current_user.id,
             mount_id=mount_id,
-            error=str(e)
+            error=str(e),
         )
         raise HTTPException(
             status_code=500,
-            detail={"key": "backend.errors.mounts.failedGetMountInfo", "params": {"error": str(e)}}
+            detail={
+                "key": "backend.errors.mounts.failedGetMountInfo",
+                "params": {"error": str(e)},
+            },
         )

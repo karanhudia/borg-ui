@@ -1,4 +1,5 @@
 """Add archive_name column to backup_jobs table"""
+
 from sqlalchemy import text
 import structlog
 

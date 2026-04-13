@@ -1,12 +1,13 @@
 """
 Unit tests for security functions
 """
+
 import pytest
 import sys
 import os
 
 # Add parent directory to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.core.security import get_password_hash, verify_password, create_access_token
 
