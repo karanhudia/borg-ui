@@ -40,18 +40,20 @@ export default function MountArchiveDialog({
         <Stack direction="row" spacing={2} alignItems="center">
           <HardDrive size={24} />
           <Box>
-            <Typography variant="h6" fontWeight={600}>
-              {t('dialogs.mountArchive.title')}
-            </Typography>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <Typography variant="h6" fontWeight={600}>
+                {t('dialogs.mountArchive.title')}
+              </Typography>
+              <Tooltip title={t('dialogs.mount.readOnlyInfo')} arrow placement="top">
+                <Box sx={{ display: 'flex', color: 'text.disabled', cursor: 'help' }}>
+                  <Info size={16} />
+                </Box>
+              </Tooltip>
+            </Stack>
             <Typography variant="body2" color="text.secondary">
               {archive?.name}
             </Typography>
           </Box>
-          <Tooltip title={t('dialogs.mount.readOnlyInfo')} arrow placement="top">
-            <Box sx={{ ml: 'auto', display: 'flex', color: 'text.disabled', cursor: 'help' }}>
-              <Info size={16} />
-            </Box>
-          </Tooltip>
         </Stack>
       </DialogTitle>
       <DialogContent>
