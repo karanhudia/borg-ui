@@ -1,7 +1,18 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Box, Typography, Chip, Tooltip } from '@mui/material'
-import { Eye, Download, Trash2, Lock, Play, AlertCircle, Clock, Calendar, User } from 'lucide-react'
+import {
+  Eye,
+  Download,
+  Trash2,
+  Lock,
+  Play,
+  AlertCircle,
+  Clock,
+  Calendar,
+  User,
+  FolderOpen,
+} from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import DataTable, { Column, ActionButton } from './DataTable'
@@ -17,6 +28,8 @@ import LockErrorDialog from './LockErrorDialog'
 import { repositoriesAPI } from '../services/api'
 import { BASE_PATH } from '@/utils/basePath'
 import { buildDownloadUrl } from '@/utils/downloadUrl'
+import ArchiveContentsDialog from './ArchiveContentsDialog'
+import type { Repository as FullRepository, Archive } from '../types'
 
 interface EmptyState {
   icon?: React.ReactNode
@@ -40,6 +53,7 @@ interface BackupJobsTableProps<T extends Job = Job> {
   // Actions configuration
   actions?: {
     viewLogs?: boolean
+    viewArchive?: boolean
     downloadLogs?: boolean
     cancel?: boolean
     errorInfo?: boolean
@@ -135,11 +149,11 @@ export const BackupJobsTable = <T extends Job = Job>({
   const queryClient = useQueryClient()
   const { t } = useTranslation()
 
-  // Fetch repositories (needed for break lock)
+  // Fetch repositories (needed for break lock and view archive)
   const { data: repositoriesData } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.list,
-    enabled: actions.breakLock !== false, // Only fetch if break lock action is enabled
+    enabled: actions.breakLock !== false || actions.viewArchive !== false,
   })
 
   // Internal state for dialogs
@@ -151,6 +165,10 @@ export const BackupJobsTable = <T extends Job = Job>({
     repositoryId: number
     repositoryName: string
     borgVersion?: 1 | 2
+  } | null>(null)
+  const [archiveView, setArchiveView] = useState<{
+    archive: Archive
+    repository: FullRepository
   } | null>(null)
 
   // Internal error handler (can be overridden by onErrorDetails prop)
@@ -500,6 +518,42 @@ export const BackupJobsTable = <T extends Job = Job>({
     })
   }
 
+  if (actions.viewArchive !== false) {
+    actionButtons.push({
+      icon: <FolderOpen size={18} />,
+      label: t('backupJobsTable.actions.viewArchive'),
+      onClick: (job) => {
+        if (!job.archive_name) return
+        // Find repository from available data
+        const allRepos = repositoriesData?.data?.repositories || repositories || []
+        const repoPath = job.repository_path || job.repository
+        const repo = allRepos.find(
+          (r: FullRepository) => r.path === repoPath || r.name === repoPath
+        ) as FullRepository | undefined
+        if (!repo) {
+          toast.error(t('backupJobsTable.toasts.repositoryNotFound'))
+          return
+        }
+        setArchiveView({
+          archive: {
+            id: job.archive_name,
+            archive: job.archive_name,
+            name: job.archive_name,
+            start: job.started_at || '',
+            time: job.started_at || '',
+          },
+          repository: repo,
+        })
+      },
+      color: 'success',
+      tooltip: t('backupJobsTable.actions.viewArchive'),
+      show: (job) =>
+        !!job.archive_name &&
+        (job.type === 'backup' || !job.type) &&
+        (job.status === 'completed' || job.status === 'completed_with_warnings'),
+    })
+  }
+
   if (actions.downloadLogs !== false) {
     actionButtons.push({
       icon: <Download size={18} />,
@@ -641,7 +695,14 @@ export const BackupJobsTable = <T extends Job = Job>({
         jobType={deleteJob?.type}
       />
 
-      {/* Lock Error Dialog */}
+      {/* Archive Contents Dialog */}
+      <ArchiveContentsDialog
+        open={!!archiveView}
+        archive={archiveView?.archive ?? null}
+        repository={archiveView?.repository ?? null}
+        onClose={() => setArchiveView(null)}
+      />
+
       {lockError && (
         <LockErrorDialog
           open={!!lockError}

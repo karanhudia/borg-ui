@@ -222,6 +222,9 @@ class BackupJob(Base):
     total_expected_size = Column(BigInteger, default=0)  # Total size of source directories (calculated before backup)
     estimated_time_remaining = Column(Integer, default=0)  # Estimated seconds remaining
 
+    # Archive name created by this backup
+    archive_name = Column(String, nullable=True)  # Name of the archive created (e.g., "manual-backup-2024-04-13T10:30:00")
+
     # Maintenance status tracking
     maintenance_status = Column(String, nullable=True)  # null, "running_prune", "prune_completed", "prune_failed", "running_compact", "compact_completed", "compact_failed", "maintenance_completed"
 

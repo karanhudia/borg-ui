@@ -1708,6 +1708,13 @@ class BackupService:
             if process.returncode is None:
                 await process.wait()
 
+            def publish_terminal_state(reason: str):
+                """Persist a terminal state before slow post-processing runs."""
+                if job.completed_at is None:
+                    job.completed_at = datetime.utcnow()
+                db.commit()
+                mqtt_service.sync_state_with_db(db, reason=reason)
+
             # Use the actual exit code from the process, or fall back to captured code from logs
             # This handles cases where borg sends the exit code in log messages but process.returncode is 0
             actual_returncode = process.returncode
@@ -1724,7 +1731,7 @@ class BackupService:
             # Modern: 0 = success, 3-99 = errors, 100-127 = warnings
             if job.status == "cancelled":
                 logger.info("Backup job was cancelled", job_id=job_id)
-                job.completed_at = datetime.utcnow()
+                publish_terminal_state("backup cancelled")
                 if repo_record and not skip_hooks:
                     logger.info("Executing post-backup hooks (cancelled case)", job_id=job_id, repository=repository)
                     hook_result = await self._execute_hooks(
@@ -1750,6 +1757,7 @@ class BackupService:
             elif actual_returncode == 0:
                 job.status = "completed"
                 job.progress = 100
+                publish_terminal_state("backup completed: borg create finished")
                 # Update archive statistics with final deduplicated size
                 await self._update_archive_stats(db, job_id, repository, archive_name, env)
                 # Update repository statistics after successful backup
@@ -1784,6 +1792,7 @@ class BackupService:
                         # Mark as failed if post-hooks fail
                         job.status = "failed"
                         job.error_message = json.dumps({"key": "backend.errors.service.postBackupHooksFailed", "params": {"failed": hook_result['scripts_failed'], "total": hook_result['scripts_executed']}})
+                        publish_terminal_state("backup failed after post-backup hooks")
 
                 # Send notification after post-hook completes
                 if post_hook_failed:
@@ -1815,6 +1824,7 @@ class BackupService:
                 job.progress = 100
                 job.error_message = json.dumps({"key": "backend.errors.service.backupCompletedWithWarning", "params": {"exitCode": actual_returncode}})
                 logger.warning("Backup completed with warning", job_id=job_id, exit_code=actual_returncode)
+                publish_terminal_state("backup completed with warnings: borg create finished")
                 # Update archive statistics with final deduplicated size
                 await self._update_archive_stats(db, job_id, repository, archive_name, env)
                 # Update repository statistics even with warnings
@@ -1849,6 +1859,7 @@ class BackupService:
                         # Mark as failed if post-hooks fail
                         job.status = "failed"
                         job.error_message = json.dumps({"key": "backend.errors.service.backupWarningPostHooksFailed", "params": {"failed": hook_result['scripts_failed'], "total": hook_result['scripts_executed']}})
+                        publish_terminal_state("backup failed after warning post-backup hooks")
 
                 # Send notification after post-hook completes (for warning case)
                 if post_hook_failed:
@@ -1909,6 +1920,7 @@ class BackupService:
                     ))
 
                 job.error_message = "\n".join(error_parts)
+                publish_terminal_state("backup failed")
 
                 # Log lock error for visibility
                 if lock_error_detected:

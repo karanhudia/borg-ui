@@ -187,6 +187,7 @@ async def get_all_backup_jobs(
                     "has_logs": bool(job.logs),  # Indicate if logs are available
                     "maintenance_status": job.maintenance_status,
                     "scheduled_job_id": job.scheduled_job_id,  # Include for filtering by schedule
+                    "archive_name": getattr(job, 'archive_name', None),
                     "progress_details": serialize_backup_progress_details(
                         job,
                         _get_job_repository(db, job.repository),

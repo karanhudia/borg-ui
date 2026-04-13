@@ -104,7 +104,7 @@ async def list_recent_activity(
                 'triggered_by': triggered_by,
                 'schedule_id': job.scheduled_job_id,
                 'schedule_name': schedule_name,
-                'archive_name': None,
+                'archive_name': getattr(job, 'archive_name', None),
                 'package_name': None,
                 'has_logs': bool(job.log_file_path or job.logs)
             })
