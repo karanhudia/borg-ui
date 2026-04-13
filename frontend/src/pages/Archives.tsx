@@ -554,10 +554,7 @@ const Archives: React.FC = () => {
               getBorgVersion(selectedRepository) === 2
                 ? (viewArchive?.id ?? archiveName)
                 : archiveName
-            window.open(
-              new BorgApiClient(selectedRepository).getDownloadUrl(archiveRef, filePath),
-              '_blank'
-            )
+            new BorgApiClient(selectedRepository).downloadFile(archiveRef, filePath)
           }
         }}
       />

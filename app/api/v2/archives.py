@@ -6,15 +6,14 @@ All routes accept a `repository` query param (the repo path).
 
 import json
 import os
-import tempfile
 import asyncio
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import structlog
 
+from app.api.archive_download import extract_file_download
 from app.database.database import get_db
 from app.database.models import User, Repository, DeleteArchiveJob
 from app.core.security import get_current_user, get_current_download_user
@@ -541,49 +540,34 @@ async def download_file_from_archive(
     """Extract and download a specific file from a Borg 2 archive."""
     repo = _get_v2_repo(repository, db)
     archive_selector = _get_archive_selector(archive)
-    temp_dir = tempfile.mkdtemp()
     try:
-        if _repo_needs_custom_env(repo):
-            with repository_borg_env(repo, db) as env:
-                result = await borg2.extract_archive(
-                    repo.path, archive_selector, [file_path], temp_dir,
-                    passphrase=repo.passphrase,
-                    remote_path=repo.remote_path,
-                    bypass_lock=repo.bypass_lock,
-                    env=env,
-                )
-        else:
-            result = await borg2.extract_archive(
-                repo.path, archive_selector, [file_path], temp_dir,
+        async def extract(temp_dir: str):
+            if _repo_needs_custom_env(repo):
+                with repository_borg_env(repo, db) as env:
+                    return await borg2.extract_archive(
+                        repo.path,
+                        archive_selector,
+                        [file_path],
+                        temp_dir,
+                        passphrase=repo.passphrase,
+                        remote_path=repo.remote_path,
+                        bypass_lock=repo.bypass_lock,
+                        env=env,
+                    )
+            return await borg2.extract_archive(
+                repo.path,
+                archive_selector,
+                [file_path],
+                temp_dir,
                 passphrase=repo.passphrase,
                 remote_path=repo.remote_path,
                 bypass_lock=repo.bypass_lock,
             )
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={"key": "backend.errors.archives.failedExtractFile",
-                        "params": {"error": result.get("stderr", "Unknown error")}},
-            )
-        extracted = os.path.join(temp_dir, file_path.lstrip("/"))
-        if not os.path.exists(extracted):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={"key": "backend.errors.archives.fileNotFoundAfterExtraction"},
-            )
-        return FileResponse(
-            path=extracted,
-            filename=os.path.basename(file_path),
-            media_type="application/octet-stream",
-        )
+
+        return await extract_file_download(file_path, extract)
     except HTTPException:
         raise
     except Exception as e:
-        try:
-            import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception:
-            pass
         raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
 
 

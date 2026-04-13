@@ -6,6 +6,21 @@ describe('BorgApiClient', () => {
     localStorage.clear()
   })
 
+  it('downloads files in the same tab', async () => {
+    const assignMock = vi.fn()
+    vi.spyOn(window.location, 'assign').mockImplementation(assignMock)
+    const clientModule = await import('./client')
+    const { BorgApiClient } = clientModule
+    const client = new BorgApiClient({ id: 9, borg_version: 2 } as never)
+
+    client.downloadFile('archive-2', '/srv/data.txt')
+
+    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('/api/v2/archives/download?'))
+    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('repository=9'))
+    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('archive=archive-2'))
+    expect(assignMock).toHaveBeenCalledWith(expect.stringContaining('file_path=%2Fsrv%2Fdata.txt'))
+  })
+
   it('uses v1 routes for non-v2 repositories', async () => {
     const clientModule = await import('./client')
     const getMock = vi.spyOn(clientModule.httpClient, 'get').mockResolvedValue({} as never)

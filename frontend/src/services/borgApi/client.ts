@@ -139,6 +139,10 @@ export class BorgApiClient {
     })
   }
 
+  downloadFile(archiveId: string, filePath: string) {
+    window.location.assign(this.getDownloadUrl(archiveId, filePath))
+  }
+
   // ── Backup operations ────────────────────────────────────────────────────
 
   runBackup(options: BackupOptions = {}) {

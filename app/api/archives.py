@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import structlog
 import json
 import os
-import tempfile
 from typing import List, Dict, Any
 
+from app.api.archive_download import extract_file_download
 from app.database.database import get_db
 from app.database.models import User, Repository, DeleteArchiveJob
 from app.core.security import (
@@ -300,7 +299,6 @@ async def download_file_from_archive(
 ):
     """Extract and download a specific file from an archive"""
     try:
-        # Get repository details for passphrase and remote_path
         repo = require_repository_access_by_path(
             db,
             current_user,
@@ -308,14 +306,10 @@ async def download_file_from_archive(
             'viewer',
             detail_key="backend.errors.archives.repositoryNotFound",
         )
-        # Create a temporary directory for extraction
-        temp_dir = tempfile.mkdtemp()
-
-        try:
+        async def extract(temp_dir: str):
             env, temp_key_file = _build_repo_env(repo, db)
-            # Extract the specific file using borg extract
             try:
-                result = await borg.extract_archive(
+                return await borg.extract_archive(
                     repo.path,
                     archive,
                     [file_path],
@@ -328,48 +322,14 @@ async def download_file_from_archive(
                 )
             finally:
                 cleanup_temp_key_file(temp_key_file)
-
-            if not result.get("success"):
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail={"key": "backend.errors.archives.failedExtractFile", "params": {"error": result.get('stderr', 'Unknown error')}}
-                )
-
-            # Find the extracted file
-            extracted_file_path = os.path.join(temp_dir, file_path.lstrip('/'))
-
-            if not os.path.exists(extracted_file_path):
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail={"key": "backend.errors.archives.fileNotFoundAfterExtraction"}
-                )
-
-            # Get the filename for the download
-            filename = os.path.basename(file_path)
-
-            # Return the file as a download
-            return FileResponse(
-                path=extracted_file_path,
-                filename=filename,
-                media_type='application/octet-stream',
-                background=None  # Don't delete temp file yet, will be handled by OS
-            )
-
-        except Exception as inner_e:
-            # Clean up temp directory on error
-            try:
-                import shutil
-                shutil.rmtree(temp_dir, ignore_errors=True)
-            except:
-                pass
-            raise inner_e
+        return await extract_file_download(file_path, extract)
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to download file from archive",
                     repository=repository,
-                    archive=archive_id,
+                    archive=archive,
                     file_path=file_path,
                     error=str(e))
         raise HTTPException(

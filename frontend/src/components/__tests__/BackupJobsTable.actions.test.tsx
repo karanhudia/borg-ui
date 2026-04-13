@@ -9,6 +9,7 @@ const { toastSuccess, toastError, buildDownloadUrlMock, repositoriesListMock } =
   buildDownloadUrlMock: vi.fn((path: string) => `https://example.test${path}`),
   repositoriesListMock: vi.fn(),
 }))
+const borgDownloadFileMock = vi.fn()
 
 vi.mock('react-hot-toast', async () => {
   const actual = await vi.importActual<typeof import('react-hot-toast')>('react-hot-toast')
@@ -118,10 +119,33 @@ vi.mock('../DeleteJobDialog', () => ({
     ) : null,
 }))
 
+vi.mock('../ArchiveContentsDialog', () => ({
+  default: ({
+    open,
+    onDownloadFile,
+  }: {
+    open: boolean
+    onDownloadFile?: (archiveName: string, filePath: string) => void
+  }) =>
+    open ? (
+      <button onClick={() => onDownloadFile?.('archive-77', '/srv/notes.txt')}>
+        Download File
+      </button>
+    ) : null,
+}))
+
 vi.mock('../../services/api', () => ({
   repositoriesAPI: {
     list: repositoriesListMock,
   },
+}))
+
+vi.mock('../../services/borgApi', () => ({
+  BorgApiClient: vi.fn(function MockBorgApiClient() {
+    return {
+      downloadFile: borgDownloadFileMock,
+    }
+  }),
 }))
 
 vi.mock('../../utils/downloadUrl', () => ({
@@ -197,6 +221,32 @@ describe('BackupJobsTable action internals', () => {
     appendSpy.mockRestore()
     removeSpy.mockRestore()
     clickSpy.mockRestore()
+  })
+
+  it('downloads archive files from the finished backup archive modal through BorgApiClient', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <BackupJobsTable
+        jobs={[
+          {
+            id: 11,
+            repository: '/backup/repo77',
+            repository_path: '/backup/repo77',
+            type: 'backup',
+            status: 'completed',
+            started_at: '2026-04-01T10:00:00Z',
+            archive_name: 'archive-77',
+          },
+        ]}
+        actions={{ viewArchive: true }}
+      />
+    )
+
+    await user.click(await screen.findByRole('button', { name: /view archive/i }))
+    await user.click(await screen.findByRole('button', { name: /download file/i }))
+
+    expect(borgDownloadFileMock).toHaveBeenCalledWith('archive-77', '/srv/notes.txt')
   })
 
   it('cancels running jobs through the activity API when using the built-in handler', async () => {

@@ -198,16 +198,14 @@ export const archivesAPI = {
     api.delete(
       `/archives/${encodeURIComponent(archive)}?repository=${encodeURIComponent(repository)}`
     ),
-  downloadFile: (repository: string, archive: string, filePath: string) => {
-    window.open(
+  downloadFile: (repository: string, archive: string, filePath: string) =>
+    window.location.assign(
       buildDownloadUrl('/archives/download', {
         repository,
         archive,
         file_path: filePath,
-      }),
-      '_blank'
-    )
-  },
+      })
+    ),
 }
 
 export const restoreAPI = {
