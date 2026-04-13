@@ -552,6 +552,75 @@ class TestBackupService:
         notifications.send_backup_success.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_execute_backup_publishes_terminal_status_before_stats_refresh(self, backup_service, test_db, tmp_path):
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+        (repo_path / "data").mkdir()
+        (repo_path / "config").write_text("[repository]\nversion = 1\n")
+        repo = Repository(
+            name="Repo",
+            path=str(repo_path),
+            encryption="none",
+            repository_type="local",
+            source_directories='["/data"]',
+            compression="lz4",
+        )
+        settings_row = SystemSettings(log_save_policy="all_jobs")
+        job = BackupJob(repository=repo.path, status="pending")
+        test_db.add_all([repo, settings_row, job])
+        test_db.commit()
+        test_db.refresh(job)
+
+        fake_process = FakeProcess(
+            returncode=0,
+            stdout_lines=[
+                '{"type":"archive_progress","original_size":1024,"compressed_size":512,"deduplicated_size":256,"nfiles":3,"finished":true}',
+            ],
+        )
+        notifications = MagicMock()
+        notifications.send_backup_start = AsyncMock()
+        notifications.send_backup_success = AsyncMock()
+        notifications.send_backup_warning = AsyncMock()
+        notifications.send_backup_failure = AsyncMock()
+
+        async def assert_terminal_state_before_stats(*args, **kwargs):
+            refreshed = test_db.query(BackupJob).filter(BackupJob.id == job.id).first()
+            assert refreshed.status == "completed"
+            assert refreshed.progress == 100
+            assert refreshed.completed_at is not None
+
+        with patch.object(backup_service, "_execute_hooks", AsyncMock(return_value={
+            "success": True,
+            "execution_logs": [],
+            "scripts_executed": 0,
+            "scripts_failed": 0,
+            "using_library": False,
+        })), patch.object(
+            backup_service, "_prepare_source_paths", AsyncMock(return_value=(["/data"], []))
+        ), patch.object(
+            backup_service, "_calculate_and_update_size_background", AsyncMock()
+        ), patch.object(
+            backup_service, "_update_archive_stats", AsyncMock(side_effect=assert_terminal_state_before_stats)
+        ), patch.object(
+            backup_service, "_update_repository_stats", AsyncMock()
+        ), patch("app.services.backup_service.resolve_repo_ssh_key_file", return_value=None), patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec", return_value=fake_process
+        ), patch(
+            "app.services.backup_service.asyncio.create_task", side_effect=_discard_background_task
+        ), patch(
+            "app.services.backup_service.notification_service", notifications
+        ), patch(
+            "app.services.backup_service.mqtt_service"
+        ) as mqtt:
+            mqtt.sync_state_with_db = Mock()
+            await backup_service.execute_backup(job.id, repo.path, db=test_db)
+
+        test_db.refresh(job)
+        assert job.status == "completed"
+        assert job.completed_at is not None
+        notifications.send_backup_success.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_execute_backup_warning_marks_warning_and_notifies_warning(self, backup_service, test_db, tmp_path):
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
