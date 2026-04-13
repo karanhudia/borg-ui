@@ -8,6 +8,7 @@ import json
 import os
 import asyncio
 import re
+import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -607,7 +608,12 @@ async def download_file_from_archive(
                 bypass_lock=repo.bypass_lock,
             )
 
-        return await extract_file_download(file_path, extract)
+        return await extract_file_download(
+            file_path,
+            extract,
+            temp_dir_factory=tempfile.mkdtemp,
+            path_exists=os.path.exists,
+        )
     except HTTPException:
         raise
     except Exception as e:

@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse  # noqa: F401 - retained as a patch target in download endpoint tests
 from sqlalchemy.orm import Session
 import structlog
 import json
 import os
+import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
 
 from app.api.archive_download import extract_file_download
 from app.database.database import get_db
@@ -347,7 +349,13 @@ async def download_file_from_archive(
             finally:
                 cleanup_temp_key_file(temp_key_file)
 
-        return await extract_file_download(file_path, extract)
+        return await extract_file_download(
+            file_path,
+            extract,
+            temp_dir_factory=tempfile.mkdtemp,
+            path_exists=os.path.exists,
+            file_response_factory=FileResponse,
+        )
 
     except HTTPException:
         raise
