@@ -96,11 +96,11 @@ export default function WizardStepRestoreDestination({
       </Box>
 
       {/* Destination Selection Cards */}
-      <Box sx={{ display: 'flex', gap: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
         <Card
           variant="outlined"
           sx={{
-            flex: 1,
+            flex: '1 1 200px',
             border: data.destinationType === 'local' ? 2 : 1,
             borderColor: data.destinationType === 'local' ? '#1976d2' : 'divider',
             boxShadow:
@@ -157,7 +157,7 @@ export default function WizardStepRestoreDestination({
           <Card
             variant="outlined"
             sx={{
-              flex: 1,
+              flex: '1 1 200px',
               border: data.destinationType === 'ssh' ? 2 : 1,
               borderColor: data.destinationType === 'ssh' ? '#1976d2' : 'divider',
               boxShadow:

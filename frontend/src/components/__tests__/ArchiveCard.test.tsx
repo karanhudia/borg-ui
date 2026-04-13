@@ -118,8 +118,8 @@ describe('ArchiveCard', () => {
   it('has hover effect styling', () => {
     const { container } = render(<ArchiveCard archive={mockArchive} {...mockHandlers} />)
 
-    // Card is now a Box — check the outermost element has a transition
+    // Row uses a transition for hover accent border
     const card = container.firstChild as HTMLElement
-    expect(card).toHaveStyle({ transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)' })
+    expect(card).toHaveStyle({ transition: 'all 150ms ease' })
   })
 })

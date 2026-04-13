@@ -53,16 +53,15 @@ export default function ArchiveCard({
         py: 1.125,
         borderBottom: '1px solid',
         borderBottomColor: isDark ? alpha('#fff', 0.04) : alpha('#000', 0.04),
-        borderLeft: '2px solid transparent',
         transition: 'all 150ms ease',
         '&:hover': {
           bgcolor: alpha(theme.palette.primary.main, isDark ? 0.04 : 0.03),
-          borderLeftColor: theme.palette.primary.main,
         },
         '@media (max-width: 767px)': {
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 0.75,
+          display: 'grid',
+          gridTemplateColumns: '1fr auto',
+          gridTemplateRows: 'auto auto',
+          gap: 0.5,
           px: 1.75,
           py: 1.25,
         },
@@ -81,18 +80,32 @@ export default function ArchiveCard({
           whiteSpace: 'nowrap',
           minWidth: 0,
           '@media (max-width: 767px)': {
-            width: '100%',
-            order: 1,
+            gridColumn: 1,
+            gridRow: 1,
           },
         }}
       >
         {archive.name}
       </Box>
 
-      {/* Type chip */}
-      <Box sx={{ '@media (max-width: 767px)': { order: 2 } }}>
+      {/* Type chip + Date (share row 2 on mobile) */}
+      <Box
+        sx={{
+          display: 'contents',
+          '@media (max-width: 767px)': {
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+            gridColumn: 1,
+            gridRow: 2,
+            minWidth: 0,
+          },
+        }}
+      >
         <Chip
-          label={isManual ? t('archivesList.manualAbbr', 'MAN') : t('archivesList.scheduledAbbr', 'SCH')}
+          label={
+            isManual ? t('archivesList.manualAbbr', 'MAN') : t('archivesList.scheduledAbbr', 'SCH')
+          }
           size="small"
           sx={{
             height: 18,
@@ -111,32 +124,29 @@ export default function ArchiveCard({
             '& .MuiChip-label': { px: 0.75 },
           }}
         />
-      </Box>
-
-      {/* Date */}
-      <Box
-        sx={{
-          fontSize: '0.72rem',
-          color: 'text.secondary',
-          whiteSpace: 'nowrap',
-          '@media (max-width: 767px)': {
-            order: 3,
-            flex: 1,
-          },
-        }}
-      >
-        {formatDate(archiveTime)}
+        <Box
+          component="span"
+          sx={{
+            fontSize: '0.72rem',
+            color: 'text.secondary',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {formatDate(archiveTime)}
+        </Box>
       </Box>
 
       {/* Actions — always visible */}
       <Box
         sx={{
           display: 'flex',
+          alignItems: 'center',
           gap: 0.25,
           justifyContent: 'flex-end',
           '@media (max-width: 767px)': {
-            order: 4,
-            ml: 'auto',
+            gridColumn: 2,
+            gridRow: '1 / 3',
+            alignSelf: 'center',
           },
         }}
       >

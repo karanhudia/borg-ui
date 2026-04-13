@@ -1279,7 +1279,8 @@
     "restore": "Ripristina",
     "browse": "Sfoglia",
     "mount": "Monta",
-    "delete": "Elimina"
+    "delete": "Elimina",
+    "viewContents": "Visualizza contenuto"
   },
   "archivesList": {
     "empty": "Nessun archivio trovato",
@@ -1299,7 +1300,13 @@
     "noScheduledArchives": "Nessun archivio pianificato trovato",
     "noManualArchives": "Nessun archivio manuale trovato",
     "tryDifferentFilter": "Prova a selezionare un filtro diverso",
-    "archivesPerPage": "Archivi per pagina:"
+    "archivesPerPage": "Archivi per pagina:",
+    "scheduledAbbr": "PIA",
+    "manualAbbr": "MAN",
+    "columnArchive": "Archivio",
+    "columnType": "Tipo",
+    "columnDate": "Data",
+    "columnActions": "Azioni"
   },
   "repositoryInfo": {
     "title": "Informazioni Repository",

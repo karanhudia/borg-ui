@@ -1279,7 +1279,8 @@
     "restore": "Restaurar",
     "browse": "Explorar",
     "mount": "Montar",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "viewContents": "Ver contenido"
   },
   "archivesList": {
     "empty": "No se encontraron archivos",
@@ -1299,7 +1300,13 @@
     "noScheduledArchives": "No se encontraron archivos programados",
     "noManualArchives": "No se encontraron archivos manuales",
     "tryDifferentFilter": "Intenta seleccionar un filtro diferente",
-    "archivesPerPage": "Archivos por página:"
+    "archivesPerPage": "Archivos por página:",
+    "scheduledAbbr": "PRG",
+    "manualAbbr": "MAN",
+    "columnArchive": "Archivo",
+    "columnType": "Tipo",
+    "columnDate": "Fecha",
+    "columnActions": "Acciones"
   },
   "repositoryInfo": {
     "title": "Información del repositorio",

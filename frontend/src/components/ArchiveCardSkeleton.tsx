@@ -19,7 +19,6 @@ export default function ArchiveCardSkeleton({ index = 0 }: ArchiveCardSkeletonPr
         py: 1.125,
         borderBottom: '1px solid',
         borderBottomColor: isDark ? alpha('#fff', 0.04) : alpha('#000', 0.04),
-        borderLeft: '2px solid transparent',
         opacity: 0,
         animation: 'archiveSkeletonFadeIn 0.35s ease forwards',
         animationDelay: `${index * 40}ms`,

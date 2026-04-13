@@ -1279,7 +1279,8 @@
     "restore": "Wiederherstellen",
     "browse": "Durchsuchen",
     "mount": "Einhängen",
-    "delete": "Löschen"
+    "delete": "Löschen",
+    "viewContents": "Inhalte anzeigen"
   },
   "archivesList": {
     "empty": "Keine Archive gefunden",
@@ -1299,7 +1300,13 @@
     "noScheduledArchives": "Keine geplanten Archive gefunden",
     "noManualArchives": "Keine manuellen Archive gefunden",
     "tryDifferentFilter": "Versuche einen anderen Filter auszuwählen",
-    "archivesPerPage": "Archive pro Seite:"
+    "archivesPerPage": "Archive pro Seite:",
+    "scheduledAbbr": "GEP",
+    "manualAbbr": "MAN",
+    "columnArchive": "Archiv",
+    "columnType": "Typ",
+    "columnDate": "Datum",
+    "columnActions": "Aktionen"
   },
   "repositoryInfo": {
     "title": "Repository-Informationen",

@@ -182,17 +182,6 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
         </Stack>
       )}
 
-      {job.status === 'completed_with_warnings' && job.error_message && (
-        <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
-          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-            {job.error_message
-              .split('\n')
-              .map((line) => translateBackendKey(line))
-              .join('\n')}
-          </Typography>
-        </Alert>
-      )}
-
       {job.status === 'failed' && job.error_message && (
         <Alert severity="error" sx={{ mb: 2 }}>
           <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>

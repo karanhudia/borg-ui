@@ -1279,7 +1279,8 @@
     "restore": "Restore",
     "browse": "Browse",
     "mount": "Mount",
-    "delete": "Delete"
+    "delete": "Delete",
+    "viewContents": "View Contents"
   },
   "archivesList": {
     "empty": "No archives found",
@@ -1299,7 +1300,13 @@
     "noScheduledArchives": "No scheduled archives found",
     "noManualArchives": "No manual archives found",
     "tryDifferentFilter": "Try selecting a different filter",
-    "archivesPerPage": "Archives per page:"
+    "archivesPerPage": "Archives per page:",
+    "scheduledAbbr": "SCH",
+    "manualAbbr": "MAN",
+    "columnArchive": "Archive",
+    "columnType": "Type",
+    "columnDate": "Date",
+    "columnActions": "Actions"
   },
   "repositoryInfo": {
     "title": "Repository Information",
