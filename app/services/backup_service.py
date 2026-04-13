@@ -1372,6 +1372,7 @@ class BackupService:
                 env=env,
                 cwd=backup_cwd  # Use cwd for SSH mounts to get cleaner archive paths
             )
+            process_wait_task = asyncio.get_running_loop().create_task(process.wait())
 
             # Track this process so it can be cancelled
             self.running_processes[job_id] = process
@@ -1428,8 +1429,12 @@ class BackupService:
             async def check_cancellation():
                 """Periodic heartbeat to check for cancellation independent of log output"""
                 nonlocal cancelled
-                while not cancelled and process.returncode is None:
-                    await asyncio.sleep(3)  # Check every 3 seconds (reduced from 1s for performance)
+                while not cancelled and not process_wait_task.done():
+                    try:
+                        await asyncio.wait_for(asyncio.shield(process_wait_task), timeout=3.0)
+                        break
+                    except asyncio.TimeoutError:
+                        pass
                     db.refresh(job)
                     if job.status == "cancelled":
                         logger.info("Backup job cancelled (heartbeat), terminating process", job_id=job_id)
@@ -1679,10 +1684,14 @@ class BackupService:
                 """Periodically sync state with DB for MQTT progress updates"""
                 nonlocal cancelled
                 try:
-                    while not cancelled and process.returncode is None:
+                    while not cancelled and not process_wait_task.done():
                         # Sync state with DB every 15 seconds to publish progress updates
                         mqtt_service.sync_state_with_db(db, reason="backup progress update")
-                        await asyncio.sleep(15)
+                        try:
+                            await asyncio.wait_for(asyncio.shield(process_wait_task), timeout=15.0)
+                            break
+                        except asyncio.TimeoutError:
+                            pass
                 except asyncio.CancelledError:
                     logger.info("Periodic sync state task cancelled", job_id=job_id)
                     raise
@@ -1705,8 +1714,8 @@ class BackupService:
                 raise
 
             # Wait for process to complete if not already terminated
-            if process.returncode is None:
-                await process.wait()
+            if not process_wait_task.done():
+                await process_wait_task
 
             def publish_terminal_state(reason: str):
                 """Persist a terminal state before slow post-processing runs."""
