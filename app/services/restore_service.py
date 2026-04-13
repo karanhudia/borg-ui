@@ -101,6 +101,7 @@ class RestoreService:
         """
         # Create new database session
         db_session = SessionLocal()
+        temp_key_file = None
 
         try:
             # Get job record

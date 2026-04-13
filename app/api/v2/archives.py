@@ -29,6 +29,14 @@ router = APIRouter(tags=["Archives v2"], dependencies=[require_feature("borg_v2"
 ARCHIVE_ID_RE = re.compile(r"^[0-9a-fA-F]{16,}$")
 
 
+def _repo_needs_custom_env(repo: Repository) -> bool:
+    return bool(
+        getattr(repo, "repository_type", None) == "ssh"
+        or getattr(repo, "connection_id", None)
+        or str(getattr(repo, "path", "")).startswith("ssh://")
+    )
+
+
 def _get_v2_repo(repository: str, db: Session) -> Repository:
     """Resolve and validate a Borg 2 repository by ID or path.
 
@@ -70,13 +78,21 @@ async def _resolve_archive_name(repo: Repository, archive_ref: str, db: Session)
     if not ARCHIVE_ID_RE.fullmatch(archive_ref):
         return archive_ref
 
-    with repository_borg_env(repo, db) as env:
+    if _repo_needs_custom_env(repo):
+        with repository_borg_env(repo, db) as env:
+            result = await borg2.list_archives(
+                repo.path,
+                passphrase=repo.passphrase,
+                remote_path=repo.remote_path,
+                bypass_lock=repo.bypass_lock,
+                env=env,
+            )
+    else:
         result = await borg2.list_archives(
             repo.path,
             passphrase=repo.passphrase,
             remote_path=repo.remote_path,
             bypass_lock=repo.bypass_lock,
-            env=env,
         )
     if not result["success"]:
         return archive_ref
@@ -149,13 +165,21 @@ async def list_archives(
 ):
     """List archives in a Borg 2 repository."""
     repo = _get_v2_repo(repository, db)
-    with repository_borg_env(repo, db) as env:
+    if _repo_needs_custom_env(repo):
+        with repository_borg_env(repo, db) as env:
+            result = await borg2.list_archives(
+                repo.path,
+                passphrase=repo.passphrase,
+                remote_path=repo.remote_path,
+                bypass_lock=repo.bypass_lock,
+                env=env,
+            )
+    else:
         result = await borg2.list_archives(
             repo.path,
             passphrase=repo.passphrase,
             remote_path=repo.remote_path,
             bypass_lock=repo.bypass_lock,
-            env=env,
         )
     if not result["success"]:
         raise HTTPException(
@@ -179,13 +203,21 @@ async def get_archive_info(
     """Get detailed information about a Borg 2 archive."""
     repo = _get_v2_repo(repository, db)
     archive_selector = _get_archive_selector(archive_id)
-    with repository_borg_env(repo, db) as env:
+    if _repo_needs_custom_env(repo):
+        with repository_borg_env(repo, db) as env:
+            result = await borg2.info_archive(
+                repo.path, archive_selector,
+                passphrase=repo.passphrase,
+                remote_path=repo.remote_path,
+                bypass_lock=repo.bypass_lock,
+                env=env,
+            )
+    else:
         result = await borg2.info_archive(
             repo.path, archive_selector,
             passphrase=repo.passphrase,
             remote_path=repo.remote_path,
             bypass_lock=repo.bypass_lock,
-            env=env,
         )
     if not result["success"]:
         raise HTTPException(
@@ -217,13 +249,21 @@ async def get_archive_info(
         }
 
         if include_files:
-            with repository_borg_env(repo, db) as env:
+            if _repo_needs_custom_env(repo):
+                with repository_borg_env(repo, db) as env:
+                    list_result = await borg2.list_archive_contents(
+                        repo.path, archive_selector,
+                        passphrase=repo.passphrase,
+                        remote_path=repo.remote_path,
+                        bypass_lock=repo.bypass_lock,
+                        env=env,
+                    )
+            else:
                 list_result = await borg2.list_archive_contents(
                     repo.path, archive_selector,
                     passphrase=repo.passphrase,
                     remote_path=repo.remote_path,
                     bypass_lock=repo.bypass_lock,
-                    env=env,
                 )
             if list_result["success"]:
                 files = []
@@ -284,7 +324,18 @@ async def get_archive_contents(
         )
         return {"items": cached_items}
 
-    with repository_borg_env(repo, db) as env:
+    if _repo_needs_custom_env(repo):
+        with repository_borg_env(repo, db) as env:
+            result = await borg2.list_archive_contents(
+                repo.path, archive_selector,
+                path=path,
+                passphrase=repo.passphrase,
+                remote_path=repo.remote_path,
+                bypass_lock=repo.bypass_lock,
+                browse_depth=_get_browse_depth(repo, path),
+                env=env,
+            )
+    else:
         result = await borg2.list_archive_contents(
             repo.path, archive_selector,
             path=path,
@@ -292,7 +343,6 @@ async def get_archive_contents(
             remote_path=repo.remote_path,
             bypass_lock=repo.bypass_lock,
             browse_depth=_get_browse_depth(repo, path),
-            env=env,
         )
     # borg2 list exits with 1 on warnings but stdout is still valid JSONL —
     # treat any result that produced stdout as usable.
@@ -493,13 +543,21 @@ async def download_file_from_archive(
     archive_selector = _get_archive_selector(archive)
     temp_dir = tempfile.mkdtemp()
     try:
-        with repository_borg_env(repo, db) as env:
+        if _repo_needs_custom_env(repo):
+            with repository_borg_env(repo, db) as env:
+                result = await borg2.extract_archive(
+                    repo.path, archive_selector, [file_path], temp_dir,
+                    passphrase=repo.passphrase,
+                    remote_path=repo.remote_path,
+                    bypass_lock=repo.bypass_lock,
+                    env=env,
+                )
+        else:
             result = await borg2.extract_archive(
                 repo.path, archive_selector, [file_path], temp_dir,
                 passphrase=repo.passphrase,
                 remote_path=repo.remote_path,
                 bypass_lock=repo.bypass_lock,
-                env=env,
             )
         if not result.get("success"):
             raise HTTPException(
