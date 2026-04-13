@@ -86,6 +86,20 @@ describe('BorgApiClient', () => {
     expect(downloadUrl).toContain('file_path=%2Fsrv%2Fdata.txt')
   })
 
+  it('passes max_duration to Borg 2 check routes', async () => {
+    const clientModule = await import('./client')
+    const postMock = vi.spyOn(clientModule.httpClient, 'post').mockResolvedValue({} as never)
+    const { BorgApiClient } = clientModule
+    const client = new BorgApiClient({ id: 11, borg_version: 2 } as never)
+
+    client.checkRepository(3600)
+
+    expect(postMock).toHaveBeenCalledWith('/v2/backup/check', {
+      repository_id: 11,
+      max_duration: 3600,
+    })
+  })
+
   it('routes static create and import calls by borg version', async () => {
     const clientModule = await import('./client')
     const postMock = vi.spyOn(clientModule.httpClient, 'post').mockResolvedValue({} as never)

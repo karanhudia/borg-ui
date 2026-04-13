@@ -861,6 +861,7 @@ export default function Repositories() {
       <CheckWarningDialog
         open={!!checkingRepository}
         repositoryName={checkingRepository?.name || ''}
+        borgVersion={checkingRepository?.borg_version}
         onConfirm={handleConfirmCheck}
         onCancel={() => setCheckingRepository(null)}
         isLoading={checkRepositoryMutation.isPending}

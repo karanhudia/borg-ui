@@ -1065,7 +1065,12 @@
       "progressTrackingDetail": "Puoi monitorare i progressi in tempo reale. Nota: Le operazioni di controllo non possono essere annullate una volta avviate.",
       "otherReposAccessible": "Gli altri repository rimarranno accessibili durante questa operazione.",
       "maxDurationLabel": "Durata Massima (secondi)",
-      "maxDurationHelper": "Tempo massimo per l'operazione di controllo. Predefinito: 3600 secondi (1 ora). Imposta a 0 per illimitato."
+      "maxDurationHelper": "Tempo massimo per l'operazione di controllo. Predefinito: 3600 secondi (1 ora). Imposta a 0 per illimitato.",
+      "maxDurationHelperBorg2": "Con Borg 2, impostare un limite di tempo esegue un controllo parziale del solo repository. Usa 0 per un controllo completo di repository e archivi.",
+      "maxDurationHelperBorg2Short": "I controlli temporizzati di Borg 2 coprono solo la fase del repository. Usa 0 per un controllo completo.",
+      "borg2InlineNotice": "I controlli temporizzati di Borg 2 riguardano solo il repository.",
+      "borg2TooltipTitle": "Come funzionano i controlli temporizzati di Borg 2",
+      "borg2PartialCheckNotice": "Borg 2 supporta i controlli con limite di tempo solo per la fase del repository. I controlli di coerenza degli archivi vengono eseguiti solo quando la durata è impostata a 0."
     },
     "compactWarning": {
       "title": "Compatta Repository",
@@ -1222,6 +1227,7 @@
       "duplicate": "Duplica",
       "delete": "Elimina",
       "viewLogs": "Visualizza Log",
+      "viewArchive": "Visualizza Archivio",
       "downloadLogs": "Scarica Log",
       "errorDetails": "Dettagli Errore",
       "cancel": "Annulla",
@@ -1878,6 +1884,7 @@
     "checkScheduleLabel": "Pianificazione Controllo",
     "maxDuration": "Durata Massima (secondi)",
     "maxDurationHint": "Limite di tempo per l'operazione di controllo (3600 = 1 ora)",
+    "maxDurationHintBorg2": "Con Borg 2, un limite di tempo esegue un controllo parziale del solo repository (3600 = 1 ora). Usa 0 per includere i controlli degli archivi.",
     "notificationHint": "Le impostazioni di notifica per i job di controllo possono essere configurate in Impostazioni → Notifiche",
     "noScheduledChecks": "Nessun controllo pianificato",
     "noScheduledChecksDesc": "Configura controlli automatici del repository per garantire l'integrità dei dati",

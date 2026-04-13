@@ -1065,7 +1065,12 @@
       "progressTrackingDetail": "You can monitor progress in real-time. Note: Check operations cannot be cancelled once started.",
       "otherReposAccessible": "Other repositories will remain accessible during this operation.",
       "maxDurationLabel": "Max Duration (seconds)",
-      "maxDurationHelper": "Maximum time for the check operation. Default: 3600 seconds (1 hour). Set to 0 for unlimited."
+      "maxDurationHelper": "Maximum time for the check operation. Default: 3600 seconds (1 hour). Set to 0 for unlimited.",
+      "maxDurationHelperBorg2": "For Borg 2, setting a time limit runs a partial repository-only check. Use 0 for a full repository and archive check.",
+      "maxDurationHelperBorg2Short": "Timed Borg 2 checks cover the repository phase only. Use 0 for a full check.",
+      "borg2InlineNotice": "Timed Borg 2 checks are repository-only.",
+      "borg2TooltipTitle": "How Borg 2 timed checks work",
+      "borg2PartialCheckNotice": "Borg 2 only supports time-limited checks for the repository phase. Archive consistency checks run only when the duration is set to 0."
     },
     "compactWarning": {
       "title": "Compact Repository",
@@ -1222,6 +1227,7 @@
       "duplicate": "Duplicate",
       "delete": "Delete",
       "viewLogs": "View Logs",
+      "viewArchive": "View Archive",
       "downloadLogs": "Download Logs",
       "errorDetails": "Error Details",
       "cancel": "Cancel",
@@ -1878,6 +1884,7 @@
     "checkScheduleLabel": "Check Schedule",
     "maxDuration": "Max Duration (seconds)",
     "maxDurationHint": "Time limit for check operation (3600 = 1 hour)",
+    "maxDurationHintBorg2": "For Borg 2, a time limit runs a partial repository-only check (3600 = 1 hour). Use 0 to include archive checks.",
     "notificationHint": "Notification settings for check jobs can be configured in Settings → Notifications",
     "noScheduledChecks": "No scheduled checks",
     "noScheduledChecksDesc": "Configure automatic repository checks to ensure data integrity",

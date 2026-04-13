@@ -1065,7 +1065,12 @@
       "progressTrackingDetail": "Puedes monitorizar el progreso en tiempo real. Nota: Las operaciones de verificación no se pueden cancelar una vez iniciadas.",
       "otherReposAccessible": "Otros repositorios seguirán siendo accesibles durante esta operación.",
       "maxDurationLabel": "Duración máxima (segundos)",
-      "maxDurationHelper": "Tiempo máximo para la operación de verificación. Predeterminado: 3600 segundos (1 hora). Establece 0 para ilimitado."
+      "maxDurationHelper": "Tiempo máximo para la operación de verificación. Predeterminado: 3600 segundos (1 hora). Establece 0 para ilimitado.",
+      "maxDurationHelperBorg2": "En Borg 2, establecer un límite de tiempo ejecuta una comprobación parcial solo del repositorio. Usa 0 para una comprobación completa de repositorio y archivos.",
+      "maxDurationHelperBorg2Short": "Las comprobaciones temporizadas de Borg 2 solo cubren la fase del repositorio. Usa 0 para una comprobación completa.",
+      "borg2InlineNotice": "Las comprobaciones temporizadas de Borg 2 son solo del repositorio.",
+      "borg2TooltipTitle": "Cómo funcionan las comprobaciones temporizadas de Borg 2",
+      "borg2PartialCheckNotice": "Borg 2 solo admite comprobaciones con límite de tiempo para la fase del repositorio. Las comprobaciones de consistencia de archivos solo se ejecutan cuando la duración se establece en 0."
     },
     "compactWarning": {
       "title": "Compactar repositorio",
@@ -1222,6 +1227,7 @@
       "duplicate": "Duplicar",
       "delete": "Eliminar",
       "viewLogs": "Ver registros",
+      "viewArchive": "Ver archivo",
       "downloadLogs": "Descargar registros",
       "errorDetails": "Detalles del error",
       "cancel": "Cancelar",
@@ -1878,6 +1884,7 @@
     "checkScheduleLabel": "Programación de comprobación",
     "maxDuration": "Duración máxima (segundos)",
     "maxDurationHint": "Límite de tiempo para la operación de comprobación (3600 = 1 hora)",
+    "maxDurationHintBorg2": "En Borg 2, un límite de tiempo ejecuta una comprobación parcial solo del repositorio (3600 = 1 hora). Usa 0 para incluir comprobaciones de archivos.",
     "notificationHint": "La configuración de notificaciones para trabajos de comprobación se puede configurar en Configuración → Notificaciones",
     "noScheduledChecks": "Sin comprobaciones programadas",
     "noScheduledChecksDesc": "Configura comprobaciones automáticas del repositorio para garantizar la integridad de los datos",

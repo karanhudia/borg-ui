@@ -250,7 +250,7 @@ class TestV2BackupRoutes:
             mock_start.return_value = CheckJob(id=7, repository_id=repo.id, status="running")
             response = test_client.post(
                 "/api/v2/backup/check",
-                json={"repository_id": repo.id},
+                json={"repository_id": repo.id, "max_duration": 3600},
                 headers=admin_headers,
             )
 
@@ -258,6 +258,7 @@ class TestV2BackupRoutes:
         assert response.json()["status"] == "running"
         assert response.json()["message"] == "backend.success.repo.checkJobStarted"
         mock_start.assert_called_once()
+        assert mock_start.call_args.kwargs["extra_fields"] == {"max_duration": 3600}
 
     def test_backup_check_rejects_duplicate_running_job(self, test_client: TestClient, admin_headers, test_db):
         _enable_borg_v2(test_db)

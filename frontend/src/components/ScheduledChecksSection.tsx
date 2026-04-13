@@ -27,6 +27,7 @@ import { convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
 import CronBuilderDialog from './CronBuilderDialog'
 import ScheduleCheckCard from './ScheduleCheckCard'
 import { usePermissions } from '../hooks/usePermissions'
+import type { Repository } from '../types'
 
 interface ScheduledCheck {
   repository_id: number
@@ -67,6 +68,10 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   const manageableRepositories = repositories.filter((repo: { id: number }) =>
     canDo(repo.id, 'maintenance')
   )
+  const selectedRepository = manageableRepositories.find(
+    (repo: Repository) => repo.id === selectedRepositoryId
+  ) as Repository | undefined
+  const isSelectedRepoBorg2 = selectedRepository?.borg_version === 2
 
   // Fetch scheduled checks for all repositories
   const { data: scheduledChecks, isLoading } = useQuery({
@@ -425,7 +430,11 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               type="number"
               value={formData.max_duration}
               onChange={(e) => setFormData({ ...formData, max_duration: Number(e.target.value) })}
-              helperText={t('scheduledChecks.maxDurationHint')}
+              helperText={
+                isSelectedRepoBorg2
+                  ? t('scheduledChecks.maxDurationHintBorg2')
+                  : t('scheduledChecks.maxDurationHint')
+              }
               fullWidth
               inputProps={{ min: 60 }}
             />

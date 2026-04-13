@@ -55,6 +55,7 @@ class CompactV2Request(BaseModel):
 
 class CheckV2Request(BaseModel):
     repository_id: int
+    max_duration: Optional[int] = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -240,6 +241,9 @@ async def check_repository(
         error_key="backend.errors.repo.checkAlreadyRunning",
         dispatcher=lambda job: check_v2_service.execute_check(job.id, repo.id),
         status="running",
+        extra_fields={
+            "max_duration": data.max_duration,
+        },
     )
 
     logger.info("Borg2 check job created", job_id=check_job.id, repository_id=repo.id,

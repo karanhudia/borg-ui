@@ -1065,7 +1065,12 @@
       "progressTrackingDetail": "Du kannst den Fortschritt in Echtzeit überwachen. Hinweis: Überprüfungsvorgänge können nach dem Start nicht abgebrochen werden.",
       "otherReposAccessible": "Andere Repositories bleiben während dieser Operation zugänglich.",
       "maxDurationLabel": "Maximale Dauer (Sekunden)",
-      "maxDurationHelper": "Maximale Zeit für die Überprüfung. Standard: 3600 Sekunden (1 Stunde). 0 für unbegrenzt."
+      "maxDurationHelper": "Maximale Zeit für die Überprüfung. Standard: 3600 Sekunden (1 Stunde). 0 für unbegrenzt.",
+      "maxDurationHelperBorg2": "Bei Borg 2 führt ein Zeitlimit zu einer partiellen, nur auf das Repository bezogenen Prüfung. Verwende 0 für eine vollständige Repository- und Archivprüfung.",
+      "maxDurationHelperBorg2Short": "Zeitbegrenzte Borg-2-Prüfungen decken nur die Repository-Phase ab. Verwende 0 für eine vollständige Prüfung.",
+      "borg2InlineNotice": "Zeitbegrenzte Borg-2-Prüfungen sind nur repository-basiert.",
+      "borg2TooltipTitle": "So funktionieren zeitbegrenzte Borg-2-Prüfungen",
+      "borg2PartialCheckNotice": "Borg 2 unterstützt zeitbegrenzte Prüfungen nur für die Repository-Phase. Archiv-Konsistenzprüfungen laufen nur, wenn die Dauer auf 0 gesetzt ist."
     },
     "compactWarning": {
       "title": "Repository komprimieren",
@@ -1222,6 +1227,7 @@
       "duplicate": "Duplizieren",
       "delete": "Löschen",
       "viewLogs": "Protokolle anzeigen",
+      "viewArchive": "Archiv anzeigen",
       "downloadLogs": "Protokolle herunterladen",
       "errorDetails": "Fehlerdetails",
       "cancel": "Abbrechen",
@@ -1878,6 +1884,7 @@
     "checkScheduleLabel": "Überprüfungszeitplan",
     "maxDuration": "Maximale Dauer (Sekunden)",
     "maxDurationHint": "Zeitlimit für den Überprüfungsvorgang (3600 = 1 Stunde)",
+    "maxDurationHintBorg2": "Bei Borg 2 startet ein Zeitlimit eine partielle Repository-Prüfung (3600 = 1 Stunde). Verwende 0, um Archivprüfungen einzuschließen.",
     "notificationHint": "Benachrichtigungseinstellungen für Überprüfungsaufgaben können unter Einstellungen → Benachrichtigungen konfiguriert werden",
     "noScheduledChecks": "Keine geplanten Überprüfungen",
     "noScheduledChecksDesc": "Konfiguriere automatische Repository-Überprüfungen, um die Datenintegrität sicherzustellen",

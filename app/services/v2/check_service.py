@@ -78,6 +78,8 @@ class CheckV2Service:
 
             borg_cmd = _get_borg2_binary()
             cmd = [borg_cmd, "--info", "-r", repo.path, "check", "--progress", "--log-json"]
+            if job.max_duration and job.max_duration > 0:
+                cmd.extend(["--repository-only", "--max-duration", str(job.max_duration)])
             if repo.remote_path:
                 cmd.extend(["--remote-path", repo.remote_path])
 
@@ -193,7 +195,10 @@ class CheckV2Service:
             elif process.returncode == 0:
                 job.status = "completed"
                 job.progress = 100
-                job.progress_message = "Check completed successfully"
+                if job.max_duration and job.max_duration > 0:
+                    job.progress_message = "Partial repository check completed successfully"
+                else:
+                    job.progress_message = "Check completed successfully"
                 job.completed_at = datetime.utcnow()
                 repo.last_check = datetime.utcnow()
                 logger.info("Borg2 check completed", job_id=job_id)
