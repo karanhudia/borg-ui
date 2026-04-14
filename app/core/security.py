@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 import jwt
 from jwt.exceptions import PyJWTError as JWTError
 import bcrypt
@@ -13,7 +13,10 @@ from cryptography.fernet import InvalidToken
 import base64
 
 from app.config import settings
-from app.core.permissions import GLOBAL_ROLE_RANK, REPOSITORY_ROLE_RANK
+from app.core.permissions import (
+    GLOBAL_ROLE_RANK,
+    REPOSITORY_ROLE_RANK,
+)
 from app.database.database import get_db
 from app.database.models import Repository, User, UserRepositoryPermission
 
@@ -24,6 +27,11 @@ REPO_ROLE_RANK = REPOSITORY_ROLE_RANK
 
 # JWT token security
 security = HTTPBearer()
+
+LOGIN_CHALLENGE_TOKEN_TYPE = "login_challenge"
+TOTP_SETUP_TOKEN_TYPE = "totp_setup"
+LOGIN_CHALLENGE_EXPIRE_MINUTES = 10
+TOTP_SETUP_EXPIRE_MINUTES = 15
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -55,16 +63,95 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-def verify_token(token: str) -> Optional[str]:
-    """Verify and decode a JWT token"""
+def _create_scoped_token(
+    token_type: str, data: dict[str, Any], expires_delta: timedelta
+) -> str:
+    payload = data.copy()
+    payload.update(
+        {
+            "type": token_type,
+            "exp": datetime.now(timezone.utc) + expires_delta,
+        }
+    )
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+
+
+def _verify_scoped_token(token: str, expected_type: str) -> Optional[dict[str, Any]]:
     try:
         payload = jwt.decode(
             token, settings.secret_key, algorithms=[settings.algorithm]
         )
-        username: str = payload.get("sub")
-        if username is None:
-            return None
-        return username
+    except JWTError:
+        return None
+
+    if payload.get("type") != expected_type:
+        return None
+    return payload
+
+
+def create_login_challenge_token(username: str) -> str:
+    return _create_scoped_token(
+        LOGIN_CHALLENGE_TOKEN_TYPE,
+        {"sub": username},
+        timedelta(minutes=LOGIN_CHALLENGE_EXPIRE_MINUTES),
+    )
+
+
+def verify_login_challenge_token(token: str) -> Optional[str]:
+    payload = _verify_scoped_token(token, LOGIN_CHALLENGE_TOKEN_TYPE)
+    username = payload.get("sub") if payload else None
+    return username if isinstance(username, str) and username else None
+
+
+def create_totp_setup_token(
+    username: str, secret: str, recovery_codes: list[str]
+) -> str:
+    return _create_scoped_token(
+        TOTP_SETUP_TOKEN_TYPE,
+        {
+            "sub": username,
+            "secret": secret,
+            "recovery_codes": recovery_codes,
+        },
+        timedelta(minutes=TOTP_SETUP_EXPIRE_MINUTES),
+    )
+
+
+def verify_totp_setup_token(token: str) -> Optional[dict[str, Any]]:
+    payload = _verify_scoped_token(token, TOTP_SETUP_TOKEN_TYPE)
+    if not payload:
+        return None
+
+    username = payload.get("sub")
+    secret = payload.get("secret")
+    recovery_codes = payload.get("recovery_codes")
+    if not isinstance(username, str) or not isinstance(secret, str):
+        return None
+    if not isinstance(recovery_codes, list) or not all(
+        isinstance(code, str) for code in recovery_codes
+    ):
+        return None
+
+    return {
+        "username": username,
+        "secret": secret,
+        "recovery_codes": recovery_codes,
+    }
+
+
+def verify_token(token: str) -> Optional[str]:
+    """Verify and decode a JWT token"""
+    payload = decode_token(token)
+    if payload is None:
+        return None
+    username = payload.get("sub")
+    return username if isinstance(username, str) else None
+
+
+def decode_token(token: str) -> Optional[dict[str, Any]]:
+    """Decode a JWT token and return its payload if valid."""
+    try:
+        return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except JWTError:
         return None
 
@@ -129,10 +216,14 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
                     logger.debug("Found username in alternative header", header=header)
                     break
 
-    # If no username found in any header, use default user for direct access
     if not username:
-        logger.info("No proxy header found, using default user for direct access")
-        username = "admin"  # Default user when accessing directly without proxy
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "key": "backend.errors.auth.proxyHeaderRequired",
+                "params": {"header": settings.proxy_auth_header},
+            },
+        )
 
     # Normalize username
     username = username.strip().lower()
@@ -169,9 +260,6 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled"
         )
-
-    # Update last login timestamp
-    from datetime import timezone
 
     user.last_login = datetime.now(timezone.utc)
     db.commit()

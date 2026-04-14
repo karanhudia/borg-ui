@@ -1,3 +1,20 @@
+type PublicKeyCredentialDescriptorJSON = Record<string, unknown> & {
+  id: string
+}
+
+type RegistrationOptionsJSON = Record<string, unknown> & {
+  challenge: string
+  user: Record<string, unknown> & {
+    id: string
+  }
+  excludeCredentials?: PublicKeyCredentialDescriptorJSON[]
+}
+
+type AuthenticationOptionsJSON = Record<string, unknown> & {
+  challenge: string
+  allowCredentials?: PublicKeyCredentialDescriptorJSON[]
+}
+
 function base64UrlToBuffer(value: string): ArrayBuffer {
   const padding = '='.repeat((4 - (value.length % 4)) % 4)
   const normalized = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -99,7 +116,7 @@ function serializeCredential(credential: PublicKeyCredential) {
 export function prepareRegistrationOptions(
   options: Record<string, unknown>
 ): PublicKeyCredentialCreationOptions {
-  const publicKey = options as Record<string, any>
+  const publicKey = options as RegistrationOptionsJSON
 
   return {
     ...publicKey,
@@ -108,7 +125,7 @@ export function prepareRegistrationOptions(
       ...publicKey.user,
       id: base64UrlToBuffer(publicKey.user.id),
     },
-    excludeCredentials: publicKey.excludeCredentials?.map((credential: Record<string, any>) => ({
+    excludeCredentials: publicKey.excludeCredentials?.map((credential) => ({
       ...credential,
       id: base64UrlToBuffer(credential.id),
     })),
@@ -118,12 +135,12 @@ export function prepareRegistrationOptions(
 export function prepareAuthenticationOptions(
   options: Record<string, unknown>
 ): PublicKeyCredentialRequestOptions {
-  const publicKey = options as Record<string, any>
+  const publicKey = options as AuthenticationOptionsJSON
 
   return {
     ...publicKey,
     challenge: base64UrlToBuffer(publicKey.challenge),
-    allowCredentials: publicKey.allowCredentials?.map((credential: Record<string, any>) => ({
+    allowCredentials: publicKey.allowCredentials?.map((credential) => ({
       ...credential,
       id: base64UrlToBuffer(credential.id),
     })),
