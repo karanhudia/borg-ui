@@ -32,6 +32,9 @@ export default function AccountTabNavigation({
       <Tabs
         value={tabs.findIndex((tab) => tab.value === value)}
         onChange={(_, nextValue) => onChange(tabs[nextValue].value)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
         sx={{ px: { xs: 1, md: 2 } }}
       >
         {tabs.map((tab) => {
