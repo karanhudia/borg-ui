@@ -157,6 +157,35 @@ describe('ArchiveContentsDialog', () => {
     })
   })
 
+  it('hides folder size when the backend omits it', async () => {
+    mockGetArchiveContents.mockResolvedValue({
+      data: {
+        items: [
+          {
+            name: 'documents',
+            path: '/documents',
+            type: 'directory',
+            size: null,
+          },
+        ],
+      },
+    } as AxiosResponse)
+
+    renderWithProviders(
+      <ArchiveContentsDialog
+        open={true}
+        archive={mockArchive}
+        repository={mockRepository}
+        {...mockHandlers}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('documents')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('0 B')).not.toBeInTheDocument()
+  })
+
   it('navigates into folders when clicked', async () => {
     mockGetArchiveContents.mockResolvedValue({
       data: {

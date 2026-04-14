@@ -16,7 +16,9 @@ from app.core.security import (
     require_repository_access_by_path,
 )
 from app.services.restore_service import restore_service
+from app.services.archive_browse_service import build_browse_items, parse_archive_items
 from app.services.cache_service import archive_cache
+from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.borg_env import (
     get_standard_ssh_opts,
@@ -44,6 +46,26 @@ def _build_repo_env(repo: Repository, db: Session):
     ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
     env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
     return env, temp_key_file
+
+
+def _get_restore_result_cache_key(archive_name: str, path: str, fast_v2: bool) -> str:
+    normalized_path = path.strip("/")
+    if fast_v2:
+        if normalized_path:
+            return f"{archive_name}::path::{normalized_path}::fast::result"
+        return f"{archive_name}::fast::result"
+    if not normalized_path:
+        return f"{archive_name}::restore-root"
+    return f"{archive_name}::restore::{normalized_path}"
+
+
+def _get_restore_raw_cache_key(archive_name: str, path: str, fast_v2: bool) -> str:
+    normalized_path = path.strip("/")
+    if fast_v2:
+        if normalized_path:
+            return f"{archive_name}::path::{normalized_path}::fast::raw"
+        return f"{archive_name}::fast::raw"
+    return archive_name
 
 
 class RestoreRequest(BaseModel):
@@ -297,9 +319,27 @@ async def get_archive_contents(
                 detail={"key": "backend.errors.restore.repositoryNotFound"},
             )
         check_repo_access(db, current_user, repository, "viewer")
+        fast_v2_browse = (repository.borg_version or 1) == 2 and is_fast_browse_enabled(
+            db
+        )
+        normalized_path = path.lstrip("/") if path else ""
+        result_cache_key = _get_restore_result_cache_key(
+            archive_name, path, fast_v2_browse
+        )
+        raw_cache_key = _get_restore_raw_cache_key(archive_name, path, fast_v2_browse)
+
+        cached_result = await archive_cache.get(repository_id, result_cache_key)
+        if cached_result is not None:
+            logger.info(
+                "Using cached restore archive browse result",
+                archive=archive_name,
+                path=path,
+                items_count=len(cached_result),
+            )
+            return {"items": cached_result}
 
         # Check cache first
-        all_items = await archive_cache.get(repository_id, archive_name)
+        all_items = await archive_cache.get(repository_id, raw_cache_key)
 
         if all_items is not None:
             logger.info(
@@ -308,12 +348,16 @@ async def get_archive_contents(
                 items_count=len(all_items),
             )
         else:
-            # If not in cache, fetch from borg (fetch ALL items, not just the requested path)
+            # Default browse fetches the whole archive for accurate recursive folder sizes.
+            # Fast Borg2 browse fetches only the requested subtree and hides folder sizes.
             env, temp_key_file = _build_repo_env(repository, db)
             try:
                 result = await BorgRouter(repository).list_archive_contents(
                     archive=archive_name,
-                    path="",  # Always fetch all items for caching
+                    path=path if fast_v2_browse else "",
+                    browse_depth=get_browse_depth(repository, path)
+                    if fast_v2_browse
+                    else None,
                     env=env,
                 )
             finally:
@@ -331,145 +375,25 @@ async def get_archive_contents(
                     archive=archive_name,
                     total_lines=len(lines),
                 )
-
-                for line in lines:
-                    if line:
-                        try:
-                            item_data = json.loads(line)
-                            item_path = item_data.get("path", "")
-                            if item_path:
-                                all_items.append(
-                                    {
-                                        "path": item_path,
-                                        "type": item_data.get("type", ""),
-                                        "size": item_data.get("size"),
-                                    }
-                                )
-                        except json.JSONDecodeError:
-                            continue
+                all_items = parse_archive_items(result["stdout"])
 
                 # Store in cache
-                await archive_cache.set(repository_id, archive_name, all_items)
+                await archive_cache.set(
+                    repository_id,
+                    raw_cache_key,
+                    all_items,
+                )
                 logger.info(
                     "Cached archive contents",
                     archive=archive_name,
                     items_count=len(all_items),
                 )
 
-        # Helper function to calculate directory size
-        def calculate_directory_size(dir_path: str) -> int:
-            """Calculate total size of all files in a directory recursively"""
-            total_size = 0
-            # Normalize the directory path
-            norm_dir_path = dir_path.lstrip("/") if dir_path else ""
-            search_prefix = f"{norm_dir_path}/" if norm_dir_path else ""
-
-            for item in all_items:
-                norm_item_path = item["path"].lstrip("/")
-                # Check if this item is under the directory
-                if search_prefix:
-                    if (
-                        norm_item_path.startswith(search_prefix)
-                        or norm_item_path == norm_dir_path
-                    ):
-                        # Only count files, not directories themselves
-                        if item.get("type") != "d" and item.get("size") is not None:
-                            total_size += item.get("size", 0)
-                else:
-                    # Root level - count all files
-                    if item.get("type") != "d" and item.get("size") is not None:
-                        total_size += item.get("size", 0)
-
-            return total_size
-
-        # Now filter the cached items for the requested path
-        items = []
-        seen_paths = set()
-
-        for item in all_items:
-            item_path = item["path"]
-            item_type = item.get("type", "")
-            item_size = item.get("size")
-
-            # Skip empty paths
-            if not item_path:
-                continue
-
-            # Normalize paths to handle potential leading slash mismatches
-            # Some archives might store paths with leading slashes, others without
-            norm_path = path.lstrip("/") if path else ""
-            norm_item_path = item_path.lstrip("/")
-
-            relative_path = ""
-
-            if norm_path:
-                # If browsing a subdirectory, only show items inside it
-                if norm_item_path == norm_path:
-                    # Skip the directory itself
-                    continue
-                elif norm_item_path.startswith(norm_path + "/"):
-                    # It's a child item
-                    relative_path = norm_item_path[len(norm_path) + 1 :]
-                else:
-                    # Item is not inside the requested path
-                    # This prevents the "phantom folder" bug where mismatched paths
-                    # were treated as root-level items (e.g. showing "mnt" inside "/mnt/user/...")
-                    continue
-            else:
-                # Root directory browsing
-                relative_path = norm_item_path
-
-            # Skip if empty
-            if not relative_path:
-                continue
-
-            # Only show immediate children
-            if "/" in relative_path:
-                # This is a nested item, show only the directory
-                dir_name = relative_path.split("/")[0]
-                if dir_name not in seen_paths:
-                    seen_paths.add(dir_name)
-                    full_dir_path = f"{path}/{dir_name}" if path else dir_name
-                    # Calculate directory size
-                    dir_size = calculate_directory_size(full_dir_path)
-                    items.append(
-                        {
-                            "name": dir_name,
-                            "type": "directory",
-                            "size": dir_size,
-                            "path": full_dir_path,
-                        }
-                    )
-            else:
-                # This is an immediate child
-                if relative_path not in seen_paths:
-                    seen_paths.add(relative_path)
-                    full_path = f"{path}/{relative_path}" if path else relative_path
-
-                    # For directories, calculate their size
-                    if item_type == "d":
-                        dir_size = calculate_directory_size(full_path)
-                        items.append(
-                            {
-                                "name": relative_path,
-                                "type": "directory",
-                                "size": dir_size,
-                                "path": full_path,
-                            }
-                        )
-                    else:
-                        # For files, use the actual size
-                        items.append(
-                            {
-                                "name": relative_path,
-                                "type": "file",
-                                "size": item_size,
-                                "path": full_path,
-                            }
-                        )
-
-        # Sort: directories first, then by name
-        items.sort(key=lambda x: (x["type"] != "directory", x["name"].lower()))
+        items = build_browse_items(
+            all_items,
+            path,
+            hide_directory_sizes=fast_v2_browse,
+        )
 
         logger.info(
             "Archive contents parsed",
@@ -478,6 +402,8 @@ async def get_archive_contents(
             items_count=len(items),
             first_few_items=[item["name"] for item in items[:10]],
         )
+
+        await archive_cache.set(repository_id, result_cache_key, items)
 
         return {"items": items}
     except HTTPException:

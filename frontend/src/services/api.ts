@@ -100,6 +100,7 @@ export interface SystemSettings {
   metrics_require_auth?: boolean
   metrics_token?: string
   metrics_token_set?: boolean
+  borg2_fast_browse_beta_enabled?: boolean
   [key: string]: unknown
 }
 

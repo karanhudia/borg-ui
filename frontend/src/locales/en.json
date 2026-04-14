@@ -1580,6 +1580,9 @@
     "showLegacyRestoreTabTitle": "Show Legacy Restore Tab",
     "showLegacyRestoreTabLabel": "Show the dedicated Restore tab in navigation",
     "showLegacyRestoreTabDescription": "Enable this to access the legacy Restore tab. Restore functionality is now integrated into the Archives page, but this option allows you to use the old interface if preferred.",
+    "borg2FastBrowseTitle": "Fast Borg 2 Archive Browse",
+    "enableBorg2FastBrowse": "Enable faster Borg 2 archive browsing",
+    "borg2FastBrowseDescription": "Uses depth-limited browsing for Borg 2 repositories to reduce payload size and improve responsiveness on very large archives. Folder sizes are hidden in this mode because recursive totals are not available.",
     "mqttIntegrationTitle": "MQTT Integration",
     "enableMqtt": "Enable MQTT",
     "mqttIntegrationDescription": "Activates MQTT integration in the UI.",
@@ -2193,10 +2196,12 @@
   },
   "repositoryStatsGrid": {
     "totalArchives": "Total Archives",
-    "spaceUsed": "Space Used",
-    "spaceSaved": "Space Saved",
-    "compression": "Compression",
-    "deduplication": "Deduplication"
+    "originalSize": "Total Archive Size",
+    "originalSizeTooltip": "Total logical size of all backed up data across all archives before compression and deduplication",
+    "compressedSize": "Compressed Archive Size",
+    "compressedSizeTooltip": "Total size of all archive data after compression, before deduplication across all archives",
+    "repositorySize": "Repository Size",
+    "repositorySizeTooltip": "Actual storage used by the repository on disk after compression and deduplication across all archives"
   },
   "upcomingJobs": {
     "title": "Upcoming Jobs (Next 24 Hours)",

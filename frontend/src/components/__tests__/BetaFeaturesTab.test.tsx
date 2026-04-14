@@ -30,6 +30,7 @@ describe('BetaFeaturesTab', () => {
       bypass_lock_on_info: false,
       bypass_lock_on_list: false,
       show_restore_tab: false,
+      borg2_fast_browse_beta_enabled: false,
       mqtt_beta_enabled: false,
     },
   }
@@ -98,12 +99,20 @@ describe('BetaFeaturesTab', () => {
       })
     })
 
+    it('renders Borg 2 fast browse toggle', async () => {
+      renderWithProviders(<BetaFeaturesTab />)
+      await waitFor(() => {
+        expect(screen.getByText('Enable faster Borg 2 archive browsing')).toBeInTheDocument()
+      })
+    })
+
     it('renders section headers', async () => {
       renderWithProviders(<BetaFeaturesTab />)
       await waitFor(() => {
         expect(screen.getByText('Bypass Locks for Info Commands')).toBeInTheDocument()
         expect(screen.getByText('Bypass Locks for List Commands')).toBeInTheDocument()
         expect(screen.getByText('Show Legacy Restore Tab')).toBeInTheDocument()
+        expect(screen.getByText('Fast Borg 2 Archive Browse')).toBeInTheDocument()
         expect(screen.getByText('MQTT Integration')).toBeInTheDocument()
       })
     })
@@ -340,6 +349,58 @@ describe('BetaFeaturesTab', () => {
     })
   })
 
+  describe('Borg 2 Fast Browse', () => {
+    it('toggle is initially unchecked', async () => {
+      renderWithProviders(<BetaFeaturesTab />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Enable faster Borg 2 archive browsing')).toBeInTheDocument()
+      })
+
+      const switches = screen.getAllByRole('switch')
+      const fastBrowseSwitch = switches[3]
+      expect(fastBrowseSwitch).not.toBeChecked()
+    })
+
+    it('can enable Borg 2 fast browse', async () => {
+      const user = userEvent.setup()
+      vi.mocked(settingsAPI.updateSystemSettings).mockResolvedValue({} as AxiosResponse)
+
+      renderWithProviders(<BetaFeaturesTab />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Enable faster Borg 2 archive browsing')).toBeInTheDocument()
+      })
+
+      const switches = screen.getAllByRole('switch')
+      const fastBrowseSwitch = switches.find((sw) =>
+        sw.parentElement?.textContent?.includes('Enable faster Borg 2 archive browsing')
+      )
+
+      if (fastBrowseSwitch) {
+        await user.click(fastBrowseSwitch)
+
+        await waitFor(() => {
+          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+            borg2_fast_browse_beta_enabled: true,
+          })
+        })
+      }
+    })
+
+    it('shows Borg 2 fast browse description', async () => {
+      renderWithProviders(<BetaFeaturesTab />)
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            /Uses depth-limited browsing for Borg 2 repositories to reduce payload size and improve responsiveness on very large archives/
+          )
+        ).toBeInTheDocument()
+      })
+    })
+  })
+
   describe('MQTT Beta', () => {
     it('toggle is initially unchecked', async () => {
       renderWithProviders(<BetaFeaturesTab />)
@@ -349,7 +410,7 @@ describe('BetaFeaturesTab', () => {
       })
 
       const switches = screen.getAllByRole('switch')
-      const mqttSwitch = switches[3] // Fourth switch is MQTT
+      const mqttSwitch = switches[4] // Fifth switch is MQTT
       expect(mqttSwitch).not.toBeChecked()
     })
 
@@ -425,6 +486,7 @@ describe('BetaFeaturesTab', () => {
           bypass_lock_on_info: true,
           bypass_lock_on_list: true,
           show_restore_tab: true,
+          borg2_fast_browse_beta_enabled: true,
           mqtt_beta_enabled: true,
         },
       }
@@ -534,6 +596,7 @@ describe('BetaFeaturesTab', () => {
           data: {
             settings: {
               ...mockSystemSettings.settings,
+              borg2_fast_browse_beta_enabled: false,
               mqtt_beta_enabled: true,
             },
           },

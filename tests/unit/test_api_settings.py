@@ -90,6 +90,27 @@ class TestSystemSettings:
         assert payload["metrics_enabled"] is False
         assert payload["metrics_require_auth"] is False
         assert payload["metrics_token_set"] is False
+        assert payload["borg2_fast_browse_beta_enabled"] is False
+
+    def test_update_system_settings_persists_borg2_fast_browse_beta_enabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "borg2_fast_browse_beta_enabled": True,
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(settings)
+        assert settings.borg2_fast_browse_beta_enabled is True
 
     def test_update_system_settings_persists_metrics_configuration(
         self, test_client: TestClient, admin_headers, test_db

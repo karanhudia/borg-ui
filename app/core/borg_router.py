@@ -12,7 +12,7 @@ Use BorgRouter instead so the routing stays in one place.
 
 import structlog
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 logger = structlog.get_logger()
 
@@ -272,17 +272,23 @@ class BorgRouter:
         archive: str,
         path: str = "",
         max_lines: int = 1_000_000,
+        browse_depth: Optional[int] = None,
         env: dict = None,
     ) -> dict:
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
 
-            return await restore_v2_service.list_archive_contents(
-                repo=self.repo,
-                archive=archive,
-                path=path,
-                max_lines=max_lines,
-            )
+            kwargs = {
+                "repo": self.repo,
+                "archive": archive,
+                "path": path,
+                "max_lines": max_lines,
+            }
+            if browse_depth is not None:
+                kwargs["browse_depth"] = browse_depth
+            if env is not None:
+                kwargs["env"] = env
+            return await restore_v2_service.list_archive_contents(**kwargs)
 
         from app.core.borg import borg
 

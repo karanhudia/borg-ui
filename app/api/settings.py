@@ -128,6 +128,7 @@ class SystemSettingsUpdate(BaseModel):
     show_restore_tab: Optional[bool] = (
         None  # Show legacy Restore tab in navigation (beta)
     )
+    borg2_fast_browse_beta_enabled: Optional[bool] = None
     stats_refresh_interval_minutes: Optional[int] = (
         None  # How often to refresh repository stats (0 = disabled)
     )
@@ -286,6 +287,7 @@ async def get_system_settings(
                 "bypass_lock_on_info": settings.bypass_lock_on_info,
                 "bypass_lock_on_list": settings.bypass_lock_on_list,
                 "show_restore_tab": settings.show_restore_tab,
+                "borg2_fast_browse_beta_enabled": settings.borg2_fast_browse_beta_enabled,
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes
                 if settings.stats_refresh_interval_minutes is not None
                 else 60,
@@ -456,6 +458,10 @@ async def update_system_settings(
             settings.bypass_lock_on_list = settings_update.bypass_lock_on_list
         if settings_update.show_restore_tab is not None:
             settings.show_restore_tab = settings_update.show_restore_tab
+        if settings_update.borg2_fast_browse_beta_enabled is not None:
+            settings.borg2_fast_browse_beta_enabled = (
+                settings_update.borg2_fast_browse_beta_enabled
+            )
         if settings_update.stats_refresh_interval_minutes is not None:
             settings.stats_refresh_interval_minutes = (
                 settings_update.stats_refresh_interval_minutes

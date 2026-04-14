@@ -63,6 +63,7 @@ class RestoreV2Service:
         archive: str,
         path: str = "",
         max_lines: int = 1_000_000,
+        browse_depth: Optional[int] = None,
         env: Optional[dict] = None,
     ) -> dict:
         kwargs = {
@@ -74,6 +75,8 @@ class RestoreV2Service:
             "max_lines": max_lines,
             "bypass_lock": repo.bypass_lock,
         }
+        if browse_depth is not None:
+            kwargs["browse_depth"] = browse_depth
         if env is not None:
             kwargs["env"] = env
         return await borg2.list_archive_contents(**kwargs)

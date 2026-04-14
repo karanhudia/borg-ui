@@ -14,6 +14,7 @@ const BetaFeaturesTab: React.FC = () => {
   const [bypassLockOnInfo, setBypassLockOnInfo] = useState(false)
   const [bypassLockOnList, setBypassLockOnList] = useState(false)
   const [showRestoreTab, setShowRestoreTab] = useState(false)
+  const [borg2FastBrowseBetaEnabled, setBorg2FastBrowseBetaEnabled] = useState(false)
   const [mqttBetaEnabled, setMqttBetaEnabled] = useState(false)
 
   // Fetch system settings
@@ -33,6 +34,7 @@ const BetaFeaturesTab: React.FC = () => {
       setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
       setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
       setShowRestoreTab(systemSettings.show_restore_tab ?? false)
+      setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
       setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
     }
   }, [systemSettings])
@@ -43,6 +45,7 @@ const BetaFeaturesTab: React.FC = () => {
       bypass_lock_on_info?: boolean
       bypass_lock_on_list?: boolean
       show_restore_tab?: boolean
+      borg2_fast_browse_beta_enabled?: boolean
       mqtt_beta_enabled?: boolean
     }) => {
       await settingsAPI.updateSystemSettings(settings)
@@ -58,6 +61,7 @@ const BetaFeaturesTab: React.FC = () => {
         setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
         setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
         setShowRestoreTab(systemSettings.show_restore_tab ?? false)
+        setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
         setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
       }
     },
@@ -91,6 +95,16 @@ const BetaFeaturesTab: React.FC = () => {
       enabled: checked,
     })
     saveSettingsMutation.mutate({ show_restore_tab: checked })
+  }
+
+  const handleBorg2FastBrowseToggle = (checked: boolean) => {
+    setBorg2FastBrowseBetaEnabled(checked)
+    trackSettings(EventAction.EDIT, {
+      section: 'beta_features',
+      feature: 'borg2_fast_browse_beta_enabled',
+      enabled: checked,
+    })
+    saveSettingsMutation.mutate({ borg2_fast_browse_beta_enabled: checked })
   }
 
   const handleMQTTBetaToggle = (checked: boolean) => {
@@ -198,6 +212,31 @@ const BetaFeaturesTab: React.FC = () => {
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {t('betaFeatures.showLegacyRestoreTabDescription')}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
+
+          <Box>
+            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+              {t('betaFeatures.borg2FastBrowseTitle')}
+            </Typography>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={borg2FastBrowseBetaEnabled}
+                  onChange={(e) => handleBorg2FastBrowseToggle(e.target.checked)}
+                  disabled={saveSettingsMutation.isPending}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">{t('betaFeatures.enableBorg2FastBrowse')}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('betaFeatures.borg2FastBrowseDescription')}
                   </Typography>
                 </Box>
               }

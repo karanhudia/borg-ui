@@ -30,7 +30,7 @@ interface ArchiveContentsDialogProps {
 interface FileItem {
   name: string
   path: string
-  size: number
+  size?: number | null
   mtime?: string
   type: string
 }
@@ -38,7 +38,7 @@ interface FileItem {
 interface RawFileItem {
   name: string
   path: string
-  size: number
+  size?: number | null
   type: string
   mtime?: string
 }
@@ -272,9 +272,11 @@ export default function ArchiveContentsDialog({
                                 {folder.name}
                               </Typography>
                             </Stack>
-                            <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                              {formatBytesUtil(folder.size)}
-                            </Typography>
+                            {folder.size !== null && folder.size !== undefined ? (
+                              <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                                {formatBytesUtil(folder.size)}
+                              </Typography>
+                            ) : null}
                           </Box>
                         ))}
 

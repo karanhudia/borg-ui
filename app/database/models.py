@@ -684,6 +684,9 @@ class SystemSettings(Base):
     show_restore_tab = Column(
         Boolean, default=False, nullable=False
     )  # Show legacy Restore tab in navigation (beta feature)
+    borg2_fast_browse_beta_enabled = Column(
+        Boolean, default=False, nullable=False
+    )  # Use depth-limited Borg 2 archive browse and hide directory sizes
     mqtt_beta_enabled = Column(
         Boolean, default=False, nullable=False
     )  # Expose MQTT under beta features

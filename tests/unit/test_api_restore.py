@@ -5,7 +5,7 @@ Comprehensive unit tests for restore API endpoints
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import Repository, RestoreJob
+from app.database.models import Repository, RestoreJob, SystemSettings
 from tests.unit.helpers import assert_auth_required
 
 
@@ -166,6 +166,43 @@ class TestRestoreContents:
             )
 
             assert response.status_code == 200
+
+    def test_list_contents_uses_fast_borg2_browse_mode_when_enabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Borg2 Repo",
+            path="/test/repo-v2",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+            source_directories='["/local/Users/karanhudia/Downloads"]',
+        )
+        settings = SystemSettings(borg2_fast_browse_beta_enabled=True)
+        test_db.add(settings)
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.restore.BorgRouter.list_archive_contents", new_callable=AsyncMock
+        ) as mock_list:
+            mock_list.return_value = {
+                "success": True,
+                "stdout": '{"path": "docs/sub", "type": "d"}\n{"path": "docs/sub/file.txt", "type": "f", "size": 12}\n',
+            }
+
+            response = test_client.get(
+                f"/api/restore/contents/{repo.id}/test-archive?path=docs",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        mock_list.assert_awaited_once()
+        _, kwargs = mock_list.await_args
+        assert kwargs["path"] == "docs"
+        assert kwargs["browse_depth"] == 5
+        assert response.json()["items"][0]["size"] is None
 
     def test_list_contents_uses_repo_ssh_environment(
         self, test_client: TestClient, admin_headers, test_db

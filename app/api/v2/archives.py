@@ -20,7 +20,13 @@ from app.database.models import User, Repository, DeleteArchiveJob
 from app.core.security import get_current_user, get_current_download_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2
+from app.services.archive_browse_service import (
+    build_browse_items,
+    collect_browse_paths,
+    parse_archive_items,
+)
 from app.services.cache_service import archive_cache
+from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
 from app.utils.borg_env import repository_borg_env
 
 logger = structlog.get_logger()
@@ -134,29 +140,8 @@ def _get_browse_cache_key(archive_ref: str, path: str) -> str:
     return f"{archive_key}::path::{normalized_path}"
 
 
-def _get_archive_root_depth(repo: Repository) -> int:
-    if not repo.source_directories:
-        return 1
-    try:
-        source_directories = json.loads(repo.source_directories)
-    except (json.JSONDecodeError, TypeError):
-        return 1
-
-    depths = []
-    for source_dir in source_directories:
-        if not isinstance(source_dir, str):
-            continue
-        parts = [part for part in source_dir.strip("/").split("/") if part]
-        if parts:
-            depths.append(len(parts))
-
-    return min(depths) if depths else 1
-
-
-def _get_browse_depth(repo: Repository, path: str) -> int:
-    normalized_path = path.strip("/")
-    path_depth = len([part for part in normalized_path.split("/") if part])
-    return _get_archive_root_depth(repo) + path_depth
+def _get_browse_raw_cache_key(archive_ref: str) -> str:
+    return f"{_get_archive_selector(archive_ref)}::raw"
 
 
 # ── List archives ──────────────────────────────────────────────────────────────
@@ -324,7 +309,11 @@ async def get_archive_contents(
     """
     repo = _get_v2_repo(repository, db)
     archive_selector = _get_archive_selector(archive_id)
+    fast_browse = is_fast_browse_enabled(db)
     cache_key = _get_browse_cache_key(archive_id, path)
+    if fast_browse:
+        cache_key = f"{cache_key}::fast"
+    raw_cache_key = _get_browse_raw_cache_key(archive_id)
 
     cached_items = await archive_cache.get(repo.id, cache_key)
     if cached_items is not None:
@@ -337,162 +326,78 @@ async def get_archive_contents(
         )
         return {"items": cached_items}
 
-    if _repo_needs_custom_env(repo):
-        with repository_borg_env(repo, db) as env:
-            result = await borg2.list_archive_contents(
-                repo.path,
-                archive_selector,
-                path=path,
-                passphrase=repo.passphrase,
-                remote_path=repo.remote_path,
-                bypass_lock=repo.bypass_lock,
-                browse_depth=_get_browse_depth(repo, path),
-                env=env,
-            )
-    else:
-        result = await borg2.list_archive_contents(
-            repo.path,
-            archive_selector,
-            path=path,
-            passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
-            bypass_lock=repo.bypass_lock,
-            browse_depth=_get_browse_depth(repo, path),
-        )
-    # borg2 list exits with 1 on warnings but stdout is still valid JSONL —
-    # treat any result that produced stdout as usable.
-    stdout = result.get("stdout", "")
-    logger.info(
-        "borg2 list_archive_contents result",
-        archive=archive_selector,
-        path=path,
-        return_code=result.get("return_code"),
-        success=result.get("success"),
-        stdout_len=len(stdout),
-        stderr=result.get("stderr", "")[:200],
-    )
-    if not stdout and not result["success"]:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get archive contents: {result.get('stderr', 'unknown error')}",
-        )
+    all_items = None if fast_browse else await archive_cache.get(repo.id, raw_cache_key)
 
-    # Parse ALL entries first (needed for recursive directory size calculation)
-    all_items = []
-    for line in stdout.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        entry_path = entry.get("path", "").strip("/")
-        if not entry_path:
-            continue
-        all_items.append(
-            {
-                "path": entry_path,
-                "type": entry.get("type", ""),
-                "size": entry.get("size", 0) or 0,
-                "mtime": entry.get("mtime", ""),
+    if all_items is None:
+        if _repo_needs_custom_env(repo):
+            with repository_borg_env(repo, db) as env:
+                kwargs = {
+                    "repository": repo.path,
+                    "archive": archive_selector,
+                    "path": path if fast_browse else "",
+                    "passphrase": repo.passphrase,
+                    "remote_path": repo.remote_path,
+                    "bypass_lock": repo.bypass_lock,
+                    "env": env,
+                }
+                if fast_browse:
+                    kwargs["browse_depth"] = get_browse_depth(repo, path)
+                result = await borg2.list_archive_contents(**kwargs)
+        else:
+            kwargs = {
+                "repository": repo.path,
+                "archive": archive_selector,
+                "path": path if fast_browse else "",
+                "passphrase": repo.passphrase,
+                "remote_path": repo.remote_path,
+                "bypass_lock": repo.bypass_lock,
             }
-        )
-
-    def calculate_directory_size(dir_path: str) -> int:
-        """Sum sizes of all files recursively under dir_path."""
-        total = 0
-        prefix = f"{dir_path}/"
-        for item in all_items:
-            item_path = item["path"]
-            if item_path.startswith(prefix) or item_path == dir_path:
-                if item["type"] != "d" and item["size"]:
-                    total += item["size"]
-        return total
-
-    # Filter items for the requested path and build the response
-    base_path = path.strip("/")
-    items = []
-    seen_dirs: set = set()
-
-    for item in all_items:
-        item_path = item["path"]
-
-        if base_path:
-            if item_path == base_path:
-                continue  # skip the directory itself
-            if not item_path.startswith(base_path + "/"):
-                continue
-            relative = item_path[len(base_path) + 1 :]
-        else:
-            relative = item_path
-
-        parts = relative.split("/")
-        if not parts or not parts[0]:
-            continue
-
-        if len(parts) == 1:
-            # Direct child
-            if item_path in seen_dirs:
-                continue
-            seen_dirs.add(item_path)
-            entry_type = item["type"]
-            is_dir = entry_type == "d"
-            if is_dir:
-                items.append(
-                    {
-                        "name": parts[0],
-                        "path": item_path,
-                        "size": calculate_directory_size(item_path),
-                        "type": "directory",
-                        "mtime": item["mtime"],
-                    }
-                )
-            else:
-                items.append(
-                    {
-                        "name": parts[0],
-                        "path": item_path,
-                        "size": item["size"],
-                        "type": "file",
-                        "mtime": item["mtime"],
-                    }
-                )
-        else:
-            # Deeper descendant — surface the intermediate directory once
-            dir_name = parts[0]
-            dir_path = (base_path + "/" + dir_name).strip("/")
-            if dir_path not in seen_dirs:
-                seen_dirs.add(dir_path)
-                items.append(
-                    {
-                        "name": dir_name,
-                        "path": dir_path,
-                        "size": calculate_directory_size(dir_path),
-                        "type": "directory",
-                        "mtime": "",
-                    }
-                )
-
-    cache_success = await archive_cache.set(repo.id, cache_key, items)
-    if cache_success:
+            if fast_browse:
+                kwargs["browse_depth"] = get_browse_depth(repo, path)
+            result = await borg2.list_archive_contents(**kwargs)
+        # borg2 list exits with 1 on warnings but stdout is still valid JSONL —
+        # treat any result that produced stdout as usable.
+        stdout = result.get("stdout", "")
         logger.info(
-            "Cached borg2 archive contents",
-            repository_id=repo.id,
+            "borg2 list_archive_contents result",
             archive=archive_selector,
             path=path,
-            items_count=len(items),
+            return_code=result.get("return_code"),
+            success=result.get("success"),
+            stdout_len=len(stdout),
+            stderr=result.get("stderr", "")[:200],
         )
-    else:
-        logger.warning(
-            "Failed to cache borg2 archive contents",
-            repository_id=repo.id,
-            archive=archive_selector,
-            path=path,
-            items_count=len(items),
+        if not stdout and not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get archive contents: {result.get('stderr', 'unknown error')}",
+            )
+
+        all_items = parse_archive_items(stdout)
+        if not fast_browse:
+            await archive_cache.set(repo.id, raw_cache_key, all_items)
+
+    if fast_browse:
+        items = build_browse_items(
+            all_items,
+            path,
+            hide_directory_sizes=True,
+        )
+        await archive_cache.set(repo.id, cache_key, items)
+        return {"items": items}
+
+    result_map = {
+        browse_path: build_browse_items(all_items, browse_path)
+        for browse_path in collect_browse_paths(all_items)
+    }
+    for browse_path, browse_items in result_map.items():
+        await archive_cache.set(
+            repo.id,
+            _get_browse_cache_key(archive_id, browse_path),
+            browse_items,
         )
 
-    return {"items": items}
+    return {"items": result_map.get(path.strip("/"), [])}
 
 
 # ── Delete archive ─────────────────────────────────────────────────────────────

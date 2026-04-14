@@ -329,11 +329,15 @@ class TestBrowseArchiveBehavior:
         assert data["items"][0]["size"] == 7
         assert data["items"][1]["size"] == 3
         mock_list.assert_awaited_once()
-        mock_set.assert_awaited_once()
-        cached_args = mock_set.await_args.args
-        assert cached_args[0] == repo.id
-        assert cached_args[1] == "parsed-archive"
-        assert len(cached_args[2]) == 3
+        assert mock_set.await_count == 2
+        first_call = mock_set.await_args_list[0].args
+        second_call = mock_set.await_args_list[1].args
+        assert first_call[0] == repo.id
+        assert first_call[1] == "parsed-archive"
+        assert len(first_call[2]) == 3
+        assert second_call[0] == repo.id
+        assert second_call[1] == "parsed-archive::browse-root"
+        assert [item["name"] for item in second_call[2]] == ["docs", "notes.txt"]
 
     @pytest.mark.asyncio
     async def test_browse_archive_uses_repo_ssh_environment_when_cache_misses(

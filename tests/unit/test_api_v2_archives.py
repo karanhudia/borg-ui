@@ -4,10 +4,16 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database.models import DeleteArchiveJob, LicensingState, Repository
+from app.database.models import (
+    DeleteArchiveJob,
+    LicensingState,
+    Repository,
+    SystemSettings,
+)
+from app.services.archive_browse_service import parse_archive_items
 
 
-def _enable_borg_v2(test_db):
+def _enable_borg_v2(test_db, *, fast_browse=False):
     state = test_db.query(LicensingState).first()
     if state is None:
         state = LicensingState(instance_id="test-instance-v2-archives")
@@ -15,6 +21,11 @@ def _enable_borg_v2(test_db):
     state.plan = "pro"
     state.status = "active"
     state.is_trial = False
+    settings = test_db.query(SystemSettings).first()
+    if settings is None:
+        settings = SystemSettings()
+        test_db.add(settings)
+    settings.borg2_fast_browse_beta_enabled = fast_browse
     test_db.commit()
 
 
@@ -291,6 +302,75 @@ class TestV2ArchiveRoutes:
         assert sub_dir["type"] == "directory"
         assert sub_dir["size"] == 5
 
+    def test_get_archive_contents_sums_nested_descendants_for_directory_size(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db)
+        stdout = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "path": "docs/sub",
+                        "type": "d",
+                        "size": 0,
+                        "mtime": "2026-04-04T00:00:00",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "path": "docs/sub/notes.txt",
+                        "type": "f",
+                        "size": 5,
+                        "mtime": "2026-04-04T00:00:01",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "path": "docs/sub/deeper",
+                        "type": "d",
+                        "size": 0,
+                        "mtime": "2026-04-04T00:00:02",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "path": "docs/sub/deeper/final.txt",
+                        "type": "f",
+                        "size": 13,
+                        "mtime": "2026-04-04T00:00:03",
+                    }
+                ),
+            ]
+        )
+
+        with (
+            patch(
+                "app.api.v2.archives.archive_cache.get",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.api.v2.archives.borg2.list_archive_contents",
+                new=AsyncMock(
+                    return_value={"success": True, "stdout": stdout, "stderr": ""}
+                ),
+            ),
+            patch(
+                "app.api.v2.archives.archive_cache.set",
+                new=AsyncMock(return_value=True),
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/archive-1/contents?repository={repo.path}&path=docs",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        items = response.json()["items"]
+        sub_dir = next(item for item in items if item["name"] == "sub")
+        assert sub_dir["type"] == "directory"
+        assert sub_dir["size"] == 18
+
     def test_get_archive_contents_passes_requested_path_to_borg2(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -322,14 +402,109 @@ class TestV2ArchiveRoutes:
 
         assert response.status_code == 200
         mock_contents.assert_awaited_once_with(
-            repo.path,
-            "archive-1",
+            repository=repo.path,
+            archive="archive-1",
+            path="",
+            passphrase=None,
+            remote_path=None,
+            bypass_lock=False,
+        )
+
+    def test_get_archive_contents_uses_depth_limited_browse_when_fast_mode_enabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db, fast_browse=True)
+        repo = _create_v2_repo(
+            test_db, source_directories=["/local/Users/karanhudia/Downloads"]
+        )
+
+        with (
+            patch(
+                "app.api.v2.archives.archive_cache.get",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.api.v2.archives.borg2.list_archive_contents",
+                new=AsyncMock(
+                    return_value={"success": True, "stdout": "", "stderr": ""}
+                ),
+            ) as mock_contents,
+            patch(
+                "app.api.v2.archives.archive_cache.set",
+                new=AsyncMock(return_value=True),
+            ) as mock_cache_set,
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/archive-1/contents?repository={repo.path}&path=docs/sub",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        mock_contents.assert_awaited_once_with(
+            repository=repo.path,
+            archive="archive-1",
             path="docs/sub",
             passphrase=None,
             remote_path=None,
             bypass_lock=False,
             browse_depth=6,
         )
+        mock_cache_set.assert_awaited_once_with(
+            repo.id, "archive-1::path::docs/sub::fast", []
+        )
+
+    def test_get_archive_contents_hides_directory_size_when_fast_mode_enabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db, fast_browse=True)
+        repo = _create_v2_repo(test_db)
+        stdout = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "path": "docs/sub",
+                        "type": "d",
+                        "size": 0,
+                        "mtime": "2026-04-04T00:00:00",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "path": "docs/sub/deeper/final.txt",
+                        "type": "f",
+                        "size": 13,
+                        "mtime": "2026-04-04T00:00:03",
+                    }
+                ),
+            ]
+        )
+
+        with (
+            patch(
+                "app.api.v2.archives.archive_cache.get",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.api.v2.archives.borg2.list_archive_contents",
+                new=AsyncMock(
+                    return_value={"success": True, "stdout": stdout, "stderr": ""}
+                ),
+            ),
+            patch(
+                "app.api.v2.archives.archive_cache.set",
+                new=AsyncMock(return_value=True),
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/archives/archive-1/contents?repository={repo.path}&path=docs",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        items = response.json()["items"]
+        sub_dir = next(item for item in items if item["name"] == "sub")
+        assert sub_dir["type"] == "directory"
+        assert sub_dir["size"] is None
 
     def test_get_archive_contents_uses_archive_id_selector_without_resolving_name(
         self, test_client: TestClient, admin_headers, test_db
@@ -363,13 +538,12 @@ class TestV2ArchiveRoutes:
 
         assert response.status_code == 200
         mock_contents.assert_awaited_once_with(
-            repo.path,
-            f"aid:{archive_id}",
+            repository=repo.path,
+            archive=f"aid:{archive_id}",
             path="",
             passphrase=None,
             remote_path=None,
             bypass_lock=False,
-            browse_depth=4,
         )
 
     def test_get_archive_contents_uses_cached_items_when_available(
@@ -493,11 +667,14 @@ class TestV2ArchiveRoutes:
             )
 
         assert response.status_code == 200
-        mock_cache_set.assert_awaited_once_with(
-            repo.id,
-            "archive-1::path::docs",
-            response.json()["items"],
-        )
+        assert mock_cache_set.await_count == 3
+        calls = [call.args for call in mock_cache_set.await_args_list]
+        assert calls[0] == (repo.id, "archive-1::raw", parse_archive_items(stdout))
+        assert calls[1][0] == repo.id
+        assert calls[1][1] == "archive-1"
+        assert calls[2][0] == repo.id
+        assert calls[2][1] == "archive-1::path::docs"
+        assert calls[2][2] == response.json()["items"]
 
     def test_download_file_success(
         self, test_client: TestClient, admin_headers, test_db, tmp_path
