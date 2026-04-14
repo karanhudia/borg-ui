@@ -5,9 +5,11 @@ Utility functions for process management and orphan detection
 import json
 import os
 import subprocess
+from pathlib import Path
 import structlog
 from datetime import datetime
 from sqlalchemy.orm import Session
+from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.models import CheckJob, CompactJob, BackupJob, RestoreJob, Repository
 
@@ -337,7 +339,8 @@ def cleanup_orphaned_mounts():
     logger.info("Checking for orphaned mounts...")
 
     try:
-        # Get list of active mounts
+        managed_mount_base = Path(settings.data_dir) / "mounts"
+
         result = subprocess.run(["mount"], capture_output=True, text=True, timeout=5)
 
         if result.returncode != 0:
@@ -347,105 +350,105 @@ def cleanup_orphaned_mounts():
         orphaned_count = 0
 
         for line in result.stdout.split("\n"):
-            # Look for borg_ui mount points
-            # Patterns: sshfs_mount_, /mounts/borg_, etc.
-            if "sshfs_mount_" in line or "/mounts/borg_" in line:
-                # Extract mount point from mount output
-                # Format: "source on /mount/point type fuse.sshfs (options)"
-                parts = line.split()
-                if len(parts) >= 3:
-                    # Find the "on" keyword and get the next part
-                    try:
-                        on_index = parts.index("on")
-                        if on_index + 1 < len(parts):
-                            mount_point = parts[on_index + 1]
+            parts = line.split()
+            if len(parts) < 3 or "on" not in parts:
+                continue
 
-                            logger.info("Found orphaned mount", mount_point=mount_point)
-                            orphaned_count += 1
+            try:
+                on_index = parts.index("on")
+                if on_index + 1 >= len(parts):
+                    continue
+                mount_point = parts[on_index + 1]
+            except (ValueError, IndexError):
+                continue
 
-                            # Attempt cleanup with fusermount
-                            try:
-                                cleanup_result = subprocess.run(
-                                    ["fusermount", "-uz", mount_point],
-                                    capture_output=True,
-                                    text=True,
-                                    timeout=10,
-                                )
+            is_temp_mount = (
+                "sshfs_mount_" in mount_point or "borg_backup_root_" in mount_point
+            )
+            is_managed_mount = False
+            try:
+                is_managed_mount = (
+                    Path(mount_point)
+                    .resolve()
+                    .is_relative_to(managed_mount_base.resolve())
+                )
+            except Exception:
+                pass
 
-                                if cleanup_result.returncode == 0:
-                                    logger.info(
-                                        "Successfully unmounted orphaned mount",
-                                        mount_point=mount_point,
-                                    )
+            if not is_temp_mount and not is_managed_mount:
+                continue
 
-                                    # Try to remove the directory if it's empty
-                                    try:
-                                        if os.path.exists(mount_point):
-                                            # Check if it's in a temp directory
-                                            if (
-                                                "sshfs_mount_" in mount_point
-                                                or "borg_backup_root_" in mount_point
-                                            ):
-                                                # Remove parent temp directory
-                                                import shutil
+            logger.info("Found orphaned mount", mount_point=mount_point)
+            orphaned_count += 1
 
-                                                parent_dir = os.path.dirname(
-                                                    mount_point
-                                                )
-                                                if os.path.exists(parent_dir):
-                                                    shutil.rmtree(
-                                                        parent_dir, ignore_errors=True
-                                                    )
-                                                    logger.debug(
-                                                        "Removed orphaned temp directory",
-                                                        temp_dir=parent_dir,
-                                                    )
-                                    except Exception as e:
-                                        logger.debug(
-                                            "Could not remove mount directory",
-                                            mount_point=mount_point,
-                                            error=str(e),
-                                        )
-                                else:
-                                    logger.warning(
-                                        "Failed to unmount orphaned mount",
-                                        mount_point=mount_point,
-                                        stderr=cleanup_result.stderr,
-                                    )
-                            except subprocess.TimeoutExpired:
-                                logger.warning(
-                                    "Timeout unmounting orphaned mount",
-                                    mount_point=mount_point,
-                                )
-                            except FileNotFoundError:
-                                # fusermount not found, try umount on macOS
-                                try:
-                                    cleanup_result = subprocess.run(
-                                        ["umount", "-f", mount_point],
-                                        capture_output=True,
-                                        text=True,
-                                        timeout=10,
-                                    )
-                                    if cleanup_result.returncode == 0:
-                                        logger.info(
-                                            "Successfully unmounted orphaned mount (umount)",
-                                            mount_point=mount_point,
-                                        )
-                                except Exception as e:
-                                    logger.warning(
-                                        "Failed to unmount with umount",
-                                        mount_point=mount_point,
-                                        error=str(e),
-                                    )
-                            except Exception as e:
-                                logger.error(
-                                    "Error unmounting orphaned mount",
-                                    mount_point=mount_point,
-                                    error=str(e),
-                                )
-                    except (ValueError, IndexError):
-                        # "on" not found or invalid format
+            try:
+                cleanup_result = subprocess.run(
+                    ["fusermount", "-uz", mount_point],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+
+                if cleanup_result.returncode == 0:
+                    logger.info(
+                        "Successfully unmounted orphaned mount",
+                        mount_point=mount_point,
+                    )
+                else:
+                    logger.warning(
+                        "Failed to unmount orphaned mount",
+                        mount_point=mount_point,
+                        stderr=cleanup_result.stderr,
+                    )
+            except subprocess.TimeoutExpired:
+                logger.warning(
+                    "Timeout unmounting orphaned mount",
+                    mount_point=mount_point,
+                )
+            except FileNotFoundError:
+                try:
+                    cleanup_result = subprocess.run(
+                        ["umount", "-f", mount_point],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                    )
+                    if cleanup_result.returncode == 0:
+                        logger.info(
+                            "Successfully unmounted orphaned mount (umount)",
+                            mount_point=mount_point,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to unmount with umount",
+                        mount_point=mount_point,
+                        error=str(e),
+                    )
+            except Exception as e:
+                logger.error(
+                    "Error unmounting orphaned mount",
+                    mount_point=mount_point,
+                    error=str(e),
+                )
+
+        if managed_mount_base.exists():
+            for child in managed_mount_base.iterdir():
+                if not child.is_dir():
+                    continue
+                try:
+                    if any(child.iterdir()):
                         continue
+                    child.rmdir()
+                    logger.debug(
+                        "Removed orphaned managed mount directory",
+                        mount_point=str(child),
+                    )
+                except Exception as e:
+                    logger.debug(
+                        "Could not remove managed mount directory",
+                        mount_point=str(child),
+                        error=str(e),
+                    )
 
         if orphaned_count > 0:
             logger.info(

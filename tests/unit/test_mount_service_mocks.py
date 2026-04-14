@@ -1,4 +1,5 @@
 import pytest
+import os
 from unittest.mock import MagicMock, patch, AsyncMock
 from app.services.mount_service import MountService, MountType, MountInfo
 from app.database.models import Repository, SSHConnection, SystemSettings
@@ -310,6 +311,40 @@ async def test_unmount_v2_uses_borg2_binary(mount_service_fixture):
     args = mock_exec.call_args[0]
     assert args[0] == "borg2"
     assert args[1] == "umount"
+
+
+@pytest.mark.asyncio
+async def test_unmount_removes_empty_managed_borg_mount_dir(mount_service_fixture):
+    mount_point = str(
+        mount_service_fixture.mount_base_dir / "manual-backup-2026-01-15T16_24_12"
+    )
+    os.makedirs(mount_point, exist_ok=True)
+
+    mount_id = "test-mount-id"
+    mount_service_fixture.active_mounts[mount_id] = MountInfo(
+        mount_id=mount_id,
+        mount_type=MountType.BORG_ARCHIVE,
+        mount_point=mount_point,
+        source="repo",
+        created_at="2024-01-01",
+        process_pid=12345,
+    )
+
+    mock_process = AsyncMock()
+    mock_process.returncode = 0
+    mock_process.communicate.return_value = (b"", b"")
+
+    with (
+        patch("app.services.mount_service.os.kill"),
+        patch(
+            "app.services.mount_service.asyncio.create_subprocess_exec",
+            return_value=mock_process,
+        ),
+    ):
+        result = await mount_service_fixture.unmount(mount_id)
+
+    assert result is True
+    assert not os.path.exists(mount_point)
 
 
 @pytest.mark.asyncio

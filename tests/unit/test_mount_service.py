@@ -193,6 +193,48 @@ class TestMountService:
         assert result is not None
         assert result.mount_id == "test-123"
 
+    def test_cleanup_managed_mount_dir_removes_empty_directory(self, mount_service):
+        managed_mount = (
+            mount_service.mount_base_dir / "manual-backup-2026-01-15T16_24_12"
+        )
+        managed_mount.mkdir()
+
+        mount_service._cleanup_managed_mount_dir(str(managed_mount))
+
+        assert not managed_mount.exists()
+
+    def test_cleanup_orphaned_mount_dirs_removes_only_untracked_empty_dirs(
+        self, mount_service
+    ):
+        orphaned_mount = (
+            mount_service.mount_base_dir / "manual-backup-2026-01-15T16_24_12"
+        )
+        orphaned_mount.mkdir()
+
+        active_mount = mount_service.mount_base_dir / "still-mounted"
+        active_mount.mkdir()
+
+        tracked_mount = mount_service.mount_base_dir / "tracked-but-not-mounted"
+        tracked_mount.mkdir()
+        mount_service.active_mounts["tracked"] = MountInfo(
+            mount_id="tracked",
+            mount_type=MountType.BORG_ARCHIVE,
+            mount_point=str(tracked_mount),
+            source="repo::archive",
+            created_at=datetime.now(timezone.utc),
+        )
+
+        with patch.object(
+            mount_service,
+            "_get_active_mount_points",
+            return_value={str(active_mount.resolve())},
+        ):
+            mount_service._cleanup_orphaned_mount_dirs()
+
+        assert not orphaned_mount.exists()
+        assert active_mount.exists()
+        assert tracked_mount.exists()
+
     @pytest.mark.asyncio
     async def test_mount_ssh_directory_no_connection(self, mount_service):
         """Test mount_ssh_directory fails gracefully when connection not found"""

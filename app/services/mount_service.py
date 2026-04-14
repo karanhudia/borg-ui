@@ -98,6 +98,9 @@ class MountService:
         # Clean up stale mounts (mounts in state file but not actually mounted)
         self._cleanup_stale_mounts()
 
+        # Clean up orphaned managed mount directories from previous sessions
+        self._cleanup_orphaned_mount_dirs()
+
         # Clean up orphaned temp directories (from crashed processes)
         self._cleanup_orphaned_temp_dirs()
 
@@ -189,27 +192,9 @@ class MountService:
     def _cleanup_stale_mounts(self):
         """Remove mounts from state that are no longer active in the system"""
         try:
-            # Get list of active mount points from system
-            result = subprocess.run(
-                ["mount"], capture_output=True, text=True, timeout=5
-            )
-
-            if result.returncode != 0:
-                logger.warning("Failed to list system mounts for cleanup")
+            active_mount_points = self._get_active_mount_points()
+            if active_mount_points is None:
                 return
-
-            active_mount_points = set()
-            for line in result.stdout.split("\n"):
-                # Extract mount point from mount output
-                # Format: "source on /mount/point type filesystem (options)"
-                parts = line.split()
-                if len(parts) >= 3 and "on" in parts:
-                    try:
-                        on_index = parts.index("on")
-                        if on_index + 1 < len(parts):
-                            active_mount_points.add(parts[on_index + 1])
-                    except:
-                        pass
 
             # Check each tracked mount
             stale_mounts = []
@@ -228,6 +213,7 @@ class MountService:
 
                 # Clean up temp files for stale mount
                 self._cleanup_temp_files(mount_info.temp_root, mount_info.temp_key_file)
+                self._cleanup_managed_mount_dir(mount_info.mount_point)
 
                 del self.active_mounts[mount_id]
 
@@ -240,6 +226,101 @@ class MountService:
 
         except Exception as e:
             logger.error("Failed to cleanup stale mounts", error=str(e))
+
+    def _get_active_mount_points(self) -> Optional[set[str]]:
+        """Return active system mount points, or None if they cannot be listed."""
+        result = subprocess.run(["mount"], capture_output=True, text=True, timeout=5)
+
+        if result.returncode != 0:
+            logger.warning("Failed to list system mounts for cleanup")
+            return None
+
+        active_mount_points = set()
+        for line in result.stdout.split("\n"):
+            parts = line.split()
+            if len(parts) >= 3 and "on" in parts:
+                try:
+                    on_index = parts.index("on")
+                    if on_index + 1 < len(parts):
+                        active_mount_points.add(parts[on_index + 1])
+                except Exception:
+                    continue
+
+        return active_mount_points
+
+    def _cleanup_managed_mount_dir(self, mount_point: Optional[str]):
+        """Remove an empty directory only when it lives under the managed mount base."""
+        if not mount_point:
+            return
+
+        try:
+            mount_path = Path(mount_point).resolve()
+            managed_base = self.mount_base_dir.resolve()
+            mount_path.relative_to(managed_base)
+        except Exception:
+            return
+
+        if not mount_path.exists() or not mount_path.is_dir():
+            return
+
+        try:
+            if any(mount_path.iterdir()):
+                return
+        except Exception:
+            return
+
+        try:
+            mount_path.rmdir()
+            logger.debug(
+                "Removed empty managed mount directory", mount_point=str(mount_path)
+            )
+        except Exception as e:
+            logger.debug(
+                "Failed to remove managed mount directory",
+                mount_point=str(mount_path),
+                error=str(e),
+            )
+
+    def _cleanup_orphaned_mount_dirs(self):
+        """Remove empty managed mount directories that are no longer mounted or tracked."""
+        try:
+            if not self.mount_base_dir.exists():
+                return
+
+            active_mount_points = self._get_active_mount_points()
+            if active_mount_points is None:
+                return
+
+            tracked_mount_points = {
+                str(Path(mount_info.mount_point).resolve())
+                for mount_info in self.active_mounts.values()
+            }
+
+            orphaned_count = 0
+            for child in self.mount_base_dir.iterdir():
+                if not child.is_dir():
+                    continue
+
+                child_path = str(child.resolve())
+                if (
+                    child_path in active_mount_points
+                    or child_path in tracked_mount_points
+                ):
+                    continue
+
+                if any(child.iterdir()):
+                    continue
+
+                self._cleanup_managed_mount_dir(child_path)
+                orphaned_count += 1
+
+            if orphaned_count:
+                logger.info(
+                    "Cleaned up orphaned managed mount directories",
+                    count=orphaned_count,
+                )
+        except Exception as e:
+            logger.error("Failed to cleanup orphaned mount directories", error=str(e))
 
     async def mount_ssh_directory(
         self, connection_id: int, remote_path: str, job_id: Optional[int] = None
@@ -1157,6 +1238,9 @@ class MountService:
                     mount_id=mount_id,
                     temp_root=mount_info.temp_root,
                 )
+
+            if mount_info.mount_type == MountType.BORG_ARCHIVE:
+                self._cleanup_managed_mount_dir(mount_info.mount_point)
 
             if success:
                 # Remove from tracking

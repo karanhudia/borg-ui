@@ -6,6 +6,7 @@ from app.utils.process_utils import (
     is_process_alive,
     break_repository_lock,
     cleanup_orphaned_jobs,
+    cleanup_orphaned_mounts,
 )
 from app.database.models import Repository, BackupJob
 
@@ -169,3 +170,31 @@ class TestProcessUtils:
 
         # Verify commit was called
         mock_db.commit.assert_called_once()
+
+    @patch("app.utils.process_utils.settings")
+    @patch("app.utils.process_utils.subprocess.run")
+    def test_cleanup_orphaned_mounts_handles_managed_mount_dir_names(
+        self, mock_run, mock_settings, tmp_path
+    ):
+        managed_mount_base = tmp_path / "mounts"
+        managed_mount_base.mkdir()
+        orphaned_dir = managed_mount_base / "manual-backup-2026-01-15T16_24_12"
+        orphaned_dir.mkdir()
+
+        mock_settings.data_dir = str(tmp_path)
+        mock_run.side_effect = [
+            MagicMock(
+                returncode=0,
+                stdout=f"borgfs on {orphaned_dir} type fuse.borgfs (rw,nosuid,nodev,relatime,user_id=0,group_id=0)",
+            ),
+            MagicMock(returncode=0, stderr=""),
+        ]
+
+        cleanup_orphaned_mounts()
+
+        assert not orphaned_dir.exists()
+        assert mock_run.call_args_list[1][0][0] == [
+            "fusermount",
+            "-uz",
+            str(orphaned_dir),
+        ]
