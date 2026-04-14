@@ -15,12 +15,13 @@ describe('repoCapabilities', () => {
     expect(getBorgVersion(undefined)).toBe(1)
   })
 
-  it('disables destructive actions for observe-mode repositories', () => {
+  it('disables archive-maintenance actions for observe-mode repositories while allowing repo removal', () => {
     expect(getRepoCapabilities({ mode: 'observe' })).toEqual({
       canBackup: false,
       canPrune: false,
       canCompact: false,
-      canDelete: false,
+      canDeleteArchive: false,
+      canDeleteRepository: true,
       canMount: true,
       canRestore: true,
     })
@@ -31,7 +32,8 @@ describe('repoCapabilities', () => {
       canBackup: true,
       canPrune: true,
       canCompact: true,
-      canDelete: true,
+      canDeleteArchive: true,
+      canDeleteRepository: true,
       canMount: true,
       canRestore: true,
     })

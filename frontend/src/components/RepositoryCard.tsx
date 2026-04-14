@@ -605,7 +605,7 @@ export default function RepositoryCard({
             )}
 
             {/* Delete — separated with a vertical rule */}
-            {canManageRepository && capabilities.canDelete && (
+            {canManageRepository && capabilities.canDeleteRepository && (
               <>
                 <Box
                   sx={{

@@ -377,7 +377,7 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Backup Now/i })).toBeInTheDocument()
     })
 
-    it('hides Compact, Prune, and Delete buttons for observe mode', () => {
+    it('hides Compact and Prune buttons for observe mode but still allows Delete', () => {
       const observeRepo = { ...mockRepository, mode: 'observe' as const }
       renderWithProviders(
         <RepositoryCard
@@ -391,7 +391,7 @@ describe('RepositoryCard', () => {
 
       expect(screen.queryByRole('button', { name: /Compact/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Prune/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /Delete/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
     })
 
     it('shows Compact, Prune, and Delete buttons for full mode', () => {

@@ -536,7 +536,7 @@ const Archives: React.FC = () => {
           onDeleteArchive={(archiveName) => setShowDeleteConfirm(archiveName)}
           mountDisabled={mountArchiveMutation.isPending}
           canDelete={
-            getRepoCapabilities({ mode: selectedRepository?.mode }).canDelete &&
+            getRepoCapabilities({ mode: selectedRepository?.mode }).canDeleteArchive &&
             (selectedRepositoryId
               ? permissions.canDo(selectedRepositoryId, 'delete_archive')
               : false)
