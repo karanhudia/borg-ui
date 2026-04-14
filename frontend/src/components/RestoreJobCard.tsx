@@ -1,4 +1,4 @@
-import { Box, Stack, Typography, Alert } from '@mui/material'
+import { Box, Typography, Alert, Chip, useTheme, alpha, type Theme } from '@mui/material'
 import { RefreshCw, CheckCircle, AlertCircle, Clock, AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatTimeRange, formatDurationSeconds, formatRelativeTime } from '../utils/dateUtils'
@@ -28,162 +28,200 @@ interface RestoreJobCardProps {
   showJobId?: boolean
 }
 
+const ICON_SIZE = 14
+
 const getStatusIcon = (status: string) => {
   switch (status) {
     case 'running':
-      return <RefreshCw size={18} className="animate-spin" />
+      return <RefreshCw size={ICON_SIZE} className="animate-spin" />
     case 'completed':
-      return <CheckCircle size={18} />
+      return <CheckCircle size={ICON_SIZE} />
+    case 'completed_with_warnings':
+      return <AlertTriangle size={ICON_SIZE} />
     case 'failed':
-      return <AlertCircle size={18} />
+      return <AlertCircle size={ICON_SIZE} />
     default:
-      return <Clock size={18} />
+      return <Clock size={ICON_SIZE} />
+  }
+}
+
+const getStatusColor = (status: string, theme: Theme): string => {
+  switch (status) {
+    case 'running':
+      return theme.palette.info.main
+    case 'completed':
+      return theme.palette.success.main
+    case 'completed_with_warnings':
+      return theme.palette.warning.main
+    case 'failed':
+      return theme.palette.error.main
+    default:
+      return theme.palette.text.secondary
+  }
+}
+
+const getStatusLabel = (status: string, t: (key: string) => string): string => {
+  switch (status) {
+    case 'completed':
+      return t('restoreJobCard.completed')
+    case 'completed_with_warnings':
+      return t('restoreJobCard.completedWithWarnings')
+    case 'failed':
+      return t('status.failed')
+    case 'running':
+      return t('restoreJobCard.restoringFiles')
+    default:
+      return t('status.pending')
   }
 }
 
 export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCardProps) {
   const { t } = useTranslation()
-  // Extract a cleaner archive name (remove timestamp if present)
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
   const getArchiveName = (archiveName: string) => {
-    // If archive name contains a timestamp pattern, extract the base name
     const timestampPattern = /-\d{4}-\d{2}-\d{2}T[\d:.]+$/
     return archiveName.replace(timestampPattern, '')
   }
 
-  // Calculate duration for display
   const getDurationText = () => {
     if (!job.started_at || !job.completed_at) return null
     const duration = formatTimeRange(job.started_at, job.completed_at, job.status)
-    // Don't show duration if it's 0 or very short
     if (duration === '0 sec' || duration === '0 min') return null
-    return `Duration: ${duration}`
+    return duration
   }
+
+  const statusColor = getStatusColor(job.status, theme)
 
   return (
     <Box>
-      {/* Header with job info */}
-      <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1.5 }}>
-        {job.status !== 'completed' && (
-          <Box sx={{ color: 'info.main' }}>{getStatusIcon(job.status)}</Box>
-        )}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          {showJobId && (
-            <Typography variant="body1" fontWeight={500} sx={{ mb: 0.5 }}>
-              {t('restoreJobCard.title')} #{job.id}
-            </Typography>
-          )}
-          <Stack direction="row" spacing={1} alignItems="baseline" sx={{ flexWrap: 'wrap' }}>
-            <Typography variant="body2" fontWeight={500}>
-              {getArchiveName(job.archive)}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              →
-            </Typography>
-            <Typography
-              variant="body2"
-              color="text.secondary"
+      {showJobId && (
+        <Typography variant="body2" fontWeight={500} sx={{ mb: 1 }}>
+          {t('restoreJobCard.title')} #{job.id}
+        </Typography>
+      )}
+
+      {/* Single-line layout: archive → destination + status chip + time */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          flexWrap: 'wrap',
+          rowGap: 0.75,
+        }}
+      >
+        {/* Archive → Destination */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+            minWidth: 0,
+            flex: '1 1 auto',
+          }}
+        >
+          <Typography
+            variant="body2"
+            fontWeight={600}
+            noWrap
+            sx={{
+              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+              fontSize: '0.78rem',
+            }}
+          >
+            {getArchiveName(job.archive)}
+          </Typography>
+          <Box component="span" sx={{ color: 'text.disabled', fontSize: '0.72rem', flexShrink: 0 }}>
+            →
+          </Box>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            noWrap
+            sx={{
+              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+              fontSize: '0.72rem',
+              minWidth: 0,
+            }}
+          >
+            {job.destination}
+          </Typography>
+        </Box>
+
+        {/* Status chip */}
+        <Chip
+          icon={
+            <Box
               sx={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                fontFamily: 'monospace',
-                fontSize: '0.8rem',
+                display: 'flex',
+                alignItems: 'center',
               }}
             >
-              {job.destination}
-            </Typography>
-          </Stack>
-        </Box>
-      </Stack>
+              {getStatusIcon(job.status)}
+            </Box>
+          }
+          label={getStatusLabel(job.status, t)}
+          size="small"
+          sx={{
+            height: 22,
+            fontSize: '0.68rem',
+            fontWeight: 600,
+            letterSpacing: '0.02em',
+            bgcolor: alpha(statusColor, isDark ? 0.12 : 0.08),
+            color: statusColor,
+            border: '1px solid',
+            borderColor: alpha(statusColor, isDark ? 0.25 : 0.18),
+            '& .MuiChip-icon': { ml: 0.5, mr: -0.25, color: 'inherit' },
+            '& .MuiChip-label': { px: 0.75 },
+          }}
+        />
 
-      {/* Status info */}
-      {job.status === 'running' && (
-        <Box sx={{ mb: 2 }}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 1.5 }}
+        {/* Time + duration */}
+        {job.completed_at && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              flexShrink: 0,
+            }}
           >
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Box
-                sx={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  bgcolor: 'info.main',
-                  animation: 'pulse 2s ease-in-out infinite',
-                  '@keyframes pulse': {
-                    '0%, 100%': { opacity: 1 },
-                    '50%': { opacity: 0.5 },
-                  },
-                }}
-              />
-              <Typography variant="body2" fontWeight={500} color="info.main">
-                {t('restoreJobCard.restoringFiles')}
-              </Typography>
-            </Stack>
-            <Typography variant="body2" color="text.secondary">
-              {formatTimeRange(job.started_at, job.completed_at, job.status)}
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+              {formatRelativeTime(job.completed_at)}
             </Typography>
-          </Stack>
-        </Box>
+            {getDurationText() && (
+              <>
+                <Box
+                  component="span"
+                  sx={{
+                    width: 3,
+                    height: 3,
+                    borderRadius: '50%',
+                    bgcolor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.18),
+                    flexShrink: 0,
+                  }}
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
+                  {getDurationText()}
+                </Typography>
+              </>
+            )}
+          </Box>
+        )}
+      </Box>
+
+      {/* Running: elapsed time */}
+      {job.status === 'running' && job.started_at && !job.completed_at && (
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.72rem', mt: 0.5 }}>
+          {formatTimeRange(job.started_at, job.completed_at, job.status)}
+        </Typography>
       )}
 
-      {job.status === 'completed' && job.completed_at && (
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
-          <Stack direction="row" spacing={0.5} alignItems="center">
-            <CheckCircle
-              size={14}
-              color="currentColor"
-              style={{ color: 'inherit', flexShrink: 0 }}
-            />
-            <Typography variant="body2" color="success.main" fontWeight={500}>
-              {t('restoreJobCard.completed')}
-            </Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary">
-            {formatRelativeTime(job.completed_at)}
-          </Typography>
-          {getDurationText() && (
-            <>
-              <Typography variant="body2" color="text.secondary">
-                •
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {getDurationText()}
-              </Typography>
-            </>
-          )}
-        </Stack>
-      )}
-
-      {job.status === 'completed_with_warnings' && job.completed_at && (
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexWrap: 'wrap', gap: 1 }}>
-          <Stack direction="row" spacing={0.5} alignItems="center">
-            <AlertTriangle size={14} style={{ color: 'inherit', flexShrink: 0 }} />
-            <Typography variant="body2" color="warning.main" fontWeight={500}>
-              {t('restoreJobCard.completedWithWarnings')}
-            </Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary">
-            {formatRelativeTime(job.completed_at)}
-          </Typography>
-          {getDurationText() && (
-            <>
-              <Typography variant="body2" color="text.secondary">
-                •
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {getDurationText()}
-              </Typography>
-            </>
-          )}
-        </Stack>
-      )}
-
+      {/* Error alert */}
       {job.status === 'failed' && job.error_message && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mt: 1.5 }}>
           <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
             {job.error_message
               .split('\n')
@@ -193,15 +231,16 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
         </Alert>
       )}
 
+      {/* Running: current file */}
       {job.status === 'running' && job.progress_details?.current_file && (
-        <Alert severity="info" sx={{ mb: 2, py: 0.5 }}>
+        <Alert severity="info" sx={{ mt: 1.5, py: 0.5 }}>
           <Typography variant="caption" fontWeight={500}>
             {t('restoreJobCard.currentFile')}
           </Typography>
           <Typography
             variant="caption"
             sx={{
-              fontFamily: 'monospace',
+              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
               display: 'block',
               mt: 0.5,
               wordBreak: 'break-all',
@@ -212,12 +251,14 @@ export default function RestoreJobCard({ job, showJobId = true }: RestoreJobCard
         </Alert>
       )}
 
+      {/* Running: progress stats */}
       {job.status === 'running' && job.progress_details && (
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
             gap: 2,
+            mt: 1.5,
           }}
         >
           <Box>
