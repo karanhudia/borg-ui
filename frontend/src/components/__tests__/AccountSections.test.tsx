@@ -20,11 +20,17 @@ vi.mock('../UserPermissionsPanel', () => ({
   ),
 }))
 
+const defaultBadgeProps = {
+  roleLabel: 'Administrator',
+  isAdmin: true,
+  isOperator: false,
+  createdAt: '2024-01-15T00:00:00Z',
+}
+
 describe('AccountProfileSection', () => {
-  it('renders the password action first when setup is incomplete and submits personal profile changes', async () => {
+  it('renders the password and edit profile cards when setup is incomplete', async () => {
     const user = userEvent.setup()
-    const onProfileFormChange = vi.fn()
-    const onSaveProfile = vi.fn()
+    const onOpenEditProfile = vi.fn()
 
     renderWithProviders(
       <AccountProfileSection
@@ -34,25 +40,47 @@ describe('AccountProfileSection', () => {
         deploymentForm={{ deployment_type: 'individual', enterprise_name: '' }}
         isSavingProfile={false}
         isSavingDeployment={false}
-        onProfileFormChange={onProfileFormChange}
+        onProfileFormChange={vi.fn()}
         onDeploymentFormChange={vi.fn()}
-        onSaveProfile={onSaveProfile}
+        onSaveProfile={vi.fn()}
         onSaveDeployment={vi.fn()}
         onOpenChangePassword={vi.fn()}
+        onOpenEditProfile={onOpenEditProfile}
+        {...defaultBadgeProps}
       />
     )
 
     const headings = screen.getAllByText('Account password')
     expect(headings[0]).toBeInTheDocument()
     expect(screen.getByText('Password update required')).toBeInTheDocument()
-    expect(screen.queryByText('Finish account setup')).not.toBeInTheDocument()
+    expect(screen.getByText('Edit profile')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'backup-admin' } })
-    expect(onProfileFormChange).toHaveBeenCalledWith({ username: 'backup-admin' })
-
-    await user.click(screen.getByRole('button', { name: /save profile/i }))
-    expect(onSaveProfile).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: /edit profile/i }))
+    expect(onOpenEditProfile).toHaveBeenCalledTimes(1)
     expect(screen.queryByText('Deployment profile')).not.toBeInTheDocument()
+  })
+
+  it('renders role badge in the profile info banner', () => {
+    renderWithProviders(
+      <AccountProfileSection
+        canManageSystem={false}
+        mustChangePassword={false}
+        profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
+        deploymentForm={{ deployment_type: 'individual', enterprise_name: '' }}
+        isSavingProfile={false}
+        isSavingDeployment={false}
+        onProfileFormChange={vi.fn()}
+        onDeploymentFormChange={vi.fn()}
+        onSaveProfile={vi.fn()}
+        onSaveDeployment={vi.fn()}
+        onOpenChangePassword={vi.fn()}
+        onOpenEditProfile={vi.fn()}
+        {...defaultBadgeProps}
+      />
+    )
+
+    expect(screen.getByText('Administrator')).toBeInTheDocument()
+    expect(screen.getByText(/Member since/i)).toBeInTheDocument()
   })
 
   it('drives deployment profile interactions and blocks enterprise save without organization name', async () => {
@@ -73,6 +101,8 @@ describe('AccountProfileSection', () => {
         onSaveProfile={vi.fn()}
         onSaveDeployment={onSaveDeployment}
         onOpenChangePassword={vi.fn()}
+        onOpenEditProfile={vi.fn()}
+        {...defaultBadgeProps}
       />
     )
 
@@ -102,6 +132,8 @@ describe('AccountProfileSection', () => {
         onSaveProfile={vi.fn()}
         onSaveDeployment={onSaveDeployment}
         onOpenChangePassword={vi.fn()}
+        onOpenEditProfile={vi.fn()}
+        {...defaultBadgeProps}
       />
     )
 
@@ -204,23 +236,13 @@ describe('AccountSecuritySection', () => {
 })
 
 describe('AccountTabHeader', () => {
-  it('renders identity chips and member metadata', () => {
-    renderWithProviders(
-      <AccountTabHeader
-        username="admin"
-        displayName="Admin User"
-        subtitle="Personal and deployment identity live here."
-        roleLabel="Administrator"
-        roleColor="secondary"
-        createdAt="2024-01-15T00:00:00Z"
-        deploymentLabel="Enterprise deployment"
-      />
-    )
+  it('renders account settings title and description', () => {
+    renderWithProviders(<AccountTabHeader />)
 
-    expect(screen.getByText('Admin User')).toBeInTheDocument()
-    expect(screen.getByText('Administrator')).toBeInTheDocument()
-    expect(screen.getByText('Enterprise deployment')).toBeInTheDocument()
-    expect(screen.getByText(/@admin · since/i)).toBeInTheDocument()
+    expect(screen.getByText('User Settings')).toBeInTheDocument()
+    expect(
+      screen.getByText('Manage your personal profile, credentials, and access preferences.')
+    ).toBeInTheDocument()
   })
 })
 
@@ -234,6 +256,5 @@ describe('AccountTabNavigation', () => {
     await user.click(screen.getByRole('tab', { name: /access/i }))
 
     expect(onChange).toHaveBeenCalledWith('access')
-    expect(screen.queryByRole('tab', { name: /security/i })).not.toBeInTheDocument()
   })
 })

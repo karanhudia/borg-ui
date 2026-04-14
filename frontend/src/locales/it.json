@@ -775,6 +775,9 @@
           "enterpriseDesc": "Show an organization name as the deployment identity.",
           "orgName": "Organization name",
           "saveButton": "Save deployment"
+        },
+        "badges": {
+          "memberSince": "Membro dal {{date}}"
         }
       },
       "security": {
@@ -2709,7 +2712,8 @@
         "invalidToken": "Token non valido",
         "invalidAuthentication": "Autenticazione non valida",
         "invalidAuthToken": "Token di autenticazione non valido",
-        "invalidOrExpiredToken": "Token non valido o scaduto"
+        "invalidOrExpiredToken": "Token non valido o scaduto",
+        "proxyHeaderRequired": "L'header di autenticazione del reverse proxy \"{{header}}\" è obbligatorio"
       },
       "repo": {
         "repositoryNotFound": "Repository non trovato",

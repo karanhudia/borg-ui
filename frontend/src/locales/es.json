@@ -775,6 +775,9 @@
           "enterpriseDesc": "Show an organization name as the deployment identity.",
           "orgName": "Organization name",
           "saveButton": "Save deployment"
+        },
+        "badges": {
+          "memberSince": "Miembro desde {{date}}"
         }
       },
       "security": {
@@ -2709,7 +2712,8 @@
         "invalidToken": "Token inválido",
         "invalidAuthentication": "Autenticación inválida",
         "invalidAuthToken": "Token de autenticación inválido",
-        "invalidOrExpiredToken": "Token inválido o expirado"
+        "invalidOrExpiredToken": "Token inválido o expirado",
+        "proxyHeaderRequired": "Se requiere el encabezado de autenticación del proxy inverso \"{{header}}\""
       },
       "repo": {
         "repositoryNotFound": "Repositorio no encontrado",

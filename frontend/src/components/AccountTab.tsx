@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation } from '@tanstack/react-query'
-import { Box, Card, Stack } from '@mui/material'
+import {
+  Box,
+  Button,
+  Card,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material'
 import { settingsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth'
@@ -17,6 +27,7 @@ import AccountAccessSection from './AccountAccessSection'
 import AccountPasswordDialog from './AccountPasswordDialog'
 import AccountTabNavigation, { AccountView } from './AccountTabNavigation'
 import { clearPasswordSetupPromptSeen } from '../utils/passwordSetupPrompt'
+import ResponsiveDialog from './ResponsiveDialog'
 
 const AccountTab: React.FC = () => {
   const { t } = useTranslation()
@@ -27,6 +38,7 @@ const AccountTab: React.FC = () => {
 
   const [accountView, setAccountView] = useState<AccountView>('profile')
   const [showChangePasswordDialog, setShowChangePasswordDialog] = useState(false)
+  const [showEditProfileDialog, setShowEditProfileDialog] = useState(false)
   const [changePasswordForm, setChangePasswordForm] = useState({
     current_password: '',
     new_password: '',
@@ -122,11 +134,6 @@ const AccountTab: React.FC = () => {
   const deploymentType = user?.deployment_type === 'enterprise' ? 'enterprise' : 'individual'
   const enterpriseName = user?.enterprise_name || ''
 
-  const accountDisplayName = fullName || username || ''
-  const deploymentLabel =
-    deploymentType === 'enterprise'
-      ? enterpriseName || 'Enterprise deployment'
-      : 'Individual deployment'
   const currentUserRolePresentation = getGlobalRolePresentation(user?.role, t)
 
   useEffect(() => {
@@ -145,21 +152,7 @@ const AccountTab: React.FC = () => {
   return (
     <>
       <Stack spacing={3}>
-        {user && (
-          <AccountTabHeader
-            username={user.username}
-            displayName={accountDisplayName}
-            subtitle={
-              user?.deployment_type === 'enterprise'
-                ? t('settings.account.subtitle.enterprise')
-                : t('settings.account.subtitle.individual')
-            }
-            roleLabel={currentUserRolePresentation.label}
-            roleColor={currentUserRolePresentation.color}
-            createdAt={user.created_at}
-            deploymentLabel={deploymentLabel}
-          />
-        )}
+        <AccountTabHeader />
 
         <Card variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
           <AccountTabNavigation value={accountView} onChange={setAccountSurface} />
@@ -172,6 +165,10 @@ const AccountTab: React.FC = () => {
                 deploymentForm={deploymentForm}
                 isSavingProfile={updateProfileMutation.isPending}
                 isSavingDeployment={updateDeploymentMutation.isPending}
+                roleLabel={currentUserRolePresentation.label}
+                isAdmin={currentUserRolePresentation.isAdminRole}
+                isOperator={currentUserRolePresentation.isOperatorRole}
+                createdAt={user?.created_at || ''}
                 onProfileFormChange={(updates) =>
                   setProfileForm((current) => ({ ...current, ...updates }))
                 }
@@ -185,6 +182,13 @@ const AccountTab: React.FC = () => {
                   trackSettings(EventAction.VIEW, {
                     section: 'account',
                     operation: 'open_change_password_dialog',
+                  })
+                }}
+                onOpenEditProfile={() => {
+                  setShowEditProfileDialog(true)
+                  trackSettings(EventAction.VIEW, {
+                    section: 'account',
+                    operation: 'open_edit_profile_dialog',
                   })
                 }}
               />
@@ -225,6 +229,64 @@ const AccountTab: React.FC = () => {
           })
         }}
       />
+
+      <ResponsiveDialog
+        open={showEditProfileDialog}
+        onClose={() => setShowEditProfileDialog(false)}
+        fullWidth
+        maxWidth="sm"
+        footer={
+          <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 1.5 }}>
+            <Button onClick={() => setShowEditProfileDialog(false)}>
+              {t('common.buttons.cancel')}
+            </Button>
+            <Button
+              variant="contained"
+              disabled={updateProfileMutation.isPending}
+              onClick={() =>
+                updateProfileMutation.mutate(profileForm, {
+                  onSuccess: () => setShowEditProfileDialog(false),
+                })
+              }
+            >
+              {updateProfileMutation.isPending
+                ? t('settings.account.profile.saving')
+                : t('settings.account.profile.saveButton')}
+            </Button>
+          </DialogActions>
+        }
+      >
+        <DialogTitle>{t('settings.account.profile.title')}</DialogTitle>
+        <DialogContent sx={{ display: 'grid', gap: 2, pt: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            {t('settings.account.profile.description')}
+          </Typography>
+          <TextField
+            label={t('settings.users.fields.username')}
+            value={profileForm.username}
+            onChange={(e) => setProfileForm((c) => ({ ...c, username: e.target.value }))}
+            required
+            fullWidth
+            size="small"
+          />
+          <TextField
+            label={t('settings.users.fields.email')}
+            type="email"
+            value={profileForm.email}
+            onChange={(e) => setProfileForm((c) => ({ ...c, email: e.target.value }))}
+            required
+            fullWidth
+            size="small"
+          />
+          <TextField
+            label={t('settings.users.fields.fullName')}
+            value={profileForm.full_name}
+            onChange={(e) => setProfileForm((c) => ({ ...c, full_name: e.target.value }))}
+            fullWidth
+            size="small"
+          />
+        </DialogContent>
+      </ResponsiveDialog>
     </>
   )
 }

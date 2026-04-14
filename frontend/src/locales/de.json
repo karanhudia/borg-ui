@@ -775,6 +775,9 @@
           "enterpriseDesc": "Show an organization name as the deployment identity.",
           "orgName": "Organization name",
           "saveButton": "Save deployment"
+        },
+        "badges": {
+          "memberSince": "Mitglied seit {{date}}"
         }
       },
       "security": {
@@ -2709,7 +2712,8 @@
         "invalidToken": "Ungültiges Token",
         "invalidAuthentication": "Ungültige Authentifizierung",
         "invalidAuthToken": "Ungültiges Authentifizierungstoken",
-        "invalidOrExpiredToken": "Ungültiges oder abgelaufenes Token"
+        "invalidOrExpiredToken": "Ungültiges oder abgelaufenes Token",
+        "proxyHeaderRequired": "Der Reverse-Proxy-Authentifizierungsheader \"{{header}}\" ist erforderlich"
       },
       "repo": {
         "repositoryNotFound": "Repository nicht gefunden",
