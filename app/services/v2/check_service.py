@@ -16,6 +16,9 @@ from app.database.database import SessionLocal
 from app.core.borg2 import _get_borg2_binary
 from app.config import settings
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.ssh_utils import (
+    resolve_repo_ssh_key_file,  # noqa: F401
+)  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 

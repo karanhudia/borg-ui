@@ -22,6 +22,9 @@ from app.utils.borg_env import (
     cleanup_temp_key_file,
     setup_borg_env,
 )
+from app.utils.ssh_utils import (
+    resolve_repo_ssh_key_file,  # noqa: F401
+)  # Backward-compatible patch target for tests
 
 logger = structlog.get_logger()
 

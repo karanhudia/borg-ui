@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 import structlog
 from typing import List, Optional
 import json
+import os  # noqa: F401
 from datetime import timezone
 import asyncio
 

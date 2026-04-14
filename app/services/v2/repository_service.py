@@ -3,6 +3,7 @@
 from typing import Any, Dict, Optional
 
 from app.core.borg2 import borg2
+from app.database.database import SessionLocal  # noqa: F401
 from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import ssh_key_borg_env
 

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+import os  # noqa: F401
 import structlog
 
 from app.database.models import User, Repository, SystemSettings
