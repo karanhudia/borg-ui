@@ -185,6 +185,11 @@ const AccountTab: React.FC = () => {
       setPasskeyPassword('')
       await refreshUser()
       await refetchPasskeys()
+      trackSettings(EventAction.CREATE, {
+        section: 'account',
+        operation: 'add_passkey',
+        surface: 'security',
+      })
     },
     onError: (error: unknown) => {
       toast.error(
@@ -200,6 +205,11 @@ const AccountTab: React.FC = () => {
       toast.success(t('settings.account.security.passkeyDeletedToast'))
       await refreshUser()
       await refetchPasskeys()
+      trackSettings(EventAction.DELETE, {
+        section: 'account',
+        operation: 'delete_passkey',
+        surface: 'security',
+      })
     },
     onError: (error: unknown) => {
       toast.error(

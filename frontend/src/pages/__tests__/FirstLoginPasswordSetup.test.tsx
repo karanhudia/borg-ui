@@ -9,16 +9,29 @@ const {
   changePasswordFromRecentLoginMock,
   skipPasswordSetupMock,
   onCompleteMock,
+  trackAuthMock,
 } = vi.hoisted(() => ({
   useAuthMock: vi.fn(),
   navigateMock: vi.fn(),
   changePasswordFromRecentLoginMock: vi.fn(),
   skipPasswordSetupMock: vi.fn(),
   onCompleteMock: vi.fn(),
+  trackAuthMock: vi.fn(),
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
   useAuth: () => useAuthMock(),
+}))
+
+vi.mock('../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
+    trackAuth: trackAuthMock,
+    EventAction: {
+      VIEW: 'View',
+      COMPLETE: 'Complete',
+      FAIL: 'Fail',
+    },
+  }),
 }))
 
 vi.mock('react-router-dom', async () => {
@@ -60,12 +73,18 @@ describe('FirstLoginPasswordSetup', () => {
 
     renderWithProviders(<FirstLoginPasswordSetup onComplete={onCompleteMock} />)
 
+    expect(trackAuthMock).toHaveBeenCalledWith('View', { surface: 'first_login_password_setup' })
+
     await user.type(screen.getByLabelText(/^new password$/i), 'new-password-123')
     await user.type(screen.getByLabelText(/^confirm new password$/i), 'new-password-123')
     await user.click(screen.getByRole('button', { name: /^next$/i }))
 
     await waitFor(() => {
       expect(changePasswordFromRecentLoginMock).toHaveBeenCalledWith('new-password-123')
+      expect(trackAuthMock).toHaveBeenCalledWith('Complete', {
+        surface: 'first_login_password_setup',
+        operation: 'change_password',
+      })
       expect(toast.success).toHaveBeenCalledWith('Password changed successfully')
       expect(onCompleteMock).toHaveBeenCalled()
     })
@@ -80,6 +99,10 @@ describe('FirstLoginPasswordSetup', () => {
     expect(changePasswordFromRecentLoginMock).not.toHaveBeenCalled()
     await waitFor(() => {
       expect(skipPasswordSetupMock).toHaveBeenCalled()
+      expect(trackAuthMock).toHaveBeenCalledWith('Skip', {
+        surface: 'first_login_password_setup',
+        operation: 'change_password',
+      })
       expect(onCompleteMock).toHaveBeenCalled()
     })
   })
@@ -94,6 +117,11 @@ describe('FirstLoginPasswordSetup', () => {
     await user.click(screen.getByRole('button', { name: /^next$/i }))
 
     expect(changePasswordFromRecentLoginMock).not.toHaveBeenCalled()
+    expect(trackAuthMock).toHaveBeenCalledWith('Fail', {
+      surface: 'first_login_password_setup',
+      operation: 'change_password_validation',
+      reason: 'password_mismatch',
+    })
     expect(toast.error).toHaveBeenCalledWith('New passwords do not match')
   })
 })

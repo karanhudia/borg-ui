@@ -41,6 +41,7 @@
     "optional": "Opcional",
     "required": "Requerido",
     "default": "Predeterminado:",
+    "clearFilters": "Borrar filtros",
     "path_one": "ruta",
     "path_other": "rutas",
     "actions": "Acciones",
@@ -113,6 +114,7 @@
       "system": "Sistema",
       "management": "Gestión",
       "advanced": "Avanzado",
+      "accountAndSecurity": "Cuenta y seguridad",
       "account": "Cuenta",
       "appearance": "Apariencia",
       "notifications": "Notificaciones",
@@ -128,6 +130,11 @@
       "users": "Usuarios",
       "exportImport": "Exportar/Importar",
       "beta": "Beta"
+    },
+    "menu": {
+      "accountAndSecurityDesc": "Perfil, contraseña, 2FA, passkeys",
+      "appearanceDesc": "Tema, idioma",
+      "notificationsDesc": "Alertas y preferencias"
     },
     "versionInfo": "Información de versión",
     "app": "App:",
@@ -2731,6 +2738,7 @@
     "confirmRemove": "¿Eliminar este script del repositorio?",
     "parametersConfigured": "{{count}} parámetro(s) configurado(s)",
     "tooltips": {
+      "testScript": "Probar este script",
       "parametersOutOfSync": "Los parámetros necesitan atención - la definición del script ha cambiado",
       "configureParameters": "Configurar parámetros",
       "remove": "Eliminar"
@@ -3220,6 +3228,11 @@
     },
     "currentPlan": "Plan actual",
     "fullAccessLabel": "Acceso completo",
+    "planSuffix": "Plan",
+    "activeStatus": "Activo",
+    "descriptionCommunity": "Funciones principales de copia de seguridad incluidas",
+    "descriptionPro": "Todas las funciones Pro desbloqueadas",
+    "descriptionEnterprise": "Todas las funciones Enterprise desbloqueadas",
     "proFeatures": "Funciones Pro",
     "plans": "Planes",
     "fullAccessActiveNotice": "El acceso completo está incluido hasta {{date}}. Después de eso, esta instancia volverá automáticamente a Community, a menos que se active una licencia de pago.",

@@ -42,8 +42,12 @@ export default function Login() {
   } = useForm<LoginForm>()
 
   const handleSuccessfulLogin = useCallback(
-    (_username: string | null, mustChangePassword: boolean) => {
-      trackAuth(EventAction.LOGIN)
+    (
+      _username: string | null,
+      mustChangePassword: boolean,
+      method: 'password' | 'totp' | 'passkey' | 'passkey_autofill'
+    ) => {
+      trackAuth(EventAction.LOGIN, { method, requires_password_setup: mustChangePassword })
       toast.success(t('login.success'))
       if (mustChangePassword) {
         setShowPasswordSetup(true)
@@ -87,7 +91,7 @@ export default function Login() {
           throw new Error('Missing access token')
         }
         localStorage.setItem('access_token', access_token)
-        handleSuccessfulLogin(null, must_change_password || false)
+        handleSuccessfulLogin(null, must_change_password || false, 'passkey_autofill')
       } catch (error: unknown) {
         if (hasErrorName(error, 'AbortError') || cancelled) {
           return
@@ -118,7 +122,7 @@ export default function Login() {
         setTotpCode('')
         toast.success(t('login.totpRequired'))
       } else {
-        handleSuccessfulLogin(data.username, result.mustChangePassword)
+        handleSuccessfulLogin(data.username, result.mustChangePassword, 'password')
       }
     } catch (error: unknown) {
       toast.error(translateBackendKey(getApiErrorDetail(error)) || t('login.failed'))
@@ -132,7 +136,7 @@ export default function Login() {
     setIsLoading(true)
     try {
       const result = await verifyTotpLogin(pendingChallengeToken, totpCode)
-      handleSuccessfulLogin(pendingUsername, result.mustChangePassword)
+      handleSuccessfulLogin(pendingUsername, result.mustChangePassword, 'totp')
     } catch (error: unknown) {
       toast.error(translateBackendKey(getApiErrorDetail(error)) || t('login.failed'))
     } finally {
@@ -142,19 +146,22 @@ export default function Login() {
 
   const onSubmitPasskey = async () => {
     setIsLoading(true)
+    trackAuth(EventAction.START, { method: 'passkey', surface: 'login' })
     try {
       conditionalPasskeyAbortRef.current?.abort()
       conditionalPasskeyAbortRef.current = null
       const result = await loginWithPasskey()
-      handleSuccessfulLogin(null, result.mustChangePassword)
+      handleSuccessfulLogin(null, result.mustChangePassword, 'passkey')
     } catch (error: unknown) {
       if (
         hasErrorName(error, 'NotAllowedError') ||
         hasErrorName(error, 'AbortError') ||
         hasErrorName(error, 'InvalidStateError')
       ) {
+        trackAuth('Cancel', { method: 'passkey', surface: 'login' })
         toast.error(t('login.passkeyCancelled'))
       } else {
+        trackAuth(EventAction.FAIL, { method: 'passkey', surface: 'login' })
         toast.error(translateBackendKey(getApiErrorDetail(error)) || t('login.failed'))
       }
     } finally {

@@ -41,6 +41,7 @@
     "optional": "Opzionale",
     "required": "Obbligatorio",
     "default": "Predefinito:",
+    "clearFilters": "Cancella filtri",
     "path_one": "percorso",
     "path_other": "percorsi",
     "actions": "Azioni",
@@ -113,6 +114,7 @@
       "system": "Sistema",
       "management": "Gestione",
       "advanced": "Avanzate",
+      "accountAndSecurity": "Account e sicurezza",
       "account": "Account",
       "appearance": "Aspetto",
       "notifications": "Notifiche",
@@ -128,6 +130,11 @@
       "users": "Utenti",
       "exportImport": "Esporta/Importa",
       "beta": "Beta"
+    },
+    "menu": {
+      "accountAndSecurityDesc": "Profilo, password, 2FA, passkey",
+      "appearanceDesc": "Tema, lingua",
+      "notificationsDesc": "Avvisi e preferenze"
     },
     "versionInfo": "Info Versione",
     "app": "App:",
@@ -2731,6 +2738,7 @@
     "confirmRemove": "Rimuovere questo script dal repository?",
     "parametersConfigured": "{{count}} parametro(i) configurati",
     "tooltips": {
+      "testScript": "Esegui il test di questo script",
       "parametersOutOfSync": "I parametri necessitano attenzione - la definizione dello script è cambiata",
       "configureParameters": "Configura Parametri",
       "remove": "Rimuovi"
@@ -3220,6 +3228,11 @@
     },
     "currentPlan": "Piano attuale",
     "fullAccessLabel": "Accesso completo",
+    "planSuffix": "Piano",
+    "activeStatus": "Attivo",
+    "descriptionCommunity": "Funzionalità di backup essenziali incluse",
+    "descriptionPro": "Tutte le funzionalità Pro sbloccate",
+    "descriptionEnterprise": "Tutte le funzionalità Enterprise sbloccate",
     "proFeatures": "Funzionalità Pro",
     "plans": "Piani",
     "fullAccessActiveNotice": "L'accesso completo è incluso fino al {{date}}. Dopo quella data, questa istanza tornerà automaticamente a Community, a meno che non venga attivato un diritto a pagamento.",

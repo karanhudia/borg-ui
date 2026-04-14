@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'react-hot-toast'
 import { Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 
@@ -15,18 +16,31 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
   const { t } = useTranslation()
   const { canChangePasswordFromRecentLogin, changePasswordFromRecentLogin, skipPasswordSetup } =
     useAuth()
+  const { trackAuth, EventAction } = useAnalytics()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
+  useEffect(() => {
+    trackAuth(EventAction.VIEW, { surface: 'first_login_password_setup' })
+  }, [EventAction.VIEW, trackAuth])
+
   const changePasswordMutation = useMutation({
     mutationFn: async () => changePasswordFromRecentLogin(newPassword),
     onSuccess: () => {
+      trackAuth(EventAction.COMPLETE, {
+        surface: 'first_login_password_setup',
+        operation: 'change_password',
+      })
       toast.success(t('settings.toasts.passwordChanged'))
       onComplete()
     },
     onError: (error: unknown) => {
+      trackAuth(EventAction.FAIL, {
+        surface: 'first_login_password_setup',
+        operation: 'change_password',
+      })
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) || t('settings.toasts.failedToChangePassword')
       )
@@ -36,9 +50,17 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
   const skipSetupMutation = useMutation({
     mutationFn: async () => skipPasswordSetup(),
     onSuccess: () => {
+      trackAuth('Skip', {
+        surface: 'first_login_password_setup',
+        operation: 'change_password',
+      })
       onComplete()
     },
     onError: (error: unknown) => {
+      trackAuth(EventAction.FAIL, {
+        surface: 'first_login_password_setup',
+        operation: 'skip_password_change',
+      })
       toast.error(
         translateBackendKey(getApiErrorDetail(error)) || t('common.errors.unexpectedError')
       )
@@ -53,6 +75,11 @@ export default function PasswordSetupCard({ onComplete }: { onComplete: () => vo
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (passwordsMismatch) {
+      trackAuth(EventAction.FAIL, {
+        surface: 'first_login_password_setup',
+        operation: 'change_password_validation',
+        reason: 'password_mismatch',
+      })
       toast.error(t('settings.toasts.passwordsDoNotMatch'))
       return
     }

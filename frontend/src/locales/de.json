@@ -41,6 +41,7 @@
     "optional": "Optional",
     "required": "Erforderlich",
     "default": "Standard:",
+    "clearFilters": "Filter löschen",
     "path_one": "Pfad",
     "path_other": "Pfade",
     "actions": "Aktionen",
@@ -113,6 +114,7 @@
       "system": "System",
       "management": "Verwaltung",
       "advanced": "Erweitert",
+      "accountAndSecurity": "Konto & Sicherheit",
       "account": "Konto",
       "appearance": "Erscheinungsbild",
       "notifications": "Benachrichtigungen",
@@ -128,6 +130,11 @@
       "users": "Benutzer",
       "exportImport": "Export/Import",
       "beta": "Beta"
+    },
+    "menu": {
+      "accountAndSecurityDesc": "Profil, Passwort, 2FA, Passkeys",
+      "appearanceDesc": "Design, Sprache",
+      "notificationsDesc": "Benachrichtigungen & Einstellungen"
     },
     "versionInfo": "Versionsinformationen",
     "app": "App:",
@@ -2731,6 +2738,7 @@
     "confirmRemove": "Dieses Skript aus dem Repository entfernen?",
     "parametersConfigured": "{{count}} Parameter konfiguriert",
     "tooltips": {
+      "testScript": "Dieses Skript testweise ausführen",
       "parametersOutOfSync": "Parameter benötigen Aufmerksamkeit - Skriptdefinition hat sich geändert",
       "configureParameters": "Parameter konfigurieren",
       "remove": "Entfernen"
@@ -3220,6 +3228,11 @@
     },
     "currentPlan": "Aktueller Plan",
     "fullAccessLabel": "Voller Zugriff",
+    "planSuffix": "Plan",
+    "activeStatus": "Aktiv",
+    "descriptionCommunity": "Zentrale Backup-Funktionen enthalten",
+    "descriptionPro": "Alle Pro-Funktionen freigeschaltet",
+    "descriptionEnterprise": "Alle Enterprise-Funktionen freigeschaltet",
     "proFeatures": "Pro-Funktionen",
     "plans": "Pläne",
     "fullAccessActiveNotice": "Voller Zugriff ist bis {{date}} inbegriffen. Danach wechselt diese Instanz automatisch zu Community, sofern keine kostenpflichtige Berechtigung aktiviert wird.",

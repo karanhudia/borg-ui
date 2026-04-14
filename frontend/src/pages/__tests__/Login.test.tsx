@@ -30,6 +30,8 @@ vi.mock('../../hooks/useAnalytics', () => ({
     trackAuth: trackAuthMock,
     EventAction: {
       LOGIN: 'Login',
+      START: 'Start',
+      FAIL: 'Fail',
     },
   }),
 }))
@@ -71,7 +73,10 @@ describe('Login page', () => {
 
     await waitFor(() => {
       expect(loginMock).toHaveBeenCalledWith('admin', 'secret')
-      expect(trackAuthMock).toHaveBeenCalledWith('Login')
+      expect(trackAuthMock).toHaveBeenCalledWith('Login', {
+        method: 'password',
+        requires_password_setup: false,
+      })
       expect(toast.success).toHaveBeenCalled()
       expect(navigateMock).toHaveBeenCalledWith('/dashboard')
     })
@@ -140,7 +145,10 @@ describe('Login page', () => {
     await waitFor(() => {
       expect(verifyTotpLoginMock).toHaveBeenCalledWith('challenge-token', '123456')
       expect(navigateMock).toHaveBeenCalledWith('/dashboard')
-      expect(trackAuthMock).toHaveBeenCalledWith('Login')
+      expect(trackAuthMock).toHaveBeenCalledWith('Login', {
+        method: 'totp',
+        requires_password_setup: false,
+      })
     })
   })
 
@@ -153,9 +161,13 @@ describe('Login page', () => {
     await user.click(screen.getByRole('button', { name: /sign in with passkey/i }))
 
     await waitFor(() => {
+      expect(trackAuthMock).toHaveBeenCalledWith('Start', { method: 'passkey', surface: 'login' })
       expect(loginWithPasskeyMock).toHaveBeenCalled()
       expect(navigateMock).toHaveBeenCalledWith('/dashboard')
-      expect(trackAuthMock).toHaveBeenCalledWith('Login')
+      expect(trackAuthMock).toHaveBeenCalledWith('Login', {
+        method: 'passkey',
+        requires_password_setup: false,
+      })
     })
   })
 })

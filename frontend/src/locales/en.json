@@ -41,6 +41,7 @@
     "optional": "Optional",
     "required": "Required",
     "default": "Default:",
+    "clearFilters": "Clear filters",
     "path_one": "path",
     "path_other": "paths",
     "actions": "Actions",
@@ -113,6 +114,7 @@
       "system": "System",
       "management": "Management",
       "advanced": "Advanced",
+      "accountAndSecurity": "Account & Security",
       "account": "Account",
       "appearance": "Appearance",
       "notifications": "Notifications",
@@ -128,6 +130,11 @@
       "users": "Users",
       "exportImport": "Export/Import",
       "beta": "Beta"
+    },
+    "menu": {
+      "accountAndSecurityDesc": "Profile, password, 2FA, passkeys",
+      "appearanceDesc": "Theme, language",
+      "notificationsDesc": "Alerts & preferences"
     },
     "versionInfo": "Version Info",
     "app": "App:",
@@ -2731,6 +2738,7 @@
     "confirmRemove": "Remove this script from the repository?",
     "parametersConfigured": "{{count}} parameter(s) configured",
     "tooltips": {
+      "testScript": "Test run this script",
       "parametersOutOfSync": "Parameters need attention - script definition has changed",
       "configureParameters": "Configure Parameters",
       "remove": "Remove"
@@ -3220,6 +3228,11 @@
     },
     "currentPlan": "Your Plan",
     "fullAccessLabel": "Full Access",
+    "planSuffix": "Plan",
+    "activeStatus": "Active",
+    "descriptionCommunity": "Core backup features included",
+    "descriptionPro": "All Pro features unlocked",
+    "descriptionEnterprise": "All Enterprise features unlocked",
     "proFeatures": "Pro features",
     "plans": "Plans",
     "fullAccessActiveNotice": "Full Access is included until {{date}}. After that, this instance will automatically move to Community unless a paid entitlement is activated.",
