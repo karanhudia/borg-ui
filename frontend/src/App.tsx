@@ -14,11 +14,18 @@ import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
 import { UmamiTracker } from './components/UmamiTracker'
-import AnnouncementManager from './components/AnnouncementManager'
 import { loadUserPreference, initAnalyticsIfEnabled, identifyUser } from './utils/analytics'
 
 function App() {
-  const { isAuthenticated, isLoading, proxyAuthEnabled, user } = useAuth()
+  const {
+    isAuthenticated,
+    isLoading,
+    proxyAuthEnabled,
+    proxyAuthHeader,
+    proxyAuthWarnings,
+    authError,
+    user,
+  } = useAuth()
 
   // Load user analytics preference on mount and after login, then conditionally initialize Umami
   useEffect(() => {
@@ -45,11 +52,37 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    // If proxy auth is enabled, show loading (backend will auto-create default user)
+    // If proxy auth is enabled, never send users to the local login page.
     if (proxyAuthEnabled) {
       return (
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+          {authError ? (
+            <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+              <h1 className="text-2xl font-semibold text-slate-900">
+                Proxy authentication required
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{authError}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Ensure Borg UI is only reachable through your authenticated reverse proxy and that
+                it forwards the expected user header{proxyAuthHeader ? ` (${proxyAuthHeader})` : ''}
+                .
+              </p>
+              {proxyAuthWarnings.length > 0 ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <h2 className="text-sm font-semibold text-amber-900">
+                    Proxy auth configuration warnings
+                  </h2>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
+                    {proxyAuthWarnings.map((warning) => (
+                      <li key={warning.code}>{warning.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+          )}
         </div>
       )
     }
@@ -69,7 +102,6 @@ function App() {
   return (
     <Layout>
       <UmamiTracker />
-      <AnnouncementManager />
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />

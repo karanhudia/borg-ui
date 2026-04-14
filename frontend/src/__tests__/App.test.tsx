@@ -35,10 +35,6 @@ vi.mock('../components/UmamiTracker', () => ({
   UmamiTracker: () => <div>Umami Tracker</div>,
 }))
 
-vi.mock('../components/AnnouncementManager', () => ({
-  default: () => <div>Announcement Manager</div>,
-}))
-
 vi.mock('../components/ProtectedRoute', () => ({
   default: ({ children, requiredTab }: { children: ReactNode; requiredTab: string }) => {
     protectedRouteMock(requiredTab)
@@ -89,6 +85,7 @@ describe('App', () => {
       isAuthenticated: true,
       isLoading: false,
       proxyAuthEnabled: false,
+      proxyAuthWarnings: [],
       user: null,
     })
   })
@@ -98,6 +95,7 @@ describe('App', () => {
       isAuthenticated: false,
       isLoading: true,
       proxyAuthEnabled: false,
+      proxyAuthWarnings: [],
       user: null,
     })
 
@@ -112,6 +110,9 @@ describe('App', () => {
       isAuthenticated: false,
       isLoading: false,
       proxyAuthEnabled: true,
+      proxyAuthHeader: 'X-Forwarded-User',
+      proxyAuthWarnings: [],
+      authError: null,
       user: null,
     })
 
@@ -121,11 +122,34 @@ describe('App', () => {
     expect(screen.queryByText('Login Page')).not.toBeInTheDocument()
   })
 
+  it('shows a proxy-auth guidance screen when proxy auth is enabled but identity is missing', () => {
+    useAuthMock.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+      proxyAuthEnabled: true,
+      proxyAuthHeader: 'X-Forwarded-User',
+      proxyAuthWarnings: [{ code: 'broad_bind', message: 'Bound broadly' }],
+      authError: 'Reverse proxy authentication header "X-Forwarded-User" is required',
+      user: null,
+    })
+
+    renderWithProviders(<App />, { initialRoute: '/login' })
+
+    expect(screen.getByText('Proxy authentication required')).toBeInTheDocument()
+    expect(
+      screen.getByText('Reverse proxy authentication header "X-Forwarded-User" is required')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Proxy auth configuration warnings')).toBeInTheDocument()
+    expect(screen.getByText('Bound broadly')).toBeInTheDocument()
+    expect(screen.queryByText('Login Page')).not.toBeInTheDocument()
+  })
+
   it('renders the login route when unauthenticated in JWT mode', async () => {
     useAuthMock.mockReturnValue({
       isAuthenticated: false,
       isLoading: false,
       proxyAuthEnabled: false,
+      proxyAuthWarnings: [],
       user: null,
     })
 
@@ -134,7 +158,6 @@ describe('App', () => {
     expect(await screen.findByText('Login Page')).toBeInTheDocument()
     expect(screen.getByText('Umami Tracker')).toBeInTheDocument()
     expect(screen.queryByText('Layout')).not.toBeInTheDocument()
-    expect(screen.queryByText('Announcement Manager')).not.toBeInTheDocument()
   })
 
   it('renders the authenticated app shell and redirects root to dashboard', async () => {
@@ -143,7 +166,6 @@ describe('App', () => {
     expect(await screen.findByText('Dashboard Page')).toBeInTheDocument()
     expect(screen.getByText('Layout')).toBeInTheDocument()
     expect(screen.getByText('Umami Tracker')).toBeInTheDocument()
-    expect(screen.getByText('Announcement Manager')).toBeInTheDocument()
   })
 
   it('does not force users with required password changes back to account settings on every route', async () => {
@@ -151,6 +173,7 @@ describe('App', () => {
       isAuthenticated: true,
       isLoading: false,
       proxyAuthEnabled: false,
+      proxyAuthWarnings: [],
       user: { username: 'admin', must_change_password: true },
     })
 
