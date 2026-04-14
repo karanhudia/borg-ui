@@ -2533,7 +2533,7 @@
   "cache": {
     "subtitle": "Monitoriza y configura el sistema de caché de archivos basado en Redis para una navegación más rápida",
     "cacheStatus": "Estado de la caché",
-    "cachedArchives": "Archivos en caché",
+    "cachedArchives": "Entidades en caché",
     "memoryUsed": "Memoria utilizada",
     "hitRate": "Tasa de aciertos",
     "totalRequests": "{{count}} solicitudes totales",

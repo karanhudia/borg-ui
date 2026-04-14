@@ -2533,7 +2533,7 @@
   "cache": {
     "subtitle": "Monitor and configure the Redis-based archive caching system for faster browsing",
     "cacheStatus": "Cache Status",
-    "cachedArchives": "Cached Archives",
+    "cachedArchives": "Cached Entities",
     "memoryUsed": "Memory Used",
     "hitRate": "Hit Rate",
     "totalRequests": "{{count}} total requests",

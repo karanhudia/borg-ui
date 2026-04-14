@@ -2533,7 +2533,7 @@
   "cache": {
     "subtitle": "Redis-basiertes Archiv-Caching-System für schnelleres Durchsuchen überwachen und konfigurieren",
     "cacheStatus": "Cache-Status",
-    "cachedArchives": "Gecachte Archive",
+    "cachedArchives": "Gecachte Einträge",
     "memoryUsed": "Verwendeter Speicher",
     "hitRate": "Trefferrate",
     "totalRequests": "{{count}} Anfragen gesamt",
