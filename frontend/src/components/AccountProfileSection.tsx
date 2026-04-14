@@ -17,7 +17,6 @@ export interface DeploymentProfileFormData {
 
 interface AccountProfileSectionProps {
   canManageSystem: boolean
-  mustChangePassword: boolean
   profileForm: AccountProfileFormData
   deploymentForm: DeploymentProfileFormData
   isSavingProfile: boolean
@@ -38,7 +37,6 @@ interface AccountProfileSectionProps {
 
 export default function AccountProfileSection({
   canManageSystem,
-  mustChangePassword,
   profileForm,
   deploymentForm,
   isSavingDeployment,
@@ -412,14 +410,9 @@ export default function AccountProfileSection({
             {t('settings.account.security.accountPassword')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {mustChangePassword
-              ? t('settings.account.security.passwordUpdateHint')
-              : t('settings.account.security.changeCredentialsHint')}
+            {t('settings.account.security.changeCredentialsHint')}
           </Typography>
-          <AccountSecuritySection
-            mustChangePassword={mustChangePassword}
-            onOpenChangePassword={onOpenChangePassword}
-          />
+          <AccountSecuritySection onOpenChangePassword={onOpenChangePassword} />
         </Box>
       </Box>
 

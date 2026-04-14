@@ -344,7 +344,6 @@ const AccountTab: React.FC = () => {
             {accountView === 'profile' && (
               <AccountProfileSection
                 canManageSystem={canManageSystem}
-                mustChangePassword={!!user?.must_change_password}
                 profileForm={profileForm}
                 deploymentForm={deploymentForm}
                 isSavingProfile={updateProfileMutation.isPending}
@@ -407,20 +406,11 @@ const AccountTab: React.FC = () => {
 
       <AccountPasswordDialog
         open={showChangePasswordDialog}
-        mustChangePassword={!!user?.must_change_password}
         currentPassword={changePasswordForm.current_password}
         newPassword={changePasswordForm.new_password}
         confirmPassword={changePasswordForm.confirm_password}
         isSubmitting={changePasswordMutation.isPending}
-        onClose={(reason) => {
-          if (
-            user?.must_change_password &&
-            (reason === 'backdropClick' || reason === 'escapeKeyDown')
-          ) {
-            return
-          }
-          setShowChangePasswordDialog(false)
-        }}
+        onClose={() => setShowChangePasswordDialog(false)}
         onFormChange={(updates) => setChangePasswordForm((current) => ({ ...current, ...updates }))}
         onSubmit={() => {
           if (changePasswordForm.new_password !== changePasswordForm.confirm_password) {

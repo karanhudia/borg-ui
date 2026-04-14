@@ -46,7 +46,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       }
     }
     checkConsent()
-  }, [user?.must_change_password])
+  }, [])
 
   useEffect(() => {
     if (!user?.username) {

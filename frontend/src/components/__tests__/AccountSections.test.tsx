@@ -31,14 +31,13 @@ const defaultBadgeProps = {
 }
 
 describe('AccountProfileSection', () => {
-  it('renders the password and edit profile cards when setup is incomplete', async () => {
+  it('renders the password and edit profile cards', async () => {
     const user = userEvent.setup()
     const onOpenEditProfile = vi.fn()
 
     renderWithProviders(
       <AccountProfileSection
         canManageSystem={false}
-        mustChangePassword={true}
         profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
         deploymentForm={{ deployment_type: 'individual', enterprise_name: '' }}
         isSavingProfile={false}
@@ -55,7 +54,7 @@ describe('AccountProfileSection', () => {
 
     const headings = screen.getAllByText('Account password')
     expect(headings[0]).toBeInTheDocument()
-    expect(screen.getByText('Password update required')).toBeInTheDocument()
+    expect(screen.getAllByText('Click to change your login credentials').length).toBeGreaterThan(0)
     expect(screen.getByText('Edit profile')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /edit profile/i }))
@@ -71,7 +70,6 @@ describe('AccountProfileSection', () => {
     const { unmount } = renderWithProviders(
       <AccountProfileSection
         canManageSystem={true}
-        mustChangePassword={false}
         profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
         deploymentForm={{ deployment_type: 'enterprise', enterprise_name: '' }}
         isSavingProfile={false}
@@ -102,7 +100,6 @@ describe('AccountProfileSection', () => {
     renderWithProviders(
       <AccountProfileSection
         canManageSystem={true}
-        mustChangePassword={false}
         profileForm={{ username: 'admin', email: 'admin@example.com', full_name: 'Admin User' }}
         deploymentForm={{ deployment_type: 'enterprise', enterprise_name: 'NullCode AI' }}
         isSavingProfile={false}
@@ -123,7 +120,7 @@ describe('AccountProfileSection', () => {
 })
 
 describe('AccountPasswordDialog', () => {
-  it('shows mismatch feedback and supports cancel for optional password changes', async () => {
+  it('shows mismatch feedback and supports cancel for password changes', async () => {
     const user = userEvent.setup()
     const onFormChange = vi.fn()
     const onSubmit = vi.fn()
@@ -132,7 +129,6 @@ describe('AccountPasswordDialog', () => {
     renderWithProviders(
       <AccountPasswordDialog
         open={true}
-        mustChangePassword={false}
         currentPassword="old-pass"
         newPassword="new-pass"
         confirmPassword="different-pass"
@@ -150,30 +146,6 @@ describe('AccountPasswordDialog', () => {
 
     fireEvent.submit(screen.getByRole('button', { name: /update password/i }).closest('form')!)
     expect(onSubmit).toHaveBeenCalledTimes(1)
-  })
-
-  it('hides cancel when password change is mandatory', () => {
-    renderWithProviders(
-      <AccountPasswordDialog
-        open={true}
-        mustChangePassword={true}
-        currentPassword=""
-        newPassword=""
-        confirmPassword=""
-        isSubmitting={false}
-        onClose={vi.fn()}
-        onFormChange={vi.fn()}
-        onSubmit={vi.fn()}
-      />
-    )
-
-    expect(screen.getByText('Complete account setup')).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        /your password must be changed before you can navigate outside account settings/i
-      )
-    ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument()
   })
 })
 
@@ -198,19 +170,14 @@ describe('AccountAccessSection', () => {
 })
 
 describe('AccountSecuritySection', () => {
-  it('changes copy for mandatory password updates and opens the password dialog on click', async () => {
+  it('opens the password dialog on click', async () => {
     const user = userEvent.setup()
     const onOpenChangePassword = vi.fn()
 
-    renderWithProviders(
-      <AccountSecuritySection
-        mustChangePassword={true}
-        onOpenChangePassword={onOpenChangePassword}
-      />
-    )
+    renderWithProviders(<AccountSecuritySection onOpenChangePassword={onOpenChangePassword} />)
 
-    expect(screen.getByText('Password update required')).toBeInTheDocument()
-    await user.click(screen.getByText('Password update required'))
+    expect(screen.getByText('Account password')).toBeInTheDocument()
+    await user.click(screen.getByText('Account password'))
     expect(onOpenChangePassword).toHaveBeenCalledTimes(1)
   })
 })

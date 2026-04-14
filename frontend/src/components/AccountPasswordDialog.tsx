@@ -6,13 +6,11 @@ import {
   DialogTitle,
   Stack,
   TextField,
-  Typography,
 } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
 
 interface AccountPasswordDialogProps {
   open: boolean
-  mustChangePassword: boolean
   currentPassword: string
   newPassword: string
   confirmPassword: string
@@ -30,7 +28,6 @@ interface AccountPasswordDialogProps {
 
 export default function AccountPasswordDialog({
   open,
-  mustChangePassword,
   currentPassword,
   newPassword,
   confirmPassword,
@@ -42,14 +39,8 @@ export default function AccountPasswordDialog({
   const passwordsMismatch = confirmPassword !== '' && newPassword !== confirmPassword
 
   return (
-    <ResponsiveDialog
-      open={open}
-      onClose={(_, reason) => onClose(reason)}
-      maxWidth="sm"
-      fullWidth
-      disableEscapeKeyDown={mustChangePassword}
-    >
-      <DialogTitle>{mustChangePassword ? 'Complete account setup' : 'Change password'}</DialogTitle>
+    <ResponsiveDialog open={open} onClose={(_, reason) => onClose(reason)} maxWidth="sm" fullWidth>
+      <DialogTitle>Change password</DialogTitle>
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -58,11 +49,6 @@ export default function AccountPasswordDialog({
       >
         <DialogContent>
           <Stack spacing={2}>
-            {mustChangePassword && (
-              <Typography variant="body2" color="text.secondary">
-                Your password must be changed before you can navigate outside account settings.
-              </Typography>
-            )}
             <TextField
               label="Current password"
               type="password"
@@ -95,7 +81,7 @@ export default function AccountPasswordDialog({
           </Stack>
         </DialogContent>
         <DialogActions>
-          {!mustChangePassword && <Button onClick={() => onClose('closeButton')}>Cancel</Button>}
+          <Button onClick={() => onClose('closeButton')}>Cancel</Button>
           <Button
             type="submit"
             variant="contained"
