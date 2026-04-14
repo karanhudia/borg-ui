@@ -16,6 +16,8 @@ from app.config import settings
 from app.core.permissions import (
     GLOBAL_ROLE_RANK,
     REPOSITORY_ROLE_RANK,
+    default_repository_role_for_global_role,
+    normalize_repository_role_for_global_role,
 )
 from app.database.database import get_db
 from app.database.models import Repository, User, UserRepositoryPermission
@@ -234,6 +236,54 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
             detail="Empty username in proxy header",
         )
 
+    def get_configured_header(header_name: str) -> Optional[str]:
+        if not header_name:
+            return None
+        value = request.headers.get(header_name)
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    def normalize_global_role(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        return normalized if normalized in GLOBAL_ROLE_RANK else None
+
+    def normalize_repository_role(value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        return normalized if normalized in REPO_ROLE_RANK else None
+
+    role_from_header = normalize_global_role(
+        get_configured_header(settings.proxy_auth_role_header)
+    )
+    all_repositories_role_from_header = normalize_repository_role(
+        get_configured_header(settings.proxy_auth_all_repositories_role_header)
+    )
+    email_from_header = get_configured_header(settings.proxy_auth_email_header)
+    full_name_from_header = get_configured_header(settings.proxy_auth_full_name_header)
+
+    resolved_role = role_from_header or "viewer"
+    resolved_all_repositories_role = (
+        normalize_repository_role_for_global_role(
+            resolved_role, all_repositories_role_from_header
+        )
+        if all_repositories_role_from_header is not None
+        else default_repository_role_for_global_role(resolved_role)
+    )
+
+    fallback_email = f"{username}@proxy.local"
+    resolved_email = fallback_email
+    if email_from_header:
+        existing_email_owner = (
+            db.query(User).filter(User.email == email_from_header).first()
+        )
+        if existing_email_owner is None or existing_email_owner.username == username:
+            resolved_email = email_from_header
+
     # Check if user exists
     user = db.query(User).filter(User.username == username).first()
 
@@ -244,8 +294,10 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
         user = User(
             username=username,
             password_hash="",  # No password for proxy auth users
-            email=f"{username}@proxy.local",
-            role="viewer",
+            email=resolved_email,
+            full_name=full_name_from_header,
+            role=resolved_role,
+            all_repositories_role=resolved_all_repositories_role,
             is_active=True,
             must_change_password=False,
         )
@@ -260,6 +312,28 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled"
         )
+
+    if role_from_header is not None:
+        user.role = role_from_header
+        user.all_repositories_role = (
+            normalize_repository_role_for_global_role(
+                user.role, all_repositories_role_from_header
+            )
+            if all_repositories_role_from_header is not None
+            else default_repository_role_for_global_role(user.role)
+        )
+
+    if email_from_header:
+        existing_email_owner = (
+            db.query(User)
+            .filter(User.email == email_from_header, User.username != username)
+            .first()
+        )
+        if existing_email_owner is None:
+            user.email = email_from_header
+
+    if full_name_from_header:
+        user.full_name = full_name_from_header
 
     user.last_login = datetime.now(timezone.utc)
     db.commit()

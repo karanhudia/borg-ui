@@ -17,11 +17,25 @@ function isBackendDetail(value: unknown): value is Exclude<BackendDetail, null |
   )
 }
 
-export function getApiErrorDetail(error: unknown): BackendDetail {
-  if (!axios.isAxiosError(error)) {
+function getResponseDetail(error: unknown): unknown {
+  if (typeof error !== 'object' || error === null || !('response' in error)) {
     return undefined
   }
 
-  const detail = error.response?.data?.detail
+  const response = error.response
+  if (typeof response !== 'object' || response === null || !('data' in response)) {
+    return undefined
+  }
+
+  const data = response.data
+  if (typeof data !== 'object' || data === null || !('detail' in data)) {
+    return undefined
+  }
+
+  return data.detail
+}
+
+export function getApiErrorDetail(error: unknown): BackendDetail {
+  const detail = axios.isAxiosError(error) ? error.response?.data?.detail : getResponseDetail(error)
   return isBackendDetail(detail) ? detail : undefined
 }

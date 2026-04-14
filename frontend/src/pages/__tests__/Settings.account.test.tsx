@@ -132,7 +132,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
 
     expect(trackSettings).toHaveBeenCalledWith('View', {
       section: 'settings',
@@ -171,7 +171,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
 
     const headings = screen.getAllByText('Account password')
     expect(headings[0]).toBeInTheDocument()
@@ -188,7 +188,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
     await user.click(screen.getByRole('button', { name: /account password/i }))
     const dialog = await screen.findByRole('dialog', { name: /change password/i })
     const newPasswordInput = within(dialog).getByLabelText(/new password/i)
@@ -219,7 +219,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
     await user.click(screen.getByRole('button', { name: /account password/i }))
     const dialog = await screen.findByRole('dialog', { name: /change password/i })
     const newPasswordInput = within(dialog).getByLabelText(/new password/i)
@@ -244,7 +244,7 @@ describe('Settings account tab', () => {
       </ThemeProvider>
     )
 
-    await screen.findByText('Personal profile')
+    await screen.findByRole('tab', { name: 'Personal profile' })
     await user.click(screen.getByRole('button', { name: /account password/i }))
     const dialog = await screen.findByRole('dialog', { name: /change password/i })
     const newPasswordInput = within(dialog).getByLabelText(/new password/i)
