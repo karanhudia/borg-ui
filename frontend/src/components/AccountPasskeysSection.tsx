@@ -1,4 +1,4 @@
-import { Box, Button, IconButton, Stack, Typography } from '@mui/material'
+import { Box, Button, IconButton, Stack, Typography, useTheme } from '@mui/material'
 import { KeyRound, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { PasskeyCredentialResponse } from '../services/api'
@@ -17,6 +17,12 @@ export default function AccountPasskeysSection({
   onDelete,
 }: AccountPasskeysSectionProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const cardGradient = isDark
+    ? 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.015) 0%, rgba(0,0,0,0.005) 100%)'
+  const neutralIconBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'
 
   return (
     <Box>
@@ -36,7 +42,7 @@ export default function AccountPasskeysSection({
           background:
             passkeys.length > 0
               ? 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(14,116,144,0.05) 100%)'
-              : 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+              : cardGradient,
         }}
       >
         <Stack
@@ -54,7 +60,7 @@ export default function AccountPasskeysSection({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                bgcolor: passkeys.length > 0 ? 'rgba(59,130,246,0.16)' : 'rgba(255,255,255,0.04)',
+                bgcolor: passkeys.length > 0 ? 'rgba(59,130,246,0.16)' : neutralIconBg,
               }}
             >
               <KeyRound size={18} />
@@ -68,7 +74,7 @@ export default function AccountPasskeysSection({
                   fontWeight: 700,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
-                  color: passkeys.length > 0 ? 'info.light' : 'text.disabled',
+                  color: passkeys.length > 0 ? 'info.light' : 'text.secondary',
                 }}
               >
                 {passkeys.length > 0
@@ -89,10 +95,14 @@ export default function AccountPasskeysSection({
           </Stack>
 
           <Button
-            variant="contained"
+            variant="outlined"
             onClick={onAdd}
             disabled={loading}
-            sx={{ minWidth: { xs: '100%', sm: 160, md: 'auto' }, alignSelf: { md: 'center' } }}
+            sx={{
+              minWidth: { xs: '100%', md: 'auto' },
+              alignSelf: { md: 'center' },
+              whiteSpace: 'nowrap',
+            }}
           >
             {t('settings.account.security.addPasskey')}
           </Button>
@@ -100,21 +110,7 @@ export default function AccountPasskeysSection({
       </Box>
 
       <Stack spacing={1.5}>
-        {passkeys.length === 0 ? (
-          <Box
-            sx={{
-              p: 2,
-              borderRadius: 2,
-              border: '1px dashed',
-              borderColor: 'divider',
-              bgcolor: 'rgba(255,255,255,0.015)',
-            }}
-          >
-            <Typography variant="body2" color="text.secondary">
-              {t('settings.account.security.passkeyEmptyHint')}
-            </Typography>
-          </Box>
-        ) : (
+        {passkeys.length > 0 &&
           passkeys.map((passkey) => (
             <Box
               key={passkey.id}
@@ -152,8 +148,7 @@ export default function AccountPasskeysSection({
                 <Trash2 size={16} />
               </IconButton>
             </Box>
-          ))
-        )}
+          ))}
       </Stack>
     </Box>
   )

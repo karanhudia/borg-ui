@@ -1,4 +1,4 @@
-import { Box, Stack, Typography } from '@mui/material'
+import { Box, Stack, Typography, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { Lock } from 'lucide-react'
 
@@ -10,8 +10,19 @@ export default function AccountSecuritySection({
   onOpenChangePassword,
 }: AccountSecuritySectionProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const title = t('settings.account.security.accountPassword')
   const description = t('settings.account.security.changeCredentialsHint')
+
+  const cardBorder = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.09)'
+  const cardBorderHover = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.16)'
+  const cardGradient = isDark
+    ? 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.015) 0%, rgba(0,0,0,0.005) 100%)'
+  const cardHoverGradient = isDark
+    ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.03) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0.015) 100%)'
 
   return (
     <Box
@@ -35,14 +46,12 @@ export default function AccountSecuritySection({
         borderRadius: 2.5,
         cursor: 'pointer',
         border: '1px solid',
-        borderColor: 'rgba(255,255,255,0.07)',
-        background:
-          'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+        borderColor: cardBorder,
+        background: cardGradient,
         transition: 'border-color 180ms ease, background 180ms ease',
         '&:hover': {
-          borderColor: 'rgba(255,255,255,0.14)',
-          background:
-            'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.03) 100%)',
+          borderColor: cardBorderHover,
+          background: cardHoverGradient,
         },
       }}
     >
@@ -56,10 +65,11 @@ export default function AccountSecuritySection({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background:
-              'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)',
+            background: isDark
+              ? 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)'
+              : 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.02) 100%)',
             border: '1px solid',
-            borderColor: 'rgba(255,255,255,0.08)',
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
           }}
         >
           <Lock size={16} style={{ opacity: 0.45 }} />
@@ -79,7 +89,6 @@ export default function AccountSecuritySection({
           fontWeight: 600,
           color: 'text.secondary',
           flexShrink: 0,
-          opacity: 0.7,
           letterSpacing: '0.02em',
         }}
       >

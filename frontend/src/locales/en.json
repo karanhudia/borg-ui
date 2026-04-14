@@ -856,7 +856,7 @@
         "passkeysCount_one": "1 passkey registered",
         "passkeysCount_other": "{{count}} passkeys registered",
         "passkeysManageHint": "Review, remove, or add another passkey for your regular devices.",
-        "passkeyEmptyHint": "Add a passkey to sign in faster on trusted devices without relying on passwords alone.",
+        "passkeyEmptyHint": "Sign in faster on trusted devices without passwords.",
         "addPasskey": "Add passkey",
         "passkeyName": "Passkey name",
         "passkeySetupIntro": "Confirm your current password, then complete the browser passkey prompt.",

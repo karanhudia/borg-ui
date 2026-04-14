@@ -856,7 +856,7 @@
         "passkeysCount_one": "1 passkey registrata",
         "passkeysCount_other": "{{count}} passkey registrate",
         "passkeysManageHint": "Controlla, rimuovi o aggiungi un'altra passkey per i tuoi dispositivi abituali.",
-        "passkeyEmptyHint": "Aggiungi una passkey per accedere più velocemente dai dispositivi fidati senza affidarti solo alle password.",
+        "passkeyEmptyHint": "Accedi più velocemente dai dispositivi fidati senza password.",
         "addPasskey": "Aggiungi passkey",
         "passkeyName": "Nome della passkey",
         "passkeySetupIntro": "Conferma la tua password attuale e completa poi la richiesta di passkey nel browser.",

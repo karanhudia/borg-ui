@@ -1,4 +1,4 @@
-import { Box, Stack, Typography } from '@mui/material'
+import { Box, Stack, Typography, useTheme } from '@mui/material'
 import { KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import AccountPasskeysSection from './AccountPasskeysSection'
@@ -29,13 +29,18 @@ export default function AccountSecuritySettingsSection({
   onDeletePasskey,
 }: AccountSecuritySettingsSectionProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const neutralBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'
+  const subtleBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'
+
   const securityHighlights = [
     {
       label: t('settings.account.security.highlights.twoFactor'),
       value: totpEnabled
         ? t('settings.account.security.statusActive')
         : t('settings.account.security.statusNotEnabled'),
-      tone: totpEnabled ? 'rgba(34,197,94,0.14)' : 'rgba(255,255,255,0.04)',
+      tone: totpEnabled ? 'rgba(34,197,94,0.14)' : neutralBg,
     },
     {
       label: t('settings.account.security.highlights.passkeys'),
@@ -43,7 +48,7 @@ export default function AccountSecuritySettingsSection({
         passkeys.length > 0
           ? t('settings.account.security.passkeysCount', { count: passkeys.length })
           : t('settings.account.security.statusNotConfigured'),
-      tone: passkeys.length > 0 ? 'rgba(59,130,246,0.14)' : 'rgba(255,255,255,0.04)',
+      tone: passkeys.length > 0 ? 'rgba(59,130,246,0.14)' : neutralBg,
     },
   ]
 
@@ -116,7 +121,8 @@ export default function AccountSecuritySettingsSection({
                 sx={{
                   p: 1.75,
                   borderRadius: 2.5,
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  border: '1px solid',
+                  borderColor: subtleBorder,
                   bgcolor: highlight.tone,
                   minHeight: 88,
                 }}

@@ -856,7 +856,7 @@
         "passkeysCount_one": "1 Passkey registriert",
         "passkeysCount_other": "{{count}} Passkeys registriert",
         "passkeysManageHint": "Prüfe, entferne oder füge einen weiteren Passkey für deine üblichen Geräte hinzu.",
-        "passkeyEmptyHint": "Füge einen Passkey hinzu, um dich auf vertrauenswürdigen Geräten schneller anzumelden, ohne dich nur auf Passwörter zu verlassen.",
+        "passkeyEmptyHint": "Schneller anmelden auf vertrauenswürdigen Geräten ohne Passwort.",
         "addPasskey": "Passkey hinzufügen",
         "passkeyName": "Passkey-Name",
         "passkeySetupIntro": "Bestätige dein aktuelles Passwort und schließe dann den Passkey-Dialog im Browser ab.",

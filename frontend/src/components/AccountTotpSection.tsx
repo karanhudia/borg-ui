@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Typography } from '@mui/material'
+import { Box, Button, Stack, Typography, useTheme } from '@mui/material'
 import { KeyRound, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -18,6 +18,12 @@ export default function AccountTotpSection({
   onDisable,
 }: AccountTotpSectionProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+  const cardGradient = isDark
+    ? 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.015) 0%, rgba(0,0,0,0.005) 100%)'
+  const neutralIconBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'
 
   return (
     <Box>
@@ -36,7 +42,7 @@ export default function AccountTotpSection({
           borderColor: enabled ? 'rgba(34,197,94,0.25)' : 'divider',
           background: enabled
             ? 'linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(14,116,144,0.05) 100%)'
-            : 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+            : cardGradient,
         }}
       >
         <Stack
@@ -54,7 +60,7 @@ export default function AccountTotpSection({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                bgcolor: enabled ? 'rgba(34,197,94,0.16)' : 'rgba(255,255,255,0.04)',
+                bgcolor: enabled ? 'rgba(34,197,94,0.16)' : neutralIconBg,
               }}
             >
               {enabled ? <ShieldCheck size={18} /> : <KeyRound size={18} />}
@@ -68,7 +74,7 @@ export default function AccountTotpSection({
                   fontWeight: 700,
                   letterSpacing: '0.04em',
                   textTransform: 'uppercase',
-                  color: enabled ? 'success.light' : 'text.disabled',
+                  color: enabled ? 'success.light' : 'text.secondary',
                 }}
               >
                 {enabled

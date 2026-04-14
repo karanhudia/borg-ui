@@ -1,4 +1,12 @@
-import { Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material'
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Stack,
+  TextField,
+  Typography,
+  useTheme,
+} from '@mui/material'
 import { User, Building2, Pencil, ShieldCheck, KeyRound, Calendar, Fingerprint } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import AccountSecuritySection from './AccountSecuritySection'
@@ -52,6 +60,24 @@ export default function AccountProfileSection({
   passkeyCount,
 }: AccountProfileSectionProps) {
   const { t } = useTranslation()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
+  // Theme-aware surface tokens
+  const subtleBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)'
+  const subtleBg = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'
+  const cardBorder = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.09)'
+  const cardBorderHover = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.16)'
+  const cardGradient = isDark
+    ? 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.015) 0%, rgba(0,0,0,0.005) 100%)'
+  const cardHoverGradient = isDark
+    ? 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.03) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0.015) 100%)'
+  const iconBoxGradient = isDark
+    ? 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)'
+    : 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.02) 100%)'
+  const iconBoxBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'
 
   // Badge color schemes
   const roleBadge = isAdmin
@@ -69,9 +95,9 @@ export default function AccountProfileSection({
           icon: KeyRound,
         }
       : {
-          bg: 'rgba(255,255,255,0.06)',
-          border: 'rgba(255,255,255,0.12)',
-          text: 'rgb(161,161,170)',
+          bg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+          border: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
+          text: isDark ? 'rgb(161,161,170)' : 'rgb(113,113,122)',
           icon: User,
         }
 
@@ -231,8 +257,9 @@ export default function AccountProfileSection({
                     px: 1.25,
                     py: 0.5,
                     borderRadius: 10,
-                    bgcolor: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.10)',
+                    bgcolor: subtleBg,
+                    border: '1px solid',
+                    borderColor: subtleBorder,
                   }}
                 >
                   <Calendar size={12} style={{ color: 'rgb(161,161,170)', opacity: 0.8 }} />
@@ -289,8 +316,9 @@ export default function AccountProfileSection({
                 sx={{
                   p: 1.75,
                   borderRadius: 2.5,
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  bgcolor: 'rgba(255,255,255,0.04)',
+                  border: '1px solid',
+                  borderColor: subtleBorder,
+                  bgcolor: subtleBg,
                 }}
               >
                 <Typography
@@ -326,12 +354,6 @@ export default function AccountProfileSection({
       >
         {/* Edit profile — clickable card */}
         <Box>
-          <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-            {t('settings.account.profile.title')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t('settings.account.profile.description')}
-          </Typography>
           <Box
             onClick={onOpenEditProfile}
             onKeyDown={(event) => {
@@ -353,14 +375,12 @@ export default function AccountProfileSection({
               borderRadius: 2.5,
               cursor: 'pointer',
               border: '1px solid',
-              borderColor: 'rgba(255,255,255,0.07)',
-              background:
-                'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+              borderColor: cardBorder,
+              background: cardGradient,
               transition: 'border-color 180ms ease, background 180ms ease',
               '&:hover': {
-                borderColor: 'rgba(255,255,255,0.14)',
-                background:
-                  'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.03) 100%)',
+                borderColor: cardBorderHover,
+                background: cardHoverGradient,
               },
             }}
           >
@@ -374,9 +394,9 @@ export default function AccountProfileSection({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background:
-                    'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 100%)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: iconBoxGradient,
+                  border: '1px solid',
+                  borderColor: iconBoxBorder,
                 }}
               >
                 <Pencil size={16} style={{ opacity: 0.45 }} />
@@ -396,7 +416,6 @@ export default function AccountProfileSection({
                 fontWeight: 600,
                 color: 'text.secondary',
                 flexShrink: 0,
-                opacity: 0.7,
               }}
             >
               →
@@ -406,12 +425,6 @@ export default function AccountProfileSection({
 
         {/* Password section */}
         <Box>
-          <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-            {t('settings.account.security.accountPassword')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t('settings.account.security.changeCredentialsHint')}
-          </Typography>
           <AccountSecuritySection onOpenChangePassword={onOpenChangePassword} />
         </Box>
       </Box>
@@ -432,8 +445,7 @@ export default function AccountProfileSection({
               borderRadius: 2.5,
               border: '1px solid',
               borderColor: 'divider',
-              background:
-                'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+              background: cardGradient,
             }}
           >
             <Stack spacing={2.5}>
@@ -468,19 +480,15 @@ export default function AccountProfileSection({
                       sx={{
                         p: 2,
                         border: '1px solid',
-                        borderColor: isSelected
-                          ? 'rgba(14,165,233,0.35)'
-                          : 'rgba(255,255,255,0.07)',
+                        borderColor: isSelected ? 'rgba(14,165,233,0.35)' : cardBorder,
                         borderRadius: 2.5,
                         cursor: 'pointer',
                         background: isSelected
                           ? 'linear-gradient(135deg, rgba(2,132,199,0.1) 0%, rgba(8,47,73,0.05) 100%)'
-                          : 'linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.005) 100%)',
+                          : cardGradient,
                         transition: 'border-color 180ms ease, background 180ms ease',
                         '&:hover': {
-                          borderColor: isSelected
-                            ? 'rgba(14,165,233,0.5)'
-                            : 'rgba(255,255,255,0.14)',
+                          borderColor: isSelected ? 'rgba(14,165,233,0.5)' : cardBorderHover,
                         },
                       }}
                     >
@@ -493,13 +501,9 @@ export default function AccountProfileSection({
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            bgcolor: isSelected
-                              ? 'rgba(14,165,233,0.14)'
-                              : 'rgba(255,255,255,0.04)',
+                            bgcolor: isSelected ? 'rgba(14,165,233,0.14)' : subtleBg,
                             border: '1px solid',
-                            borderColor: isSelected
-                              ? 'rgba(14,165,233,0.24)'
-                              : 'rgba(255,255,255,0.08)',
+                            borderColor: isSelected ? 'rgba(14,165,233,0.24)' : subtleBorder,
                           }}
                         >
                           {option.icon}
