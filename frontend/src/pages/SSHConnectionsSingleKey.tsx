@@ -1208,14 +1208,31 @@ export default function SSHConnectionsSingleKey() {
             mb: 2,
           }}
         >
-          <Box>
-            <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
-              Remote Connections
-            </Typography>
-            {connections.length > 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
-                {connections.length} machine{connections.length !== 1 ? 's' : ''} configured
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box>
+              <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+                Remote Connections
               </Typography>
+              {connections.length > 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                  {connections.length} machine{connections.length !== 1 ? 's' : ''} configured
+                </Typography>
+              )}
+            </Box>
+            {!keyExists && connections.length > 0 && (
+              <Tooltip title={t('sshConnections.systemKey.noKey')} arrow placement="right">
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: theme.palette.warning.main,
+                    cursor: 'help',
+                  }}
+                >
+                  <Info size={18} />
+                </Box>
+              </Tooltip>
             )}
           </Box>
           <Tooltip title="Refresh connections" arrow>
@@ -1237,12 +1254,6 @@ export default function SSHConnectionsSingleKey() {
             </IconButton>
           </Tooltip>
         </Box>
-
-        {!keyExists && connections.length > 0 && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            No SSH key configured. Generate or import a key to test these connections.
-          </Alert>
-        )}
 
         {connections.length === 0 ? (
           <Box
