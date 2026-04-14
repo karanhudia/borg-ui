@@ -1,7 +1,141 @@
 {
   "version": 1,
-  "generated_at": "2026-04-11T00:00:00Z",
+  "generated_at": "2026-04-14T00:00:00Z",
   "announcements": [
+    {
+      "id": "update-2.0.3-available",
+      "type": "update_available",
+      "priority": 80,
+      "title": "Borg UI 2.0.3 is available",
+      "title_localized": {
+        "es": "Borg UI 2.0.3 ya esta disponible",
+        "de": "Borg UI 2.0.3 ist verfugbar",
+        "it": "Borg UI 2.0.3 e disponibile"
+      },
+      "message": "Update to Borg UI 2.0.3 for a major security and UX refresh with passkeys, built-in TOTP, a new first-login onboarding flow, improved archive browsing, secured metrics configuration, and better Borg 2 and remote SSH reliability.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.0.3 para obtener una gran mejora de seguridad y experiencia de uso con passkeys, TOTP integrado, un nuevo flujo de onboarding en el primer acceso, mejor navegacion de archivos, configuracion segura de metricas y mejor fiabilidad con Borg 2 y SSH remoto.",
+        "de": "Aktualisieren Sie auf Borg UI 2.0.3 fur ein grosses Sicherheits- und UX-Update mit Passkeys, integriertem TOTP, einem neuen Onboarding beim ersten Login, verbessertem Archive-Browsing, gesicherter Metrik-Konfiguration sowie besserer Zuverlassigkeit fur Borg 2 und Remote-SSH.",
+        "it": "Aggiorna a Borg UI 2.0.3 per un importante aggiornamento di sicurezza e UX con passkey, TOTP integrato, un nuovo onboarding al primo accesso, navigazione degli archivi migliorata, configurazione sicura delle metriche e migliore affidabilita per Borg 2 e SSH remoto."
+      },
+      "highlights": [
+        "Passkeys and built-in TOTP for local accounts",
+        "New first-login password setup and onboarding flow",
+        "UX refresh across accounts, archives, navigation, and settings",
+        "Secured Prometheus metrics configuration and monitoring dashboards",
+        "Faster archive browsing and better Borg 2 compatibility",
+        "Better remote SSH backup, mount, and restore reliability"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Passkeys y TOTP integrado para cuentas locales",
+          "Nuevo flujo de configuracion de contrasena y onboarding en el primer acceso",
+          "Renovacion de UX en cuentas, archivos, navegacion y ajustes",
+          "Configuracion segura de metricas de Prometheus y paneles de monitorizacion",
+          "Navegacion de archivos mas rapida y mejor compatibilidad con Borg 2",
+          "Mejor fiabilidad en copias, montajes y restauraciones SSH remotas"
+        ],
+        "de": [
+          "Passkeys und integriertes TOTP fur lokale Konten",
+          "Neuer Passwort- und Onboarding-Ablauf beim ersten Login",
+          "UX-Auffrischung fur Konten, Archive, Navigation und Einstellungen",
+          "Gesicherte Prometheus-Metrik-Konfiguration und Monitoring-Dashboards",
+          "Schnelleres Archive-Browsing und bessere Borg-2-Kompatibilitat",
+          "Bessere Zuverlassigkeit fur Remote-SSH-Backups, Mounts und Wiederherstellungen"
+        ],
+        "it": [
+          "Passkey e TOTP integrato per gli account locali",
+          "Nuovo flusso di configurazione password e onboarding al primo accesso",
+          "Aggiornamento UX per account, archivi, navigazione e impostazioni",
+          "Configurazione sicura delle metriche Prometheus e dashboard di monitoraggio",
+          "Navigazione degli archivi piu veloce e migliore compatibilita con Borg 2",
+          "Migliore affidabilita per backup, mount e ripristini SSH remoti"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualizacion",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-04-14T00:00:00Z",
+      "ends_at": "2027-04-14T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.0.3-beta.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.0.3-whats-new",
+      "type": "release_highlight",
+      "priority": 60,
+      "title": "What's new in 2.0.3",
+      "title_localized": {
+        "es": "Novedades de la version 2.0.3",
+        "de": "Neu in Version 2.0.3",
+        "it": "Novita della versione 2.0.3"
+      },
+      "message": "Borg UI 2.0.3 delivers a major security and UX refresh with passkeys, built-in TOTP, a new first-login onboarding flow, refreshed account and archive experiences, secured metrics configuration, and stronger Borg 2 and remote SSH reliability.",
+      "message_localized": {
+        "es": "Borg UI 2.0.3 ofrece una gran mejora de seguridad y experiencia de uso con passkeys, TOTP integrado, un nuevo flujo de onboarding en el primer acceso, experiencias renovadas en cuentas y archivos, configuracion segura de metricas y mayor fiabilidad con Borg 2 y SSH remoto.",
+        "de": "Borg UI 2.0.3 bringt ein grosses Sicherheits- und UX-Update mit Passkeys, integriertem TOTP, einem neuen Onboarding beim ersten Login, erneuerten Konto- und Archiv-Oberflachen, gesicherter Metrik-Konfiguration sowie besserer Zuverlassigkeit fur Borg 2 und Remote-SSH.",
+        "it": "Borg UI 2.0.3 offre un importante aggiornamento di sicurezza e UX con passkey, TOTP integrato, un nuovo onboarding al primo accesso, esperienze rinnovate per account e archivi, configurazione sicura delle metriche e maggiore affidabilita per Borg 2 e SSH remoto."
+      },
+      "highlights": [
+        "Passkeys and built-in TOTP for local account security",
+        "New first-login password setup and post-login onboarding flow",
+        "Refreshed account, profile, and security surfaces",
+        "Redesigned archive browsing and archive views",
+        "Updated profile menu, plan drawer, and system settings surfaces",
+        "Secured Prometheus metrics configuration and monitoring dashboards",
+        "Better Borg 2 support and improved remote SSH reliability"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Passkeys y TOTP integrado para reforzar la seguridad de cuentas locales",
+          "Nuevo flujo de configuracion de contrasena y onboarding tras el primer acceso",
+          "Renovacion de las superficies de cuenta, perfil y seguridad",
+          "Navegacion de archivos y vistas de archivo redisenadas",
+          "Menu de perfil, panel del plan y superficies de ajustes del sistema actualizados",
+          "Configuracion segura de metricas de Prometheus y paneles de monitorizacion",
+          "Mejor soporte para Borg 2 y mejor fiabilidad con SSH remoto"
+        ],
+        "de": [
+          "Passkeys und integriertes TOTP fur mehr Sicherheit bei lokalen Konten",
+          "Neuer Passwort- und Onboarding-Ablauf nach dem ersten Login",
+          "Auffrischung der Konto-, Profil- und Sicherheitsoberflachen",
+          "Neu gestaltetes Archive-Browsing und Archivansichten",
+          "Aktualisiertes Profilmenu, Plan-Drawer und Oberflachen der Systemeinstellungen",
+          "Gesicherte Prometheus-Metrik-Konfiguration und Monitoring-Dashboards",
+          "Bessere Borg-2-Unterstutzung und bessere Zuverlassigkeit fur Remote-SSH"
+        ],
+        "it": [
+          "Passkey e TOTP integrato per rafforzare la sicurezza degli account locali",
+          "Nuovo flusso di configurazione password e onboarding dopo il primo accesso",
+          "Aggiornamento delle superfici di account, profilo e sicurezza",
+          "Navigazione degli archivi e viste archivio riprogettate",
+          "Menu profilo, pannello del piano e superfici delle impostazioni di sistema aggiornati",
+          "Configurazione sicura delle metriche Prometheus e dashboard di monitoraggio",
+          "Migliore supporto per Borg 2 e migliore affidabilita per SSH remoto"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-04-14T00:00:00Z",
+      "ends_at": "2027-04-14T00:00:00Z",
+      "min_app_version": "2.0.3",
+      "max_app_version": "2.0.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
     {
       "id": "release-2.0.0-whats-new",
       "type": "release_highlight",
@@ -70,7 +204,7 @@
       "dismissible": true,
       "snooze_days": 7,
       "starts_at": "2026-04-11T00:00:00Z",
-      "ends_at": "2027-04-11T00:00:00Z",
+      "ends_at": "2026-04-13T23:59:59Z",
       "min_app_version": "2.0.0",
       "max_app_version": "2.0.999",
       "target_plans": ["community", "pro", "enterprise"]
