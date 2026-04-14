@@ -95,7 +95,20 @@ const Archives: React.FC = () => {
     [repositories, selectedRepositoryId]
   )
 
-  // Get archives for selected repository
+  // Get repository info for statistics
+  const {
+    data: repoInfo,
+    isLoading: loadingRepoInfo,
+    error: repoInfoError,
+    isPending: repoInfoPending,
+  } = useQuery({
+    queryKey: ['repository-info', selectedRepositoryId],
+    queryFn: () => new BorgApiClient(selectedRepository!).getInfo(),
+    enabled: !!selectedRepository,
+    retry: false,
+  })
+
+  // Get archives for selected repository after repo info settles
   const {
     data: archives,
     isLoading: loadingArchives,
@@ -103,7 +116,7 @@ const Archives: React.FC = () => {
   } = useQuery({
     queryKey: ['repository-archives', selectedRepositoryId],
     queryFn: () => new BorgApiClient(selectedRepository!).listArchives(),
-    enabled: !!selectedRepository,
+    enabled: !!selectedRepository && !repoInfoPending,
     retry: false,
   })
 
@@ -119,18 +132,6 @@ const Archives: React.FC = () => {
       })
     }
   }, [archivesError, selectedRepositoryId, selectedRepository])
-
-  // Get repository info for statistics
-  const {
-    data: repoInfo,
-    isLoading: loadingRepoInfo,
-    error: repoInfoError,
-  } = useQuery({
-    queryKey: ['repository-info', selectedRepositoryId],
-    queryFn: () => new BorgApiClient(selectedRepository!).getInfo(),
-    enabled: !!selectedRepository,
-    retry: false,
-  })
 
   // Get restore jobs
   const { data: restoreJobsData } = useQuery({

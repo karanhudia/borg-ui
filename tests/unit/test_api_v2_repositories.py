@@ -1,4 +1,6 @@
+import asyncio
 import base64
+import contextlib
 import json
 from unittest.mock import AsyncMock, patch
 
@@ -8,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
+from app.api.v2 import repositories as repositories_v2_api
 from app.core.borg2 import BORG2_ENCRYPTION_MODES
 from app.config import settings
 from app.database.models import LicensingState, Repository, SystemSettings
@@ -428,6 +431,85 @@ class TestV2RepositoryRoutes:
 
         assert response.status_code == 409
         assert response.json()["detail"]["key"] == "backend.errors.repo.pathExists"
+
+    @pytest.mark.asyncio
+    async def test_v2_metadata_routes_serialize_borg_commands_per_repository(
+        self, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(
+            test_db, name="Serialized Repo", path="/tmp/v2-serialized"
+        )
+        state = {"active": 0, "max_active": 0}
+
+        async def fake_info_repo(*args, **kwargs):
+            state["active"] += 1
+            state["max_active"] = max(state["max_active"], state["active"])
+            await asyncio.sleep(0.05)
+            state["active"] -= 1
+            return {
+                "success": True,
+                "stdout": json.dumps({"repository": {}, "encryption": {}}),
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        async def fake_list_archives(*args, **kwargs):
+            state["active"] += 1
+            state["max_active"] = max(state["max_active"], state["active"])
+            await asyncio.sleep(0.05)
+            state["active"] -= 1
+            return {
+                "success": True,
+                "stdout": json.dumps({"archives": []}),
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        with (
+            patch(
+                "app.api.v2.repositories.repository_borg_env",
+                side_effect=lambda *args, **kwargs: contextlib.nullcontext({}),
+            ),
+            patch.object(
+                repositories_v2_api.borg2,
+                "info_repo",
+                side_effect=fake_info_repo,
+            ),
+            patch.object(
+                repositories_v2_api.borg2,
+                "rinfo",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "stdout": json.dumps({"repository": {}, "encryption": {}}),
+                        "stderr": "",
+                        "return_code": 0,
+                    }
+                ),
+            ),
+            patch.object(
+                repositories_v2_api.borg2,
+                "list_archives",
+                side_effect=fake_list_archives,
+            ),
+            patch(
+                "app.api.v2.repositories.calculate_path_size_bytes",
+                new=AsyncMock(return_value=0),
+            ),
+        ):
+            archives_result, info_result = await asyncio.gather(
+                repositories_v2_api.list_archives(
+                    repo.id, current_user=object(), db=test_db
+                ),
+                repositories_v2_api.get_repository_info(
+                    repo.id, current_user=object(), db=test_db
+                ),
+            )
+
+        assert state["max_active"] == 1
+        assert archives_result["archives"] == []
+        assert info_result["borg_version"] == 2
 
     def test_get_repository_info_merges_rinfo_and_disk_usage(
         self, test_client: TestClient, admin_headers, test_db

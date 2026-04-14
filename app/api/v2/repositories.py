@@ -20,6 +20,7 @@ from app.core.security import get_current_user
 from app.core.features import require_feature
 from app.core.borg2 import borg2, BORG2_ENCRYPTION_MODES
 from app.core.borg_errors import is_lock_error
+from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import repository_borg_env
@@ -409,95 +410,99 @@ async def get_repository_info(
     db: Session = Depends(get_db),
 ):
     """Get Borg 2 repository-level information via borg2 rinfo."""
-    repo = (
-        db.query(Repository)
-        .filter(Repository.id == repo_id, Repository.borg_version == 2)
-        .first()
-    )
-    if not repo:
-        raise HTTPException(
-            status_code=404, detail={"key": "backend.errors.repo.notFound"}
-        )
 
-    info_timeout = _get_info_timeout(db)
-    bypass_lock = _resolve_bypass_lock(repo, db, "bypass_lock_on_info")
-    with repository_borg_env(repo, db) as env:
-        result = await borg2.info_repo(
-            repository=repo.path,
-            passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
-            bypass_lock=bypass_lock,
-            timeout=info_timeout,
-            env=env,
+    async def _operation():
+        repo = (
+            db.query(Repository)
+            .filter(Repository.id == repo_id, Repository.borg_version == 2)
+            .first()
         )
-    if (
-        not result["success"]
-        and not bypass_lock
-        and _is_borg2_lock_like_failure(result)
-    ):
-        logger.warning(
-            "Retrying borg2 info_repo with bypass lock after lock-like failure",
-            repo_id=repo.id,
-            path=repo.path,
-        )
+        if not repo:
+            raise HTTPException(
+                status_code=404, detail={"key": "backend.errors.repo.notFound"}
+            )
+
+        info_timeout = _get_info_timeout(db)
+        bypass_lock = _resolve_bypass_lock(repo, db, "bypass_lock_on_info")
         with repository_borg_env(repo, db) as env:
             result = await borg2.info_repo(
                 repository=repo.path,
                 passphrase=repo.passphrase,
                 remote_path=repo.remote_path,
-                bypass_lock=True,
+                bypass_lock=bypass_lock,
                 timeout=info_timeout,
                 env=env,
             )
-    if not result["success"]:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "key": "backend.errors.repo.infoFailed",
-                "params": {"error": result["stderr"]},
-            },
-        )
+        if (
+            not result["success"]
+            and not bypass_lock
+            and _is_borg2_lock_like_failure(result)
+        ):
+            logger.warning(
+                "Retrying borg2 info_repo with bypass lock after lock-like failure",
+                repo_id=repo.id,
+                path=repo.path,
+            )
+            with repository_borg_env(repo, db) as env:
+                result = await borg2.info_repo(
+                    repository=repo.path,
+                    passphrase=repo.passphrase,
+                    remote_path=repo.remote_path,
+                    bypass_lock=True,
+                    timeout=info_timeout,
+                    env=env,
+                )
+        if not result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "key": "backend.errors.repo.infoFailed",
+                    "params": {"error": result["stderr"]},
+                },
+            )
 
-    try:
-        info_data = json.loads(result["stdout"])
-    except json.JSONDecodeError:
-        info_data = {"raw": result["stdout"]}
-
-    # borg2 info --json has per-archive original_size but no repo-level disk usage.
-    # borg2 repo-info --json has cache.path only — no cache.stats like borg1.
-    # Pull repository/encryption metadata from rinfo, then compute disk usage separately.
-    with repository_borg_env(repo, db) as env:
-        rinfo_result = await borg2.rinfo(
-            repository=repo.path,
-            passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
-            env=env,
-        )
-    if rinfo_result["success"]:
         try:
-            rinfo_data = json.loads(rinfo_result["stdout"])
-            if rinfo_data.get("repository") and not info_data.get("repository"):
-                info_data["repository"] = rinfo_data["repository"]
-            if rinfo_data.get("encryption") and not info_data.get("encryption"):
-                info_data["encryption"] = rinfo_data["encryption"]
+            info_data = json.loads(result["stdout"])
         except json.JSONDecodeError:
-            pass
+            info_data = {"raw": result["stdout"]}
 
-    # For local repos compute actual on-disk size via du (borg2 has no JSON equivalent).
-    # Remote repos (SSH/SFTP) get no rinfo_stats — frontend treats missing as unavailable.
-    is_local = repo.path.startswith("/") and not repo.host
-    if is_local:
-        try:
-            disk_bytes = await calculate_path_size_bytes([repo.path], timeout=30)
-            if disk_bytes > 0:
-                info_data["rinfo_stats"] = {
-                    "unique_csize": disk_bytes,
-                    "unique_size": disk_bytes,
-                }
-        except Exception:
-            pass
+        # borg2 info --json has per-archive original_size but no repo-level disk usage.
+        # borg2 repo-info --json has cache.path only — no cache.stats like borg1.
+        # Pull repository/encryption metadata from rinfo, then compute disk usage separately.
+        with repository_borg_env(repo, db) as env:
+            rinfo_result = await borg2.rinfo(
+                repository=repo.path,
+                passphrase=repo.passphrase,
+                remote_path=repo.remote_path,
+                env=env,
+            )
+        if rinfo_result["success"]:
+            try:
+                rinfo_data = json.loads(rinfo_result["stdout"])
+                if rinfo_data.get("repository") and not info_data.get("repository"):
+                    info_data["repository"] = rinfo_data["repository"]
+                if rinfo_data.get("encryption") and not info_data.get("encryption"):
+                    info_data["encryption"] = rinfo_data["encryption"]
+            except json.JSONDecodeError:
+                pass
 
-    return {"info": info_data, "borg_version": 2}
+        # For local repos compute actual on-disk size via du (borg2 has no JSON equivalent).
+        # Remote repos (SSH/SFTP) get no rinfo_stats — frontend treats missing as unavailable.
+        is_local = repo.path.startswith("/") and not repo.host
+        if is_local:
+            try:
+                disk_bytes = await calculate_path_size_bytes([repo.path], timeout=30)
+                if disk_bytes > 0:
+                    info_data["rinfo_stats"] = {
+                        "unique_csize": disk_bytes,
+                        "unique_size": disk_bytes,
+                    }
+            except Exception:
+                pass
+
+        return {"info": info_data, "borg_version": 2}
+
+    return await run_serialized_repository_command(repo_id, _operation)
 
 
 @router.get("/{repo_id}/archives")
@@ -507,46 +512,50 @@ async def list_archives(
     db: Session = Depends(get_db),
 ):
     """List all archives in a Borg 2 repository."""
-    repo = (
-        db.query(Repository)
-        .filter(Repository.id == repo_id, Repository.borg_version == 2)
-        .first()
-    )
-    if not repo:
-        raise HTTPException(
-            status_code=404, detail={"key": "backend.errors.repo.notFound"}
+
+    async def _operation():
+        repo = (
+            db.query(Repository)
+            .filter(Repository.id == repo_id, Repository.borg_version == 2)
+            .first()
+        )
+        if not repo:
+            raise HTTPException(
+                status_code=404, detail={"key": "backend.errors.repo.notFound"}
+            )
+
+        from app.database.models import SystemSettings
+
+        system_settings = db.query(SystemSettings).first()
+        bypass_lock = repo.bypass_lock or (
+            system_settings and system_settings.bypass_lock_on_list
         )
 
-    from app.database.models import SystemSettings
+        with repository_borg_env(repo, db) as env:
+            result = await borg2.list_archives(
+                repo.path,
+                passphrase=repo.passphrase,
+                remote_path=repo.remote_path,
+                bypass_lock=bypass_lock,
+                env=env,
+            )
+        if not result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "key": "backend.errors.repo.listFailed",
+                    "params": {"error": result["stderr"]},
+                },
+            )
 
-    system_settings = db.query(SystemSettings).first()
-    bypass_lock = repo.bypass_lock or (
-        system_settings and system_settings.bypass_lock_on_list
-    )
+        try:
+            data = json.loads(result.get("stdout", "{}"))
+        except json.JSONDecodeError:
+            data = {}
 
-    with repository_borg_env(repo, db) as env:
-        result = await borg2.list_archives(
-            repo.path,
-            passphrase=repo.passphrase,
-            remote_path=repo.remote_path,
-            bypass_lock=bypass_lock,
-            env=env,
-        )
-    if not result["success"]:
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "key": "backend.errors.repo.listFailed",
-                "params": {"error": result["stderr"]},
-            },
-        )
+        return {"archives": data.get("archives", []), "borg_version": 2}
 
-    try:
-        data = json.loads(result.get("stdout", "{}"))
-    except json.JSONDecodeError:
-        data = {}
-
-    return {"archives": data.get("archives", []), "borg_version": 2}
+    return await run_serialized_repository_command(repo_id, _operation)
 
 
 @router.get("/{repo_id}/stats")

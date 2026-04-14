@@ -40,6 +40,7 @@ from app.core.borg_errors import is_lock_error
 from app.core.features import FEATURES, get_current_plan, plan_includes
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
+from app.services.repository_command_lock import run_serialized_repository_command
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.ssh_paths import apply_ssh_command_prefix
 from app.utils.borg_env import (
@@ -2497,53 +2498,57 @@ async def list_repository_archives(
     db: Session = Depends(get_db),
 ):
     """List all archives in a repository using borg list"""
-    repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
-    use_bypass_lock, source = _resolve_bypass_lock(
-        repository, db, "bypass_lock_on_list"
-    )
-    router = BorgRouter(repository)
-    cmd = router.build_repo_list_command(repository.path)
-    if repository.remote_path:
-        cmd.extend(["--remote-path", repository.remote_path])
-    if use_bypass_lock:
-        cmd.append("--bypass-lock")
 
-    stdout = await _run_repository_command_with_retries(
-        repository,
-        db,
-        repo_id=repo_id,
-        cmd=cmd,
-        timeout=get_operation_timeouts(db)["list_timeout"],
-        bypass_lock=use_bypass_lock,
-        source=source,
-        command_label="Executing borg list command",
-        ssh_log_message="Using SSH key for archive list",
-        failure_key="backend.errors.repo.failedToListArchives",
-    )
-    # Parse JSON output
-    try:
-        archives_data = json.loads(stdout.decode())
-        archives = archives_data.get("archives", [])
-
-        logger.info(
-            "Archives listed successfully", repo_id=repo_id, count=len(archives)
+    async def _operation():
+        repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+        use_bypass_lock, source = _resolve_bypass_lock(
+            repository, db, "bypass_lock_on_list"
         )
+        router = BorgRouter(repository)
+        cmd = router.build_repo_list_command(repository.path)
+        if repository.remote_path:
+            cmd.extend(["--remote-path", repository.remote_path])
+        if use_bypass_lock:
+            cmd.append("--bypass-lock")
 
-        return {
-            "success": True,
-            "archives": archives,
-            "repository": {
-                "id": repository.id,
-                "name": repository.name,
-                "path": repository.path,
-            },
-        }
-    except json.JSONDecodeError as e:
-        logger.error("Failed to parse borg list output", error=str(e))
-        raise HTTPException(
-            status_code=500,
-            detail={"key": "backend.errors.repo.failedParseArchiveList"},
+        stdout = await _run_repository_command_with_retries(
+            repository,
+            db,
+            repo_id=repo_id,
+            cmd=cmd,
+            timeout=get_operation_timeouts(db)["list_timeout"],
+            bypass_lock=use_bypass_lock,
+            source=source,
+            command_label="Executing borg list command",
+            ssh_log_message="Using SSH key for archive list",
+            failure_key="backend.errors.repo.failedToListArchives",
         )
+        # Parse JSON output
+        try:
+            archives_data = json.loads(stdout.decode())
+            archives = archives_data.get("archives", [])
+
+            logger.info(
+                "Archives listed successfully", repo_id=repo_id, count=len(archives)
+            )
+
+            return {
+                "success": True,
+                "archives": archives,
+                "repository": {
+                    "id": repository.id,
+                    "name": repository.name,
+                    "path": repository.path,
+                },
+            }
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse borg list output", error=str(e))
+            raise HTTPException(
+                status_code=500,
+                detail={"key": "backend.errors.repo.failedParseArchiveList"},
+            )
+
+    return await run_serialized_repository_command(repo_id, _operation)
 
 
 @router.get("/{repo_id}/info")
@@ -2553,63 +2558,67 @@ async def get_repository_info(
     db: Session = Depends(get_db),
 ):
     """Get detailed repository information using borg info"""
-    repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
-    use_bypass_lock, source = _resolve_bypass_lock(
-        repository, db, "bypass_lock_on_info"
-    )
-    router = BorgRouter(repository)
-    cmd = router.build_repo_info_command(repository.path)
-    if repository.remote_path:
-        cmd.extend(["--remote-path", repository.remote_path])
-    if use_bypass_lock:
-        cmd.append("--bypass-lock")
 
-    stdout = await _run_repository_command_with_retries(
-        repository,
-        db,
-        repo_id=repo_id,
-        cmd=cmd,
-        timeout=get_operation_timeouts(db)["info_timeout"],
-        bypass_lock=use_bypass_lock,
-        source=source,
-        command_label="Executing borg info command",
-        ssh_log_message="Using SSH key for repository info",
-        failure_key="backend.errors.repo.failedToGetRepositoryInfo",
-    )
-    # Parse JSON output
-    try:
-        info_data = json.loads(stdout.decode())
-
-        # Extract relevant information
-        repository_info = info_data.get("repository", {})
-        cache_info = info_data.get("cache", {})
-        encryption_info = info_data.get("encryption", {})
-
-        logger.info("Repository info retrieved successfully", repo_id=repo_id)
-
-        return {
-            "success": True,
-            "info": {
-                "repository": repository_info,
-                "cache": cache_info,
-                "encryption": encryption_info,
-            },
-            "raw_output": info_data,
-        }
-    except HTTPException:
-        raise
-    except json.JSONDecodeError as e:
-        logger.error("Failed to parse borg info output", error=str(e))
-        raise HTTPException(
-            status_code=500,
-            detail={"key": "backend.errors.repo.failedParseRepositoryInfo"},
+    async def _operation():
+        repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+        use_bypass_lock, source = _resolve_bypass_lock(
+            repository, db, "bypass_lock_on_info"
         )
-    except Exception as e:
-        logger.error("Failed to get repository info", error=str(e))
-        raise HTTPException(
-            status_code=500,
-            detail={"key": "backend.errors.repo.failedToGetRepositoryInfo"},
+        router = BorgRouter(repository)
+        cmd = router.build_repo_info_command(repository.path)
+        if repository.remote_path:
+            cmd.extend(["--remote-path", repository.remote_path])
+        if use_bypass_lock:
+            cmd.append("--bypass-lock")
+
+        stdout = await _run_repository_command_with_retries(
+            repository,
+            db,
+            repo_id=repo_id,
+            cmd=cmd,
+            timeout=get_operation_timeouts(db)["info_timeout"],
+            bypass_lock=use_bypass_lock,
+            source=source,
+            command_label="Executing borg info command",
+            ssh_log_message="Using SSH key for repository info",
+            failure_key="backend.errors.repo.failedToGetRepositoryInfo",
         )
+        # Parse JSON output
+        try:
+            info_data = json.loads(stdout.decode())
+
+            # Extract relevant information
+            repository_info = info_data.get("repository", {})
+            cache_info = info_data.get("cache", {})
+            encryption_info = info_data.get("encryption", {})
+
+            logger.info("Repository info retrieved successfully", repo_id=repo_id)
+
+            return {
+                "success": True,
+                "info": {
+                    "repository": repository_info,
+                    "cache": cache_info,
+                    "encryption": encryption_info,
+                },
+                "raw_output": info_data,
+            }
+        except HTTPException:
+            raise
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse borg info output", error=str(e))
+            raise HTTPException(
+                status_code=500,
+                detail={"key": "backend.errors.repo.failedParseRepositoryInfo"},
+            )
+        except Exception as e:
+            logger.error("Failed to get repository info", error=str(e))
+            raise HTTPException(
+                status_code=500,
+                detail={"key": "backend.errors.repo.failedToGetRepositoryInfo"},
+            )
+
+    return await run_serialized_repository_command(repo_id, _operation)
 
 
 @router.post("/{repo_id}/break-lock")

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -418,3 +419,74 @@ class TestRepositoryHelperContracts:
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
         mock_size.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_repo_metadata_routes_serialize_borg_commands_per_repository(
+        self, test_db
+    ):
+        repo = Repository(
+            name="Remote Repo",
+            path="ssh://borg@example.com:22/backups/main",
+            encryption="none",
+            repository_type="ssh",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        state = {"active": 0, "max_active": 0}
+
+        async def fake_run(*args, **kwargs):
+            state["active"] += 1
+            state["max_active"] = max(state["max_active"], state["active"])
+            await asyncio.sleep(0.05)
+            state["active"] -= 1
+
+            command_label = kwargs["command_label"]
+            if "list" in command_label.lower():
+                return b'{"archives":[]}'
+            return b'{"repository":{},"cache":{},"encryption":{}}'
+
+        with (
+            patch.object(
+                repositories_api,
+                "_load_repository_with_access",
+                return_value=repo,
+            ),
+            patch.object(
+                repositories_api,
+                "_resolve_bypass_lock",
+                return_value=(False, "none"),
+            ),
+            patch.object(
+                repositories_api,
+                "get_operation_timeouts",
+                return_value={"info_timeout": 30, "list_timeout": 30},
+            ),
+            patch.object(
+                repositories_api.BorgRouter,
+                "build_repo_list_command",
+                return_value=["borg", "list"],
+            ),
+            patch.object(
+                repositories_api.BorgRouter,
+                "build_repo_info_command",
+                return_value=["borg", "info"],
+            ),
+            patch.object(
+                repositories_api,
+                "_run_repository_command_with_retries",
+                side_effect=fake_run,
+            ),
+        ):
+            archives_result, info_result = await asyncio.gather(
+                repositories_api.list_repository_archives(
+                    repo.id, current_user=object(), db=test_db
+                ),
+                repositories_api.get_repository_info(
+                    repo.id, current_user=object(), db=test_db
+                ),
+            )
+
+        assert state["max_active"] == 1
+        assert archives_result["archives"] == []
+        assert info_result["info"]["repository"] == {}
