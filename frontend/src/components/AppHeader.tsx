@@ -1,22 +1,25 @@
 import { type MouseEvent, useState } from 'react'
-import {
-  AppBar,
-  Avatar,
-  Box,
-  Divider,
-  IconButton,
-  Popover,
-  Toolbar,
-  Typography,
-} from '@mui/material'
+import { AppBar, Avatar, Box, IconButton, Popover, Toolbar, Typography } from '@mui/material'
 import { alpha, useTheme as useMuiTheme } from '@mui/material/styles'
-import { ChevronDown, LogOut, Menu, Shield, Sparkles } from 'lucide-react'
+import {
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  LogOut,
+  Menu,
+  Palette,
+  Shield,
+  Sparkles,
+  User,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { formatRoleLabel } from '../utils/rolePresentation'
 import PlanInfoDrawer from './PlanInfoDrawer'
 import { usePlan } from '../hooks/usePlan'
+import { useNavigate } from 'react-router-dom'
+import { PLAN_LABEL } from '../core/features'
 
 const drawerWidth = 240
 const headerHeight = 64
@@ -49,13 +52,14 @@ function getRoleBadgeStyles(roleLabel: string, isDark: boolean) {
 export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
-  const { trackAuth, trackNavigation, EventAction } = useAnalytics()
+  const { trackAuth, trackNavigation, trackPlan, EventAction } = useAnalytics()
   const muiTheme = useMuiTheme()
   const isDark = muiTheme.palette.mode === 'dark'
   const { plan, features, entitlement } = usePlan()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [planDrawerOpen, setPlanDrawerOpen] = useState(false)
   const open = Boolean(anchorEl)
+  const navigate = useNavigate()
 
   const displayName = user?.full_name?.trim() || user?.username || user?.email || ''
   const roleLabel = formatRoleLabel(user?.role)
@@ -64,6 +68,15 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
     user?.deployment_type === 'enterprise'
       ? user.enterprise_name?.trim() || 'Enterprise deployment'
       : ''
+
+  const isFullAccess = entitlement?.is_full_access && entitlement.status === 'active'
+  const planLabel = isFullAccess ? t('plan.fullAccessLabel', 'Full Access') : PLAN_LABEL[plan]
+  const planDescription =
+    plan === 'enterprise' || isFullAccess
+      ? t('plan.descriptionEnterprise', 'All Enterprise features unlocked')
+      : plan === 'pro'
+        ? t('plan.descriptionPro', 'All Pro features unlocked')
+        : t('plan.descriptionCommunity', 'Core backup features included')
 
   const initials = displayName
     .split(/\s+/)
@@ -117,9 +130,9 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
             alignItems: 'center',
             gap: 1,
             px: 1,
-            py: 0.5,
+            py: 1,
             border: 'none',
-            borderRadius: 2,
+            borderRadius: '12px',
             cursor: 'pointer',
             bgcolor: open
               ? isDark
@@ -140,6 +153,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
               height: 32,
               fontSize: '0.8rem',
               fontWeight: 700,
+              borderRadius: '8px',
               bgcolor: 'rgba(5,150,105,0.15)',
               color: '#34d399',
               border: '1.5px solid rgba(5,150,105,0.3)',
@@ -179,7 +193,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
             paper: {
               sx: {
                 mt: 1,
-                width: 240,
+                width: 300,
                 borderRadius: 3,
                 border: `1px solid ${alpha(muiTheme.palette.divider, isDark ? 0.4 : 0.2)}`,
                 boxShadow: isDark
@@ -191,104 +205,338 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
             },
           }}
         >
-          <Box sx={{ px: 2, py: 1.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-              <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
+          {/* ── 1. Hero header ── */}
+          <Box
+            sx={{
+              px: 1.75,
+              py: 1.5,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              bgcolor: isDark ? 'rgba(5,150,105,0.05)' : 'rgba(5,150,105,0.03)',
+              borderBottom: `1px solid ${alpha(muiTheme.palette.divider, 0.06)}`,
+            }}
+          >
+            <Avatar
+              sx={{
+                width: 46,
+                height: 46,
+                fontSize: '1rem',
+                fontWeight: 800,
+                borderRadius: '12px',
+                bgcolor: 'rgba(5,150,105,0.12)',
+                color: '#34d399',
+                border: '1.5px solid rgba(52,211,153,0.22)',
+              }}
+            >
+              {initials}
+            </Avatar>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" noWrap sx={{ fontWeight: 700, fontSize: '0.875rem' }}>
                 {displayName}
+              </Typography>
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}
+              >
+                {companyLabel || t('settings.account.profile.deployment.individual', 'Individual')}
               </Typography>
               {roleLabel && (
                 <Box
                   sx={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 0.35,
-                    fontSize: '0.65rem',
-                    fontWeight: 600,
+                    gap: 0.4,
+                    fontSize: '0.57rem',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
                     px: 0.75,
-                    py: 0.2,
-                    borderRadius: 1,
+                    py: 0.25,
+                    mt: 0.75,
+                    borderRadius: 0.75,
                     bgcolor: roleBadgeStyles.backgroundColor,
                     color: roleBadgeStyles.color,
-                    flexShrink: 0,
                   }}
                 >
-                  <Shield size={10} />
+                  <Shield size={9} />
                   {roleLabel}
                 </Box>
               )}
             </Box>
-            <Typography
-              variant="caption"
-              noWrap
-              sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}
+          </Box>
+
+          {/* ── 2. Plan card ── */}
+          <Box sx={{ px: 1.25, py: 1.125 }}>
+            <Box
+              component="button"
+              onClick={() => {
+                setAnchorEl(null)
+                trackPlan(EventAction.VIEW, { surface: 'user_menu', operation: 'open_drawer' })
+                setPlanDrawerOpen(true)
+              }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                width: '100%',
+                p: 1.25,
+                border: '1px solid rgba(99,102,241,0.22)',
+                borderRadius: 2.5,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                background:
+                  'linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(139,92,246,0.06) 100%)',
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.18s ease',
+                '&:hover': {
+                  background:
+                    'linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.1) 100%)',
+                  borderColor: 'rgba(99,102,241,0.38)',
+                },
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: -20,
+                  right: -20,
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)',
+                  pointerEvents: 'none',
+                },
+              }}
             >
-              {companyLabel || 'Individual deployment'}
+              <Box
+                sx={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(99,102,241,0.15)',
+                  border: '1px solid rgba(99,102,241,0.28)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  position: 'relative',
+                  zIndex: 1,
+                }}
+              >
+                <Sparkles size={15} style={{ color: '#a78bfa' }} />
+              </Box>
+              <Box
+                sx={{ flex: 1, minWidth: 0, textAlign: 'left', position: 'relative', zIndex: 1 }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#c4b5fd' }}>
+                    {planLabel} {t('plan.planSuffix', 'Plan')}
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.4,
+                      fontSize: '0.55rem',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      px: 0.6,
+                      py: 0.2,
+                      borderRadius: 0.5,
+                      bgcolor: 'rgba(167,139,250,0.14)',
+                      color: '#a78bfa',
+                      border: '1px solid rgba(167,139,250,0.22)',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 4,
+                        height: 4,
+                        borderRadius: '50%',
+                        bgcolor: '#a78bfa',
+                        boxShadow: '0 0 4px #a78bfa',
+                      }}
+                    />
+                    {t('plan.activeStatus', 'Active')}
+                  </Box>
+                </Box>
+                <Typography sx={{ fontSize: '0.61rem', color: '#6b6fa8', mt: 0.25 }}>
+                  {planDescription}
+                </Typography>
+              </Box>
+              <ChevronRight
+                size={14}
+                style={{
+                  color: '#a78bfa',
+                  opacity: 0.7,
+                  flexShrink: 0,
+                  position: 'relative',
+                  zIndex: 1,
+                }}
+              />
+            </Box>
+          </Box>
+
+          {/* ── 3. Settings nav links ── */}
+          <Box
+            sx={{
+              borderTop: `1px solid ${alpha(muiTheme.palette.divider, 0.05)}`,
+              pt: 0.5,
+              pb: 0.5,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: '0.57rem',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.09em',
+                color: 'text.disabled',
+                px: 1.75,
+                pt: 0.75,
+                pb: 0.375,
+                display: 'block',
+              }}
+            >
+              {t('navigation.sections.settings', 'Settings')}
             </Typography>
+
+            {(
+              [
+                {
+                  icon: User,
+                  label: t('navigation.settings.accountAndSecurity', 'Account & Security'),
+                  desc: t(
+                    'navigation.menu.accountAndSecurityDesc',
+                    'Profile, password, 2FA, passkeys'
+                  ),
+                  route: '/settings/account',
+                },
+                {
+                  icon: Palette,
+                  label: t('navigation.settings.appearance', 'Appearance'),
+                  desc: t('navigation.menu.appearanceDesc', 'Theme, language'),
+                  route: '/settings/appearance',
+                },
+                {
+                  icon: Bell,
+                  label: t('navigation.settings.notifications', 'Notifications'),
+                  desc: t('navigation.menu.notificationsDesc', 'Alerts & preferences'),
+                  route: '/settings/notifications',
+                },
+              ] as const
+            ).map(({ icon: Icon, label, desc, route }) => (
+              <Box
+                key={route + label}
+                component="button"
+                onClick={() => {
+                  setAnchorEl(null)
+                  navigate(route)
+                }}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.25,
+                  width: '100%',
+                  px: 1.5,
+                  py: 0.875,
+                  border: 'none',
+                  bgcolor: 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  transition: 'background-color 150ms',
+                  '&:hover': {
+                    bgcolor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                  },
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                    border: `1px solid ${alpha(muiTheme.palette.divider, isDark ? 0.07 : 0.05)}`,
+                  }}
+                >
+                  <Icon size={14} style={{ color: isDark ? '#64748b' : '#94a3b8' }} />
+                </Box>
+                <Box sx={{ flex: 1, textAlign: 'left' }}>
+                  <Typography
+                    sx={{
+                      fontSize: '0.77rem',
+                      fontWeight: 600,
+                      color: 'text.primary',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {label}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.59rem', color: 'text.disabled', mt: 0.125 }}>
+                    {desc}
+                  </Typography>
+                </Box>
+                <ChevronRight
+                  size={13}
+                  style={{ color: isDark ? '#2d4059' : '#cbd5e1', flexShrink: 0 }}
+                />
+              </Box>
+            ))}
           </Box>
 
-          <Divider />
-
-          <Box
-            component="button"
-            onClick={() => {
-              setAnchorEl(null)
-              setPlanDrawerOpen(true)
-            }}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              width: '100%',
-              px: 2,
-              py: 1.25,
-              border: 'none',
-              bgcolor: 'transparent',
-              color: 'text.primary',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontSize: '0.8125rem',
-              fontWeight: 500,
-              transition: 'background-color 150ms',
-              '&:hover': {
-                bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-              },
-            }}
-          >
-            <Sparkles size={15} style={{ opacity: 0.6 }} />
-            {t('navigation.yourPlan')}
-          </Box>
-
-          <Divider />
-
-          <Box
-            component="button"
-            onClick={() => {
-              setAnchorEl(null)
-              trackAuth(EventAction.LOGOUT, { surface: 'user_menu' })
-              logout()
-            }}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              width: '100%',
-              px: 2,
-              py: 1.25,
-              border: 'none',
-              bgcolor: 'transparent',
-              color: isDark ? '#f87171' : '#dc2626',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontSize: '0.8125rem',
-              fontWeight: 500,
-              transition: 'background-color 150ms',
-              '&:hover': {
-                bgcolor: isDark ? 'rgba(248,113,113,0.08)' : 'rgba(220,38,38,0.05)',
-              },
-            }}
-          >
-            <LogOut size={15} />
-            {t('navigation.logout')}
+          {/* ── 4. Logout (danger zone) ── */}
+          <Box sx={{ borderTop: `1px solid ${alpha(muiTheme.palette.divider, 0.05)}`, py: 0.625 }}>
+            <Box
+              component="button"
+              onClick={() => {
+                setAnchorEl(null)
+                trackAuth(EventAction.LOGOUT, { surface: 'user_menu' })
+                logout()
+              }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                width: '100%',
+                px: 1.5,
+                py: 0.875,
+                border: 'none',
+                bgcolor: 'transparent',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'background-color 150ms',
+                '&:hover': {
+                  bgcolor: isDark ? 'rgba(248,113,113,0.07)' : 'rgba(220,38,38,0.04)',
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  bgcolor: isDark ? 'rgba(248,113,113,0.07)' : 'rgba(220,38,38,0.04)',
+                  border: `1px solid ${alpha(isDark ? '#f87171' : '#dc2626', 0.12)}`,
+                }}
+              >
+                <LogOut size={14} style={{ color: isDark ? '#f87171' : '#dc2626' }} />
+              </Box>
+              <Typography
+                sx={{ fontSize: '0.77rem', fontWeight: 600, color: isDark ? '#f87171' : '#dc2626' }}
+              >
+                {t('navigation.logout')}
+              </Typography>
+            </Box>
           </Box>
         </Popover>
 
