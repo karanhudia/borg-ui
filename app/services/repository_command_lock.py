@@ -1,20 +1,26 @@
 import asyncio
+import threading
+import weakref
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
 T = TypeVar("T")
 
-_locks: dict[tuple[int, str], asyncio.Lock] = {}
-_locks_guard = asyncio.Lock()
+_locks: weakref.WeakKeyDictionary[
+    asyncio.AbstractEventLoop, dict[tuple[int, str], asyncio.Lock]
+] = weakref.WeakKeyDictionary()
+_locks_guard = threading.Lock()
 
 
 async def _get_lock(repo_id: int, scope: str) -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
     key = (repo_id, scope)
-    async with _locks_guard:
-        lock = _locks.get(key)
+    with _locks_guard:
+        loop_locks = _locks.setdefault(loop, {})
+        lock = loop_locks.get(key)
         if lock is None:
             lock = asyncio.Lock()
-            _locks[key] = lock
+            loop_locks[key] = lock
         return lock
 
 
