@@ -1,18 +1,20 @@
 import React from 'react'
-import { Box, Stack, Typography, useTheme, alpha } from '@mui/material'
-import { Archive as ArchiveIcon, Database, Gauge, Layers } from 'lucide-react'
+import { Box, Stack, Tooltip, Typography, useTheme, alpha } from '@mui/material'
+import { Archive as ArchiveIcon, Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes as formatBytesUtil } from '../utils/dateUtils'
 
 interface RepositoryStats {
-  unique_csize: number
-  unique_size: number
-  total_size: number
+  original_size: number
+  compressed_size: number
+  deduplicated_size: number
+  total_files?: number
 }
 
 interface RepositoryStatsGridProps {
   stats: RepositoryStats
   archivesCount: number
+  borgVersion?: number
 }
 
 type ColorKey = 'primary' | 'success' | 'info' | 'secondary' | 'warning'
@@ -22,14 +24,15 @@ interface StatCardProps {
   value: string | number
   icon: React.ReactNode
   colorKey: ColorKey
+  tooltip?: string
 }
 
-function StatCard({ label, value, icon, colorKey }: StatCardProps) {
+function StatCard({ label, value, icon, colorKey, tooltip }: StatCardProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const color = (theme.palette[colorKey] as { main: string }).main
 
-  return (
+  const card = (
     <Box
       sx={{
         borderRadius: 2,
@@ -76,21 +79,31 @@ function StatCard({ label, value, icon, colorKey }: StatCardProps) {
       </Stack>
     </Box>
   )
+
+  if (!tooltip) {
+    return card
+  }
+
+  return (
+    <Tooltip title={tooltip} arrow>
+      {card}
+    </Tooltip>
+  )
 }
 
-export default function RepositoryStatsGrid({ stats, archivesCount }: RepositoryStatsGridProps) {
+export default function RepositoryStatsGrid({
+  stats,
+  archivesCount,
+  borgVersion,
+}: RepositoryStatsGridProps) {
   const { t } = useTranslation()
-  const spaceSaved = (stats.total_size || 0) - (stats.unique_csize || 0)
-  const compressionRatio =
-    stats.unique_size > 0 ? ((1 - stats.unique_csize / stats.unique_size) * 100).toFixed(1) : '0'
-  const deduplicationRatio =
-    stats.total_size > 0 ? ((1 - stats.unique_size / stats.total_size) * 100).toFixed(1) : '0'
+  const isBorg2 = borgVersion === 2
 
   return (
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' },
+        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
         gap: 2,
         mb: 0,
       }}
@@ -102,28 +115,31 @@ export default function RepositoryStatsGrid({ stats, archivesCount }: Repository
         colorKey="primary"
       />
       <StatCard
-        label={t('repositoryStatsGrid.spaceUsed')}
-        value={formatBytesUtil(stats.unique_csize)}
+        label={t('repositoryStatsGrid.repositorySize')}
+        value={formatBytesUtil(stats.deduplicated_size)}
         icon={<Database size={32} />}
         colorKey="success"
+        tooltip={t('repositoryStatsGrid.repositorySizeTooltip')}
       />
       <StatCard
-        label={t('repositoryStatsGrid.spaceSaved')}
-        value={spaceSaved > 0 ? formatBytesUtil(spaceSaved) : '0 B'}
+        label={t('repositoryStatsGrid.originalSize')}
+        value={formatBytesUtil(stats.original_size)}
         icon={<Database size={32} />}
         colorKey="info"
+        tooltip={t('repositoryStatsGrid.originalSizeTooltip')}
       />
       <StatCard
-        label={t('repositoryStatsGrid.compression')}
-        value={`${compressionRatio}%`}
-        icon={<Gauge size={32} />}
+        label={
+          isBorg2 ? t('repositoryStatsGrid.numberOfFiles') : t('repositoryStatsGrid.compressedSize')
+        }
+        value={isBorg2 ? stats.total_files || 0 : formatBytesUtil(stats.compressed_size)}
+        icon={isBorg2 ? <ArchiveIcon size={32} /> : <Database size={32} />}
         colorKey="secondary"
-      />
-      <StatCard
-        label={t('repositoryStatsGrid.deduplication')}
-        value={`${deduplicationRatio}%`}
-        icon={<Layers size={32} />}
-        colorKey="warning"
+        tooltip={
+          isBorg2
+            ? t('repositoryStatsGrid.numberOfFilesTooltip')
+            : t('repositoryStatsGrid.compressedSizeTooltip')
+        }
       />
     </Box>
   )

@@ -498,7 +498,11 @@ const Archives: React.FC = () => {
               {loadingRepoInfo ? (
                 <RepositoryStatsGridSkeleton />
               ) : repositoryStats ? (
-                <RepositoryStatsGrid stats={repositoryStats} archivesCount={archivesList.length} />
+                <RepositoryStatsGrid
+                  stats={repositoryStats}
+                  archivesCount={archivesList.length}
+                  borgVersion={selectedRepository?.borg_version}
+                />
               ) : null}
             </Box>
             {/* Last Restore */}

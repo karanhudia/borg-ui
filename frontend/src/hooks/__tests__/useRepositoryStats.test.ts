@@ -6,17 +6,19 @@ const v1Info = {
   cache: {
     stats: {
       total_size: 10_000_000,
-      unique_size: 6_000_000,
+      total_csize: 8_000_000,
       unique_csize: 4_000_000,
     },
   },
 }
 
 const v2Info = {
-  archives: [{ stats: { original_size: 3_000_000 } }, { stats: { original_size: 5_000_000 } }],
+  archives: [
+    { time: '2026-04-10T13:41:53+05:30', stats: { original_size: 3_000_000, nfiles: 4 } },
+    { time: '2026-04-11T13:41:53+05:30', stats: { original_size: 5_000_000, nfiles: 6 } },
+  ],
   rinfo_stats: {
     unique_csize: 2_000_000,
-    unique_size: 3_500_000,
   },
 }
 
@@ -31,29 +33,42 @@ describe('useRepositoryStats', () => {
     expect(result.current).toBeNull()
   })
 
-  it('returns cache.stats directly for Borg 1', () => {
+  it('maps Borg 1 cache stats to original/compressed/deduplicated sizes', () => {
     const { result } = renderHook(() => useRepositoryStats(v1Info, 1))
-    expect(result.current).toEqual(v1Info.cache.stats)
+    expect(result.current).toEqual({
+      original_size: 10_000_000,
+      compressed_size: 8_000_000,
+      deduplicated_size: 4_000_000,
+    })
   })
 
-  it('returns cache.stats when borgVersion is undefined (defaults to v1 path)', () => {
+  it('maps Borg 1 cache stats when borgVersion is undefined', () => {
     const { result } = renderHook(() => useRepositoryStats(v1Info, undefined))
-    expect(result.current).toEqual(v1Info.cache.stats)
+    expect(result.current).toEqual({
+      original_size: 10_000_000,
+      compressed_size: 8_000_000,
+      deduplicated_size: 4_000_000,
+    })
   })
 
   it('returns summed original_size across archives for Borg 2', () => {
     const { result } = renderHook(() => useRepositoryStats(v2Info, 2))
-    expect(result.current?.total_size).toBe(8_000_000) // 3M + 5M
+    expect(result.current?.original_size).toBe(8_000_000)
   })
 
-  it('uses rinfo_stats unique_csize for Borg 2 on-disk size', () => {
+  it('uses rinfo_stats unique_csize as the displayed compressed size for Borg 2 fallback', () => {
     const { result } = renderHook(() => useRepositoryStats(v2Info, 2))
-    expect(result.current?.unique_csize).toBe(2_000_000)
+    expect(result.current?.compressed_size).toBe(2_000_000)
   })
 
-  it('uses rinfo_stats unique_size for Borg 2 unique data', () => {
+  it('uses rinfo_stats unique_csize as the displayed deduplicated size for Borg 2 fallback', () => {
     const { result } = renderHook(() => useRepositoryStats(v2Info, 2))
-    expect(result.current?.unique_size).toBe(3_500_000)
+    expect(result.current?.deduplicated_size).toBe(2_000_000)
+  })
+
+  it('uses nfiles from the latest Borg 2 archive', () => {
+    const { result } = renderHook(() => useRepositoryStats(v2Info, 2))
+    expect(result.current?.total_files).toBe(6)
   })
 
   it('returns null for Borg 2 when all stats are zero (no backups yet)', () => {
@@ -62,13 +77,17 @@ describe('useRepositoryStats', () => {
     expect(result.current).toBeNull()
   })
 
-  it('falls back unique_size to unique_csize when rinfo_stats.unique_size is missing', () => {
-    const v2NoUniqueSize = {
+  it('returns summary_stats directly when backend provides them', () => {
+    const withSummaryStats = {
       archives: [{ stats: { original_size: 1_000_000 } }],
       rinfo_stats: { unique_csize: 500_000 },
+      summary_stats: {
+        original_size: 9_000_000,
+        compressed_size: 7_000_000,
+        deduplicated_size: 2_000_000,
+      },
     }
-    const { result } = renderHook(() => useRepositoryStats(v2NoUniqueSize, 2))
-    expect(result.current?.unique_size).toBe(500_000)
-    expect(result.current?.unique_csize).toBe(500_000)
+    const { result } = renderHook(() => useRepositoryStats(withSummaryStats, 2))
+    expect(result.current).toEqual(withSummaryStats.summary_stats)
   })
 })

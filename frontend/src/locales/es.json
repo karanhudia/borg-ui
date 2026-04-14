@@ -2193,10 +2193,14 @@
   },
   "repositoryStatsGrid": {
     "totalArchives": "Total de archivos",
-    "spaceUsed": "Espacio usado",
-    "spaceSaved": "Espacio ahorrado",
-    "compression": "Compresión",
-    "deduplication": "Deduplicación"
+    "originalSize": "Tamaño total de archivos",
+    "originalSizeTooltip": "Tamaño lógico total de todos los datos respaldados en todos los archivos antes de la compresión y la deduplicación",
+    "compressedSize": "Tamaño comprimido de archivos",
+    "compressedSizeTooltip": "Tamaño total de todos los datos de archivo después de la compresión, antes de la deduplicación en todos los archivos",
+    "numberOfFiles": "Número de archivos",
+    "numberOfFilesTooltip": "Número total de archivos en todos los archivos",
+    "repositorySize": "Tamaño del repositorio",
+    "repositorySizeTooltip": "Almacenamiento real usado por el repositorio en disco después de la compresión y la deduplicación en todos los archivos"
   },
   "upcomingJobs": {
     "title": "Trabajos próximos (Próximas 24 horas)",

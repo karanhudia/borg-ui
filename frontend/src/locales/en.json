@@ -2200,6 +2200,8 @@
     "originalSizeTooltip": "Total logical size of all backed up data across all archives before compression and deduplication",
     "compressedSize": "Compressed Archive Size",
     "compressedSizeTooltip": "Total size of all archive data after compression, before deduplication across all archives",
+    "numberOfFiles": "Number of Files",
+    "numberOfFilesTooltip": "Total number of files across all archives",
     "repositorySize": "Repository Size",
     "repositorySizeTooltip": "Actual storage used by the repository on disk after compression and deduplication across all archives"
   },

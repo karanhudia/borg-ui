@@ -2193,10 +2193,14 @@
   },
   "repositoryStatsGrid": {
     "totalArchives": "Archivi Totali",
-    "spaceUsed": "Spazio Usato",
-    "spaceSaved": "Spazio Risparmiato",
-    "compression": "Compressione",
-    "deduplication": "Deduplicazione"
+    "originalSize": "Dimensione totale archivi",
+    "originalSizeTooltip": "Dimensione logica totale di tutti i dati salvati in tutti gli archivi prima di compressione e deduplicazione",
+    "compressedSize": "Dimensione archivi compressa",
+    "compressedSizeTooltip": "Dimensione totale di tutti i dati degli archivi dopo la compressione, prima della deduplicazione su tutti gli archivi",
+    "numberOfFiles": "Numero di file",
+    "numberOfFilesTooltip": "Numero totale di file in tutti gli archivi",
+    "repositorySize": "Dimensione repository",
+    "repositorySizeTooltip": "Spazio di archiviazione realmente usato dal repository su disco dopo compressione e deduplicazione su tutti gli archivi"
   },
   "upcomingJobs": {
     "title": "Prossimi Job (Prossime 24 Ore)",

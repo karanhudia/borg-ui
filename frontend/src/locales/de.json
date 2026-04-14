@@ -2193,10 +2193,14 @@
   },
   "repositoryStatsGrid": {
     "totalArchives": "Archive gesamt",
-    "spaceUsed": "Verwendeter Speicher",
-    "spaceSaved": "Gesparter Speicher",
-    "compression": "Komprimierung",
-    "deduplication": "Deduplizierung"
+    "originalSize": "Gesamtgröße der Archive",
+    "originalSizeTooltip": "Gesamte logische Größe aller gesicherten Daten über alle Archive vor Komprimierung und Deduplizierung",
+    "compressedSize": "Komprimierte Archivgröße",
+    "compressedSizeTooltip": "Gesamtgröße aller Archivdaten nach Komprimierung, vor Deduplizierung über alle Archive",
+    "numberOfFiles": "Anzahl der Dateien",
+    "numberOfFilesTooltip": "Gesamtzahl der Dateien über alle Archive",
+    "repositorySize": "Repository-Größe",
+    "repositorySizeTooltip": "Tatsächlich vom Repository auf dem Datenträger belegter Speicher nach Komprimierung und Deduplizierung über alle Archive"
   },
   "upcomingJobs": {
     "title": "Bevorstehende Aufgaben (Nächste 24 Stunden)",
