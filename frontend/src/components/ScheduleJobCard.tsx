@@ -92,13 +92,14 @@ export default function ScheduleJobCard({
   isDuplicatePending,
 }: ScheduleJobCardProps) {
   const { t } = useTranslation()
+  const scheduleDisplay = formatCronHuman(convertCronToLocal(job.cron_expression))
 
   const stats: StatItem[] = [
     {
       icon: <CalendarClock size={11} />,
       label: t('schedule.card.stats.schedule'),
-      value: formatCronHuman(convertCronToLocal(job.cron_expression)),
-      tooltip: job.cron_expression,
+      value: scheduleDisplay,
+      tooltip: scheduleDisplay,
       color: 'info',
     },
     {
