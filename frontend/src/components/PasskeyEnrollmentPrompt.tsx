@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'react-hot-toast'
 import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material'
 import { Fingerprint, ShieldCheck, Zap, KeyRound } from 'lucide-react'
+import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
 import ResponsiveDialog from './ResponsiveDialog'
@@ -59,9 +60,9 @@ export default function PasskeyEnrollmentPrompt({
       toast.success(t('settings.account.security.passkeyAddedToast'))
       await onSuccess()
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(
-        translateBackendKey(error.response?.data?.detail) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('settings.account.security.passkeyAddFailed')
       )
     },

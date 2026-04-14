@@ -42,6 +42,7 @@ import {
   EyeOff,
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
+import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RemoteMachineCard from '../components/RemoteMachineCard'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -111,25 +112,6 @@ interface UpdateConnectionPayload extends Record<string, unknown> {
   default_path: string
   ssh_path_prefix: string
   mount_point: string
-}
-
-function getErrorDetail(error: unknown): string | undefined {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'response' in error &&
-    typeof error.response === 'object' &&
-    error.response !== null &&
-    'data' in error.response &&
-    typeof error.response.data === 'object' &&
-    error.response.data !== null &&
-    'detail' in error.response.data &&
-    typeof error.response.data.detail === 'string'
-  ) {
-    return error.response.data.detail
-  }
-
-  return undefined
 }
 
 export default function SSHConnectionsSingleKey() {
@@ -226,7 +208,8 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to generate SSH key:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) || t('sshConnections.toasts.keyGenerateFailed')
+        translateBackendKey(getApiErrorDetail(error)) ||
+          t('sshConnections.toasts.keyGenerateFailed')
       )
     },
   })
@@ -248,7 +231,7 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to import SSH key:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) || t('sshConnections.toasts.keyImportFailed')
+        translateBackendKey(getApiErrorDetail(error)) || t('sshConnections.toasts.keyImportFailed')
       )
     },
   })
@@ -275,7 +258,7 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to deploy SSH key:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) || t('sshConnections.toasts.keyDeployFailed')
+        translateBackendKey(getApiErrorDetail(error)) || t('sshConnections.toasts.keyDeployFailed')
       )
     },
   })
@@ -295,7 +278,7 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to test connection:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.toasts.connectionTestFailed')
       )
     },
@@ -323,7 +306,7 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to update connection:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.toasts.connectionUpdateFailed')
       )
     },
@@ -341,7 +324,7 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to delete connection:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.toasts.connectionDeleteFailed')
       )
     },
@@ -357,7 +340,7 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to refresh storage:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.toasts.storageRefreshFailed')
       )
     },
@@ -380,7 +363,7 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to test connection:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('sshConnections.toasts.connectionTestFailed')
       )
     },
@@ -398,7 +381,7 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to delete SSH key:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) || t('sshConnections.toasts.keyDeleteFailed')
+        translateBackendKey(getApiErrorDetail(error)) || t('sshConnections.toasts.keyDeleteFailed')
       )
     },
   })
@@ -425,7 +408,7 @@ export default function SSHConnectionsSingleKey() {
     onError: (error: unknown) => {
       console.error('Failed to redeploy SSH key:', error)
       toast.error(
-        translateBackendKey(getErrorDetail(error)) || t('sshConnections.toasts.keyDeployFailed')
+        translateBackendKey(getApiErrorDetail(error)) || t('sshConnections.toasts.keyDeployFailed')
       )
     },
   })

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-hot-toast'
@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth.tsx'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { authAPI } from '../services/api'
 import { BASE_PATH } from '@/utils/basePath'
@@ -17,6 +18,10 @@ import {
 interface LoginForm {
   username: string
   password: string
+}
+
+function hasErrorName(error: unknown, name: string) {
+  return typeof error === 'object' && error !== null && 'name' in error && error.name === name
 }
 
 // ─── Animated background nodes ────────────────────────────────────────────────
@@ -95,6 +100,28 @@ export default function Login() {
     formState: { errors },
   } = useForm<LoginForm>()
 
+  const handleSuccessfulLogin = useCallback(
+    (username: string | null, mustChangePassword: boolean) => {
+      trackAuth(EventAction.LOGIN)
+      if (mustChangePassword) {
+        if (username && hasSeenPasswordSetupPrompt(username)) {
+          toast.success(t('login.success'))
+          navigate('/dashboard')
+        } else {
+          if (username) {
+            markPasswordSetupPromptSeen(username)
+          }
+          toast.success(t('login.successChangePassword'))
+          navigate('/settings/account')
+        }
+      } else {
+        toast.success(t('login.success'))
+        navigate('/dashboard')
+      }
+    },
+    [EventAction.LOGIN, navigate, t, trackAuth]
+  )
+
   useEffect(() => {
     if (pendingChallengeToken) return
 
@@ -129,8 +156,8 @@ export default function Login() {
         }
         localStorage.setItem('access_token', access_token)
         handleSuccessfulLogin(null, must_change_password || false)
-      } catch (error: any) {
-        if (error?.name === 'AbortError' || cancelled) {
+      } catch (error: unknown) {
+        if (hasErrorName(error, 'AbortError') || cancelled) {
           return
         }
       } finally {
@@ -147,26 +174,7 @@ export default function Login() {
       conditionalPasskeyAbortRef.current?.abort()
       conditionalPasskeyAbortRef.current = null
     }
-  }, [pendingChallengeToken])
-
-  const handleSuccessfulLogin = (username: string | null, mustChangePassword: boolean) => {
-    trackAuth(EventAction.LOGIN)
-    if (mustChangePassword) {
-      if (username && hasSeenPasswordSetupPrompt(username)) {
-        toast.success(t('login.success'))
-        navigate('/dashboard')
-      } else {
-        if (username) {
-          markPasswordSetupPromptSeen(username)
-        }
-        toast.success(t('login.successChangePassword'))
-        navigate('/settings/account')
-      }
-    } else {
-      toast.success(t('login.success'))
-      navigate('/dashboard')
-    }
-  }
+  }, [handleSuccessfulLogin, pendingChallengeToken])
 
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)
@@ -180,9 +188,8 @@ export default function Login() {
       } else {
         handleSuccessfulLogin(data.username, result.mustChangePassword)
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('login.failed'))
+    } catch (error: unknown) {
+      toast.error(translateBackendKey(getApiErrorDetail(error)) || t('login.failed'))
     } finally {
       setIsLoading(false)
     }
@@ -194,8 +201,8 @@ export default function Login() {
     try {
       const result = await verifyTotpLogin(pendingChallengeToken, totpCode)
       handleSuccessfulLogin(pendingUsername, result.mustChangePassword)
-    } catch (error: any) {
-      toast.error(translateBackendKey(error.response?.data?.detail) || t('login.failed'))
+    } catch (error: unknown) {
+      toast.error(translateBackendKey(getApiErrorDetail(error)) || t('login.failed'))
     } finally {
       setIsLoading(false)
     }
@@ -208,15 +215,15 @@ export default function Login() {
       conditionalPasskeyAbortRef.current = null
       const result = await loginWithPasskey()
       handleSuccessfulLogin(null, result.mustChangePassword)
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (
-        error?.name === 'NotAllowedError' ||
-        error?.name === 'AbortError' ||
-        error?.name === 'InvalidStateError'
+        hasErrorName(error, 'NotAllowedError') ||
+        hasErrorName(error, 'AbortError') ||
+        hasErrorName(error, 'InvalidStateError')
       ) {
         toast.error(t('login.passkeyCancelled'))
       } else {
-        toast.error(translateBackendKey(error.response?.data?.detail) || t('login.failed'))
+        toast.error(translateBackendKey(getApiErrorDetail(error)) || t('login.failed'))
       }
     } finally {
       setIsLoading(false)

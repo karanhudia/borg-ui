@@ -5,6 +5,7 @@ import { HardDrive, XCircle, Trash2, AlertCircle, FolderOpen, Copy } from 'lucid
 import SettingsCard from './SettingsCard'
 import { mountsAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
+import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { formatDate } from '../utils/dateUtils'
 import DataTable, { Column, ActionButton } from './DataTable'
@@ -20,25 +21,6 @@ interface Mount {
   job_id: number | null
   repository_id: number | null
   connection_id: number | null
-}
-
-function getErrorDetail(error: unknown): string | undefined {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'response' in error &&
-    typeof error.response === 'object' &&
-    error.response !== null &&
-    'data' in error.response &&
-    typeof error.response.data === 'object' &&
-    error.response.data !== null &&
-    'detail' in error.response.data &&
-    typeof error.response.data.detail === 'string'
-  ) {
-    return error.response.data.detail
-  }
-
-  return undefined
 }
 
 export default function MountsManagementTab() {
@@ -69,7 +51,7 @@ export default function MountsManagementTab() {
     },
     onError: (error: unknown) => {
       toast.error(
-        translateBackendKey(getErrorDetail(error)) || t('mountsManagement.failedToUnmount')
+        translateBackendKey(getApiErrorDetail(error)) || t('mountsManagement.failedToUnmount')
       )
     },
   })

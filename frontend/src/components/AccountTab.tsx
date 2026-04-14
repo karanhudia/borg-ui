@@ -17,6 +17,7 @@ import { toast } from 'react-hot-toast'
 import QRCode from 'qrcode'
 import { useAuth } from '../hooks/useAuth'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { getApiErrorDetail } from '../utils/apiErrors'
 import { getGlobalRolePresentation } from '../utils/rolePresentation'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import AccountTabHeader from './AccountTabHeader'
@@ -101,11 +102,9 @@ const AccountTab: React.FC = () => {
       await refreshUser()
       trackSettings(EventAction.EDIT, { section: 'account', operation: 'change_password' })
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(
-        translateBackendKey(error.response?.data?.detail) ||
-          t('settings.toasts.failedToChangePassword')
+        translateBackendKey(getApiErrorDetail(error)) || t('settings.toasts.failedToChangePassword')
       )
     },
   })
@@ -119,9 +118,9 @@ const AccountTab: React.FC = () => {
       setTotpRecoveryCodes(data.recovery_codes)
       toast.success(t('settings.account.security.totpSetupStarted'))
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(
-        translateBackendKey(error.response?.data?.detail) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('settings.account.security.totpSetupFailed')
       )
     },
@@ -140,9 +139,9 @@ const AccountTab: React.FC = () => {
       await refreshUser()
       await refetchTotpStatus()
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(
-        translateBackendKey(error.response?.data?.detail) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('settings.account.security.totpEnableFailed')
       )
     },
@@ -159,9 +158,9 @@ const AccountTab: React.FC = () => {
       await refreshUser()
       await refetchTotpStatus()
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(
-        translateBackendKey(error.response?.data?.detail) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('settings.account.security.totpDisableFailed')
       )
     },
@@ -184,9 +183,9 @@ const AccountTab: React.FC = () => {
       await refreshUser()
       await refetchPasskeys()
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(
-        translateBackendKey(error.response?.data?.detail) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('settings.account.security.passkeyAddFailed')
       )
     },
@@ -199,9 +198,9 @@ const AccountTab: React.FC = () => {
       await refreshUser()
       await refetchPasskeys()
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(
-        translateBackendKey(error.response?.data?.detail) ||
+        translateBackendKey(getApiErrorDetail(error)) ||
           t('settings.account.security.passkeyDeleteFailed')
       )
     },
