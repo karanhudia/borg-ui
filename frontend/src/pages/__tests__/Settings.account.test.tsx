@@ -114,6 +114,7 @@ describe('Settings account tab', () => {
         ['settings.users.manage', 'settings.system.manage', 'repositories.manage_all'].includes(
           permission
         ),
+      markRecentPasswordConfirmation: vi.fn(),
       refreshUser: vi.fn(),
     })
     vi.mocked(apiModule.settingsAPI.getSystemSettings).mockResolvedValue({
@@ -162,6 +163,7 @@ describe('Settings account tab', () => {
         ['settings.users.manage', 'settings.system.manage', 'repositories.manage_all'].includes(
           permission
         ),
+      markRecentPasswordConfirmation: vi.fn(),
       refreshUser: vi.fn(),
     })
 

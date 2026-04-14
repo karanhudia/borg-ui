@@ -87,6 +87,10 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
+class PasswordSetupCompleteResponse(BaseModel):
+    must_change_password: bool = False
+
+
 class TotpLoginVerification(BaseModel):
     login_challenge_token: str
     code: str
@@ -918,3 +922,16 @@ async def change_password(
 
     logger.info("Password changed", username=current_user.username)
     return {"message": "backend.success.auth.passwordChanged"}
+
+
+@router.post("/password-setup/skip", response_model=PasswordSetupCompleteResponse)
+async def skip_password_setup(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark the first-login password setup step as completed without changing the password."""
+    current_user.must_change_password = False
+    db.commit()
+
+    logger.info("Password setup skipped", username=current_user.username)
+    return {"must_change_password": False}

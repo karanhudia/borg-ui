@@ -477,6 +477,40 @@ class TestProtectedEndpoints:
 
 
 @pytest.mark.unit
+class TestPasswordSetupFlow:
+    def test_skip_password_setup_clears_must_change_password(
+        self, test_client: TestClient, admin_headers, admin_user, test_db
+    ):
+        admin_user.must_change_password = True
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/auth/password-setup/skip", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert response.json()["must_change_password"] is False
+        test_db.refresh(admin_user)
+        assert admin_user.must_change_password is False
+
+    def test_auth_change_password_clears_must_change_password(
+        self, test_client: TestClient, admin_headers, admin_user, test_db
+    ):
+        admin_user.must_change_password = True
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/auth/change-password",
+            json={"current_password": "admin123", "new_password": "NewPass123!"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(admin_user)
+        assert admin_user.must_change_password is False
+
+
+@pytest.mark.unit
 class TestTokenValidation:
     """Test JWT token validation in protected endpoints"""
 

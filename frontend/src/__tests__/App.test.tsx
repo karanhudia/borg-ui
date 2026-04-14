@@ -84,9 +84,10 @@ describe('App', () => {
     useAuthMock.mockReturnValue({
       isAuthenticated: true,
       isLoading: false,
+      mustChangePassword: false,
       proxyAuthEnabled: false,
       proxyAuthWarnings: [],
-      user: null,
+      user: { username: 'admin', must_change_password: false },
     })
   })
 
@@ -94,6 +95,7 @@ describe('App', () => {
     useAuthMock.mockReturnValue({
       isAuthenticated: false,
       isLoading: true,
+      mustChangePassword: false,
       proxyAuthEnabled: false,
       proxyAuthWarnings: [],
       user: null,
@@ -109,6 +111,7 @@ describe('App', () => {
     useAuthMock.mockReturnValue({
       isAuthenticated: false,
       isLoading: false,
+      mustChangePassword: false,
       proxyAuthEnabled: true,
       proxyAuthHeader: 'X-Forwarded-User',
       proxyAuthWarnings: [],
@@ -126,6 +129,7 @@ describe('App', () => {
     useAuthMock.mockReturnValue({
       isAuthenticated: false,
       isLoading: false,
+      mustChangePassword: false,
       proxyAuthEnabled: true,
       proxyAuthHeader: 'X-Forwarded-User',
       proxyAuthWarnings: [{ code: 'broad_bind', message: 'Bound broadly' }],
@@ -148,6 +152,7 @@ describe('App', () => {
     useAuthMock.mockReturnValue({
       isAuthenticated: false,
       isLoading: false,
+      mustChangePassword: false,
       proxyAuthEnabled: false,
       proxyAuthWarnings: [],
       user: null,
@@ -168,10 +173,11 @@ describe('App', () => {
     expect(screen.getByText('Umami Tracker')).toBeInTheDocument()
   })
 
-  it('does not force users with required password changes back to account settings on every route', async () => {
+  it('keeps authenticated first-login users on the auth screen until password setup is handled', async () => {
     useAuthMock.mockReturnValue({
       isAuthenticated: true,
       isLoading: false,
+      mustChangePassword: true,
       proxyAuthEnabled: false,
       proxyAuthWarnings: [],
       user: { username: 'admin', must_change_password: true },
@@ -179,8 +185,11 @@ describe('App', () => {
 
     renderWithProviders(<App />, { initialRoute: '/backup' })
 
-    expect(await screen.findByText('Backup Page')).toBeInTheDocument()
-    expect(screen.queryByText('Settings Page')).not.toBeInTheDocument()
+    expect(await screen.findByText('Login Page')).toBeInTheDocument()
+    expect(screen.queryByText('Layout')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/login')
+    })
   })
 
   it('wraps guarded routes with the expected required tab', async () => {

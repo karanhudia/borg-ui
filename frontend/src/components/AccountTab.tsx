@@ -28,7 +28,6 @@ import AccountProfileSection, {
 import AccountAccessSection from './AccountAccessSection'
 import AccountPasswordDialog from './AccountPasswordDialog'
 import AccountTabNavigation, { AccountView } from './AccountTabNavigation'
-import { clearPasswordSetupPromptSeen } from '../utils/passwordSetupPrompt'
 import { createPasskeyCredential } from '../utils/webauthn'
 import { getDefaultPasskeyDeviceName } from '../utils/passkeyDeviceName'
 import AccountSecuritySettingsSection from './AccountSecuritySettingsSection'
@@ -36,7 +35,13 @@ import ResponsiveDialog from './ResponsiveDialog'
 
 const AccountTab: React.FC = () => {
   const { t } = useTranslation()
-  const { user, hasGlobalPermission, refreshUser, proxyAuthEnabled } = useAuth()
+  const {
+    user,
+    hasGlobalPermission,
+    refreshUser,
+    proxyAuthEnabled,
+    markRecentPasswordConfirmation,
+  } = useAuth()
   const { trackSettings, EventAction } = useAnalytics()
   const canManageSystem = hasGlobalPermission('settings.system.manage')
   const hasGlobalRepositoryAccess = hasGlobalPermission('repositories.manage_all')
@@ -94,11 +99,9 @@ const AccountTab: React.FC = () => {
       settingsAPI.changePassword(passwordData),
     onSuccess: async () => {
       toast.success(t('settings.toasts.passwordChanged'))
+      markRecentPasswordConfirmation(changePasswordForm.new_password)
       setChangePasswordForm({ current_password: '', new_password: '', confirm_password: '' })
       setShowChangePasswordDialog(false)
-      if (user?.username) {
-        clearPasswordSetupPromptSeen(user.username)
-      }
       await refreshUser()
       trackSettings(EventAction.EDIT, { section: 'account', operation: 'change_password' })
     },

@@ -32,6 +32,10 @@ interface AuthContextType {
   loginWithPasskey: () => Promise<{ mustChangePassword: boolean }>
   canEnrollPasskeyFromRecentLogin: boolean
   enrollPasskeyFromRecentLogin: () => Promise<void>
+  canChangePasswordFromRecentLogin: boolean
+  changePasswordFromRecentLogin: (newPassword: string) => Promise<void>
+  skipPasswordSetup: () => Promise<void>
+  markRecentPasswordConfirmation: (password: string) => void
   clearRecentPasskeyEnrollmentState: () => void
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
@@ -52,6 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearRecentPasskeyEnrollmentState = () => {
     setRecentPasswordForPasskeyPrompt(null)
+  }
+
+  const markRecentPasswordConfirmation = (password: string) => {
+    if (!password) return
+    markRecentPasswordLogin()
+    setRecentPasswordForPasskeyPrompt(password)
   }
 
   const refreshUser = async () => {
@@ -195,8 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     localStorage.setItem('access_token', access_token)
-    markRecentPasswordLogin()
-    setRecentPasswordForPasskeyPrompt(password)
+    markRecentPasswordConfirmation(password)
 
     await refreshUser()
 
@@ -255,6 +264,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearRecentPasskeyEnrollmentState()
   }
 
+  const changePasswordFromRecentLogin = async (newPassword: string) => {
+    if (!recentPasswordForPasskeyPrompt) {
+      throw new Error('Missing recent password confirmation')
+    }
+
+    await authAPI.changePassword(recentPasswordForPasskeyPrompt, newPassword)
+    markRecentPasswordConfirmation(newPassword)
+    await refreshUser()
+  }
+
+  const skipPasswordSetup = async () => {
+    await authAPI.skipPasswordSetup()
+    await refreshUser()
+  }
+
   const logout = async () => {
     try {
       await authAPI.logout()
@@ -286,6 +310,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loginWithPasskey,
     canEnrollPasskeyFromRecentLogin: !!recentPasswordForPasskeyPrompt,
     enrollPasskeyFromRecentLogin,
+    canChangePasswordFromRecentLogin: !!recentPasswordForPasskeyPrompt,
+    changePasswordFromRecentLogin,
+    skipPasswordSetup,
+    markRecentPasswordConfirmation,
     clearRecentPasskeyEnrollmentState,
     logout,
     refreshUser,

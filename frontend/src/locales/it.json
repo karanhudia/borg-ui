@@ -83,6 +83,14 @@
     "featureArchive": "Sfoglia e ripristina qualsiasi archivio",
     "featureSSH": "Accesso al repository protetto da SSH"
   },
+  "firstLoginSetup": {
+    "overline": "Primo accesso",
+    "title": "Imposta una nuova password o continua",
+    "description": "Puoi impostare una nuova password ora oppure saltare questo passaggio e continuare alla dashboard.",
+    "flowHint": "Dopo questo passaggio, Borg UI proseguirà con passkey, consenso analytics e eventuali annunci attivi.",
+    "skipHint": "Puoi saltare questo passaggio e cambiarla più tardi dalle impostazioni account.",
+    "skip": "Salta per ora"
+  },
   "navigation": {
     "appName": "Borg UI",
     "sections": {

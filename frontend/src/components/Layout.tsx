@@ -56,7 +56,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     const shouldPrompt =
       !proxyAuthEnabled &&
-      !user.must_change_password &&
       (user.passkey_count ?? 0) === 0 &&
       hasRecentPasswordLogin() &&
       canEnrollPasskeyFromRecentLogin &&
@@ -64,13 +63,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       !isPasskeyPromptSnoozed(user.username)
 
     setShowPasskeyPrompt(shouldPrompt)
-  }, [
-    canEnrollPasskeyFromRecentLogin,
-    proxyAuthEnabled,
-    user?.must_change_password,
-    user?.passkey_count,
-    user?.username,
-  ])
+  }, [canEnrollPasskeyFromRecentLogin, proxyAuthEnabled, user?.passkey_count, user?.username])
 
   const handlePasskeyPromptSnooze = () => {
     if (user?.username) {
@@ -103,10 +96,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const activeSurface: ActivePostLoginSurface = showPasskeyPrompt
     ? 'passkey'
-    : announcement
-      ? 'announcement'
-      : showConsentBanner
-        ? 'analytics'
+    : showConsentBanner
+      ? 'analytics'
+      : announcement
+        ? 'announcement'
         : null
 
   return (

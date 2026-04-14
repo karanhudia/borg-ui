@@ -147,6 +147,10 @@ export interface AuthLoginResponse {
   login_challenge_token?: string | null
 }
 
+export interface PasswordSetupCompleteResponse {
+  must_change_password: boolean
+}
+
 export interface TotpStatusResponse {
   enabled: boolean
   recovery_codes_remaining: number
@@ -254,6 +258,7 @@ export const authAPI = {
       current_password: currentPassword,
       new_password: newPassword,
     }),
+  skipPasswordSetup: () => api.post<PasswordSetupCompleteResponse>('/auth/password-setup/skip'),
 }
 
 export const dashboardAPI = {

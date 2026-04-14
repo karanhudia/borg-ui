@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAnalytics } from './useAnalytics'
-import { useAuth } from './useAuth'
 import { useSystemInfo } from './useSystemInfo'
 import type { Announcement } from '../types/announcements'
 import {
@@ -27,8 +25,6 @@ interface UseAnnouncementSurfaceResult {
 }
 
 export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
-  const { user } = useAuth()
-  const location = useLocation()
   const [hiddenAnnouncementIds, setHiddenAnnouncementIds] = useState<string[]>([])
   const { i18n } = useTranslation()
   const { trackAnnouncement, EventAction } = useAnalytics()
@@ -46,7 +42,6 @@ export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
   })
 
   const announcement = useMemo(() => {
-    if (user?.must_change_password && location.pathname.startsWith('/settings/account')) return null
     if (!systemInfo || !manifest) return null
 
     const selectedAnnouncement = selectAnnouncement(
@@ -63,14 +58,7 @@ export function useAnnouncementSurface(): UseAnnouncementSurfaceResult {
     return selectedAnnouncement
       ? resolveAnnouncementLocale(selectedAnnouncement, i18n.resolvedLanguage)
       : null
-  }, [
-    hiddenAnnouncementIds,
-    i18n.resolvedLanguage,
-    location.pathname,
-    manifest,
-    systemInfo,
-    user?.must_change_password,
-  ])
+  }, [hiddenAnnouncementIds, i18n.resolvedLanguage, manifest, systemInfo])
 
   const hideAnnouncement = useCallback((id: string) => {
     setHiddenAnnouncementIds((current) => [...current, id])

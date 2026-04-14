@@ -163,8 +163,9 @@ describe('Layout', () => {
     expect(logoutMock).toHaveBeenCalledTimes(1)
   })
 
-  it('still shows the analytics consent banner during forced password setup', async () => {
+  it('shows the passkey prompt before analytics even when password setup is still pending', async () => {
     hasConsentBeenGivenMock.mockReturnValue(false)
+    sessionStorage.setItem('recent_password_login', '1')
     useAuthMock.mockReturnValue({
       user: {
         username: 'admin',
@@ -183,13 +184,12 @@ describe('Layout', () => {
     renderWithProviders(
       <Layout>
         <div>Page Content</div>
-      </Layout>
+      </Layout>,
+      { initialRoute: '/dashboard' }
     )
 
-    await waitFor(() => {
-      expect(loadUserPreferenceMock).toHaveBeenCalledTimes(1)
-    })
-    expect(await screen.findByText('Consent Banner')).toBeInTheDocument()
+    expect(await screen.findByText('Passkey Prompt')).toBeInTheDocument()
+    expect(screen.queryByText('Consent Banner')).not.toBeInTheDocument()
   })
 
   it('shows the passkey prompt after a recent password login when no passkeys exist', async () => {
@@ -325,7 +325,7 @@ describe('Layout', () => {
     expect(screen.queryByText('Announcement Modal')).not.toBeInTheDocument()
   })
 
-  it('shows announcements before the analytics consent banner', async () => {
+  it('shows the analytics consent banner before announcements', async () => {
     hasConsentBeenGivenMock.mockReturnValue(false)
     announcementSurfaceMock.mockReturnValue({
       announcement: {
@@ -345,7 +345,7 @@ describe('Layout', () => {
       </Layout>
     )
 
-    expect(await screen.findByText('Announcement Modal')).toBeInTheDocument()
-    expect(screen.queryByText('Consent Banner')).not.toBeInTheDocument()
+    expect(await screen.findByText('Consent Banner')).toBeInTheDocument()
+    expect(screen.queryByText('Announcement Modal')).not.toBeInTheDocument()
   })
 })

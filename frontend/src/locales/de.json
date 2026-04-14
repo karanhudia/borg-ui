@@ -83,6 +83,14 @@
     "featureArchive": "Archive durchsuchen und wiederherstellen",
     "featureSSH": "SSH-gesicherter Repository-Zugriff"
   },
+  "firstLoginSetup": {
+    "overline": "Erste Anmeldung",
+    "title": "Neues Passwort setzen oder fortfahren",
+    "description": "Du kannst jetzt ein neues Passwort setzen oder diesen Schritt überspringen und mit dem Dashboard fortfahren.",
+    "flowHint": "Nach diesem Schritt fährt Borg UI mit Passkeys, der Analyse-Einwilligung und aktiven Ankündigungen fort.",
+    "skipHint": "Du kannst diesen Schritt überspringen und das Passwort später in den Kontoeinstellungen ändern.",
+    "skip": "Jetzt überspringen"
+  },
   "navigation": {
     "appName": "Borg UI",
     "sections": {

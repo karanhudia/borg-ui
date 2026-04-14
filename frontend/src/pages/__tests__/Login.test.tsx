@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Login from '../Login'
 import { toast } from 'react-hot-toast'
-import { markPasswordSetupPromptSeen } from '../../utils/passwordSetupPrompt'
 
 const { loginMock, verifyTotpLoginMock, loginWithPasskeyMock, navigateMock, trackAuthMock } =
   vi.hoisted(() => ({
@@ -18,7 +17,12 @@ vi.mock('../../hooks/useAuth.tsx', () => ({
     login: loginMock,
     verifyTotpLogin: verifyTotpLoginMock,
     loginWithPasskey: loginWithPasskeyMock,
+    mustChangePassword: false,
   }),
+}))
+
+vi.mock('../FirstLoginPasswordSetup', () => ({
+  default: () => <div>Password Setup Card</div>,
 }))
 
 vi.mock('../../hooks/useAnalytics', () => ({
@@ -73,7 +77,7 @@ describe('Login page', () => {
     })
   })
 
-  it('redirects to the dashboard and shows the password change toast when required', async () => {
+  it('replaces the login card with the password setup card for first-time users', async () => {
     const user = userEvent.setup()
     loginMock.mockResolvedValue({ totpRequired: false, mustChangePassword: true })
 
@@ -84,26 +88,10 @@ describe('Login page', () => {
     await user.click(screen.getByRole('button', { name: /^sign in$/i }))
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith('/settings/account')
-      expect(toast.success).toHaveBeenCalledWith('Login successful! Please change your password.')
-    })
-  })
-
-  it('does not redirect to account settings again after the prompt was already shown once', async () => {
-    const user = userEvent.setup()
-    loginMock.mockResolvedValue({ totpRequired: false, mustChangePassword: true })
-    markPasswordSetupPromptSeen('admin')
-
-    renderWithProviders(<Login />)
-
-    await user.type(screen.getByLabelText(/username/i), 'admin')
-    await user.type(screen.getByLabelText(/^password$/i), 'secret')
-    await user.click(screen.getByRole('button', { name: /^sign in$/i }))
-
-    await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith('/dashboard')
       expect(toast.success).toHaveBeenCalledWith('Login successful!')
     })
+    expect(screen.getByText('Password Setup Card')).toBeInTheDocument()
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 
   it('shows the translated backend error and resets loading after a failed login', async () => {

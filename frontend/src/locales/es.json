@@ -83,6 +83,14 @@
     "featureArchive": "Navegar y restaurar cualquier archivo",
     "featureSSH": "Acceso al repositorio protegido por SSH"
   },
+  "firstLoginSetup": {
+    "overline": "Primer inicio de sesión",
+    "title": "Configura una nueva contraseña o continúa",
+    "description": "Puedes configurar una nueva contraseña ahora o saltarte este paso y continuar al panel.",
+    "flowHint": "Después de este paso, Borg UI continuará con passkeys, consentimiento de analíticas y cualquier anuncio activo.",
+    "skipHint": "Puedes omitir este paso por ahora y cambiarla más tarde desde la configuración de la cuenta.",
+    "skip": "Omitir por ahora"
+  },
   "navigation": {
     "appName": "Borg UI",
     "sections": {

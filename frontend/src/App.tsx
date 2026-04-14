@@ -13,6 +13,7 @@ import Repositories from './pages/Repositories'
 import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
+import AuthLayout from './components/AuthLayout'
 import { UmamiTracker } from './components/UmamiTracker'
 import { loadUserPreference, initAnalyticsIfEnabled, identifyUser } from './utils/analytics'
 
@@ -20,6 +21,7 @@ function App() {
   const {
     isAuthenticated,
     isLoading,
+    mustChangePassword,
     proxyAuthEnabled,
     proxyAuthHeader,
     proxyAuthWarnings,
@@ -42,6 +44,25 @@ function App() {
       identifyUser(user.username)
     }
   }, [isAuthenticated, user?.username])
+
+  const shouldUseAuthShell = !isAuthenticated || mustChangePassword
+
+  const authShell = (
+    <>
+      <UmamiTracker />
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <AuthLayout>
+              <Login />
+            </AuthLayout>
+          }
+        />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </>
+  )
 
   if (isLoading) {
     return (
@@ -86,17 +107,10 @@ function App() {
         </div>
       )
     }
+  }
 
-    // Regular JWT auth mode - show login screen
-    return (
-      <>
-        <UmamiTracker />
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </>
-    )
+  if (shouldUseAuthShell) {
+    return authShell
   }
 
   return (

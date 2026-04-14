@@ -8,6 +8,7 @@ const loginApiMock = vi.fn()
 const verifyTotpLoginApiMock = vi.fn()
 const beginPasskeyAuthenticationApiMock = vi.fn()
 const finishPasskeyAuthenticationApiMock = vi.fn()
+const skipPasswordSetupApiMock = vi.fn()
 const logoutApiMock = vi.fn()
 const setProxyAuthModeMock = vi.fn()
 const getPasskeyAssertionMock = vi.fn()
@@ -22,6 +23,7 @@ vi.mock('../../services/api', () => ({
     beginPasskeyAuthentication: () => beginPasskeyAuthenticationApiMock(),
     finishPasskeyAuthentication: (ceremonyToken: string, credential: unknown) =>
       finishPasskeyAuthenticationApiMock(ceremonyToken, credential),
+    skipPasswordSetup: () => skipPasswordSetupApiMock(),
     logout: () => logoutApiMock(),
   },
   setProxyAuthMode: (enabled: boolean) => setProxyAuthModeMock(enabled),
@@ -43,6 +45,7 @@ function AuthProbe() {
     login,
     verifyTotpLogin,
     loginWithPasskey,
+    markRecentPasswordConfirmation,
     logout,
   } = useAuth()
 
@@ -67,6 +70,9 @@ function AuthProbe() {
       </button>
       <button onClick={() => void verifyTotpLogin('challenge-token', '123456')}>VerifyTotp</button>
       <button onClick={() => void loginWithPasskey()}>PasskeyLogin</button>
+      <button onClick={() => markRecentPasswordConfirmation('fresh-password')}>
+        MarkRecentPassword
+      </button>
       <button onClick={() => void logout()}>Logout</button>
     </div>
   )
@@ -105,6 +111,9 @@ describe('AuthProvider', () => {
     })
     finishPasskeyAuthenticationApiMock.mockResolvedValue({
       data: { access_token: 'jwt-token', must_change_password: false },
+    })
+    skipPasswordSetupApiMock.mockResolvedValue({
+      data: { must_change_password: false },
     })
     getPasskeyAssertionMock.mockResolvedValue({ id: 'credential-id' })
     logoutApiMock.mockResolvedValue({})
@@ -231,6 +240,23 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(sessionStorage.getItem('recent_password_login')).toBe('1')
       expect(localStorage.getItem('access_token')).toBe('jwt-token')
+    })
+  })
+
+  it('can mark a successful password confirmation as eligible for the passkey prompt', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    )
+
+    await screen.findByText('authenticated:false')
+    await user.click(screen.getByRole('button', { name: 'MarkRecentPassword' }))
+
+    await waitFor(() => {
+      expect(sessionStorage.getItem('recent_password_login')).toBe('1')
     })
   })
 
