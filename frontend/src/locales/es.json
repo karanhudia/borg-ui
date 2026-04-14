@@ -3085,6 +3085,7 @@
         "cacheCleared": "Se limpiaron {{count}} entradas de caché para el repositorio {{repositoryId}}",
         "cacheSettingsUpdated": "Configuración de caché actualizada correctamente",
         "logCleanupCompleted": "Limpieza de registros completada. Se eliminaron {{count}} archivos ({{sizeMb}} MB liberados)",
+        "logCleanupNoop": "Limpieza de registros completada. Ningún archivo coincidió con las reglas actuales de retención o tamaño.",
         "noRepositoriesToRefresh": "No hay repositorios para actualizar",
         "passwordChanged": "Contraseña cambiada correctamente",
         "passwordReset": "Contraseña restablecida correctamente",

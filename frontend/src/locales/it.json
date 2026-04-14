@@ -3085,6 +3085,7 @@
         "cacheCleared": "Pulite {{count}} voci cache per il repository {{repositoryId}}",
         "cacheSettingsUpdated": "Impostazioni cache aggiornate con successo",
         "logCleanupCompleted": "Pulizia log completata. Eliminati {{count}} file ({{sizeMb}} MB liberati)",
+        "logCleanupNoop": "Pulizia log completata. Nessun file corrisponde alle attuali regole di conservazione o dimensione.",
         "noRepositoriesToRefresh": "Nessun repository da aggiornare",
         "passwordChanged": "Password cambiata con successo",
         "passwordReset": "Password reimpostata con successo",

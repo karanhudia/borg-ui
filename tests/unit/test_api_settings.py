@@ -212,6 +212,90 @@ class TestSystemSettings:
         test_db.refresh(settings)
         assert settings.metrics_token == body["generated_metrics_token"]
 
+    def test_manual_log_cleanup_returns_interpolated_success_message(
+        self, test_client: TestClient, admin_headers
+    ):
+        with (
+            patch(
+                "app.services.log_manager.log_manager.cleanup_logs_combined",
+                return_value={
+                    "success": True,
+                    "age_cleanup": {
+                        "deleted_count": 1,
+                        "deleted_size_mb": 1.25,
+                        "skipped_count": 0,
+                        "errors": [],
+                    },
+                    "size_cleanup": {
+                        "deleted_count": 1,
+                        "deleted_size_mb": 2.5,
+                        "skipped_count": 0,
+                        "final_size_mb": 10.0,
+                        "errors": [],
+                    },
+                    "total_deleted_count": 2,
+                    "total_deleted_size_mb": 3.75,
+                    "total_errors": [],
+                },
+            ),
+            patch(
+                "app.services.log_manager.log_manager.calculate_log_storage",
+                return_value={"total_size_mb": 10.0, "file_count": 4},
+            ),
+        ):
+            response = test_client.post(
+                "/api/settings/system/logs/cleanup", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["message"] == {
+            "key": "backend.success.settings.logCleanupCompleted",
+            "params": {"count": 2, "sizeMb": 3.75},
+        }
+
+    def test_manual_log_cleanup_returns_noop_message_when_nothing_deleted(
+        self, test_client: TestClient, admin_headers
+    ):
+        with (
+            patch(
+                "app.services.log_manager.log_manager.cleanup_logs_combined",
+                return_value={
+                    "success": True,
+                    "age_cleanup": {
+                        "deleted_count": 0,
+                        "deleted_size_mb": 0.0,
+                        "skipped_count": 0,
+                        "errors": [],
+                    },
+                    "size_cleanup": {
+                        "deleted_count": 0,
+                        "deleted_size_mb": 0.0,
+                        "skipped_count": 0,
+                        "final_size_mb": 10.0,
+                        "errors": [],
+                    },
+                    "total_deleted_count": 0,
+                    "total_deleted_size_mb": 0.0,
+                    "total_errors": [],
+                },
+            ),
+            patch(
+                "app.services.log_manager.log_manager.calculate_log_storage",
+                return_value={"total_size_mb": 10.0, "file_count": 4},
+            ),
+        ):
+            response = test_client.post(
+                "/api/settings/system/logs/cleanup", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["message"] == {
+            "key": "backend.success.settings.logCleanupNoop",
+            "params": {"retentionDays": 30, "sizeLimitMb": 500},
+        }
+
 
 @pytest.mark.unit
 class TestUserSettings:

@@ -3085,6 +3085,7 @@
         "cacheCleared": "{{count}} Cache-Einträge für Repository {{repositoryId}} geleert",
         "cacheSettingsUpdated": "Cache-Einstellungen erfolgreich aktualisiert",
         "logCleanupCompleted": "Protokollbereinigung abgeschlossen. {{count}} Dateien gelöscht ({{sizeMb}} MB freigegeben)",
+        "logCleanupNoop": "Protokollbereinigung abgeschlossen. Keine Dateien entsprachen den aktuellen Aufbewahrungs- oder Größenregeln.",
         "noRepositoriesToRefresh": "Keine Repositories zum Aktualisieren",
         "passwordChanged": "Passwort erfolgreich geändert",
         "passwordReset": "Passwort erfolgreich zurückgesetzt",

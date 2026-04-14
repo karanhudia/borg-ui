@@ -1325,9 +1325,26 @@ async def manual_log_cleanup(
             size_freed_mb=result["total_deleted_size_mb"],
         )
 
+        if result["total_deleted_count"] > 0:
+            message = {
+                "key": "backend.success.settings.logCleanupCompleted",
+                "params": {
+                    "count": result["total_deleted_count"],
+                    "sizeMb": result["total_deleted_size_mb"],
+                },
+            }
+        else:
+            message = {
+                "key": "backend.success.settings.logCleanupNoop",
+                "params": {
+                    "retentionDays": max_age_days,
+                    "sizeLimitMb": max_total_size_mb,
+                },
+            }
+
         return {
             "success": result["success"],
-            "message": "backend.success.settings.logCleanupCompleted",
+            "message": message,
             "cleanup_results": {
                 "age_cleanup": {
                     "deleted_count": result["age_cleanup"]["deleted_count"],
