@@ -777,7 +777,10 @@
           "saveButton": "Save deployment"
         },
         "badges": {
-          "memberSince": "Membro dal {{date}}"
+          "memberSince": "Membro dal {{date}}",
+          "totpActive": "2FA attivo",
+          "passkeyActive_one": "{{count}} passkey",
+          "passkeyActive_other": "{{count}} passkeys"
         }
       },
       "security": {
