@@ -2544,8 +2544,11 @@
       "review": "Riepilogo"
     },
     "finalButtonCreate": "Crea Repository",
+    "finalButtonCreating": "Creazione…",
     "finalButtonEdit": "Salva Modifiche",
+    "finalButtonSaving": "Salvataggio…",
     "finalButtonImport": "Importa Repository",
+    "finalButtonImporting": "Importazione…",
     "fileExplorer": {
       "selectRepoPath": "Seleziona Percorso Repository",
       "selectSourceDirs": "Seleziona Directory o File Sorgente",

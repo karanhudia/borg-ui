@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { DialogTitle, DialogContent, DialogActions, Box, Button, Typography } from '@mui/material'
+import {
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Box,
+  Button,
+  Typography,
+  CircularProgress,
+} from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
 import { FolderOpen, Database, Shield, Settings, CheckCircle } from 'lucide-react'
 import {
@@ -37,7 +45,7 @@ interface RepositoryWizardProps {
   onClose: () => void
   mode: 'create' | 'edit' | 'import'
   repository?: Repository
-  onSubmit: (data: RepositoryData, keyfile?: File | null) => void
+  onSubmit: (data: RepositoryData, keyfile?: File | null) => void | Promise<void>
 }
 
 interface SSHConnection {
@@ -117,6 +125,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const [showSourceExplorer, setShowSourceExplorer] = useState(false)
   const [showRemoteSourceExplorer, setShowRemoteSourceExplorer] = useState(false)
   const [showExcludeExplorer, setShowExcludeExplorer] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Step definitions
   const steps = useMemo(() => {
@@ -450,7 +459,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     setActiveStep((prev) => prev - 1)
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const data: RepositoryData = {
       name: wizardState.name,
       borg_version: wizardState.borgVersion,
@@ -497,7 +506,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     )
 
     // Pass keyfile for import mode
-    onSubmit(data, mode === 'import' ? wizardState.selectedKeyfile : null)
+    setIsSubmitting(true)
+    try {
+      await onSubmit(data, mode === 'import' ? wizardState.selectedKeyfile : null)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // Render current step content
@@ -669,9 +683,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         }}
         footer={
           <DialogActions sx={{ px: { xs: 1, sm: 3 }, pb: { xs: 1, sm: 2 } }}>
-            <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
+            <Button onClick={onClose} disabled={isSubmitting}>
+              {t('common.buttons.cancel')}
+            </Button>
             <Box sx={{ flex: 1 }} />
-            <Button disabled={activeStep === 0} onClick={handleBack}>
+            <Button disabled={activeStep === 0 || isSubmitting} onClick={handleBack}>
               {t('common.buttons.back')}
             </Button>
             {activeStep < steps.length - 1 ? (
@@ -687,14 +703,21 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               <Button
                 variant="contained"
                 onClick={handleSubmit}
-                disabled={!canProceed()}
-                sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+                disabled={!canProceed() || isSubmitting}
+                startIcon={
+                  isSubmitting ? <CircularProgress size={16} color="inherit" /> : undefined
+                }
+                sx={{ boxShadow: isSubmitting ? 'none' : '0 2px 8px rgba(37,99,235,0.3)' }}
               >
-                {mode === 'create'
-                  ? t('repositoryWizard.finalButtonCreate')
-                  : mode === 'edit'
-                    ? t('repositoryWizard.finalButtonEdit')
-                    : t('repositoryWizard.finalButtonImport')}
+                {isSubmitting
+                  ? t(
+                      `repositoryWizard.finalButton${mode === 'create' ? 'Creating' : mode === 'edit' ? 'Saving' : 'Importing'}`
+                    )
+                  : mode === 'create'
+                    ? t('repositoryWizard.finalButtonCreate')
+                    : mode === 'edit'
+                      ? t('repositoryWizard.finalButtonEdit')
+                      : t('repositoryWizard.finalButtonImport')}
               </Button>
             )}
           </DialogActions>

@@ -2544,8 +2544,11 @@
       "review": "Überprüfung"
     },
     "finalButtonCreate": "Repository erstellen",
+    "finalButtonCreating": "Erstellen…",
     "finalButtonEdit": "Änderungen speichern",
+    "finalButtonSaving": "Speichern…",
     "finalButtonImport": "Repository importieren",
+    "finalButtonImporting": "Importieren…",
     "fileExplorer": {
       "selectRepoPath": "Repository-Pfad auswählen",
       "selectSourceDirs": "Quellverzeichnisse oder -dateien auswählen",

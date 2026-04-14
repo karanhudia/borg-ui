@@ -2544,8 +2544,11 @@
       "review": "Revisión"
     },
     "finalButtonCreate": "Crear repositorio",
+    "finalButtonCreating": "Creando…",
     "finalButtonEdit": "Guardar cambios",
+    "finalButtonSaving": "Guardando…",
     "finalButtonImport": "Importar repositorio",
+    "finalButtonImporting": "Importando…",
     "fileExplorer": {
       "selectRepoPath": "Seleccionar ruta del repositorio",
       "selectSourceDirs": "Seleccionar directorios o archivos de origen",

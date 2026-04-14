@@ -2544,8 +2544,11 @@
       "review": "Review"
     },
     "finalButtonCreate": "Create Repository",
+    "finalButtonCreating": "Creating…",
     "finalButtonEdit": "Save Changes",
+    "finalButtonSaving": "Saving…",
     "finalButtonImport": "Import Repository",
+    "finalButtonImporting": "Importing…",
     "fileExplorer": {
       "selectRepoPath": "Select Repository Path",
       "selectSourceDirs": "Select Source Directories or Files",
