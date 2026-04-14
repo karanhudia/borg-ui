@@ -528,7 +528,7 @@ const Archives: React.FC = () => {
         <ArchivesList
           archives={archivesList}
           repositoryName={selectedRepository?.name || ''}
-          loading={loadingArchives}
+          loading={loadingArchives || repoInfoPending}
           onViewArchive={handleViewArchive}
           onRestoreArchive={handleRestoreArchive}
           onMountArchive={openMountDialog}
