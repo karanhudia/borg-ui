@@ -527,19 +527,9 @@ class TestProxyAuthentication:
         assert "proxy_auth_enabled" in data
         assert "authentication_required" in data
         assert "proxy_auth_header" in data
-        assert "proxy_auth_role_header" in data
-        assert "proxy_auth_all_repositories_role_header" in data
-        assert "proxy_auth_email_header" in data
-        assert "proxy_auth_full_name_header" in data
-        assert "proxy_auth_health" in data
         assert data["proxy_auth_enabled"] is False
         assert data["authentication_required"] is True
         assert data["proxy_auth_header"] is None
-        assert data["proxy_auth_role_header"] is None
-        assert data["proxy_auth_all_repositories_role_header"] is None
-        assert data["proxy_auth_email_header"] is None
-        assert data["proxy_auth_full_name_header"] is None
-        assert data["proxy_auth_health"] == {"enabled": False, "warnings": []}
 
     def test_auth_config_endpoint_proxy_mode(
         self, test_client: TestClient, monkeypatch
@@ -556,11 +546,6 @@ class TestProxyAuthentication:
         assert data["proxy_auth_enabled"] is True
         assert data["authentication_required"] is False
         assert data["proxy_auth_header"] == "X-Forwarded-User"
-        assert data["proxy_auth_role_header"] is None
-        assert data["proxy_auth_all_repositories_role_header"] is None
-        assert data["proxy_auth_email_header"] is None
-        assert data["proxy_auth_full_name_header"] is None
-        assert data["proxy_auth_health"]["enabled"] is True
 
     def test_proxy_auth_with_header(
         self, test_client: TestClient, test_db, monkeypatch

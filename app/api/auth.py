@@ -65,11 +65,6 @@ class AuthConfig(BaseModel):
     proxy_auth_enabled: bool
     authentication_required: bool
     proxy_auth_header: Optional[str] = None
-    proxy_auth_role_header: Optional[str] = None
-    proxy_auth_all_repositories_role_header: Optional[str] = None
-    proxy_auth_email_header: Optional[str] = None
-    proxy_auth_full_name_header: Optional[str] = None
-    proxy_auth_health: dict
 
 
 class UserCreate(BaseModel):
@@ -284,33 +279,12 @@ def _serialize_passkey_credential(credential: PasskeyCredential) -> dict:
 @router.get("/config", response_model=AuthConfig)
 async def get_auth_config():
     """Get authentication configuration for frontend"""
-    from app.core.proxy_auth import inspect_proxy_auth_config
-
     return {
         "proxy_auth_enabled": settings.disable_authentication,
         "authentication_required": not settings.disable_authentication,
         "proxy_auth_header": (
             settings.proxy_auth_header if settings.disable_authentication else None
         ),
-        "proxy_auth_role_header": (
-            settings.proxy_auth_role_header if settings.disable_authentication else None
-        ),
-        "proxy_auth_all_repositories_role_header": (
-            settings.proxy_auth_all_repositories_role_header
-            if settings.disable_authentication
-            else None
-        ),
-        "proxy_auth_email_header": (
-            settings.proxy_auth_email_header
-            if settings.disable_authentication
-            else None
-        ),
-        "proxy_auth_full_name_header": (
-            settings.proxy_auth_full_name_header
-            if settings.disable_authentication
-            else None
-        ),
-        "proxy_auth_health": inspect_proxy_auth_config(),
     }
 
 
