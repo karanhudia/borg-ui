@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, Stack, Tooltip, Typography, useTheme, alpha } from '@mui/material'
+import { Box, Skeleton, Stack, Tooltip, Typography, useTheme, alpha } from '@mui/material'
 import { Archive as ArchiveIcon, Database } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes as formatBytesUtil } from '../utils/dateUtils'
@@ -15,13 +15,14 @@ interface RepositoryStatsGridProps {
   stats: RepositoryStats
   archivesCount: number
   borgVersion?: number
+  archivesLoading?: boolean
 }
 
 type ColorKey = 'primary' | 'success' | 'info' | 'secondary' | 'warning'
 
 interface StatCardProps {
   label: string
-  value: string | number
+  value: React.ReactNode
   icon: React.ReactNode
   colorKey: ColorKey
   tooltip?: string
@@ -95,6 +96,7 @@ export default function RepositoryStatsGrid({
   stats,
   archivesCount,
   borgVersion,
+  archivesLoading,
 }: RepositoryStatsGridProps) {
   const { t } = useTranslation()
   const isBorg2 = borgVersion === 2
@@ -110,7 +112,13 @@ export default function RepositoryStatsGrid({
     >
       <StatCard
         label={t('repositoryStatsGrid.totalArchives')}
-        value={archivesCount}
+        value={
+          archivesLoading ? (
+            <Skeleton variant="text" width={40} sx={{ fontSize: '1.5rem' }} />
+          ) : (
+            archivesCount
+          )
+        }
         icon={<ArchiveIcon size={32} />}
         colorKey="primary"
       />

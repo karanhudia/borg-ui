@@ -503,6 +503,7 @@ const Archives: React.FC = () => {
                   stats={repositoryStats}
                   archivesCount={archivesList.length}
                   borgVersion={selectedRepository?.borg_version}
+                  archivesLoading={loadingArchives || repoInfoPending}
                 />
               ) : null}
             </Box>
