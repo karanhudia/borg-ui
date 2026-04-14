@@ -141,7 +141,7 @@ describe('Settings account tab', () => {
     })
   })
 
-  it('shows the password action at the top when password change is required', async () => {
+  it('keeps the account password section in its normal state even when must_change_password is set', async () => {
     useAuthMock.mockReturnValue({
       user: {
         id: 1,
@@ -175,9 +175,9 @@ describe('Settings account tab', () => {
 
     await screen.findByRole('tab', { name: 'Personal profile' })
 
-    const headings = screen.getAllByText('Account password')
-    expect(headings[0]).toBeInTheDocument()
-    expect(screen.getByText('Password update required')).toBeInTheDocument()
+    expect(screen.getAllByText('Account password').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Click to change your login credentials').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Password update required')).not.toBeInTheDocument()
     expect(screen.queryByText('Finish account setup')).not.toBeInTheDocument()
   })
 
