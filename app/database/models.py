@@ -42,6 +42,10 @@ class User(Base):
     must_change_password = Column(
         Boolean, default=False
     )  # Force password change on next login
+    totp_secret_encrypted = Column(String, nullable=True)
+    totp_enabled = Column(Boolean, default=False, nullable=False)
+    totp_enabled_at = Column(DateTime, nullable=True)
+    totp_recovery_codes_hashes = Column(Text, nullable=True)
     analytics_enabled = Column(Boolean, default=True)  # User's analytics preference
     analytics_consent_given = Column(
         Boolean, default=False
@@ -49,6 +53,9 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+    passkeys = relationship(
+        "PasskeyCredential", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class ApiToken(Base):
@@ -63,6 +70,26 @@ class ApiToken(Base):
     prefix = Column(String(12), nullable=False)
     created_at = Column(DateTime, default=utc_now, nullable=False)
     last_used_at = Column(DateTime, nullable=True)
+
+
+class PasskeyCredential(Base):
+    __tablename__ = "passkey_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name = Column(String, nullable=False)
+    credential_id = Column(String, nullable=False, unique=True, index=True)
+    public_key = Column(Text, nullable=False)
+    sign_count = Column(Integer, default=0, nullable=False)
+    transports = Column(Text, nullable=True)
+    device_type = Column(String, nullable=True)
+    backed_up = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    last_used_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", back_populates="passkeys")
 
 
 class UserRepositoryPermission(Base):

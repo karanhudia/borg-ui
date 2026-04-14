@@ -7,7 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 from datetime import timedelta
 from app.database.models import User
-from app.core.security import get_password_hash, verify_password, create_access_token
+from app.core.security import (
+    create_access_token,
+    encrypt_secret,
+    get_password_hash,
+    verify_password,
+)
+from app.core.totp import _hotp
 
 
 @pytest.mark.unit
@@ -520,8 +526,20 @@ class TestProxyAuthentication:
         data = response.json()
         assert "proxy_auth_enabled" in data
         assert "authentication_required" in data
+        assert "proxy_auth_header" in data
+        assert "proxy_auth_role_header" in data
+        assert "proxy_auth_all_repositories_role_header" in data
+        assert "proxy_auth_email_header" in data
+        assert "proxy_auth_full_name_header" in data
+        assert "proxy_auth_health" in data
         assert data["proxy_auth_enabled"] is False
         assert data["authentication_required"] is True
+        assert data["proxy_auth_header"] is None
+        assert data["proxy_auth_role_header"] is None
+        assert data["proxy_auth_all_repositories_role_header"] is None
+        assert data["proxy_auth_email_header"] is None
+        assert data["proxy_auth_full_name_header"] is None
+        assert data["proxy_auth_health"] == {"enabled": False, "warnings": []}
 
     def test_auth_config_endpoint_proxy_mode(
         self, test_client: TestClient, monkeypatch
@@ -537,6 +555,12 @@ class TestProxyAuthentication:
         data = response.json()
         assert data["proxy_auth_enabled"] is True
         assert data["authentication_required"] is False
+        assert data["proxy_auth_header"] == "X-Forwarded-User"
+        assert data["proxy_auth_role_header"] is None
+        assert data["proxy_auth_all_repositories_role_header"] is None
+        assert data["proxy_auth_email_header"] is None
+        assert data["proxy_auth_full_name_header"] is None
+        assert data["proxy_auth_health"]["enabled"] is True
 
     def test_proxy_auth_with_header(
         self, test_client: TestClient, test_db, monkeypatch
@@ -565,10 +589,10 @@ class TestProxyAuthentication:
         assert user.email == "proxyuser@proxy.local"
         assert user.password_hash == ""  # No password for proxy auth users
 
-    def test_proxy_auth_without_header_uses_default_admin(
+    def test_proxy_auth_without_header_is_denied(
         self, test_client: TestClient, test_db, monkeypatch
     ):
-        """Test proxy auth without header uses default 'admin' user"""
+        """Test proxy auth fails closed when no trusted identity header is present"""
         from app import config
 
         monkeypatch.setattr(config.settings, "disable_authentication", True)
@@ -576,15 +600,10 @@ class TestProxyAuthentication:
         # Access without any proxy header
         response = test_client.get("/api/auth/me")
 
-        assert response.status_code == 200
+        assert response.status_code == 401
         data = response.json()
-        assert data["username"] == "admin"
-
-        # Verify admin user was created
-        from app.database.models import User
-
-        user = test_db.query(User).filter(User.username == "admin").first()
-        assert user is not None
+        assert data["detail"]["key"] == "backend.errors.auth.proxyHeaderRequired"
+        assert data["detail"]["params"]["header"] == "X-Forwarded-User"
 
     def test_proxy_auth_with_alternative_headers(
         self, test_client: TestClient, test_db, monkeypatch
@@ -762,6 +781,220 @@ class TestProxyAuthentication:
         # Last login should be updated
         assert second_login > first_login
 
+    def test_proxy_auth_can_assign_role_from_trusted_header(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        from app import config
+        from app.database.models import User
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+        monkeypatch.setattr(config.settings, "proxy_auth_role_header", "X-Proxy-Role")
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Forwarded-User": "operatoruser", "X-Proxy-Role": "operator"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["role"] == "operator"
+        assert data["all_repositories_role"] == "operator"
+
+        user = test_db.query(User).filter(User.username == "operatoruser").first()
+        assert user is not None
+        assert user.role == "operator"
+        assert user.all_repositories_role == "operator"
+
+    def test_proxy_auth_can_assign_all_repositories_role_from_trusted_header(
+        self, test_client: TestClient, monkeypatch
+    ):
+        from app import config
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+        monkeypatch.setattr(config.settings, "proxy_auth_role_header", "X-Proxy-Role")
+        monkeypatch.setattr(
+            config.settings,
+            "proxy_auth_all_repositories_role_header",
+            "X-Proxy-Repo-Role",
+        )
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={
+                "X-Forwarded-User": "adminuser",
+                "X-Proxy-Role": "admin",
+                "X-Proxy-Repo-Role": "operator",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["role"] == "admin"
+        assert data["all_repositories_role"] == "operator"
+
+    def test_proxy_auth_can_assign_email_and_full_name_from_trusted_headers(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        from app import config
+        from app.database.models import User
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+        monkeypatch.setattr(config.settings, "proxy_auth_email_header", "X-Proxy-Email")
+        monkeypatch.setattr(
+            config.settings, "proxy_auth_full_name_header", "X-Proxy-Full-Name"
+        )
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={
+                "X-Forwarded-User": "personuser",
+                "X-Proxy-Email": "person@example.com",
+                "X-Proxy-Full-Name": "Person Example",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == "person@example.com"
+        assert data["full_name"] == "Person Example"
+
+        user = test_db.query(User).filter(User.username == "personuser").first()
+        assert user is not None
+        assert user.email == "person@example.com"
+        assert user.full_name == "Person Example"
+
+    def test_proxy_auth_updates_existing_user_identity_from_trusted_headers(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        from app import config
+        from app.database.models import User
+
+        existing_user = User(
+            username="identityuser",
+            password_hash="",
+            email="old@proxy.local",
+            full_name="Old Name",
+            is_active=True,
+            role="viewer",
+        )
+        test_db.add(existing_user)
+        test_db.commit()
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+        monkeypatch.setattr(config.settings, "proxy_auth_email_header", "X-Proxy-Email")
+        monkeypatch.setattr(
+            config.settings, "proxy_auth_full_name_header", "X-Proxy-Full-Name"
+        )
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={
+                "X-Forwarded-User": "identityuser",
+                "X-Proxy-Email": "new@example.com",
+                "X-Proxy-Full-Name": "New Name",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == "new@example.com"
+        assert data["full_name"] == "New Name"
+
+    def test_proxy_auth_ignores_email_header_when_already_taken(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        from app import config
+        from app.database.models import User
+
+        test_db.add(
+            User(
+                username="existingowner",
+                password_hash="",
+                email="taken@example.com",
+                is_active=True,
+                role="viewer",
+            )
+        )
+        test_db.commit()
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+        monkeypatch.setattr(config.settings, "proxy_auth_email_header", "X-Proxy-Email")
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={
+                "X-Forwarded-User": "emailconflictuser",
+                "X-Proxy-Email": "taken@example.com",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == "emailconflictuser@proxy.local"
+
+    def test_proxy_auth_ignores_invalid_role_header_values(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        from app import config
+        from app.database.models import User
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+        monkeypatch.setattr(config.settings, "proxy_auth_role_header", "X-Proxy-Role")
+        monkeypatch.setattr(
+            config.settings,
+            "proxy_auth_all_repositories_role_header",
+            "X-Proxy-Repo-Role",
+        )
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={
+                "X-Forwarded-User": "invalidroleuser",
+                "X-Proxy-Role": "superadmin",
+                "X-Proxy-Repo-Role": "editor",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["role"] == "viewer"
+        assert data["all_repositories_role"] == "viewer"
+
+        user = test_db.query(User).filter(User.username == "invalidroleuser").first()
+        assert user is not None
+        assert user.role == "viewer"
+        assert user.all_repositories_role == "viewer"
+
+    def test_proxy_auth_updates_existing_user_role_from_trusted_header(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        from app import config
+        from app.database.models import User
+
+        existing_user = User(
+            username="mappeduser",
+            password_hash="",
+            email="mapped@proxy.local",
+            is_active=True,
+            role="viewer",
+            all_repositories_role="viewer",
+        )
+        test_db.add(existing_user)
+        test_db.commit()
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+        monkeypatch.setattr(config.settings, "proxy_auth_role_header", "X-Proxy-Role")
+
+        response = test_client.get(
+            "/api/auth/me",
+            headers={"X-Forwarded-User": "mappeduser", "X-Proxy-Role": "operator"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["role"] == "operator"
+        assert data["all_repositories_role"] == "operator"
+
 
 @pytest.mark.unit
 class TestDualHeaderFallback:
@@ -804,3 +1037,111 @@ class TestDualHeaderFallback:
         )
 
         assert response.status_code == 401
+
+
+@pytest.mark.unit
+class TestTotpAuthentication:
+    def test_login_returns_totp_challenge_for_enabled_user(
+        self, test_client: TestClient, test_db
+    ):
+        secret = "JBSWY3DPEHPK3PXP"
+        user = User(
+            username="totpuser",
+            password_hash=get_password_hash("password123"),
+            is_active=True,
+            role="viewer",
+            totp_enabled=True,
+            totp_secret_encrypted=encrypt_secret(secret),
+            totp_recovery_codes_hashes="[]",
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/auth/login",
+            data={"username": "totpuser", "password": "password123"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["totp_required"] is True
+        assert data["login_challenge_token"]
+        assert data["access_token"] is None
+
+    def test_login_totp_completion_accepts_current_code(
+        self, test_client: TestClient, test_db
+    ):
+        import time
+
+        secret = "JBSWY3DPEHPK3PXP"
+        user = User(
+            username="totpuser2",
+            password_hash=get_password_hash("password123"),
+            is_active=True,
+            role="viewer",
+            totp_enabled=True,
+            totp_secret_encrypted=encrypt_secret(secret),
+            totp_recovery_codes_hashes="[]",
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        login_response = test_client.post(
+            "/api/auth/login",
+            data={"username": "totpuser2", "password": "password123"},
+        )
+        challenge_token = login_response.json()["login_challenge_token"]
+        code = _hotp(secret, int(time.time()) // 30)
+
+        response = test_client.post(
+            "/api/auth/login/totp",
+            json={"login_challenge_token": challenge_token, "code": code},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["access_token"]
+        assert data["totp_required"] is False
+
+    def test_totp_setup_enable_and_disable_flow(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        import time
+
+        setup_response = test_client.post(
+            "/api/auth/totp/setup",
+            headers=admin_headers,
+            json={"current_password": "admin123"},
+        )
+        assert setup_response.status_code == 200
+        setup_data = setup_response.json()
+        assert setup_data["setup_token"]
+        assert setup_data["secret"]
+        assert len(setup_data["recovery_codes"]) == 8
+
+        enable_code = _hotp(setup_data["secret"], int(time.time()) // 30)
+        enable_response = test_client.post(
+            "/api/auth/totp/enable",
+            headers=admin_headers,
+            json={"setup_token": setup_data["setup_token"], "code": enable_code},
+        )
+        assert enable_response.status_code == 200
+        assert enable_response.json()["enabled"] is True
+
+        admin_user = test_db.query(User).filter(User.username == "admin").first()
+        assert admin_user.totp_enabled is True
+        assert admin_user.totp_secret_encrypted
+
+        disable_response = test_client.post(
+            "/api/auth/totp/disable",
+            headers=admin_headers,
+            json={
+                "current_password": "admin123",
+                "code": setup_data["recovery_codes"][0],
+            },
+        )
+        assert disable_response.status_code == 200
+
+        test_db.refresh(admin_user)
+        assert admin_user.totp_enabled is False
+        assert admin_user.totp_secret_encrypted is None

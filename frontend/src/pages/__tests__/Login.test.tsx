@@ -4,15 +4,20 @@ import Login from '../Login'
 import { toast } from 'react-hot-toast'
 import { markPasswordSetupPromptSeen } from '../../utils/passwordSetupPrompt'
 
-const { loginMock, navigateMock, trackAuthMock } = vi.hoisted(() => ({
-  loginMock: vi.fn(),
-  navigateMock: vi.fn(),
-  trackAuthMock: vi.fn(),
-}))
+const { loginMock, verifyTotpLoginMock, loginWithPasskeyMock, navigateMock, trackAuthMock } =
+  vi.hoisted(() => ({
+    loginMock: vi.fn(),
+    verifyTotpLoginMock: vi.fn(),
+    loginWithPasskeyMock: vi.fn(),
+    navigateMock: vi.fn(),
+    trackAuthMock: vi.fn(),
+  }))
 
 vi.mock('../../hooks/useAuth.tsx', () => ({
   useAuth: () => ({
     login: loginMock,
+    verifyTotpLogin: verifyTotpLoginMock,
+    loginWithPasskey: loginWithPasskeyMock,
   }),
 }))
 
@@ -52,13 +57,13 @@ describe('Login page', () => {
 
   it('submits credentials, tracks login, and redirects to the dashboard by default', async () => {
     const user = userEvent.setup()
-    loginMock.mockResolvedValue(false)
+    loginMock.mockResolvedValue({ totpRequired: false, mustChangePassword: false })
 
     renderWithProviders(<Login />)
 
     await user.type(screen.getByLabelText(/username/i), 'admin')
     await user.type(screen.getByLabelText(/^password$/i), 'secret')
-    await user.click(screen.getByRole('button', { name: /sign in/i }))
+    await user.click(screen.getByRole('button', { name: /^sign in$/i }))
 
     await waitFor(() => {
       expect(loginMock).toHaveBeenCalledWith('admin', 'secret')
@@ -70,13 +75,13 @@ describe('Login page', () => {
 
   it('redirects to the dashboard and shows the password change toast when required', async () => {
     const user = userEvent.setup()
-    loginMock.mockResolvedValue(true)
+    loginMock.mockResolvedValue({ totpRequired: false, mustChangePassword: true })
 
     renderWithProviders(<Login />)
 
     await user.type(screen.getByLabelText(/username/i), 'admin')
     await user.type(screen.getByLabelText(/^password$/i), 'secret')
-    await user.click(screen.getByRole('button', { name: /sign in/i }))
+    await user.click(screen.getByRole('button', { name: /^sign in$/i }))
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/settings/account')
@@ -86,14 +91,14 @@ describe('Login page', () => {
 
   it('does not redirect to account settings again after the prompt was already shown once', async () => {
     const user = userEvent.setup()
-    loginMock.mockResolvedValue(true)
+    loginMock.mockResolvedValue({ totpRequired: false, mustChangePassword: true })
     markPasswordSetupPromptSeen('admin')
 
     renderWithProviders(<Login />)
 
     await user.type(screen.getByLabelText(/username/i), 'admin')
     await user.type(screen.getByLabelText(/^password$/i), 'secret')
-    await user.click(screen.getByRole('button', { name: /sign in/i }))
+    await user.click(screen.getByRole('button', { name: /^sign in$/i }))
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/dashboard')
@@ -115,12 +120,54 @@ describe('Login page', () => {
 
     await user.type(screen.getByLabelText(/username/i), 'admin')
     await user.type(screen.getByLabelText(/^password$/i), 'wrong-secret')
-    await user.click(screen.getByRole('button', { name: /sign in/i }))
+    await user.click(screen.getByRole('button', { name: /^sign in$/i }))
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Incorrect username or password')
     })
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /^sign in$/i })).toBeEnabled()
     expect(trackAuthMock).not.toHaveBeenCalled()
+  })
+
+  it('switches to TOTP verification when the backend requires a second factor', async () => {
+    const user = userEvent.setup()
+    loginMock.mockResolvedValue({
+      totpRequired: true,
+      mustChangePassword: false,
+      loginChallengeToken: 'challenge-token',
+    })
+    verifyTotpLoginMock.mockResolvedValue({ mustChangePassword: false })
+
+    renderWithProviders(<Login />)
+
+    await user.type(screen.getByLabelText(/username/i), 'admin')
+    await user.type(screen.getByLabelText(/^password$/i), 'secret')
+    await user.click(screen.getByRole('button', { name: /^sign in$/i }))
+
+    expect(await screen.findByLabelText(/authentication code/i)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/authentication code/i), '123456')
+    await user.click(screen.getByRole('button', { name: /verify code/i }))
+
+    await waitFor(() => {
+      expect(verifyTotpLoginMock).toHaveBeenCalledWith('challenge-token', '123456')
+      expect(navigateMock).toHaveBeenCalledWith('/dashboard')
+      expect(trackAuthMock).toHaveBeenCalledWith('Login')
+    })
+  })
+
+  it('supports passkey login from the login page', async () => {
+    const user = userEvent.setup()
+    loginWithPasskeyMock.mockResolvedValue({ mustChangePassword: false })
+
+    renderWithProviders(<Login />)
+
+    await user.click(screen.getByRole('button', { name: /sign in with passkey/i }))
+
+    await waitFor(() => {
+      expect(loginWithPasskeyMock).toHaveBeenCalled()
+      expect(navigateMock).toHaveBeenCalledWith('/dashboard')
+      expect(trackAuthMock).toHaveBeenCalledWith('Login')
+    })
   })
 })

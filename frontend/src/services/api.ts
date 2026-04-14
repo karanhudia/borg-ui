@@ -41,6 +41,8 @@ api.interceptors.response.use(
     if (
       error.response?.status === 401 &&
       error.config?.url !== '/auth/login' &&
+      error.config?.url !== '/auth/login/totp' &&
+      error.config?.url !== '/auth/passkeys/authenticate/verify' &&
       error.config?.url !== '/auth/config' &&
       !proxyAuthMode // Don't redirect in proxy auth mode
     ) {
@@ -129,19 +131,78 @@ export interface AuthUserResponse {
   role: string
   all_repositories_role?: string | null
   must_change_password?: boolean
+  totp_enabled?: boolean
+  passkey_count?: number
   last_login?: string | null
   created_at: string
   global_permissions: string[]
+}
+
+export interface AuthLoginResponse {
+  access_token?: string | null
+  token_type?: string | null
+  expires_in?: number | null
+  must_change_password?: boolean
+  totp_required?: boolean
+  login_challenge_token?: string | null
+}
+
+export interface TotpStatusResponse {
+  enabled: boolean
+  recovery_codes_remaining: number
+}
+
+export interface TotpSetupResponse {
+  setup_token: string
+  secret: string
+  otpauth_uri: string
+  recovery_codes: string[]
+}
+
+export interface TotpEnableResponse {
+  enabled: boolean
+  recovery_codes: string[]
+}
+
+export interface PasskeyCredentialResponse {
+  id: number
+  name: string
+  created_at: string
+  last_used_at?: string | null
+}
+
+export interface PasskeyCeremonyResponse {
+  ceremony_token: string
+  options: Record<string, unknown>
+}
+
+export interface ProxyAuthWarning {
+  code: string
+  message: string
+}
+
+export interface AuthConfigResponse {
+  proxy_auth_enabled: boolean
+  authentication_required: boolean
+  proxy_auth_header?: string | null
+  proxy_auth_role_header?: string | null
+  proxy_auth_all_repositories_role_header?: string | null
+  proxy_auth_email_header?: string | null
+  proxy_auth_full_name_header?: string | null
+  proxy_auth_health?: {
+    enabled: boolean
+    warnings: ProxyAuthWarning[]
+  }
 }
 
 // Generic type for object data
 type ApiData = Record<string, unknown>
 
 export const authAPI = {
-  getAuthConfig: () => api.get('/auth/config'),
+  getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
 
   login: (username: string, password: string) =>
-    api.post(
+    api.post<AuthLoginResponse>(
       '/auth/login',
       `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
       {
@@ -149,12 +210,44 @@ export const authAPI = {
       }
     ),
 
+  verifyTotpLogin: (loginChallengeToken: string, code: string) =>
+    api.post<AuthLoginResponse>('/auth/login/totp', {
+      login_challenge_token: loginChallengeToken,
+      code,
+    }),
+
   logout: () => api.post('/auth/logout'),
 
   refresh: () => api.post('/auth/refresh'),
 
   getProfile: () => api.get('/auth/me'),
   getAuthorizationModel: () => api.get<AuthorizationModel>('/auth/authorization-model'),
+  getTotpStatus: () => api.get<TotpStatusResponse>('/auth/totp'),
+  beginTotpSetup: (currentPassword: string) =>
+    api.post<TotpSetupResponse>('/auth/totp/setup', { current_password: currentPassword }),
+  enableTotp: (setupToken: string, code: string) =>
+    api.post<TotpEnableResponse>('/auth/totp/enable', { setup_token: setupToken, code }),
+  disableTotp: (currentPassword: string, code: string) =>
+    api.post('/auth/totp/disable', { current_password: currentPassword, code }),
+  listPasskeys: () => api.get<PasskeyCredentialResponse[]>('/auth/passkeys'),
+  beginPasskeyRegistration: (currentPassword: string) =>
+    api.post<PasskeyCeremonyResponse>('/auth/passkeys/register/options', {
+      current_password: currentPassword,
+    }),
+  finishPasskeyRegistration: (ceremonyToken: string, credential: unknown, name?: string) =>
+    api.post<PasskeyCredentialResponse>('/auth/passkeys/register/verify', {
+      ceremony_token: ceremonyToken,
+      credential,
+      name,
+    }),
+  deletePasskey: (passkeyId: number) => api.delete(`/auth/passkeys/${passkeyId}`),
+  beginPasskeyAuthentication: () =>
+    api.post<PasskeyCeremonyResponse>('/auth/passkeys/authenticate/options'),
+  finishPasskeyAuthentication: (ceremonyToken: string, credential: unknown) =>
+    api.post<AuthLoginResponse>('/auth/passkeys/authenticate/verify', {
+      ceremony_token: ceremonyToken,
+      credential,
+    }),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/auth/change-password', {

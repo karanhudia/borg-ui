@@ -159,6 +159,43 @@ describe('API Response Interceptor - 401 Handling', () => {
     mock.restore()
   })
 
+  it('does NOT redirect on 401 from /auth/login/totp endpoint', async () => {
+    const mock = new MockAdapter(api)
+
+    mock.onPost('/auth/login/totp').reply(401, { detail: 'Invalid code' })
+
+    try {
+      await api.post('/auth/login/totp', {
+        login_challenge_token: 'challenge-token',
+        code: '123456',
+      })
+    } catch (error) {
+      expect(error).toBeDefined()
+    }
+
+    expect(windowLocationHref).toBe('')
+
+    mock.restore()
+  })
+
+  it('does NOT redirect on 401 from /auth/passkeys/authenticate/verify endpoint', async () => {
+    const mock = new MockAdapter(api)
+
+    mock.onPost('/auth/passkeys/authenticate/verify').reply(401, { detail: 'Invalid passkey' })
+
+    try {
+      await api.post('/auth/passkeys/authenticate/verify', {
+        ceremony_token: 'ceremony-token',
+        credential: {},
+      })
+    } catch (error) {
+      expect(error).toBeDefined()
+    }
+
+    expect(windowLocationHref).toBe('')
+    mock.restore()
+  })
+
   it('clears localStorage token on 401 redirect', async () => {
     const mock = new MockAdapter(api)
     localStorageMock['access_token'] = 'expired-token'
@@ -303,7 +340,7 @@ describe('API Response Interceptor - Edge Cases', () => {
         // Expected
       }
 
-      // All should redirect except /auth/login
+      // All should redirect except /auth/login and /auth/login/totp
       expect(windowLocationHref).toBe('/login')
     }
 

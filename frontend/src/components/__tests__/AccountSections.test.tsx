@@ -21,6 +21,15 @@ vi.mock('../UserPermissionsPanel', () => ({
   ),
 }))
 
+const defaultBadgeProps = {
+  roleLabel: 'Administrator',
+  isAdmin: true,
+  isOperator: false,
+  createdAt: '2024-01-15T00:00:00Z',
+  totpEnabled: false,
+  passkeyCount: 0,
+}
+
 describe('AccountProfileSection', () => {
   it('renders the password and edit profile cards when setup is incomplete', async () => {
     const user = userEvent.setup()
@@ -40,6 +49,7 @@ describe('AccountProfileSection', () => {
         onSaveDeployment={vi.fn()}
         onOpenChangePassword={vi.fn()}
         onOpenEditProfile={onOpenEditProfile}
+        {...defaultBadgeProps}
       />
     )
 
@@ -72,6 +82,7 @@ describe('AccountProfileSection', () => {
         onSaveDeployment={onSaveDeployment}
         onOpenChangePassword={vi.fn()}
         onOpenEditProfile={vi.fn()}
+        {...defaultBadgeProps}
       />
     )
 
@@ -102,6 +113,7 @@ describe('AccountProfileSection', () => {
         onSaveDeployment={onSaveDeployment}
         onOpenChangePassword={vi.fn()}
         onOpenEditProfile={vi.fn()}
+        {...defaultBadgeProps}
       />
     )
 
@@ -204,19 +216,13 @@ describe('AccountSecuritySection', () => {
 })
 
 describe('AccountTabHeader', () => {
-  it('renders identity chips and member metadata', () => {
-    renderWithProviders(
-      <AccountTabHeader
-        username="admin"
-        roleLabel="Administrator"
-        roleColor="secondary"
-        createdAt="2024-01-15T00:00:00Z"
-      />
-    )
+  it('renders account settings title and description', () => {
+    renderWithProviders(<AccountTabHeader />)
 
     expect(screen.getByText('User Settings')).toBeInTheDocument()
-    expect(screen.getByText('Administrator')).toBeInTheDocument()
-    expect(screen.getByText(/@admin · since/i)).toBeInTheDocument()
+    expect(
+      screen.getByText('Manage your personal profile, credentials, and access preferences.')
+    ).toBeInTheDocument()
   })
 })
 

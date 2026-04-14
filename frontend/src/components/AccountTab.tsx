@@ -330,14 +330,7 @@ const AccountTab: React.FC = () => {
   return (
     <>
       <Stack spacing={3}>
-        {user && (
-          <AccountTabHeader
-            username={user.username}
-            roleLabel={currentUserRolePresentation.label}
-            roleColor={currentUserRolePresentation.color}
-            createdAt={user.created_at}
-          />
-        )}
+        <AccountTabHeader />
 
         <Card variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
           <AccountTabNavigation
@@ -354,6 +347,12 @@ const AccountTab: React.FC = () => {
                 deploymentForm={deploymentForm}
                 isSavingProfile={updateProfileMutation.isPending}
                 isSavingDeployment={updateDeploymentMutation.isPending}
+                roleLabel={currentUserRolePresentation.label}
+                isAdmin={currentUserRolePresentation.isAdminRole}
+                isOperator={currentUserRolePresentation.isOperatorRole}
+                createdAt={user?.created_at || ''}
+                totpEnabled={!!user?.totp_enabled}
+                passkeyCount={user?.passkey_count ?? 0}
                 onProfileFormChange={(updates) =>
                   setProfileForm((current) => ({ ...current, ...updates }))
                 }

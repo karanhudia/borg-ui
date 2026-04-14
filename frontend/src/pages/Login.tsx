@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-hot-toast'
@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth.tsx'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import { authAPI } from '../services/api'
 import { BASE_PATH } from '@/utils/basePath'
 import {
   hasSeenPasswordSetupPrompt,
@@ -79,7 +80,11 @@ const FloatingDot = ({
 export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const { login } = useAuth()
+  const [totpCode, setTotpCode] = useState('')
+  const [pendingChallengeToken, setPendingChallengeToken] = useState<string | null>(null)
+  const [pendingUsername, setPendingUsername] = useState<string | null>(null)
+  const conditionalPasskeyAbortRef = useRef<AbortController | null>(null)
+  const { login, verifyTotpLogin, loginWithPasskey } = useAuth()
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { trackAuth, EventAction } = useAnalytics()
@@ -90,27 +95,129 @@ export default function Login() {
     formState: { errors },
   } = useForm<LoginForm>()
 
+  useEffect(() => {
+    if (pendingChallengeToken) return
+
+    let cancelled = false
+
+    const startConditionalPasskey = async () => {
+      try {
+        const { getConditionalPasskeyAssertion, isConditionalMediationAvailable } =
+          await import('../utils/webauthn')
+        if (!(await isConditionalMediationAvailable())) {
+          return
+        }
+
+        const startResponse = await authAPI.beginPasskeyAuthentication()
+        if (cancelled) return
+
+        conditionalPasskeyAbortRef.current = new AbortController()
+        const credential = await getConditionalPasskeyAssertion(
+          startResponse.data.options,
+          conditionalPasskeyAbortRef.current.signal
+        )
+        if (cancelled) return
+
+        setIsLoading(true)
+        const finishResponse = await authAPI.finishPasskeyAuthentication(
+          startResponse.data.ceremony_token,
+          credential
+        )
+        const { access_token, must_change_password } = finishResponse.data
+        if (!access_token) {
+          throw new Error('Missing access token')
+        }
+        localStorage.setItem('access_token', access_token)
+        handleSuccessfulLogin(null, must_change_password || false)
+      } catch (error: any) {
+        if (error?.name === 'AbortError' || cancelled) {
+          return
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void startConditionalPasskey()
+
+    return () => {
+      cancelled = true
+      conditionalPasskeyAbortRef.current?.abort()
+      conditionalPasskeyAbortRef.current = null
+    }
+  }, [pendingChallengeToken])
+
+  const handleSuccessfulLogin = (username: string | null, mustChangePassword: boolean) => {
+    trackAuth(EventAction.LOGIN)
+    if (mustChangePassword) {
+      if (username && hasSeenPasswordSetupPrompt(username)) {
+        toast.success(t('login.success'))
+        navigate('/dashboard')
+      } else {
+        if (username) {
+          markPasswordSetupPromptSeen(username)
+        }
+        toast.success(t('login.successChangePassword'))
+        navigate('/settings/account')
+      }
+    } else {
+      toast.success(t('login.success'))
+      navigate('/dashboard')
+    }
+  }
+
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)
     try {
-      const mustChangePassword = await login(data.username, data.password)
-      trackAuth(EventAction.LOGIN)
-      if (mustChangePassword) {
-        if (hasSeenPasswordSetupPrompt(data.username)) {
-          toast.success(t('login.success'))
-          navigate('/dashboard')
-        } else {
-          markPasswordSetupPromptSeen(data.username)
-          toast.success(t('login.successChangePassword'))
-          navigate('/settings/account')
-        }
+      const result = await login(data.username, data.password)
+      if (result.totpRequired) {
+        setPendingChallengeToken(result.loginChallengeToken)
+        setPendingUsername(data.username)
+        setTotpCode('')
+        toast.success(t('login.totpRequired'))
       } else {
-        toast.success(t('login.success'))
-        navigate('/dashboard')
+        handleSuccessfulLogin(data.username, result.mustChangePassword)
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       toast.error(translateBackendKey(error.response?.data?.detail) || t('login.failed'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const onSubmitTotp = async () => {
+    if (!pendingChallengeToken || !pendingUsername) return
+    setIsLoading(true)
+    try {
+      const result = await verifyTotpLogin(pendingChallengeToken, totpCode)
+      handleSuccessfulLogin(pendingUsername, result.mustChangePassword)
+    } catch (error: any) {
+      toast.error(translateBackendKey(error.response?.data?.detail) || t('login.failed'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const onSubmitPasskey = async () => {
+    setIsLoading(true)
+    try {
+      conditionalPasskeyAbortRef.current?.abort()
+      conditionalPasskeyAbortRef.current = null
+      const result = await loginWithPasskey()
+      handleSuccessfulLogin(null, result.mustChangePassword)
+    } catch (error: any) {
+      if (
+        error?.name === 'NotAllowedError' ||
+        error?.name === 'AbortError' ||
+        error?.name === 'InvalidStateError'
+      ) {
+        toast.error(t('login.passkeyCancelled'))
+      } else {
+        toast.error(translateBackendKey(error.response?.data?.detail) || t('login.failed'))
+      }
     } finally {
       setIsLoading(false)
     }
@@ -442,96 +549,143 @@ export default function Login() {
               {/* Form */}
               <form onSubmit={handleSubmit(onSubmit)} noValidate>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                  {/* Username */}
-                  <div>
-                    <label
-                      htmlFor="username"
-                      style={{
-                        display: 'block',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: '#94a3b8',
-                        marginBottom: 6,
-                        letterSpacing: '0.01em',
-                      }}
-                    >
-                      {t('login.username')}
-                    </label>
-                    <input
-                      {...register('username', { required: t('login.errors.usernameRequired') })}
-                      id="username"
-                      type="text"
-                      autoComplete="username"
-                      placeholder="admin"
-                      className={`borg-card-input${errors.username ? ' error' : ''}`}
-                    />
-                    {errors.username && (
-                      <p style={{ margin: '5px 0 0', fontSize: 12, color: '#f87171' }} role="alert">
-                        {errors.username.message}
-                      </p>
-                    )}
-                  </div>
+                  {!pendingChallengeToken ? (
+                    <>
+                      <div>
+                        <label
+                          htmlFor="username"
+                          style={{
+                            display: 'block',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: '#94a3b8',
+                            marginBottom: 6,
+                            letterSpacing: '0.01em',
+                          }}
+                        >
+                          {t('login.username')}
+                        </label>
+                        <input
+                          {...register('username', {
+                            required: t('login.errors.usernameRequired'),
+                          })}
+                          id="username"
+                          type="text"
+                          autoComplete="username webauthn"
+                          placeholder="admin"
+                          className={`borg-card-input${errors.username ? ' error' : ''}`}
+                        />
+                        {errors.username && (
+                          <p
+                            style={{ margin: '5px 0 0', fontSize: 12, color: '#f87171' }}
+                            role="alert"
+                          >
+                            {errors.username.message}
+                          </p>
+                        )}
+                      </div>
 
-                  {/* Password */}
-                  <div>
-                    <label
-                      htmlFor="password"
-                      style={{
-                        display: 'block',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: '#94a3b8',
-                        marginBottom: 6,
-                        letterSpacing: '0.01em',
-                      }}
-                    >
-                      {t('login.password')}
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        {...register('password', { required: t('login.errors.passwordRequired') })}
-                        id="password"
-                        type={showPassword ? 'text' : 'password'}
-                        autoComplete="current-password"
-                        placeholder="••••••••"
-                        style={{ paddingRight: 42 }}
-                        className={`borg-card-input${errors.password ? ' error' : ''}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        style={{
-                          position: 'absolute',
-                          right: 12,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: '#64748b',
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: 4,
-                          borderRadius: 4,
-                          transition: 'color 0.15s ease',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = '#94a3b8')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                    {errors.password && (
-                      <p style={{ margin: '5px 0 0', fontSize: 12, color: '#f87171' }} role="alert">
-                        {errors.password.message}
+                      <div>
+                        <label
+                          htmlFor="password"
+                          style={{
+                            display: 'block',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: '#94a3b8',
+                            marginBottom: 6,
+                            letterSpacing: '0.01em',
+                          }}
+                        >
+                          {t('login.password')}
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            {...register('password', {
+                              required: t('login.errors.passwordRequired'),
+                            })}
+                            id="password"
+                            type={showPassword ? 'text' : 'password'}
+                            autoComplete="current-password"
+                            placeholder="••••••••"
+                            style={{ paddingRight: 42 }}
+                            className={`borg-card-input${errors.password ? ' error' : ''}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            style={{
+                              position: 'absolute',
+                              right: 12,
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: '#64748b',
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: 4,
+                              borderRadius: 4,
+                              transition: 'color 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = '#94a3b8')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
+                          >
+                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                        {errors.password && (
+                          <p
+                            style={{ margin: '5px 0 0', fontSize: 12, color: '#f87171' }}
+                            role="alert"
+                          >
+                            {errors.password.message}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      <p style={{ margin: 0, fontSize: 14, color: '#94a3b8', lineHeight: 1.6 }}>
+                        {t('login.totpPrompt')}
                       </p>
-                    )}
-                  </div>
+                      <div>
+                        <label
+                          htmlFor="totp-code"
+                          style={{
+                            display: 'block',
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: '#94a3b8',
+                            marginBottom: 6,
+                            letterSpacing: '0.01em',
+                          }}
+                        >
+                          {t('login.totpLabel')}
+                        </label>
+                        <input
+                          id="totp-code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          placeholder="123456"
+                          className="borg-card-input"
+                          value={totpCode}
+                          onChange={(event) => setTotpCode(event.target.value)}
+                        />
+                        <p style={{ margin: '5px 0 0', fontSize: 12, color: '#64748b' }}>
+                          {t('login.totpHint')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Submit */}
                   <button
-                    type="submit"
+                    type={pendingChallengeToken ? 'button' : 'submit'}
+                    onClick={pendingChallengeToken ? () => void onSubmitTotp() : undefined}
                     disabled={isLoading}
                     style={{
                       marginTop: 4,
@@ -578,10 +732,58 @@ export default function Login() {
                         <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
                         {t('login.submitting')}
                       </>
+                    ) : pendingChallengeToken ? (
+                      t('login.verifyTotp')
                     ) : (
                       t('login.submit')
                     )}
                   </button>
+                  {pendingChallengeToken && (
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => {
+                        setPendingChallengeToken(null)
+                        setPendingUsername(null)
+                        setTotpCode('')
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '11px 20px',
+                        borderRadius: 8,
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        background: 'transparent',
+                        color: '#cbd5e1',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        cursor: isLoading ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {t('common.buttons.back')}
+                    </button>
+                  )}
+                  {!pendingChallengeToken && (
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => void onSubmitPasskey()}
+                      style={{
+                        width: '100%',
+                        padding: '11px 20px',
+                        borderRadius: 8,
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        background: 'transparent',
+                        color: '#cbd5e1',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        cursor: isLoading ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {t('login.passkeySubmit')}
+                    </button>
+                  )}
                 </div>
               </form>
             </div>

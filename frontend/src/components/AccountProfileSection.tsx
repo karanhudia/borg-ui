@@ -1,5 +1,5 @@
 import { Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material'
-import { User, Building2, Pencil, ShieldCheck, KeyRound, Calendar } from 'lucide-react'
+import { User, Building2, Pencil, ShieldCheck, KeyRound, Calendar, Fingerprint } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import AccountSecuritySection from './AccountSecuritySection'
 import { formatDateShort } from '../utils/dateUtils'
@@ -32,6 +32,8 @@ interface AccountProfileSectionProps {
   isAdmin: boolean
   isOperator: boolean
   createdAt: string
+  totpEnabled: boolean
+  passkeyCount: number
 }
 
 export default function AccountProfileSection({
@@ -48,6 +50,8 @@ export default function AccountProfileSection({
   isAdmin,
   isOperator,
   createdAt,
+  totpEnabled,
+  passkeyCount,
 }: AccountProfileSectionProps) {
   const { t } = useTranslation()
 
@@ -160,6 +164,64 @@ export default function AccountProfileSection({
                   {roleLabel}
                 </Typography>
               </Box>
+
+              {/* TOTP badge */}
+              {totpEnabled && (
+                <Box
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.6,
+                    px: 1.25,
+                    py: 0.5,
+                    borderRadius: 10,
+                    bgcolor: 'rgba(34,197,94,0.10)',
+                    border: '1px solid rgba(34,197,94,0.24)',
+                  }}
+                >
+                  <ShieldCheck size={12} style={{ color: 'rgb(74,222,128)' }} />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 700,
+                      color: 'rgb(74,222,128)',
+                      lineHeight: 1,
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    {t('settings.account.profile.badges.totpActive')}
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Passkey badge */}
+              {passkeyCount > 0 && (
+                <Box
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 0.6,
+                    px: 1.25,
+                    py: 0.5,
+                    borderRadius: 10,
+                    bgcolor: 'rgba(251,191,36,0.10)',
+                    border: '1px solid rgba(251,191,36,0.24)',
+                  }}
+                >
+                  <Fingerprint size={12} style={{ color: 'rgb(252,211,77)' }} />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 700,
+                      color: 'rgb(252,211,77)',
+                      lineHeight: 1,
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    {t('settings.account.profile.badges.passkeyActive', { count: passkeyCount })}
+                  </Typography>
+                </Box>
+              )}
 
               {/* Member since badge */}
               {createdAt && (

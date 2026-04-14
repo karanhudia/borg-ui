@@ -1,26 +1,49 @@
-from datetime import timedelta, datetime
+import base64
+from datetime import timedelta, datetime, timezone
+import json
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import structlog
 
 from app.database.database import get_db
-from app.database.models import User, SystemSettings
+from app.database.models import PasskeyCredential, User, SystemSettings
 from app.core.security import (
     authenticate_user,
     create_access_token,
+    create_login_challenge_token,
+    create_totp_setup_token,
     get_current_user,
     get_current_admin_user,
     create_user,
+    decrypt_secret,
+    encrypt_secret,
     update_user_password,
+    verify_login_challenge_token,
+    verify_password,
+    verify_totp_setup_token,
+)
+from app.core.passkeys import (
+    create_passkey_ceremony_token,
+    parse_options_json,
+    require_webauthn,
+    resolve_origin_and_rp_id,
+    verify_passkey_ceremony_token,
 )
 from app.core.permissions import (
     get_global_permissions_for_role,
     serialize_authorization_model,
     default_repository_role_for_global_role,
     normalize_repository_role_for_global_role,
+)
+from app.core.totp import (
+    build_totp_uri,
+    generate_recovery_codes,
+    generate_totp_secret,
+    hash_recovery_code,
+    verify_totp_code,
 )
 from app.config import settings
 
@@ -30,15 +53,23 @@ router = APIRouter()
 
 # Pydantic models for request/response
 class Token(BaseModel):
-    access_token: str
-    token_type: str
-    expires_in: int
+    access_token: Optional[str] = None
+    token_type: Optional[str] = None
+    expires_in: Optional[int] = None
     must_change_password: bool = False
+    totp_required: bool = False
+    login_challenge_token: Optional[str] = None
 
 
 class AuthConfig(BaseModel):
     proxy_auth_enabled: bool
     authentication_required: bool
+    proxy_auth_header: Optional[str] = None
+    proxy_auth_role_header: Optional[str] = None
+    proxy_auth_all_repositories_role_header: Optional[str] = None
+    proxy_auth_email_header: Optional[str] = None
+    proxy_auth_full_name_header: Optional[str] = None
+    proxy_auth_health: dict
 
 
 class UserCreate(BaseModel):
@@ -61,6 +92,74 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
+class TotpLoginVerification(BaseModel):
+    login_challenge_token: str
+    code: str
+
+
+class TotpSetupRequest(BaseModel):
+    current_password: str
+
+
+class TotpEnableRequest(BaseModel):
+    setup_token: str
+    code: str
+
+
+class TotpDisableRequest(BaseModel):
+    current_password: str
+    code: str
+
+
+class TotpStatusResponse(BaseModel):
+    enabled: bool
+    recovery_codes_remaining: int = 0
+
+
+class TotpSetupResponse(BaseModel):
+    setup_token: str
+    secret: str
+    otpauth_uri: str
+    recovery_codes: list[str]
+
+
+class TotpEnableResponse(BaseModel):
+    enabled: bool
+    recovery_codes: list[str]
+
+
+class PasskeyCredentialResponse(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    last_used_at: Optional[datetime] = None
+
+
+class PasskeyBeginRegistrationRequest(BaseModel):
+    current_password: str
+
+
+class PasskeyFinishRegistrationRequest(BaseModel):
+    ceremony_token: str
+    credential: dict
+    name: Optional[str] = None
+
+
+class PasskeyBeginRegistrationResponse(BaseModel):
+    ceremony_token: str
+    options: dict
+
+
+class PasskeyBeginAuthenticationResponse(BaseModel):
+    ceremony_token: str
+    options: dict
+
+
+class PasskeyFinishAuthenticationRequest(BaseModel):
+    ceremony_token: str
+    credential: dict
+
+
 class UserResponse(BaseModel):
     id: int
     username: str
@@ -72,6 +171,8 @@ class UserResponse(BaseModel):
     role: str
     all_repositories_role: Optional[str] = None
     must_change_password: bool = False
+    totp_enabled: bool = False
+    passkey_count: int = 0
     last_login: Optional[datetime] = None
     created_at: datetime
     global_permissions: list[str] = []
@@ -105,6 +206,8 @@ def _build_user_response(
         "role": user.role,
         "all_repositories_role": getattr(user, "all_repositories_role", None),
         "must_change_password": getattr(user, "must_change_password", False),
+        "totp_enabled": getattr(user, "totp_enabled", False),
+        "passkey_count": len(getattr(user, "passkeys", []) or []),
         "last_login": getattr(user, "last_login", None),
         "created_at": user.created_at,
         "global_permissions": get_global_permissions_for_role(user.role),
@@ -122,12 +225,92 @@ def _resolve_legacy_role(
     return "viewer"
 
 
+def _get_totp_secret(user: User) -> Optional[str]:
+    if not user.totp_enabled or not user.totp_secret_encrypted:
+        return None
+    return decrypt_secret(user.totp_secret_encrypted)
+
+
+def _get_recovery_code_hashes(user: User) -> list[str]:
+    if not user.totp_recovery_codes_hashes:
+        return []
+    try:
+        data = json.loads(user.totp_recovery_codes_hashes)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return [item for item in data if isinstance(item, str)]
+
+
+def _store_recovery_code_hashes(user: User, hashes: list[str]) -> None:
+    user.totp_recovery_codes_hashes = json.dumps(hashes)
+
+
+def _consume_recovery_code(user: User, code: str) -> bool:
+    normalized_hash = hash_recovery_code(code)
+    existing_hashes = _get_recovery_code_hashes(user)
+    if normalized_hash not in existing_hashes:
+        return False
+    remaining = [item for item in existing_hashes if item != normalized_hash]
+    _store_recovery_code_hashes(user, remaining)
+    return True
+
+
+def _verify_totp_or_recovery_code(user: User, code: str) -> bool:
+    totp_secret = _get_totp_secret(user)
+    if totp_secret and verify_totp_code(totp_secret, code):
+        return True
+    return _consume_recovery_code(user, code)
+
+
+def _ensure_local_password_user(user: User) -> None:
+    if settings.disable_authentication or not user.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.localPasswordRequired"},
+        )
+
+
+def _serialize_passkey_credential(credential: PasskeyCredential) -> dict:
+    return {
+        "id": credential.id,
+        "name": credential.name,
+        "created_at": credential.created_at,
+        "last_used_at": credential.last_used_at,
+    }
+
+
 @router.get("/config", response_model=AuthConfig)
 async def get_auth_config():
     """Get authentication configuration for frontend"""
+    from app.core.proxy_auth import inspect_proxy_auth_config
+
     return {
         "proxy_auth_enabled": settings.disable_authentication,
         "authentication_required": not settings.disable_authentication,
+        "proxy_auth_header": (
+            settings.proxy_auth_header if settings.disable_authentication else None
+        ),
+        "proxy_auth_role_header": (
+            settings.proxy_auth_role_header if settings.disable_authentication else None
+        ),
+        "proxy_auth_all_repositories_role_header": (
+            settings.proxy_auth_all_repositories_role_header
+            if settings.disable_authentication
+            else None
+        ),
+        "proxy_auth_email_header": (
+            settings.proxy_auth_email_header
+            if settings.disable_authentication
+            else None
+        ),
+        "proxy_auth_full_name_header": (
+            settings.proxy_auth_full_name_header
+            if settings.disable_authentication
+            else None
+        ),
+        "proxy_auth_health": inspect_proxy_auth_config(),
     }
 
 
@@ -157,8 +340,14 @@ async def login(
             detail={"key": "backend.errors.auth.inactiveUser"},
         )
 
-    # Update last login timestamp
-    from datetime import timezone
+    if user.totp_enabled:
+        challenge_token = create_login_challenge_token(user.username)
+        logger.info("Password verified, awaiting TOTP", username=user.username)
+        return {
+            "totp_required": True,
+            "login_challenge_token": challenge_token,
+            "must_change_password": user.must_change_password,
+        }
 
     user.last_login = datetime.now(timezone.utc)
     db.commit()
@@ -170,6 +359,48 @@ async def login(
 
     logger.info("User logged in successfully", username=user.username)
 
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": settings.access_token_expire_minutes * 60,
+        "must_change_password": user.must_change_password,
+    }
+
+
+@router.post("/login/totp", response_model=Token)
+async def complete_login_with_totp(
+    payload: TotpLoginVerification, db: Session = Depends(get_db)
+):
+    username = verify_login_challenge_token(payload.login_challenge_token)
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
+        )
+
+    user = db.query(User).filter(User.username == username).first()
+    if not user or not user.is_active or not user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.invalidTotpCode"},
+        )
+
+    if not _verify_totp_or_recovery_code(user, payload.code):
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.invalidTotpCode"},
+        )
+
+    user.last_login = datetime.now(timezone.utc)
+    db.commit()
+
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    logger.info("User completed TOTP login successfully", username=user.username)
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -209,6 +440,349 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
         "access_token": access_token,
         "token_type": "bearer",
         "expires_in": settings.access_token_expire_minutes * 60,
+    }
+
+
+@router.get("/totp", response_model=TotpStatusResponse)
+async def get_totp_status(current_user: User = Depends(get_current_user)):
+    return {
+        "enabled": bool(current_user.totp_enabled),
+        "recovery_codes_remaining": len(_get_recovery_code_hashes(current_user)),
+    }
+
+
+@router.post("/totp/setup", response_model=TotpSetupResponse)
+async def begin_totp_setup(
+    payload: TotpSetupRequest,
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_local_password_user(current_user)
+
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
+        )
+
+    secret = generate_totp_secret()
+    recovery_codes = generate_recovery_codes()
+    return {
+        "setup_token": create_totp_setup_token(
+            current_user.username, secret, recovery_codes
+        ),
+        "secret": secret,
+        "otpauth_uri": build_totp_uri(secret, current_user.username),
+        "recovery_codes": recovery_codes,
+    }
+
+
+@router.post("/totp/enable", response_model=TotpEnableResponse)
+async def enable_totp(
+    payload: TotpEnableRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _ensure_local_password_user(current_user)
+    setup_data = verify_totp_setup_token(payload.setup_token)
+    if not setup_data or setup_data["username"] != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
+        )
+
+    if not verify_totp_code(setup_data["secret"], payload.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.invalidTotpCode"},
+        )
+
+    current_user.totp_secret_encrypted = encrypt_secret(setup_data["secret"])
+    current_user.totp_enabled = True
+    current_user.totp_enabled_at = datetime.now(timezone.utc)
+    _store_recovery_code_hashes(
+        current_user,
+        [hash_recovery_code(code) for code in setup_data["recovery_codes"]],
+    )
+    db.commit()
+
+    logger.info("TOTP enabled", username=current_user.username)
+    return {"enabled": True, "recovery_codes": setup_data["recovery_codes"]}
+
+
+@router.post("/totp/disable")
+async def disable_totp(
+    payload: TotpDisableRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _ensure_local_password_user(current_user)
+
+    if not current_user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.totpNotEnabled"},
+        )
+
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
+        )
+
+    if not _verify_totp_or_recovery_code(current_user, payload.code):
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.invalidTotpCode"},
+        )
+
+    current_user.totp_secret_encrypted = None
+    current_user.totp_enabled = False
+    current_user.totp_enabled_at = None
+    current_user.totp_recovery_codes_hashes = None
+    db.commit()
+
+    logger.info("TOTP disabled", username=current_user.username)
+    return {"message": "backend.success.auth.totpDisabled"}
+
+
+@router.get("/passkeys", response_model=list[PasskeyCredentialResponse])
+async def list_passkeys(current_user: User = Depends(get_current_user)):
+    return [
+        _serialize_passkey_credential(credential)
+        for credential in current_user.passkeys
+    ]
+
+
+@router.post(
+    "/passkeys/register/options", response_model=PasskeyBeginRegistrationResponse
+)
+async def begin_passkey_registration(
+    payload: PasskeyBeginRegistrationRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_local_password_user(current_user)
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.currentPasswordIncorrect"},
+        )
+
+    webauthn = require_webauthn()
+    origin, rp_id = resolve_origin_and_rp_id(request)
+    existing_credentials = [
+        webauthn["PublicKeyCredentialDescriptor"](
+            id=webauthn["base64url_to_bytes"](credential.credential_id)
+        )
+        for credential in current_user.passkeys
+    ]
+    options = webauthn["generate_registration_options"](
+        rp_id=rp_id,
+        rp_name="Borg UI",
+        user_id=str(current_user.id).encode("utf-8"),
+        user_name=current_user.username,
+        user_display_name=current_user.full_name or current_user.username,
+        exclude_credentials=existing_credentials,
+        authenticator_selection=webauthn["AuthenticatorSelectionCriteria"](
+            resident_key=webauthn["ResidentKeyRequirement"].REQUIRED,
+            user_verification=webauthn["UserVerificationRequirement"].PREFERRED,
+        ),
+    )
+    options_json = webauthn["options_to_json"](options)
+    options_dict = parse_options_json(options_json)
+    ceremony_token = create_passkey_ceremony_token(
+        username=current_user.username,
+        challenge=options_dict["challenge"],
+        purpose="passkey_register",
+    )
+    logger.info(
+        "Passkey registration started", username=current_user.username, origin=origin
+    )
+    return {"ceremony_token": ceremony_token, "options": options_dict}
+
+
+@router.post("/passkeys/register/verify", response_model=PasskeyCredentialResponse)
+async def finish_passkey_registration(
+    payload: PasskeyFinishRegistrationRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _ensure_local_password_user(current_user)
+    ceremony = verify_passkey_ceremony_token(payload.ceremony_token, "passkey_register")
+    if not ceremony or ceremony["username"] != current_user.username:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
+        )
+
+    webauthn = require_webauthn()
+    origin, rp_id = resolve_origin_and_rp_id(request)
+    verification = webauthn["verify_registration_response"](
+        credential=webauthn["parse_registration_credential_json"](
+            json.dumps(payload.credential)
+        ),
+        expected_challenge=webauthn["base64url_to_bytes"](ceremony["challenge"]),
+        expected_origin=origin,
+        expected_rp_id=rp_id,
+        require_user_verification=True,
+    )
+
+    credential_id = payload.credential.get("id")
+    if not isinstance(credential_id, str):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.invalidPasskey"},
+        )
+
+    existing = (
+        db.query(PasskeyCredential)
+        .filter(PasskeyCredential.credential_id == credential_id)
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.passkeyAlreadyRegistered"},
+        )
+
+    transports = None
+    if isinstance(payload.credential.get("response"), dict):
+        transports_value = payload.credential["response"].get("transports")
+        if isinstance(transports_value, list):
+            transports = json.dumps(transports_value)
+
+    new_passkey = PasskeyCredential(
+        user_id=current_user.id,
+        name=(payload.name or "Passkey").strip() or "Passkey",
+        credential_id=credential_id,
+        public_key=base64.urlsafe_b64encode(verification.credential_public_key).decode(
+            "ascii"
+        ),
+        sign_count=verification.sign_count,
+        transports=transports,
+        device_type=getattr(verification, "credential_device_type", None),
+        backed_up=bool(getattr(verification, "credential_backed_up", False)),
+    )
+    db.add(new_passkey)
+    db.commit()
+    db.refresh(new_passkey)
+
+    logger.info(
+        "Passkey registered", username=current_user.username, passkey_id=new_passkey.id
+    )
+    return _serialize_passkey_credential(new_passkey)
+
+
+@router.delete("/passkeys/{passkey_id}")
+async def delete_passkey(
+    passkey_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    passkey = (
+        db.query(PasskeyCredential)
+        .filter(
+            PasskeyCredential.id == passkey_id,
+            PasskeyCredential.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not passkey:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.auth.passkeyNotFound"},
+        )
+
+    db.delete(passkey)
+    db.commit()
+    logger.info(
+        "Passkey deleted", username=current_user.username, passkey_id=passkey_id
+    )
+    return {"message": "backend.success.auth.passkeyDeleted"}
+
+
+@router.post(
+    "/passkeys/authenticate/options", response_model=PasskeyBeginAuthenticationResponse
+)
+async def begin_passkey_authentication(request: Request):
+    webauthn = require_webauthn()
+    origin, rp_id = resolve_origin_and_rp_id(request)
+    options = webauthn["generate_authentication_options"](
+        rp_id=rp_id,
+        user_verification=webauthn["UserVerificationRequirement"].PREFERRED,
+    )
+    options_json = webauthn["options_to_json"](options)
+    options_dict = parse_options_json(options_json)
+    ceremony_token = create_passkey_ceremony_token(
+        username="passkey-user",
+        challenge=options_dict["challenge"],
+        purpose="passkey_authenticate",
+        expires_minutes=5,
+    )
+    logger.info("Passkey authentication started", origin=origin)
+    return {"ceremony_token": ceremony_token, "options": options_dict}
+
+
+@router.post("/passkeys/authenticate/verify", response_model=Token)
+async def finish_passkey_authentication(
+    payload: PasskeyFinishAuthenticationRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    ceremony = verify_passkey_ceremony_token(
+        payload.ceremony_token, "passkey_authenticate"
+    )
+    if not ceremony:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
+        )
+
+    webauthn = require_webauthn()
+    origin, rp_id = resolve_origin_and_rp_id(request)
+    raw_id = payload.credential.get("id")
+    passkey = (
+        db.query(PasskeyCredential)
+        .filter(PasskeyCredential.credential_id == raw_id)
+        .first()
+    )
+    if not passkey or not passkey.user or not passkey.user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.invalidPasskey"},
+        )
+
+    verification = webauthn["verify_authentication_response"](
+        credential=webauthn["parse_authentication_credential_json"](
+            json.dumps(payload.credential)
+        ),
+        expected_challenge=webauthn["base64url_to_bytes"](ceremony["challenge"]),
+        expected_origin=origin,
+        expected_rp_id=rp_id,
+        credential_public_key=base64.urlsafe_b64decode(
+            passkey.public_key.encode("ascii")
+        ),
+        credential_current_sign_count=passkey.sign_count,
+        require_user_verification=True,
+    )
+
+    passkey.sign_count = verification.new_sign_count
+    passkey.last_used_at = datetime.now(timezone.utc)
+    passkey.user.last_login = datetime.now(timezone.utc)
+    db.commit()
+
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": passkey.user.username}, expires_delta=access_token_expires
+    )
+    logger.info("User logged in with passkey", username=passkey.user.username)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": settings.access_token_expire_minutes * 60,
+        "must_change_password": passkey.user.must_change_password,
     }
 
 

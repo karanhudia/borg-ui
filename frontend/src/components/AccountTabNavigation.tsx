@@ -1,20 +1,31 @@
 import { Box, Tab, Tabs } from '@mui/material'
-import { ShieldCheck, User } from 'lucide-react'
+import { KeyRound, ShieldCheck, User } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-export type AccountView = 'profile' | 'access'
+export type AccountView = 'profile' | 'security' | 'access'
 
 interface AccountTabNavigationProps {
   value: AccountView
   onChange: (view: AccountView) => void
+  showSecurityTab?: boolean
 }
 
-export default function AccountTabNavigation({ value, onChange }: AccountTabNavigationProps) {
+export default function AccountTabNavigation({
+  value,
+  onChange,
+  showSecurityTab = true,
+}: AccountTabNavigationProps) {
   const { t } = useTranslation()
-  const tabs = [
-    { value: 'profile' as const, label: t('settings.account.profile.title'), icon: User },
-    { value: 'access' as const, label: t('settings.account.access.title'), icon: ShieldCheck },
-  ]
+  const tabs = showSecurityTab
+    ? [
+        { value: 'profile' as const, label: t('settings.account.profile.title'), icon: User },
+        { value: 'security' as const, label: t('settings.account.security.title'), icon: KeyRound },
+        { value: 'access' as const, label: t('settings.account.access.title'), icon: ShieldCheck },
+      ]
+    : [
+        { value: 'profile' as const, label: t('settings.account.profile.title'), icon: User },
+        { value: 'access' as const, label: t('settings.account.access.title'), icon: ShieldCheck },
+      ]
 
   return (
     <Box sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>

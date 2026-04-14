@@ -2,14 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import Layout from '../Layout'
 
-const { logoutMock, hasConsentBeenGivenMock, loadUserPreferenceMock, useAuthMock } = vi.hoisted(
-  () => ({
-    logoutMock: vi.fn(),
-    hasConsentBeenGivenMock: vi.fn(),
-    loadUserPreferenceMock: vi.fn(),
-    useAuthMock: vi.fn(),
-  })
-)
+const {
+  logoutMock,
+  refreshUserMock,
+  hasConsentBeenGivenMock,
+  loadUserPreferenceMock,
+  announcementSurfaceMock,
+  useAuthMock,
+} = vi.hoisted(() => ({
+  logoutMock: vi.fn(),
+  refreshUserMock: vi.fn(),
+  hasConsentBeenGivenMock: vi.fn(),
+  loadUserPreferenceMock: vi.fn(),
+  announcementSurfaceMock: vi.fn(),
+  useAuthMock: vi.fn(),
+}))
 
 vi.mock('../../hooks/useAuth.tsx', () => ({
   useAuth: () => useAuthMock(),
@@ -32,6 +39,10 @@ vi.mock('../../utils/analytics', async () => {
   }
 })
 
+vi.mock('../../hooks/useAnnouncementSurface', () => ({
+  useAnnouncementSurface: () => announcementSurfaceMock(),
+}))
+
 vi.mock('../AnalyticsConsentBanner', () => ({
   default: ({ onConsentGiven }: { onConsentGiven: () => void }) => (
     <div>
@@ -41,6 +52,44 @@ vi.mock('../AnalyticsConsentBanner', () => ({
   ),
 }))
 
+vi.mock('../AnnouncementModal', () => ({
+  default: ({
+    announcement,
+    open,
+    onAcknowledge,
+  }: {
+    announcement: { title: string } | null
+    open: boolean
+    onAcknowledge: () => void
+  }) =>
+    open && announcement ? (
+      <div>
+        Announcement Modal
+        <div>{announcement.title}</div>
+        <button onClick={onAcknowledge}>Dismiss Announcement</button>
+      </div>
+    ) : null,
+}))
+
+vi.mock('../PasskeyEnrollmentPrompt', () => ({
+  default: ({
+    open,
+    onSnooze,
+    onIgnore,
+  }: {
+    open: boolean
+    onSnooze: () => void
+    onIgnore: () => void
+  }) =>
+    open ? (
+      <div>
+        Passkey Prompt
+        <button onClick={onSnooze}>Snooze Passkey Prompt</button>
+        <button onClick={onIgnore}>Ignore Passkey Prompt</button>
+      </div>
+    ) : null,
+}))
+
 vi.mock('../AppSidebar', () => ({
   default: () => <div>Sidebar</div>,
 }))
@@ -48,10 +97,22 @@ vi.mock('../AppSidebar', () => ({
 describe('Layout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
+    sessionStorage.clear()
     loadUserPreferenceMock.mockResolvedValue(undefined)
     hasConsentBeenGivenMock.mockReturnValue(true)
+    announcementSurfaceMock.mockReturnValue({
+      announcement: null,
+      acknowledgeAnnouncement: vi.fn(),
+      snoozeAnnouncement: vi.fn(),
+      trackAnnouncementCtaClick: vi.fn(),
+    })
     useAuthMock.mockReturnValue({
-      user: { username: 'admin', email: 'admin@example.com', role: 'admin' },
+      user: { username: 'admin', email: 'admin@example.com', role: 'admin', passkey_count: 0 },
+      proxyAuthEnabled: false,
+      canEnrollPasskeyFromRecentLogin: true,
+      clearRecentPasskeyEnrollmentState: vi.fn(),
+      refreshUser: refreshUserMock,
       logout: logoutMock,
     })
   })
@@ -110,7 +171,12 @@ describe('Layout', () => {
         email: 'admin@example.com',
         role: 'admin',
         must_change_password: true,
+        passkey_count: 0,
       },
+      proxyAuthEnabled: false,
+      canEnrollPasskeyFromRecentLogin: true,
+      clearRecentPasskeyEnrollmentState: vi.fn(),
+      refreshUser: refreshUserMock,
       logout: logoutMock,
     })
 
@@ -124,5 +190,162 @@ describe('Layout', () => {
       expect(loadUserPreferenceMock).toHaveBeenCalledTimes(1)
     })
     expect(await screen.findByText('Consent Banner')).toBeInTheDocument()
+  })
+
+  it('shows the passkey prompt after a recent password login when no passkeys exist', async () => {
+    sessionStorage.setItem('recent_password_login', '1')
+
+    renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    expect(await screen.findByText('Passkey Prompt')).toBeInTheDocument()
+  })
+
+  it('does not show the passkey prompt for users who already have passkeys', async () => {
+    sessionStorage.setItem('recent_password_login', '1')
+    useAuthMock.mockReturnValue({
+      user: { username: 'admin', email: 'admin@example.com', role: 'admin', passkey_count: 1 },
+      proxyAuthEnabled: false,
+      canEnrollPasskeyFromRecentLogin: true,
+      clearRecentPasskeyEnrollmentState: vi.fn(),
+      refreshUser: refreshUserMock,
+      logout: logoutMock,
+    })
+
+    renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByText('Passkey Prompt')).not.toBeInTheDocument()
+    })
+  })
+
+  it('snoozes the passkey prompt and shows it again after the snooze expires', async () => {
+    sessionStorage.setItem('recent_password_login', '1')
+    const user = userEvent.setup()
+
+    const { unmount } = renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Snooze Passkey Prompt' }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Passkey Prompt')).not.toBeInTheDocument()
+      expect(Number(localStorage.getItem('passkey_prompt_snoozed_admin'))).toBeGreaterThan(
+        Date.now()
+      )
+      expect(sessionStorage.getItem('recent_password_login')).toBeNull()
+    })
+
+    sessionStorage.setItem('recent_password_login', '1')
+    unmount()
+    renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByText('Passkey Prompt')).not.toBeInTheDocument()
+    })
+
+    localStorage.setItem('passkey_prompt_snoozed_admin', String(Date.now() - 1000))
+    sessionStorage.setItem('recent_password_login', '1')
+    unmount()
+    renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    expect(await screen.findByText('Passkey Prompt')).toBeInTheDocument()
+  })
+
+  it('can ignore the passkey prompt on this device', async () => {
+    sessionStorage.setItem('recent_password_login', '1')
+    const user = userEvent.setup()
+
+    const { unmount } = renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Ignore Passkey Prompt' }))
+
+    await waitFor(() => {
+      expect(screen.queryByText('Passkey Prompt')).not.toBeInTheDocument()
+      expect(localStorage.getItem('passkey_prompt_ignored_admin')).toBe('1')
+      expect(sessionStorage.getItem('recent_password_login')).toBeNull()
+    })
+
+    sessionStorage.setItem('recent_password_login', '1')
+    unmount()
+    renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByText('Passkey Prompt')).not.toBeInTheDocument()
+    })
+  })
+
+  it('suppresses announcements while the passkey prompt is active', async () => {
+    sessionStorage.setItem('recent_password_login', '1')
+    announcementSurfaceMock.mockReturnValue({
+      announcement: {
+        id: 'update-1',
+        type: 'update_available',
+        title: 'Update Available',
+        message: 'A new version is ready.',
+      },
+      acknowledgeAnnouncement: vi.fn(),
+      snoozeAnnouncement: vi.fn(),
+      trackAnnouncementCtaClick: vi.fn(),
+    })
+
+    renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    expect(await screen.findByText('Passkey Prompt')).toBeInTheDocument()
+    expect(screen.queryByText('Announcement Modal')).not.toBeInTheDocument()
+  })
+
+  it('shows announcements before the analytics consent banner', async () => {
+    hasConsentBeenGivenMock.mockReturnValue(false)
+    announcementSurfaceMock.mockReturnValue({
+      announcement: {
+        id: 'update-1',
+        type: 'update_available',
+        title: 'Update Available',
+        message: 'A new version is ready.',
+      },
+      acknowledgeAnnouncement: vi.fn(),
+      snoozeAnnouncement: vi.fn(),
+      trackAnnouncementCtaClick: vi.fn(),
+    })
+
+    renderWithProviders(
+      <Layout>
+        <div>Page Content</div>
+      </Layout>
+    )
+
+    expect(await screen.findByText('Announcement Modal')).toBeInTheDocument()
+    expect(screen.queryByText('Consent Banner')).not.toBeInTheDocument()
   })
 })
