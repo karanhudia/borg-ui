@@ -1,5 +1,6 @@
-# Shared Borg runtime base image.
-# Build this separately so app releases do not recompile Borg for every tag.
+# Internal Borg runtime base image used by CI.
+# Keep this image private on Docker Hub and build it separately so app releases
+# do not recompile Borg for every tag.
 
 FROM python:3.10-slim AS runtime-base
 
