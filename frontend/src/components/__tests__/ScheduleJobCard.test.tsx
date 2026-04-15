@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen } from '../../test/test-utils'
 import ScheduleJobCard from '../ScheduleJobCard'
 import { convertCronToLocal, formatCronHuman } from '../../utils/dateUtils'
@@ -38,6 +38,10 @@ const baseJob = {
 }
 
 describe('ScheduleJobCard', () => {
+  beforeEach(() => {
+    entityCardMock.mockClear()
+  })
+
   it('shows the localized schedule while keeping the local cron expression in the tooltip', () => {
     renderWithProviders(
       <ScheduleJobCard
@@ -54,12 +58,17 @@ describe('ScheduleJobCard', () => {
 
     expect(screen.getByTestId('entity-card')).toBeInTheDocument()
 
-    const props = entityCardMock.mock.calls[0][0] as {
-      stats: Array<{ label: string; value: string; tooltip?: string }>
-    }
-    const scheduleStat = props.stats.find((stat) => stat.label === 'Schedule')
     const expectedLocalCron = convertCronToLocal(baseJob.cron_expression)
     const expectedSchedule = formatCronHuman(expectedLocalCron)
+    const props = entityCardMock.mock.lastCall?.[0] as
+      | {
+          stats: Array<{ label: string; value: string; tooltip?: string }>
+        }
+      | undefined
+    expect(props).toBeDefined()
+    const scheduleStat = props?.stats.find(
+      (stat) => stat.value === expectedSchedule && stat.tooltip === expectedLocalCron
+    )
 
     expect(scheduleStat).toMatchObject({
       value: expectedSchedule,
