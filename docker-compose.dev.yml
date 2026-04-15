@@ -11,7 +11,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: production
+      target: development
     container_name: borg-web-ui-dev
     restart: unless-stopped
     privileged: true
