@@ -1,7 +1,7 @@
 import type { PlanContentFeature, PlanContentManifest } from '../types/planContent'
 import { BASE_PATH } from '../utils/basePath'
-import planContentManifestData from '../../../docs/plan-content.json'
-import localPlanContentUrl from '../../../docs/plan-content.json?url'
+import planContentManifestData from '../data/plan-content.json'
+import localPlanContentUrl from '../data/plan-content.json?url'
 
 const MAX_SUPPORTED_VERSION = 1
 
