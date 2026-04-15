@@ -186,7 +186,15 @@ const ScheduledJobsTable = ({
 
     if (jobs.length === 0) {
       return (
-        <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
+        <Box
+          sx={{
+            py: 6,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            color: 'text.secondary',
+          }}
+        >
           <Clock size={40} style={{ opacity: 0.25, marginBottom: 12 }} />
           <Typography variant="body1" gutterBottom>
             {t('scheduledJobsTableSection.noJobsFound')}

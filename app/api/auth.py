@@ -280,6 +280,19 @@ def _serialize_passkey_credential(credential: PasskeyCredential) -> dict:
     }
 
 
+def _raise_passkey_verification_error(exc: Exception) -> None:
+    message = str(exc).lower()
+    detail_key = "backend.errors.auth.invalidPasskey"
+
+    if "user verification is required" in message and "was not verified" in message:
+        detail_key = "backend.errors.auth.passkeyUserVerificationRequired"
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={"key": detail_key},
+    ) from exc
+
+
 @router.get("/config", response_model=AuthConfig)
 async def get_auth_config():
     """Get authentication configuration for frontend"""
@@ -597,15 +610,18 @@ async def finish_passkey_registration(
 
     webauthn = require_webauthn()
     origin, rp_id = resolve_origin_and_rp_id(request)
-    verification = webauthn["verify_registration_response"](
-        credential=webauthn["parse_registration_credential_json"](
-            json.dumps(payload.credential)
-        ),
-        expected_challenge=webauthn["base64url_to_bytes"](ceremony["challenge"]),
-        expected_origin=origin,
-        expected_rp_id=rp_id,
-        require_user_verification=True,
-    )
+    try:
+        verification = webauthn["verify_registration_response"](
+            credential=webauthn["parse_registration_credential_json"](
+                json.dumps(payload.credential)
+            ),
+            expected_challenge=webauthn["base64url_to_bytes"](ceremony["challenge"]),
+            expected_origin=origin,
+            expected_rp_id=rp_id,
+            require_user_verification=True,
+        )
+    except webauthn["InvalidRegistrationResponse"] as exc:
+        _raise_passkey_verification_error(exc)
 
     credential_id = payload.credential.get("id")
     if not isinstance(credential_id, str):
@@ -732,19 +748,22 @@ async def finish_passkey_authentication(
             detail={"key": "backend.errors.auth.invalidPasskey"},
         )
 
-    verification = webauthn["verify_authentication_response"](
-        credential=webauthn["parse_authentication_credential_json"](
-            json.dumps(payload.credential)
-        ),
-        expected_challenge=webauthn["base64url_to_bytes"](ceremony["challenge"]),
-        expected_origin=origin,
-        expected_rp_id=rp_id,
-        credential_public_key=base64.urlsafe_b64decode(
-            passkey.public_key.encode("ascii")
-        ),
-        credential_current_sign_count=passkey.sign_count,
-        require_user_verification=True,
-    )
+    try:
+        verification = webauthn["verify_authentication_response"](
+            credential=webauthn["parse_authentication_credential_json"](
+                json.dumps(payload.credential)
+            ),
+            expected_challenge=webauthn["base64url_to_bytes"](ceremony["challenge"]),
+            expected_origin=origin,
+            expected_rp_id=rp_id,
+            credential_public_key=base64.urlsafe_b64decode(
+                passkey.public_key.encode("ascii")
+            ),
+            credential_current_sign_count=passkey.sign_count,
+            require_user_verification=True,
+        )
+    except webauthn["InvalidAuthenticationResponse"] as exc:
+        _raise_passkey_verification_error(exc)
 
     passkey.sign_count = verification.new_sign_count
     passkey.last_used_at = datetime.now(timezone.utc)

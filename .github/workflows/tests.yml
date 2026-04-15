@@ -268,7 +268,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download backend coverage artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: backend-coverage-xml
           path: coverage-artifacts/backend
@@ -294,7 +294,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download frontend coverage artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: frontend-coverage-lcov
           path: coverage-artifacts/frontend
@@ -397,7 +397,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Download frontend build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: frontend-build-output
           path: frontend-artifact
@@ -503,7 +503,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Download frontend build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: frontend-build-output
           path: frontend-artifact
@@ -626,7 +626,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Download frontend build artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: frontend-build-output
           path: frontend-artifact

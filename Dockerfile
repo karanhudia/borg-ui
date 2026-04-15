@@ -1,14 +1,5 @@
 ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.4-borg2-2.0.0b21-r1
 
-# Build stage for frontend
-FROM node:22-alpine AS frontend-builder
-WORKDIR /app/frontend
-
-COPY frontend/package*.json ./
-RUN npm install
-COPY frontend/ .
-RUN npm run build
-
 # Build stage for backend
 FROM python:3.10-slim AS backend-builder
 WORKDIR /app
@@ -55,9 +46,12 @@ WORKDIR /app
 COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 
+# Frontend assets are prepared outside Docker in CI and copied into the
+# build context to avoid rebuilding the same static bundle per architecture.
+COPY docker/frontend-build-output/ ./app/static/
+
 # Copy application code
 COPY app/ ./app/
-COPY --from=frontend-builder /app/frontend/build ./app/static
 
 # Copy VERSION file
 COPY VERSION ./VERSION

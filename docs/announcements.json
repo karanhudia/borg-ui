@@ -133,7 +133,7 @@
       "starts_at": "2026-04-14T00:00:00Z",
       "ends_at": "2027-04-14T00:00:00Z",
       "min_app_version": "2.0.3",
-      "max_app_version": "2.0.999",
+      "max_app_version": "2.0.3",
       "target_plans": ["community", "pro", "enterprise"]
     },
     {
@@ -206,7 +206,7 @@
       "starts_at": "2026-04-11T00:00:00Z",
       "ends_at": "2026-04-13T23:59:59Z",
       "min_app_version": "2.0.0",
-      "max_app_version": "2.0.999",
+      "max_app_version": "2.0.0",
       "target_plans": ["community", "pro", "enterprise"]
     }
   ]
