@@ -284,6 +284,7 @@ const Backup: React.FC = () => {
           displayMode="backup-only"
           borgVersion={selectedRepoData.borg_version}
           repositoryPath={selectedRepoData.path}
+          archiveName="manual-backup-{now}"
           compression={selectedRepoData.compression}
           excludePatterns={selectedRepoData.exclude_patterns}
           sourceDirs={selectedRepoData.source_directories}

@@ -15,6 +15,7 @@ interface CommandPreviewProps {
   displayMode?: 'detailed' | 'backup-only'
   repositoryPath: string
   borgVersion?: 1 | 2
+  archiveName?: string
   repositoryLocation?: 'local' | 'ssh'
   host?: string
   username?: string
@@ -54,6 +55,7 @@ export default function CommandPreview({
   displayMode = 'detailed',
   repositoryPath,
   borgVersion = 1,
+  archiveName,
   repositoryLocation = 'local',
   host,
   username,
@@ -124,6 +126,7 @@ export default function CommandPreview({
   const createCommand = generateBorgCreateCommand({
     repositoryPath: fullRepoPath,
     borgVersion,
+    archiveName,
     compression,
     excludePatterns: excludePatterns,
     sourceDirs: effectiveSourceDirs,

@@ -235,7 +235,7 @@ describe('Backup page', () => {
     await user.click(await screen.findByRole('button', { name: /choose primary repo/i }))
 
     expect(await screen.findByText(/borg create/i)).toBeInTheDocument()
-    expect(screen.getByText(/\/repos\/primary::/i)).toBeInTheDocument()
+    expect(screen.getByText(/\/repos\/primary::manual-backup-\{now\}/i)).toBeInTheDocument()
     expect(screen.getByText(/--exclude '\*\.tmp'/i)).toBeInTheDocument()
     expect(screen.getByText(/\/data/i)).toBeInTheDocument()
   })
