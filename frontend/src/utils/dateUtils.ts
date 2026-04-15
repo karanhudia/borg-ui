@@ -1,4 +1,4 @@
-import { format, formatDistance, intervalToDuration } from 'date-fns'
+import { formatDistance, intervalToDuration } from 'date-fns'
 
 /**
  * Format a date string to a compact, locale-aware format.
@@ -34,7 +34,11 @@ export const formatDateShort = (dateString: string | null | undefined): string =
 
   try {
     const date = new Date(dateString)
-    return format(date, 'MMM d, yyyy')
+    return date.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
   } catch (error) {
     console.error('Error formatting date:', error)
     return dateString
@@ -582,9 +586,18 @@ export const formatDateTimeFull = (dateString: string | null | undefined): strin
 
   try {
     const date = new Date(dateString)
-
-    // Format: "November 9, 2025 at 2:56:53 PM UTC"
-    return format(date, "MMMM d, yyyy 'at' h:mm:ss a 'UTC'")
+    const datePart = date.toLocaleDateString(undefined, {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    })
+    const timePart = date.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short',
+    })
+    return `${datePart} at ${timePart}`
   } catch (error) {
     console.error('Error formatting full datetime:', error)
     return dateString
@@ -600,8 +613,13 @@ export const formatDateCompact = (dateString: string | null | undefined): string
 
   try {
     const date = new Date(dateString)
-    // Format: "17 Oct 2025, 2:13 PM" (no seconds, abbreviated month)
-    return format(date, 'd MMM yyyy, h:mm a')
+    return date.toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
   } catch (error) {
     console.error('Error formatting compact date:', error)
     return dateString

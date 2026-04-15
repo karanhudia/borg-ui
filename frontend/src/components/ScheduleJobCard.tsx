@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import EntityCard, { StatItem, MetaItem, ActionItem } from './EntityCard'
 import {
-  formatDateShort,
+  formatDateCompact,
   formatDateTimeFull,
   formatCronHuman,
   convertCronToLocal,
@@ -112,14 +112,14 @@ export default function ScheduleJobCard({
     {
       icon: <History size={11} />,
       label: t('schedule.card.stats.lastRun'),
-      value: job.last_run ? formatDateShort(job.last_run) : t('common.never'),
+      value: job.last_run ? formatDateCompact(job.last_run) : t('common.never'),
       tooltip: job.last_run ? formatDateTimeFull(job.last_run) : '',
       color: 'warning',
     },
     {
       icon: <CalendarCheck size={11} />,
       label: t('schedule.card.stats.nextRun'),
-      value: job.next_run ? formatDateShort(job.next_run) : t('common.never'),
+      value: job.next_run ? formatDateCompact(job.next_run) : t('common.never'),
       tooltip: job.next_run ? formatDateTimeFull(job.next_run) : '',
       color: 'success',
     },
@@ -136,7 +136,7 @@ export default function ScheduleJobCard({
   if (job.last_prune)
     meta.push({
       label: t('schedule.card.meta.lastPruned'),
-      value: formatDateShort(job.last_prune),
+      value: formatDateCompact(job.last_prune),
       tooltip: formatDateTimeFull(job.last_prune),
     })
   if (job.run_compact_after)
@@ -147,7 +147,7 @@ export default function ScheduleJobCard({
   if (job.last_compact)
     meta.push({
       label: t('schedule.card.meta.lastCompact'),
-      value: formatDateShort(job.last_compact),
+      value: formatDateCompact(job.last_compact),
       tooltip: formatDateTimeFull(job.last_compact),
     })
 

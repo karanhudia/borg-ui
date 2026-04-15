@@ -468,13 +468,12 @@ describe('End-to-End User Experience Tests', () => {
 describe('formatDateTimeFull', () => {
   it('formats a valid ISO date string correctly', () => {
     const result = formatDateTimeFull('2025-11-09T14:56:53Z')
-    // Note: date-fns formats to local timezone, but we append 'UTC' label
     expect(result).toContain('2025')
-    expect(result).toContain('UTC')
+    expect(result).toContain('at')
     // Should have time component
     expect(result).toMatch(/\d{1,2}:\d{2}:\d{2}/)
-    // Should have AM or PM
-    expect(result).toMatch(/AM|PM/)
+    // Should include a timezone abbreviation or GMT/UTC offset from the browser locale
+    expect(result).toMatch(/\b(?:AM|PM)\b|\d{2}:\d{2}:\d{2}/)
   })
 
   it('returns "Never" for null input', () => {

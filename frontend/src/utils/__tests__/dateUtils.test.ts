@@ -260,6 +260,7 @@ describe('formatDateTimeFull', () => {
     const result = formatDateTimeFull('2025-11-09T14:56:53Z')
     expect(result).toMatch(/November/)
     expect(result).toMatch(/2025/)
+    expect(result).toContain('at')
   })
 })
 

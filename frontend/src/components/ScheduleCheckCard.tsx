@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { CalendarClock, History, CalendarCheck, Timer, Play, Pencil, Trash2 } from 'lucide-react'
 import EntityCard, { StatItem, ActionItem } from './EntityCard'
 import {
-  formatDateShort,
+  formatDateCompact,
   formatDateTimeFull,
   formatCronHuman,
   convertCronToLocal,
@@ -57,7 +57,7 @@ export default function ScheduleCheckCard({
       icon: <History size={11} />,
       label: t('schedule.checkCard.stats.lastCheck'),
       value: check.last_scheduled_check
-        ? formatDateShort(check.last_scheduled_check)
+        ? formatDateCompact(check.last_scheduled_check)
         : t('common.never'),
       tooltip: check.last_scheduled_check ? formatDateTimeFull(check.last_scheduled_check) : '',
       color: 'warning',
@@ -66,7 +66,7 @@ export default function ScheduleCheckCard({
       icon: <CalendarCheck size={11} />,
       label: t('schedule.checkCard.stats.nextCheck'),
       value: check.next_scheduled_check
-        ? formatDateShort(check.next_scheduled_check)
+        ? formatDateCompact(check.next_scheduled_check)
         : t('common.never'),
       tooltip: check.next_scheduled_check ? formatDateTimeFull(check.next_scheduled_check) : '',
       color: 'success',
