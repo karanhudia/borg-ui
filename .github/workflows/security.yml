@@ -148,11 +148,16 @@ jobs:
     name: Trivy Docker Image Scan
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Build runtime base image
+        run: docker build -f Dockerfile.runtime-base -t borg-ui-runtime-base:security-scan .
 
       - name: Build Docker image
-        run: docker build -t borg-ui:${{ github.sha }} .
+        run: docker build --build-arg BASE_IMAGE=borg-ui-runtime-base:security-scan -t borg-ui:${{ github.sha }} .
 
       - name: Run Trivy vulnerability scanner (Docker image)
         uses: aquasecurity/trivy-action@master
