@@ -48,7 +48,7 @@
       "starts_at": "2026-04-06T00:00:00Z",
       "ends_at": "2027-04-06T00:00:00Z",
       "min_app_version": "2.0.0",
-      "max_app_version": "2.1.0",
+      "max_app_version": "2.0.0",
       "target_plans": ["community", "pro", "enterprise"]
     }
   ]
