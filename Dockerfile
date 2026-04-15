@@ -1,3 +1,5 @@
+ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.4-borg2-2.0.0b21-r1
+
 # Build stage for frontend
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
@@ -30,7 +32,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Production stage
-FROM python:3.10-slim AS production
+FROM ${BASE_IMAGE} AS production
 
 # Build arguments
 ARG APP_VERSION=dev
@@ -49,65 +51,6 @@ LABEL com.borg-ui.icon.color="#00dd00"
 
 WORKDIR /app
 
-# Install system dependencies (excluding borg, will install via pip for latest version)
-RUN apt-get update && apt-get install -y \
-    # Core system packages
-    cron \
-    curl \
-    wget \
-    gnupg \
-    lsb-release \
-    gosu \
-    sudo \
-    # Borg dependencies (but not borgbackup package itself)
-    libacl1-dev \
-    libssl-dev \
-    liblz4-dev \
-    libzstd-dev \
-    libxxhash-dev \
-    build-essential \
-    pkg-config \
-    # FUSE support for borg mount
-    fuse3 \
-    libfuse3-dev \
-    # Additional useful packages
-    rsync \
-    openssh-client \
-    sshfs \
-    python3-pip \
-    python3-dev \
-    # Cleanup
-    && rm -rf /var/lib/apt/lists/*
-
-# Install FUSE Python bindings first (required for borg mount)
-RUN pip install --no-cache-dir pyfuse3
-
-# Install Borg 1.x via pip — available as `borg` at the system default path
-# Auto-update patch versions within 1.4.x for security/bug fixes
-RUN pip install --no-cache-dir 'borgbackup[fuse]>=1.4.4,<1.5.0'
-
-# Install Borg 2.x into an isolated prefix so it does not conflict with Borg 1
-# Available as `borg2` via the symlink created below
-RUN python3 -m venv /opt/borg2-venv && \
-    /opt/borg2-venv/bin/pip install --no-cache-dir pyfuse3 'borgbackup[fuse]>=2.0.0b1,<3.0.0' && \
-    ln -sf /opt/borg2-venv/bin/borg /usr/local/bin/borg2
-
-# Install additional useful tools
-RUN apt-get update && apt-get install -y \
-    # Monitoring tools
-    htop \
-    iotop \
-    # Network tools
-    net-tools \
-    iputils-ping \
-    # File system tools
-    tree \
-    ncdu \
-    # SSH deployment tools
-    sshpass \
-    # Cleanup
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy Python dependencies
 COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
@@ -119,33 +62,6 @@ COPY --from=frontend-builder /app/frontend/build ./app/static
 # Copy VERSION file
 COPY VERSION ./VERSION
 
-# Create necessary directories with proper permissions
-# /data - main data directory for all persistent data (database, ssh keys, logs, configs)
-# /backups - for actual backup storage
-RUN mkdir -p \
-    /data \
-    /data/ssh_keys \
-    /data/borg_keys \
-    /data/logs \
-    /data/config \
-    /backups \
-    /var/log/borg \
-    /etc/borg
-
-# Create non-root user with default UID/GID 1001:1001
-# Runtime UID/GID can be changed via PUID/PGID environment variables
-RUN groupadd -g 1001 borg && \
-    useradd -m -u 1001 -g 1001 -s /bin/bash borg && \
-    # Add user to necessary groups
-    usermod -a -G sudo borg && \
-    # Create fuse group if it doesn't exist (for SSHFS mounting)
-    groupadd -f fuse && \
-    usermod -a -G fuse borg && \
-    # Set up sudo access for borg user (needed for cron jobs, borg operations, and package installation)
-    echo "borg ALL=(ALL) NOPASSWD: /usr/bin/borg, /usr/bin/crontab, /usr/bin/apt-get" >> /etc/sudoers && \
-    # Enable user_allow_other in fuse.conf (required for non-root FUSE mounts)
-    sed -i 's/^#user_allow_other/user_allow_other/' /etc/fuse.conf
-
 # Set proper ownership and permissions
 RUN chown -R borg:borg /app /data /backups /var/log/borg /etc/borg && \
     chmod -R 755 /app && \
@@ -153,15 +69,6 @@ RUN chown -R borg:borg /app /data /backups /var/log/borg /etc/borg && \
     chmod -R 755 /backups && \
     chmod -R 755 /var/log/borg && \
     chmod -R 755 /etc/borg
-
-# Create SSH directory for borg user
-RUN mkdir -p /home/borg/.ssh && \
-    chown -R borg:borg /home/borg/.ssh && \
-    chmod 700 /home/borg/.ssh
-
-# Set up cron directory
-RUN mkdir -p /etc/cron.d && \
-    chown -R borg:borg /etc/cron.d
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
