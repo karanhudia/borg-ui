@@ -28,7 +28,7 @@ const baseCheck = {
 }
 
 describe('ScheduleCheckCard', () => {
-  it('uses the same local schedule text for the stat value and tooltip', () => {
+  it('shows the localized schedule while keeping the local cron expression in the tooltip', () => {
     renderWithProviders(
       <ScheduleCheckCard
         check={baseCheck}
@@ -45,12 +45,14 @@ describe('ScheduleCheckCard', () => {
       stats: Array<{ label: string; value: string; tooltip?: string }>
     }
     const scheduleStat = props.stats.find((stat) => stat.label === 'Schedule')
-    const expectedSchedule = formatCronHuman(convertCronToLocal(baseCheck.check_cron_expression))
+    const expectedLocalCron = convertCronToLocal(baseCheck.check_cron_expression)
+    const expectedSchedule = formatCronHuman(expectedLocalCron)
 
     expect(scheduleStat).toMatchObject({
       value: expectedSchedule,
-      tooltip: expectedSchedule,
+      tooltip: expectedLocalCron,
     })
     expect(scheduleStat?.tooltip).not.toBe(baseCheck.check_cron_expression)
+    expect(scheduleStat?.tooltip).not.toBe(expectedSchedule)
   })
 })

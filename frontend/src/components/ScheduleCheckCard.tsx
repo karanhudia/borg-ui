@@ -38,8 +38,11 @@ export default function ScheduleCheckCard({
   onRunNow,
 }: ScheduleCheckCardProps) {
   const { t } = useTranslation()
-  const scheduleDisplay = check.check_cron_expression
-    ? formatCronHuman(convertCronToLocal(check.check_cron_expression))
+  const localCronExpression = check.check_cron_expression
+    ? convertCronToLocal(check.check_cron_expression)
+    : ''
+  const scheduleDisplay = localCronExpression
+    ? formatCronHuman(localCronExpression)
     : t('schedule.checkCard.stats.notSet')
 
   const stats: StatItem[] = [
@@ -47,7 +50,7 @@ export default function ScheduleCheckCard({
       icon: <CalendarClock size={11} />,
       label: t('common.schedule'),
       value: scheduleDisplay,
-      tooltip: scheduleDisplay,
+      tooltip: localCronExpression,
       color: 'info',
     },
     {
