@@ -29,6 +29,7 @@ export default function ArchiveCard({
   const isDark = theme.palette.mode === 'dark'
   const isManual = getArchiveType(archive) === 'manual'
   const archiveTime = archive.start || archive.time
+  const desktopGridTemplate = 'minmax(0, 1fr) 76px minmax(180px, 220px) 132px'
 
   const iconBtnSx = (color: string) => ({
     width: 28,
@@ -46,7 +47,7 @@ export default function ArchiveCard({
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: '1fr 64px 120px auto',
+        gridTemplateColumns: desktopGridTemplate,
         alignItems: 'center',
         gap: 1,
         px: 2,
@@ -109,6 +110,7 @@ export default function ArchiveCard({
           size="small"
           sx={{
             height: 18,
+            justifySelf: 'start',
             fontSize: '0.6rem',
             fontWeight: 700,
             letterSpacing: '0.05em',
@@ -130,6 +132,9 @@ export default function ArchiveCard({
             fontSize: '0.72rem',
             color: 'text.secondary',
             whiteSpace: 'nowrap',
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
           {formatDate(archiveTime)}
@@ -142,6 +147,7 @@ export default function ArchiveCard({
           display: 'flex',
           alignItems: 'center',
           gap: 0.25,
+          minWidth: 0,
           justifyContent: 'flex-end',
           '@media (max-width: 767px)': {
             gridColumn: 2,

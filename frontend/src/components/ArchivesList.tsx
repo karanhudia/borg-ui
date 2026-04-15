@@ -111,6 +111,7 @@ export default function ArchivesList({
   const { t } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
+  const desktopGridTemplate = 'minmax(0, 1fr) 76px minmax(180px, 220px) 132px'
 
   // State
   const [page, setPage] = useState(0)
@@ -186,7 +187,7 @@ export default function ArchivesList({
     <Box
       sx={{
         display: { xs: 'none', md: 'grid' },
-        gridTemplateColumns: '1fr 64px 120px auto',
+        gridTemplateColumns: desktopGridTemplate,
         alignItems: 'center',
         gap: 1,
         px: 2,

@@ -7,12 +7,13 @@ interface ArchiveCardSkeletonProps {
 export default function ArchiveCardSkeleton({ index = 0 }: ArchiveCardSkeletonProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
+  const desktopGridTemplate = 'minmax(0, 1fr) 76px minmax(180px, 220px) 132px'
 
   return (
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: '1fr 64px 120px auto',
+        gridTemplateColumns: desktopGridTemplate,
         alignItems: 'center',
         gap: 1,
         px: 2,
