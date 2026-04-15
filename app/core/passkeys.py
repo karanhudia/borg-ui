@@ -26,6 +26,10 @@ def require_webauthn():
         from webauthn.helpers.parse_authentication_credential_json import (
             parse_authentication_credential_json,
         )
+        from webauthn.helpers.exceptions import (
+            InvalidAuthenticationResponse,
+            InvalidRegistrationResponse,
+        )
         from webauthn.helpers.structs import (
             AuthenticatorSelectionCriteria,
             PublicKeyCredentialDescriptor,
@@ -50,6 +54,8 @@ def require_webauthn():
         "base64url_to_bytes": base64url_to_bytes,
         "parse_registration_credential_json": parse_registration_credential_json,
         "parse_authentication_credential_json": parse_authentication_credential_json,
+        "InvalidAuthenticationResponse": InvalidAuthenticationResponse,
+        "InvalidRegistrationResponse": InvalidRegistrationResponse,
         "AuthenticatorSelectionCriteria": AuthenticatorSelectionCriteria,
         "PublicKeyCredentialDescriptor": PublicKeyCredentialDescriptor,
         "ResidentKeyRequirement": ResidentKeyRequirement,

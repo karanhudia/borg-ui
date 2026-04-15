@@ -3,10 +3,12 @@ Comprehensive unit tests for authentication API endpoints and security
 Consolidated from test_api_auth.py, test_auth_comprehensive.py, and test_auth_specific.py
 """
 
+import base64
 import pytest
 from fastapi.testclient import TestClient
 from datetime import timedelta
-from app.database.models import User
+from app.database.models import PasskeyCredential, User
+from app.core.passkeys import create_passkey_ceremony_token
 from app.core.security import (
     create_access_token,
     encrypt_secret,
@@ -508,6 +510,141 @@ class TestPasswordSetupFlow:
         assert response.status_code == 200
         test_db.refresh(admin_user)
         assert admin_user.must_change_password is False
+
+
+@pytest.mark.unit
+class TestPasskeyErrors:
+    def test_passkey_registration_requires_user_verification(
+        self, test_client: TestClient, admin_headers, admin_user, monkeypatch
+    ):
+        ceremony_token = create_passkey_ceremony_token(
+            username=admin_user.username,
+            challenge="challenge-123",
+            purpose="passkey_register",
+        )
+
+        def fake_require_webauthn():
+            class InvalidRegistrationResponse(Exception):
+                pass
+
+            def verify_registration_response(**kwargs):
+                raise InvalidRegistrationResponse(
+                    "User verification is required but user was not verified during attestation"
+                )
+
+            return {
+                "parse_registration_credential_json": lambda value: value,
+                "base64url_to_bytes": lambda value: value.encode("utf-8"),
+                "verify_registration_response": verify_registration_response,
+                "InvalidRegistrationResponse": InvalidRegistrationResponse,
+            }
+
+        monkeypatch.setattr("app.api.auth.require_webauthn", fake_require_webauthn)
+
+        response = test_client.post(
+            "/api/auth/passkeys/register/verify",
+            headers=admin_headers,
+            json={
+                "ceremony_token": ceremony_token,
+                "credential": {"id": "credential-123", "response": {}},
+                "name": "Desk Mac",
+            },
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.passkeyUserVerificationRequired"
+        )
+
+    def test_passkey_registration_invalid_response_returns_invalid_passkey(
+        self, test_client: TestClient, admin_headers, admin_user, monkeypatch
+    ):
+        ceremony_token = create_passkey_ceremony_token(
+            username=admin_user.username,
+            challenge="challenge-123",
+            purpose="passkey_register",
+        )
+
+        def fake_require_webauthn():
+            class InvalidRegistrationResponse(Exception):
+                pass
+
+            def verify_registration_response(**kwargs):
+                raise InvalidRegistrationResponse("Registration response was invalid")
+
+            return {
+                "parse_registration_credential_json": lambda value: value,
+                "base64url_to_bytes": lambda value: value.encode("utf-8"),
+                "verify_registration_response": verify_registration_response,
+                "InvalidRegistrationResponse": InvalidRegistrationResponse,
+            }
+
+        monkeypatch.setattr("app.api.auth.require_webauthn", fake_require_webauthn)
+
+        response = test_client.post(
+            "/api/auth/passkeys/register/verify",
+            headers=admin_headers,
+            json={
+                "ceremony_token": ceremony_token,
+                "credential": {"id": "credential-123", "response": {}},
+                "name": "Desk Mac",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"]["key"] == "backend.errors.auth.invalidPasskey"
+
+    def test_passkey_authentication_requires_user_verification(
+        self, test_client: TestClient, test_db, test_user, monkeypatch
+    ):
+        passkey = PasskeyCredential(
+            user_id=test_user.id,
+            name="Desk Mac",
+            credential_id="credential-123",
+            public_key=base64.urlsafe_b64encode(b"public-key").decode("ascii"),
+            sign_count=0,
+        )
+        test_db.add(passkey)
+        test_db.commit()
+
+        ceremony_token = create_passkey_ceremony_token(
+            username="passkey-user",
+            challenge="challenge-456",
+            purpose="passkey_authenticate",
+        )
+
+        def fake_require_webauthn():
+            class InvalidAuthenticationResponse(Exception):
+                pass
+
+            def verify_authentication_response(**kwargs):
+                raise InvalidAuthenticationResponse(
+                    "User verification is required but user was not verified during authentication"
+                )
+
+            return {
+                "parse_authentication_credential_json": lambda value: value,
+                "base64url_to_bytes": lambda value: value.encode("utf-8"),
+                "verify_authentication_response": verify_authentication_response,
+                "InvalidAuthenticationResponse": InvalidAuthenticationResponse,
+            }
+
+        monkeypatch.setattr("app.api.auth.require_webauthn", fake_require_webauthn)
+
+        response = test_client.post(
+            "/api/auth/passkeys/authenticate/verify",
+            json={
+                "ceremony_token": ceremony_token,
+                "credential": {"id": "credential-123", "response": {}},
+            },
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.passkeyUserVerificationRequired"
+        )
 
 
 @pytest.mark.unit

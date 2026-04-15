@@ -2825,6 +2825,7 @@
         "localPasswordRequired": "Questo account deve usare l'autenticazione integrata con password per gestire TOTP",
         "totpNotEnabled": "L'autenticazione a due fattori non è attiva per questo account",
         "invalidPasskey": "Risposta passkey non valida",
+        "passkeyUserVerificationRequired": "Su questo dispositivo è richiesta la verifica della passkey. Sbloccalo con Touch ID, Face ID o il codice del dispositivo e riprova.",
         "passkeysUnavailable": "Le passkey non sono disponibili perché la dipendenza WebAuthn non è installata",
         "passkeyAlreadyRegistered": "Questa passkey è già registrata",
         "passkeyNotFound": "Passkey non trovata"
