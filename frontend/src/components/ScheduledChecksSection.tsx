@@ -307,7 +307,15 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
           ))}
         </Stack>
       ) : !scheduledChecks || scheduledChecks.length === 0 ? (
-        <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
+        <Box
+          sx={{
+            py: 6,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            color: 'text.secondary',
+          }}
+        >
           <Shield size={40} style={{ opacity: 0.25, marginBottom: 12 }} />
           <Typography variant="body1" gutterBottom>
             {t('scheduledChecks.noScheduledChecks')}
