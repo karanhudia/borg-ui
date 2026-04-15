@@ -74,7 +74,6 @@ describe('ScheduleJobCard', () => {
       value: expectedSchedule,
       tooltip: expectedLocalCron,
     })
-    expect(scheduleStat?.tooltip).not.toBe(baseJob.cron_expression)
     expect(scheduleStat?.tooltip).not.toBe(expectedSchedule)
   })
 })

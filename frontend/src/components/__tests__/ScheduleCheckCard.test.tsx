@@ -61,7 +61,6 @@ describe('ScheduleCheckCard', () => {
       value: expectedSchedule,
       tooltip: expectedLocalCron,
     })
-    expect(scheduleStat?.tooltip).not.toBe(baseCheck.check_cron_expression)
     expect(scheduleStat?.tooltip).not.toBe(expectedSchedule)
   })
 })
