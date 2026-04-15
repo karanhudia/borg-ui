@@ -139,6 +139,40 @@
       "availability": "included"
     },
     {
+      "id": "totp_2fa",
+      "plan": "community",
+      "label": "Two-factor authentication (TOTP)",
+      "label_localized": {
+        "es": "Autenticación de dos factores (TOTP)",
+        "de": "Zwei-Faktor-Authentifizierung (TOTP)",
+        "it": "Autenticazione a due fattori (TOTP)"
+      },
+      "description": "Secure your account with time-based one-time passwords and recovery codes.",
+      "description_localized": {
+        "es": "Protege tu cuenta con contraseñas de un solo uso basadas en tiempo y códigos de recuperación.",
+        "de": "Sichern Sie Ihr Konto mit zeitbasierten Einmalpasswörtern und Wiederherstellungscodes.",
+        "it": "Proteggi il tuo account con password monouso basate sul tempo e codici di recupero."
+      },
+      "availability": "included"
+    },
+    {
+      "id": "passkeys",
+      "plan": "pro",
+      "label": "Passkeys",
+      "label_localized": {
+        "es": "Passkeys",
+        "de": "Passkeys",
+        "it": "Passkey"
+      },
+      "description": "Sign in with biometrics or a hardware security key instead of a password.",
+      "description_localized": {
+        "es": "Inicia sesión con biometría o una clave de seguridad de hardware en lugar de una contraseña.",
+        "de": "Melden Sie sich mit Biometrie oder einem Hardware-Sicherheitsschlüssel statt mit einem Passwort an.",
+        "it": "Accedi con biometria o una chiave di sicurezza hardware invece di una password."
+      },
+      "available_in": "2.0.3"
+    },
+    {
       "id": "borg_v2",
       "plan": "pro",
       "label": "Borg v2 beta testing",

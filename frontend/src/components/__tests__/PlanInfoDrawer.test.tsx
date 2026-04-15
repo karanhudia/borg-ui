@@ -40,6 +40,20 @@ const { usePlanContentMock } = vi.hoisted(() => ({
         availability: 'coming_soon',
       },
       {
+        id: 'passkeys',
+        plan: 'pro',
+        label: 'Passkeys',
+        description: 'Sign in with biometrics or a hardware security key instead of a password.',
+        available_in: '2.0.3',
+      },
+      {
+        id: 'totp_2fa',
+        plan: 'community',
+        label: 'Two-factor authentication (TOTP)',
+        description: 'Secure your account with time-based one-time passwords and recovery codes.',
+        available_in: '2.0.3',
+      },
+      {
         id: 'alerting_monitoring',
         plan: 'pro',
         label: 'Alerts and monitoring',
@@ -121,14 +135,60 @@ describe('PlanInfoDrawer', () => {
     expect(screen.getByText('Upcoming for Enterprise')).toBeInTheDocument()
   })
 
-  it('shows upcoming features without a separate versioned section by default', () => {
+  it('shows a separate versioned section when the selected plan has version-targeted features', () => {
     renderWithProviders(
       <PlanInfoDrawer open={true} onClose={vi.fn()} plan="community" features={featureMap} />
     )
 
     expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
-    expect(screen.queryByText('Included in upcoming releases for Pro')).not.toBeInTheDocument()
-    expect(screen.queryByText('Available in 2.0.1')).not.toBeInTheDocument()
+    expect(screen.getByText('Included in upcoming releases for Pro')).toBeInTheDocument()
+    expect(screen.getByText('Available in 2.0.3')).toBeInTheDocument()
+  })
+
+  it('shows versioned features as upcoming when the installed version is lower', () => {
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan="community"
+        appVersion="2.0.2"
+        features={featureMap}
+      />
+    )
+
+    expect(screen.getByText('Included in upcoming releases for Pro')).toBeInTheDocument()
+    expect(screen.getAllByText('Passkeys').length).toBeGreaterThan(0)
+    expect(screen.getByText('Available in 2.0.3')).toBeInTheDocument()
+  })
+
+  it('treats versioned upgrade features as included when the installed version is equal or newer', () => {
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan="community"
+        appVersion="2.0.3"
+        features={featureMap}
+      />
+    )
+
+    expect(screen.getAllByText('Passkeys').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Available in 2.0.3')).not.toBeInTheDocument()
+  })
+
+  it('treats versioned community features as included when the installed version is equal or newer', () => {
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan="pro"
+        appVersion="2.0.3"
+        features={featureMap}
+      />
+    )
+
+    expect(screen.getByText('Two-factor authentication (TOTP)')).toBeInTheDocument()
+    expect(screen.queryByText('Available in 2.0.3')).not.toBeInTheDocument()
   })
 
   it('shows features for the selected plan tier', async () => {

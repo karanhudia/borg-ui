@@ -6,12 +6,14 @@ import { Plan, PLAN_COLOR } from '../core/features'
 import { useAnalytics } from '../hooks/useAnalytics'
 import type { EntitlementInfo } from '../hooks/useSystemInfo'
 import { usePlanContent } from '../hooks/usePlanContent'
+import { compareVersions } from '../utils/announcements'
 import { BUY_URL } from '../utils/externalLinks'
 
 interface PlanInfoDrawerProps {
   open: boolean
   onClose: () => void
   plan: Plan
+  appVersion?: string
   initialSelectedPlan?: Plan
   features?: Record<string, Plan>
   entitlement?: EntitlementInfo
@@ -21,12 +23,30 @@ const UPGRADE_PLANS: Plan[] = ['pro', 'enterprise']
 
 type ActiveTab = 'your-plan' | 'upgrade'
 
-function isVersionedUpcomingFeature(feature: { available_in?: string }) {
-  return Boolean(feature.available_in)
+function isFeatureAvailableInCurrentVersion(
+  feature: { available_in?: string },
+  appVersion?: string
+) {
+  return Boolean(
+    feature.available_in && appVersion && compareVersions(appVersion, feature.available_in) >= 0
+  )
+}
+
+function isVersionedUpcomingFeature(feature: { available_in?: string }, appVersion?: string) {
+  return Boolean(feature.available_in) && !isFeatureAvailableInCurrentVersion(feature, appVersion)
 }
 
 function isComingSoonFeature(feature: { availability?: string }) {
   return feature.availability === 'coming_soon'
+}
+
+function isFeatureIncluded(
+  feature: { availability?: string; available_in?: string },
+  appVersion?: string
+) {
+  return (
+    feature.availability === 'included' || isFeatureAvailableInCurrentVersion(feature, appVersion)
+  )
 }
 
 function getDefaultSelectedPlan(plan: Plan, initialSelectedPlan?: Plan): Plan {
@@ -45,6 +65,7 @@ export default function PlanInfoDrawer({
   open,
   onClose,
   plan,
+  appVersion,
   initialSelectedPlan,
   features,
   entitlement,
@@ -86,7 +107,7 @@ export default function PlanInfoDrawer({
     (feature) => feature.plan === selectedPlan
   )
   const visibleFeatures = manifestFeaturesForPlan
-    .filter((feature) => feature.availability === 'included')
+    .filter((feature) => isFeatureIncluded(feature, appVersion))
     .map((feature) => ({
       id: feature.id,
       label: feature.label,
@@ -108,9 +129,7 @@ export default function PlanInfoDrawer({
     visibleFeatures.length > 0 || backendOnlyVisibleFeatures.length > 0
       ? [...visibleFeatures, ...backendOnlyVisibleFeatures]
       : manifestFeaturesForPlan
-          .filter(
-            (feature) => feature.availability === 'included' && !isVersionedUpcomingFeature(feature)
-          )
+          .filter((feature) => isFeatureIncluded(feature, appVersion))
           .map((feature) => ({
             id: feature.id,
             label: feature.label,
@@ -118,18 +137,19 @@ export default function PlanInfoDrawer({
           }))
 
   const upcomingVersionedFeatures = manifestFeaturesForPlan.filter(
-    (feature) => isVersionedUpcomingFeature(feature) && !visibleFeatureIdSet.has(feature.id)
+    (feature) =>
+      isVersionedUpcomingFeature(feature, appVersion) && !visibleFeatureIdSet.has(feature.id)
   )
 
   const comingSoonFeatures = manifestFeaturesForPlan.filter(
     (feature) =>
-      !isVersionedUpcomingFeature(feature) &&
+      !isVersionedUpcomingFeature(feature, appVersion) &&
       (isComingSoonFeature(feature) ||
         (feature.availability === undefined && !visibleFeatureIdSet.has(feature.id)))
   )
 
   const communityFeatures = planContentFeatures.filter(
-    (f) => f.plan === 'community' && f.availability === 'included'
+    (f) => f.plan === 'community' && isFeatureIncluded(f, appVersion)
   )
 
   useEffect(() => {
