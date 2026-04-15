@@ -1,3 +1,5 @@
+ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.4-borg2-2.0.0b21-r1
+
 # Build stage for frontend
 FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
@@ -30,7 +32,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Production stage
-ARG BASE_IMAGE=docker.io/ainullcode/borg-ui-runtime-base:runtime-borg1-1.4.4-borg2-2.0.0b21-r1
 FROM ${BASE_IMAGE} AS production
 
 # Build arguments
