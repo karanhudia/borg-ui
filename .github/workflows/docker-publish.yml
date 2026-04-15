@@ -30,10 +30,47 @@ env:
   IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/borg-ui
   RUNTIME_IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/borg-ui-runtime-base
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  NODE_VERSION: "22"
 
 jobs:
+  frontend-build:
+    name: Frontend / Release Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-build-output
+          path: |
+            frontend/build/
+            frontend/dist/
+          if-no-files-found: error
+          retention-days: 1
+
   smoke-test-amd64:
     runs-on: ubuntu-latest
+    needs: [frontend-build]
     permissions:
       contents: read
 
@@ -46,6 +83,30 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Download frontend build artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: frontend-build-output
+          path: frontend-artifact
+
+      - name: Prepare frontend build context
+        run: |
+          rm -rf docker/frontend-build-output
+          mkdir -p docker/frontend-build-output
+          if [ -d "frontend-artifact/build" ]; then
+            cp -R frontend-artifact/build/. docker/frontend-build-output/
+          elif [ -d "frontend-artifact/dist" ]; then
+            cp -R frontend-artifact/dist/. docker/frontend-build-output/
+          elif [ -d "frontend-artifact/frontend/build" ]; then
+            cp -R frontend-artifact/frontend/build/. docker/frontend-build-output/
+          elif [ -d "frontend-artifact/frontend/dist" ]; then
+            cp -R frontend-artifact/frontend/dist/. docker/frontend-build-output/
+          else
+            echo "Frontend build artifact did not contain build output"
+            find frontend-artifact -maxdepth 4 -type d | sort
+            exit 1
+          fi
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
@@ -137,7 +198,7 @@ jobs:
 
   build-and-push:
     runs-on: ubuntu-latest
-    needs: [smoke-test-amd64]
+    needs: [frontend-build, smoke-test-amd64]
     if: github.event_name != 'workflow_dispatch' || inputs.push_image
     permissions:
       contents: read
@@ -152,6 +213,30 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Download frontend build artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: frontend-build-output
+          path: frontend-artifact
+
+      - name: Prepare frontend build context
+        run: |
+          rm -rf docker/frontend-build-output
+          mkdir -p docker/frontend-build-output
+          if [ -d "frontend-artifact/build" ]; then
+            cp -R frontend-artifact/build/. docker/frontend-build-output/
+          elif [ -d "frontend-artifact/dist" ]; then
+            cp -R frontend-artifact/dist/. docker/frontend-build-output/
+          elif [ -d "frontend-artifact/frontend/build" ]; then
+            cp -R frontend-artifact/frontend/build/. docker/frontend-build-output/
+          elif [ -d "frontend-artifact/frontend/dist" ]; then
+            cp -R frontend-artifact/frontend/dist/. docker/frontend-build-output/
+          else
+            echo "Frontend build artifact did not contain build output"
+            find frontend-artifact -maxdepth 4 -type d | sort
+            exit 1
+          fi
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
