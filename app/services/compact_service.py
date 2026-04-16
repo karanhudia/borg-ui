@@ -8,6 +8,7 @@ from app.database.models import CompactJob, Repository
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
+from app.services.maintenance_state import apply_compact_completion
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
@@ -267,41 +268,24 @@ class CompactService:
             if job.status == "cancelled":
                 logger.info("Compact job was cancelled", job_id=job_id)
                 job.completed_at = datetime.utcnow()
-            elif process.returncode == 0:
-                job.status = "completed"
-                job.progress = 100
-                job.progress_message = "Compact completed successfully"
-                job.completed_at = datetime.utcnow()
-                # Update repository's last_compact timestamp
-                repository.last_compact = datetime.utcnow()
-                logger.info("Compact completed successfully", job_id=job_id)
-            elif process.returncode == 1 or (100 <= process.returncode <= 127):
-                # Warning (legacy exit code 1 or modern exit codes 100-127)
-                job.status = "completed_with_warnings"
-                job.progress = 100
-                job.progress_message = (
-                    f"Compact completed with warnings (exit code {process.returncode})"
-                )
-                job.error_message = (
-                    f"Compact completed with warnings (exit code {process.returncode})"
-                )
-                job.completed_at = datetime.utcnow()
-                # Update repository's last_compact timestamp even with warnings
-                repository.last_compact = datetime.utcnow()
-                logger.warning(
-                    "Compact completed with warnings",
-                    job_id=job_id,
-                    exit_code=process.returncode,
-                )
             else:
-                job.status = "failed"
-                job.error_message = (
-                    f"Compact failed with exit code {process.returncode}"
+                apply_compact_completion(
+                    job,
+                    repository,
+                    process.returncode,
                 )
-                job.completed_at = datetime.utcnow()
-                logger.error(
-                    "Compact failed", job_id=job_id, exit_code=process.returncode
-                )
+                if job.status == "completed":
+                    logger.info("Compact completed successfully", job_id=job_id)
+                elif job.status == "completed_with_warnings":
+                    logger.warning(
+                        "Compact completed with warnings",
+                        job_id=job_id,
+                        exit_code=process.returncode,
+                    )
+                else:
+                    logger.error(
+                        "Compact failed", job_id=job_id, exit_code=process.returncode
+                    )
 
             # Save logs for all completed/failed/cancelled/warning jobs
             if job.status in [

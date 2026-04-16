@@ -371,9 +371,15 @@ class TestCompactV2Service:
         refreshed = (
             verification.query(CompactJob).filter(CompactJob.id == job.id).first()
         )
+        refreshed_repo = (
+            verification.query(Repository)
+            .filter(Repository.id == borg_v2_repo_for_services.id)
+            .first()
+        )
         assert refreshed.status == "completed"
         assert refreshed.progress == 100
         assert refreshed.has_logs is True
+        assert refreshed_repo.last_compact is not None
         verification.close()
 
     @pytest.mark.unit
@@ -416,8 +422,14 @@ class TestCompactV2Service:
         refreshed = (
             verification.query(CompactJob).filter(CompactJob.id == job.id).first()
         )
+        refreshed_repo = (
+            verification.query(Repository)
+            .filter(Repository.id == borg_v2_repo_for_services.id)
+            .first()
+        )
         assert refreshed.status == "completed_with_warnings"
         assert "warnings" in refreshed.error_message
+        assert refreshed_repo.last_compact is not None
         verification.close()
 
 

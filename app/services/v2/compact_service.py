@@ -19,6 +19,7 @@ from app.database.models import CompactJob, Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import _get_borg2_binary
 from app.config import settings
+from app.services.maintenance_state import apply_compact_completion
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,  # noqa: F401
@@ -57,8 +58,10 @@ class CompactV2Service:
                 logger.error("Borg2 compact job not found", job_id=job_id)
                 return
 
-            repo = db.query(Repository).filter(Repository.id == repository_id).first()
-            if not repo:
+            repository = (
+                db.query(Repository).filter(Repository.id == repository_id).first()
+            )
+            if not repository:
                 job.status = "failed"
                 job.error_message = f"Repository not found (ID: {repository_id})"
                 job.completed_at = datetime.utcnow()
@@ -77,21 +80,28 @@ class CompactV2Service:
                 return
 
             env, temp_key_file = build_repository_borg_env(
-                repo,
+                repository,
                 db,
                 keepalive=True,
                 show_progress=True,
             )
 
             borg_cmd = _get_borg2_binary()
-            cmd = [borg_cmd, "-r", repo.path, "compact", "--progress", "--log-json"]
-            if repo.remote_path:
-                cmd.extend(["--remote-path", repo.remote_path])
+            cmd = [
+                borg_cmd,
+                "-r",
+                repository.path,
+                "compact",
+                "--progress",
+                "--log-json",
+            ]
+            if repository.remote_path:
+                cmd.extend(["--remote-path", repository.remote_path])
 
             logger.info(
                 "Starting borg2 compact",
                 job_id=job_id,
-                repository=repo.path,
+                repository=repository.path,
                 command=" ".join(cmd),
             )
 
@@ -215,34 +225,26 @@ class CompactV2Service:
 
             if job.status == "cancelled":
                 job.completed_at = datetime.utcnow()
-            elif process.returncode == 0:
-                job.status = "completed"
-                job.progress = 100
-                job.progress_message = "Compact completed successfully"
-                job.completed_at = datetime.utcnow()
-                logger.info("Borg2 compact completed", job_id=job_id)
-            elif process.returncode == 1 or (100 <= process.returncode <= 127):
-                job.status = "completed_with_warnings"
-                job.progress = 100
-                job.progress_message = (
-                    f"Compact completed with warnings (exit code {process.returncode})"
-                )
-                job.error_message = job.progress_message
-                job.completed_at = datetime.utcnow()
-                logger.warning(
-                    "Borg2 compact warnings",
-                    job_id=job_id,
-                    exit_code=process.returncode,
-                )
             else:
-                job.status = "failed"
-                job.error_message = (
-                    f"Compact failed with exit code {process.returncode}"
+                apply_compact_completion(
+                    job,
+                    repository,
+                    process.returncode,
                 )
-                job.completed_at = datetime.utcnow()
-                logger.error(
-                    "Borg2 compact failed", job_id=job_id, exit_code=process.returncode
-                )
+                if job.status == "completed":
+                    logger.info("Borg2 compact completed", job_id=job_id)
+                elif job.status == "completed_with_warnings":
+                    logger.warning(
+                        "Borg2 compact warnings",
+                        job_id=job_id,
+                        exit_code=process.returncode,
+                    )
+                else:
+                    logger.error(
+                        "Borg2 compact failed",
+                        job_id=job_id,
+                        exit_code=process.returncode,
+                    )
 
             if log_buffer:
                 log_file = (
