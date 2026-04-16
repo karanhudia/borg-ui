@@ -24,13 +24,13 @@ Free, no license key required. Includes:
 - Script library and pre/post-backup hooks
 - Prometheus metrics export
 - Two-factor authentication (TOTP) with recovery codes
+- Passkeys (biometric and hardware key login)
 - Single server deployment, no external calls required after activation
 
 ### Pro
 
 Requires a Pro license key. Includes everything in Community, plus:
 
-- Passkeys (biometric and hardware key login)
 - Borg v2 beta access
 - Up to 10 user accounts
 - Deployment on up to 3 servers

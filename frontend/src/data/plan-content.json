@@ -157,7 +157,7 @@
     },
     {
       "id": "passkeys",
-      "plan": "pro",
+      "plan": "community",
       "label": "Passkeys",
       "label_localized": {
         "es": "Passkeys",
@@ -170,7 +170,7 @@
         "de": "Melden Sie sich mit Biometrie oder einem Hardware-Sicherheitsschlüssel statt mit einem Passwort an.",
         "it": "Accedi con biometria o una chiave di sicurezza hardware invece di una password."
       },
-      "available_in": "2.0.3"
+      "availability": "included"
     },
     {
       "id": "borg_v2",
