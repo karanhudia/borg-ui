@@ -45,7 +45,7 @@ Requires an Enterprise license key. Includes everything in Pro, plus:
 - Unlimited user accounts
 - Deployment on up to 15 servers
 
-Coming soon: SSO and OIDC identity provider integration, centralized multi-instance management, immutable audit log export, approval workflows for sensitive actions.
+Coming soon: centralized multi-instance management, immutable audit log export, approval workflows for sensitive actions.
 
 ---
 
