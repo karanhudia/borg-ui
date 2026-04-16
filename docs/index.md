@@ -62,6 +62,7 @@ See [Installation Guide](installation) for other methods and security best pract
 - **[Installation Guide](installation)** - Docker Compose, Portainer, Unraid installation
 - **[Configuration Guide](configuration)** - Environment variables, volumes, permissions
 - **[Usage Guide](usage-guide)** - Create your first backup
+- **[Licensing](licensing)** - Community, Pro, and Enterprise tiers, full access period, and activation
 
 ### Features
 
