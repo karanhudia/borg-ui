@@ -237,7 +237,7 @@ See [Notifications Setup](notifications) for detailed configuration.
 
 ## License
 
-GNU General Public License v3.0 - See [LICENSE](https://github.com/karanhudia/borg-ui/blob/main/LICENSE)
+GNU Affero General Public License v3.0 - See [LICENSE](https://github.com/karanhudia/borg-ui/blob/main/LICENSE)
 
 ---
 

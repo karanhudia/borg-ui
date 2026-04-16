@@ -6,7 +6,7 @@ nav_order: 12
 
 # Licensing
 
-Borg UI is open-source software licensed under the GNU GPL v3. On top of the open-source core, it offers three tiers that unlock additional features.
+Borg UI is open-source software licensed under the GNU AGPL v3. On top of the open-source core, it offers three tiers that unlock additional features.
 
 ---
 
