@@ -4,11 +4,12 @@ from pydantic import BaseModel
 import structlog
 import asyncio
 import json
+from types import SimpleNamespace
 from typing import Optional
 from datetime import datetime
 
 from app.database.database import get_db
-from app.database.models import User, BackupJob, Repository
+from app.database.models import User, BackupJob, Repository, PruneJob, CompactJob
 from app.config import settings
 from app.core.security import (
     get_current_user,
@@ -46,6 +47,66 @@ def _resolve_backup_log_file(job: BackupJob):
             return log_file
 
     return None
+
+
+def _get_running_maintenance_job(
+    db: Session,
+    backup_job: BackupJob,
+    maintenance_status: Optional[str],
+):
+    if maintenance_status == "running_prune":
+        job_model = PruneJob
+    elif maintenance_status == "running_compact":
+        job_model = CompactJob
+    else:
+        return None
+
+    return (
+        db.query(job_model)
+        .filter(
+            job_model.repository_path == backup_job.repository,
+            job_model.status == "running",
+        )
+        .order_by(job_model.id.desc())
+        .first()
+    )
+
+
+async def _cancel_running_maintenance_job(db: Session, backup_job: BackupJob):
+    maintenance_job = _get_running_maintenance_job(
+        db, backup_job, backup_job.maintenance_status
+    )
+    if not maintenance_job:
+        return None
+
+    repo = _get_job_repository(db, backup_job.repository)
+
+    if backup_job.maintenance_status == "running_prune":
+        backup_job.maintenance_status = "prune_failed"
+        if repo and getattr(repo, "borg_version", 1) == 2:
+            from app.services.v2.prune_service import prune_v2_service
+
+            process_killed = await prune_v2_service.cancel_prune(maintenance_job.id)
+        else:
+            from app.services.prune_service import prune_service
+
+            process_killed = await prune_service.cancel_prune(maintenance_job.id)
+    elif backup_job.maintenance_status == "running_compact":
+        backup_job.maintenance_status = "compact_failed"
+        if repo and getattr(repo, "borg_version", 1) == 2:
+            from app.services.v2.compact_service import compact_v2_service
+
+            process_killed = await compact_v2_service.cancel_compact(maintenance_job.id)
+        else:
+            from app.services.compact_service import compact_service
+
+            process_killed = await compact_service.cancel_compact(maintenance_job.id)
+    else:
+        return None
+
+    maintenance_job.status = "cancelled"
+    maintenance_job.completed_at = datetime.utcnow()
+    return SimpleNamespace(job=maintenance_job, process_killed=process_killed)
 
 
 # Pydantic models
@@ -271,25 +332,28 @@ async def cancel_backup(
         if repo:
             check_repo_access(db, current_user, repo, "operator")
 
-        if job.status != "running":
+        if job.status == "running":
+            process_killed = await backup_service.cancel_backup(job_id)
+            job.status = "cancelled"
+            job.completed_at = datetime.utcnow()
+            if process_killed:
+                job.error_message = '{"key": "backend.errors.backup.cancelledByUser"}'
+            else:
+                job.error_message = (
+                    '{"key": "backend.errors.backup.cancelledByUserProcessNotFound"}'
+                )
+        elif job.maintenance_status in {"running_prune", "running_compact"}:
+            maintenance_result = await _cancel_running_maintenance_job(db, job)
+            if maintenance_result is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"key": "backend.errors.backup.canOnlyCancelRunningJobs"},
+                )
+            process_killed = maintenance_result.process_killed
+        else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"key": "backend.errors.backup.canOnlyCancelRunningJobs"},
-            )
-
-        # Try to terminate the actual process
-        from app.services.backup_service import backup_service
-
-        process_killed = await backup_service.cancel_backup(job_id)
-
-        # Update job status in database
-        job.status = "cancelled"
-        job.completed_at = datetime.utcnow()
-        if process_killed:
-            job.error_message = '{"key": "backend.errors.backup.cancelledByUser"}'
-        else:
-            job.error_message = (
-                '{"key": "backend.errors.backup.cancelledByUserProcessNotFound"}'
             )
         db.commit()
 

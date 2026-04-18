@@ -47,6 +47,36 @@ class CompactV2Service:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes: dict = {}
 
+    async def cancel_compact(self, job_id: int) -> bool:
+        """Cancel a running borg2 compact job by terminating its tracked process."""
+        if job_id not in self.running_processes:
+            logger.warning(
+                "No running borg2 compact process found for job", job_id=job_id
+            )
+            return False
+
+        process = self.running_processes[job_id]
+        try:
+            process.terminate()
+            logger.info(
+                "Sent SIGTERM to borg2 compact process",
+                job_id=job_id,
+                pid=process.pid,
+            )
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+            return True
+        except Exception as e:
+            logger.error(
+                "Failed to cancel borg2 compact process",
+                job_id=job_id,
+                error=str(e),
+            )
+            return False
+
     async def execute_compact(self, job_id: int, repository_id: int, _db=None):
         """Execute borg2 compact with progress streaming into a CompactJob record."""
         db = SessionLocal()

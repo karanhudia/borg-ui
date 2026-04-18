@@ -11,7 +11,14 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.borg_router import BorgRouter
-from app.database.models import CheckJob, CompactJob, BackupJob, RestoreJob, Repository
+from app.database.models import (
+    CheckJob,
+    CompactJob,
+    BackupJob,
+    PruneJob,
+    RestoreJob,
+    Repository,
+)
 
 logger = structlog.get_logger()
 
@@ -150,6 +157,9 @@ def cleanup_orphaned_jobs(db: Session):
     # Find all running check jobs
     running_check_jobs = db.query(CheckJob).filter(CheckJob.status == "running").all()
 
+    # Find all running prune jobs
+    running_prune_jobs = db.query(PruneJob).filter(PruneJob.status == "running").all()
+
     # Find all running compact jobs
     running_compact_jobs = (
         db.query(CompactJob).filter(CompactJob.status == "running").all()
@@ -159,6 +169,7 @@ def cleanup_orphaned_jobs(db: Session):
         len(running_backup_jobs)
         + len(running_restore_jobs)
         + len(running_check_jobs)
+        + len(running_prune_jobs)
         + len(running_compact_jobs)
     )
     logger.info(
@@ -166,6 +177,7 @@ def cleanup_orphaned_jobs(db: Session):
         backup_jobs=len(running_backup_jobs),
         restore_jobs=len(running_restore_jobs),
         check_jobs=len(running_check_jobs),
+        prune_jobs=len(running_prune_jobs),
         compact_jobs=len(running_compact_jobs),
     )
 
@@ -260,6 +272,38 @@ def cleanup_orphaned_jobs(db: Session):
                 pid=job.process_pid,
             )
 
+    # Process prune jobs
+    for job in running_prune_jobs:
+        job.status = "failed"
+        job.error_message = json.dumps(
+            {"key": "backend.errors.service.containerRestartedDuringOperation"}
+        )
+        job.completed_at = datetime.utcnow()
+
+        logger.info(
+            "Orphaned prune job detected",
+            job_id=job.id,
+            repository_id=job.repository_id,
+        )
+
+        affected_backup_jobs = (
+            db.query(BackupJob)
+            .filter(
+                BackupJob.repository == job.repository_path,
+                BackupJob.maintenance_status == "running_prune",
+            )
+            .all()
+        )
+
+        for backup_job in affected_backup_jobs:
+            backup_job.maintenance_status = "prune_failed"
+            logger.info(
+                "Marked backup maintenance state as failed after orphaned prune",
+                backup_job_id=backup_job.id,
+                prune_job_id=job.id,
+                repository=backup_job.repository,
+            )
+
     # Process compact jobs
     for job in running_compact_jobs:
         if not is_process_alive(job.process_pid, job.process_start_time):
@@ -313,6 +357,24 @@ def cleanup_orphaned_jobs(db: Session):
                             "key": "backend.errors.service.warningRemoteProcessMayBeRunning"
                         }
                     )
+
+            affected_backup_jobs = (
+                db.query(BackupJob)
+                .filter(
+                    BackupJob.repository == job.repository_path,
+                    BackupJob.maintenance_status == "running_compact",
+                )
+                .all()
+            )
+
+            for backup_job in affected_backup_jobs:
+                backup_job.maintenance_status = "compact_failed"
+                logger.info(
+                    "Marked backup maintenance state as failed after orphaned compact",
+                    backup_job_id=backup_job.id,
+                    compact_job_id=job.id,
+                    repository=backup_job.repository,
+                )
         else:
             # Process is still alive! This is unexpected
             logger.warning(

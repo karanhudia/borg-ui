@@ -20,6 +20,31 @@ class PruneService:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.running_processes = {}  # Track running processes by job_id
 
+    async def cancel_prune(self, job_id: int) -> bool:
+        """Cancel a running prune job by terminating its tracked process."""
+        if job_id not in self.running_processes:
+            logger.warning("No running prune process found for job", job_id=job_id)
+            return False
+
+        process = self.running_processes[job_id]
+        try:
+            process.terminate()
+            logger.info("Sent SIGTERM to prune process", job_id=job_id, pid=process.pid)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                logger.warning(
+                    "Force killed prune process (SIGKILL)",
+                    job_id=job_id,
+                    pid=process.pid,
+                )
+                await process.wait()
+            return True
+        except Exception as e:
+            logger.error("Failed to cancel prune process", job_id=job_id, error=str(e))
+            return False
+
     async def execute_prune(
         self,
         job_id: int,
