@@ -155,7 +155,7 @@ class BorgWebUITester:
                     )
 
                     # Test getting user info with token
-                    headers = {"Authorization": f"Bearer {self.auth_token}"}
+                    headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
                     user_response = self.session.get(
                         f"{self.base_url}/api/auth/me", headers=headers, timeout=5
                     )
@@ -208,7 +208,7 @@ class BorgWebUITester:
             self.log_test("Protected Endpoints", False, "No auth token available")
             return False
 
-        headers = {"Authorization": f"Bearer {self.auth_token}"}
+        headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
         protected_routes = [
             "/api/dashboard/status",
             "/api/dashboard/metrics",
@@ -248,7 +248,7 @@ class BorgWebUITester:
             return False
 
         headers = {
-            "Authorization": f"Bearer {self.auth_token}",
+            "X-Borg-Authorization": f"Bearer {self.auth_token}",
             "Content-Type": "application/json",
         }
 
@@ -284,7 +284,7 @@ class BorgWebUITester:
             self.log_test("System Info", False, "No auth token available")
             return False
 
-        headers = {"Authorization": f"Bearer {self.auth_token}"}
+        headers = {"X-Borg-Authorization": f"Bearer {self.auth_token}"}
 
         try:
             # Test system info
@@ -337,7 +337,7 @@ class BorgWebUITester:
             return False
 
         headers = {
-            "Authorization": f"Bearer {self.auth_token}",
+            "X-Borg-Authorization": f"Bearer {self.auth_token}",
             "Content-Type": "application/json",
         }
 

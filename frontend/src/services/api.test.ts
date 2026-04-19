@@ -38,7 +38,7 @@ describe('API Request Interceptor', () => {
     localStorageMock['access_token'] = 'test-token-123'
 
     mock.onGet('/test').reply((config) => {
-      // Verify the Authorization header was added
+      // Verify the X-Borg-Authorization header was added
       expect(config.headers?.['X-Borg-Authorization']).toBe('Bearer test-token-123')
       return [200, { success: true }]
     })
@@ -52,7 +52,7 @@ describe('API Request Interceptor', () => {
     // No token in localStorage
 
     mock.onGet('/test').reply((config) => {
-      // Authorization header should not be present
+      // X-Borg-Authorization header should not be present
       expect(config.headers?.['X-Borg-Authorization']).toBeUndefined()
       return [200, { success: true }]
     })

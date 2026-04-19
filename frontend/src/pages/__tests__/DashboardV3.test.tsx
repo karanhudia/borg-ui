@@ -174,12 +174,12 @@ describe('DashboardV3', () => {
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/dashboard/overview',
         expect.objectContaining({
-          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+          headers: expect.objectContaining({ 'X-Borg-Authorization': 'Bearer test-token' }),
         })
       )
     })
 
-    it('sends the stored access token in the Authorization header', async () => {
+    it('sends the stored access token in the X-Borg-Authorization header', async () => {
       vi.stubGlobal('localStorage', {
         getItem: (key: string) => (key === 'access_token' ? 'my-secret-token' : null),
       })
@@ -190,7 +190,7 @@ describe('DashboardV3', () => {
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
       const [, options] = fetchMock.mock.calls[0]
-      expect(options.headers.Authorization).toBe('Bearer my-secret-token')
+      expect(options.headers['X-Borg-Authorization']).toBe('Bearer my-secret-token')
     })
 
     it('fetches exactly once on initial render', async () => {
