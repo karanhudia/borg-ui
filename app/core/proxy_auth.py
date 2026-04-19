@@ -6,7 +6,7 @@ from app.config import settings
 
 
 def inspect_proxy_auth_config() -> dict[str, Any]:
-    if not settings.disable_authentication:
+    if not settings.disable_authentication or settings.allow_insecure_no_auth:
         return {"enabled": False, "warnings": []}
 
     warnings: list[dict[str, str]] = []

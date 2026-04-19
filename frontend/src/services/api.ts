@@ -4,11 +4,12 @@ import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
 import { attachAccessTokenHeader } from './authHeaders'
 
-// Track if proxy auth is enabled (set during auth config check)
-let proxyAuthMode = false
+export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
-export const setProxyAuthMode = (enabled: boolean) => {
-  proxyAuthMode = enabled
+let authTransportMode: AuthTransportMode = 'jwt'
+
+export const setAuthTransportMode = (mode: AuthTransportMode) => {
+  authTransportMode = mode
 }
 
 const api = axios.create({
@@ -39,7 +40,7 @@ api.interceptors.response.use(
       error.config?.url !== '/auth/login/totp' &&
       error.config?.url !== '/auth/passkeys/authenticate/verify' &&
       error.config?.url !== '/auth/config' &&
-      !proxyAuthMode // Don't redirect in proxy auth mode
+      authTransportMode === 'jwt'
     ) {
       localStorage.removeItem('access_token')
       window.location.href = `${BASE_PATH}/login`
@@ -182,6 +183,7 @@ export interface ProxyAuthWarning {
 
 export interface AuthConfigResponse {
   proxy_auth_enabled: boolean
+  insecure_no_auth_enabled: boolean
   authentication_required: boolean
   proxy_auth_header?: string | null
   proxy_auth_role_header?: string | null

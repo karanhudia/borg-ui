@@ -696,6 +696,7 @@ class TestProxyAuthentication:
         assert response.status_code == 200
         data = response.json()
         assert "proxy_auth_enabled" in data
+        assert "insecure_no_auth_enabled" in data
         assert "authentication_required" in data
         assert "proxy_auth_header" in data
         assert "proxy_auth_role_header" in data
@@ -704,6 +705,7 @@ class TestProxyAuthentication:
         assert "proxy_auth_full_name_header" in data
         assert "proxy_auth_health" in data
         assert data["proxy_auth_enabled"] is False
+        assert data["insecure_no_auth_enabled"] is False
         assert data["authentication_required"] is True
         assert data["proxy_auth_header"] is None
         assert data["proxy_auth_role_header"] is None
@@ -725,6 +727,7 @@ class TestProxyAuthentication:
         assert response.status_code == 200
         data = response.json()
         assert data["proxy_auth_enabled"] is True
+        assert data["insecure_no_auth_enabled"] is False
         assert data["authentication_required"] is False
         assert data["proxy_auth_header"] == "X-Forwarded-User"
         assert data["proxy_auth_role_header"] is None
@@ -732,6 +735,53 @@ class TestProxyAuthentication:
         assert data["proxy_auth_email_header"] is None
         assert data["proxy_auth_full_name_header"] is None
         assert data["proxy_auth_health"]["enabled"] is True
+
+    def test_auth_config_endpoint_insecure_no_auth_mode(
+        self, test_client: TestClient, monkeypatch
+    ):
+        """Test auth config endpoint exposes insecure no-auth mode separately."""
+        from app import config
+
+        monkeypatch.setattr(config.settings, "allow_insecure_no_auth", True)
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+
+        response = test_client.get("/api/auth/config")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["proxy_auth_enabled"] is False
+        assert data["insecure_no_auth_enabled"] is True
+        assert data["authentication_required"] is False
+        assert data["proxy_auth_header"] is None
+        assert data["proxy_auth_health"] == {"enabled": False, "warnings": []}
+
+    def test_insecure_no_auth_uses_local_admin_without_proxy_header(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        """In insecure mode, protected endpoints should resolve to a local user without headers."""
+        from app import config
+        from app.database.models import User
+        from app.core.security import get_password_hash
+
+        monkeypatch.setattr(config.settings, "allow_insecure_no_auth", True)
+        test_db.add(
+            User(
+                username="admin",
+                password_hash=get_password_hash("admin123"),
+                email="admin@example.com",
+                is_active=True,
+                role="admin",
+                must_change_password=False,
+            )
+        )
+        test_db.commit()
+
+        response = test_client.get("/api/auth/me")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == "admin"
+        assert data["role"] == "admin"
 
     def test_proxy_auth_with_header(
         self, test_client: TestClient, test_db, monkeypatch

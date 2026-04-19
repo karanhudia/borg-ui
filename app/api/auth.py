@@ -63,6 +63,7 @@ class Token(BaseModel):
 
 class AuthConfig(BaseModel):
     proxy_auth_enabled: bool
+    insecure_no_auth_enabled: bool
     authentication_required: bool
     proxy_auth_header: Optional[str] = None
     proxy_auth_role_header: Optional[str] = None
@@ -269,7 +270,11 @@ def _verify_totp_or_recovery_code(user: User, code: str) -> bool:
 
 
 def _ensure_local_password_user(user: User) -> None:
-    if settings.disable_authentication or not user.password_hash:
+    if (
+        settings.disable_authentication
+        or settings.allow_insecure_no_auth
+        or not user.password_hash
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"key": "backend.errors.auth.localPasswordRequired"},
@@ -303,29 +308,32 @@ async def get_auth_config():
     """Get authentication configuration for frontend"""
     from app.core.proxy_auth import inspect_proxy_auth_config
 
+    proxy_auth_enabled = (
+        settings.disable_authentication and not settings.allow_insecure_no_auth
+    )
+
     return {
-        "proxy_auth_enabled": settings.disable_authentication,
-        "authentication_required": not settings.disable_authentication,
+        "proxy_auth_enabled": proxy_auth_enabled,
+        "insecure_no_auth_enabled": settings.allow_insecure_no_auth,
+        "authentication_required": not (
+            settings.disable_authentication or settings.allow_insecure_no_auth
+        ),
         "proxy_auth_header": (
-            settings.proxy_auth_header if settings.disable_authentication else None
+            settings.proxy_auth_header if proxy_auth_enabled else None
         ),
         "proxy_auth_role_header": (
-            settings.proxy_auth_role_header if settings.disable_authentication else None
+            settings.proxy_auth_role_header if proxy_auth_enabled else None
         ),
         "proxy_auth_all_repositories_role_header": (
             settings.proxy_auth_all_repositories_role_header
-            if settings.disable_authentication
+            if proxy_auth_enabled
             else None
         ),
         "proxy_auth_email_header": (
-            settings.proxy_auth_email_header
-            if settings.disable_authentication
-            else None
+            settings.proxy_auth_email_header if proxy_auth_enabled else None
         ),
         "proxy_auth_full_name_header": (
-            settings.proxy_auth_full_name_header
-            if settings.disable_authentication
-            else None
+            settings.proxy_auth_full_name_header if proxy_auth_enabled else None
         ),
         "proxy_auth_health": inspect_proxy_auth_config(),
     }

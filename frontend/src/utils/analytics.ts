@@ -9,7 +9,7 @@
  */
 
 import { authAPI } from '../services/api'
-import { fetchJsonWithAuth } from '../services/authRequest'
+import { fetchJsonForAuthMode } from '../services/authRequest'
 
 const UMAMI_WEBSITE_ID = '870dcd0c-2fa3-4f78-8180-d0d7895c5d8c'
 const UMAMI_SCRIPT_URL = 'https://cloud.umami.is/script.js'
@@ -97,17 +97,22 @@ export const loadUserPreference = async (): Promise<void> => {
     const authConfigResponse = await authAPI.getAuthConfig()
     const authConfig = authConfigResponse.data
     const proxyAuthEnabled = authConfig.proxy_auth_enabled
+    const insecureNoAuthEnabled = authConfig.insecure_no_auth_enabled
 
     const token = localStorage.getItem('access_token')
 
-    if (!token && !proxyAuthEnabled) {
+    if (!token && !proxyAuthEnabled && !insecureNoAuthEnabled) {
       userOptedOut = true
       consentGiven = false
       preferenceLoaded = true
       return
     }
 
-    const response = await fetchJsonWithAuth('/settings/preferences')
+    const response = await fetchJsonForAuthMode(
+      '/settings/preferences',
+      {},
+      insecureNoAuthEnabled ? 'insecure-no-auth' : proxyAuthEnabled ? 'proxy' : 'jwt'
+    )
     const data = await response.json()
     userOptedOut = !data.preferences?.analytics_enabled
     consentGiven = data.preferences?.analytics_consent_given ?? false

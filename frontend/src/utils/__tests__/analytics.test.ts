@@ -25,10 +25,17 @@ const { getAuthConfigMock } = vi.hoisted(() => ({
   getAuthConfigMock: vi.fn(),
 }))
 
+const fetchJsonForAuthModeMock = vi.fn()
+
 vi.mock('../../services/api', () => ({
   authAPI: {
     getAuthConfig: getAuthConfigMock,
   },
+}))
+
+vi.mock('../../services/authRequest', () => ({
+  fetchJsonForAuthMode: (path: string, init?: RequestInit, mode?: string) =>
+    fetchJsonForAuthModeMock(path, init, mode),
 }))
 
 interface UmamiWindow extends Window {
@@ -52,6 +59,7 @@ describe('analytics (umami)', () => {
       configurable: true,
     })
     getAuthConfigMock.mockReset()
+    fetchJsonForAuthModeMock.mockReset()
   })
 
   afterEach(() => {
@@ -118,7 +126,7 @@ describe('analytics (umami)', () => {
     it('handles proxy auth mode without token', async () => {
       Storage.prototype.getItem = vi.fn().mockReturnValue(null)
       getAuthConfigMock.mockResolvedValueOnce({ data: { proxy_auth_enabled: true } })
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      fetchJsonForAuthModeMock.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           preferences: { analytics_enabled: true, analytics_consent_given: true },
@@ -128,6 +136,29 @@ describe('analytics (umami)', () => {
       await loadUserPreference()
 
       expect(arePreferencesLoaded()).toBe(true)
+    })
+
+    it('loads analytics preference in insecure no-auth mode without a token', async () => {
+      Storage.prototype.getItem = vi.fn().mockReturnValue(null)
+      getAuthConfigMock.mockResolvedValueOnce({
+        data: { proxy_auth_enabled: false, insecure_no_auth_enabled: true },
+      })
+      fetchJsonForAuthModeMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          preferences: { analytics_enabled: true, analytics_consent_given: true },
+        }),
+      } as Response)
+
+      await loadUserPreference()
+
+      expect(fetchJsonForAuthModeMock).toHaveBeenCalledWith(
+        '/settings/preferences',
+        {},
+        'insecure-no-auth'
+      )
+      expect(arePreferencesLoaded()).toBe(true)
+      expect(hasConsentBeenGiven()).toBe(true)
     })
   })
 

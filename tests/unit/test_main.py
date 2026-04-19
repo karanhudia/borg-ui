@@ -223,6 +223,45 @@ class TestProxyAuthStartupWarnings:
 
 
 @pytest.mark.unit
+class TestInsecureNoAuthStartupWarnings:
+    def test_no_insecure_warning_when_disabled(self):
+        with (
+            patch("app.main.settings.allow_insecure_no_auth", False),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_insecure_no_auth_warning
+
+            _log_insecure_no_auth_warning()
+
+        mock_warning.assert_not_called()
+
+    def test_warns_when_insecure_no_auth_enabled(self):
+        with (
+            patch("app.main.settings.allow_insecure_no_auth", True),
+            patch("app.main.settings.disable_authentication", False),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_insecure_no_auth_warning
+
+            _log_insecure_no_auth_warning()
+
+        mock_warning.assert_called_once()
+        assert mock_warning.call_args.kwargs["code"] == "insecure_no_auth_enabled"
+
+    def test_warns_when_insecure_no_auth_conflicts_with_proxy_auth(self):
+        with (
+            patch("app.main.settings.allow_insecure_no_auth", True),
+            patch("app.main.settings.disable_authentication", True),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_insecure_no_auth_warning
+
+            _log_insecure_no_auth_warning()
+
+        assert mock_warning.call_count == 2
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 class TestShutdownEvent:
     """Test application shutdown event"""

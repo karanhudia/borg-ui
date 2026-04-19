@@ -154,9 +154,12 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)) -> U
     if cached_user is not None:
         return cached_user
 
-    # Check if proxy authentication is enabled
+    if settings.allow_insecure_no_auth:
+        user = _get_current_user_insecure_no_auth(db)
+        request.state.current_user = user
+        return user
+
     if settings.disable_authentication:
-        # Use proxy authentication
         user = await get_current_user_proxy(request, db)
         request.state.current_user = user
         return user
@@ -424,10 +427,42 @@ def _get_active_user_from_token(
     return user
 
 
+def _get_current_user_insecure_no_auth(db: Session) -> User:
+    """Resolve a deterministic local user for intentionally insecure anonymous mode."""
+    user = (
+        db.query(User)
+        .filter(User.username == "admin", User.is_active.is_(True))
+        .first()
+    )
+    if user is None:
+        user = (
+            db.query(User)
+            .filter(User.role == "admin", User.is_active.is_(True))
+            .order_by(User.id.asc())
+            .first()
+        )
+    if user is None:
+        user = (
+            db.query(User)
+            .filter(User.is_active.is_(True))
+            .order_by(User.id.asc())
+            .first()
+        )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Insecure no-auth mode is enabled but no active local user exists",
+        )
+    return user
+
+
 async def get_current_download_user(
     request: Request, db: Session = Depends(get_db)
 ) -> User:
     """Authenticate download endpoints for both JWT and proxy-auth modes."""
+    if settings.allow_insecure_no_auth:
+        return _get_current_user_insecure_no_auth(db)
+
     if settings.disable_authentication:
         return await get_current_user_proxy(request, db)
 

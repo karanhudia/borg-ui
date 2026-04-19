@@ -1,5 +1,12 @@
 import React, { useState, useEffect, createContext, useContext } from 'react'
-import { authAPI, setProxyAuthMode, AuthUserResponse, ProxyAuthWarning } from '../services/api'
+import {
+  authAPI,
+  setAuthTransportMode,
+  AuthTransportMode,
+  AuthUserResponse,
+  ProxyAuthWarning,
+} from '../services/api'
+import { fetchJsonForAuthMode, setFetchAuthMode } from '../services/authRequest'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { clearRecentPasswordLogin, markRecentPasswordLogin } from '../utils/passkeyPrompt'
 import { getDefaultPasskeyDeviceName } from '../utils/passkeyDeviceName'
@@ -15,6 +22,7 @@ interface AuthContextType {
   hasGlobalPermission: (permission: string) => boolean
   mustChangePassword: boolean
   proxyAuthEnabled: boolean
+  insecureNoAuthEnabled: boolean
   proxyAuthHeader: string | null
   proxyAuthWarnings: ProxyAuthWarning[]
   authError: string | null
@@ -47,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [proxyAuthEnabled, setProxyAuthEnabled] = useState(false)
+  const [insecureNoAuthEnabled, setInsecureNoAuthEnabled] = useState(false)
   const [proxyAuthHeader, setProxyAuthHeader] = useState<string | null>(null)
   const [proxyAuthWarnings, setProxyAuthWarnings] = useState<ProxyAuthWarning[]>([])
   const [authError, setAuthError] = useState<string | null>(null)
@@ -64,7 +73,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRecentPasswordForPasskeyPrompt(password)
   }
 
-  const refreshUser = async () => {
+  const refreshUser = async (mode: AuthTransportMode = 'jwt') => {
+    if (mode !== 'jwt') {
+      const response = await fetchJsonForAuthMode('/auth/me', {}, mode)
+
+      if (!response.ok) {
+        const error = new Error(`Failed to fetch profile (${response.status})`)
+        ;(error as Error & { response?: { status: number; data?: unknown } }).response = {
+          status: response.status,
+          data: await response.json().catch(() => undefined),
+        }
+        throw error
+      }
+
+      const profile = (await response.json()) as User
+      setUser(profile)
+      return
+    }
+
     const profileResponse = await authAPI.getProfile()
     setUser(profileResponse.data)
   }
@@ -96,14 +122,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // First, check if proxy authentication is enabled
         const configResponse = await authAPI.getAuthConfig()
-        const { proxy_auth_enabled, proxy_auth_header, proxy_auth_health } = configResponse.data
+        const {
+          proxy_auth_enabled,
+          insecure_no_auth_enabled,
+          proxy_auth_header,
+          proxy_auth_health,
+        } = configResponse.data
+        const authTransportMode: AuthTransportMode = insecure_no_auth_enabled
+          ? 'insecure-no-auth'
+          : proxy_auth_enabled
+            ? 'proxy'
+            : 'jwt'
+
         setProxyAuthEnabled(proxy_auth_enabled)
+        setInsecureNoAuthEnabled(insecure_no_auth_enabled ?? false)
         setProxyAuthHeader(proxy_auth_header ?? null)
         setProxyAuthWarnings(proxy_auth_health?.warnings ?? [])
-        setProxyAuthMode(proxy_auth_enabled) // Update API interceptor
+        setAuthTransportMode(authTransportMode)
+        setFetchAuthMode(authTransportMode)
         setAuthError(null)
 
-        if (proxy_auth_enabled) {
+        if (insecure_no_auth_enabled) {
+          localStorage.removeItem('access_token')
+          try {
+            await refreshUser('insecure-no-auth')
+            setAuthError(null)
+          } catch (error) {
+            console.error('Failed to get profile in insecure no-auth mode:', error)
+            const { detail } = extractAuthError(error)
+            setUser(null)
+            setAuthError(
+              translateBackendKey(
+                detail as
+                  | string
+                  | { key: string; params?: Record<string, unknown> }
+                  | null
+                  | undefined
+              ) || 'Insecure no-auth mode is enabled but Borg UI could not resolve a local user.'
+            )
+          }
+        } else if (proxy_auth_enabled) {
           // Proxy auth mode: trust the reverse proxy, but fail closed when no identity header arrives.
           let retries = 3
           let success = false
@@ -162,7 +220,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Failed to check auth config:', error)
         // Default to JWT auth mode if config check fails
+        setAuthTransportMode('jwt')
+        setFetchAuthMode('jwt')
         setProxyAuthEnabled(false)
+        setInsecureNoAuthEnabled(false)
         setProxyAuthWarnings([])
         const token = localStorage.getItem('access_token')
         if (token) {
@@ -302,6 +363,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     hasGlobalPermission,
     mustChangePassword: user?.must_change_password || false,
     proxyAuthEnabled,
+    insecureNoAuthEnabled,
     proxyAuthHeader,
     proxyAuthWarnings,
     authError,

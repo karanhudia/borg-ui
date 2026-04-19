@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     disable_authentication: bool = (
         False  # Disable built-in auth, trust reverse proxy headers
     )
+    allow_insecure_no_auth: bool = False  # Disable all auth checks and impersonate a local user; unsafe outside local/dev use
     proxy_auth_header: str = (
         "X-Forwarded-User"  # Header containing authenticated username
     )

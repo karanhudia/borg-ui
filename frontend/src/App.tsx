@@ -24,6 +24,7 @@ function App() {
     isLoading,
     mustChangePassword,
     proxyAuthEnabled,
+    insecureNoAuthEnabled,
     proxyAuthHeader,
     proxyAuthWarnings,
     authError,
@@ -46,7 +47,7 @@ function App() {
     }
   }, [isAuthenticated, user?.username])
 
-  const shouldUseAuthShell = !isAuthenticated || mustChangePassword
+  const shouldUseAuthShell = !insecureNoAuthEnabled && (!isAuthenticated || mustChangePassword)
 
   const authShell = (
     <>
@@ -114,6 +115,26 @@ function App() {
         </div>
       )
     }
+
+    if (insecureNoAuthEnabled) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          {authError ? (
+            <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert size={22} className="shrink-0 text-slate-500" />
+                <h1 className="text-2xl font-semibold text-slate-900">
+                  Anonymous access unavailable
+                </h1>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{authError}</p>
+            </div>
+          ) : (
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+          )}
+        </div>
+      )
+    }
   }
 
   if (shouldUseAuthShell) {
@@ -125,6 +146,9 @@ function App() {
       <UmamiTracker />
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        {insecureNoAuthEnabled ? (
+          <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+        ) : null}
         <Route path="/dashboard" element={<Dashboard />} />
         <Route
           path="/backup"

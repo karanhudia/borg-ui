@@ -107,6 +107,24 @@ def _log_proxy_auth_security_warnings() -> None:
         )
 
 
+def _log_insecure_no_auth_warning() -> None:
+    if not settings.allow_insecure_no_auth:
+        return
+
+    logger.warning(
+        "Insecure no-auth mode enabled",
+        code="insecure_no_auth_enabled",
+        message="ALLOW_INSECURE_NO_AUTH is enabled. Borg UI will allow unauthenticated access and impersonate a local user. Use only for local development or explicitly trusted environments.",
+    )
+
+    if settings.disable_authentication:
+        logger.warning(
+            "Proxy auth setting ignored because insecure no-auth is enabled",
+            code="auth_mode_conflict",
+            message="DISABLE_AUTHENTICATION is ignored while ALLOW_INSECURE_NO_AUTH is enabled. Disable one of the modes so the deployment intent is unambiguous.",
+        )
+
+
 # Configure structured logging
 import logging
 
@@ -206,6 +224,7 @@ app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 async def startup_event():
     """Initialize application on startup"""
     logger.info("Starting Borg Web UI")
+    _log_insecure_no_auth_warning()
     _log_proxy_auth_security_warnings()
     from app.database.database import SessionLocal
 

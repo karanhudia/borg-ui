@@ -10,7 +10,9 @@ const beginPasskeyAuthenticationApiMock = vi.fn()
 const finishPasskeyAuthenticationApiMock = vi.fn()
 const skipPasswordSetupApiMock = vi.fn()
 const logoutApiMock = vi.fn()
-const setProxyAuthModeMock = vi.fn()
+const setAuthTransportModeMock = vi.fn()
+const setFetchAuthModeMock = vi.fn()
+const fetchJsonForAuthModeMock = vi.fn()
 const getPasskeyAssertionMock = vi.fn()
 
 vi.mock('../../services/api', () => ({
@@ -26,7 +28,14 @@ vi.mock('../../services/api', () => ({
     skipPasswordSetup: () => skipPasswordSetupApiMock(),
     logout: () => logoutApiMock(),
   },
-  setProxyAuthMode: (enabled: boolean) => setProxyAuthModeMock(enabled),
+  setAuthTransportMode: (mode: 'jwt' | 'proxy' | 'insecure-no-auth') =>
+    setAuthTransportModeMock(mode),
+}))
+
+vi.mock('../../services/authRequest', () => ({
+  fetchJsonForAuthMode: (path: string, init?: RequestInit, mode?: string) =>
+    fetchJsonForAuthModeMock(path, init, mode),
+  setFetchAuthMode: (mode: 'jwt' | 'proxy' | 'insecure-no-auth') => setFetchAuthModeMock(mode),
 }))
 
 vi.mock('../../utils/webauthn', () => ({
@@ -39,6 +48,7 @@ function AuthProbe() {
     isAuthenticated,
     isLoading,
     proxyAuthEnabled,
+    insecureNoAuthEnabled,
     proxyAuthHeader,
     proxyAuthWarnings,
     authError,
@@ -54,6 +64,7 @@ function AuthProbe() {
       <div>loading:{String(isLoading)}</div>
       <div>authenticated:{String(isAuthenticated)}</div>
       <div>proxy:{String(proxyAuthEnabled)}</div>
+      <div>insecure:{String(insecureNoAuthEnabled)}</div>
       <div>proxy-header:{proxyAuthHeader ?? 'none'}</div>
       <div>
         proxy-warnings:{proxyAuthWarnings.map((warning) => warning.code).join(',') || 'none'}
@@ -86,6 +97,7 @@ describe('AuthProvider', () => {
     getAuthConfigMock.mockResolvedValue({
       data: {
         proxy_auth_enabled: false,
+        insecure_no_auth_enabled: false,
         proxy_auth_header: null,
         proxy_auth_health: { enabled: false, warnings: [] },
       },
@@ -117,6 +129,7 @@ describe('AuthProvider', () => {
     })
     getPasskeyAssertionMock.mockResolvedValue({ id: 'credential-id' })
     logoutApiMock.mockResolvedValue({})
+    fetchJsonForAuthModeMock.mockReset()
   })
 
   it('hydrates a JWT session from an existing access token', async () => {
@@ -129,10 +142,51 @@ describe('AuthProvider', () => {
     )
 
     await waitFor(() => {
-      expect(setProxyAuthModeMock).toHaveBeenCalledWith(false)
+      expect(setAuthTransportModeMock).toHaveBeenCalledWith('jwt')
+      expect(setFetchAuthModeMock).toHaveBeenCalledWith('jwt')
+      expect(screen.getByText('insecure:false')).toBeInTheDocument()
       expect(getProfileMock).toHaveBeenCalledTimes(1)
       expect(screen.getByText('authenticated:true')).toBeInTheDocument()
       expect(screen.getByText('proxy-warnings:none')).toBeInTheDocument()
+      expect(screen.getByText('user:admin')).toBeInTheDocument()
+    })
+  })
+
+  it('loads the profile without a JWT in insecure no-auth mode', async () => {
+    getAuthConfigMock.mockResolvedValue({
+      data: {
+        proxy_auth_enabled: false,
+        insecure_no_auth_enabled: true,
+        proxy_auth_header: null,
+        proxy_auth_health: { enabled: false, warnings: [] },
+      },
+    })
+    localStorage.setItem('access_token', 'stale-token')
+    fetchJsonForAuthModeMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: 1,
+        username: 'admin',
+        email: 'admin@example.com',
+        role: 'admin',
+        all_repositories_role: null,
+        global_permissions: ['settings.users.manage'],
+      }),
+    })
+
+    renderWithProviders(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    )
+
+    await waitFor(() => {
+      expect(setAuthTransportModeMock).toHaveBeenCalledWith('insecure-no-auth')
+      expect(setFetchAuthModeMock).toHaveBeenCalledWith('insecure-no-auth')
+      expect(screen.getByText('insecure:true')).toBeInTheDocument()
+      expect(fetchJsonForAuthModeMock).toHaveBeenCalledWith('/auth/me', {}, 'insecure-no-auth')
+      expect(localStorage.getItem('access_token')).toBeNull()
+      expect(screen.getByText('authenticated:true')).toBeInTheDocument()
       expect(screen.getByText('user:admin')).toBeInTheDocument()
     })
   })
@@ -184,7 +238,8 @@ describe('AuthProvider', () => {
       await vi.runAllTimersAsync()
 
       await waitFor(() => {
-        expect(setProxyAuthModeMock).toHaveBeenCalledWith(true)
+        expect(setAuthTransportModeMock).toHaveBeenCalledWith('proxy')
+        expect(setFetchAuthModeMock).toHaveBeenCalledWith('proxy')
         expect(screen.getByText('proxy:true')).toBeInTheDocument()
         expect(screen.getByText('proxy-header:X-Forwarded-User')).toBeInTheDocument()
         expect(screen.getByText('proxy-warnings:none')).toBeInTheDocument()
