@@ -72,7 +72,9 @@ describe('analytics (umami)', () => {
     })
 
     it('loads analytics preference from API when token exists', async () => {
-      Storage.prototype.getItem = vi.fn().mockReturnValue('test-token')
+      const getItemSpy = vi.spyOn(localStorage, 'getItem').mockImplementation((key) =>
+        key === 'access_token' ? 'test-token' : null
+      )
       global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
@@ -86,9 +88,17 @@ describe('analytics (umami)', () => {
           }),
         } as Response)
 
-      await loadUserPreference()
+      try {
+        await loadUserPreference()
 
-      expect(arePreferencesLoaded()).toBe(true)
+        expect(arePreferencesLoaded()).toBe(true)
+        const fetchMock = global.fetch as ReturnType<typeof vi.fn>
+        expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+        const prefsCall = fetchMock.mock.calls[1]
+        expect(prefsCall[1]?.headers?.['X-Borg-Authorization']).toBe('Bearer test-token')
+      } finally {
+        getItemSpy.mockRestore()
+      }
     })
 
     it('defaults to opt-out when API fails', async () => {

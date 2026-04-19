@@ -1,9 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import MockAdapter from 'axios-mock-adapter'
 
 describe('BorgApiClient', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+  })
+
+  it('attaches X-Borg-Authorization when access_token is in localStorage', async () => {
+    localStorage.setItem('access_token', 'borg-jwt')
+    const clientModule = await import('./client')
+    const mock = new MockAdapter(clientModule.httpClient)
+    mock.onGet('/repositories/1/info').reply((config) => {
+      expect(config.headers?.['X-Borg-Authorization']).toBe('Bearer borg-jwt')
+      return [200, {}]
+    })
+    const { BorgApiClient } = clientModule
+    const client = new BorgApiClient({ id: 1, borg_version: 1, path: '/p' } as never)
+    await client.getInfo()
+    mock.restore()
   })
 
   it('downloads files in the same tab', async () => {

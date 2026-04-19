@@ -53,7 +53,7 @@ class SmokeClient:
         headers = {}
         auth_token = token or self.token
         if auth_token:
-            headers["Authorization"] = f"Bearer {auth_token}"
+            headers["X-Borg-Authorization"] = f"Bearer {auth_token}"
         if json_body:
             headers["Content-Type"] = "application/json"
         return headers

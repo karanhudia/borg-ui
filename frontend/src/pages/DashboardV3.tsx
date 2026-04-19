@@ -987,7 +987,7 @@ export default function DashboardV3() {
     queryKey: ['dashboard-v3'],
     queryFn: async () => {
       const res = await fetch(`${BASE_PATH}/api/dashboard/overview`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+        headers: { 'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token')}` },
       })
       if (!res.ok) throw new Error('Failed')
       return res.json()

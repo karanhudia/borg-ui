@@ -108,7 +108,7 @@ export const loadUserPreference = async (): Promise<void> => {
 
     const headers: Record<string, string> = {}
     if (token) {
-      headers.Authorization = `Bearer ${token}`
+      headers['X-Borg-Authorization'] = `Bearer ${token}`
     }
 
     const response = await fetch(`${BASE_PATH}/api/settings/preferences`, { headers })
