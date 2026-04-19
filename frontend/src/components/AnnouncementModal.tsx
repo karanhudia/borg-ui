@@ -66,6 +66,7 @@ export default function AnnouncementModal({
 
   if (!announcement) return null
 
+  const isDark = theme.palette.mode === 'dark'
   const tone = getAnnouncementTone(announcement.type)
   const icon = getAnnouncementIcon(announcement.type)
   const accentColor =
@@ -74,9 +75,16 @@ export default function AnnouncementModal({
       : tone === 'info'
         ? theme.palette.info.main
         : theme.palette.primary.main
-  const panelBackground = theme.palette.mode === 'dark' ? '#18181b' : '#1f2937'
-  const mutedText = alpha('#ffffff', 0.76)
-  const secondaryText = alpha('#ffffff', 0.58)
+  const panelBackground = isDark ? '#18181b' : '#ffffff'
+  const foreground = isDark ? '#ffffff' : '#1f2937'
+  const mutedText = isDark ? alpha('#ffffff', 0.76) : alpha('#1f2937', 0.82)
+  const secondaryText = isDark ? alpha('#ffffff', 0.58) : alpha('#1f2937', 0.5)
+  const borderAlpha = isDark ? alpha('#ffffff', 0.08) : alpha('#000000', 0.1)
+  const subtleBg = isDark ? alpha('#ffffff', 0.12) : alpha('#000000', 0.06)
+  const subtleBorder = isDark ? alpha('#ffffff', 0.12) : alpha('#000000', 0.08)
+  const highlightBg = isDark ? alpha('#000000', 0.24) : alpha('#000000', 0.03)
+  const glintTop = isDark ? alpha('#ffffff', 0.08) : alpha('#ffffff', 0.6)
+  const hoverBg = isDark ? alpha('#ffffff', 0.08) : alpha('#000000', 0.06)
 
   return (
     <Dialog
@@ -87,10 +95,12 @@ export default function AnnouncementModal({
         sx: {
           overflow: 'hidden',
           borderRadius: 3,
-          color: '#fff',
+          color: foreground,
           background: panelBackground,
-          border: `1px solid ${alpha('#ffffff', 0.08)}`,
-          boxShadow: `0 28px 80px ${alpha('#000000', 0.52)}`,
+          border: `1px solid ${borderAlpha}`,
+          boxShadow: isDark
+            ? `0 28px 80px ${alpha('#000000', 0.52)}`
+            : `0 28px 80px ${alpha('#000000', 0.16)}`,
         },
       }}
     >
@@ -108,7 +118,7 @@ export default function AnnouncementModal({
               justifyContent: 'center',
               flexShrink: 0,
               border: `1px solid ${alpha(accentColor, 0.32)}`,
-              boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.08)}`,
+              boxShadow: `inset 0 1px 0 ${glintTop}`,
             }}
           >
             {icon}
@@ -122,16 +132,16 @@ export default function AnnouncementModal({
                 label={t(`announcements.types.${announcement.type}`)}
                 sx={{
                   height: 24,
-                  bgcolor: alpha('#ffffff', 0.12),
-                  color: '#fff',
-                  border: `1px solid ${alpha('#ffffff', 0.12)}`,
+                  bgcolor: subtleBg,
+                  color: foreground,
+                  border: `1px solid ${subtleBorder}`,
                   '& .MuiChip-label': {
                     px: 1.2,
                     fontSize: '0.72rem',
                     fontWeight: 700,
                   },
                   '& .MuiChip-icon': {
-                    color: alpha('#ffffff', 0.76),
+                    color: mutedText,
                   },
                 }}
               />
@@ -176,11 +186,11 @@ export default function AnnouncementModal({
               aria-label="Close announcement"
               sx={{
                 color: secondaryText,
-                border: `1px solid ${alpha('#ffffff', 0.08)}`,
-                bgcolor: alpha('#ffffff', 0.03),
+                border: `1px solid ${borderAlpha}`,
+                bgcolor: isDark ? alpha('#ffffff', 0.03) : alpha('#000000', 0.02),
                 '&:hover': {
-                  color: '#fff',
-                  bgcolor: alpha('#ffffff', 0.08),
+                  color: foreground,
+                  bgcolor: hoverBg,
                 },
               }}
             >
@@ -197,9 +207,9 @@ export default function AnnouncementModal({
               p: 2,
               mb: 2.25,
               borderRadius: 2.5,
-              bgcolor: alpha('#000000', 0.24),
+              bgcolor: highlightBg,
               border: `1px solid ${alpha(accentColor, 0.18)}`,
-              boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.04)}`,
+              boxShadow: `inset 0 1px 0 ${isDark ? alpha('#ffffff', 0.04) : alpha('#ffffff', 0.5)}`,
             }}
           >
             <Typography
@@ -275,11 +285,11 @@ export default function AnnouncementModal({
               variant="outlined"
               sx={{
                 color: mutedText,
-                borderColor: alpha('#ffffff', 0.16),
-                bgcolor: alpha('#ffffff', 0.04),
+                borderColor: isDark ? alpha('#ffffff', 0.16) : alpha('#000000', 0.15),
+                bgcolor: isDark ? alpha('#ffffff', 0.04) : alpha('#000000', 0.03),
                 '&:hover': {
-                  borderColor: alpha('#ffffff', 0.28),
-                  bgcolor: alpha('#ffffff', 0.08),
+                  borderColor: isDark ? alpha('#ffffff', 0.28) : alpha('#000000', 0.25),
+                  bgcolor: hoverBg,
                 },
               }}
             >
