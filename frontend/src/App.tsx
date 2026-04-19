@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { ShieldAlert, AlertTriangle } from 'lucide-react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth.tsx'
 import Layout from './components/Layout'
@@ -79,9 +80,12 @@ function App() {
         <div className="min-h-screen flex items-center justify-center">
           {authError ? (
             <div className="max-w-lg rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <h1 className="text-2xl font-semibold text-slate-900">
-                Proxy authentication required
-              </h1>
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert size={22} className="shrink-0 text-slate-500" />
+                <h1 className="text-2xl font-semibold text-slate-900">
+                  Proxy authentication required
+                </h1>
+              </div>
               <p className="mt-3 text-sm leading-6 text-slate-600">{authError}</p>
               <p className="mt-3 text-sm leading-6 text-slate-600">
                 Ensure Borg UI is only reachable through your authenticated reverse proxy and that
@@ -90,10 +94,13 @@ function App() {
               </p>
               {proxyAuthWarnings.length > 0 ? (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                  <h2 className="text-sm font-semibold text-amber-900">
-                    Proxy auth configuration warnings
-                  </h2>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={14} className="shrink-0 text-amber-700" />
+                    <h2 className="text-sm font-semibold text-amber-900">
+                      Proxy auth configuration warnings
+                    </h2>
+                  </div>
+                  <ul className="mt-2 space-y-1 text-sm text-amber-800">
                     {proxyAuthWarnings.map((warning) => (
                       <li key={warning.code}>{warning.message}</li>
                     ))}
