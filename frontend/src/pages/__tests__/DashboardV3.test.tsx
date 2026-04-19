@@ -6,6 +6,10 @@ import Dashboard from '../DashboardV3'
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn()
+const { getOverviewMock } = vi.hoisted(() => ({
+  getOverviewMock: vi.fn(),
+}))
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }))
@@ -18,6 +22,12 @@ vi.mock('../../utils/basePath', () => ({
   BASE_PATH: '',
 }))
 
+vi.mock('../../services/api', () => ({
+  dashboardAPI: {
+    getOverview: getOverviewMock,
+  },
+}))
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const createQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -28,6 +38,14 @@ function renderDashboard() {
       <Dashboard />
     </QueryClientProvider>
   )
+}
+
+function mockFetchSuccess(data: unknown) {
+  getOverviewMock.mockResolvedValueOnce({ data })
+}
+
+function mockFetchError() {
+  getOverviewMock.mockRejectedValueOnce(new Error('Failed'))
 }
 
 function makeOverview(overrides: Record<string, unknown> = {}) {
@@ -134,28 +152,9 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function mockFetchSuccess(data: unknown) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(data),
-    })
-  )
-}
-
-function mockFetchError() {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve({}),
-    })
-  )
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
+  getOverviewMock.mockResolvedValue({ data: makeOverview() })
   // Default: suppress localStorage access
   vi.stubGlobal('localStorage', { getItem: () => 'test-token' })
 })
@@ -164,52 +163,29 @@ beforeEach(() => {
 
 describe('DashboardV3', () => {
   describe('API calls', () => {
-    it('fetches from /api/dashboard/overview on mount', async () => {
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue({ ok: true, json: () => Promise.resolve(makeOverview()) })
-      vi.stubGlobal('fetch', fetchMock)
+    it('fetches overview through the shared dashboard API on mount', async () => {
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/dashboard/overview',
-        expect.objectContaining({
-          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
-        })
-      )
+      expect(getOverviewMock).toHaveBeenCalledTimes(1)
     })
 
-    it('sends the stored access token in the Authorization header', async () => {
-      vi.stubGlobal('localStorage', {
-        getItem: (key: string) => (key === 'access_token' ? 'my-secret-token' : null),
-      })
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue({ ok: true, json: () => Promise.resolve(makeOverview()) })
-      vi.stubGlobal('fetch', fetchMock)
+    it('renders overview data returned by the shared API', async () => {
+      getOverviewMock.mockResolvedValueOnce({ data: makeOverview() })
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
-      const [, options] = fetchMock.mock.calls[0]
-      expect(options.headers.Authorization).toBe('Bearer my-secret-token')
+      expect(screen.getAllByText('backup-nas').length).toBeGreaterThan(0)
     })
 
     it('fetches exactly once on initial render', async () => {
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue({ ok: true, json: () => Promise.resolve(makeOverview()) })
-      vi.stubGlobal('fetch', fetchMock)
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
-      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(getOverviewMock).toHaveBeenCalledTimes(1)
     })
   })
 
   describe('loading and error states', () => {
     it('shows loading skeletons before data arrives', () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(() => new Promise(() => {}))
-      ) // never resolves
+      getOverviewMock.mockReturnValueOnce(new Promise(() => {}) as never)
       renderDashboard()
       expect(document.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0)
     })
@@ -431,16 +407,13 @@ describe('DashboardV3', () => {
 
   describe('refresh button', () => {
     it('triggers a new fetch when clicked', async () => {
-      const fetchMock = vi
-        .fn()
-        .mockResolvedValue({ ok: true, json: () => Promise.resolve(makeOverview()) })
-      vi.stubGlobal('fetch', fetchMock)
+      getOverviewMock.mockResolvedValue({ data: makeOverview() })
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
 
-      const callsBefore = fetchMock.mock.calls.length
+      const callsBefore = getOverviewMock.mock.calls.length
       fireEvent.click(screen.getByText('Refresh'))
-      await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore))
+      await waitFor(() => expect(getOverviewMock.mock.calls.length).toBeGreaterThan(callsBefore))
     })
   })
 })

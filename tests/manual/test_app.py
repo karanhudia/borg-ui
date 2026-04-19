@@ -17,6 +17,14 @@ class BorgWebUITester:
         self.auth_token = None
         self.test_results = []
 
+    def auth_headers(self, *, content_type: bool = False) -> dict:
+        headers = {}
+        if self.auth_token:
+            headers["X-Borg-Authorization"] = f"Bearer {self.auth_token}"
+        if content_type:
+            headers["Content-Type"] = "application/json"
+        return headers
+
     def log_test(
         self, test_name: str, success: bool, message: str = "", details: Any = None
     ):
@@ -155,7 +163,7 @@ class BorgWebUITester:
                     )
 
                     # Test getting user info with token
-                    headers = {"Authorization": f"Bearer {self.auth_token}"}
+                    headers = self.auth_headers()
                     user_response = self.session.get(
                         f"{self.base_url}/api/auth/me", headers=headers, timeout=5
                     )
@@ -208,7 +216,7 @@ class BorgWebUITester:
             self.log_test("Protected Endpoints", False, "No auth token available")
             return False
 
-        headers = {"Authorization": f"Bearer {self.auth_token}"}
+        headers = self.auth_headers()
         protected_routes = [
             "/api/dashboard/status",
             "/api/dashboard/metrics",
@@ -247,10 +255,7 @@ class BorgWebUITester:
             self.log_test("Config Endpoints", False, "No auth token available")
             return False
 
-        headers = {
-            "Authorization": f"Bearer {self.auth_token}",
-            "Content-Type": "application/json",
-        }
+        headers = self.auth_headers(content_type=True)
 
         try:
             # Test settings/profile endpoint
@@ -284,7 +289,7 @@ class BorgWebUITester:
             self.log_test("System Info", False, "No auth token available")
             return False
 
-        headers = {"Authorization": f"Bearer {self.auth_token}"}
+        headers = self.auth_headers()
 
         try:
             # Test system info
@@ -336,10 +341,7 @@ class BorgWebUITester:
             self.log_test("Repository Operations", False, "No auth token available")
             return False
 
-        headers = {
-            "Authorization": f"Bearer {self.auth_token}",
-            "Content-Type": "application/json",
-        }
+        headers = self.auth_headers(content_type=True)
 
         try:
             # Test listing repositories

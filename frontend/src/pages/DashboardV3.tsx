@@ -15,7 +15,6 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { BASE_PATH } from '@/utils/basePath'
 import { Box, Skeleton, Alert, Button, Stack, Typography, Chip } from '@mui/material'
 import {
   XCircle,
@@ -34,6 +33,7 @@ import {
 import { formatDistanceToNow, differenceInDays, startOfDay, addDays, format } from 'date-fns'
 import { useTheme } from '../context/ThemeContext'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { dashboardAPI } from '../services/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -985,13 +985,7 @@ export default function DashboardV3() {
     refetch,
   } = useQuery<DashboardOverview>({
     queryKey: ['dashboard-v3'],
-    queryFn: async () => {
-      const res = await fetch(`${BASE_PATH}/api/dashboard/overview`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
-      })
-      if (!res.ok) throw new Error('Failed')
-      return res.json()
-    },
+    queryFn: () => dashboardAPI.getOverview().then((response) => response.data),
     refetchInterval: 30_000,
   })
 

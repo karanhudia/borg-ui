@@ -29,15 +29,17 @@ class Settings(BaseSettings):
     proxy_auth_header: str = (
         "X-Forwarded-User"  # Header containing authenticated username
     )
-    proxy_auth_role_header: str = (
-        "X-Forwarded-Role"  # Optional header containing global role
+    proxy_auth_role_header: Optional[str] = (
+        None  # Optional header containing global role
     )
-    proxy_auth_all_repositories_role_header: str = "X-Forwarded-All-Repositories-Role"  # Optional header containing repository-wide role
-    proxy_auth_email_header: str = (
-        "X-Forwarded-Email"  # Optional header containing authenticated email
+    proxy_auth_all_repositories_role_header: Optional[str] = (
+        None  # Optional header containing repository-wide role
     )
-    proxy_auth_full_name_header: str = (
-        "X-Forwarded-Full-Name"  # Optional header containing authenticated full name
+    proxy_auth_email_header: Optional[str] = (
+        None  # Optional header containing authenticated email
+    )
+    proxy_auth_full_name_header: Optional[str] = (
+        None  # Optional header containing authenticated full name
     )
 
     # Licensing / activation settings

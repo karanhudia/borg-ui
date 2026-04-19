@@ -30,7 +30,7 @@ import {
 } from 'lucide-react'
 import SettingsCard from './SettingsCard'
 import { toast } from 'react-hot-toast'
-import { settingsAPI } from '../services/api'
+import { authAPI, settingsAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
 
@@ -91,11 +91,20 @@ const SystemSettingsTab: React.FC = () => {
     },
   })
 
+  const { data: authConfigData } = useQuery({
+    queryKey: ['authConfig'],
+    queryFn: async () => {
+      const response = await authAPI.getAuthConfig()
+      return response.data
+    },
+  })
+
   const cacheStats = cacheData
   const systemSettings = systemData?.settings
   const timeoutSources = systemData?.settings?.timeout_sources as
     | Record<string, string | null>
     | undefined
+  const proxyAuthConfig = authConfigData
 
   // Helper to render source label with color
   const renderSourceLabel = (source: string | null | undefined) => {
@@ -411,6 +420,16 @@ const SystemSettingsTab: React.FC = () => {
 
   const isLoading = cacheLoading || systemLoading
   const isSaving = saveBrowseLimitsMutation.isPending || saveTimeoutsMutation.isPending
+  const proxyAuthHeaderRows: Array<[string, string | null | undefined]> = [
+    ['systemSettings.proxyAuthUsernameHeader', proxyAuthConfig?.proxy_auth_header],
+    ['systemSettings.proxyAuthRoleHeader', proxyAuthConfig?.proxy_auth_role_header],
+    [
+      'systemSettings.proxyAuthAllRepositoriesRoleHeader',
+      proxyAuthConfig?.proxy_auth_all_repositories_role_header,
+    ],
+    ['systemSettings.proxyAuthEmailHeader', proxyAuthConfig?.proxy_auth_email_header],
+    ['systemSettings.proxyAuthFullNameHeader', proxyAuthConfig?.proxy_auth_full_name_header],
+  ]
   const sectionTabs = [
     {
       label: t('systemSettings.operationTimeoutsTitle'),
@@ -427,6 +446,10 @@ const SystemSettingsTab: React.FC = () => {
     {
       label: t('systemSettings.archiveBrowsingLimitsTitle'),
       description: t('systemSettings.archiveBrowsingLimitsDescription'),
+    },
+    {
+      label: t('systemSettings.proxyAuthTitle'),
+      description: t('systemSettings.proxyAuthDescription'),
     },
   ]
 
@@ -485,6 +508,7 @@ const SystemSettingsTab: React.FC = () => {
                 { label: sectionTabs[1].label, icon: <RefreshCw size={15} /> },
                 { label: sectionTabs[2].label, icon: <Key size={15} /> },
                 { label: sectionTabs[3].label, icon: <AlertTriangle size={15} /> },
+                { label: sectionTabs[4].label, icon: <Settings size={15} /> },
               ].map((section) => (
                 <Tab
                   key={section.label}
@@ -504,6 +528,7 @@ const SystemSettingsTab: React.FC = () => {
                 {activeSection === 1 && <RefreshCw size={22} />}
                 {activeSection === 2 && <Settings size={22} />}
                 {activeSection === 3 && <AlertTriangle size={22} />}
+                {activeSection === 4 && <Settings size={22} />}
                 <Typography variant="h6">{sectionTabs[activeSection].label}</Typography>
                 {activeSection === 1 && (
                   <Tooltip title={t('systemSettings.manualRefreshAlert')} placement="right">
@@ -897,6 +922,74 @@ const SystemSettingsTab: React.FC = () => {
                     }
                   />
                 </Box>
+              )}
+
+              {activeSection === 4 && (
+                <Stack spacing={2}>
+                  <Alert
+                    severity={proxyAuthConfig?.proxy_auth_enabled ? 'info' : 'success'}
+                    variant="outlined"
+                  >
+                    <Typography variant="body2">
+                      {proxyAuthConfig?.proxy_auth_enabled
+                        ? t('systemSettings.proxyAuthEnabledStatus')
+                        : t('systemSettings.proxyAuthDisabledStatus')}
+                    </Typography>
+                  </Alert>
+
+                  {proxyAuthConfig?.proxy_auth_enabled ? (
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                        gap: 2,
+                      }}
+                    >
+                      {proxyAuthHeaderRows.map(([labelKey, value]) => (
+                        <Box
+                          key={labelKey}
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            border: '1px solid',
+                            borderColor: 'divider',
+                          }}
+                        >
+                          <Typography variant="caption" color="text.secondary">
+                            {t(labelKey)}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{ mt: 0.5, fontFamily: 'monospace', wordBreak: 'break-word' }}
+                          >
+                            {value || t('systemSettings.proxyAuthNotConfigured')}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  ) : null}
+
+                  {proxyAuthConfig?.proxy_auth_health?.warnings?.length ? (
+                    <Alert severity="warning">
+                      <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
+                        {t('systemSettings.proxyAuthWarningsTitle')}
+                      </Typography>
+                      <Stack spacing={0.75}>
+                        {proxyAuthConfig.proxy_auth_health.warnings.map((warning) => (
+                          <Typography key={warning.code} variant="body2">
+                            • {warning.message}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    </Alert>
+                  ) : proxyAuthConfig?.proxy_auth_enabled ? (
+                    <Alert severity="success">
+                      <Typography variant="body2">
+                        {t('systemSettings.proxyAuthNoWarnings')}
+                      </Typography>
+                    </Alert>
+                  ) : null}
+                </Stack>
               )}
             </Stack>
           </Box>

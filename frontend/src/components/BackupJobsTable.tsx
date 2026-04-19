@@ -25,8 +25,7 @@ import LogViewerDialog from './LogViewerDialog'
 import CancelJobDialog from './CancelJobDialog'
 import DeleteJobDialog from './DeleteJobDialog'
 import LockErrorDialog from './LockErrorDialog'
-import { repositoriesAPI } from '../services/api'
-import { BASE_PATH } from '@/utils/basePath'
+import { activityAPI, repositoriesAPI } from '../services/api'
 import { buildDownloadUrl } from '@/utils/downloadUrl'
 import { BorgApiClient } from '../services/borgApi'
 import ArchiveContentsDialog from './ArchiveContentsDialog'
@@ -231,16 +230,7 @@ export const BackupJobsTable = <T extends Job = Job>({
     try {
       // Call cancel API
       const jobType = cancelJob.type || 'backup'
-      const response = await fetch(`${BASE_PATH}/api/activity/${jobType}/${cancelJob.id}/cancel`, {
-        method: 'POST',
-        headers: {
-          'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(t('backupJobsTable.toasts.failedToCancel'))
-      }
+      await activityAPI.cancelJob(jobType, cancelJob.id)
 
       toast.success(t('backupJobsTable.toasts.cancelSuccess'))
       setCancelJob(null)
@@ -305,19 +295,7 @@ export const BackupJobsTable = <T extends Job = Job>({
 
     try {
       // Call delete API
-      const response = await fetch(`${BASE_PATH}/api/activity/${jobType}/${jobToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ detail: t('backupJobsTable.toasts.failedToDelete') }))
-        throw new Error(errorData.detail || t('backupJobsTable.toasts.failedToDelete'))
-      }
+      await activityAPI.deleteJob(jobType, jobToDelete.id)
 
       // Success - show toast after item is already removed from UI
       toast.success(t('backupJobsTable.toasts.deleteSuccess'))

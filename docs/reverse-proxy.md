@@ -280,18 +280,27 @@ Disable the built-in login screen and let your reverse proxy handle authenticati
 environment:
   - DISABLE_AUTHENTICATION=true          # Disable built-in login screen
   - PROXY_AUTH_HEADER=X-Forwarded-User   # Header containing authenticated username (optional, default shown)
+  - PROXY_AUTH_ROLE_HEADER=X-Borg-Role   # Optional trusted Borg UI global role header
+  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-Borg-All-Repositories-Role   # Optional trusted default repository role header
+  - PROXY_AUTH_EMAIL_HEADER=X-Borg-Email   # Optional trusted email header
+  - PROXY_AUTH_FULL_NAME_HEADER=X-Borg-Full-Name   # Optional trusted display-name header
 ```
 
 **How it works:**
 - Borg UI reads the authenticated username from HTTP headers set by your reverse proxy
-- Users are auto-created on first access as regular users (not admins)
-- Admin must manually promote users via Settings > User Management
+- Users are auto-created on first access as `viewer` by default
+- Optional trusted headers can assign Borg UI `viewer`, `operator`, or `admin` roles
+- Optional trusted headers can assign a default repository role of `viewer` or `operator`
+- Optional trusted headers can populate `email` and `full_name`
+- Requests without a trusted identity header are rejected with HTTP 401
 
-**Supported headers (checked in order):**
+**Supported headers (checked in order when using the default username header):**
 - `X-Forwarded-User` (default, configurable via `PROXY_AUTH_HEADER`)
 - `X-Remote-User`
 - `Remote-User`
 - `X-authentik-username` (Authentik)
+
+If you set a custom `PROXY_AUTH_HEADER`, Borg UI trusts only that configured header for username resolution.
 
 **Supported authentication providers:**
 
@@ -341,6 +350,44 @@ services:
 4. Set Internal URL: `http://borg-ui:8081`
 5. Enable **Forward auth (single application)**
 6. Set authorization flow and user/group bindings
+
+**Authentik header mapping example:**
+
+If you want Authentik or your proxy layer to assign Borg UI roles, emit separate trusted headers.
+
+```yaml
+environment:
+  - DISABLE_AUTHENTICATION=true
+  - PROXY_AUTH_HEADER=X-authentik-username
+  - PROXY_AUTH_ROLE_HEADER=X-Borg-Role
+  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-Borg-All-Repositories-Role
+  - PROXY_AUTH_EMAIL_HEADER=X-Borg-Email
+  - PROXY_AUTH_FULL_NAME_HEADER=X-Borg-Full-Name
+```
+
+Example reverse-proxy forwarding:
+
+```nginx
+location / {
+    proxy_set_header X-authentik-username $upstream_http_x_authentik_username;
+    proxy_set_header X-Borg-Role $upstream_http_x_borg_role;
+    proxy_set_header X-Borg-All-Repositories-Role $upstream_http_x_borg_all_repositories_role;
+    proxy_set_header X-Borg-Email $upstream_http_x_borg_email;
+    proxy_set_header X-Borg-Full-Name $upstream_http_x_borg_full_name;
+
+    proxy_pass http://127.0.0.1:8081;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Valid Borg UI values:
+- `X-Borg-Role`: `viewer`, `operator`, `admin`
+- `X-Borg-All-Repositories-Role`: `viewer`, `operator`
+- `X-Borg-Email`: any trusted email string
+- `X-Borg-Full-Name`: any trusted display name
 
 ### Cloudflare Access Setup
 

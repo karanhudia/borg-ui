@@ -90,13 +90,19 @@ Disable the built-in login screen and use your reverse proxy for authentication:
 environment:
   - DISABLE_AUTHENTICATION=true          # Disable built-in login screen
   - PROXY_AUTH_HEADER=X-Forwarded-User   # Header containing authenticated username (optional, default shown)
+  - PROXY_AUTH_ROLE_HEADER=X-Borg-Role   # Optional trusted Borg UI global role header
+  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-Borg-All-Repositories-Role   # Optional trusted default repository role header
+  - PROXY_AUTH_EMAIL_HEADER=X-Borg-Email   # Optional trusted email header
+  - PROXY_AUTH_FULL_NAME_HEADER=X-Borg-Full-Name   # Optional trusted display-name header
 ```
 
 **How it works:**
 - Borg UI reads the authenticated username from HTTP headers set by your reverse proxy
 - Users are auto-created on first access
-- New users are created as regular users (not admins)
-- Admin must manually promote users to admin via Settings > User Management
+- New users are created as `viewer` by default
+- Optionally, trusted proxy headers can assign Borg UI `viewer`, `operator`, or `admin` roles
+- Optionally, trusted proxy headers can assign a default repository role (`viewer` or `operator`)
+- Optionally, trusted proxy headers can populate `email` and `full_name`
 
 **Supported authentication providers:**
 - **Authentik** (header: `X-authentik-username`)

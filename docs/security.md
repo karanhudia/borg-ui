@@ -60,6 +60,42 @@ Use passwords with:
 3. Disable or delete inactive accounts
 4. Review user access regularly
 
+#### Two-Factor Authentication (TOTP)
+
+Borg UI supports built-in TOTP for local password-based accounts.
+
+**What it does:**
+- Adds a second factor after username/password login
+- Issues single-use recovery codes during setup
+- Supports disabling TOTP with the current password plus an authenticator or recovery code
+
+**How to enable it:**
+1. Go to **Settings** > **Account**
+2. Under **Two-factor authentication**, choose **Enable TOTP**
+3. Confirm your current password
+4. Add the displayed secret to your authenticator app
+5. Save the recovery codes somewhere secure
+6. Enter the current 6-digit authenticator code to finish setup
+
+**Notes:**
+- TOTP is only available for Borg UI's built-in local accounts
+- Proxy-auth / external SSO deployments should enforce MFA in the identity provider instead
+- Recovery codes are shown during setup, so they must be stored before closing the dialog
+
+#### Passkeys
+
+Borg UI also supports WebAuthn passkeys for local accounts.
+
+**What it does:**
+- Lets users sign in with device-bound passkeys instead of typing a password
+- Stores multiple passkeys per account
+- Supports removing passkeys from **Settings** > **Account**
+
+**Notes:**
+- Passkeys require the Python `webauthn` dependency to be installed
+- Passkey enrollment currently requires confirming the current account password first
+- Reverse-proxy / external SSO deployments should usually keep passkeys in the identity provider instead of inside Borg UI
+
 #### Emergency Password Reset (CLI)
 
 Use this procedure when a user (including the admin) is locked out of the web UI and cannot change their password through **Settings > Profile**.
@@ -112,7 +148,9 @@ When enabled, Borg Web UI:
 1. **Disables the login screen** - No password prompts
 2. **Trusts the reverse proxy** - Reads username from HTTP headers
 3. **Auto-creates users** - Creates accounts on first access
-4. **Maintains authorization** - Still respects admin/user permissions
+4. **Optionally maps authorization from trusted headers** - Can assign Borg UI roles from proxy-provided claims
+5. **Maintains authorization** - Still respects Borg UI's built-in permission model
+6. **Fails closed without a trusted header** - Requests are rejected instead of falling back to a local default user
 
 **Security Model:**
 - ✅ Authentication: Handled by your proxy/OIDC provider
@@ -127,17 +165,30 @@ When enabled, Borg Web UI:
 environment:
   - DISABLE_AUTHENTICATION=true  # Disable built-in login screen
   - PROXY_AUTH_HEADER=X-Forwarded-User  # Default header name
+  - PROXY_AUTH_ROLE_HEADER=X-Borg-Role  # Optional trusted Borg UI global role header
+  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-Borg-All-Repositories-Role  # Optional trusted default repository role header
+  - PROXY_AUTH_EMAIL_HEADER=X-Borg-Email  # Optional trusted email header
+  - PROXY_AUTH_FULL_NAME_HEADER=X-Borg-Full-Name  # Optional trusted display-name header
 ```
 
 **2. Configure your reverse proxy to forward authenticated usernames:**
 
 The proxy must set the `X-Forwarded-User` header (or your custom header) with the authenticated username.
 
-**Supported Headers (checked in order):**
+**Supported Headers (checked in order when using the default username header):**
 - `X-Forwarded-User` (default, configurable via `PROXY_AUTH_HEADER`)
 - `X-Remote-User`
 - `Remote-User`
 - `X-authentik-username` (Authentik)
+
+If you set a custom `PROXY_AUTH_HEADER`, Borg UI trusts only that configured header for identity.
+
+**Optional authorization headers (only when explicitly configured):**
+- `PROXY_AUTH_ROLE_HEADER` supports Borg UI global roles: `viewer`, `operator`, `admin`
+- `PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER` supports Borg UI default repository roles: `viewer`, `operator`
+- `PROXY_AUTH_EMAIL_HEADER` can update the user's email address
+- `PROXY_AUTH_FULL_NAME_HEADER` can update the user's display name
+- Invalid values are ignored and Borg UI falls back to its normal defaults
 
 #### Security Requirements
 
@@ -164,6 +215,46 @@ The proxy must set the `X-Forwarded-User` header (or your custom header) with th
 **Why this matters:**
 - If Borg UI is directly accessible, anyone can set the `X-Forwarded-User` header and impersonate any user
 - The proxy MUST strip/override user-supplied headers before forwarding
+- The same rule applies to any trusted role-mapping headers
+
+#### Optional Role Mapping
+
+If your reverse proxy or identity provider can emit trusted claims as headers, Borg UI can map them into its built-in authorization model.
+
+**Supported Borg UI global roles:**
+- `viewer`
+- `operator`
+- `admin`
+
+**Supported repository-wide default roles:**
+- `viewer`
+- `operator`
+
+**Behavior:**
+- New proxy-auth users default to `viewer` unless a valid trusted role header is configured
+- Existing proxy-auth users are updated on login when a valid trusted role header is present
+- Invalid role values are ignored instead of blocking login
+
+**Example:**
+```yaml
+environment:
+  - DISABLE_AUTHENTICATION=true
+  - PROXY_AUTH_HEADER=X-authentik-username
+  - PROXY_AUTH_ROLE_HEADER=X-borg-role
+  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-borg-all-repositories-role
+  - PROXY_AUTH_EMAIL_HEADER=X-borg-email
+  - PROXY_AUTH_FULL_NAME_HEADER=X-borg-full-name
+```
+
+If your proxy can emit trusted claims, you can map them directly:
+
+```nginx
+proxy_set_header X-authentik-username $upstream_http_x_authentik_username;
+proxy_set_header X-borg-role $upstream_http_x_borg_role;
+proxy_set_header X-borg-all-repositories-role $upstream_http_x_borg_all_repositories_role;
+proxy_set_header X-borg-email $upstream_http_x_borg_email;
+proxy_set_header X-borg-full-name $upstream_http_x_borg_full_name;
+```
 
 #### Example Configurations
 
@@ -322,9 +413,9 @@ docker logs borg-web-ui 2>&1 | grep "proxy"
 docker logs borg-web-ui 2>&1 | grep "X-Forwarded-User"
 ```
 
-**Test with direct access (should use fallback):**
+**Test with direct access (should fail closed):**
 ```bash
-# Without proxy header - falls back to 'admin' user
+# Without proxy header - should return HTTP 401
 curl http://localhost:8081/api/auth/me
 ```
 

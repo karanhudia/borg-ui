@@ -1,9 +1,24 @@
+import MockAdapter from 'axios-mock-adapter'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('BorgApiClient', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+  })
+
+  it('attaches X-Borg-Authorization on httpClient requests', async () => {
+    const clientModule = await import('./client')
+    const mock = new MockAdapter(clientModule.httpClient)
+    localStorage.setItem('access_token', 'client-token')
+
+    mock.onGet('/test').reply((config) => {
+      expect(config.headers?.['X-Borg-Authorization']).toBe('Bearer client-token')
+      return [200, { success: true }]
+    })
+
+    await clientModule.httpClient.get('/test')
+    mock.restore()
   })
 
   it('downloads files in the same tab', async () => {

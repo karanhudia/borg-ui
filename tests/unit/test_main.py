@@ -175,6 +175,54 @@ class TestStartupEvent:
 
 
 @pytest.mark.unit
+class TestProxyAuthStartupWarnings:
+    def test_no_proxy_warning_when_proxy_auth_disabled(self):
+        with (
+            patch("app.main.settings.disable_authentication", False),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_proxy_auth_security_warnings
+
+            _log_proxy_auth_security_warnings()
+
+        mock_warning.assert_not_called()
+
+    def test_warns_when_proxy_auth_binds_broadly(self):
+        with (
+            patch("app.main.settings.disable_authentication", True),
+            patch("app.main.settings.host", "0.0.0.0"),
+            patch("app.main.settings.proxy_auth_header", "X-Forwarded-User"),
+            patch("app.main.settings.proxy_auth_role_header", None),
+            patch("app.main.settings.proxy_auth_all_repositories_role_header", None),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_proxy_auth_security_warnings
+
+            _log_proxy_auth_security_warnings()
+
+        mock_warning.assert_called_once()
+        assert mock_warning.call_args.kwargs["code"] == "broad_bind"
+
+    def test_warns_on_conflicting_proxy_auth_headers(self):
+        with (
+            patch("app.main.settings.disable_authentication", True),
+            patch("app.main.settings.host", "127.0.0.1"),
+            patch("app.main.settings.proxy_auth_header", "Authorization"),
+            patch("app.main.settings.proxy_auth_role_header", "Authorization"),
+            patch(
+                "app.main.settings.proxy_auth_all_repositories_role_header",
+                "Authorization",
+            ),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_proxy_auth_security_warnings
+
+            _log_proxy_auth_security_warnings()
+
+        assert mock_warning.call_count == 4
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 class TestShutdownEvent:
     """Test application shutdown event"""

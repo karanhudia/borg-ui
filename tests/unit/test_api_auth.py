@@ -698,9 +698,19 @@ class TestProxyAuthentication:
         assert "proxy_auth_enabled" in data
         assert "authentication_required" in data
         assert "proxy_auth_header" in data
+        assert "proxy_auth_role_header" in data
+        assert "proxy_auth_all_repositories_role_header" in data
+        assert "proxy_auth_email_header" in data
+        assert "proxy_auth_full_name_header" in data
+        assert "proxy_auth_health" in data
         assert data["proxy_auth_enabled"] is False
         assert data["authentication_required"] is True
         assert data["proxy_auth_header"] is None
+        assert data["proxy_auth_role_header"] is None
+        assert data["proxy_auth_all_repositories_role_header"] is None
+        assert data["proxy_auth_email_header"] is None
+        assert data["proxy_auth_full_name_header"] is None
+        assert data["proxy_auth_health"] == {"enabled": False, "warnings": []}
 
     def test_auth_config_endpoint_proxy_mode(
         self, test_client: TestClient, monkeypatch
@@ -717,6 +727,11 @@ class TestProxyAuthentication:
         assert data["proxy_auth_enabled"] is True
         assert data["authentication_required"] is False
         assert data["proxy_auth_header"] == "X-Forwarded-User"
+        assert data["proxy_auth_role_header"] is None
+        assert data["proxy_auth_all_repositories_role_header"] is None
+        assert data["proxy_auth_email_header"] is None
+        assert data["proxy_auth_full_name_header"] is None
+        assert data["proxy_auth_health"]["enabled"] is True
 
     def test_proxy_auth_with_header(
         self, test_client: TestClient, test_db, monkeypatch
@@ -795,6 +810,24 @@ class TestProxyAuthentication:
         assert response.status_code == 200
         data = response.json()
         assert data["username"] == "authentik_user"
+
+    def test_proxy_auth_custom_header_disables_fallback_headers(
+        self, test_client: TestClient, monkeypatch
+    ):
+        """A custom configured identity header should be the only trusted username source."""
+        from app import config
+
+        monkeypatch.setattr(config.settings, "disable_authentication", True)
+        monkeypatch.setattr(config.settings, "proxy_auth_header", "X-Custom-User")
+
+        response = test_client.get(
+            "/api/auth/me", headers={"X-Forwarded-User": "fallback-user"}
+        )
+
+        assert response.status_code == 401
+        data = response.json()
+        assert data["detail"]["key"] == "backend.errors.auth.proxyHeaderRequired"
+        assert data["detail"]["params"]["header"] == "X-Custom-User"
 
     def test_proxy_auth_username_normalized_lowercase(
         self, test_client: TestClient, test_db, monkeypatch

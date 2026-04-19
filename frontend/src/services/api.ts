@@ -2,6 +2,7 @@ import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
+import { attachAccessTokenHeader } from './authHeaders'
 
 // Track if proxy auth is enabled (set during auth config check)
 let proxyAuthMode = false
@@ -18,13 +19,7 @@ const api = axios.create({
 })
 
 // Request interceptor to add auth token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
-  if (token) {
-    config.headers['X-Borg-Authorization'] = `Bearer ${token}`
-  }
-  return config
-})
+api.interceptors.request.use(attachAccessTokenHeader)
 
 // Response interceptor to handle auth errors
 api.interceptors.response.use(
@@ -563,8 +558,12 @@ export const notificationsAPI = {
 
 export const activityAPI = {
   list: (params?: ApiData) => api.get('/activity/recent', { params }),
-  getLogs: (jobType: string, jobId: number, offset: number = 0) =>
+  getLogs: (jobType: string, jobId: string | number, offset: number = 0) =>
     api.get(`/activity/${jobType}/${jobId}/logs`, { params: { offset } }),
+  cancelJob: (jobType: string, jobId: string | number) =>
+    api.post(`/activity/${jobType}/${jobId}/cancel`),
+  deleteJob: (jobType: string, jobId: string | number) =>
+    api.delete(`/activity/${jobType}/${jobId}`),
   downloadLogs: (jobType: string, jobId: number) =>
     window.open(buildDownloadUrl(`/activity/${jobType}/${jobId}/logs/download`), '_blank'),
 }

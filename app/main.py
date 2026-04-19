@@ -38,6 +38,7 @@ from app.routers import config
 from app.database.database import engine
 from app.database.models import Base
 from app.config import get_runtime_app_version, settings
+from app.core.proxy_auth import inspect_proxy_auth_config
 from app.core.security import create_first_user
 from app.services.licensing_service import sync_licensing_state
 
@@ -91,6 +92,19 @@ def _spawn_background_task(coro):
     if not isinstance(task, asyncio.Task):
         coro.close()
     return task
+
+
+def _log_proxy_auth_security_warnings() -> None:
+    inspection = inspect_proxy_auth_config()
+    if not inspection["enabled"]:
+        return
+
+    for warning in inspection["warnings"]:
+        logger.warning(
+            "Proxy authentication configuration warning",
+            code=warning["code"],
+            message=warning["message"],
+        )
 
 
 # Configure structured logging
@@ -192,6 +206,7 @@ app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 async def startup_event():
     """Initialize application on startup"""
     logger.info("Starting Borg Web UI")
+    _log_proxy_auth_security_warnings()
     from app.database.database import SessionLocal
 
     # Run database migrations
