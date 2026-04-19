@@ -238,6 +238,38 @@ def _is_email_service(service_url: str) -> bool:
     return any(service_url.lower().startswith(prefix) for prefix in email_prefixes)
 
 
+def _build_test_notification_failure_message(service_url: str) -> str:
+    """Return a service-specific test notification failure message."""
+    service_type = (
+        service_url.split(":")[0].lower() if ":" in service_url else "unknown"
+    )
+
+    if service_type in {"ntfy", "ntfys"}:
+        return (
+            "Failed to send test notification to ntfy. The URL format was accepted, "
+            "but delivery failed. Possible causes:\n"
+            "• The ntfy server is unreachable from Borg UI\n"
+            "• TLS/certificate issues on the self-hosted ntfy server\n"
+            "• Invalid username/password\n"
+            "• Username or password contains reserved URL characters and must be percent-encoded"
+        )
+
+    if _is_email_service(service_url):
+        return (
+            "Failed to send test notification. Possible causes:\n"
+            "• For Gmail: Check App Password is correct (16 chars, no spaces)\n"
+            "• For Gmail: Ensure 2-Step Verification is enabled\n"
+            "• Check SMTP server is reachable (firewall/network)\n"
+            "• Verify credentials are correct"
+        )
+
+    return (
+        f"Failed to send test notification to '{service_type}'. "
+        "The URL format was accepted, but delivery failed. Check network reachability, "
+        "credentials, and the remote service configuration."
+    )
+
+
 def _create_html_email(title: str, content_blocks: list, footer: str = None) -> str:
     """
     Create a well-formatted HTML email template.
@@ -1712,11 +1744,7 @@ class NotificationService:
                 )
                 return {
                     "success": False,
-                    "message": "Failed to send test notification. Possible causes:\n"
-                    + "• For Gmail: Check App Password is correct (16 chars, no spaces)\n"
-                    + "• For Gmail: Ensure 2-Step Verification is enabled\n"
-                    + "• Check SMTP server is reachable (firewall/network)\n"
-                    + "• Verify credentials are correct",
+                    "message": _build_test_notification_failure_message(service_url),
                 }
 
         except Exception as e:

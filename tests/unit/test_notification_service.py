@@ -168,6 +168,7 @@ async def test_global_repo_setting(
 from app.services.notification_service import (
     _is_webhook_service,
     _is_email_service,
+    _build_test_notification_failure_message,
     _should_include_json,
     _build_json_data,
     _append_json_to_body,
@@ -189,6 +190,23 @@ class TestHelperFunctions:
         assert not _is_email_service("slack://token/channel")
         assert not _is_email_service("discord://webhook")
         assert not _is_email_service("https://webhook.site/abc123")
+
+    def test_build_test_notification_failure_message_for_ntfys(self):
+        message = _build_test_notification_failure_message(
+            "ntfys://user:pass@example.com/topic"
+        )
+
+        assert "ntfy" in message
+        assert "URL format was accepted" in message
+        assert "percent-encoded" in message
+
+    def test_build_test_notification_failure_message_for_email(self):
+        message = _build_test_notification_failure_message(
+            "mailtos://user:pass@smtp.example.com"
+        )
+
+        assert "Gmail" in message
+        assert "SMTP server is reachable" in message
 
     def test_is_webhook_service(self):
         """Test webhook service detection"""
