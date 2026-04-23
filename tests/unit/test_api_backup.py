@@ -293,6 +293,61 @@ class TestBackupJobs:
 
         assert response.status_code == 200
 
+    def test_list_manual_backup_jobs_filtered_by_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        primary_repo = Repository(
+            name="Primary Repo",
+            path="/repos/primary",
+            encryption="none",
+            repository_type="local",
+        )
+        secondary_repo = Repository(
+            name="Secondary Repo",
+            path="/repos/secondary",
+            encryption="none",
+            repository_type="local",
+        )
+        matching_manual_job = BackupJob(
+            repository=primary_repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+        )
+        other_manual_job = BackupJob(
+            repository=secondary_repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+        )
+        scheduled_job = BackupJob(
+            repository=primary_repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            scheduled_job_id=123,
+        )
+        test_db.add_all(
+            [
+                primary_repo,
+                secondary_repo,
+                matching_manual_job,
+                other_manual_job,
+                scheduled_job,
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/backup/jobs?manual_only=true&repository=/repos/primary",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        jobs = response.json()["jobs"]
+        assert [job["id"] for job in jobs] == [matching_manual_job.id]
+        assert all(job["repository"] == "/repos/primary" for job in jobs)
+
     def test_list_backup_jobs_unauthorized(self, test_client: TestClient):
         """Test listing backup jobs without authentication"""
         response = test_client.get("/api/backup/jobs")

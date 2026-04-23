@@ -215,6 +215,7 @@ async def get_all_backup_jobs(
     limit: int = 200,
     scheduled_only: bool = False,
     manual_only: bool = False,
+    repository: Optional[str] = None,
 ):
     """Get all backup jobs (most recent first) with progress details
 
@@ -231,6 +232,9 @@ async def get_all_backup_jobs(
         elif manual_only:
             # Filter to only jobs without scheduled_job_id (manual backups)
             query = query.filter(BackupJob.scheduled_job_id.is_(None))
+
+        if repository:
+            query = query.filter(BackupJob.repository == repository)
 
         jobs = query.order_by(BackupJob.id.desc()).limit(limit).all()
         visible_jobs = []

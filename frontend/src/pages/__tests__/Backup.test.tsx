@@ -10,6 +10,11 @@ const { trackBackup, toastSuccess, toastError } = vi.hoisted(() => ({
   toastError: vi.fn(),
 }))
 
+const { getManualJobsMock, backupJobsTableMock } = vi.hoisted(() => ({
+  getManualJobsMock: vi.fn(),
+  backupJobsTableMock: vi.fn(),
+}))
+
 let locationState: Record<string, unknown> | null = null
 let canManageAll = false
 let canDoBackup = true
@@ -81,7 +86,10 @@ vi.mock('../../components/RepoSelect', () => ({
 }))
 
 vi.mock('../../components/BackupJobsTable', () => ({
-  default: () => <div>backup jobs table</div>,
+  default: (props: unknown) => {
+    backupJobsTableMock(props)
+    return <div>backup jobs table</div>
+  },
 }))
 
 vi.mock('../../components/LogViewerDialog', () => ({
@@ -90,7 +98,7 @@ vi.mock('../../components/LogViewerDialog', () => ({
 
 vi.mock('../../services/api', () => ({
   backupAPI: {
-    getManualJobs: vi.fn(() =>
+    getManualJobs: getManualJobsMock.mockImplementation(() =>
       Promise.resolve({
         data: {
           jobs: manualJobsPayload,
@@ -202,6 +210,44 @@ describe('Backup page', () => {
 
     expect(await screen.findByText('choose Primary Repo')).toBeInTheDocument()
     expect(screen.queryByText('choose Observe Repo')).not.toBeInTheDocument()
+  })
+
+  it('only loads recent jobs for the selected repository', async () => {
+    const user = userEvent.setup()
+    manualJobsPayload = [
+      {
+        id: 42,
+        repository: '/repos/primary',
+        status: 'completed',
+      },
+    ]
+
+    renderWithProviders(<Backup />)
+
+    await waitFor(() => {
+      expect(getManualJobsMock).not.toHaveBeenCalled()
+    })
+
+    await user.click(await screen.findByRole('button', { name: /choose primary repo/i }))
+
+    await waitFor(() => {
+      expect(getManualJobsMock).toHaveBeenCalledWith('/repos/primary')
+    })
+
+    expect(backupJobsTableMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        jobs: manualJobsPayload,
+      })
+    )
+  })
+
+  it('labels the history section as recent manual jobs', async () => {
+    renderWithProviders(<Backup />)
+
+    expect(await screen.findByText('Recent Manual Jobs')).toBeInTheDocument()
+    expect(
+      screen.getByText('History of manual backup operations for the selected repository')
+    ).toBeInTheDocument()
   })
 
   it('tracks repository selection and hides manual backup choices when backup permission is missing', async () => {

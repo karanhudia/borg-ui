@@ -322,8 +322,8 @@
       }
     },
     "recentJobs": {
-      "title": "Recent Jobs",
-      "subtitle": "History of backup operations",
+      "title": "Recent Manual Jobs",
+      "subtitle": "History of manual backup operations for the selected repository",
       "empty": "No backup jobs found"
     },
     "toasts": {

@@ -276,7 +276,13 @@ export const backupAPI = {
   startBackup: (repository?: string) => api.post('/backup/start', { repository }),
   getStatus: (jobId: string) => api.get(`/backup/status/${jobId}`),
   getAllJobs: () => api.get('/backup/jobs'),
-  getManualJobs: () => api.get('/backup/jobs?manual_only=true'),
+  getManualJobs: (repository?: string) =>
+    api.get('/backup/jobs', {
+      params: {
+        manual_only: true,
+        ...(repository ? { repository } : {}),
+      },
+    }),
   getScheduledJobs: () => api.get('/backup/jobs?scheduled_only=true'),
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
   // Download logs as file (only for failed/cancelled backups)

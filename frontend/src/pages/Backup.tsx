@@ -55,10 +55,11 @@ const Backup: React.FC = () => {
     }
   }, [location.state])
 
-  // Get backup status and history (manual backups only)
+  // Get backup status and history (manual backups only) for the selected repository
   const { data: backupStatusResponse, isLoading: loadingStatus } = useQuery({
-    queryKey: ['backup-status-manual'],
-    queryFn: backupAPI.getManualJobs,
+    queryKey: ['backup-status-manual', selectedRepository],
+    queryFn: () => backupAPI.getManualJobs(selectedRepository),
+    enabled: Boolean(selectedRepository),
     refetchInterval: 1000, // Poll every 1 second for real-time updates
   })
   const backupStatus = backupStatusResponse?.data?.jobs
@@ -144,7 +145,7 @@ const Backup: React.FC = () => {
   }
 
   const runningJobs = backupStatus?.filter((job: BackupJob) => job.status === 'running') || []
-  const recentJobs = backupStatus || []
+  const recentJobs = selectedRepository ? backupStatus || [] : []
 
   useTrackedJobOutcomes<BackupJob>({
     jobs: recentJobs,
