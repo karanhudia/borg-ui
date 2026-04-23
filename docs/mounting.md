@@ -145,6 +145,24 @@ services:
 
 Replace `/path/to/host/mountpoint` with a directory on your host (e.g. `/mnt/borg-mounts`). After you mount an archive in the UI, it will appear under that path on the host.
 
+**Important:** the host-side source mount must also allow shared propagation. The Compose snippet alone is not always enough.
+
+Check the host path propagation mode:
+
+```bash
+findmnt -o TARGET,PROPAGATION /path/to/host/mountpoint
+```
+
+If it is not `shared` or `rshared`, update it on the host:
+
+```bash
+sudo mount --make-rshared /path/to/host/mountpoint
+```
+
+If the host path lives under another mount with restrictive propagation, you may need to make the parent mount `rshared` as well.
+
+If the archive is visible inside the container at `/data/mounts/...` but not on the host, this is almost always a host mount propagation issue rather than a Borg UI mount failure.
+
 ---
 
 ## Timeouts for Large Repositories
