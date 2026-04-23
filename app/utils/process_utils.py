@@ -23,6 +23,43 @@ from app.database.models import (
 logger = structlog.get_logger()
 
 
+def _mark_stale_backup_maintenance_failed(db: Session) -> int:
+    """
+    Normalize backup rows left in running maintenance states after a restart.
+
+    This handles stale backup rows even when the corresponding prune/compact
+    child job row is already gone or no longer marked as running.
+    """
+    stale_backup_jobs = (
+        db.query(BackupJob)
+        .filter(
+            BackupJob.maintenance_status.in_(["running_prune", "running_compact"]),
+            BackupJob.status != "completed",
+        )
+        .all()
+    )
+
+    for backup_job in stale_backup_jobs:
+        previous_state = backup_job.maintenance_status
+        backup_job.status = "failed"
+        backup_job.completed_at = backup_job.completed_at or datetime.utcnow()
+        backup_job.error_message = backup_job.error_message or json.dumps(
+            {"key": "backend.errors.service.containerRestartedDuringOperation"}
+        )
+        backup_job.maintenance_status = (
+            "prune_failed" if previous_state == "running_prune" else "compact_failed"
+        )
+        logger.info(
+            "Normalized stale backup maintenance state after restart",
+            backup_job_id=backup_job.id,
+            repository=backup_job.repository,
+            previous_maintenance_status=previous_state,
+            new_maintenance_status=backup_job.maintenance_status,
+        )
+
+    return len(stale_backup_jobs)
+
+
 def is_process_alive(pid: int, stored_start_time: int) -> bool:
     """
     Check if a process with given PID and start_time is still running
@@ -144,6 +181,8 @@ def cleanup_orphaned_jobs(db: Session):
     """
     logger.info("Checking for orphaned jobs...")
 
+    stale_backup_jobs = _mark_stale_backup_maintenance_failed(db)
+
     # Find all running backup jobs
     running_backup_jobs = (
         db.query(BackupJob).filter(BackupJob.status == "running").all()
@@ -171,6 +210,7 @@ def cleanup_orphaned_jobs(db: Session):
         + len(running_check_jobs)
         + len(running_prune_jobs)
         + len(running_compact_jobs)
+        + stale_backup_jobs
     )
     logger.info(
         "Found running jobs",
@@ -179,6 +219,7 @@ def cleanup_orphaned_jobs(db: Session):
         check_jobs=len(running_check_jobs),
         prune_jobs=len(running_prune_jobs),
         compact_jobs=len(running_compact_jobs),
+        stale_backup_maintenance_jobs=stale_backup_jobs,
     )
 
     if total_jobs == 0:

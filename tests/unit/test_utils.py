@@ -158,6 +158,7 @@ class TestProcessUtils:
 
         # Setup query chain
         query_results = [
+            [mock_backup_job],  # stale backup maintenance jobs
             [mock_backup_job],  # running backup jobs
             [],  # running restore jobs
             [],  # running check jobs
@@ -206,6 +207,49 @@ class TestProcessUtils:
         assert mock_compact_backup_job.maintenance_status == "compact_failed"
 
         # Verify commit was called
+        mock_db.commit.assert_called_once()
+
+    def test_cleanup_orphaned_jobs_normalizes_stale_backup_maintenance_without_child_job(
+        self,
+    ):
+        """Test stale backup maintenance state is repaired even without a running child job"""
+        mock_db = MagicMock()
+
+        stale_backup_job = MagicMock(spec=BackupJob)
+        stale_backup_job.id = 10
+        stale_backup_job.repository = "repo-stale"
+        stale_backup_job.status = "running"
+        stale_backup_job.maintenance_status = "running_prune"
+        stale_backup_job.completed_at = None
+        stale_backup_job.error_message = None
+
+        query_results = [
+            [stale_backup_job],  # stale backup maintenance jobs
+            [],  # running backup jobs
+            [],  # running restore jobs
+            [],  # running check jobs
+            [],  # running prune jobs
+            [],  # running compact jobs
+        ]
+
+        def build_query(result):
+            mock_query = MagicMock()
+            mock_query.filter.return_value = mock_query
+            mock_query.all.return_value = result
+            mock_query.first.return_value = None
+            return mock_query
+
+        mock_db.query.side_effect = [build_query(result) for result in query_results]
+
+        cleanup_orphaned_jobs(mock_db)
+
+        assert stale_backup_job.status == "failed"
+        assert stale_backup_job.maintenance_status == "prune_failed"
+        assert stale_backup_job.completed_at is not None
+        assert (
+            json.loads(stale_backup_job.error_message)["key"]
+            == "backend.errors.service.containerRestartedDuringOperation"
+        )
         mock_db.commit.assert_called_once()
 
     @patch("app.utils.process_utils.settings")
