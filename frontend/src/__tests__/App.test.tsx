@@ -59,9 +59,6 @@ vi.mock('../pages/Backup', () => ({
 vi.mock('../pages/Archives', () => ({
   default: () => <div>Archives Page</div>,
 }))
-vi.mock('../pages/Restore', () => ({
-  default: () => <div>Restore Page</div>,
-}))
 vi.mock('../pages/Schedule', () => ({
   default: () => <div>Schedule Page</div>,
 }))

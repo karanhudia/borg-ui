@@ -1421,38 +1421,6 @@ class TestRepositoriesStatistics:
 
         assert stats["archive_count"] == 0
 
-    def test_list_archive_files_uses_v2_router_for_borg2_repo(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        repo = Repository(
-            name="V2 Files Repo",
-            path="/tmp/v2-files-repo",
-            encryption="none",
-            compression="lz4",
-            repository_type="local",
-            borg_version=2,
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with patch(
-            "app.api.repositories.BorgRouter.list_archive_contents",
-            new_callable=AsyncMock,
-        ) as mock_list:
-            mock_list.return_value = {
-                "success": True,
-                "stdout": '{"path":"photo.jpg","type":"-","size":42}\n',
-            }
-            response = test_client.get(
-                f"/api/repositories/{repo.id}/archives/archive-1/files",
-                headers=admin_headers,
-            )
-
-        assert response.status_code == 200
-        assert response.json()["success"] is True
-        mock_list.assert_awaited_once()
-
 
 @pytest.mark.unit
 class TestRepositoriesImport:

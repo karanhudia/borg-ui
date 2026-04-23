@@ -8,7 +8,6 @@ import Login from './pages/Login'
 import Dashboard from './pages/DashboardV3'
 import Backup from './pages/Backup'
 import Archives from './pages/Archives'
-import Restore from './pages/Restore'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
 import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
@@ -166,14 +165,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/restore"
-          element={
-            <ProtectedRoute requiredTab="restore">
-              <Restore />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/restore" element={<Navigate to="/archives" replace />} />
         <Route
           path="/schedule/*"
           element={

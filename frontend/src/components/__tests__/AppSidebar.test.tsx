@@ -126,16 +126,6 @@ describe('AppSidebar', () => {
     })
   })
 
-  it('shows restore navigation when enabled in system settings', async () => {
-    mockGetSystemSettings.mockResolvedValue({
-      data: { settings: { show_restore_tab: true } },
-    })
-
-    renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
-
-    expect(await screen.findAllByRole('link', { name: /restore/i })).not.toHaveLength(0)
-  })
-
   it('shows MQTT settings navigation when enabled', async () => {
     const user = userEvent.setup()
     mockGetSystemSettings.mockResolvedValue({

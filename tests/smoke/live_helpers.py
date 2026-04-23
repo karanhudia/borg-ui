@@ -607,7 +607,7 @@ class SmokeClient:
         params = {"path": path} if path else None
         response = self.request_ok(
             "GET",
-            f"/api/restore/contents/{repo_id}/{archive_name}",
+            f"/api/browse/{repo_id}/{archive_name}",
             token=token,
             params=params,
         )

@@ -305,12 +305,6 @@ export const archivesAPI = {
 }
 
 export const restoreAPI = {
-  getRepositories: () => api.get('/restore/repositories'),
-  getArchives: (repositoryId: number) => api.get(`/restore/archives/${repositoryId}`),
-  getArchiveContents: (repositoryId: number, archiveName: string, path: string = '') =>
-    api.get(`/restore/contents/${repositoryId}/${encodeURIComponent(archiveName)}`, {
-      params: { path },
-    }),
   previewRestore: (repository: string, archive: string, paths: string[]) =>
     api.post('/restore/preview', { repository, archive, paths }),
   startRestore: (
@@ -481,19 +475,6 @@ export const repositoriesAPI = {
   getRepositoryPruneJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/prune-jobs`, { params: { limit } }),
   getRunningJobs: (id: number) => api.get(`/repositories/${id}/running-jobs`),
-  getArchiveInfo: (
-    repoId: number,
-    archiveName: string,
-    includeFiles: boolean = true,
-    fileLimit: number = 1000
-  ) =>
-    api.get(`/repositories/${repoId}/archives/${archiveName}/info`, {
-      params: { include_files: includeFiles, file_limit: fileLimit },
-    }),
-  getArchiveFiles: (repoId: number, archiveName: string, limit?: number) =>
-    api.get(`/repositories/${repoId}/archives/${archiveName}/files`, {
-      params: limit ? { limit } : undefined,
-    }),
   // Check schedule management
   getCheckSchedule: (id: number) => api.get(`/repositories/${id}/check-schedule`),
   updateCheckSchedule: (id: number, data: ApiData) =>

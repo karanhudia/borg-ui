@@ -17,7 +17,8 @@ import {
   alpha,
 } from '@mui/material'
 import { Folder, File, ChevronRight, Home, CheckSquare, Square, MinusSquare } from 'lucide-react'
-import { restoreAPI } from '../../services/api'
+import { BorgApiClient, type Repository } from '../../services/borgApi/client'
+import type { Archive } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 
@@ -33,15 +34,15 @@ export interface RestoreFilesStepData {
 }
 
 interface WizardStepRestoreFilesProps {
-  repositoryId: number
-  archiveName: string
+  repository: Repository
+  archive: Pick<Archive, 'id' | 'name'>
   data: RestoreFilesStepData
   onChange: (data: Partial<RestoreFilesStepData>) => void
 }
 
 export default function WizardStepRestoreFiles({
-  repositoryId,
-  archiveName,
+  repository,
+  archive,
   data,
   onChange,
 }: WizardStepRestoreFilesProps) {
@@ -59,7 +60,11 @@ export default function WizardStepRestoreFiles({
       setError(null)
 
       try {
-        const response = await restoreAPI.getArchiveContents(repositoryId, archiveName, currentPath)
+        const response = await new BorgApiClient(repository).getArchiveContents(
+          archive.id,
+          archive.name,
+          currentPath
+        )
         setItems(response.data.items || [])
       } catch (err: unknown) {
         const error = err as { response?: { data?: { detail?: string } } }
@@ -73,7 +78,7 @@ export default function WizardStepRestoreFiles({
     }
 
     fetchContents()
-  }, [repositoryId, archiveName, currentPath, t])
+  }, [repository, archive, currentPath, t])
 
   // Parse breadcrumb path
   const pathParts = currentPath ? currentPath.split('/').filter(Boolean) : []

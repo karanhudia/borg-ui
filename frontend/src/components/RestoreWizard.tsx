@@ -18,6 +18,7 @@ import {
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
 import { sshKeysAPI } from '../services/api'
+import type { Archive, Repository } from '../types'
 
 interface SSHConnection {
   id: number
@@ -43,8 +44,8 @@ interface ArchiveFile {
 interface RestoreWizardProps {
   open: boolean
   onClose: () => void
-  archiveName: string
-  repositoryId: number
+  archive: Pick<Archive, 'id' | 'name'>
+  repository: Repository
   repositoryType: string
   onRestore: (data: RestoreData) => void
 }
@@ -81,8 +82,8 @@ const initialState: WizardState = {
 const RestoreWizard = ({
   open,
   onClose,
-  archiveName,
-  repositoryId,
+  archive,
+  repository,
   repositoryType,
   onRestore,
 }: RestoreWizardProps) => {
@@ -236,8 +237,8 @@ const RestoreWizard = ({
       case 'files':
         return (
           <WizardStepRestoreFiles
-            repositoryId={repositoryId}
-            archiveName={archiveName}
+            repository={repository}
+            archive={archive}
             data={{
               selectedPaths: wizardState.selectedPaths,
             }}
@@ -282,7 +283,7 @@ const RestoreWizard = ({
             }}
             selectedFiles={selectedFiles}
             sshConnections={sshConnections}
-            archiveName={archiveName}
+            archiveName={archive.name}
           />
         )
 
@@ -317,7 +318,7 @@ const RestoreWizard = ({
             {t('restoreWizard.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {t('restoreWizard.fromArchive', { archiveName })}
+            {t('restoreWizard.fromArchive', { archiveName: archive.name })}
           </Typography>
         </DialogTitle>
         <DialogContent>

@@ -26,7 +26,6 @@ import {
   Zap,
   HardDrive,
   Sliders,
-  RotateCcw,
   Wifi,
 } from 'lucide-react'
 import api, { settingsAPI } from '../services/api'
@@ -127,7 +126,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     },
   })
 
-  const showRestoreTab = systemData?.settings?.show_restore_tab ?? false
   const showMqttNav = systemData?.settings?.mqtt_beta_enabled ?? false
 
   const navigationSections = React.useMemo(() => {
@@ -152,15 +150,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
       { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
     ]
-
-    if (showRestoreTab) {
-      backupItems.push({
-        name: 'Restore',
-        href: '/restore',
-        icon: RotateCcw,
-        key: 'archives' as const,
-      })
-    }
 
     backupItems.push({ name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const })
 
@@ -248,7 +237,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       },
     ]
   }, [
-    showRestoreTab,
     showMqttNav,
     canManageUsers,
     canManageLicensing,

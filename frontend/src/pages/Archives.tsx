@@ -608,8 +608,8 @@ const Archives: React.FC = () => {
         <RestoreWizard
           open={showRestoreWizard}
           onClose={() => setShowRestoreWizard(false)}
-          archiveName={restoreArchive.name}
-          repositoryId={selectedRepository.id}
+          archive={restoreArchive}
+          repository={selectedRepository}
           repositoryType={selectedRepository.repository_type || 'local'}
           onRestore={handleRestoreFromWizard}
         />
