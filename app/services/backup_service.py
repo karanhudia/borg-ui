@@ -1426,7 +1426,10 @@ class BackupService:
 
             # Setup SSH-specific configuration if this is an SSH repository
             env, temp_key_file = build_repository_borg_env(
-                repo_record, db, base_env=env
+                repo_record,
+                db,
+                keepalive=True,
+                base_env=env,
             )
             if temp_key_file:
                 logger.info(
