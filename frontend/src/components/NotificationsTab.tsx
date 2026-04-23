@@ -111,7 +111,6 @@ const NotificationsTab: React.FC = () => {
       toast.success(t('notifications.serviceAddedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setShowDialog(false)
-      resetForm()
       trackNotifications(EventAction.CREATE, {
         enabled: formData.enabled,
         monitor_all_repositories: formData.monitor_all_repositories,
@@ -134,8 +133,6 @@ const NotificationsTab: React.FC = () => {
       toast.success(t('notifications.serviceUpdatedSuccessfully'))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setShowDialog(false)
-      setEditingNotification(null)
-      resetForm()
       trackNotifications(EventAction.EDIT, {
         enabled: formData.enabled,
         monitor_all_repositories: formData.monitor_all_repositories,
@@ -474,6 +471,7 @@ const NotificationsTab: React.FC = () => {
             startIcon={<Plus size={18} />}
             onClick={() => {
               resetForm()
+              setEditingNotification(null)
               setShowDialog(true)
             }}
           >
