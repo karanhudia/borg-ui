@@ -1596,6 +1596,7 @@
       "notifyOn": "Notify on:",
       "started": "Started",
       "success": "Success",
+      "warning": "Warning",
       "failure": "Failure",
       "schedulerErrors": "Scheduler Errors",
       "schedulerErrorsHelper": "Notifies when the scheduler fails to start a backup (e.g., system errors). Regular backup failures are handled above.",
@@ -1632,6 +1633,7 @@
       "events": {
         "start": "Start",
         "success": "Success",
+        "warning": "Warning",
         "failure": "Failure",
         "off": "Off",
         "errors": "Errors"

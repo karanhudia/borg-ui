@@ -845,6 +845,7 @@ class NotificationSettings(Base):
     # Event triggers
     notify_on_backup_start = Column(Boolean, default=False, nullable=False)
     notify_on_backup_success = Column(Boolean, default=False, nullable=False)
+    notify_on_backup_warning = Column(Boolean, default=False, nullable=False)
     notify_on_backup_failure = Column(Boolean, default=True, nullable=False)
     notify_on_restore_success = Column(Boolean, default=False, nullable=False)
     notify_on_restore_failure = Column(Boolean, default=True, nullable=False)

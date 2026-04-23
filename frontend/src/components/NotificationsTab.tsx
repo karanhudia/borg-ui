@@ -44,6 +44,7 @@ interface NotificationSetting {
   include_job_name_in_title: boolean
   notify_on_backup_start: boolean
   notify_on_backup_success: boolean
+  notify_on_backup_warning: boolean
   notify_on_backup_failure: boolean
   notify_on_restore_success: boolean
   notify_on_restore_failure: boolean
@@ -75,6 +76,7 @@ const NotificationsTab: React.FC = () => {
     include_job_name_in_title: false,
     notify_on_backup_start: false,
     notify_on_backup_success: false,
+    notify_on_backup_warning: false,
     notify_on_backup_failure: true,
     notify_on_restore_success: false,
     notify_on_restore_failure: true,
@@ -197,6 +199,7 @@ const NotificationsTab: React.FC = () => {
       include_job_name_in_title: false,
       notify_on_backup_start: false,
       notify_on_backup_success: false,
+      notify_on_backup_warning: false,
       notify_on_backup_failure: true,
       notify_on_restore_success: false,
       notify_on_restore_failure: true,
@@ -218,6 +221,7 @@ const NotificationsTab: React.FC = () => {
       include_job_name_in_title: notification.include_job_name_in_title || false,
       notify_on_backup_start: notification.notify_on_backup_start,
       notify_on_backup_success: notification.notify_on_backup_success,
+      notify_on_backup_warning: notification.notify_on_backup_warning,
       notify_on_backup_failure: notification.notify_on_backup_failure,
       notify_on_restore_success: notification.notify_on_restore_success,
       notify_on_restore_failure: notification.notify_on_restore_failure,
@@ -244,6 +248,7 @@ const NotificationsTab: React.FC = () => {
       include_job_name_in_title: notification.include_job_name_in_title || false,
       notify_on_backup_start: notification.notify_on_backup_start,
       notify_on_backup_success: notification.notify_on_backup_success,
+      notify_on_backup_warning: notification.notify_on_backup_warning,
       notify_on_backup_failure: notification.notify_on_backup_failure,
       notify_on_restore_success: notification.notify_on_restore_success,
       notify_on_restore_failure: notification.notify_on_restore_failure,
@@ -692,6 +697,17 @@ const NotificationsTab: React.FC = () => {
                     />
                   }
                   label={t('notifications.form.success')}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_backup_warning}
+                      onChange={(e) =>
+                        setFormData({ ...formData, notify_on_backup_warning: e.target.checked })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.warning')}
                 />
                 <FormControlLabel
                   control={

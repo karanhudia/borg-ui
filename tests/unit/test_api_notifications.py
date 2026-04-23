@@ -42,6 +42,7 @@ class TestNotificationSettingsAPI:
         assert data["name"] == "Slack Alerts"
         assert data["enabled"] is True
         assert data["monitor_all_repositories"] is True
+        assert data["notify_on_backup_warning"] is False
         assert data["repositories"] == []
 
         setting = (
@@ -161,6 +162,35 @@ class TestNotificationSettingsAPI:
         data = response.json()
         assert data["monitor_all_repositories"] is True
         assert data["repositories"] == []
+
+    def test_update_notification_setting_backup_warning_toggle(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        setting = NotificationSettings(
+            name="Warning Toggle",
+            service_url="slack://token/",
+            notify_on_backup_warning=False,
+        )
+        test_db.add(setting)
+        test_db.commit()
+        test_db.refresh(setting)
+
+        response = test_client.put(
+            f"/api/notifications/{setting.id}",
+            json={"notify_on_backup_warning": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["notify_on_backup_warning"] is True
+
+        refreshed = (
+            test_db.query(NotificationSettings)
+            .filter(NotificationSettings.id == setting.id)
+            .first()
+        )
+        assert refreshed.notify_on_backup_warning is True
 
     def test_delete_notification_setting_success(
         self, test_client: TestClient, admin_headers, test_db

@@ -1083,8 +1083,7 @@ class NotificationService:
             db.query(NotificationSettings)
             .filter(
                 NotificationSettings.enabled == True,
-                NotificationSettings.notify_on_backup_success
-                == True,  # Use success setting for warnings
+                NotificationSettings.notify_on_backup_warning == True,
             )
             .all()
         )

@@ -111,6 +111,65 @@ async def test_send_backup_failure_discord(
 
 
 @pytest.mark.asyncio
+async def test_send_backup_warning_uses_warning_toggle_only(
+    test_db, mock_apprise, mock_repository
+):
+    setting = NotificationSettings(
+        name="Warning Alert",
+        service_url="slack://token/channel",
+        enabled=True,
+        notify_on_backup_success=False,
+        notify_on_backup_warning=True,
+        monitor_all_repositories=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    await notification_service.send_backup_warning(
+        test_db,
+        mock_repository.name,
+        "archive-warning",
+        "File changed while reading",
+    )
+
+    assert apprise_instance.notify.call_count == 1
+    call_args = apprise_instance.notify.call_args[1]
+    assert call_args["title"] == "[WARNING] Backup Completed with Warnings"
+    assert "File changed while reading" in call_args["body"]
+
+
+@pytest.mark.asyncio
+async def test_send_backup_warning_not_sent_without_warning_toggle(
+    test_db, mock_apprise, mock_repository
+):
+    setting = NotificationSettings(
+        name="Success Only Alert",
+        service_url="slack://token/channel",
+        enabled=True,
+        notify_on_backup_success=True,
+        notify_on_backup_warning=False,
+        monitor_all_repositories=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+
+    await notification_service.send_backup_warning(
+        test_db,
+        mock_repository.name,
+        "archive-warning",
+        "File changed while reading",
+    )
+
+    apprise_instance.notify.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_repo_filtering(
     test_db, mock_apprise, mock_repository, email_notification_setting
 ):
