@@ -27,7 +27,7 @@
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.72.1",
     "react-hot-toast": "^2.6.0",
-    "react-i18next": "^16.6.5",
+    "react-i18next": "^17.0.4",
     "react-router-dom": "^7.14.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0"
