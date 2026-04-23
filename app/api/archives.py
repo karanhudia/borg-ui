@@ -5,6 +5,7 @@ import structlog
 import json
 import os
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
+from types import SimpleNamespace
 
 from app.api.archive_download import extract_file_download
 from app.database.database import get_db
@@ -289,7 +290,11 @@ async def delete_archive(
         db.refresh(delete_job)
 
         # Execute delete asynchronously (non-blocking)
-        asyncio.create_task(BorgRouter(repo).delete_archive(delete_job.id, archive_id))
+        asyncio.create_task(
+            BorgRouter(
+                SimpleNamespace(id=repo.id, borg_version=repo.borg_version)
+            ).delete_archive(delete_job.id, archive_id)
+        )
 
         logger.info(
             "Delete archive job created",

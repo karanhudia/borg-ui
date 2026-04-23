@@ -7,6 +7,7 @@ from app.database.models import PruneJob, Repository
 from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
+from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
@@ -77,17 +78,39 @@ class PruneService:
             )
             if not repository:
                 logger.error("Repository not found", repository_id=repository_id)
-                job.status = "failed"
-                job.error_message = f"Repository not found (ID: {repository_id})"
-                job.completed_at = datetime.utcnow()
-                db.commit()
+                completed_at = datetime.utcnow()
+
+                def persist_missing_repo_state():
+                    job.status = "failed"
+                    job.error_message = f"Repository not found (ID: {repository_id})"
+                    job.completed_at = completed_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_missing_repo_state,
+                    logger=logger,
+                    action="prune_missing_repo",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
                 return
 
             # Update job status - may fail if job was deleted after we queried it
             try:
-                job.status = "running"
-                job.started_at = datetime.utcnow()
-                db.commit()
+                started_at = datetime.utcnow()
+
+                def persist_start_state():
+                    job.status = "running"
+                    job.started_at = started_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_start_state,
+                    logger=logger,
+                    action="prune_start",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
             except Exception as status_error:
                 # Job was deleted while starting - exit gracefully
                 logger.warning(
@@ -302,7 +325,29 @@ class PruneService:
                         "Failed to save log buffer", job_id=job_id, error=str(e)
                     )
 
-            db.commit()
+            final_status = job.status
+            final_completed_at = job.completed_at
+            final_error_message = job.error_message
+            final_log_file_path = job.log_file_path
+            final_has_logs = job.has_logs
+            final_logs = job.logs
+
+            def persist_final_state():
+                job.status = final_status
+                job.completed_at = final_completed_at
+                job.error_message = final_error_message
+                job.log_file_path = final_log_file_path
+                job.has_logs = final_has_logs
+                job.logs = final_logs
+
+            await commit_with_retry(
+                db,
+                prepare=persist_final_state,
+                logger=logger,
+                action="prune_finalize",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
             logger.info(
                 "Prune job completed", job_id=job_id, status=job.status, dry_run=dry_run
             )
@@ -312,10 +357,21 @@ class PruneService:
 
             # Try to update job status - may fail if job was deleted during execution
             try:
-                job.status = "failed"
-                job.error_message = str(e)
-                job.completed_at = datetime.utcnow()
-                db.commit()
+                completed_at = datetime.utcnow()
+
+                def persist_failure_state():
+                    job.status = "failed"
+                    job.error_message = str(e)
+                    job.completed_at = completed_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_failure_state,
+                    logger=logger,
+                    action="prune_fail",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
             except Exception as commit_error:
                 # Job may have been deleted while running - that's okay
                 logger.warning(

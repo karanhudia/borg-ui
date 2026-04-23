@@ -12,6 +12,7 @@ from app.database.models import DeleteArchiveJob, Repository
 from app.database.database import SessionLocal
 from app.core.borg2 import borg2
 from app.config import settings
+from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
@@ -38,16 +39,37 @@ class DeleteArchiveV2Service:
 
             repo = db.query(Repository).filter(Repository.id == repository_id).first()
             if not repo:
-                job.status = "failed"
-                job.error_message = "Repository not found"
-                db.commit()
+
+                def persist_missing_repo_state():
+                    job.status = "failed"
+                    job.error_message = "Repository not found"
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_missing_repo_state,
+                    logger=logger,
+                    action="borg2_delete_missing_repo",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
                 return
 
-            job.status = "running"
-            job.started_at = datetime.now(timezone.utc)
-            job.progress = 10
-            job.progress_message = "Deleting archive..."
-            db.commit()
+            started_at = datetime.now(timezone.utc)
+
+            def persist_start_state():
+                job.status = "running"
+                job.started_at = started_at
+                job.progress = 10
+                job.progress_message = "Deleting archive..."
+
+            await commit_with_retry(
+                db,
+                prepare=persist_start_state,
+                logger=logger,
+                action="borg2_delete_start",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
             env, temp_key_file = build_repository_borg_env(repo, db, keepalive=True)
 
@@ -61,10 +83,21 @@ class DeleteArchiveV2Service:
             )
 
             if not delete_result["success"]:
-                job.status = "failed"
-                job.error_message = delete_result["stderr"]
-                job.completed_at = datetime.now(timezone.utc)
-                db.commit()
+                completed_at = datetime.now(timezone.utc)
+
+                def persist_delete_failure():
+                    job.status = "failed"
+                    job.error_message = delete_result["stderr"]
+                    job.completed_at = completed_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_delete_failure,
+                    logger=logger,
+                    action="borg2_delete_delete_fail",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
                 logger.error(
                     "Borg2 delete archive failed",
                     job_id=job_id,
@@ -73,9 +106,18 @@ class DeleteArchiveV2Service:
                 return
 
             # Step 2: compact (mandatory in borg2 to reclaim space)
-            job.progress = 60
-            job.progress_message = "Compacting repository to free space..."
-            db.commit()
+            def persist_compact_transition():
+                job.progress = 60
+                job.progress_message = "Compacting repository to free space..."
+
+            await commit_with_retry(
+                db,
+                prepare=persist_compact_transition,
+                logger=logger,
+                action="borg2_delete_compact_transition",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
             compact_result = await borg2.compact(
                 repository=repo.path,
@@ -92,11 +134,22 @@ class DeleteArchiveV2Service:
                     stderr=compact_result["stderr"],
                 )
 
-            job.status = "completed"
-            job.progress = 100
-            job.progress_message = "Archive deleted and repository compacted"
-            job.completed_at = datetime.now(timezone.utc)
-            db.commit()
+            completed_at = datetime.now(timezone.utc)
+
+            def persist_final_state():
+                job.status = "completed"
+                job.progress = 100
+                job.progress_message = "Archive deleted and repository compacted"
+                job.completed_at = completed_at
+
+            await commit_with_retry(
+                db,
+                prepare=persist_final_state,
+                logger=logger,
+                action="borg2_delete_finalize",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
             logger.info(
                 "Borg2 archive deleted successfully",
@@ -115,10 +168,21 @@ class DeleteArchiveV2Service:
                     .first()
                 )
                 if job:
-                    job.status = "failed"
-                    job.error_message = str(e)
-                    job.completed_at = datetime.now(timezone.utc)
-                    db.commit()
+                    completed_at = datetime.now(timezone.utc)
+
+                    def persist_failure_state():
+                        job.status = "failed"
+                        job.error_message = str(e)
+                        job.completed_at = completed_at
+
+                    await commit_with_retry(
+                        db,
+                        prepare=persist_failure_state,
+                        logger=logger,
+                        action="borg2_delete_fail",
+                        job_id=job_id,
+                        repository_id=repository_id,
+                    )
             except Exception:
                 pass
         finally:

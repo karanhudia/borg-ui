@@ -1,8 +1,10 @@
 import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.database.models import CheckJob, Repository, SystemSettings
 from app.services.check_scheduler import CheckScheduler
@@ -101,6 +103,144 @@ async def test_check_scheduler_ignores_invalid_cron_expression(db_session):
     assert repo.last_scheduled_check is not None
     assert repo.next_scheduled_check is None
     verification_session.close()
+
+
+class _AsyncLineStream:
+    def __init__(self, lines):
+        self._lines = [
+            line if isinstance(line, bytes) else line.encode("utf-8") for line in lines
+        ]
+        self._index = 0
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._index >= len(self._lines):
+            raise StopAsyncIteration
+        value = self._lines[self._index]
+        self._index += 1
+        return value
+
+
+class _FakeProcess:
+    def __init__(self, returncode=0, stderr_lines=None, pid=4321):
+        self.returncode = returncode
+        self.stderr = _AsyncLineStream(stderr_lines or [])
+        self.stdout = _AsyncLineStream([])
+        self.pid = pid
+
+    async def wait(self):
+        return self.returncode
+
+    def terminate(self):
+        self.returncode = -15
+
+    def kill(self):
+        self.returncode = -9
+
+
+class _LockingSession(Session):
+    """Inject one transient SQLite lock when a check job is first marked running."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._injected_running_lock = False
+
+    def commit(self):
+        dirty_running_jobs = [
+            obj
+            for obj in self.dirty
+            if isinstance(obj, CheckJob) and getattr(obj, "status", None) == "running"
+        ]
+        if dirty_running_jobs and not self._injected_running_lock:
+            self._injected_running_lock = True
+            raise OperationalError(
+                "UPDATE check_jobs SET status='running'",
+                {},
+                Exception("database is locked"),
+            )
+        return super().commit()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_check_scheduler_runs_all_due_checks_despite_transient_sqlite_locks(
+    db_session, tmp_path
+):
+    repos = []
+    for index in range(4):
+        repo = Repository(
+            name=f"Repo {index}",
+            path=f"/tmp/repo-{index}",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            check_cron_expression="0 2 * * *",
+            borg_version=1,
+        )
+        db_session.add(repo)
+        repos.append(repo)
+
+    db_session.commit()
+    for repo in repos:
+        db_session.refresh(repo)
+
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(),
+        autocommit=False,
+        autoflush=False,
+        class_=_LockingSession,
+    )
+
+    started_tasks = []
+    fake_processes = [
+        _FakeProcess(returncode=0, pid=5000 + idx) for idx in range(len(repos))
+    ]
+
+    def schedule_and_track(coro):
+        task = asyncio.create_task(coro)
+        started_tasks.append(task)
+        return None
+
+    async def fake_exec(*args, **kwargs):
+        return fake_processes.pop(0)
+
+    scheduler = CheckScheduler()
+
+    with (
+        patch("app.services.check_scheduler.SessionLocal", testing_session_local),
+        patch("app.services.check_service.SessionLocal", testing_session_local),
+        patch(
+            "app.api.maintenance_jobs.schedule_background_job",
+            side_effect=schedule_and_track,
+        ),
+        patch(
+            "app.services.check_service.asyncio.create_subprocess_exec",
+            side_effect=fake_exec,
+        ),
+        patch("app.services.check_service.get_process_start_time", return_value=123),
+        patch(
+            "app.services.check_service.NotificationService.send_check_completion",
+            new=AsyncMock(),
+        ),
+    ):
+        from app.services.check_service import check_service
+
+        check_service.log_dir = Path(tmp_path)
+        await scheduler.run_scheduled_checks()
+        await asyncio.gather(*started_tasks)
+
+    verification_session = testing_session_local()
+    try:
+        check_jobs = verification_session.query(CheckJob).order_by(CheckJob.id).all()
+        assert len(check_jobs) == 4
+        assert [job.status for job in check_jobs] == ["completed"] * 4
+        assert all(job.started_at is not None for job in check_jobs)
+        assert all(job.completed_at is not None for job in check_jobs)
+        assert not any(job.status == "pending" for job in check_jobs)
+    finally:
+        verification_session.close()
 
 
 @pytest.mark.unit

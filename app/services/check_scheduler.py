@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+from types import SimpleNamespace
 import structlog
 from sqlalchemy import or_
 from croniter import croniter
@@ -59,7 +60,11 @@ class CheckScheduler:
                         repo,
                         CheckJob,
                         error_key="backend.errors.repo.checkAlreadyRunning",
-                        dispatcher=lambda job: BorgRouter(repo).check(job.id),
+                        dispatcher=lambda job,
+                        router_repo=SimpleNamespace(
+                            id=repo.id,
+                            borg_version=repo.borg_version,
+                        ): BorgRouter(router_repo).check(job.id),
                         extra_fields={
                             "max_duration": repo.check_max_duration or 3600,
                             "scheduled_check": True,

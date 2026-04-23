@@ -9,6 +9,7 @@ from app.database.database import SessionLocal
 from app.config import settings
 from app.core.borg import borg
 from app.services.notification_service import NotificationService
+from app.utils.db_retries import commit_with_retry
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
@@ -68,9 +69,20 @@ class CheckService:
 
             # Update job status - may fail if job was deleted after we queried it
             try:
-                job.status = "running"
-                job.started_at = datetime.utcnow()
-                db.commit()
+                started_at = datetime.utcnow()
+
+                def mark_job_running():
+                    job.status = "running"
+                    job.started_at = started_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=mark_job_running,
+                    logger=logger,
+                    action="check_start",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
             except Exception as status_error:
                 # Job was deleted while starting - exit gracefully
                 logger.warning(
@@ -120,9 +132,20 @@ class CheckService:
             )
 
             # Store PID and start time for orphan detection on container restart
-            job.process_pid = process.pid
-            job.process_start_time = get_process_start_time(process.pid)
-            db.commit()
+            process_start_time = get_process_start_time(process.pid)
+
+            def persist_pid_tracking():
+                job.process_pid = process.pid
+                job.process_start_time = process_start_time
+
+            await commit_with_retry(
+                db,
+                prepare=persist_pid_tracking,
+                logger=logger,
+                action="check_store_pid",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
             logger.info(
                 "Stored PID tracking info",
@@ -259,7 +282,21 @@ class CheckService:
                                             current_time - last_commit_time
                                             >= COMMIT_INTERVAL
                                         ):
-                                            db.commit()
+                                            progress = job.progress
+                                            progress_message = job.progress_message
+
+                                            def persist_progress():
+                                                job.progress = progress
+                                                job.progress_message = progress_message
+
+                                            await commit_with_retry(
+                                                db,
+                                                prepare=persist_progress,
+                                                logger=logger,
+                                                action="check_progress",
+                                                job_id=job_id,
+                                                repository_id=repository_id,
+                                            )
                                             last_commit_time = current_time
                                             logger.info(
                                                 "Check progress committed to DB",
@@ -277,7 +314,21 @@ class CheckService:
                     raise
                 finally:
                     # Final commit
-                    db.commit()
+                    final_progress = job.progress
+                    final_progress_message = job.progress_message
+
+                    def persist_stream_state():
+                        job.progress = final_progress
+                        job.progress_message = final_progress_message
+
+                    await commit_with_retry(
+                        db,
+                        prepare=persist_stream_state,
+                        logger=logger,
+                        action="check_stream_finalize",
+                        job_id=job_id,
+                        repository_id=repository_id,
+                    )
 
             # Run both tasks concurrently
             try:
@@ -366,7 +417,35 @@ class CheckService:
                         "Failed to save log buffer", job_id=job_id, error=str(e)
                     )
 
-            db.commit()
+            final_status = job.status
+            final_progress = job.progress
+            final_progress_message = job.progress_message
+            final_completed_at = job.completed_at
+            final_error_message = job.error_message
+            final_log_file_path = job.log_file_path
+            final_has_logs = job.has_logs
+            final_logs = job.logs
+            repository_last_check = repository.last_check
+
+            def persist_final_state():
+                job.status = final_status
+                job.progress = final_progress
+                job.progress_message = final_progress_message
+                job.completed_at = final_completed_at
+                job.error_message = final_error_message
+                job.log_file_path = final_log_file_path
+                job.has_logs = final_has_logs
+                job.logs = final_logs
+                repository.last_check = repository_last_check
+
+            await commit_with_retry(
+                db,
+                prepare=persist_final_state,
+                logger=logger,
+                action="check_finalize",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
 
             # Send notifications for completed or failed checks (skip cancelled)
             if job.status in ["completed", "failed"]:
@@ -408,10 +487,21 @@ class CheckService:
 
             # Try to update job status - may fail if job was deleted during execution
             try:
-                job.status = "failed"
-                job.error_message = str(e)
-                job.completed_at = datetime.utcnow()
-                db.commit()
+                completed_at = datetime.utcnow()
+
+                def persist_failure_state():
+                    job.status = "failed"
+                    job.error_message = str(e)
+                    job.completed_at = completed_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_failure_state,
+                    logger=logger,
+                    action="check_fail",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
 
                 # Send failure notification
                 try:
