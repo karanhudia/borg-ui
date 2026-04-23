@@ -1596,6 +1596,7 @@
       "notifyOn": "Benachrichtigen bei:",
       "started": "Gestartet",
       "success": "Erfolg",
+      "warning": "Warnung",
       "failure": "Fehler",
       "schedulerErrors": "Zeitplaner-Fehler",
       "schedulerErrorsHelper": "Benachrichtigt, wenn der Zeitplaner eine Sicherung nicht starten kann (z.B. Systemfehler). Reguläre Sicherungsfehler werden oben behandelt.",
@@ -1632,6 +1633,7 @@
       "events": {
         "start": "Start",
         "success": "Success",
+        "warning": "Warnung",
         "failure": "Failure",
         "off": "Off",
         "errors": "Errors"

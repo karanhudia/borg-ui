@@ -1596,6 +1596,7 @@
       "notifyOn": "Notificar en:",
       "started": "Iniciado",
       "success": "Éxito",
+      "warning": "Advertencia",
       "failure": "Fallo",
       "schedulerErrors": "Errores del planificador",
       "schedulerErrorsHelper": "Notifica cuando el planificador no puede iniciar una copia (ej., errores del sistema). Los fallos regulares de copia se gestionan arriba.",
@@ -1632,6 +1633,7 @@
       "events": {
         "start": "Start",
         "success": "Success",
+        "warning": "Advertencia",
         "failure": "Failure",
         "off": "Off",
         "errors": "Errors"

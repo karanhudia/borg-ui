@@ -1596,6 +1596,7 @@
       "notifyOn": "Notifica per:",
       "started": "Avviato",
       "success": "Successo",
+      "warning": "Avviso",
       "failure": "Fallimento",
       "schedulerErrors": "Errori Pianificatore",
       "schedulerErrorsHelper": "Notifica quando il pianificatore non riesce ad avviare un backup (es., errori di sistema). I fallimenti normali del backup sono gestiti sopra.",
@@ -1632,6 +1633,7 @@
       "events": {
         "start": "Start",
         "success": "Success",
+        "warning": "Avviso",
         "failure": "Failure",
         "off": "Off",
         "errors": "Errors"
