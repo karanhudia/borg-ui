@@ -110,6 +110,8 @@ class SystemSettingsUpdate(BaseModel):
     source_size_timeout: Optional[int] = None
 
     max_concurrent_backups: Optional[int] = None
+    max_concurrent_scheduled_backups: Optional[int] = None
+    max_concurrent_scheduled_checks: Optional[int] = None
     log_retention_days: Optional[int] = None
     log_save_policy: Optional[str] = None
     log_max_total_size_mb: Optional[int] = None
@@ -172,6 +174,8 @@ async def get_system_settings(
             # Timeout values stay NULL so env vars can be used as fallback
             settings = SystemSettings(
                 max_concurrent_backups=2,
+                max_concurrent_scheduled_backups=2,
+                max_concurrent_scheduled_checks=4,
                 log_retention_days=30,
                 email_notifications=False,
                 webhook_url="",
@@ -275,6 +279,12 @@ async def get_system_settings(
                 },
                 # Other settings
                 "max_concurrent_backups": settings.max_concurrent_backups,
+                "max_concurrent_scheduled_backups": settings.max_concurrent_scheduled_backups
+                if settings.max_concurrent_scheduled_backups is not None
+                else 2,
+                "max_concurrent_scheduled_checks": settings.max_concurrent_scheduled_checks
+                if settings.max_concurrent_scheduled_checks is not None
+                else 4,
                 "log_retention_days": settings.log_retention_days,
                 "log_save_policy": settings.log_save_policy,
                 "log_max_total_size_mb": settings.log_max_total_size_mb,
@@ -375,6 +385,21 @@ async def update_system_settings(
                     "Failed to check log storage for validation", error=str(e)
                 )
 
+        concurrency_fields = {
+            "max_concurrent_backups": settings_update.max_concurrent_backups,
+            "max_concurrent_scheduled_backups": settings_update.max_concurrent_scheduled_backups,
+            "max_concurrent_scheduled_checks": settings_update.max_concurrent_scheduled_checks,
+        }
+        for field_name, value in concurrency_fields.items():
+            if value is not None and value < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.settings.invalidConcurrencyLimit",
+                        "params": {"field": field_name},
+                    },
+                )
+
         settings = db.query(SystemSettings).first()
         if not settings:
             settings = SystemSettings()
@@ -434,6 +459,14 @@ async def update_system_settings(
         # Other settings
         if settings_update.max_concurrent_backups is not None:
             settings.max_concurrent_backups = settings_update.max_concurrent_backups
+        if settings_update.max_concurrent_scheduled_backups is not None:
+            settings.max_concurrent_scheduled_backups = (
+                settings_update.max_concurrent_scheduled_backups
+            )
+        if settings_update.max_concurrent_scheduled_checks is not None:
+            settings.max_concurrent_scheduled_checks = (
+                settings_update.max_concurrent_scheduled_checks
+            )
         if settings_update.log_retention_days is not None:
             settings.log_retention_days = settings_update.log_retention_days
         if settings_update.log_save_policy is not None:

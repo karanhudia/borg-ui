@@ -361,20 +361,13 @@ async def startup_event():
 
     task1 = _spawn_background_task(check_scheduled_jobs())
     app.state.background_tasks.append(task1)
-    logger.info("Scheduled backup checker started")
-
-    # Start check scheduler (background task)
-    from app.services.check_scheduler import check_scheduler
-
-    task2 = asyncio.create_task(check_scheduler.start())
-    app.state.background_tasks.append(task2)
-    logger.info("Check scheduler started")
+    logger.info("Scheduled job checker started")
 
     # Start stats refresh scheduler (background task)
     from app.services.stats_refresh_scheduler import stats_refresh_scheduler
 
-    task3 = asyncio.create_task(stats_refresh_scheduler.start())
-    app.state.background_tasks.append(task3)
+    task2 = asyncio.create_task(stats_refresh_scheduler.start())
+    app.state.background_tasks.append(task2)
     logger.info("Stats refresh scheduler started")
 
     # Initialize MQTT service from database settings (using new implementation)

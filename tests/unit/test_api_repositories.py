@@ -21,6 +21,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from app.database.models import (
+    CheckJob,
     LicensingState,
     Repository,
     ScheduledJob,
@@ -1590,6 +1591,45 @@ class TestRepositoriesJobStatus:
         )
 
         assert response.status_code == 200
+
+    def test_get_repository_check_jobs_scheduled_only(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Scheduled Check Repo",
+            path="/job/scheduled-check-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        test_db.add_all(
+            [
+                CheckJob(
+                    repository_id=repo.id,
+                    status="completed",
+                    scheduled_check=True,
+                ),
+                CheckJob(
+                    repository_id=repo.id,
+                    status="completed",
+                    scheduled_check=False,
+                ),
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/check-jobs?scheduled_only=true",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        jobs = response.json()["jobs"]
+        assert len(jobs) == 1
+        assert jobs[0]["scheduled_check"] is True
 
     def test_get_repository_compact_jobs(
         self, test_client: TestClient, admin_headers, test_db

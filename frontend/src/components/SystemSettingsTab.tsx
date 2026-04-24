@@ -50,6 +50,8 @@ const SystemSettingsTab: React.FC = () => {
   const [initTimeout, setInitTimeout] = useState(300)
   const [backupTimeout, setBackupTimeout] = useState(3600)
   const [sourceSizeTimeout, setSourceSizeTimeout] = useState(3600)
+  const [maxConcurrentScheduledBackups, setMaxConcurrentScheduledBackups] = useState(2)
+  const [maxConcurrentScheduledChecks, setMaxConcurrentScheduledChecks] = useState(4)
 
   // Local state for stats refresh
   const [statsRefreshInterval, setStatsRefreshInterval] = useState(60)
@@ -154,6 +156,8 @@ const SystemSettingsTab: React.FC = () => {
       setInitTimeout(systemSettings.init_timeout || 300)
       setBackupTimeout(systemSettings.backup_timeout || 3600)
       setSourceSizeTimeout(systemSettings.source_size_timeout || 3600)
+      setMaxConcurrentScheduledBackups(systemSettings.max_concurrent_scheduled_backups ?? 2)
+      setMaxConcurrentScheduledChecks(systemSettings.max_concurrent_scheduled_checks ?? 4)
       setStatsRefreshInterval(systemSettings.stats_refresh_interval_minutes ?? 60)
       setMetricsEnabled(systemSettings.metrics_enabled ?? false)
       setMetricsRequireAuth(systemSettings.metrics_require_auth ?? false)
@@ -175,7 +179,9 @@ const SystemSettingsTab: React.FC = () => {
         listTimeout !== (systemSettings.list_timeout || 600) ||
         initTimeout !== (systemSettings.init_timeout || 300) ||
         backupTimeout !== (systemSettings.backup_timeout || 3600) ||
-        sourceSizeTimeout !== (systemSettings.source_size_timeout || 3600)
+        sourceSizeTimeout !== (systemSettings.source_size_timeout || 3600) ||
+        maxConcurrentScheduledBackups !== (systemSettings.max_concurrent_scheduled_backups ?? 2) ||
+        maxConcurrentScheduledChecks !== (systemSettings.max_concurrent_scheduled_checks ?? 4)
 
       const statsRefreshDirty =
         statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60)
@@ -198,6 +204,8 @@ const SystemSettingsTab: React.FC = () => {
     initTimeout,
     backupTimeout,
     sourceSizeTimeout,
+    maxConcurrentScheduledBackups,
+    maxConcurrentScheduledChecks,
     statsRefreshInterval,
     metricsEnabled,
     metricsRequireAuth,
@@ -214,6 +222,7 @@ const SystemSettingsTab: React.FC = () => {
   const MIN_TIMEOUT = 10
   const MAX_TIMEOUT = 86400 // 24 hours
   const MAX_STATS_REFRESH = 1440 // 24 hours in minutes
+  const MAX_SCHEDULE_CONCURRENCY = 64
 
   const getValidationError = (): string | null => {
     if (browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES) {
@@ -235,6 +244,14 @@ const SystemSettingsTab: React.FC = () => {
     }
     if (statsRefreshInterval < 0 || statsRefreshInterval > MAX_STATS_REFRESH) {
       return `Stats refresh interval must be between 0 and ${MAX_STATS_REFRESH} minutes (0 = disabled)`
+    }
+    if (
+      maxConcurrentScheduledBackups < 0 ||
+      maxConcurrentScheduledBackups > MAX_SCHEDULE_CONCURRENCY ||
+      maxConcurrentScheduledChecks < 0 ||
+      maxConcurrentScheduledChecks > MAX_SCHEDULE_CONCURRENCY
+    ) {
+      return `Scheduler concurrency limits must be between 0 and ${MAX_SCHEDULE_CONCURRENCY}`
     }
     return null
   }
@@ -279,6 +296,8 @@ const SystemSettingsTab: React.FC = () => {
         init_timeout: initTimeout,
         backup_timeout: backupTimeout,
         source_size_timeout: sourceSizeTimeout,
+        max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
+        max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
         stats_refresh_interval_minutes: statsRefreshInterval,
         metrics_enabled: metricsEnabled,
         metrics_require_auth: metricsRequireAuth,
@@ -346,6 +365,8 @@ const SystemSettingsTab: React.FC = () => {
         init_timeout: initTimeout,
         backup_timeout: backupTimeout,
         source_size_timeout: sourceSizeTimeout,
+        max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
+        max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
         stats_refresh_interval_minutes: statsRefreshInterval,
         metrics_enabled: metricsEnabled,
         metrics_require_auth: metricsRequireAuth,
@@ -730,6 +751,40 @@ const SystemSettingsTab: React.FC = () => {
                         ? t('systemSettings.refreshing')
                         : t('systemSettings.refreshNow')}
                     </Button>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(240px, 320px))' },
+                      gap: 2,
+                    }}
+                  >
+                    <TextField
+                      label={t('systemSettings.maxConcurrentScheduledBackupsLabel')}
+                      type="number"
+                      value={maxConcurrentScheduledBackups}
+                      onChange={(e) => setMaxConcurrentScheduledBackups(Number(e.target.value))}
+                      inputProps={{ min: 0, max: MAX_SCHEDULE_CONCURRENCY, step: 1 }}
+                      error={
+                        maxConcurrentScheduledBackups < 0 ||
+                        maxConcurrentScheduledBackups > MAX_SCHEDULE_CONCURRENCY
+                      }
+                      helperText={t('systemSettings.maxConcurrentScheduledBackupsHelper')}
+                    />
+
+                    <TextField
+                      label={t('systemSettings.maxConcurrentScheduledChecksLabel')}
+                      type="number"
+                      value={maxConcurrentScheduledChecks}
+                      onChange={(e) => setMaxConcurrentScheduledChecks(Number(e.target.value))}
+                      inputProps={{ min: 0, max: MAX_SCHEDULE_CONCURRENCY, step: 1 }}
+                      error={
+                        maxConcurrentScheduledChecks < 0 ||
+                        maxConcurrentScheduledChecks > MAX_SCHEDULE_CONCURRENCY
+                      }
+                      helperText={t('systemSettings.maxConcurrentScheduledChecksHelper')}
+                    />
                   </Box>
 
                   {systemSettings?.last_stats_refresh && (

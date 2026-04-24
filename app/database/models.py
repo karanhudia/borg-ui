@@ -658,6 +658,8 @@ class SystemSettings(Base):
     )  # Default 1 hour for du-based source size calculation
 
     max_concurrent_backups = Column(Integer, default=1)
+    max_concurrent_scheduled_backups = Column(Integer, default=2)
+    max_concurrent_scheduled_checks = Column(Integer, default=4)
     log_retention_days = Column(Integer, default=30)
     log_save_policy = Column(
         String, default="failed_and_warnings"

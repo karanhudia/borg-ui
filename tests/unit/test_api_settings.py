@@ -112,6 +112,28 @@ class TestSystemSettings:
         test_db.refresh(settings)
         assert settings.borg2_fast_browse_beta_enabled is True
 
+    def test_update_system_settings_persists_scheduler_concurrency_limits(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "max_concurrent_scheduled_backups": 3,
+                "max_concurrent_scheduled_checks": 5,
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(settings)
+        assert settings.max_concurrent_scheduled_backups == 3
+        assert settings.max_concurrent_scheduled_checks == 5
+
     def test_update_system_settings_persists_metrics_configuration(
         self, test_client: TestClient, admin_headers, test_db
     ):

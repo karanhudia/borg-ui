@@ -15,6 +15,8 @@ import {
   InputAdornment,
   Tooltip,
   alpha,
+  Select,
+  MenuItem,
 } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
 import { Shield, Info } from 'lucide-react'
@@ -26,8 +28,10 @@ import { translateBackendKey } from '../utils/translateBackendKey'
 import { convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
 import CronBuilderDialog from './CronBuilderDialog'
 import ScheduleCheckCard from './ScheduleCheckCard'
+import BackupJobsTable from './BackupJobsTable'
 import { usePermissions } from '../hooks/usePermissions'
 import type { Repository } from '../types'
+import type { Job } from '../types/jobs'
 
 interface ScheduledCheck {
   repository_id: number
@@ -40,6 +44,11 @@ interface ScheduledCheck {
   notify_on_check_success: boolean
   notify_on_check_failure: boolean
   enabled: boolean
+}
+
+interface CheckHistoryJob extends Job {
+  type: 'check'
+  scheduled_check: boolean
 }
 
 export interface ScheduledChecksSectionRef {
@@ -57,6 +66,8 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     cron_expression: '0 2 * * 0', // Default: Weekly on Sunday at 2 AM
     max_duration: 3600,
   })
+  const [historyRepositoryFilter, setHistoryRepositoryFilter] = useState<number | 'all'>('all')
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<string | 'all'>('all')
 
   // Fetch repositories
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
@@ -93,6 +104,53 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     },
     enabled: repositories.length > 0 && !loadingRepositories,
   })
+
+  const { data: checkHistoryData, isLoading: loadingCheckHistory } = useQuery({
+    queryKey: [
+      'scheduled-check-history',
+      manageableRepositories.map((repo: Repository) => repo.id),
+    ],
+    queryFn: async () => {
+      const jobs: CheckHistoryJob[] = []
+      for (const repo of manageableRepositories) {
+        try {
+          const response = await repositoriesAPI.getRepositoryCheckJobs(repo.id, 10, true)
+          const repoJobs = response.data.jobs || []
+          jobs.push(
+            ...repoJobs.map((job: Job & { scheduled_check?: boolean }) => ({
+              ...job,
+              repository_id: repo.id,
+              repository: repo.path,
+              repository_path: repo.path,
+              type: 'check' as const,
+              scheduled_check: Boolean(job.scheduled_check),
+            }))
+          )
+        } catch {
+          // Ignore per-repository history failures
+        }
+      }
+      return jobs.sort((a, b) => {
+        const aTime = new Date(a.started_at || a.completed_at || 0).getTime()
+        const bTime = new Date(b.started_at || b.completed_at || 0).getTime()
+        return bTime - aTime
+      })
+    },
+    enabled: manageableRepositories.length > 0 && !loadingRepositories,
+    refetchInterval: 5000,
+  })
+
+  const checkHistory = checkHistoryData || []
+  const filteredCheckHistory = checkHistory.filter((job) => {
+    if (historyRepositoryFilter !== 'all' && job.repository_id !== historyRepositoryFilter) {
+      return false
+    }
+    if (historyStatusFilter !== 'all' && job.status !== historyStatusFilter) {
+      return false
+    }
+    return true
+  })
+  const historyHasFilters = historyRepositoryFilter !== 'all' || historyStatusFilter !== 'all'
 
   // Update check schedule mutation
   const updateMutation = useMutation({
@@ -337,6 +395,104 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
             />
           ))}
         </Stack>
+      )}
+
+      {!loadingRepositories && manageableRepositories.length > 0 && (
+        <Box sx={{ mt: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              mb: 2,
+              gap: 1,
+            }}
+          >
+            <Box>
+              <Typography variant="h6" fontWeight={600}>
+                {t('scheduledChecks.historyTitle')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {historyHasFilters
+                  ? t('scheduledChecks.historyShowingFiltered', {
+                      filtered: filteredCheckHistory.length,
+                      total: checkHistory.length,
+                    })
+                  : t('scheduledChecks.historyShowing', {
+                      filtered: filteredCheckHistory.length,
+                      total: checkHistory.length,
+                    })}
+              </Typography>
+            </Box>
+
+            {historyHasFilters && (
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => {
+                  setHistoryRepositoryFilter('all')
+                  setHistoryStatusFilter('all')
+                }}
+                sx={{ px: 1, minWidth: 'auto', fontWeight: 700, borderRadius: 2, flexShrink: 0 }}
+              >
+                {t('common.clearFilters', { defaultValue: 'Clear filters' })}
+              </Button>
+            )}
+          </Box>
+
+          <Box sx={{ mb: 2.5, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+            <Select
+              size="small"
+              value={historyRepositoryFilter}
+              displayEmpty
+              onChange={(e) => setHistoryRepositoryFilter(e.target.value as number | 'all')}
+              sx={{ flex: 2, minWidth: { xs: '100%', sm: 220 } }}
+            >
+              <MenuItem value="all">{t('scheduledChecks.allRepositories')}</MenuItem>
+              {manageableRepositories.map((repo: Repository) => (
+                <MenuItem key={repo.id} value={repo.id}>
+                  {repo.name}
+                </MenuItem>
+              ))}
+            </Select>
+
+            <Select
+              size="small"
+              value={historyStatusFilter}
+              displayEmpty
+              onChange={(e) => setHistoryStatusFilter(e.target.value)}
+              sx={{ flex: 1, minWidth: { xs: '100%', sm: 160 } }}
+            >
+              <MenuItem value="all">{t('scheduledChecks.allStatus')}</MenuItem>
+              <MenuItem value="completed">{t('backupHistory.completed')}</MenuItem>
+              <MenuItem value="failed">{t('backupHistory.failed')}</MenuItem>
+              <MenuItem value="cancelled">Cancelled</MenuItem>
+              <MenuItem value="running">Running</MenuItem>
+            </Select>
+          </Box>
+
+          <BackupJobsTable
+            jobs={filteredCheckHistory}
+            repositories={manageableRepositories}
+            loading={loadingCheckHistory}
+            actions={{
+              viewLogs: true,
+              viewArchive: false,
+              downloadLogs: true,
+              cancel: true,
+              errorInfo: true,
+              breakLock: false,
+              runNow: false,
+              delete: true,
+            }}
+            canDeleteJobs
+            emptyState={{
+              title: t('scheduledChecks.noHistoryTitle'),
+              description: t('scheduledChecks.noHistoryDescription'),
+            }}
+            tableId="scheduled-check-history"
+          />
+        </Box>
       )}
 
       {/* Add/Edit Dialog */}

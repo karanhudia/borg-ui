@@ -2822,13 +2822,21 @@ async def get_repository_check_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     limit: int = 10,
+    scheduled_only: bool = False,
 ):
     """Get recent check jobs for a repository"""
     try:
         jobs = get_repository_jobs(db, current_user, repo_id, CheckJob, limit=limit)
+        if scheduled_only:
+            jobs = [job for job in jobs if bool(getattr(job, "scheduled_check", False))]
         return {
             "jobs": [
-                serialize_job_summary(job, include_progress=True, include_has_logs=True)
+                {
+                    **serialize_job_summary(
+                        job, include_progress=True, include_has_logs=True
+                    ),
+                    "scheduled_check": bool(getattr(job, "scheduled_check", False)),
+                }
                 for job in jobs
             ]
         }

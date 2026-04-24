@@ -91,6 +91,8 @@ export interface SystemSettings {
   list_timeout?: number
   init_timeout?: number
   backup_timeout?: number
+  max_concurrent_scheduled_backups?: number
+  max_concurrent_scheduled_checks?: number
   stats_refresh_interval_minutes?: number
   bypass_lock_on_info?: boolean
   bypass_lock_on_list?: boolean
@@ -473,8 +475,10 @@ export const repositoriesAPI = {
   getRepositoryInfo: (id: number) => api.get(`/repositories/${id}/info`),
   // Check/Compact job management
   getCheckJobStatus: (jobId: number) => api.get(`/repositories/check-jobs/${jobId}`),
-  getRepositoryCheckJobs: (id: number, limit?: number) =>
-    api.get(`/repositories/${id}/check-jobs`, { params: { limit } }),
+  getRepositoryCheckJobs: (id: number, limit?: number, scheduledOnly: boolean = false) =>
+    api.get(`/repositories/${id}/check-jobs`, {
+      params: { limit, scheduled_only: scheduledOnly },
+    }),
   getCompactJobStatus: (jobId: number) => api.get(`/repositories/compact-jobs/${jobId}`),
   getRepositoryCompactJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),

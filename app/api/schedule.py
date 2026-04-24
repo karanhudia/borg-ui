@@ -11,11 +11,13 @@ from app.database.models import (
     User,
     ScheduledJob,
     ScheduledJobRepository,
+    BackupJob,
     CompactJob,
     PruneJob,
     Repository,
     Script,
     RepositoryScript,
+    SystemSettings,
 )
 from app.core.authorization import authorize_request
 from app.core.borg_router import BorgRouter
@@ -23,11 +25,13 @@ from app.core.security import get_current_user, check_repo_access
 from app.config import settings
 from app.api.maintenance_jobs import create_started_maintenance_job
 from app.services.notification_service import notification_service
+from app.services.check_scheduler import run_due_scheduled_checks
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.archive_names import build_archive_name
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["schedule"], dependencies=[Depends(authorize_request)])
+_active_scheduled_backup_runs: set[str] = set()
 
 # Pydantic models
 from pydantic import BaseModel
@@ -107,9 +111,39 @@ class CronExpression(BaseModel):
     day_of_week: str = "*"
 
 
-def _calculate_next_schedule_run(cron_expression: str) -> datetime:
-    cron = croniter.croniter(cron_expression, datetime.now(timezone.utc))
+def _calculate_next_schedule_run(
+    cron_expression: str, base_time: Optional[datetime] = None
+) -> datetime:
+    cron = croniter.croniter(cron_expression, base_time or datetime.now(timezone.utc))
     return cron.get_next(datetime)
+
+
+def _count_active_scheduled_backup_runs() -> int:
+    return len(_active_scheduled_backup_runs)
+
+
+def _get_scheduler_concurrency_limits(db: Session) -> tuple[int, int]:
+    settings = db.query(SystemSettings).first()
+    max_scheduled_backups = (
+        settings.max_concurrent_scheduled_backups
+        if settings and settings.max_concurrent_scheduled_backups is not None
+        else 2
+    )
+    max_scheduled_checks = (
+        settings.max_concurrent_scheduled_checks
+        if settings and settings.max_concurrent_scheduled_checks is not None
+        else 4
+    )
+    return max_scheduled_backups, max_scheduled_checks
+
+
+def _track_scheduled_backup_task(task: asyncio.Task, run_key: str) -> None:
+    _active_scheduled_backup_runs.add(run_key)
+
+    def _cleanup(_task: asyncio.Task) -> None:
+        _active_scheduled_backup_runs.discard(run_key)
+
+    task.add_done_callback(_cleanup)
 
 
 def _dedupe_repository_ids(repository_ids: Optional[List[int]]) -> List[int]:
@@ -2360,142 +2394,163 @@ async def execute_scheduled_backup_with_maintenance(
         db.close()
 
 
+def _dispatch_due_scheduled_job(
+    db: Session, job: ScheduledJob, now: datetime
+) -> Optional[str]:
+    """Dispatch one due scheduled backup job and return its runtime tracking key."""
+    from app.database.models import Repository
+
+    repo_links = (
+        db.query(ScheduledJobRepository).filter_by(scheduled_job_id=job.id).all()
+    )
+
+    if repo_links:
+        logger.info(
+            "Dispatching multi-repo scheduled job",
+            job_id=job.id,
+            repo_count=len(repo_links),
+        )
+        run_key = f"schedule:{job.id}"
+        task = asyncio.create_task(execute_multi_repo_schedule_by_id(job.id))
+        _track_scheduled_backup_task(task, run_key)
+    elif job.repository or job.repository_id:
+        if job.repository_id:
+            repo = db.query(Repository).filter_by(id=job.repository_id).first()
+        else:
+            repo = (
+                db.query(Repository).filter(Repository.path == job.repository).first()
+            )
+
+        if not repo:
+            logger.error(
+                "Repository not found for scheduled job",
+                job_id=job.id,
+                repository=job.repository or job.repository_id,
+            )
+            return None
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            status="pending",
+            scheduled_job_id=job.id,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(backup_job)
+        db.commit()
+        db.refresh(backup_job)
+
+        _now = datetime.now()
+        archive_name = build_archive_name(
+            job_name=job.name,
+            repo_name=repo.name,
+            template=job.archive_name_template or None,
+            timestamp=_now.strftime("%Y-%m-%dT%H:%M:%S"),
+            date=_now.strftime("%Y-%m-%d"),
+            time_str=_now.strftime("%H:%M:%S"),
+            unix_timestamp=str(int(_now.timestamp())),
+        )
+
+        run_key = f"backup:{backup_job.id}"
+        task = asyncio.create_task(
+            execute_scheduled_backup_with_maintenance(
+                backup_job.id,
+                repo.path,
+                job.id,
+                archive_name=archive_name,
+            )
+        )
+        _track_scheduled_backup_task(task, run_key)
+    else:
+        logger.error(
+            "Scheduled job has no repositories configured",
+            job_id=job.id,
+        )
+        return None
+
+    job.last_run = now
+    job.next_run = _calculate_next_schedule_run(job.cron_expression, now)
+    db.commit()
+    logger.info("Scheduled job started", job_id=job.id, name=job.name, run_key=run_key)
+    return run_key
+
+
+async def dispatch_due_scheduled_backups(
+    db: Session, now: Optional[datetime] = None
+) -> None:
+    """Dispatch due scheduled backup jobs through the shared scheduler."""
+    now = now or datetime.now(timezone.utc)
+    max_scheduled_backups, _ = _get_scheduler_concurrency_limits(db)
+
+    if max_scheduled_backups <= 0:
+        logger.info("Scheduled backup dispatch disabled", limit=max_scheduled_backups)
+        return
+
+    active_runs = _count_active_scheduled_backup_runs()
+    available_slots = max_scheduled_backups - active_runs
+    if available_slots <= 0:
+        logger.info(
+            "Scheduled backup capacity reached",
+            limit=max_scheduled_backups,
+            active=active_runs,
+        )
+        return
+
+    jobs = (
+        db.query(ScheduledJob)
+        .filter(
+            ScheduledJob.enabled == True,
+            ScheduledJob.next_run <= now,
+        )
+        .order_by(ScheduledJob.next_run.asc(), ScheduledJob.id.asc())
+        .all()
+    )
+
+    if not jobs:
+        return
+
+    dispatched = 0
+    for job in jobs:
+        if dispatched >= available_slots:
+            break
+        try:
+            run_key = _dispatch_due_scheduled_job(db, job, now)
+            if run_key:
+                dispatched += 1
+        except Exception as e:
+            logger.error("Failed to run scheduled job", job_id=job.id, error=str(e))
+            job.last_run = now
+            db.commit()
+
+            try:
+                asyncio.create_task(
+                    notification_service.send_schedule_failure(
+                        db, job.name, job.repository, str(e)
+                    )
+                )
+            except Exception as notif_error:
+                logger.warning(
+                    "Failed to send schedule failure notification",
+                    error=str(notif_error),
+                )
+
+    deferred = len(jobs) - dispatched
+    if deferred > 0:
+        logger.info(
+            "Deferred due scheduled backups until capacity is available",
+            deferred=deferred,
+            dispatched=dispatched,
+            limit=max_scheduled_backups,
+        )
+
+
 async def check_scheduled_jobs():
-    """Check and execute scheduled jobs"""
+    """Check and execute scheduled backups and scheduled repository checks."""
     while True:
         db = SessionLocal()
         try:
-            jobs = (
-                db.query(ScheduledJob)
-                .filter(
-                    ScheduledJob.enabled == True,
-                    ScheduledJob.next_run <= datetime.now(timezone.utc),
-                )
-                .all()
-            )
-
-            for job in jobs:
-                try:
-                    logger.info("Running scheduled job", job_id=job.id, name=job.name)
-
-                    # Check if this is a multi-repo schedule or single-repo schedule
-                    repo_links = (
-                        db.query(ScheduledJobRepository)
-                        .filter_by(scheduled_job_id=job.id)
-                        .all()
-                    )
-
-                    if repo_links:
-                        # Multi-repository schedule
-                        logger.info(
-                            "Detected multi-repo schedule",
-                            job_id=job.id,
-                            repo_count=len(repo_links),
-                        )
-                        # Pass job_id instead of job object to avoid session issues
-                        asyncio.create_task(execute_multi_repo_schedule_by_id(job.id))
-
-                    elif job.repository or job.repository_id:
-                        # Single-repository schedule (legacy or new format)
-                        from app.database.models import Repository, BackupJob
-
-                        # Get repository by path (legacy) or ID (new)
-                        if job.repository_id:
-                            repo = (
-                                db.query(Repository)
-                                .filter_by(id=job.repository_id)
-                                .first()
-                            )
-                        else:
-                            repo = (
-                                db.query(Repository)
-                                .filter(Repository.path == job.repository)
-                                .first()
-                            )
-
-                        if not repo:
-                            logger.error(
-                                "Repository not found for scheduled job",
-                                job_id=job.id,
-                                repository=job.repository or job.repository_id,
-                            )
-                            continue
-
-                        # Create backup job record with scheduled_job_id
-                        backup_job = BackupJob(
-                            repository=repo.path,
-                            status="pending",
-                            scheduled_job_id=job.id,  # Link to scheduled job
-                            created_at=datetime.now(
-                                timezone.utc
-                            ),  # Explicit timestamp to prevent NULL
-                        )
-                        db.add(backup_job)
-                        db.commit()
-                        db.refresh(backup_job)
-
-                        # Generate archive name
-                        _now = datetime.now()
-                        archive_name = build_archive_name(
-                            job_name=job.name,
-                            repo_name=repo.name,
-                            template=job.archive_name_template or None,
-                            timestamp=_now.strftime("%Y-%m-%dT%H:%M:%S"),
-                            date=_now.strftime("%Y-%m-%d"),
-                            time_str=_now.strftime("%H:%M:%S"),
-                            unix_timestamp=str(int(_now.timestamp())),
-                        )
-
-                        # Execute backup with optional prune/compact asynchronously (non-blocking)
-                        asyncio.create_task(
-                            execute_scheduled_backup_with_maintenance(
-                                backup_job.id,
-                                repo.path,
-                                job.id,
-                                archive_name=archive_name,
-                            )
-                        )
-                    else:
-                        logger.error(
-                            "Scheduled job has no repositories configured",
-                            job_id=job.id,
-                        )
-                        continue
-
-                    # Update job status
-                    job.last_run = datetime.now(timezone.utc)
-
-                    # Calculate next run time
-                    job.next_run = _calculate_next_schedule_run(job.cron_expression)
-
-                    db.commit()
-
-                    # Log with backup_job_id only for single-repo schedules
-                    log_data = {"job_id": job.id, "name": job.name}
-                    if "backup_job" in locals():
-                        log_data["backup_job_id"] = backup_job.id
-                    logger.info("Scheduled job started", **log_data)
-
-                except Exception as e:
-                    logger.error(
-                        "Failed to run scheduled job", job_id=job.id, error=str(e)
-                    )
-                    # Update last run time even if failed
-                    job.last_run = datetime.now(timezone.utc)
-                    db.commit()
-
-                    # Send failure notification
-                    try:
-                        asyncio.create_task(
-                            notification_service.send_schedule_failure(
-                                db, job.name, job.repository, str(e)
-                            )
-                        )
-                    except Exception as notif_error:
-                        logger.warning(
-                            "Failed to send schedule failure notification",
-                            error=str(notif_error),
-                        )
+            now = datetime.now(timezone.utc)
+            await dispatch_due_scheduled_backups(db, now)
+            await run_due_scheduled_checks(db, now)
 
         except Exception as e:
             logger.error("Error in scheduled job checker", error=str(e))

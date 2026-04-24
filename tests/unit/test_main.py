@@ -54,29 +54,24 @@ class TestStartupEvent:
                                                     return_value=AsyncMock(),
                                                 ):
                                                     with patch(
-                                                        "app.services.check_scheduler.check_scheduler"
+                                                        "app.services.stats_refresh_scheduler.stats_refresh_scheduler"
                                                     ):
                                                         with patch(
-                                                            "app.services.stats_refresh_scheduler.stats_refresh_scheduler"
+                                                            "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
+                                                            return_value=AsyncMock(),
                                                         ):
                                                             with patch(
-                                                                "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
-                                                                return_value=AsyncMock(),
+                                                                "asyncio.create_task"
                                                             ):
-                                                                with patch(
-                                                                    "asyncio.create_task"
-                                                                ):
-                                                                    from app.main import (
-                                                                        startup_event,
-                                                                        app,
-                                                                    )
+                                                                from app.main import (
+                                                                    startup_event,
+                                                                    app,
+                                                                )
 
-                                                                    app.state.background_tasks = []
-                                                                    await (
-                                                                        startup_event()
-                                                                    )
-                                                                    mock_mqtt.configure.assert_called_once()
-                                                                    mock_mqtt.sync_state_with_db.assert_called_once()
+                                                                app.state.background_tasks = []
+                                                                await startup_event()
+                                                                mock_mqtt.configure.assert_called_once()
+                                                                mock_mqtt.sync_state_with_db.assert_called_once()
 
     async def test_startup_configures_cache_even_when_license_sync_disabled(
         self, mock_db
@@ -98,7 +93,6 @@ class TestStartupEvent:
             patch("app.utils.process_utils.cleanup_orphaned_jobs"),
             patch("app.utils.process_utils.cleanup_orphaned_mounts"),
             patch("app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()),
-            patch("app.services.check_scheduler.check_scheduler"),
             patch("app.services.stats_refresh_scheduler.stats_refresh_scheduler"),
             patch(
                 "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
@@ -155,7 +149,6 @@ class TestStartupEvent:
             patch("app.utils.process_utils.cleanup_orphaned_jobs"),
             patch("app.utils.process_utils.cleanup_orphaned_mounts"),
             patch("app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()),
-            patch("app.services.check_scheduler.check_scheduler"),
             patch("app.services.stats_refresh_scheduler.stats_refresh_scheduler"),
             patch(
                 "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
