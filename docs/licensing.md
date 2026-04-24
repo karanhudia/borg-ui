@@ -49,9 +49,9 @@ Coming soon: centralized multi-instance management, immutable audit log export, 
 
 ---
 
-## 60-Day Full Access Period
+## Full Access Period
 
-Every new Borg UI installation automatically receives a **60-day full access period** on first boot. During this period, all Pro and Enterprise features are unlocked with no license key required. After 60 days, the instance returns to Community tier automatically.
+Every new Borg UI installation can receive a **full access period** on first boot. During this period, all Pro and Enterprise features are unlocked with no license key required. After it ends, the instance returns to Community tier automatically.
 
 This applies to self-hosted instances including air-gapped and private network deployments.
 
@@ -59,9 +59,27 @@ This applies to self-hosted instances including air-gapped and private network d
 
 ## Activation Service
 
-On first boot, Borg UI contacts `license.borgui.com` to register the instance and activate the 60-day full access period. This call sends basic instance metadata only: a generated instance identifier and the application version. No personal data, repository contents, backup paths, or credentials are ever sent.
+When startup licensing sync is enabled, Borg UI contacts `license.borgui.com` to register the instance and activate the full access period. This call sends basic instance metadata only: a generated instance identifier and the application version. No personal data, repository contents, backup paths, or credentials are ever sent.
 
-The activation endpoint is configured via the `ACTIVATION_SERVICE_URL` environment variable. It defaults to `https://license.borgui.com`. The 60-day trial is activated at this point regardless of whether you intend to purchase a license.
+The activation endpoint is configured via the `ACTIVATION_SERVICE_URL` environment variable. It defaults to `https://license.borgui.com`.
+
+If you want to prevent Borg UI from contacting the activation service at startup, set:
+
+```bash
+ENABLE_STARTUP_LICENSE_SYNC=false
+```
+
+If you want to disable the activation endpoint entirely, leave `ACTIVATION_SERVICE_URL` empty as well:
+
+```env
+ENABLE_STARTUP_LICENSE_SYNC=false
+ACTIVATION_SERVICE_URL=
+```
+
+Notes:
+
+- `ENABLE_STARTUP_LICENSE_SYNC` defaults to `true` in production and `false` in development.
+- Setting `ACTIVATION_SERVICE_URL=localhost` does not disable the call; it only redirects it to localhost.
 
 ---
 
