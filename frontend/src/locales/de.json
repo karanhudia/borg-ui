@@ -76,6 +76,10 @@
     "totpLabel": "Authentifizierungscode",
     "totpHint": "Verwende deinen aktuellen Authenticator-Code oder einen Wiederherstellungscode.",
     "verifyTotp": "Code bestätigen",
+    "ssoSubmit": "Mit {{provider}} fortfahren",
+    "ssoDefaultProvider": "Single Sign-on",
+    "ssoOrLocalHint": "Oder mit einem lokalen Borg-UI-Konto fortfahren.",
+    "localAuthDisabledHint": "Lokale Borg-UI-Passwörter und Passkeys sind für diese Bereitstellung deaktiviert. Fahre mit deinem Identitätsanbieter fort.",
     "passkeySubmit": "Mit Passkey anmelden",
     "passkeyCancelled": "Die Passkey-Anmeldung wurde abgebrochen oder es war kein passender Passkey verfügbar",
     "failed": "Anmeldung fehlgeschlagen",
@@ -624,6 +628,7 @@
       "stats": {
         "total": "Total",
         "active": "Active",
+        "pendingSso": "Ausstehendes SSO",
         "admins": "Admins",
         "operators": "Operators",
         "viewers": "Viewers"
@@ -634,10 +639,23 @@
         "status": "Status"
       },
       "actions": {
+        "approveSsoUser": "SSO-Benutzer freigeben",
         "edit": "Benutzer bearbeiten",
         "resetPassword": "Passwort zurücksetzen",
         "delete": "Benutzer löschen",
         "manageAccess": "Manage Access"
+      },
+      "badges": {
+        "sso": "SSO",
+        "oidc": "OIDC"
+      },
+      "labels": {
+        "subject": "Subjekt: {{subject}}"
+      },
+      "pendingReview": {
+        "title": "{{count}} SSO-Konto wartet auf Freigabe",
+        "description": "Prüfe ausstehende OIDC-Benutzer, bevor sie sich vollständig anmelden und auf Repositorys zugreifen können.",
+        "action": "Ausstehende Benutzer prüfen"
       },
       "repositoryAccess": {
         "title": "Repository Access",
@@ -666,7 +684,8 @@
       },
       "status": {
         "active": "Aktiv",
-        "inactive": "Inaktiv"
+        "inactive": "Inaktiv",
+        "pendingSso": "SSO ausstehend"
       },
       "createDialog": {
         "title": "Benutzer erstellen"
@@ -1485,6 +1504,90 @@
     "proxyAuthNotConfigured": "Nicht konfiguriert",
     "proxyAuthWarningsTitle": "Konfigurationswarnungen",
     "proxyAuthNoWarnings": "Keine Warnungen zur Proxy-Auth-Konfiguration erkannt.",
+    "oidcTitle": "Single Sign-on",
+    "oidcDescription": "Konfiguriere Borg UI als OpenID-Connect-Client mit Benutzerbereitstellung und optionaler Deaktivierung lokaler Anmeldungen.",
+    "oidcEnabledLabel": "Integriertes OIDC aktivieren",
+    "oidcDisableLocalAuthLabel": "Lokale Passwort- und Passkey-Anmeldung deaktivieren",
+    "oidcProviderNameLabel": "Anzeigename des Anbieters",
+    "oidcProviderNameHelper": "Wird auf dem Anmeldebutton angezeigt.",
+    "oidcDiscoveryUrlLabel": "Discovery-URL",
+    "oidcDiscoveryUrlHelper": "Beispiel: https://id.example.com/application/o/borg-ui/.well-known/openid-configuration",
+    "oidcClientIdLabel": "Client-ID",
+    "oidcClientSecretLabel": "Client-Secret",
+    "oidcClientSecretConfigured": "Ein Client-Secret ist bereits gespeichert. Leer lassen, um es beizubehalten.",
+    "oidcClientSecretRequiredHelper": "Erforderlich, wenn OIDC aktiviert ist.",
+    "oidcClearClientSecretLabel": "Gespeichertes Client-Secret beim Speichern löschen",
+    "oidcEventsTitle": "Letzte Authentifizierungsereignisse",
+    "oidcEventsDescription": "Zeigt die neuesten lokalen, OIDC-, TOTP-, Passkey- und Abmeldeereignisse aus Administratorsicht an.",
+    "oidcEventsEmpty": "Es wurden noch keine Authentifizierungsereignisse erfasst.",
+    "oidcEventsFilteredEmpty": "Keine Authentifizierungsereignisse entsprechen dem aktuellen Filter.",
+    "oidcEventsRefresh": "Authentifizierungsereignisse aktualisieren",
+    "oidcScopesLabel": "Scopes",
+    "oidcRedirectUriOverrideLabel": "Redirect-URI-Override",
+    "oidcRedirectUriOverrideHelper": "Optionale öffentliche Callback-URL für Reverse-Proxy- oder getrennte Origin-Setups.",
+    "oidcEndSessionEndpointOverrideLabel": "End-Session-Endpoint-Override",
+    "oidcEndSessionEndpointOverrideHelper": "Optionaler Logout-Endpunkt, falls die Discovery-Metadaten unvollständig sind.",
+    "oidcClaimUsernameLabel": "Benutzernamen-Claim",
+    "oidcClaimEmailLabel": "E-Mail-Claim",
+    "oidcClaimFullNameLabel": "Vollständiger-Name-Claim",
+    "oidcGroupClaimLabel": "Gruppen-Claim",
+    "oidcGroupClaimHelper": "Optionaler Claim mit den IdP-Gruppen für Prüfungen der Admin-Zulassungsliste.",
+    "oidcRoleClaimLabel": "Claim für globale Rolle",
+    "oidcAdminGroupsLabel": "Admin-Zulassungsgruppen",
+    "oidcAdminGroupsHelper": "Kommagetrennte Gruppen, die den Admin-Rollen-Claim erhalten dürfen.",
+    "oidcAllRepositoriesRoleClaimLabel": "Claim für alle-Repositorys-Rolle",
+    "oidcNewUserModeLabel": "Behandlung neuer Benutzer",
+    "oidcTemplateUsernameLabel": "Vorlagenbenutzername",
+    "oidcDefaultRoleLabel": "Standardmäßige globale Rolle",
+    "oidcDefaultAllRepositoriesRoleLabel": "Standardrolle für alle Repositorys",
+    "oidcModeDeny": "Ablehnen",
+    "oidcModeViewer": "Als Viewer erstellen",
+    "oidcModePending": "Zur Freigabe erstellen",
+    "oidcModeTemplate": "Vorlagenbenutzer kopieren",
+    "oidcRequiredFieldsError": "OIDC benötigt eine Discovery-URL und eine Client-ID.",
+    "oidcClientSecretRequired": "OIDC benötigt ein Client-Secret, bevor es aktiviert werden kann.",
+    "oidcTemplateUserRequired": "Der Vorlagenmodus benötigt einen Vorlagenbenutzernamen.",
+    "authEventSuccess": "Erfolgreich",
+    "authEventFailed": "Fehlgeschlagen",
+    "authEventPending": "Freigabe ausstehend",
+    "authEventAnonymous": "Unbekannte Identität",
+    "authEventActor": "Admin #{{id}}",
+    "authEventFilters": {
+      "all": "Alle Ereignisse",
+      "failed": "Fehlgeschlagen",
+      "oidc": "OIDC",
+      "pending": "Ausstehende Freigaben"
+    },
+    "authEventSummary": {
+      "total": "Gesamt: {{count}}",
+      "success": "Erfolgreich: {{count}}",
+      "failed": "Fehlgeschlagen: {{count}}",
+      "pending": "Ausstehend: {{count}}"
+    },
+    "authEventSources": {
+      "local": "Lokal",
+      "oidc": "OIDC",
+      "proxy": "Proxy",
+      "passkey": "Passkey",
+      "totp": "TOTP"
+    },
+    "authEventTypes": {
+      "local_login_failed": "Lokale Anmeldung fehlgeschlagen",
+      "local_login_succeeded": "Lokale Anmeldung erfolgreich",
+      "oidc_user_pending": "OIDC-Benutzer wartet auf Freigabe",
+      "oidc_user_provisioned": "OIDC-Benutzer bereitgestellt",
+      "oidc_user_denied": "OIDC-Benutzer abgelehnt",
+      "oidc_callback_success": "OIDC-Callback erfolgreich",
+      "oidc_callback_failed": "OIDC-Callback fehlgeschlagen",
+      "oidc_exchange_failed": "OIDC-Sitzungsaustausch fehlgeschlagen",
+      "oidc_login_succeeded": "OIDC-Anmeldung erfolgreich",
+      "totp_login_succeeded": "TOTP-Anmeldung erfolgreich",
+      "passkey_login_succeeded": "Passkey-Anmeldung erfolgreich",
+      "logout": "Benutzer abgemeldet"
+    },
+    "roleViewer": "Viewer",
+    "roleOperator": "Operator",
+    "roleAdmin": "Admin",
     "maxFilesToLoadLabel": "Maximale zu ladende Dateien",
     "maxFilesRangeError": "Muss zwischen {{min}} und {{max}} liegen",
     "maxFilesHelperText": "Maximale Dateien beim Durchsuchen. Aktuell: {{current}}M Dateien",
@@ -2834,14 +2937,28 @@
         "invalidAuthToken": "Ungültiges Authentifizierungstoken",
         "invalidOrExpiredToken": "Ungültiges oder abgelaufenes Token",
         "proxyHeaderRequired": "Der Reverse-Proxy-Authentifizierungsheader \"{{header}}\" ist erforderlich",
+        "localLoginDisabled": "Die integrierte Passwort- und Passkey-Anmeldung ist deaktiviert, weil Single Sign-on erzwungen wird",
         "invalidTotpCode": "Ungültiger Authentifizierungscode",
+        "tooManyAttempts": "Zu viele Anmeldeversuche. Bitte in {{retryAfterSeconds}} Sekunden erneut versuchen.",
+        "tooManyRequests": "Zu viele Anmeldeversuche. Bitte in {{retryAfterSeconds}} Sekunden erneut versuchen.",
         "localPasswordRequired": "Dieses Konto muss die integrierte Passwortanmeldung verwenden, um TOTP zu verwalten",
         "totpNotEnabled": "Die Zwei-Faktor-Authentifizierung ist für dieses Konto nicht aktiviert",
         "invalidPasskey": "Ungültige Passkey-Antwort",
         "passkeyUserVerificationRequired": "Für diesen Passkey ist eine Gerätebestätigung erforderlich. Entsperre das Gerät mit Touch ID, Face ID oder dem Gerätecode und versuche es erneut.",
         "passkeysUnavailable": "Passkeys sind nicht verfügbar, weil die WebAuthn-Abhängigkeit nicht installiert ist",
         "passkeyAlreadyRegistered": "Dieser Passkey ist bereits registriert",
-        "passkeyNotFound": "Passkey nicht gefunden"
+        "passkeyNotFound": "Passkey nicht gefunden",
+        "oidcNotConfigured": "Single Sign-on ist nicht konfiguriert",
+        "oidcAuthenticationCancelled": "Die Single-Sign-on-Anmeldung wurde vom Identitätsanbieter abgebrochen oder verweigert",
+        "oidcAuthenticationFailed": "Die Single-Sign-on-Anmeldung ist fehlgeschlagen",
+        "oidcIdTokenInvalid": "Der Identitätsanbieter hat ein ungültiges Anmelde-Token zurückgegeben",
+        "oidcUsernameClaimMissing": "Single Sign-on hat keinen verwendbaren Benutzernamen-Claim geliefert",
+        "oidcUserAccessDenied": "Dein Single-Sign-on-Konto darf nicht auf Borg UI zugreifen",
+        "oidcAccountLinkRequired": "Ein lokales Borg-UI-Konto verwendet bereits diesen Benutzernamen. Verknüpfe das Konto ausdrücklich, bevor du Single Sign-on verwendest.",
+        "oidcIdentityConflict": "Diese Single-Sign-on-Identität steht im Konflikt mit einem bestehenden Borg-UI-Konto.",
+        "oidcEmailAlreadyInUse": "Diese Single-Sign-on-E-Mail wird bereits von einem anderen Borg-UI-Konto verwendet.",
+        "oidcPendingApproval": "Dein Single-Sign-on-Konto wartet auf die Freigabe durch einen Administrator",
+        "oidcTemplateUserNotFound": "Der konfigurierte Single-Sign-on-Vorlagenbenutzer wurde nicht gefunden"
       },
       "repo": {
         "repositoryNotFound": "Repository nicht gefunden",
@@ -3020,7 +3137,13 @@
         "failedRunLogCleanup": "Fehler beim Ausführen der Protokollbereinigung: {{error}}",
         "failedGetCacheStats": "Fehler beim Abrufen der Cache-Statistiken: {{error}}",
         "failedClearCache": "Fehler beim Leeren des Caches: {{error}}",
-        "failedUpdateCacheSettings": "Fehler beim Aktualisieren der Cache-Einstellungen: {{error}}"
+        "failedUpdateCacheSettings": "Fehler beim Aktualisieren der Cache-Einstellungen: {{error}}",
+        "invalidOidcNewUserMode": "Ungültiger oidc_new_user_mode. Erlaubte Werte: {{modes}}",
+        "invalidOidcDefaultRole": "Ungültige OIDC-Standardrolle",
+        "invalidOidcDefaultRepositoryRole": "Ungültige OIDC-Standardrolle für Repository-Zugriff",
+        "oidcTemplateUserRequired": "Ein Vorlagenbenutzername ist erforderlich, wenn der OIDC-Neubenutzermodus auf template gesetzt ist",
+        "oidcLocalAuthRequiresOidc": "OIDC muss aktiviert sein, bevor die lokale Authentifizierung deaktiviert werden kann",
+        "oidcConfigurationIncomplete": "OIDC ist aktiviert, aber Discovery-URL, Client-ID oder Client-Secret fehlen"
       },
       "activity": {
         "adminOnlyDelete": "Nur Administratoren können Auftragseinträge löschen",

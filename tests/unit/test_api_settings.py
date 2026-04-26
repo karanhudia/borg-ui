@@ -381,6 +381,55 @@ class TestUserManagement:
         assert "users" in data
         assert isinstance(data["users"], list)
 
+    def test_list_users_includes_auth_source_fields(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        oidc_user = User(
+            username="oidc-user",
+            email="oidc-user@example.com",
+            password_hash="",
+            role="viewer",
+            is_active=False,
+            auth_source="oidc",
+            oidc_subject="subject-xyz",
+        )
+        test_db.add(oidc_user)
+        test_db.commit()
+
+        response = test_client.get("/api/settings/users", headers=admin_headers)
+
+        assert response.status_code == 200
+        users = response.json()["users"]
+        oidc_payload = next(user for user in users if user["username"] == "oidc-user")
+        assert oidc_payload["auth_source"] == "oidc"
+        assert oidc_payload["oidc_subject"] == "subject-xyz"
+
+    def test_update_user_can_approve_pending_oidc_user(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        pending_user = User(
+            username="pending-oidc",
+            email="pending-oidc@example.com",
+            password_hash="",
+            role="viewer",
+            is_active=False,
+            auth_source="oidc",
+            oidc_subject="subject-pending",
+        )
+        test_db.add(pending_user)
+        test_db.commit()
+        test_db.refresh(pending_user)
+
+        response = test_client.put(
+            f"/api/settings/users/{pending_user.id}",
+            json={"is_active": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(pending_user)
+        assert pending_user.is_active is True
+
     def test_list_users_unauthorized(self, test_client: TestClient):
         """Test listing users without auth returns 403"""
         response = test_client.get("/api/settings/users")

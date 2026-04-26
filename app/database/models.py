@@ -31,6 +31,9 @@ class User(Base):
     password_hash = Column(String)
     email = Column(String, unique=True, index=True)
     is_active = Column(Boolean, default=True)
+    auth_source = Column(String, default="local", nullable=False)
+    oidc_subject = Column(String, nullable=True, index=True)
+    oidc_last_id_token_encrypted = Column(Text, nullable=True)
     role = Column(String, default="viewer", nullable=False)
     all_repositories_role = Column(String, nullable=True)
 
@@ -747,12 +750,97 @@ class SystemSettings(Base):
     metrics_require_auth = Column(Boolean, default=False, nullable=False)
     metrics_token = Column(String, nullable=True)
 
+    # Built-in OIDC / SSO settings
+    oidc_enabled = Column(Boolean, default=False, nullable=False)
+    oidc_disable_local_auth = Column(Boolean, default=False, nullable=False)
+    oidc_provider_name = Column(String, nullable=True)
+    oidc_discovery_url = Column(String, nullable=True)
+    oidc_client_id = Column(String, nullable=True)
+    oidc_client_secret_encrypted = Column(String, nullable=True)
+    oidc_scopes = Column(String, default="openid profile email", nullable=False)
+    oidc_redirect_uri_override = Column(String, nullable=True)
+    oidc_end_session_endpoint_override = Column(String, nullable=True)
+    oidc_claim_username = Column(String, default="preferred_username", nullable=False)
+    oidc_claim_email = Column(String, default="email", nullable=False)
+    oidc_claim_full_name = Column(String, default="name", nullable=False)
+    oidc_group_claim = Column(String, nullable=True)
+    oidc_role_claim = Column(String, nullable=True)
+    oidc_admin_groups = Column(Text, nullable=True)
+    oidc_all_repositories_role_claim = Column(String, nullable=True)
+    oidc_new_user_mode = Column(String, default="viewer", nullable=False)
+    oidc_new_user_template_username = Column(String, nullable=True)
+    oidc_default_role = Column(String, default="viewer", nullable=False)
+    oidc_default_all_repositories_role = Column(
+        String, default="viewer", nullable=False
+    )
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Deployment profile
     deployment_type = Column(String, default="individual", nullable=False)
     enterprise_name = Column(String, nullable=True)
+
+
+class OidcLoginState(Base):
+    __tablename__ = "oidc_login_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    state_id = Column(String, unique=True, nullable=False, index=True)
+    nonce = Column(String, nullable=False)
+    code_verifier = Column(Text, nullable=False)
+    return_to = Column(Text, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+
+class AuthEvent(Base):
+    __tablename__ = "auth_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    auth_source = Column(String, nullable=False, index=True)
+    username = Column(String, nullable=True, index=True)
+    email = Column(String, nullable=True)
+    success = Column(Boolean, default=True, nullable=False, index=True)
+    detail = Column(Text, nullable=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
+
+
+class OidcExchangeGrant(Base):
+    __tablename__ = "oidc_exchange_grants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    grant_id = Column(String, unique=True, nullable=False, index=True)
+    username = Column(String, nullable=False, index=True)
+    oidc_subject = Column(String, nullable=True, index=True)
+    email = Column(String, nullable=True)
+    full_name = Column(String, nullable=True)
+    groups_json = Column(Text, nullable=True)
+    role = Column(String, nullable=True)
+    all_repositories_role = Column(String, nullable=True)
+    id_token_hint_encrypted = Column(Text, nullable=True)
+    used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+
+class AuthRateLimitBucket(Base):
+    __tablename__ = "auth_rate_limit_buckets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bucket_key = Column(String, nullable=False, unique=True, index=True)
+    scope = Column(String, nullable=False, index=True)
+    subject = Column(String, nullable=False)
+    client_ip = Column(String, nullable=False, index=True)
+    failure_count = Column(Integer, default=0, nullable=False)
+    window_started_at = Column(DateTime, default=utc_now, nullable=False)
+    last_attempt_at = Column(DateTime, default=utc_now, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
 
 class LicensingState(Base):

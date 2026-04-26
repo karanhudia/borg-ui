@@ -1,15 +1,56 @@
 import base64
 from datetime import timedelta, datetime, timezone
+import hmac
 import json
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from typing import Any, Optional
+from urllib.parse import urlparse
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import structlog
 
 from app.database.database import get_db
-from app.database.models import PasskeyCredential, User, SystemSettings
+from app.database.models import (
+    AuthEvent,
+    OidcExchangeGrant,
+    OidcLoginState,
+    PasskeyCredential,
+    SystemSettings,
+    User,
+    UserRepositoryPermission,
+)
+from app.core.auth_rate_limits import (
+    clear_auth_rate_limit,
+    enforce_auth_rate_limit,
+    get_passkey_login_policy,
+    get_password_login_policy,
+    get_request_client_ip,
+    get_totp_login_policy,
+    record_auth_failure,
+)
+from app.core.oidc import (
+    build_authorization_url,
+    build_end_session_url,
+    build_external_base_url,
+    create_oidc_state_token,
+    discover_oidc_configuration,
+    encode_oidc_complete_redirect,
+    encode_oidc_error_redirect,
+    exchange_code_for_tokens,
+    fetch_userinfo,
+    generate_oidc_nonce,
+    generate_oidc_state_id,
+    generate_pkce_code_challenge,
+    generate_pkce_code_verifier,
+    get_system_oidc_settings,
+    merge_claim_sets,
+    normalize_oidc_identity,
+    resolve_post_login_url,
+    verify_id_token,
+    verify_oidc_state_token,
+)
 from app.core.security import (
     authenticate_user,
     create_access_token,
@@ -49,6 +90,8 @@ from app.config import settings
 
 logger = structlog.get_logger()
 router = APIRouter()
+OIDC_EXCHANGE_COOKIE_NAME = "oidc_exchange_grant"
+OIDC_EXCHANGE_GRANT_EXPIRE_MINUTES = 5
 
 
 # Pydantic models for request/response
@@ -65,12 +108,32 @@ class AuthConfig(BaseModel):
     proxy_auth_enabled: bool
     insecure_no_auth_enabled: bool
     authentication_required: bool
+    oidc_enabled: bool = False
+    oidc_provider_name: Optional[str] = None
+    oidc_disable_local_auth: bool = False
     proxy_auth_header: Optional[str] = None
     proxy_auth_role_header: Optional[str] = None
     proxy_auth_all_repositories_role_header: Optional[str] = None
     proxy_auth_email_header: Optional[str] = None
     proxy_auth_full_name_header: Optional[str] = None
     proxy_auth_health: dict
+
+
+class LogoutResponse(BaseModel):
+    message: str
+    logout_url: Optional[str] = None
+
+
+class AuthEventResponse(BaseModel):
+    id: int
+    event_type: str
+    auth_source: str
+    username: Optional[str] = None
+    email: Optional[str] = None
+    success: bool
+    detail: Optional[str] = None
+    actor_user_id: Optional[int] = None
+    created_at: datetime
 
 
 class UserCreate(BaseModel):
@@ -281,6 +344,26 @@ def _ensure_local_password_user(user: User) -> None:
         )
 
 
+def _get_auth_settings_row(db: Session) -> Optional[SystemSettings]:
+    return db.query(SystemSettings).first()
+
+
+def _local_auth_disabled_for_oidc(settings_row: Optional[SystemSettings]) -> bool:
+    return bool(
+        settings_row
+        and settings_row.oidc_enabled
+        and settings_row.oidc_disable_local_auth
+    )
+
+
+def _ensure_local_login_allowed(settings_row: Optional[SystemSettings]) -> None:
+    if _local_auth_disabled_for_oidc(settings_row):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"key": "backend.errors.auth.localLoginDisabled"},
+        )
+
+
 def _serialize_passkey_credential(credential: PasskeyCredential) -> dict:
     return {
         "id": credential.id,
@@ -303,6 +386,197 @@ def _raise_passkey_verification_error(exc: Exception) -> None:
     ) from exc
 
 
+def _record_auth_event(
+    db: Session,
+    *,
+    event_type: str,
+    auth_source: str,
+    success: bool,
+    username: Optional[str] = None,
+    email: Optional[str] = None,
+    detail: Optional[str] = None,
+    actor_user_id: Optional[int] = None,
+) -> None:
+    db.add(
+        AuthEvent(
+            event_type=event_type,
+            auth_source=auth_source,
+            username=username,
+            email=email,
+            success=success,
+            detail=detail,
+            actor_user_id=actor_user_id,
+        )
+    )
+    db.commit()
+
+
+def _record_rate_limit_failure(
+    db: Session,
+    *,
+    scope: str,
+    subject: str,
+    client_ip: str,
+    policy,
+    event_type: str,
+    auth_source: str,
+    username: Optional[str] = None,
+    email: Optional[str] = None,
+    detail: str,
+) -> None:
+    rate_limit_exception = record_auth_failure(
+        db,
+        scope=scope,
+        subject=subject,
+        client_ip=client_ip,
+        policy=policy,
+    )
+    if rate_limit_exception is None:
+        return
+
+    _record_auth_event(
+        db,
+        event_type=event_type,
+        auth_source=auth_source,
+        success=False,
+        username=username,
+        email=email,
+        detail=detail,
+    )
+    raise rate_limit_exception
+
+
+def _clear_local_session_artifacts(user: User) -> None:
+    user.auth_source = "local"
+    user.oidc_last_id_token_encrypted = None
+
+
+def _normalize_oidc_groups(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [
+        group.strip().lower()
+        for group in value
+        if isinstance(group, str) and group.strip()
+    ]
+
+
+def _coerce_utc_datetime(value: Optional[datetime]) -> Optional[datetime]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _create_oidc_login_state(
+    db: Session, *, state_id: str, nonce: str, code_verifier: str, return_to: str
+) -> OidcLoginState:
+    state = OidcLoginState(
+        state_id=state_id,
+        nonce=nonce,
+        code_verifier=code_verifier,
+        return_to=return_to,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+    )
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return state
+
+
+def _create_oidc_exchange_grant(
+    db: Session,
+    *,
+    identity: dict[str, Any],
+    id_token_hint: Optional[str],
+) -> OidcExchangeGrant:
+    grant = OidcExchangeGrant(
+        grant_id=generate_oidc_state_id(),
+        username=identity["username"],
+        oidc_subject=identity.get("subject"),
+        email=identity.get("email"),
+        full_name=identity.get("full_name"),
+        groups_json=json.dumps(_normalize_oidc_groups(identity.get("groups"))),
+        role=identity.get("role"),
+        all_repositories_role=identity.get("all_repositories_role"),
+        id_token_hint_encrypted=(
+            encrypt_secret(id_token_hint) if id_token_hint else None
+        ),
+        expires_at=datetime.now(timezone.utc)
+        + timedelta(minutes=OIDC_EXCHANGE_GRANT_EXPIRE_MINUTES),
+    )
+    db.add(grant)
+    db.commit()
+    db.refresh(grant)
+    return grant
+
+
+def _consume_oidc_exchange_grant(
+    db: Session, *, grant_id: str
+) -> Optional[OidcExchangeGrant]:
+    grant = (
+        db.query(OidcExchangeGrant)
+        .filter(OidcExchangeGrant.grant_id == grant_id)
+        .first()
+    )
+    if grant is None or grant.used_at is not None:
+        return None
+
+    expires_at = _coerce_utc_datetime(grant.expires_at)
+    if expires_at is None or expires_at <= datetime.now(timezone.utc):
+        return None
+
+    grant.used_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(grant)
+    return grant
+
+
+def _build_oidc_exchange_identity(grant: OidcExchangeGrant) -> dict[str, Any]:
+    identity: dict[str, Any] = {
+        "username": grant.username,
+        "subject": grant.oidc_subject,
+        "email": grant.email,
+        "full_name": grant.full_name,
+        "groups": json.loads(grant.groups_json) if grant.groups_json else [],
+        "role": grant.role,
+        "all_repositories_role": grant.all_repositories_role,
+    }
+    if grant.id_token_hint_encrypted:
+        identity["id_token_hint"] = decrypt_secret(grant.id_token_hint_encrypted)
+    return identity
+
+
+def _is_same_origin_request(request: Request) -> bool:
+    expected_origin = build_external_base_url(request).rstrip("/")
+    header_value = request.headers.get("origin") or request.headers.get("referer")
+    if not header_value:
+        return False
+
+    parsed = urlparse(header_value)
+    received_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+    return hmac.compare_digest(received_origin, expected_origin)
+
+
+def _consume_oidc_login_state(
+    db: Session, *, state_id: str, nonce: str
+) -> Optional[OidcLoginState]:
+    state = db.query(OidcLoginState).filter(OidcLoginState.state_id == state_id).first()
+    if state is None:
+        return None
+    if not hmac.compare_digest(state.nonce, nonce) or state.used_at is not None:
+        return None
+    expires_at = _coerce_utc_datetime(state.expires_at)
+    if expires_at is None or expires_at <= datetime.now(timezone.utc):
+        return None
+
+    state.used_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(state)
+    return state
+
+
 @router.get("/config", response_model=AuthConfig)
 async def get_auth_config():
     """Get authentication configuration for frontend"""
@@ -311,12 +585,32 @@ async def get_auth_config():
     proxy_auth_enabled = (
         settings.disable_authentication and not settings.allow_insecure_no_auth
     )
+    oidc_settings = None
+    proxy_auth_health = {"enabled": False, "warnings": []}
+
+    db = next(get_db())
+    try:
+        oidc_settings = get_system_oidc_settings(db)
+    finally:
+        db.close()
+
+    if proxy_auth_enabled:
+        proxy_auth_health = inspect_proxy_auth_config()
 
     return {
         "proxy_auth_enabled": proxy_auth_enabled,
         "insecure_no_auth_enabled": settings.allow_insecure_no_auth,
         "authentication_required": not (
             settings.disable_authentication or settings.allow_insecure_no_auth
+        ),
+        "oidc_enabled": bool(oidc_settings),
+        "oidc_provider_name": (
+            (oidc_settings.oidc_provider_name or "Single sign-on")
+            if oidc_settings
+            else None
+        ),
+        "oidc_disable_local_auth": bool(
+            oidc_settings and oidc_settings.oidc_disable_local_auth
         ),
         "proxy_auth_header": (
             settings.proxy_auth_header if proxy_auth_enabled else None
@@ -335,7 +629,7 @@ async def get_auth_config():
         "proxy_auth_full_name_header": (
             settings.proxy_auth_full_name_header if proxy_auth_enabled else None
         ),
-        "proxy_auth_health": inspect_proxy_auth_config(),
+        "proxy_auth_health": proxy_auth_health,
     }
 
 
@@ -347,12 +641,43 @@ async def get_authorization_model():
 
 @router.post("/login", response_model=Token)
 async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
 ):
     """Authenticate user and return access token"""
+    _ensure_local_login_allowed(_get_auth_settings_row(db))
+    client_ip = get_request_client_ip(request)
+    password_subject = form_data.username.strip().lower() or "unknown"
+    enforce_auth_rate_limit(
+        db,
+        scope="password_login",
+        subject=password_subject,
+        client_ip=client_ip,
+        policy=get_password_login_policy(),
+    )
     user = await authenticate_user(db, form_data.username, form_data.password)
     if not user:
         logger.warning("Failed login attempt", username=form_data.username)
+        _record_rate_limit_failure(
+            db,
+            scope="password_login",
+            subject=password_subject,
+            client_ip=client_ip,
+            policy=get_password_login_policy(),
+            event_type="local_login_rate_limited",
+            auth_source="local",
+            username=form_data.username,
+            detail="backend.errors.auth.incorrectCredentials",
+        )
+        _record_auth_event(
+            db,
+            event_type="local_login_failed",
+            auth_source="local",
+            success=False,
+            username=form_data.username,
+            detail="backend.errors.auth.incorrectCredentials",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"key": "backend.errors.auth.incorrectCredentials"},
@@ -365,6 +690,13 @@ async def login(
             detail={"key": "backend.errors.auth.inactiveUser"},
         )
 
+    clear_auth_rate_limit(
+        db,
+        scope="password_login",
+        subject=password_subject,
+        client_ip=client_ip,
+    )
+
     if user.totp_enabled:
         challenge_token = create_login_challenge_token(user.username)
         logger.info("Password verified, awaiting TOTP", username=user.username)
@@ -374,6 +706,7 @@ async def login(
             "must_change_password": user.must_change_password,
         }
 
+    _clear_local_session_artifacts(user)
     user.last_login = datetime.now(timezone.utc)
     db.commit()
 
@@ -383,7 +716,523 @@ async def login(
     )
 
     logger.info("User logged in successfully", username=user.username)
+    _record_auth_event(
+        db,
+        event_type="local_login_succeeded",
+        auth_source="local",
+        success=True,
+        username=user.username,
+        email=user.email,
+        actor_user_id=user.id,
+    )
 
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": settings.access_token_expire_minutes * 60,
+        "must_change_password": user.must_change_password,
+    }
+
+
+def _resolve_oidc_role(identity: dict[str, Any], settings_row: SystemSettings) -> str:
+    candidate = identity.get("role")
+    if candidate in {"viewer", "operator", "admin"}:
+        if candidate == "admin":
+            admin_groups = {
+                group.strip().lower()
+                for group in (settings_row.oidc_admin_groups or "").split(",")
+                if group.strip()
+            }
+            identity_groups = set(_normalize_oidc_groups(identity.get("groups")))
+            if not admin_groups or identity_groups.isdisjoint(admin_groups):
+                logger.warning(
+                    "Ignoring OIDC admin role claim without matching admin group allow-list",
+                    username=identity.get("username"),
+                    subject=identity.get("subject"),
+                    configured_groups=sorted(admin_groups),
+                    identity_groups=sorted(identity_groups),
+                )
+                return (settings_row.oidc_default_role or "viewer").strip() or "viewer"
+        return candidate
+    return (settings_row.oidc_default_role or "viewer").strip() or "viewer"
+
+
+def _resolve_oidc_all_repositories_role(
+    identity: dict[str, Any], global_role: str, settings_row: SystemSettings
+) -> str:
+    candidate = identity.get("all_repositories_role")
+    if candidate:
+        return normalize_repository_role_for_global_role(global_role, candidate)
+    configured_default = (
+        settings_row.oidc_default_all_repositories_role
+        or default_repository_role_for_global_role(global_role)
+    )
+    return normalize_repository_role_for_global_role(global_role, configured_default)
+
+
+def _find_user_for_oidc_identity(
+    db: Session, *, username: str, subject: Optional[str]
+) -> Optional[User]:
+    if subject:
+        subject_user = db.query(User).filter(User.oidc_subject == subject).first()
+        if subject_user is not None:
+            return subject_user
+    return db.query(User).filter(User.username == username).first()
+
+
+def _clone_template_permissions(
+    db: Session, *, source_user: User, target_user: User
+) -> None:
+    template_permissions = (
+        db.query(UserRepositoryPermission)
+        .filter(UserRepositoryPermission.user_id == source_user.id)
+        .all()
+    )
+    for permission in template_permissions:
+        db.add(
+            UserRepositoryPermission(
+                user_id=target_user.id,
+                repository_id=permission.repository_id,
+                role=permission.role,
+            )
+        )
+
+
+def _provision_oidc_user(
+    db: Session, settings_row: SystemSettings, identity: dict[str, Any]
+) -> User:
+    username = identity.get("username")
+    if not username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.oidcUsernameClaimMissing"},
+        )
+
+    subject = (
+        identity.get("subject") if isinstance(identity.get("subject"), str) else None
+    )
+    user = _find_user_for_oidc_identity(db, username=username, subject=subject)
+    if user is not None and user.auth_source != "oidc":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"key": "backend.errors.auth.oidcAccountLinkRequired"},
+        )
+    if (
+        user is not None
+        and subject
+        and user.oidc_subject
+        and not hmac.compare_digest(user.oidc_subject, subject)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"key": "backend.errors.auth.oidcIdentityConflict"},
+        )
+    if user is None:
+        new_user_mode = (
+            settings_row.oidc_new_user_mode or "viewer"
+        ).strip() or "viewer"
+        if new_user_mode == "deny":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"key": "backend.errors.auth.oidcUserAccessDenied"},
+            )
+
+        template_user = None
+        if new_user_mode == "template":
+            template_username = settings_row.oidc_new_user_template_username
+            template_user = (
+                db.query(User).filter(User.username == template_username).first()
+                if template_username
+                else None
+            )
+            if template_user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"key": "backend.errors.auth.oidcTemplateUserNotFound"},
+                )
+
+        role = _resolve_oidc_role(identity, settings_row)
+        all_repositories_role = _resolve_oidc_all_repositories_role(
+            identity, role, settings_row
+        )
+        requested_email = identity.get("email")
+        existing_email_user = (
+            db.query(User).filter(User.email == requested_email).first()
+            if requested_email
+            else None
+        )
+        if existing_email_user is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"key": "backend.errors.auth.oidcEmailAlreadyInUse"},
+            )
+        user = User(
+            username=username,
+            password_hash="",
+            email=requested_email,
+            full_name=identity.get("full_name"),
+            auth_source="oidc",
+            oidc_subject=subject,
+            role=role,
+            all_repositories_role=all_repositories_role,
+            is_active=new_user_mode != "pending",
+            must_change_password=False,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        if new_user_mode == "template":
+            user.role = template_user.role
+            user.all_repositories_role = normalize_repository_role_for_global_role(
+                template_user.role,
+                template_user.all_repositories_role
+                or default_repository_role_for_global_role(template_user.role),
+            )
+            _clone_template_permissions(db, source_user=template_user, target_user=user)
+            db.commit()
+            db.refresh(user)
+
+        if new_user_mode == "pending":
+            _record_auth_event(
+                db,
+                event_type="oidc_user_pending",
+                auth_source="oidc",
+                success=False,
+                username=username,
+                email=identity.get("email"),
+                detail="backend.errors.auth.oidcPendingApproval",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"key": "backend.errors.auth.oidcPendingApproval"},
+            )
+        _record_auth_event(
+            db,
+            event_type="oidc_user_provisioned",
+            auth_source="oidc",
+            success=True,
+            username=username,
+            email=identity.get("email"),
+            detail=f"mode:{new_user_mode}",
+        )
+
+    if not user.is_active:
+        _record_auth_event(
+            db,
+            event_type="oidc_user_denied",
+            auth_source="oidc",
+            success=False,
+            username=username,
+            email=identity.get("email"),
+            detail="backend.errors.auth.inactiveUser",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"key": "backend.errors.auth.inactiveUser"},
+        )
+
+    role = _resolve_oidc_role(identity, settings_row)
+    all_repositories_role = _resolve_oidc_all_repositories_role(
+        identity, role, settings_row
+    )
+    user.role = role
+    user.all_repositories_role = all_repositories_role
+
+    incoming_email = identity.get("email")
+    if incoming_email and user.email != incoming_email:
+        existing_email_user = (
+            db.query(User).filter(User.email == incoming_email).first()
+        )
+        if existing_email_user is not None and existing_email_user.id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"key": "backend.errors.auth.oidcEmailAlreadyInUse"},
+            )
+        user.email = incoming_email
+
+    incoming_full_name = identity.get("full_name")
+    if incoming_full_name:
+        user.full_name = incoming_full_name
+
+    user.auth_source = "oidc"
+    if subject:
+        user.oidc_subject = subject
+    if identity.get("id_token_hint"):
+        user.oidc_last_id_token_encrypted = encrypt_secret(identity["id_token_hint"])
+
+    user.last_login = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.get("/oidc/login")
+async def begin_oidc_login(
+    request: Request,
+    return_to: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    settings_row = get_system_oidc_settings(db)
+    if settings_row is None or not settings_row.oidc_client_secret_encrypted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.auth.oidcNotConfigured"},
+        )
+
+    provider = await discover_oidc_configuration(
+        request,
+        settings_row,
+        decrypt_secret(settings_row.oidc_client_secret_encrypted),
+    )
+    nonce = generate_oidc_nonce()
+    state_id = generate_oidc_state_id()
+    code_verifier = generate_pkce_code_verifier()
+    _create_oidc_login_state(
+        db,
+        state_id=state_id,
+        nonce=nonce,
+        code_verifier=code_verifier,
+        return_to=resolve_post_login_url(request, return_to),
+    )
+    state = create_oidc_state_token(state_id=state_id, nonce=nonce)
+    return RedirectResponse(
+        build_authorization_url(
+            provider,
+            state=state,
+            nonce=nonce,
+            code_challenge=generate_pkce_code_challenge(code_verifier),
+        ),
+        status_code=status.HTTP_302_FOUND,
+    )
+
+
+@router.get("/oidc/callback")
+async def complete_oidc_login(
+    request: Request,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    settings_row = get_system_oidc_settings(db)
+    default_return_to = resolve_post_login_url(request, None)
+    if settings_row is None or not settings_row.oidc_client_secret_encrypted:
+        return RedirectResponse(
+            encode_oidc_error_redirect(
+                default_return_to,
+                error_key="backend.errors.auth.oidcNotConfigured",
+            ),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    if error:
+        return RedirectResponse(
+            encode_oidc_error_redirect(
+                default_return_to,
+                error_key="backend.errors.auth.oidcAuthenticationCancelled",
+            ),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    verified_state = verify_oidc_state_token(state or "")
+    if verified_state is None or not code:
+        return RedirectResponse(
+            encode_oidc_error_redirect(
+                default_return_to,
+                error_key="backend.errors.auth.invalidOrExpiredToken",
+            ),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    login_state = _consume_oidc_login_state(
+        db,
+        state_id=verified_state["state_id"],
+        nonce=verified_state["nonce"],
+    )
+    if login_state is None:
+        return RedirectResponse(
+            encode_oidc_error_redirect(
+                default_return_to,
+                error_key="backend.errors.auth.invalidOrExpiredToken",
+            ),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+    return_to = resolve_post_login_url(request, login_state.return_to)
+
+    try:
+        provider = await discover_oidc_configuration(
+            request,
+            settings_row,
+            decrypt_secret(settings_row.oidc_client_secret_encrypted),
+        )
+        token_response = await exchange_code_for_tokens(
+            provider, code=code, code_verifier=login_state.code_verifier
+        )
+        id_token = token_response.get("id_token")
+        if not isinstance(id_token, str):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"key": "backend.errors.auth.oidcIdTokenInvalid"},
+            )
+        id_claims = verify_id_token(
+            provider,
+            id_token,
+            nonce=verified_state["nonce"],
+        )
+        userinfo_claims = {}
+        access_token = token_response.get("access_token")
+        if isinstance(access_token, str) and provider.userinfo_endpoint:
+            userinfo_claims = await fetch_userinfo(provider, access_token)
+        identity = normalize_oidc_identity(
+            merge_claim_sets(id_claims, userinfo_claims),
+            provider,
+        )
+        if not identity.get("username"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"key": "backend.errors.auth.oidcUsernameClaimMissing"},
+            )
+        _record_auth_event(
+            db,
+            event_type="oidc_callback_success",
+            auth_source="oidc",
+            success=True,
+            username=identity.get("username"),
+            email=identity.get("email"),
+        )
+        identity["subject"] = (
+            id_claims.get("sub") if isinstance(id_claims.get("sub"), str) else None
+        )
+        exchange_grant = _create_oidc_exchange_grant(
+            db,
+            identity=identity,
+            id_token_hint=id_token,
+        )
+        redirect_response = RedirectResponse(
+            encode_oidc_complete_redirect(return_to),
+            status_code=status.HTTP_302_FOUND,
+        )
+        redirect_response.set_cookie(
+            key=OIDC_EXCHANGE_COOKIE_NAME,
+            value=exchange_grant.grant_id,
+            httponly=True,
+            samesite="lax",
+            secure=build_external_base_url(request).startswith("https://"),
+            max_age=OIDC_EXCHANGE_GRANT_EXPIRE_MINUTES * 60,
+            path="/",
+        )
+        return redirect_response
+    except HTTPException as exc:
+        _record_auth_event(
+            db,
+            event_type="oidc_callback_failed",
+            auth_source="oidc",
+            success=False,
+            detail=(
+                exc.detail.get("key")
+                if isinstance(exc.detail, dict)
+                else str(exc.detail)
+            ),
+        )
+        error_key = (
+            exc.detail.get("key")
+            if isinstance(exc.detail, dict)
+            else "backend.errors.auth.oidcAuthenticationFailed"
+        )
+        return RedirectResponse(
+            encode_oidc_error_redirect(return_to, error_key=error_key),
+            status_code=status.HTTP_302_FOUND,
+        )
+    except Exception:
+        _record_auth_event(
+            db,
+            event_type="oidc_callback_failed",
+            auth_source="oidc",
+            success=False,
+            detail="backend.errors.auth.oidcAuthenticationFailed",
+        )
+        return RedirectResponse(
+            encode_oidc_error_redirect(
+                return_to,
+                error_key="backend.errors.auth.oidcAuthenticationFailed",
+            ),
+            status_code=status.HTTP_302_FOUND,
+        )
+
+
+@router.post("/oidc/exchange", response_model=Token)
+async def exchange_oidc_login(
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    settings_row = get_system_oidc_settings(db)
+    if settings_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.auth.oidcNotConfigured"},
+        )
+
+    if not _is_same_origin_request(request):
+        _record_auth_event(
+            db,
+            event_type="oidc_exchange_failed",
+            auth_source="oidc",
+            success=False,
+            detail="backend.errors.auth.invalidAuthentication",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"key": "backend.errors.auth.invalidAuthentication"},
+        )
+
+    grant_id = request.cookies.get(OIDC_EXCHANGE_COOKIE_NAME)
+    if not grant_id:
+        _record_auth_event(
+            db,
+            event_type="oidc_exchange_failed",
+            auth_source="oidc",
+            success=False,
+            detail="backend.errors.auth.invalidOrExpiredToken",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
+        )
+
+    exchange_grant = _consume_oidc_exchange_grant(db, grant_id=grant_id)
+    if exchange_grant is None:
+        _record_auth_event(
+            db,
+            event_type="oidc_exchange_failed",
+            auth_source="oidc",
+            success=False,
+            detail="backend.errors.auth.invalidOrExpiredToken",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
+        )
+
+    identity = _build_oidc_exchange_identity(exchange_grant)
+
+    user = _provision_oidc_user(db, settings_row, identity)
+    response.delete_cookie(OIDC_EXCHANGE_COOKIE_NAME, path="/")
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    _record_auth_event(
+        db,
+        event_type="oidc_login_succeeded",
+        auth_source="oidc",
+        success=True,
+        username=user.username,
+        email=user.email,
+        actor_user_id=user.id,
+    )
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -394,10 +1243,32 @@ async def login(
 
 @router.post("/login/totp", response_model=Token)
 async def complete_login_with_totp(
-    payload: TotpLoginVerification, db: Session = Depends(get_db)
+    request: Request,
+    payload: TotpLoginVerification,
+    db: Session = Depends(get_db),
 ):
+    _ensure_local_login_allowed(_get_auth_settings_row(db))
+    client_ip = get_request_client_ip(request)
     username = verify_login_challenge_token(payload.login_challenge_token)
+    totp_subject = (username or "unknown").strip().lower() or "unknown"
+    enforce_auth_rate_limit(
+        db,
+        scope="totp_login",
+        subject=totp_subject,
+        client_ip=client_ip,
+        policy=get_totp_login_policy(),
+    )
     if not username:
+        _record_rate_limit_failure(
+            db,
+            scope="totp_login",
+            subject=totp_subject,
+            client_ip=client_ip,
+            policy=get_totp_login_policy(),
+            event_type="totp_login_rate_limited",
+            auth_source="local",
+            detail="backend.errors.auth.invalidOrExpiredToken",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
@@ -405,6 +1276,17 @@ async def complete_login_with_totp(
 
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active or not user.totp_enabled:
+        _record_rate_limit_failure(
+            db,
+            scope="totp_login",
+            subject=totp_subject,
+            client_ip=client_ip,
+            policy=get_totp_login_policy(),
+            event_type="totp_login_rate_limited",
+            auth_source="local",
+            username=username,
+            detail="backend.errors.auth.invalidTotpCode",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"key": "backend.errors.auth.invalidTotpCode"},
@@ -412,11 +1294,30 @@ async def complete_login_with_totp(
 
     if not _verify_totp_or_recovery_code(user, payload.code):
         db.commit()
+        _record_rate_limit_failure(
+            db,
+            scope="totp_login",
+            subject=totp_subject,
+            client_ip=client_ip,
+            policy=get_totp_login_policy(),
+            event_type="totp_login_rate_limited",
+            auth_source="local",
+            username=username,
+            email=user.email,
+            detail="backend.errors.auth.invalidTotpCode",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"key": "backend.errors.auth.invalidTotpCode"},
         )
 
+    clear_auth_rate_limit(
+        db,
+        scope="totp_login",
+        subject=totp_subject,
+        client_ip=client_ip,
+    )
+    _clear_local_session_artifacts(user)
     user.last_login = datetime.now(timezone.utc)
     db.commit()
 
@@ -426,6 +1327,15 @@ async def complete_login_with_totp(
     )
 
     logger.info("User completed TOTP login successfully", username=user.username)
+    _record_auth_event(
+        db,
+        event_type="totp_login_succeeded",
+        auth_source="local",
+        success=True,
+        username=user.username,
+        email=user.email,
+        actor_user_id=user.id,
+    )
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -434,11 +1344,96 @@ async def complete_login_with_totp(
     }
 
 
-@router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)):
+@router.post("/logout", response_model=LogoutResponse)
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Logout user (client should discard token)"""
     logger.info("User logged out", username=current_user.username)
-    return {"message": "backend.success.auth.loggedOut"}
+    settings_row = get_system_oidc_settings(db)
+    logout_url: Optional[str] = None
+    id_token_hint: Optional[str] = None
+
+    if current_user.auth_source == "oidc" and current_user.oidc_last_id_token_encrypted:
+        try:
+            id_token_hint = decrypt_secret(current_user.oidc_last_id_token_encrypted)
+        except Exception:
+            logger.warning(
+                "Failed to decrypt stored OIDC id_token for logout hint",
+                username=current_user.username,
+            )
+
+    if (
+        current_user.auth_source == "oidc"
+        and id_token_hint
+        and settings_row
+        and settings_row.oidc_client_secret_encrypted
+    ):
+        try:
+            provider = await discover_oidc_configuration(
+                request,
+                settings_row,
+                decrypt_secret(settings_row.oidc_client_secret_encrypted),
+            )
+            logout_url = build_end_session_url(
+                provider, request, id_token_hint=id_token_hint
+            )
+        except Exception:
+            logger.warning(
+                "Failed to build OIDC end-session URL",
+                username=current_user.username,
+            )
+
+    if current_user.oidc_last_id_token_encrypted is not None:
+        current_user.oidc_last_id_token_encrypted = None
+        db.commit()
+
+    _record_auth_event(
+        db,
+        event_type="logout",
+        auth_source=current_user.auth_source or "local",
+        success=True,
+        username=current_user.username,
+        email=current_user.email,
+        actor_user_id=current_user.id,
+    )
+
+    return {
+        "message": "backend.success.auth.loggedOut",
+        "logout_url": logout_url,
+    }
+
+
+@router.get("/events", response_model=list[AuthEventResponse])
+async def list_auth_events(
+    limit: int = 50,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    safe_limit = max(1, min(limit, 200))
+    events = (
+        db.query(AuthEvent)
+        .order_by(AuthEvent.created_at.desc(), AuthEvent.id.desc())
+        .limit(safe_limit)
+        .all()
+    )
+    logger.info("Auth events viewed", username=current_user.username, limit=safe_limit)
+    return [
+        {
+            "id": event.id,
+            "event_type": event.event_type,
+            "auth_source": event.auth_source,
+            "username": event.username,
+            "email": event.email,
+            "success": event.success,
+            "detail": event.detail,
+            "actor_user_id": event.actor_user_id,
+            "created_at": event.created_at,
+        }
+        for event in events
+    ]
 
 
 @router.get("/me", response_model=UserResponse)
@@ -734,7 +1729,8 @@ async def delete_passkey(
 @router.post(
     "/passkeys/authenticate/options", response_model=PasskeyBeginAuthenticationResponse
 )
-async def begin_passkey_authentication(request: Request):
+async def begin_passkey_authentication(request: Request, db: Session = Depends(get_db)):
+    _ensure_local_login_allowed(_get_auth_settings_row(db))
     webauthn = require_webauthn()
     origin, rp_id = resolve_origin_and_rp_id(request)
     options = webauthn["generate_authentication_options"](
@@ -759,10 +1755,31 @@ async def finish_passkey_authentication(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    _ensure_local_login_allowed(_get_auth_settings_row(db))
+    client_ip = get_request_client_ip(request)
+    raw_id = payload.credential.get("id")
+    passkey_subject = raw_id.strip().lower() if isinstance(raw_id, str) else "unknown"
+    enforce_auth_rate_limit(
+        db,
+        scope="passkey_login",
+        subject=passkey_subject,
+        client_ip=client_ip,
+        policy=get_passkey_login_policy(),
+    )
     ceremony = verify_passkey_ceremony_token(
         payload.ceremony_token, "passkey_authenticate"
     )
     if not ceremony:
+        _record_rate_limit_failure(
+            db,
+            scope="passkey_login",
+            subject=passkey_subject,
+            client_ip=client_ip,
+            policy=get_passkey_login_policy(),
+            event_type="passkey_login_rate_limited",
+            auth_source="local",
+            detail="backend.errors.auth.invalidOrExpiredToken",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
@@ -770,13 +1787,22 @@ async def finish_passkey_authentication(
 
     webauthn = require_webauthn()
     origin, rp_id = resolve_origin_and_rp_id(request)
-    raw_id = payload.credential.get("id")
     passkey = (
         db.query(PasskeyCredential)
         .filter(PasskeyCredential.credential_id == raw_id)
         .first()
     )
     if not passkey or not passkey.user or not passkey.user.is_active:
+        _record_rate_limit_failure(
+            db,
+            scope="passkey_login",
+            subject=passkey_subject,
+            client_ip=client_ip,
+            policy=get_passkey_login_policy(),
+            event_type="passkey_login_rate_limited",
+            auth_source="local",
+            detail="backend.errors.auth.invalidPasskey",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"key": "backend.errors.auth.invalidPasskey"},
@@ -797,8 +1823,27 @@ async def finish_passkey_authentication(
             require_user_verification=True,
         )
     except webauthn["InvalidAuthenticationResponse"] as exc:
+        _record_rate_limit_failure(
+            db,
+            scope="passkey_login",
+            subject=passkey_subject,
+            client_ip=client_ip,
+            policy=get_passkey_login_policy(),
+            event_type="passkey_login_rate_limited",
+            auth_source="local",
+            username=passkey.user.username,
+            email=passkey.user.email,
+            detail="backend.errors.auth.invalidPasskey",
+        )
         _raise_passkey_verification_error(exc)
 
+    clear_auth_rate_limit(
+        db,
+        scope="passkey_login",
+        subject=passkey_subject,
+        client_ip=client_ip,
+    )
+    _clear_local_session_artifacts(passkey.user)
     passkey.sign_count = verification.new_sign_count
     passkey.last_used_at = datetime.now(timezone.utc)
     passkey.user.last_login = datetime.now(timezone.utc)
@@ -809,6 +1854,15 @@ async def finish_passkey_authentication(
         data={"sub": passkey.user.username}, expires_delta=access_token_expires
     )
     logger.info("User logged in with passkey", username=passkey.user.username)
+    _record_auth_event(
+        db,
+        event_type="passkey_login_succeeded",
+        auth_source="local",
+        success=True,
+        username=passkey.user.username,
+        email=passkey.user.email,
+        actor_user_id=passkey.user.id,
+    )
     return {
         "access_token": access_token,
         "token_type": "bearer",

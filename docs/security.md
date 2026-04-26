@@ -127,352 +127,322 @@ BORG_DB_PATH=/custom/path/borg.db python -m app.scripts.reset_password admin new
 
 ---
 
-### Proxy/OIDC Authentication
+### SSO Authentication
 
 {: .new }
-> **New Feature**: Proxy-based authentication for OIDC/SSO integration
+> Borg UI supports two enterprise SSO patterns: built-in OIDC and reverse-proxy header authentication.
 
-Borg Web UI supports **proxy-based authentication** to integrate with external authentication providers like:
-- **Authentik**
-- **Authelia**
-- **Keycloak**
-- **Authserv**
-- **Google Identity-Aware Proxy (IAP)**
-- **Azure AD Application Proxy**
-- **Cloudflare Access**
-- Any reverse proxy that provides authenticated usernames in headers
+Use **built-in OIDC** when you want Borg UI to be the OIDC client itself. Use **proxy-header mode** when an existing access gateway or authenticated reverse proxy already sits in front of Borg UI and you want Borg UI to trust only that proxy.
 
-#### How It Works
+#### Choosing a Mode
 
-When enabled, Borg Web UI:
-1. **Disables the login screen** - No password prompts
-2. **Trusts the reverse proxy** - Reads username from HTTP headers
-3. **Auto-creates users** - Creates accounts on first access
-4. **Optionally maps authorization from trusted headers** - Can assign Borg UI roles from proxy-provided claims
-5. **Maintains authorization** - Still respects Borg UI's built-in permission model
-6. **Fails closed without a trusted header** - Requests are rejected instead of falling back to a local default user
+**Built-in OIDC is the recommended default for new enterprise deployments.**
 
-**Security Model:**
-- ✅ Authentication: Handled by your proxy/OIDC provider
-- ✅ Authorization: Managed by Borg Web UI (admin vs. regular user)
-- ✅ Session management: JWT tokens still used for API calls
+Use **built-in OIDC** when:
+- your identity provider supports standard OpenID Connect
+- you want Borg UI to redirect users to the IdP and handle the callback itself
+- you want less reliance on trusted inbound identity headers
+- you want a cleaner fit for Authentik, Keycloak, Okta, Entra ID, Google, or similar providers
 
-#### Configuration
+Use **proxy-header mode** when:
+- you already have an authenticated reverse proxy, access gateway, or forward-auth layer
+- the same upstream access layer protects multiple internal apps
+- your environment already standardizes on forwarded identity headers
+- you need the proxy to inject extra trusted headers for Borg UI-specific role mapping
 
-**1. Enable proxy authentication:**
+Do not enable both modes for the same public entrypoint. Pick one trust model and document it clearly.
+
+#### Built-in OIDC Mode
+
+In built-in OIDC mode, Borg UI acts as the OIDC client:
+1. Borg UI redirects the user to the identity provider
+2. the identity provider authenticates the user
+3. Borg UI receives the callback and validates the response
+4. Borg UI provisions or updates the local user record
+5. Borg UI issues its normal application session token
+
+This keeps identity in the IdP while keeping Borg UI's own authorization model for app-local permissions.
+
+##### Built-in OIDC Security Model
+
+- Authentication is handled by the OIDC provider
+- Borg UI validates the OIDC response before creating a local session
+- Borg UI still maintains its own user record, role, repository permissions, and audit context
+- MFA should usually be enforced in the identity provider, not reimplemented inside Borg UI for SSO users
+
+##### Built-in OIDC Hardening
+
+Borg UI's OIDC flow includes the main hardening controls you should expect:
+- **PKCE** protects the authorization code flow against intercepted codes
+- **Signed and time-limited `state`** protects against CSRF and callback mix-up attacks
+- **Provider logout support** can redirect the browser to the IdP's logout flow when configured
+- **Local session exchange** keeps the browser on Borg UI's normal token model after the callback
+
+Operationally, you should still:
+- terminate TLS in front of Borg UI
+- use the correct public URL and redirect URI
+- avoid mismatched internal and public callback URLs unless you intentionally configure an override
+- keep time synchronization correct on both Borg UI and the IdP
+
+##### Built-in OIDC User Provisioning
+
+Built-in OIDC still creates or updates Borg UI users locally. Typical patterns are:
+- `viewer`: first login creates a regular user with a safe default role
+- `pending`: first login creates an approval-required local user until an admin reviews access
+- `template`: first login copies permissions from a designated template user
+- `deny`: only pre-created or already-approved users may sign in
+
+For enterprise environments, `pending` or `template` is often the right fit when you need tighter onboarding control.
+
+**Pending approvals at a high level:**
+- the user can authenticate with the IdP successfully
+- Borg UI still blocks access until a Borg UI admin approves or promotes that local account
+- this separates "identity is valid" from "this person is allowed to operate backups here"
+
+##### Built-in OIDC Role Mapping
+
+If your IdP emits trusted claims for application roles, Borg UI can map them into its own authorization model.
+
+Recommended approach:
+- keep IdP access control coarse: who may access Borg UI at all
+- keep Borg UI authorization explicit: `viewer`, `operator`, `admin`
+- only map roles from IdP claims if your organization is prepared to manage those claims carefully
+
+Treat role claims as security-sensitive. A bad claim mapping can over-privilege users just as easily as a bad proxy header mapping.
+
+##### Built-in OIDC Setup Checklist
+
+At minimum you need:
+- OIDC discovery URL or provider endpoints
+- client ID
+- client secret for confidential-client deployments
+- exact redirect URI registered in the provider
+- claim mapping for username, and optionally email/full name
+- a decision on new-user behavior: `viewer`, `pending`, `template`, or `deny`
+
+##### Authentik Notes for Built-in OIDC
+
+Typical Authentik setup:
+1. Create an **OAuth2/OpenID Provider**
+2. Set the Borg UI redirect URI exactly to Borg UI's callback URL
+3. Assign users or groups through Authentik application bindings
+4. Prefer group or policy control in Authentik for "can access Borg UI"
+5. Optionally emit claims for Borg UI role mapping if you want centralized authorization
+
+Recommended Authentik claim choices:
+- username claim: a stable username or preferred username
+- email claim: the primary email
+- full-name claim: display name
+
+Prefer stable identifiers. Do not map Borg UI usernames from display-only values that may change frequently.
+
+##### Keycloak Notes for Built-in OIDC
+
+Typical Keycloak setup:
+1. Create a confidential OIDC client for Borg UI
+2. Add the exact Borg UI redirect URI
+3. Use standard scopes like `openid profile email`
+4. Control access through realm/client roles or groups
+5. Add protocol mappers only when you intentionally want Borg UI-specific claims
+
+With Keycloak, be explicit about:
+- valid redirect URIs
+- post-logout redirect URIs if you use provider logout
+- whether role claims come from realm roles, client roles, or groups
+
+##### Built-in OIDC Logout
+
+Logout has two layers:
+- Borg UI local logout: clear the app session
+- provider logout: optionally redirect the browser to the IdP's logout endpoint
+
+The exact result depends on the provider:
+- some providers fully clear the upstream SSO session
+- some only end the application session
+- some require a configured post-logout redirect URI
+
+Test logout explicitly with your chosen provider. Do not assume all IdPs behave the same way.
+
+##### Troubleshooting Built-in OIDC
+
+**Problem: Login redirects to the IdP but callback fails**
+- check the registered redirect URI exactly
+- check whether Borg UI is behind a reverse proxy with the correct public URL
+- check whether you need a redirect URI override for split internal/public URLs
+
+**Problem: Login succeeds at the IdP but Borg UI denies access**
+- review the new-user mode (`deny`, `pending`, `template`, `viewer`)
+- check the username claim mapping
+- check whether the user was created locally and whether it needs approval
+
+**Problem: Logout returns to the wrong place**
+- verify the provider end-session URL
+- verify post-logout redirect settings on the IdP
+- verify any Borg UI logout override you configured
+
+#### Proxy-Header Mode
+
+Proxy-header mode disables the Borg UI login screen and trusts identity headers from a reverse proxy or access gateway.
+
+Supported upstream patterns include:
+- Authentik proxy or outpost mode
+- Authelia
+- Keycloak or another IdP behind a forward-auth gateway
+- Cloudflare Access
+- Google Identity-Aware Proxy
+- Azure AD Application Proxy
+- any reverse proxy that injects a trusted authenticated username header
+
+##### How Proxy-Header Mode Works
+
+When enabled, Borg UI:
+1. disables the login screen
+2. reads the username from a trusted header
+3. auto-creates users on first access
+4. can optionally map Borg UI roles, repository-wide roles, email, or full name from additional trusted headers
+5. rejects requests that do not include the required identity header
+
+**Security model:**
+- authentication is handled by the proxy or gateway
+- Borg UI authorization still happens inside Borg UI
+- Borg UI trusts the proxy, not the browser
+
+##### Proxy-Header Configuration
 
 ```yaml
 environment:
-  - DISABLE_AUTHENTICATION=true  # Disable built-in login screen
-  - PROXY_AUTH_HEADER=X-Forwarded-User  # Default header name
-  - PROXY_AUTH_ROLE_HEADER=X-Borg-Role  # Optional trusted Borg UI global role header
-  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-Borg-All-Repositories-Role  # Optional trusted default repository role header
-  - PROXY_AUTH_EMAIL_HEADER=X-Borg-Email  # Optional trusted email header
-  - PROXY_AUTH_FULL_NAME_HEADER=X-Borg-Full-Name  # Optional trusted display-name header
+  - DISABLE_AUTHENTICATION=true
+  - PROXY_AUTH_HEADER=X-Forwarded-User
+  - PROXY_AUTH_ROLE_HEADER=X-Borg-Role
+  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-Borg-All-Repositories-Role
+  - PROXY_AUTH_EMAIL_HEADER=X-Borg-Email
+  - PROXY_AUTH_FULL_NAME_HEADER=X-Borg-Full-Name
 ```
 
-**2. Configure your reverse proxy to forward authenticated usernames:**
-
-The proxy must set the `X-Forwarded-User` header (or your custom header) with the authenticated username.
-
-**Supported Headers (checked in order when using the default username header):**
-- `X-Forwarded-User` (default, configurable via `PROXY_AUTH_HEADER`)
+**Supported identity headers when using the default username header:**
+- `X-Forwarded-User`
 - `X-Remote-User`
 - `Remote-User`
-- `X-authentik-username` (Authentik)
+- `X-authentik-username`
 
 If you set a custom `PROXY_AUTH_HEADER`, Borg UI trusts only that configured header for identity.
 
-**Optional authorization headers (only when explicitly configured):**
-- `PROXY_AUTH_ROLE_HEADER` supports Borg UI global roles: `viewer`, `operator`, `admin`
-- `PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER` supports Borg UI default repository roles: `viewer`, `operator`
-- `PROXY_AUTH_EMAIL_HEADER` can update the user's email address
-- `PROXY_AUTH_FULL_NAME_HEADER` can update the user's display name
-- Invalid values are ignored and Borg UI falls back to its normal defaults
+**Optional authorization headers:**
+- `PROXY_AUTH_ROLE_HEADER`: `viewer`, `operator`, `admin`
+- `PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER`: `viewer`, `operator`
+- `PROXY_AUTH_EMAIL_HEADER`
+- `PROXY_AUTH_FULL_NAME_HEADER`
 
-#### Security Requirements
+Invalid role values are ignored rather than silently elevating access.
 
-⚠️ **CRITICAL: This feature requires proper security configuration**
+##### Proxy-Header Hardening Requirements
 
-**You MUST:**
-1. **Bind Borg UI to localhost only:**
-   ```yaml
-   ports:
-     - "127.0.0.1:8081:8081"  # Only accessible via localhost
-   ```
+⚠️ **Proxy-header mode is safe only when Borg UI is reachable exclusively through the authenticated proxy path.**
 
-2. **Use firewall rules to block direct access:**
-   ```bash
-   # Block external access to port 8081
-   sudo ufw deny 8081
-   sudo ufw allow from 127.0.0.1 to any port 8081
-   ```
+You must:
+1. bind Borg UI to localhost or a private internal Docker network
+2. block direct access to the Borg UI container port
+3. ensure the reverse proxy strips or overwrites user-supplied identity headers
+4. expose only the reverse proxy to users
+5. treat any trusted role-mapping header as security-sensitive
 
-3. **Ensure ONLY your reverse proxy can reach Borg UI**
-   - Never expose the container port to the internet
-   - Use Docker networks to isolate Borg UI from direct access
+**Example localhost binding:**
+```yaml
+ports:
+  - "127.0.0.1:8081:8081"
+```
 
-**Why this matters:**
-- If Borg UI is directly accessible, anyone can set the `X-Forwarded-User` header and impersonate any user
-- The proxy MUST strip/override user-supplied headers before forwarding
-- The same rule applies to any trusted role-mapping headers
+**Example firewall policy:**
+```bash
+sudo ufw deny 8081
+sudo ufw allow from 127.0.0.1 to any port 8081
+```
 
-#### Optional Role Mapping
+Why this matters:
+- if users can reach Borg UI directly, they may be able to forge `X-Forwarded-User` or any other trusted header
+- the proxy must be the only entity allowed to present identity to Borg UI
 
-If your reverse proxy or identity provider can emit trusted claims as headers, Borg UI can map them into its built-in authorization model.
+##### Proxy-Header Role Mapping
 
-**Supported Borg UI global roles:**
-- `viewer`
-- `operator`
-- `admin`
+If your proxy or IdP emits trusted claims as headers, Borg UI can map them into its built-in authorization model.
 
-**Supported repository-wide default roles:**
-- `viewer`
-- `operator`
+Behavior:
+- new users default to `viewer` unless a valid trusted role header is configured
+- existing users are updated on login when a valid trusted role header is present
+- invalid role values are ignored instead of blocking login
 
-**Behavior:**
-- New proxy-auth users default to `viewer` unless a valid trusted role header is configured
-- Existing proxy-auth users are updated on login when a valid trusted role header is present
-- Invalid role values are ignored instead of blocking login
-
-**Example:**
+Example:
 ```yaml
 environment:
   - DISABLE_AUTHENTICATION=true
   - PROXY_AUTH_HEADER=X-authentik-username
-  - PROXY_AUTH_ROLE_HEADER=X-borg-role
-  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-borg-all-repositories-role
-  - PROXY_AUTH_EMAIL_HEADER=X-borg-email
-  - PROXY_AUTH_FULL_NAME_HEADER=X-borg-full-name
+  - PROXY_AUTH_ROLE_HEADER=X-Borg-Role
+  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-Borg-All-Repositories-Role
+  - PROXY_AUTH_EMAIL_HEADER=X-Borg-Email
+  - PROXY_AUTH_FULL_NAME_HEADER=X-Borg-Full-Name
 ```
 
-If your proxy can emit trusted claims, you can map them directly:
-
+Example reverse-proxy forwarding:
 ```nginx
 proxy_set_header X-authentik-username $upstream_http_x_authentik_username;
-proxy_set_header X-borg-role $upstream_http_x_borg_role;
-proxy_set_header X-borg-all-repositories-role $upstream_http_x_borg_all_repositories_role;
-proxy_set_header X-borg-email $upstream_http_x_borg_email;
-proxy_set_header X-borg-full-name $upstream_http_x_borg_full_name;
+proxy_set_header X-Borg-Role $upstream_http_x_borg_role;
+proxy_set_header X-Borg-All-Repositories-Role $upstream_http_x_borg_all_repositories_role;
+proxy_set_header X-Borg-Email $upstream_http_x_borg_email;
+proxy_set_header X-Borg-Full-Name $upstream_http_x_borg_full_name;
 ```
 
-#### Example Configurations
+##### Authentik Notes for Proxy-Header Mode
 
-##### Authentik
+The common Authentik pattern here is:
+1. protect Borg UI with an Authentik proxy provider or outpost
+2. forward `X-authentik-username` as the primary identity header
+3. optionally forward additional trusted headers for Borg UI roles or profile data
+4. keep Borg UI itself private behind the Authentik-protected proxy
 
-**docker-compose.yml:**
-```yaml
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    environment:
-      - DISABLE_AUTHENTICATION=true
-      - PROXY_AUTH_HEADER=X-authentik-username
-    networks:
-      - internal
-    # NO ports exposed - only accessible via proxy
+##### Keycloak Notes for Proxy-Header Mode
 
-  authentik-proxy:
-    image: ghcr.io/goauthentik/proxy:latest
-    environment:
-      - AUTHENTIK_HOST=https://auth.example.com
-      - AUTHENTIK_INSECURE=false
-      - AUTHENTIK_TOKEN=your-outpost-token
-    ports:
-      - "8443:8443"
-    networks:
-      - internal
-      - external
-    labels:
-      - "authentik.enabled=true"
-      - "authentik.upstream=http://borg-ui:8081"
-```
+Keycloak usually fits proxy-header mode only when another access layer is translating a successful Keycloak login into trusted headers. In that setup:
+- the gateway authenticates against Keycloak
+- the gateway injects the trusted username header
+- Borg UI trusts the gateway, not Keycloak directly
 
-**Authentik Application Setup:**
-1. Create new application in Authentik
-2. Select **Proxy Provider**
-3. Set External URL: `https://backups.example.com`
-4. Set Internal URL: `http://borg-ui:8081`
-5. Enable **Forward auth (single application)**
-6. Set authorization flow and user/group bindings
+If you want Borg UI to talk to Keycloak itself, built-in OIDC is usually the cleaner model.
 
-##### Authelia
+##### Testing Proxy-Header Mode
 
-**Authelia configuration.yml:**
-```yaml
-access_control:
-  rules:
-    - domain: backups.example.com
-      policy: one_factor  # or two_factor
-      subject:
-        - "group:admins"
-        - "group:backup-users"
-```
-
-**nginx configuration:**
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name backups.example.com;
-
-    # SSL configuration...
-
-    # Authelia authentication
-    include /path/to/authelia-authrequest.conf;
-
-    location / {
-        # Forward authenticated username to Borg UI
-        proxy_set_header X-Remote-User $remote_user;
-        proxy_set_header X-Forwarded-User $remote_user;
-
-        proxy_pass http://127.0.0.1:8081;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-##### Cloudflare Access
-
-**1. Create Cloudflare Access application:**
-- Application name: Borg Backups
-- Session duration: 24 hours
-- Add policies for users/groups
-
-**2. Configure Borg UI:**
-```yaml
-environment:
-  - DISABLE_AUTHENTICATION=true
-  - PROXY_AUTH_HEADER=Cf-Access-Authenticated-User-Email
-```
-
-**3. Cloudflare Access forwards the user's email in the `Cf-Access-Authenticated-User-Email` header**
-
-##### Nginx with Basic Auth (Simple Setup)
-
-For basic HTTP authentication:
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name backups.example.com;
-
-    # SSL configuration...
-
-    auth_basic "Borg Backups";
-    auth_basic_user_file /etc/nginx/.htpasswd;
-
-    location / {
-        # Forward authenticated username
-        proxy_set_header X-Remote-User $remote_user;
-        proxy_set_header X-Forwarded-User $remote_user;
-
-        proxy_pass http://127.0.0.1:8081;
-        # Other proxy headers...
-    }
-}
-```
-
-Create users:
-```bash
-htpasswd -c /etc/nginx/.htpasswd username
-```
-
-#### User Management with Proxy Auth
-
-**First-time access:**
-- Users are auto-created when they first access the application
-- New users are created as **regular users** (not admins)
-- Users inherit the username from the proxy header
-
-**Making users admins:**
-1. Admin manually promotes users via Settings > User Management
-2. Or update database directly:
-   ```bash
-   docker exec borg-web-ui sqlite3 /data/borg.db "UPDATE users SET is_admin=1 WHERE username='alice';"
-   ```
-
-**Disabling users:**
-- Set `is_active=0` in the database
-- Or use the User Management interface (when user is admin)
-
-#### Testing Proxy Auth
-
-**Verify headers are being sent:**
+Verify the expected behavior directly:
 
 ```bash
-# From your reverse proxy server
-curl -H "X-Forwarded-User: testuser" http://localhost:8081/api/auth/me
+# Should fail closed without the trusted header
+curl -i http://localhost:8081/api/auth/me
+
+# Should succeed only when the trusted header is present
+curl -i -H "X-Forwarded-User: testuser" http://localhost:8081/api/auth/me
 ```
 
-**Check application logs:**
+Check logs:
 ```bash
 docker logs borg-web-ui 2>&1 | grep "proxy"
-docker logs borg-web-ui 2>&1 | grep "X-Forwarded-User"
 ```
 
-**Test with direct access (should fail closed):**
-```bash
-# Without proxy header - should return HTTP 401
-curl http://localhost:8081/api/auth/me
-```
+##### Switching Between Modes
 
-#### Switching Between Auth Methods
+To return from proxy-header mode to local login, remove the proxy-auth environment variables and restart the container.
 
-**To disable proxy auth and return to built-in authentication:**
+To move from proxy-header mode to built-in OIDC, remove the proxy-header trust configuration first. Avoid leaving an old trusted-header path reachable after switching to OIDC.
 
-1. Remove environment variables:
-   ```yaml
-   environment:
-     # - DISABLE_AUTHENTICATION=true  # Commented out
-     # - PROXY_AUTH_HEADER=X-Forwarded-User
-   ```
+##### Security Checklist for SSO
 
-2. Restart container:
-   ```bash
-   docker compose up -d
-   ```
-
-3. Users can now log in with passwords again
-
-**Note:** Existing users created via proxy auth will still exist, but they'll need passwords set by an admin.
-
-#### Troubleshooting
-
-**Problem: Login screen still appears**
-- Verify `DISABLE_AUTHENTICATION=true` is set
-- Check environment variables: `docker exec borg-ui env | grep DISABLE`
-- Restart container after changing environment
-
-**Problem: "Could not validate credentials" errors**
-- Check proxy is sending the authentication header
-- Verify header name matches `PROXY_AUTH_HEADER`
-- Check logs: `docker logs borg-web-ui | grep "proxy"`
-
-**Problem: Wrong user is logged in**
-- Proxy may not be stripping user-supplied headers
-- Verify Borg UI is only accessible via proxy (not directly)
-- Check firewall rules and port bindings
-
-**Problem: Users can't access after proxy auth is enabled**
-- First access auto-creates regular users (not admins)
-- Admin must manually promote users to admin
-- Check user status: `docker exec borg-web-ui sqlite3 /data/borg.db "SELECT * FROM users;"`
-
-#### Security Checklist for Proxy Auth
-
-- [ ] `DISABLE_AUTHENTICATION=true` is set
-- [ ] Borg UI bound to localhost only (`127.0.0.1:8081`)
-- [ ] Firewall blocks external access to port 8081
-- [ ] Reverse proxy is configured to authenticate users
-- [ ] Reverse proxy strips user-supplied authentication headers
-- [ ] HTTPS is enabled on the reverse proxy
-- [ ] Reverse proxy has proper access controls (groups, 2FA, etc.)
-- [ ] First admin user has been promoted manually
-- [ ] Tested that direct access falls back safely
-- [ ] Application logs reviewed for proxy auth events
+- [ ] HTTPS is enabled in front of Borg UI
+- [ ] You chose one SSO trust model per public entrypoint: built-in OIDC or proxy-header mode
+- [ ] Redirect URIs exactly match the public Borg UI URL
+- [ ] MFA is enforced in the identity provider for SSO users
+- [ ] New-user behavior is intentional: `viewer`, `pending`, `template`, or `deny`
+- [ ] Pending-user approval workflow is documented if you use `pending`
+- [ ] Role mapping is reviewed before trusting IdP claims or proxy headers
+- [ ] Logout behavior has been tested with your provider
+- [ ] For proxy-header mode, Borg UI is not directly reachable by end users
+- [ ] For proxy-header mode, the proxy strips or overwrites user-supplied identity headers
 
 ---
 

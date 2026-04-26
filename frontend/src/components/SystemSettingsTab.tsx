@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -12,10 +12,12 @@ import {
   CircularProgress,
   FormControlLabel,
   Switch,
+  Chip,
   IconButton,
   Tooltip,
   Tabs,
   Tab,
+  MenuItem,
 } from '@mui/material'
 import {
   Save,
@@ -30,7 +32,7 @@ import {
 } from 'lucide-react'
 import SettingsCard from './SettingsCard'
 import { toast } from 'react-hot-toast'
-import { authAPI, settingsAPI } from '../services/api'
+import { authAPI, authAPIAdmin, settingsAPI } from '../services/api'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAnalytics } from '../hooks/useAnalytics'
 
@@ -61,11 +63,35 @@ const SystemSettingsTab: React.FC = () => {
   const [rotateMetricsToken, setRotateMetricsToken] = useState(false)
   const [newMetricsToken, setNewMetricsToken] = useState<string | null>(null)
   const [metricsTokenCopied, setMetricsTokenCopied] = useState(false)
+  const [oidcEnabled, setOidcEnabled] = useState(false)
+  const [oidcDisableLocalAuth, setOidcDisableLocalAuth] = useState(false)
+  const [oidcProviderName, setOidcProviderName] = useState('Single sign-on')
+  const [oidcDiscoveryUrl, setOidcDiscoveryUrl] = useState('')
+  const [oidcClientId, setOidcClientId] = useState('')
+  const [oidcClientSecret, setOidcClientSecret] = useState('')
+  const [clearOidcClientSecret, setClearOidcClientSecret] = useState(false)
+  const [oidcScopes, setOidcScopes] = useState('openid profile email')
+  const [oidcRedirectUriOverride, setOidcRedirectUriOverride] = useState('')
+  const [oidcEndSessionEndpointOverride, setOidcEndSessionEndpointOverride] = useState('')
+  const [oidcClaimUsername, setOidcClaimUsername] = useState('preferred_username')
+  const [oidcClaimEmail, setOidcClaimEmail] = useState('email')
+  const [oidcClaimFullName, setOidcClaimFullName] = useState('name')
+  const [oidcGroupClaim, setOidcGroupClaim] = useState('')
+  const [oidcRoleClaim, setOidcRoleClaim] = useState('')
+  const [oidcAdminGroups, setOidcAdminGroups] = useState('')
+  const [oidcAllRepositoriesRoleClaim, setOidcAllRepositoriesRoleClaim] = useState('')
+  const [oidcNewUserMode, setOidcNewUserMode] = useState('viewer')
+  const [oidcTemplateUsername, setOidcTemplateUsername] = useState('')
+  const [oidcDefaultRole, setOidcDefaultRole] = useState('viewer')
+  const [oidcDefaultAllRepositoriesRole, setOidcDefaultAllRepositoriesRole] = useState('viewer')
 
   const [hasChanges, setHasChanges] = useState(false)
   const [browseChanged, setBrowseChanged] = useState(false)
   const [systemChanged, setSystemChanged] = useState(false)
   const [activeSection, setActiveSection] = useState(0)
+  const [authEventFilter, setAuthEventFilter] = useState<'all' | 'failed' | 'oidc' | 'pending'>(
+    'all'
+  )
 
   interface CacheStats {
     browse_max_items?: number
@@ -99,6 +125,19 @@ const SystemSettingsTab: React.FC = () => {
       const response = await authAPI.getAuthConfig()
       return response.data
     },
+  })
+
+  const {
+    data: authEventsData,
+    isLoading: authEventsLoading,
+    refetch: refetchAuthEvents,
+  } = useQuery({
+    queryKey: ['authEvents'],
+    queryFn: async () => {
+      const response = await authAPIAdmin.listEvents(20)
+      return response.data
+    },
+    enabled: activeSection === 5,
   })
 
   const cacheStats = cacheData
@@ -162,6 +201,29 @@ const SystemSettingsTab: React.FC = () => {
       setMetricsEnabled(systemSettings.metrics_enabled ?? false)
       setMetricsRequireAuth(systemSettings.metrics_require_auth ?? false)
       setRotateMetricsToken(false)
+      setOidcEnabled(systemSettings.oidc_enabled ?? false)
+      setOidcDisableLocalAuth(systemSettings.oidc_disable_local_auth ?? false)
+      setOidcProviderName(systemSettings.oidc_provider_name ?? 'Single sign-on')
+      setOidcDiscoveryUrl(systemSettings.oidc_discovery_url ?? '')
+      setOidcClientId(systemSettings.oidc_client_id ?? '')
+      setOidcClientSecret('')
+      setClearOidcClientSecret(false)
+      setOidcScopes(systemSettings.oidc_scopes ?? 'openid profile email')
+      setOidcRedirectUriOverride(systemSettings.oidc_redirect_uri_override ?? '')
+      setOidcEndSessionEndpointOverride(systemSettings.oidc_end_session_endpoint_override ?? '')
+      setOidcClaimUsername(systemSettings.oidc_claim_username ?? 'preferred_username')
+      setOidcClaimEmail(systemSettings.oidc_claim_email ?? 'email')
+      setOidcClaimFullName(systemSettings.oidc_claim_full_name ?? 'name')
+      setOidcGroupClaim(systemSettings.oidc_group_claim ?? '')
+      setOidcRoleClaim(systemSettings.oidc_role_claim ?? '')
+      setOidcAdminGroups(systemSettings.oidc_admin_groups ?? '')
+      setOidcAllRepositoriesRoleClaim(systemSettings.oidc_all_repositories_role_claim ?? '')
+      setOidcNewUserMode(systemSettings.oidc_new_user_mode ?? 'viewer')
+      setOidcTemplateUsername(systemSettings.oidc_new_user_template_username ?? '')
+      setOidcDefaultRole(systemSettings.oidc_default_role ?? 'viewer')
+      setOidcDefaultAllRepositoriesRole(
+        systemSettings.oidc_default_all_repositories_role ?? 'viewer'
+      )
       setHasChanges(false)
     }
   }, [systemSettings])
@@ -191,9 +253,34 @@ const SystemSettingsTab: React.FC = () => {
         metricsRequireAuth !== (systemSettings.metrics_require_auth ?? false) ||
         rotateMetricsToken
 
+      const oidcDirty =
+        oidcEnabled !== (systemSettings.oidc_enabled ?? false) ||
+        oidcDisableLocalAuth !== (systemSettings.oidc_disable_local_auth ?? false) ||
+        oidcProviderName !== (systemSettings.oidc_provider_name ?? 'Single sign-on') ||
+        oidcDiscoveryUrl !== (systemSettings.oidc_discovery_url ?? '') ||
+        oidcClientId !== (systemSettings.oidc_client_id ?? '') ||
+        oidcClientSecret !== '' ||
+        clearOidcClientSecret ||
+        oidcScopes !== (systemSettings.oidc_scopes ?? 'openid profile email') ||
+        oidcRedirectUriOverride !== (systemSettings.oidc_redirect_uri_override ?? '') ||
+        oidcEndSessionEndpointOverride !==
+          (systemSettings.oidc_end_session_endpoint_override ?? '') ||
+        oidcClaimUsername !== (systemSettings.oidc_claim_username ?? 'preferred_username') ||
+        oidcClaimEmail !== (systemSettings.oidc_claim_email ?? 'email') ||
+        oidcClaimFullName !== (systemSettings.oidc_claim_full_name ?? 'name') ||
+        oidcGroupClaim !== (systemSettings.oidc_group_claim ?? '') ||
+        oidcRoleClaim !== (systemSettings.oidc_role_claim ?? '') ||
+        oidcAdminGroups !== (systemSettings.oidc_admin_groups ?? '') ||
+        oidcAllRepositoriesRoleClaim !== (systemSettings.oidc_all_repositories_role_claim ?? '') ||
+        oidcNewUserMode !== (systemSettings.oidc_new_user_mode ?? 'viewer') ||
+        oidcTemplateUsername !== (systemSettings.oidc_new_user_template_username ?? '') ||
+        oidcDefaultRole !== (systemSettings.oidc_default_role ?? 'viewer') ||
+        oidcDefaultAllRepositoriesRole !==
+          (systemSettings.oidc_default_all_repositories_role ?? 'viewer')
+
       setBrowseChanged(browseDirty)
-      setSystemChanged(timeoutDirty || statsRefreshDirty || metricsDirty)
-      setHasChanges(browseDirty || timeoutDirty || statsRefreshDirty || metricsDirty)
+      setSystemChanged(timeoutDirty || statsRefreshDirty || metricsDirty || oidcDirty)
+      setHasChanges(browseDirty || timeoutDirty || statsRefreshDirty || metricsDirty || oidcDirty)
     }
   }, [
     browseMaxItems,
@@ -210,6 +297,27 @@ const SystemSettingsTab: React.FC = () => {
     metricsEnabled,
     metricsRequireAuth,
     rotateMetricsToken,
+    oidcEnabled,
+    oidcDisableLocalAuth,
+    oidcProviderName,
+    oidcDiscoveryUrl,
+    oidcClientId,
+    oidcClientSecret,
+    clearOidcClientSecret,
+    oidcScopes,
+    oidcRedirectUriOverride,
+    oidcEndSessionEndpointOverride,
+    oidcClaimUsername,
+    oidcClaimEmail,
+    oidcClaimFullName,
+    oidcGroupClaim,
+    oidcRoleClaim,
+    oidcAdminGroups,
+    oidcAllRepositoriesRoleClaim,
+    oidcNewUserMode,
+    oidcTemplateUsername,
+    oidcDefaultRole,
+    oidcDefaultAllRepositoriesRole,
     cacheStats,
     systemSettings,
   ])
@@ -252,6 +360,18 @@ const SystemSettingsTab: React.FC = () => {
       maxConcurrentScheduledChecks > MAX_SCHEDULE_CONCURRENCY
     ) {
       return `Scheduler concurrency limits must be between 0 and ${MAX_SCHEDULE_CONCURRENCY}`
+    }
+    const hasExistingOidcSecret = Boolean(systemSettings?.oidc_client_secret_set)
+    if (oidcEnabled) {
+      if (!oidcDiscoveryUrl.trim() || !oidcClientId.trim()) {
+        return t('systemSettings.oidcRequiredFieldsError')
+      }
+      if (!hasExistingOidcSecret && !oidcClientSecret.trim()) {
+        return t('systemSettings.oidcClientSecretRequired')
+      }
+      if (oidcNewUserMode === 'template' && !oidcTemplateUsername.trim()) {
+        return t('systemSettings.oidcTemplateUserRequired')
+      }
     }
     return null
   }
@@ -302,6 +422,27 @@ const SystemSettingsTab: React.FC = () => {
         metrics_enabled: metricsEnabled,
         metrics_require_auth: metricsRequireAuth,
         rotate_metrics_token: rotateMetricsToken,
+        oidc_enabled: oidcEnabled,
+        oidc_disable_local_auth: oidcDisableLocalAuth,
+        oidc_provider_name: oidcProviderName,
+        oidc_discovery_url: oidcDiscoveryUrl,
+        oidc_client_id: oidcClientId,
+        oidc_client_secret: oidcClientSecret || undefined,
+        clear_oidc_client_secret: clearOidcClientSecret,
+        oidc_scopes: oidcScopes,
+        oidc_redirect_uri_override: oidcRedirectUriOverride,
+        oidc_end_session_endpoint_override: oidcEndSessionEndpointOverride,
+        oidc_claim_username: oidcClaimUsername,
+        oidc_claim_email: oidcClaimEmail,
+        oidc_claim_full_name: oidcClaimFullName,
+        oidc_group_claim: oidcGroupClaim,
+        oidc_role_claim: oidcRoleClaim,
+        oidc_admin_groups: oidcAdminGroups,
+        oidc_all_repositories_role_claim: oidcAllRepositoriesRoleClaim,
+        oidc_new_user_mode: oidcNewUserMode,
+        oidc_new_user_template_username: oidcTemplateUsername,
+        oidc_default_role: oidcDefaultRole,
+        oidc_default_all_repositories_role: oidcDefaultAllRepositoriesRole,
       })
     },
     onSuccess: () => {
@@ -351,6 +492,8 @@ const SystemSettingsTab: React.FC = () => {
       toast.success(t('systemSettings.savedSuccessfully'))
       setHasChanges(false)
       setRotateMetricsToken(false)
+      setOidcClientSecret('')
+      setClearOidcClientSecret(false)
       if (generatedMetricsToken) {
         setNewMetricsToken(generatedMetricsToken)
         setMetricsTokenCopied(false)
@@ -371,6 +514,15 @@ const SystemSettingsTab: React.FC = () => {
         metrics_enabled: metricsEnabled,
         metrics_require_auth: metricsRequireAuth,
         rotate_metrics_token: rotateMetricsToken,
+        oidc_enabled: oidcEnabled,
+        oidc_disable_local_auth: oidcDisableLocalAuth,
+        oidc_new_user_mode: oidcNewUserMode,
+        oidc_default_role: oidcDefaultRole,
+        oidc_default_all_repositories_role: oidcDefaultAllRepositoriesRole,
+        oidc_group_claim: oidcGroupClaim,
+        oidc_admin_groups: oidcAdminGroups,
+        oidc_redirect_uri_override: oidcRedirectUriOverride,
+        oidc_end_session_endpoint_override: oidcEndSessionEndpointOverride,
       })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
@@ -472,7 +624,59 @@ const SystemSettingsTab: React.FC = () => {
       label: t('systemSettings.proxyAuthTitle'),
       description: t('systemSettings.proxyAuthDescription'),
     },
+    {
+      label: t('systemSettings.oidcTitle'),
+      description: t('systemSettings.oidcDescription'),
+    },
   ]
+
+  const formatAuthEventType = (eventType: string) => {
+    const translationKey = `systemSettings.authEventTypes.${eventType}`
+    const translated = t(translationKey)
+    if (translated !== translationKey) {
+      return translated
+    }
+    return eventType
+      .split('_')
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ')
+  }
+
+  const formatAuthSource = (source: string) => {
+    const translationKey = `systemSettings.authEventSources.${source}`
+    const translated = t(translationKey)
+    if (translated !== translationKey) {
+      return translated
+    }
+    return source.charAt(0).toUpperCase() + source.slice(1)
+  }
+
+  const authEventStats = useMemo(() => {
+    const events = authEventsData ?? []
+    return {
+      total: events.length,
+      success: events.filter((event) => event.success).length,
+      failed: events.filter((event) => !event.success).length,
+      pending: events.filter((event) => event.event_type === 'oidc_user_pending').length,
+      oidc: events.filter((event) => event.auth_source === 'oidc').length,
+    }
+  }, [authEventsData])
+
+  const filteredAuthEvents = useMemo(() => {
+    const events = authEventsData ?? []
+    return events.filter((event) => {
+      if (authEventFilter === 'failed') {
+        return !event.success
+      }
+      if (authEventFilter === 'oidc') {
+        return event.auth_source === 'oidc'
+      }
+      if (authEventFilter === 'pending') {
+        return event.event_type === 'oidc_user_pending'
+      }
+      return true
+    })
+  }, [authEventFilter, authEventsData])
 
   if (isLoading) {
     return (
@@ -530,6 +734,7 @@ const SystemSettingsTab: React.FC = () => {
                 { label: sectionTabs[2].label, icon: <Key size={15} /> },
                 { label: sectionTabs[3].label, icon: <AlertTriangle size={15} /> },
                 { label: sectionTabs[4].label, icon: <Settings size={15} /> },
+                { label: sectionTabs[5].label, icon: <Key size={15} /> },
               ].map((section) => (
                 <Tab
                   key={section.label}
@@ -550,6 +755,7 @@ const SystemSettingsTab: React.FC = () => {
                 {activeSection === 2 && <Settings size={22} />}
                 {activeSection === 3 && <AlertTriangle size={22} />}
                 {activeSection === 4 && <Settings size={22} />}
+                {activeSection === 5 && <Key size={22} />}
                 <Typography variant="h6">{sectionTabs[activeSection].label}</Typography>
                 {activeSection === 1 && (
                   <Tooltip title={t('systemSettings.manualRefreshAlert')} placement="right">
@@ -1044,6 +1250,356 @@ const SystemSettingsTab: React.FC = () => {
                       </Typography>
                     </Alert>
                   ) : null}
+                </Stack>
+              )}
+
+              {activeSection === 5 && (
+                <Stack spacing={2.5}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={oidcEnabled}
+                        onChange={(e) => setOidcEnabled(e.target.checked)}
+                      />
+                    }
+                    label={t('systemSettings.oidcEnabledLabel')}
+                  />
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={oidcDisableLocalAuth}
+                        disabled={!oidcEnabled}
+                        onChange={(e) => setOidcDisableLocalAuth(e.target.checked)}
+                      />
+                    }
+                    label={t('systemSettings.oidcDisableLocalAuthLabel')}
+                  />
+
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
+                      gap: 2,
+                    }}
+                  >
+                    <TextField
+                      label={t('systemSettings.oidcProviderNameLabel')}
+                      value={oidcProviderName}
+                      onChange={(e) => setOidcProviderName(e.target.value)}
+                      helperText={t('systemSettings.oidcProviderNameHelper')}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcDiscoveryUrlLabel')}
+                      value={oidcDiscoveryUrl}
+                      onChange={(e) => setOidcDiscoveryUrl(e.target.value)}
+                      helperText={t('systemSettings.oidcDiscoveryUrlHelper')}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcClientIdLabel')}
+                      value={oidcClientId}
+                      onChange={(e) => setOidcClientId(e.target.value)}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcClientSecretLabel')}
+                      type="password"
+                      value={oidcClientSecret}
+                      onChange={(e) => setOidcClientSecret(e.target.value)}
+                      helperText={
+                        systemSettings?.oidc_client_secret_set
+                          ? t('systemSettings.oidcClientSecretConfigured')
+                          : t('systemSettings.oidcClientSecretRequiredHelper')
+                      }
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcScopesLabel')}
+                      value={oidcScopes}
+                      onChange={(e) => setOidcScopes(e.target.value)}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcRedirectUriOverrideLabel')}
+                      value={oidcRedirectUriOverride}
+                      onChange={(e) => setOidcRedirectUriOverride(e.target.value)}
+                      helperText={t('systemSettings.oidcRedirectUriOverrideHelper')}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcEndSessionEndpointOverrideLabel')}
+                      value={oidcEndSessionEndpointOverride}
+                      onChange={(e) => setOidcEndSessionEndpointOverride(e.target.value)}
+                      helperText={t('systemSettings.oidcEndSessionEndpointOverrideHelper')}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcClaimUsernameLabel')}
+                      value={oidcClaimUsername}
+                      onChange={(e) => setOidcClaimUsername(e.target.value)}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcClaimEmailLabel')}
+                      value={oidcClaimEmail}
+                      onChange={(e) => setOidcClaimEmail(e.target.value)}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcClaimFullNameLabel')}
+                      value={oidcClaimFullName}
+                      onChange={(e) => setOidcClaimFullName(e.target.value)}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcGroupClaimLabel')}
+                      value={oidcGroupClaim}
+                      onChange={(e) => setOidcGroupClaim(e.target.value)}
+                      helperText={t('systemSettings.oidcGroupClaimHelper')}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcRoleClaimLabel')}
+                      value={oidcRoleClaim}
+                      onChange={(e) => setOidcRoleClaim(e.target.value)}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcAdminGroupsLabel')}
+                      value={oidcAdminGroups}
+                      onChange={(e) => setOidcAdminGroups(e.target.value)}
+                      helperText={t('systemSettings.oidcAdminGroupsHelper')}
+                    />
+                    <TextField
+                      label={t('systemSettings.oidcAllRepositoriesRoleClaimLabel')}
+                      value={oidcAllRepositoriesRoleClaim}
+                      onChange={(e) => setOidcAllRepositoriesRoleClaim(e.target.value)}
+                    />
+                    <TextField
+                      select
+                      label={t('systemSettings.oidcNewUserModeLabel')}
+                      value={oidcNewUserMode}
+                      onChange={(e) => setOidcNewUserMode(e.target.value)}
+                    >
+                      <MenuItem value="deny">{t('systemSettings.oidcModeDeny')}</MenuItem>
+                      <MenuItem value="viewer">{t('systemSettings.oidcModeViewer')}</MenuItem>
+                      <MenuItem value="pending">{t('systemSettings.oidcModePending')}</MenuItem>
+                      <MenuItem value="template">{t('systemSettings.oidcModeTemplate')}</MenuItem>
+                    </TextField>
+                    <TextField
+                      label={t('systemSettings.oidcTemplateUsernameLabel')}
+                      value={oidcTemplateUsername}
+                      disabled={oidcNewUserMode !== 'template'}
+                      onChange={(e) => setOidcTemplateUsername(e.target.value)}
+                    />
+                    <TextField
+                      select
+                      label={t('systemSettings.oidcDefaultRoleLabel')}
+                      value={oidcDefaultRole}
+                      onChange={(e) => setOidcDefaultRole(e.target.value)}
+                    >
+                      <MenuItem value="viewer">{t('systemSettings.roleViewer')}</MenuItem>
+                      <MenuItem value="operator">{t('systemSettings.roleOperator')}</MenuItem>
+                      <MenuItem value="admin">{t('systemSettings.roleAdmin')}</MenuItem>
+                    </TextField>
+                    <TextField
+                      select
+                      label={t('systemSettings.oidcDefaultAllRepositoriesRoleLabel')}
+                      value={oidcDefaultAllRepositoriesRole}
+                      onChange={(e) => setOidcDefaultAllRepositoriesRole(e.target.value)}
+                    >
+                      <MenuItem value="viewer">{t('systemSettings.roleViewer')}</MenuItem>
+                      <MenuItem value="operator">{t('systemSettings.roleOperator')}</MenuItem>
+                    </TextField>
+                  </Box>
+
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={clearOidcClientSecret}
+                        disabled={!systemSettings?.oidc_client_secret_set}
+                        onChange={(e) => setClearOidcClientSecret(e.target.checked)}
+                      />
+                    }
+                    label={t('systemSettings.oidcClearClientSecretLabel')}
+                  />
+
+                  <Divider />
+
+                  <Stack spacing={1.25}>
+                    <Stack
+                      direction={{ xs: 'column', md: 'row' }}
+                      spacing={1.5}
+                      justifyContent="space-between"
+                      alignItems={{ xs: 'stretch', md: 'flex-start' }}
+                    >
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight={600}>
+                          {t('systemSettings.oidcEventsTitle')}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {t('systemSettings.oidcEventsDescription')}
+                        </Typography>
+                      </Box>
+                      <Tooltip title={t('systemSettings.oidcEventsRefresh')}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => refetchAuthEvents()}
+                            disabled={authEventsLoading}
+                          >
+                            <RefreshCw size={16} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Stack>
+
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={t('systemSettings.authEventSummary.total', {
+                          count: authEventStats.total,
+                        })}
+                      />
+                      <Chip
+                        size="small"
+                        color="success"
+                        variant="outlined"
+                        label={t('systemSettings.authEventSummary.success', {
+                          count: authEventStats.success,
+                        })}
+                      />
+                      <Chip
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        label={t('systemSettings.authEventSummary.failed', {
+                          count: authEventStats.failed,
+                        })}
+                      />
+                      <Chip
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                        label={t('systemSettings.authEventSummary.pending', {
+                          count: authEventStats.pending,
+                        })}
+                      />
+                    </Stack>
+
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      {(
+                        [
+                          ['all', 'systemSettings.authEventFilters.all'],
+                          ['failed', 'systemSettings.authEventFilters.failed'],
+                          ['oidc', 'systemSettings.authEventFilters.oidc'],
+                          ['pending', 'systemSettings.authEventFilters.pending'],
+                        ] as const
+                      ).map(([value, labelKey]) => (
+                        <Chip
+                          key={value}
+                          size="small"
+                          label={t(labelKey)}
+                          clickable
+                          color={authEventFilter === value ? 'primary' : 'default'}
+                          variant={authEventFilter === value ? 'filled' : 'outlined'}
+                          onClick={() => setAuthEventFilter(value)}
+                        />
+                      ))}
+                    </Stack>
+
+                    {authEventsLoading ? (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                        <CircularProgress size={20} />
+                      </Box>
+                    ) : (authEventsData?.length ?? 0) === 0 ? (
+                      <Alert severity="info">{t('systemSettings.oidcEventsEmpty')}</Alert>
+                    ) : filteredAuthEvents.length === 0 ? (
+                      <Alert severity="info">{t('systemSettings.oidcEventsFilteredEmpty')}</Alert>
+                    ) : (
+                      <Stack spacing={1}>
+                        {filteredAuthEvents.map((event) => {
+                          const isPendingEvent = event.event_type === 'oidc_user_pending'
+                          return (
+                            <Box
+                              key={event.id}
+                              sx={{
+                                border: '1px solid',
+                                borderColor: isPendingEvent ? 'warning.light' : 'divider',
+                                borderRadius: 2,
+                                px: 1.5,
+                                py: 1.25,
+                                bgcolor: isPendingEvent
+                                  ? 'rgba(245, 158, 11, 0.06)'
+                                  : 'transparent',
+                              }}
+                            >
+                              <Stack
+                                direction={{ xs: 'column', md: 'row' }}
+                                spacing={1.5}
+                                justifyContent="space-between"
+                              >
+                                <Stack spacing={0.4}>
+                                  <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+                                    <Chip
+                                      size="small"
+                                      label={formatAuthEventType(event.event_type)}
+                                      color={isPendingEvent ? 'warning' : 'default'}
+                                      variant={isPendingEvent ? 'filled' : 'outlined'}
+                                    />
+                                    <Chip
+                                      size="small"
+                                      label={formatAuthSource(event.auth_source)}
+                                      variant="outlined"
+                                      color={event.auth_source === 'oidc' ? 'info' : 'default'}
+                                    />
+                                  </Stack>
+                                  <Typography variant="body2" fontWeight={600}>
+                                    {event.username ||
+                                      event.email ||
+                                      t('systemSettings.authEventAnonymous')}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {[
+                                      event.email,
+                                      event.actor_user_id
+                                        ? t('systemSettings.authEventActor', {
+                                            id: event.actor_user_id,
+                                          })
+                                        : null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' • ')}
+                                  </Typography>
+                                  {event.detail && (
+                                    <Typography variant="caption" color="text.secondary">
+                                      {event.detail}
+                                    </Typography>
+                                  )}
+                                </Stack>
+                                <Stack
+                                  spacing={0.4}
+                                  alignItems={{ xs: 'flex-start', md: 'flex-end' }}
+                                >
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color: isPendingEvent
+                                        ? 'warning.main'
+                                        : event.success
+                                          ? 'success.main'
+                                          : 'error.main',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {isPendingEvent
+                                      ? t('systemSettings.authEventPending')
+                                      : event.success
+                                        ? t('systemSettings.authEventSuccess')
+                                        : t('systemSettings.authEventFailed')}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {new Date(event.created_at).toLocaleString()}
+                                  </Typography>
+                                </Stack>
+                              </Stack>
+                            </Box>
+                          )
+                        })}
+                      </Stack>
+                    )}
+                  </Stack>
                 </Stack>
               )}
             </Stack>

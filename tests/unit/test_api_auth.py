@@ -4,10 +4,17 @@ Consolidated from test_api_auth.py, test_auth_comprehensive.py, and test_auth_sp
 """
 
 import base64
+from datetime import datetime, timedelta, timezone
+import json
 import pytest
 from fastapi.testclient import TestClient
-from datetime import timedelta
-from app.database.models import PasskeyCredential, User
+from app.database.models import (
+    AuthRateLimitBucket,
+    OidcExchangeGrant,
+    PasskeyCredential,
+    SystemSettings,
+    User,
+)
 from app.core.passkeys import create_passkey_ceremony_token
 from app.core.security import (
     create_access_token,
@@ -16,6 +23,39 @@ from app.core.security import (
     verify_password,
 )
 from app.core.totp import _hotp
+
+
+def create_test_oidc_exchange_grant(
+    db_session,
+    *,
+    grant_id: str = "grant-123",
+    username: str = "oidc-user",
+    oidc_subject: str | None = "subject-123",
+    email: str | None = "oidc-user@example.com",
+    full_name: str | None = "OIDC User",
+    groups: list[str] | None = None,
+    role: str | None = None,
+    all_repositories_role: str | None = None,
+    id_token_hint: str | None = "id-token-value",
+):
+    grant = OidcExchangeGrant(
+        grant_id=grant_id,
+        username=username,
+        oidc_subject=oidc_subject,
+        email=email,
+        full_name=full_name,
+        groups_json=json.dumps(groups or []),
+        role=role,
+        all_repositories_role=all_repositories_role,
+        id_token_hint_encrypted=encrypt_secret(id_token_hint)
+        if id_token_hint
+        else None,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+    )
+    db_session.add(grant)
+    db_session.commit()
+    db_session.refresh(grant)
+    return grant
 
 
 @pytest.mark.unit
@@ -212,6 +252,57 @@ class TestAuthenticationLogin:
         data = response.json()
         assert "access_token" in data
         assert data["token_type"] == "bearer"
+
+    def test_login_rate_limits_repeated_failed_attempts(self, test_client: TestClient):
+        for _ in range(4):
+            response = test_client.post(
+                "/api/auth/login",
+                data={"username": "admin", "password": "wrong-password"},
+            )
+            assert response.status_code == 401
+
+        limited_response = test_client.post(
+            "/api/auth/login",
+            data={"username": "admin", "password": "wrong-password"},
+        )
+
+        assert limited_response.status_code == 429
+        assert (
+            limited_response.json()["detail"]["key"]
+            == "backend.errors.auth.tooManyRequests"
+        )
+        assert "Retry-After" in limited_response.headers
+
+        blocked_success = test_client.post(
+            "/api/auth/login",
+            data={"username": "admin", "password": "admin123"},
+        )
+        assert blocked_success.status_code == 429
+
+    def test_login_success_clears_stale_oidc_logout_hint(
+        self, test_client: TestClient, test_db
+    ):
+        user = User(
+            username="local-hint-user",
+            password_hash=get_password_hash("password123"),
+            email="local-hint@example.com",
+            role="viewer",
+            is_active=True,
+            auth_source="oidc",
+            oidc_last_id_token_encrypted=encrypt_secret("stale-oidc-id-token"),
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/auth/login",
+            data={"username": "local-hint-user", "password": "password123"},
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(user)
+        assert user.auth_source == "local"
+        assert user.oidc_last_id_token_encrypted is None
 
     def test_login_invalid_credentials(self, test_client: TestClient, admin_user):
         """Test login with invalid password"""
@@ -644,6 +735,64 @@ class TestPasskeyErrors:
         assert (
             response.json()["detail"]["key"]
             == "backend.errors.auth.passkeyUserVerificationRequired"
+        )
+
+    def test_passkey_authentication_rate_limits_repeated_failures(
+        self, test_client: TestClient, test_db, test_user, monkeypatch
+    ):
+        passkey = PasskeyCredential(
+            user_id=test_user.id,
+            name="Desk Mac",
+            credential_id="credential-rate-limit",
+            public_key=base64.urlsafe_b64encode(b"public-key").decode("ascii"),
+            sign_count=0,
+        )
+        test_db.add(passkey)
+        test_db.commit()
+
+        ceremony_token = create_passkey_ceremony_token(
+            username="passkey-user",
+            challenge="challenge-rate-limit",
+            purpose="passkey_authenticate",
+        )
+
+        def fake_require_webauthn():
+            class InvalidAuthenticationResponse(Exception):
+                pass
+
+            def verify_authentication_response(**kwargs):
+                raise InvalidAuthenticationResponse("invalid authentication response")
+
+            return {
+                "parse_authentication_credential_json": lambda value: value,
+                "base64url_to_bytes": lambda value: value.encode("utf-8"),
+                "verify_authentication_response": verify_authentication_response,
+                "InvalidAuthenticationResponse": InvalidAuthenticationResponse,
+            }
+
+        monkeypatch.setattr("app.api.auth.require_webauthn", fake_require_webauthn)
+
+        for _ in range(7):
+            response = test_client.post(
+                "/api/auth/passkeys/authenticate/verify",
+                json={
+                    "ceremony_token": ceremony_token,
+                    "credential": {"id": "credential-rate-limit", "response": {}},
+                },
+            )
+            assert response.status_code == 400
+
+        limited_response = test_client.post(
+            "/api/auth/passkeys/authenticate/verify",
+            json={
+                "ceremony_token": ceremony_token,
+                "credential": {"id": "credential-rate-limit", "response": {}},
+            },
+        )
+        assert limited_response.status_code == 429
+        assert (
+            limited_response.json()["detail"]["key"]
+            == "backend.errors.auth.tooManyRequests"
         )
 
 
@@ -1342,6 +1491,45 @@ class TestTotpAuthentication:
         assert data["access_token"]
         assert data["totp_required"] is False
 
+    def test_login_totp_rate_limits_repeated_invalid_codes(
+        self, test_client: TestClient, test_db
+    ):
+        secret = "JBSWY3DPEHPK3PXP"
+        user = User(
+            username="totpratelimit",
+            password_hash=get_password_hash("password123"),
+            is_active=True,
+            role="viewer",
+            totp_enabled=True,
+            totp_secret_encrypted=encrypt_secret(secret),
+            totp_recovery_codes_hashes="[]",
+        )
+        test_db.add(user)
+        test_db.commit()
+
+        login_response = test_client.post(
+            "/api/auth/login",
+            data={"username": "totpratelimit", "password": "password123"},
+        )
+        challenge_token = login_response.json()["login_challenge_token"]
+
+        for _ in range(4):
+            response = test_client.post(
+                "/api/auth/login/totp",
+                json={"login_challenge_token": challenge_token, "code": "000000"},
+            )
+            assert response.status_code == 401
+
+        limited_response = test_client.post(
+            "/api/auth/login/totp",
+            json={"login_challenge_token": challenge_token, "code": "000000"},
+        )
+        assert limited_response.status_code == 429
+        assert (
+            limited_response.json()["detail"]["key"]
+            == "backend.errors.auth.tooManyRequests"
+        )
+
     def test_totp_setup_enable_and_disable_flow(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -1384,3 +1572,572 @@ class TestTotpAuthentication:
         test_db.refresh(admin_user)
         assert admin_user.totp_enabled is False
         assert admin_user.totp_secret_encrypted is None
+
+
+@pytest.mark.unit
+class TestOidcAuthentication:
+    def test_auth_config_endpoint_includes_oidc_settings(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_provider_name="Authentik",
+                oidc_disable_local_auth=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        response = test_client.get("/api/auth/config")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["oidc_enabled"] is True
+        assert data["oidc_provider_name"] == "Authentik"
+        assert data["oidc_disable_local_auth"] is True
+
+    def test_local_login_is_blocked_when_oidc_disables_local_auth(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_disable_local_auth=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/auth/login",
+            data={"username": "admin", "password": "admin123"},
+        )
+
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.auth.localLoginDisabled"
+        )
+
+    def test_totp_completion_is_blocked_when_oidc_disables_local_auth(
+        self, test_client: TestClient, test_db
+    ):
+        challenge_user = User(
+            username="totp-blocked-user",
+            password_hash=get_password_hash("password123"),
+            email="totp-blocked@example.com",
+            role="viewer",
+            is_active=True,
+            totp_enabled=True,
+        )
+        test_db.add(challenge_user)
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_disable_local_auth=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        from app.core.security import create_login_challenge_token
+
+        response = test_client.post(
+            "/api/auth/login/totp",
+            json={
+                "login_challenge_token": create_login_challenge_token(
+                    challenge_user.username
+                ),
+                "code": "123456",
+            },
+        )
+
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.auth.localLoginDisabled"
+        )
+
+    def test_passkey_completion_is_blocked_when_oidc_disables_local_auth(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_disable_local_auth=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/auth/passkeys/authenticate/verify",
+            json={"ceremony_token": "invalid", "credential": {"id": "dummy"}},
+        )
+
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"] == "backend.errors.auth.localLoginDisabled"
+        )
+
+    def test_oidc_exchange_creates_user_with_default_role(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_provider_name="Authentik",
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+                oidc_default_role="operator",
+                oidc_default_all_repositories_role="operator",
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="oidc-user",
+            oidc_subject="subject-123",
+            email="oidc-user@example.com",
+            full_name="OIDC User",
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange",
+            headers={"Origin": "http://testserver"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["access_token"]
+
+        user = test_db.query(User).filter(User.username == "oidc-user").first()
+        assert user is not None
+        assert user.email == "oidc-user@example.com"
+        assert user.full_name == "OIDC User"
+        assert user.auth_source == "oidc"
+        assert user.oidc_subject == "subject-123"
+        assert user.oidc_last_id_token_encrypted is not None
+        assert user.role == "operator"
+        assert user.all_repositories_role == "operator"
+
+    def test_oidc_exchange_requires_same_origin_request(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(test_db)
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post("/api/auth/oidc/exchange")
+
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.invalidAuthentication"
+        )
+
+    def test_oidc_exchange_grant_is_single_use(self, test_client: TestClient, test_db):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(test_db)
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        first = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+        assert first.status_code == 200
+
+        second = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+        assert second.status_code == 401
+
+    def test_oidc_exchange_rejects_username_collision_with_local_user(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            User(
+                username="existing-local-user",
+                password_hash=get_password_hash("password123"),
+                email="existing-local@example.com",
+                role="viewer",
+                is_active=True,
+                auth_source="local",
+            )
+        )
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="existing-local-user",
+            oidc_subject="subject-local-collision",
+            email="new-oidc@example.com",
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.oidcAccountLinkRequired"
+        )
+
+    def test_oidc_exchange_rejects_email_collision(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            User(
+                username="existing-user",
+                password_hash=get_password_hash("password123"),
+                email="shared@example.com",
+                role="viewer",
+                is_active=True,
+                auth_source="oidc",
+                oidc_subject="subject-existing",
+            )
+        )
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="new-oidc-user",
+            oidc_subject="subject-email-collision",
+            email="shared@example.com",
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.oidcEmailAlreadyInUse"
+        )
+
+    def test_oidc_exchange_pending_mode_creates_inactive_user_and_denies_login(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+                oidc_new_user_mode="pending",
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="pending-user",
+            oidc_subject="subject-pending",
+            email="pending-user@example.com",
+            full_name="Pending User",
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange",
+            headers={"Origin": "http://testserver"},
+        )
+
+        assert response.status_code == 403
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.oidcPendingApproval"
+        )
+
+        user = test_db.query(User).filter(User.username == "pending-user").first()
+        assert user is not None
+        assert user.is_active is False
+
+    def test_oidc_admin_role_claim_requires_matching_admin_group(
+        self, test_client: TestClient, test_db
+    ):
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+                oidc_default_role="viewer",
+                oidc_group_claim="groups",
+                oidc_admin_groups="backup-admins",
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="non-admin-claim-user",
+            oidc_subject="subject-non-admin",
+            email="non-admin@example.com",
+            role="admin",
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+
+        assert response.status_code == 200
+        user = (
+            test_db.query(User).filter(User.username == "non-admin-claim-user").first()
+        )
+        assert user is not None
+        assert user.role == "viewer"
+
+    def test_oidc_logout_uses_stored_id_token_hint(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        from app.core.oidc import OidcProviderConfiguration
+
+        user = User(
+            username="oidc-admin",
+            password_hash=get_password_hash("irrelevant"),
+            email="oidc-admin@example.com",
+            role="admin",
+            auth_source="oidc",
+            oidc_last_id_token_encrypted=encrypt_secret("stored-id-token"),
+            is_active=True,
+        )
+        test_db.add(user)
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+        test_db.refresh(user)
+
+        async def fake_discover(request, settings_row, client_secret):
+            return OidcProviderConfiguration(
+                provider_name="Authentik",
+                discovery_url="https://id.example.com/.well-known/openid-configuration",
+                client_id="borg-ui",
+                client_secret="secret-value",
+                authorization_endpoint="https://id.example.com/auth",
+                token_endpoint="https://id.example.com/token",
+                userinfo_endpoint="https://id.example.com/userinfo",
+                jwks_uri="https://id.example.com/jwks",
+                issuer="https://id.example.com",
+                scopes="openid profile email",
+                redirect_uri="http://testserver/api/auth/oidc/callback",
+                end_session_endpoint="https://id.example.com/logout",
+                username_claim="preferred_username",
+                email_claim="email",
+                full_name_claim="name",
+                group_claim=None,
+                role_claim=None,
+                admin_groups=[],
+                all_repositories_role_claim=None,
+                new_user_mode="viewer",
+                new_user_template_username=None,
+                default_role="viewer",
+                default_all_repositories_role="viewer",
+            )
+
+        monkeypatch.setattr("app.api.auth.discover_oidc_configuration", fake_discover)
+
+        token = create_access_token(data={"sub": user.username})
+        response = test_client.post(
+            "/api/auth/logout",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert "id_token_hint=stored-id-token" in response.json()["logout_url"]
+        test_db.refresh(user)
+        assert user.oidc_last_id_token_encrypted is None
+
+    def test_local_logout_does_not_build_oidc_logout_url(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        user = User(
+            username="local-logout-user",
+            password_hash=get_password_hash("password123"),
+            email="local-logout@example.com",
+            role="admin",
+            is_active=True,
+            auth_source="local",
+            oidc_last_id_token_encrypted=encrypt_secret("stale-token"),
+        )
+        test_db.add(user)
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        async def fail_discover(*args, **kwargs):
+            raise AssertionError(
+                "discover_oidc_configuration should not run for local logout"
+            )
+
+        monkeypatch.setattr("app.api.auth.discover_oidc_configuration", fail_discover)
+
+        token = create_access_token(data={"sub": user.username})
+        response = test_client.post(
+            "/api/auth/logout",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["logout_url"] is None
+        test_db.refresh(user)
+        assert user.oidc_last_id_token_encrypted is None
+
+    def test_auth_events_endpoint_lists_recent_events(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        response = test_client.post(
+            "/api/auth/login",
+            data={"username": "admin", "password": "admin123"},
+        )
+        assert response.status_code == 200
+
+        events_response = test_client.get(
+            "/api/auth/events?limit=10", headers=admin_headers
+        )
+
+        assert events_response.status_code == 200
+        events = events_response.json()
+        assert isinstance(events, list)
+        assert any(event["event_type"] == "local_login_succeeded" for event in events)
+
+
+@pytest.mark.unit
+class TestAuthRateLimiting:
+    def test_local_login_rate_limit_returns_429(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        monkeypatch.setattr("app.config.settings.auth_rate_limit_enabled", True)
+        monkeypatch.setattr("app.config.settings.auth_rate_limit_max_attempts", 2)
+        monkeypatch.setattr("app.config.settings.auth_rate_limit_window_seconds", 300)
+        monkeypatch.setattr("app.config.settings.auth_rate_limit_lockout_seconds", 300)
+        test_db.query(AuthRateLimitBucket).delete()
+        test_db.commit()
+        test_db.add(
+            User(
+                username="rate-limit-user",
+                password_hash=get_password_hash("correct-password"),
+                email="rate-limit@example.com",
+                role="viewer",
+                is_active=True,
+            )
+        )
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/auth/login",
+            data={"username": "rate-limit-user", "password": "wrong-password"},
+        )
+        assert response.status_code == 401
+
+        locked_response = test_client.post(
+            "/api/auth/login",
+            data={"username": "rate-limit-user", "password": "wrong-password"},
+        )
+
+        assert locked_response.status_code == 429
+        assert (
+            locked_response.json()["detail"]["key"]
+            == "backend.errors.auth.tooManyRequests"
+        )
+
+    def test_successful_login_resets_local_rate_limit(
+        self, test_client: TestClient, test_db, monkeypatch
+    ):
+        monkeypatch.setattr("app.config.settings.auth_rate_limit_enabled", True)
+        monkeypatch.setattr("app.config.settings.auth_rate_limit_max_attempts", 2)
+        monkeypatch.setattr("app.config.settings.auth_rate_limit_window_seconds", 300)
+        monkeypatch.setattr("app.config.settings.auth_rate_limit_lockout_seconds", 300)
+        test_db.query(AuthRateLimitBucket).delete()
+        test_db.commit()
+        test_db.add(
+            User(
+                username="rate-limit-reset-user",
+                password_hash=get_password_hash("correct-password"),
+                email="rate-limit-reset@example.com",
+                role="viewer",
+                is_active=True,
+            )
+        )
+        test_db.commit()
+
+        failed = test_client.post(
+            "/api/auth/login",
+            data={"username": "rate-limit-reset-user", "password": "wrong-password"},
+        )
+        assert failed.status_code == 401
+
+        success = test_client.post(
+            "/api/auth/login",
+            data={
+                "username": "rate-limit-reset-user",
+                "password": "correct-password",
+            },
+        )
+        assert success.status_code == 200
+
+        another_failed = test_client.post(
+            "/api/auth/login",
+            data={"username": "rate-limit-reset-user", "password": "wrong-password"},
+        )
+        assert another_failed.status_code == 401

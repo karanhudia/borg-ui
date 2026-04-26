@@ -276,6 +276,8 @@ Caddy automatically obtains and renews SSL certificates from Let's Encrypt.
 
 Disable the built-in login screen and let your reverse proxy handle authentication:
 
+If you are starting a new enterprise SSO deployment and do not specifically need trusted-header auth, read [Security Guide - SSO Authentication](security.md#sso-authentication) first. Built-in OIDC is usually the cleaner default; this section is for the reverse-proxy trust model.
+
 ```yaml
 environment:
   - DISABLE_AUTHENTICATION=true          # Disable built-in login screen

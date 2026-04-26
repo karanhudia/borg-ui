@@ -80,17 +80,23 @@ vi.mock('../../components/DataTable', () => ({
     actions,
   }: {
     data: Array<{ id: number; username?: string }>
-    actions?: Array<{ label: string; onClick: (row: { id: number; username?: string }) => void }>
+    actions?: Array<{
+      label: string
+      onClick: (row: { id: number; username?: string }) => void
+      show?: (row: { id: number; username?: string }) => boolean
+    }>
   }) => (
     <div>
       {data.map((row) => (
         <div key={row.id}>
           <span>{row.username}</span>
-          {actions?.map((action) => (
-            <button key={`${row.id}-${action.label}`} onClick={() => action.onClick(row)}>
-              {action.label}
-            </button>
-          ))}
+          {actions
+            ?.filter((action) => (action.show ? action.show(row) : true))
+            .map((action) => (
+              <button key={`${row.id}-${action.label}`} onClick={() => action.onClick(row)}>
+                {action.label}
+              </button>
+            ))}
         </div>
       ))}
     </div>
@@ -145,6 +151,7 @@ describe('Settings users tab', () => {
             username: 'existing',
             email: 'existing@example.com',
             is_active: true,
+            auth_source: 'local',
             role: 'viewer',
             full_name: null,
             all_repositories_role: 'viewer',
@@ -349,5 +356,62 @@ describe('Settings users tab', () => {
     })
     expect(trackSettings).not.toHaveBeenCalledWith('Delete', { section: 'users' })
     expect(screen.getByRole('dialog', { name: /delete user/i })).toBeInTheDocument()
+  })
+
+  it('surfaces pending OIDC approvals and approves the selected user', async () => {
+    const user = userEvent.setup()
+    vi.mocked(apiModule.settingsAPI.getUsers).mockResolvedValue({
+      data: {
+        users: [
+          {
+            id: 2,
+            username: 'existing',
+            email: 'existing@example.com',
+            is_active: true,
+            auth_source: 'local',
+            role: 'viewer',
+            full_name: null,
+            all_repositories_role: 'viewer',
+            created_at: '2026-01-01T00:00:00Z',
+            last_login: null,
+          },
+          {
+            id: 3,
+            username: 'oidc-pending',
+            email: 'oidc@example.com',
+            is_active: false,
+            auth_source: 'oidc',
+            oidc_subject: 'authentik|alice',
+            role: 'viewer',
+            full_name: 'Alice OIDC',
+            all_repositories_role: 'viewer',
+            created_at: '2026-01-02T00:00:00Z',
+            last_login: null,
+          },
+        ],
+      },
+    } as never)
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await screen.findByText('1 SSO account is waiting for approval')
+    await user.click(screen.getByRole('button', { name: /review pending users/i }))
+
+    await screen.findByText('oidc-pending')
+    expect(screen.queryByText('existing')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /approve sso user/i }))
+
+    await waitFor(() => {
+      expect(apiModule.settingsAPI.updateUser).toHaveBeenCalledWith(3, { is_active: true })
+    })
+    expect(trackSettings).toHaveBeenCalledWith('Edit', {
+      section: 'users',
+      operation: 'approve_pending_oidc_user',
+    })
   })
 })
