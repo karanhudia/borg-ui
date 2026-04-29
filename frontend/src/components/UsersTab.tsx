@@ -321,9 +321,8 @@ const UsersTab: React.FC = () => {
   }
 
   const users = useMemo<UserType[]>(() => usersData?.data?.users ?? [], [usersData?.data?.users])
-  const userOidcFieldsExposed = useMemo(
-    () => users.some((user) => 'auth_source' in user || 'oidc_subject' in user),
-    [users]
+  const userOidcFieldsExposed = users.some(
+    (user) => 'auth_source' in user || 'oidc_subject' in user
   )
 
   const totalUsers = users.length
@@ -517,46 +516,43 @@ const UsersTab: React.FC = () => {
   )
 
   // Table row actions
-  const tableActions: ActionButton<UserType>[] = useMemo(
-    () => [
-      {
-        icon: <ShieldCheck size={15} />,
-        label: t('settings.users.actions.approveSsoUser'),
-        onClick: (user) => approveUserMutation.mutate(user.id),
-        color: 'success',
-        show: (user) => canManageUsers && !user.is_active && user.auth_source === 'oidc',
-      },
-      {
-        icon: <UserCheck size={15} />,
-        label: t('settings.users.actions.manageAccess'),
-        onClick: (user) => setAccessUser(user),
-        color: 'primary',
-        show: () => canManageUsers,
-      },
-      {
-        icon: <Edit size={15} />,
-        label: t('settings.users.actions.edit'),
-        onClick: (user) => openEditUser(user),
-        color: 'default',
-        show: () => canManageUsers,
-      },
-      {
-        icon: <Key size={15} />,
-        label: t('settings.users.actions.resetPassword'),
-        onClick: (user) => openPasswordModal(user.id),
-        color: 'warning',
-        show: (user) => canManageUsers && user.auth_source !== 'oidc',
-      },
-      {
-        icon: <Trash2 size={15} />,
-        label: t('settings.users.actions.delete'),
-        onClick: (user) => setDeleteConfirmUser(user),
-        color: 'error',
-        show: () => canManageUsers,
-      },
-    ],
-    [t, approveUserMutation, canManageUsers]
-  )
+  const tableActions: ActionButton<UserType>[] = [
+    {
+      icon: <ShieldCheck size={15} />,
+      label: t('settings.users.actions.approveSsoUser'),
+      onClick: (user) => approveUserMutation.mutate(user.id),
+      color: 'success',
+      show: (user) => canManageUsers && !user.is_active && user.auth_source === 'oidc',
+    },
+    {
+      icon: <UserCheck size={15} />,
+      label: t('settings.users.actions.manageAccess'),
+      onClick: (user) => setAccessUser(user),
+      color: 'primary',
+      show: () => canManageUsers,
+    },
+    {
+      icon: <Edit size={15} />,
+      label: t('settings.users.actions.edit'),
+      onClick: (user) => openEditUser(user),
+      color: 'default',
+      show: () => canManageUsers,
+    },
+    {
+      icon: <Key size={15} />,
+      label: t('settings.users.actions.resetPassword'),
+      onClick: (user) => openPasswordModal(user.id),
+      color: 'warning',
+      show: (user) => canManageUsers && user.auth_source !== 'oidc',
+    },
+    {
+      icon: <Trash2 size={15} />,
+      label: t('settings.users.actions.delete'),
+      onClick: (user) => setDeleteConfirmUser(user),
+      color: 'error',
+      show: () => canManageUsers,
+    },
+  ]
 
   const roleFilterOptions: { value: RoleFilter; label: string; color?: string }[] = [
     { value: 'all', label: t('settings.users.filter.allRoles') },
