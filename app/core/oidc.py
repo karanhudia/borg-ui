@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 import base64
 import hashlib
 import secrets
@@ -28,6 +28,7 @@ class OidcProviderConfiguration:
     discovery_url: str
     client_id: str
     client_secret: str
+    token_auth_method: str
     authorization_endpoint: str
     token_endpoint: str
     userinfo_endpoint: Optional[str]
@@ -209,6 +210,10 @@ async def discover_oidc_configuration(
         discovery_url=discovery_url,
         client_id=(settings_row.oidc_client_id or "").strip(),
         client_secret=client_secret,
+        token_auth_method=(
+            settings_row.oidc_token_auth_method or "client_secret_post"
+        ).strip()
+        or "client_secret_post",
         authorization_endpoint=authorization_endpoint,
         token_endpoint=token_endpoint,
         userinfo_endpoint=userinfo_endpoint,
@@ -289,15 +294,25 @@ async def exchange_code_for_tokens(
         "code": code,
         "redirect_uri": provider.redirect_uri,
         "client_id": provider.client_id,
-        "client_secret": provider.client_secret,
         "code_verifier": code_verifier,
     }
+    headers = {"Accept": "application/json"}
+
+    if provider.token_auth_method == "client_secret_basic":
+        encoded_client_id = quote(provider.client_id, safe="")
+        encoded_client_secret = quote(provider.client_secret, safe="")
+        basic_value = base64.b64encode(
+            f"{encoded_client_id}:{encoded_client_secret}".encode("ascii")
+        ).decode("ascii")
+        headers["Authorization"] = f"Basic {basic_value}"
+    else:
+        payload["client_secret"] = provider.client_secret
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             provider.token_endpoint,
             data=payload,
-            headers={"Accept": "application/json"},
+            headers=headers,
         )
         response.raise_for_status()
         return response.json()
@@ -313,10 +328,13 @@ def verify_id_token(
         algorithms=["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"],
         audience=provider.client_id,
         issuer=provider.issuer,
+        options={"require": ["exp", "iat", "sub"]},
     )
 
     if claims.get("nonce") != nonce:
         raise ValueError("OIDC nonce mismatch")
+    if not isinstance(claims.get("sub"), str) or not claims["sub"].strip():
+        raise ValueError("OIDC subject claim missing")
 
     return claims
 

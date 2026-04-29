@@ -82,6 +82,9 @@ describe('Settings system auth admin UX', () => {
           oidc_client_secret_set: true,
           oidc_enabled: true,
           oidc_provider_name: 'Authentik',
+          oidc_token_auth_method: 'client_secret_post',
+          oidc_discovery_url: 'https://id.example.com/.well-known/openid-configuration',
+          oidc_client_id: 'borg-ui',
         },
       },
     } as never)
@@ -166,5 +169,30 @@ describe('Settings system auth admin UX', () => {
     await screen.findByText('Awaiting admin approval')
     expect(screen.queryByText('Local login failed')).not.toBeInTheDocument()
     expect(screen.queryByText('OIDC login succeeded')).not.toBeInTheDocument()
+  })
+
+  it('saves the configured OIDC token auth method', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await screen.findByText('System Settings')
+    await user.click(screen.getByRole('tab', { name: /single sign-on/i }))
+
+    await user.click(screen.getByLabelText(/token auth method/i))
+    await user.click(screen.getByRole('option', { name: /client_secret_basic/i }))
+    await user.click(screen.getByRole('button', { name: /save settings/i }))
+
+    await waitFor(() => {
+      expect(apiModule.settingsAPI.updateSystemSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          oidc_token_auth_method: 'client_secret_basic',
+        })
+      )
+    })
   })
 })

@@ -698,7 +698,18 @@
         "email": "E-Mail",
         "password": "Passwort",
         "fullName": "Full name",
-        "role": "Role"
+        "role": "Role",
+        "authSource": "Auth source",
+        "oidcSubject": "OIDC subject"
+      },
+      "authSources": {
+        "local": "Local",
+        "oidc": "OIDC"
+      },
+      "ssoIdentity": {
+        "selfLinkHint": "Prefer asking the user to link their own local account from Account & Security. Manual edits are for recovery when the backend supports these fields.",
+        "subjectHelper": "Paste the exact stable subject claim from the identity provider.",
+        "clearHelper": "Local auth clears the stored OIDC subject on save."
       },
       "buttons": {
         "cancel": "Abbrechen",
@@ -895,7 +906,15 @@
         "passkeyDeletedToast": "Passkey gelöscht",
         "passkeyDeleteFailed": "Passkey konnte nicht gelöscht werden",
         "passkeyLastUsed": "Zuletzt verwendet {{date}}",
-        "passkeyNeverUsed": "Noch nicht verwendet"
+        "passkeyNeverUsed": "Noch nicht verwendet",
+        "ssoLinkTitle": "Link single sign-on",
+        "ssoLinkDescription": "Start a provider redirect to attach this local account to your SSO identity.",
+        "ssoLinkButton": "Link SSO",
+        "ssoLinkedTitle": "Single sign-on linked",
+        "ssoLinkedDescription": "This account can sign in through the configured identity provider.",
+        "ssoUnlinkButton": "Unlink SSO",
+        "ssoUnlinkedToast": "Single sign-on unlinked",
+        "ssoUnlinkFailed": "Failed to unlink single sign-on"
       },
       "access": {
         "title": "Access",
@@ -1510,6 +1529,10 @@
     "oidcDisableLocalAuthLabel": "Lokale Passwort- und Passkey-Anmeldung deaktivieren",
     "oidcProviderNameLabel": "Anzeigename des Anbieters",
     "oidcProviderNameHelper": "Wird auf dem Anmeldebutton angezeigt.",
+    "oidcTokenAuthMethodLabel": "Token auth method",
+    "oidcTokenAuthMethodHelper": "Choose how Borg UI authenticates to the provider token endpoint.",
+    "oidcTokenAuthMethodPost": "client_secret_post",
+    "oidcTokenAuthMethodBasic": "client_secret_basic",
     "oidcDiscoveryUrlLabel": "Discovery-URL",
     "oidcDiscoveryUrlHelper": "Beispiel: https://id.example.com/application/o/borg-ui/.well-known/openid-configuration",
     "oidcClientIdLabel": "Client-ID",
@@ -1547,6 +1570,8 @@
     "oidcRequiredFieldsError": "OIDC benötigt eine Discovery-URL und eine Client-ID.",
     "oidcClientSecretRequired": "OIDC benötigt ein Client-Secret, bevor es aktiviert werden kann.",
     "oidcTemplateUserRequired": "Der Vorlagenmodus benötigt einen Vorlagenbenutzernamen.",
+    "oidcDisableLocalAuthWarning": "Before disabling local login, confirm at least one active admin can sign in with OIDC.",
+    "oidcActiveAdminRequired": "Local auth cannot be disabled until an active OIDC admin exists.",
     "authEventSuccess": "Erfolgreich",
     "authEventFailed": "Fehlgeschlagen",
     "authEventPending": "Freigabe ausstehend",
@@ -1574,6 +1599,8 @@
     "authEventTypes": {
       "local_login_failed": "Lokale Anmeldung fehlgeschlagen",
       "local_login_succeeded": "Lokale Anmeldung erfolgreich",
+      "oidc_account_linked": "OIDC-Konto verknüpft",
+      "oidc_account_unlinked": "OIDC-Konto getrennt",
       "oidc_user_pending": "OIDC-Benutzer wartet auf Freigabe",
       "oidc_user_provisioned": "OIDC-Benutzer bereitgestellt",
       "oidc_user_denied": "OIDC-Benutzer abgelehnt",
@@ -2941,7 +2968,7 @@
         "invalidTotpCode": "Ungültiger Authentifizierungscode",
         "tooManyAttempts": "Zu viele Anmeldeversuche. Bitte in {{retryAfterSeconds}} Sekunden erneut versuchen.",
         "tooManyRequests": "Zu viele Anmeldeversuche. Bitte in {{retryAfterSeconds}} Sekunden erneut versuchen.",
-        "localPasswordRequired": "Dieses Konto muss die integrierte Passwortanmeldung verwenden, um TOTP zu verwalten",
+        "localPasswordRequired": "Dieses Konto benötigt ein lokales Passwort, bevor diese Aktion fortgesetzt werden kann",
         "totpNotEnabled": "Die Zwei-Faktor-Authentifizierung ist für dieses Konto nicht aktiviert",
         "invalidPasskey": "Ungültige Passkey-Antwort",
         "passkeyUserVerificationRequired": "Für diesen Passkey ist eine Gerätebestätigung erforderlich. Entsperre das Gerät mit Touch ID, Face ID oder dem Gerätecode und versuche es erneut.",
@@ -2953,8 +2980,12 @@
         "oidcAuthenticationFailed": "Die Single-Sign-on-Anmeldung ist fehlgeschlagen",
         "oidcIdTokenInvalid": "Der Identitätsanbieter hat ein ungültiges Anmelde-Token zurückgegeben",
         "oidcUsernameClaimMissing": "Single Sign-on hat keinen verwendbaren Benutzernamen-Claim geliefert",
+        "oidcSubjectClaimMissing": "Single Sign-on hat keinen verwendbaren Subject-Claim geliefert",
         "oidcUserAccessDenied": "Dein Single-Sign-on-Konto darf nicht auf Borg UI zugreifen",
         "oidcAccountLinkRequired": "Ein lokales Borg-UI-Konto verwendet bereits diesen Benutzernamen. Verknüpfe das Konto ausdrücklich, bevor du Single Sign-on verwendest.",
+        "oidcAlreadyLinked": "Dieses Konto ist bereits mit Single Sign-on verknüpft",
+        "oidcCannotUnlinkWhenLocalAuthDisabled": "Single Sign-on kann nicht getrennt werden, solange die lokale Anmeldung deaktiviert ist",
+        "oidcNotLinked": "Dieses Konto ist nicht mit Single Sign-on verknüpft",
         "oidcIdentityConflict": "Diese Single-Sign-on-Identität steht im Konflikt mit einem bestehenden Borg-UI-Konto.",
         "oidcEmailAlreadyInUse": "Diese Single-Sign-on-E-Mail wird bereits von einem anderen Borg-UI-Konto verwendet.",
         "oidcPendingApproval": "Dein Single-Sign-on-Konto wartet auf die Freigabe durch einen Administrator",
@@ -3141,8 +3172,11 @@
         "invalidOidcNewUserMode": "Ungültiger oidc_new_user_mode. Erlaubte Werte: {{modes}}",
         "invalidOidcDefaultRole": "Ungültige OIDC-Standardrolle",
         "invalidOidcDefaultRepositoryRole": "Ungültige OIDC-Standardrolle für Repository-Zugriff",
+        "invalidOidcTokenAuthMethod": "Ungültige OIDC-Token-Authentifizierungsmethode. Erlaubte Werte: {{methods}}",
+        "invalidAuthSource": "Ungültige Authentifizierungsquelle. Erlaubte Werte: {{sources}}",
         "oidcTemplateUserRequired": "Ein Vorlagenbenutzername ist erforderlich, wenn der OIDC-Neubenutzermodus auf template gesetzt ist",
         "oidcLocalAuthRequiresOidc": "OIDC muss aktiviert sein, bevor die lokale Authentifizierung deaktiviert werden kann",
+        "oidcLocalAuthRequiresOidcAdmin": "Mindestens ein aktiver Administrator muss mit OIDC verknüpft sein, bevor die lokale Authentifizierung deaktiviert werden kann",
         "oidcConfigurationIncomplete": "OIDC ist aktiviert, aber Discovery-URL, Client-ID oder Client-Secret fehlen"
       },
       "activity": {
@@ -3273,7 +3307,8 @@
       "auth": {
         "loggedOut": "Erfolgreich abgemeldet",
         "userDeleted": "Benutzer erfolgreich gelöscht",
-        "passwordChanged": "Passwort erfolgreich geändert"
+        "passwordChanged": "Passwort erfolgreich geändert",
+        "oidcUnlinked": "Single Sign-on erfolgreich getrennt"
       },
       "repo": {
         "repositoryImported": "Repository erfolgreich importiert",

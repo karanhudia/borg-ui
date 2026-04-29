@@ -757,6 +757,9 @@ class SystemSettings(Base):
     oidc_discovery_url = Column(String, nullable=True)
     oidc_client_id = Column(String, nullable=True)
     oidc_client_secret_encrypted = Column(String, nullable=True)
+    oidc_token_auth_method = Column(
+        String, default="client_secret_post", nullable=False
+    )
     oidc_scopes = Column(String, default="openid profile email", nullable=False)
     oidc_redirect_uri_override = Column(String, nullable=True)
     oidc_end_session_endpoint_override = Column(String, nullable=True)
@@ -790,6 +793,8 @@ class OidcLoginState(Base):
     nonce = Column(String, nullable=False)
     code_verifier = Column(Text, nullable=False)
     return_to = Column(Text, nullable=False)
+    flow = Column(String, default="login", nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     used_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)

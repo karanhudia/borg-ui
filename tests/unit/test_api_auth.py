@@ -8,9 +8,12 @@ from datetime import datetime, timedelta, timezone
 import json
 import pytest
 from fastapi.testclient import TestClient
+import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
 from app.database.models import (
     AuthRateLimitBucket,
     OidcExchangeGrant,
+    OidcLoginState,
     PasskeyCredential,
     SystemSettings,
     User,
@@ -1576,6 +1579,112 @@ class TestTotpAuthentication:
 
 @pytest.mark.unit
 class TestOidcAuthentication:
+    def _oidc_provider(self, *, token_auth_method: str = "client_secret_post"):
+        from app.core.oidc import OidcProviderConfiguration
+
+        return OidcProviderConfiguration(
+            provider_name="Test OIDC",
+            discovery_url="https://id.example.com/.well-known/openid-configuration",
+            client_id="borg-ui",
+            client_secret="secret-value",
+            token_auth_method=token_auth_method,
+            authorization_endpoint="https://id.example.com/auth",
+            token_endpoint="https://id.example.com/token",
+            userinfo_endpoint="https://id.example.com/userinfo",
+            jwks_uri="https://id.example.com/jwks",
+            issuer="https://id.example.com",
+            scopes="openid profile email",
+            redirect_uri="http://testserver/api/auth/oidc/callback",
+            end_session_endpoint="https://id.example.com/logout",
+            username_claim="preferred_username",
+            email_claim="email",
+            full_name_claim="name",
+            group_claim=None,
+            role_claim=None,
+            admin_groups=[],
+            all_repositories_role_claim=None,
+            new_user_mode="viewer",
+            new_user_template_username=None,
+            default_role="viewer",
+            default_all_repositories_role="viewer",
+        )
+
+    def test_oidc_id_token_requires_sub_exp_and_iat(self, monkeypatch):
+        from app.core.oidc import verify_id_token
+
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+        class DummyJwkClient:
+            def __init__(self, jwks_uri):
+                self.jwks_uri = jwks_uri
+
+            def get_signing_key_from_jwt(self, token):
+                class SigningKey:
+                    key = private_key.public_key()
+
+                return SigningKey()
+
+        monkeypatch.setattr("app.core.oidc.PyJWKClient", DummyJwkClient)
+        provider = self._oidc_provider()
+        now = datetime.now(timezone.utc)
+        required_claims = {
+            "iss": provider.issuer,
+            "aud": provider.client_id,
+            "sub": "subject-123",
+            "iat": now,
+            "exp": now + timedelta(minutes=5),
+            "nonce": "nonce-123",
+        }
+
+        for missing_claim in ("sub", "exp", "iat"):
+            claims = dict(required_claims)
+            claims.pop(missing_claim)
+            id_token = jwt.encode(claims, private_key, algorithm="RS256")
+
+            with pytest.raises(Exception):
+                verify_id_token(provider, id_token, nonce="nonce-123")
+
+    @pytest.mark.asyncio
+    async def test_oidc_token_exchange_uses_client_secret_basic(self, monkeypatch):
+        from app.core.oidc import exchange_code_for_tokens
+
+        captured = {}
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"access_token": "access-token", "id_token": "id-token"}
+
+        class FakeAsyncClient:
+            def __init__(self, timeout):
+                self.timeout = timeout
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return None
+
+            async def post(self, url, *, data, headers):
+                captured["url"] = url
+                captured["data"] = data
+                captured["headers"] = headers
+                return FakeResponse()
+
+        monkeypatch.setattr("app.core.oidc.httpx.AsyncClient", FakeAsyncClient)
+        provider = self._oidc_provider(token_auth_method="client_secret_basic")
+
+        response = await exchange_code_for_tokens(
+            provider, code="auth-code", code_verifier="verifier"
+        )
+
+        assert response["access_token"] == "access-token"
+        assert captured["data"]["client_id"] == "borg-ui"
+        assert "client_secret" not in captured["data"]
+        assert captured["headers"]["Authorization"].startswith("Basic ")
+
     def test_auth_config_endpoint_includes_oidc_settings(
         self, test_client: TestClient, test_db
     ):
@@ -1598,6 +1707,9 @@ class TestOidcAuthentication:
         assert data["oidc_enabled"] is True
         assert data["oidc_provider_name"] == "Authentik"
         assert data["oidc_disable_local_auth"] is True
+        assert data["oidc_link_supported"] is True
+        assert data["oidc_unlink_supported"] is True
+        assert data["oidc_account_linking_supported"] is True
 
     def test_local_login_is_blocked_when_oidc_disables_local_auth(
         self, test_client: TestClient, test_db
@@ -1731,6 +1843,88 @@ class TestOidcAuthentication:
         assert user.role == "operator"
         assert user.all_repositories_role == "operator"
 
+    def test_oidc_exchange_links_existing_oidc_user_without_subject(
+        self, test_client: TestClient, test_db
+    ):
+        existing_user = User(
+            username="existing-oidc-user",
+            password_hash="",
+            email="existing-oidc@example.com",
+            role="viewer",
+            is_active=True,
+            auth_source="oidc",
+            oidc_subject=None,
+        )
+        test_db.add(existing_user)
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+        test_db.refresh(existing_user)
+
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="existing-oidc-user",
+            oidc_subject="linked-subject",
+            email="existing-oidc@example.com",
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(existing_user)
+        assert existing_user.oidc_subject == "linked-subject"
+        assert existing_user.last_login is not None
+
+    def test_oidc_exchange_rejects_subject_collision_on_existing_oidc_user(
+        self, test_client: TestClient, test_db
+    ):
+        existing_user = User(
+            username="existing-oidc-user",
+            password_hash="",
+            email="existing-oidc@example.com",
+            role="viewer",
+            is_active=True,
+            auth_source="oidc",
+            oidc_subject="original-subject",
+        )
+        test_db.add(existing_user)
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+
+        create_test_oidc_exchange_grant(
+            test_db,
+            username="existing-oidc-user",
+            oidc_subject="different-subject",
+            email="existing-oidc@example.com",
+        )
+        test_client.cookies.set("oidc_exchange_grant", "grant-123")
+
+        response = test_client.post(
+            "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
+        )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.oidcIdentityConflict"
+        )
+
     def test_oidc_exchange_requires_same_origin_request(
         self, test_client: TestClient, test_db
     ):
@@ -1778,6 +1972,57 @@ class TestOidcAuthentication:
             "/api/auth/oidc/exchange", headers={"Origin": "http://testserver"}
         )
         assert second.status_code == 401
+
+    def test_expired_oidc_artifacts_are_pruned(self, test_db):
+        from app.api.auth import _prune_expired_oidc_artifacts
+
+        expired_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        valid_until = datetime.now(timezone.utc) + timedelta(minutes=5)
+        test_db.add(
+            OidcLoginState(
+                state_id="expired-state",
+                nonce="nonce",
+                code_verifier="verifier",
+                return_to="http://testserver/login",
+                expires_at=expired_at,
+            )
+        )
+        test_db.add(
+            OidcExchangeGrant(
+                grant_id="expired-grant",
+                username="expired-user",
+                expires_at=expired_at,
+            )
+        )
+        test_db.add(
+            OidcExchangeGrant(
+                grant_id="valid-grant",
+                username="valid-user",
+                expires_at=valid_until,
+            )
+        )
+        test_db.commit()
+
+        _prune_expired_oidc_artifacts(test_db)
+
+        assert (
+            test_db.query(OidcLoginState)
+            .filter(OidcLoginState.state_id == "expired-state")
+            .first()
+            is None
+        )
+        assert (
+            test_db.query(OidcExchangeGrant)
+            .filter(OidcExchangeGrant.grant_id == "expired-grant")
+            .first()
+            is None
+        )
+        assert (
+            test_db.query(OidcExchangeGrant)
+            .filter(OidcExchangeGrant.grant_id == "valid-grant")
+            .first()
+            is not None
+        )
 
     def test_oidc_exchange_rejects_username_collision_with_local_user(
         self, test_client: TestClient, test_db
@@ -1968,6 +2213,7 @@ class TestOidcAuthentication:
                 discovery_url="https://id.example.com/.well-known/openid-configuration",
                 client_id="borg-ui",
                 client_secret="secret-value",
+                token_auth_method="client_secret_post",
                 authorization_endpoint="https://id.example.com/auth",
                 token_endpoint="https://id.example.com/token",
                 userinfo_endpoint="https://id.example.com/userinfo",
@@ -2040,6 +2286,43 @@ class TestOidcAuthentication:
 
         assert response.status_code == 200
         assert response.json()["logout_url"] is None
+
+    def test_oidc_unlink_post_alias_clears_subject(
+        self, test_client: TestClient, test_db
+    ):
+        user = User(
+            username="linked-local-user",
+            password_hash=get_password_hash("password123"),
+            email="linked-local@example.com",
+            role="admin",
+            is_active=True,
+            auth_source="oidc",
+            oidc_subject="linked-subject",
+            oidc_last_id_token_encrypted=encrypt_secret("stored-id-token"),
+        )
+        test_db.add(user)
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+                oidc_client_secret_encrypted=encrypt_secret("secret-value"),
+            )
+        )
+        test_db.commit()
+        test_db.refresh(user)
+
+        token = create_access_token(data={"sub": user.username})
+        response = test_client.post(
+            "/api/auth/oidc/unlink",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(user)
+        assert user.auth_source == "local"
+        assert user.oidc_subject is None
+        assert user.oidc_last_id_token_encrypted is None
         test_db.refresh(user)
         assert user.oidc_last_id_token_encrypted is None
 

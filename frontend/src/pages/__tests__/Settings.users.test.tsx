@@ -298,6 +298,59 @@ describe('Settings users tab', () => {
     })
   })
 
+  it('allows admins to set OIDC identity fields when the users API exposes them', async () => {
+    const user = userEvent.setup()
+    vi.mocked(apiModule.settingsAPI.getUsers).mockResolvedValue({
+      data: {
+        users: [
+          {
+            id: 2,
+            username: 'existing',
+            email: 'existing@example.com',
+            is_active: true,
+            auth_source: 'local',
+            oidc_subject: null,
+            role: 'viewer',
+            full_name: null,
+            all_repositories_role: 'viewer',
+            created_at: '2026-01-01T00:00:00Z',
+            last_login: null,
+          },
+        ],
+      },
+    } as never)
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await screen.findByText('User Management')
+    await screen.findByText('existing')
+    await user.click(screen.getByRole('button', { name: /edit user/i }))
+    const editDialog = await screen.findByRole('dialog', { name: /edit user/i })
+
+    expect(
+      within(editDialog).getByText(/prefer asking the user to link their own local account/i)
+    ).toBeInTheDocument()
+
+    await user.click(within(editDialog).getByLabelText(/auth source/i))
+    await user.click(screen.getByRole('option', { name: /oidc/i }))
+    await user.type(within(editDialog).getByLabelText(/oidc subject/i), 'issuer|subject-123')
+    await user.click(within(editDialog).getByRole('button', { name: /^update$/i }))
+
+    await waitFor(() => {
+      expect(apiModule.settingsAPI.updateUser).toHaveBeenCalledWith(
+        2,
+        expect.objectContaining({
+          auth_source: 'oidc',
+          oidc_subject: 'issuer|subject-123',
+        })
+      )
+    })
+  })
+
   it('shows backend errors when creating a user fails', async () => {
     const user = userEvent.setup()
     vi.mocked(apiModule.settingsAPI.createUser).mockRejectedValue({

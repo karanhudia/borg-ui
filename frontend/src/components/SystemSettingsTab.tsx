@@ -66,6 +66,7 @@ const SystemSettingsTab: React.FC = () => {
   const [oidcEnabled, setOidcEnabled] = useState(false)
   const [oidcDisableLocalAuth, setOidcDisableLocalAuth] = useState(false)
   const [oidcProviderName, setOidcProviderName] = useState('Single sign-on')
+  const [oidcTokenAuthMethod, setOidcTokenAuthMethod] = useState('client_secret_post')
   const [oidcDiscoveryUrl, setOidcDiscoveryUrl] = useState('')
   const [oidcClientId, setOidcClientId] = useState('')
   const [oidcClientSecret, setOidcClientSecret] = useState('')
@@ -204,6 +205,7 @@ const SystemSettingsTab: React.FC = () => {
       setOidcEnabled(systemSettings.oidc_enabled ?? false)
       setOidcDisableLocalAuth(systemSettings.oidc_disable_local_auth ?? false)
       setOidcProviderName(systemSettings.oidc_provider_name ?? 'Single sign-on')
+      setOidcTokenAuthMethod(systemSettings.oidc_token_auth_method ?? 'client_secret_post')
       setOidcDiscoveryUrl(systemSettings.oidc_discovery_url ?? '')
       setOidcClientId(systemSettings.oidc_client_id ?? '')
       setOidcClientSecret('')
@@ -257,6 +259,7 @@ const SystemSettingsTab: React.FC = () => {
         oidcEnabled !== (systemSettings.oidc_enabled ?? false) ||
         oidcDisableLocalAuth !== (systemSettings.oidc_disable_local_auth ?? false) ||
         oidcProviderName !== (systemSettings.oidc_provider_name ?? 'Single sign-on') ||
+        oidcTokenAuthMethod !== (systemSettings.oidc_token_auth_method ?? 'client_secret_post') ||
         oidcDiscoveryUrl !== (systemSettings.oidc_discovery_url ?? '') ||
         oidcClientId !== (systemSettings.oidc_client_id ?? '') ||
         oidcClientSecret !== '' ||
@@ -300,6 +303,7 @@ const SystemSettingsTab: React.FC = () => {
     oidcEnabled,
     oidcDisableLocalAuth,
     oidcProviderName,
+    oidcTokenAuthMethod,
     oidcDiscoveryUrl,
     oidcClientId,
     oidcClientSecret,
@@ -331,6 +335,19 @@ const SystemSettingsTab: React.FC = () => {
   const MAX_TIMEOUT = 86400 // 24 hours
   const MAX_STATS_REFRESH = 1440 // 24 hours in minutes
   const MAX_SCHEDULE_CONCURRENCY = 64
+  const hasOidcActiveAdminSignal =
+    systemSettings &&
+    ('oidc_has_active_admin' in systemSettings ||
+      'has_active_oidc_admin' in systemSettings ||
+      'oidc_active_admin_available' in systemSettings ||
+      'active_oidc_admin_available' in systemSettings ||
+      'oidc_active_admin_count' in systemSettings)
+  const hasActiveOidcAdmin =
+    systemSettings?.oidc_has_active_admin === true ||
+    systemSettings?.has_active_oidc_admin === true ||
+    systemSettings?.oidc_active_admin_available === true ||
+    systemSettings?.active_oidc_admin_available === true ||
+    Number(systemSettings?.oidc_active_admin_count ?? 0) > 0
 
   const getValidationError = (): string | null => {
     if (browseMaxItems < MIN_FILES || browseMaxItems > MAX_FILES) {
@@ -371,6 +388,9 @@ const SystemSettingsTab: React.FC = () => {
       }
       if (oidcNewUserMode === 'template' && !oidcTemplateUsername.trim()) {
         return t('systemSettings.oidcTemplateUserRequired')
+      }
+      if (oidcDisableLocalAuth && hasOidcActiveAdminSignal && !hasActiveOidcAdmin) {
+        return t('systemSettings.oidcActiveAdminRequired')
       }
     }
     return null
@@ -425,6 +445,7 @@ const SystemSettingsTab: React.FC = () => {
         oidc_enabled: oidcEnabled,
         oidc_disable_local_auth: oidcDisableLocalAuth,
         oidc_provider_name: oidcProviderName,
+        oidc_token_auth_method: oidcTokenAuthMethod,
         oidc_discovery_url: oidcDiscoveryUrl,
         oidc_client_id: oidcClientId,
         oidc_client_secret: oidcClientSecret || undefined,
@@ -516,6 +537,7 @@ const SystemSettingsTab: React.FC = () => {
         rotate_metrics_token: rotateMetricsToken,
         oidc_enabled: oidcEnabled,
         oidc_disable_local_auth: oidcDisableLocalAuth,
+        oidc_token_auth_method: oidcTokenAuthMethod,
         oidc_new_user_mode: oidcNewUserMode,
         oidc_default_role: oidcDefaultRole,
         oidc_default_all_repositories_role: oidcDefaultAllRepositoriesRole,
@@ -1276,6 +1298,20 @@ const SystemSettingsTab: React.FC = () => {
                     label={t('systemSettings.oidcDisableLocalAuthLabel')}
                   />
 
+                  {oidcEnabled && oidcDisableLocalAuth && (
+                    <Alert
+                      severity={
+                        hasOidcActiveAdminSignal && !hasActiveOidcAdmin ? 'error' : 'warning'
+                      }
+                    >
+                      <Typography variant="body2">
+                        {hasOidcActiveAdminSignal && !hasActiveOidcAdmin
+                          ? t('systemSettings.oidcActiveAdminRequired')
+                          : t('systemSettings.oidcDisableLocalAuthWarning')}
+                      </Typography>
+                    </Alert>
+                  )}
+
                   <Box
                     sx={{
                       display: 'grid',
@@ -1289,6 +1325,20 @@ const SystemSettingsTab: React.FC = () => {
                       onChange={(e) => setOidcProviderName(e.target.value)}
                       helperText={t('systemSettings.oidcProviderNameHelper')}
                     />
+                    <TextField
+                      select
+                      label={t('systemSettings.oidcTokenAuthMethodLabel')}
+                      value={oidcTokenAuthMethod}
+                      onChange={(e) => setOidcTokenAuthMethod(e.target.value)}
+                      helperText={t('systemSettings.oidcTokenAuthMethodHelper')}
+                    >
+                      <MenuItem value="client_secret_post">
+                        {t('systemSettings.oidcTokenAuthMethodPost')}
+                      </MenuItem>
+                      <MenuItem value="client_secret_basic">
+                        {t('systemSettings.oidcTokenAuthMethodBasic')}
+                      </MenuItem>
+                    </TextField>
                     <TextField
                       label={t('systemSettings.oidcDiscoveryUrlLabel')}
                       value={oidcDiscoveryUrl}

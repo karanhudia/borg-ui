@@ -698,7 +698,18 @@
         "email": "Email",
         "password": "Password",
         "fullName": "Full name",
-        "role": "Role"
+        "role": "Role",
+        "authSource": "Auth source",
+        "oidcSubject": "OIDC subject"
+      },
+      "authSources": {
+        "local": "Local",
+        "oidc": "OIDC"
+      },
+      "ssoIdentity": {
+        "selfLinkHint": "Prefer asking the user to link their own local account from Account & Security. Manual edits are for recovery when the backend supports these fields.",
+        "subjectHelper": "Paste the exact stable subject claim from the identity provider.",
+        "clearHelper": "Local auth clears the stored OIDC subject on save."
       },
       "buttons": {
         "cancel": "Cancel",
@@ -895,7 +906,15 @@
         "passkeyDeletedToast": "Passkey deleted",
         "passkeyDeleteFailed": "Failed to delete passkey",
         "passkeyLastUsed": "Last used {{date}}",
-        "passkeyNeverUsed": "Not used yet"
+        "passkeyNeverUsed": "Not used yet",
+        "ssoLinkTitle": "Link single sign-on",
+        "ssoLinkDescription": "Start a provider redirect to attach this local account to your SSO identity.",
+        "ssoLinkButton": "Link SSO",
+        "ssoLinkedTitle": "Single sign-on linked",
+        "ssoLinkedDescription": "This account can sign in through the configured identity provider.",
+        "ssoUnlinkButton": "Unlink SSO",
+        "ssoUnlinkedToast": "Single sign-on unlinked",
+        "ssoUnlinkFailed": "Failed to unlink single sign-on"
       },
       "access": {
         "title": "Access",
@@ -1510,6 +1529,10 @@
     "oidcDisableLocalAuthLabel": "Disable local password and passkey login",
     "oidcProviderNameLabel": "Provider display name",
     "oidcProviderNameHelper": "Shown on the login button.",
+    "oidcTokenAuthMethodLabel": "Token auth method",
+    "oidcTokenAuthMethodHelper": "Choose how Borg UI authenticates to the provider token endpoint.",
+    "oidcTokenAuthMethodPost": "client_secret_post",
+    "oidcTokenAuthMethodBasic": "client_secret_basic",
     "oidcDiscoveryUrlLabel": "Discovery URL",
     "oidcDiscoveryUrlHelper": "Example: https://id.example.com/application/o/borg-ui/.well-known/openid-configuration",
     "oidcClientIdLabel": "Client ID",
@@ -1547,6 +1570,8 @@
     "oidcRequiredFieldsError": "OIDC requires a discovery URL and client ID.",
     "oidcClientSecretRequired": "OIDC requires a client secret before it can be enabled.",
     "oidcTemplateUserRequired": "Template mode requires a template username.",
+    "oidcDisableLocalAuthWarning": "Before disabling local login, confirm at least one active admin can sign in with OIDC.",
+    "oidcActiveAdminRequired": "Local auth cannot be disabled until an active OIDC admin exists.",
     "authEventSuccess": "Success",
     "authEventFailed": "Failed",
     "authEventPending": "Pending approval",
@@ -1574,6 +1599,8 @@
     "authEventTypes": {
       "local_login_failed": "Local login failed",
       "local_login_succeeded": "Local login succeeded",
+      "oidc_account_linked": "OIDC account linked",
+      "oidc_account_unlinked": "OIDC account unlinked",
       "oidc_user_pending": "OIDC user pending approval",
       "oidc_user_provisioned": "OIDC user provisioned",
       "oidc_user_denied": "OIDC user denied",
@@ -2941,7 +2968,7 @@
         "invalidTotpCode": "Invalid authentication code",
         "tooManyAttempts": "Too many sign-in attempts. Try again in {{retryAfterSeconds}} seconds.",
         "tooManyRequests": "Too many sign-in attempts. Try again in {{retryAfterSeconds}} seconds.",
-        "localPasswordRequired": "This account must use built-in password authentication to manage TOTP",
+        "localPasswordRequired": "This account must have a local password before this action can continue",
         "totpNotEnabled": "Two-factor authentication is not enabled for this account",
         "invalidPasskey": "Invalid passkey response",
         "passkeyUserVerificationRequired": "Passkey verification is required on this device. Unlock the device with Touch ID, Face ID, or the device passcode and try again.",
@@ -2953,8 +2980,12 @@
         "oidcAuthenticationFailed": "Single sign-on login failed",
         "oidcIdTokenInvalid": "The identity provider returned an invalid sign-in token",
         "oidcUsernameClaimMissing": "Single sign-on did not provide a usable username claim",
+        "oidcSubjectClaimMissing": "Single sign-on did not provide a usable subject claim",
         "oidcUserAccessDenied": "Your single sign-on account is not allowed to access Borg UI",
         "oidcAccountLinkRequired": "A local Borg UI account already uses this username. Link the account explicitly before using single sign-on.",
+        "oidcAlreadyLinked": "This account is already linked to single sign-on",
+        "oidcCannotUnlinkWhenLocalAuthDisabled": "Single sign-on cannot be unlinked while local login is disabled",
+        "oidcNotLinked": "This account is not linked to single sign-on",
         "oidcIdentityConflict": "This single sign-on identity conflicts with an existing Borg UI account.",
         "oidcEmailAlreadyInUse": "This single sign-on email is already used by another Borg UI account.",
         "oidcPendingApproval": "Your single sign-on account is waiting for administrator approval",
@@ -3141,8 +3172,11 @@
         "invalidOidcNewUserMode": "Invalid oidc_new_user_mode. Must be one of: {{modes}}",
         "invalidOidcDefaultRole": "Invalid OIDC default global role",
         "invalidOidcDefaultRepositoryRole": "Invalid OIDC default repository role",
+        "invalidOidcTokenAuthMethod": "Invalid OIDC token auth method. Must be one of: {{methods}}",
+        "invalidAuthSource": "Invalid auth source. Must be one of: {{sources}}",
         "oidcTemplateUserRequired": "A template username is required when OIDC new-user mode is set to template",
         "oidcLocalAuthRequiresOidc": "OIDC must be enabled before local authentication can be disabled",
+        "oidcLocalAuthRequiresOidcAdmin": "At least one active admin must be linked to OIDC before local authentication can be disabled",
         "oidcConfigurationIncomplete": "OIDC is enabled but the discovery URL, client ID, or client secret is missing"
       },
       "activity": {
@@ -3273,7 +3307,8 @@
       "auth": {
         "loggedOut": "Successfully logged out",
         "userDeleted": "User deleted successfully",
-        "passwordChanged": "Password changed successfully"
+        "passwordChanged": "Password changed successfully",
+        "oidcUnlinked": "Single sign-on unlinked successfully"
       },
       "repo": {
         "repositoryImported": "Repository imported successfully",

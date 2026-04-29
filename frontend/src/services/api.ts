@@ -128,6 +128,10 @@ export interface AuthUserResponse {
   is_active: boolean
   role: string
   all_repositories_role?: string | null
+  auth_source?: string | null
+  oidc_subject?: string | null
+  oidc_link_supported?: boolean
+  oidc_unlink_supported?: boolean
   must_change_password?: boolean
   totp_enabled?: boolean
   passkey_count?: number
@@ -195,6 +199,9 @@ export interface AuthConfigResponse {
   oidc_enabled?: boolean
   oidc_provider_name?: string | null
   oidc_disable_local_auth?: boolean
+  oidc_link_supported?: boolean
+  oidc_unlink_supported?: boolean
+  oidc_account_linking_supported?: boolean
   proxy_auth_header?: string | null
   proxy_auth_role_header?: string | null
   proxy_auth_all_repositories_role_header?: string | null
@@ -219,7 +226,16 @@ export const authAPI = {
     const suffix = params.toString()
     return `${API_BASE_URL}/auth/oidc/login${suffix ? `?${suffix}` : ''}`
   },
+  getOidcLinkUrl: (returnTo?: string) => {
+    const params = new URLSearchParams()
+    if (returnTo) {
+      params.set('return_to', returnTo)
+    }
+    const suffix = params.toString()
+    return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
+  },
   exchangeOidcToken: () => api.post<AuthLoginResponse>('/auth/oidc/exchange'),
+  unlinkOidc: () => api.post('/auth/oidc/unlink'),
 
   login: (username: string, password: string) =>
     api.post<AuthLoginResponse>(

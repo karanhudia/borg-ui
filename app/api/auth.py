@@ -3,7 +3,7 @@ from datetime import timedelta, datetime, timezone
 import hmac
 import json
 from typing import Any, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -111,6 +111,9 @@ class AuthConfig(BaseModel):
     oidc_enabled: bool = False
     oidc_provider_name: Optional[str] = None
     oidc_disable_local_auth: bool = False
+    oidc_link_supported: bool = False
+    oidc_unlink_supported: bool = False
+    oidc_account_linking_supported: bool = False
     proxy_auth_header: Optional[str] = None
     proxy_auth_role_header: Optional[str] = None
     proxy_auth_all_repositories_role_header: Optional[str] = None
@@ -236,6 +239,8 @@ class UserResponse(BaseModel):
     enterprise_name: Optional[str] = None
     email: Optional[str] = None
     is_active: bool
+    auth_source: str = "local"
+    oidc_subject: Optional[str] = None
     role: str
     all_repositories_role: Optional[str] = None
     must_change_password: bool = False
@@ -271,6 +276,8 @@ def _build_user_response(
         "enterprise_name": enterprise_name,
         "email": getattr(user, "email", None),
         "is_active": user.is_active,
+        "auth_source": getattr(user, "auth_source", "local"),
+        "oidc_subject": getattr(user, "oidc_subject", None),
         "role": user.role,
         "all_repositories_role": getattr(user, "all_repositories_role", None),
         "must_change_password": getattr(user, "must_change_password", False),
@@ -469,14 +476,35 @@ def _coerce_utc_datetime(value: Optional[datetime]) -> Optional[datetime]:
     return value.astimezone(timezone.utc)
 
 
+def _prune_expired_oidc_artifacts(db: Session) -> None:
+    now = datetime.now(timezone.utc)
+    deleted_login_states = (
+        db.query(OidcLoginState).filter(OidcLoginState.expires_at <= now).delete()
+    )
+    deleted_exchange_grants = (
+        db.query(OidcExchangeGrant).filter(OidcExchangeGrant.expires_at <= now).delete()
+    )
+    if deleted_login_states or deleted_exchange_grants:
+        db.commit()
+
+
 def _create_oidc_login_state(
-    db: Session, *, state_id: str, nonce: str, code_verifier: str, return_to: str
+    db: Session,
+    *,
+    state_id: str,
+    nonce: str,
+    code_verifier: str,
+    return_to: str,
+    flow: str = "login",
+    user_id: Optional[int] = None,
 ) -> OidcLoginState:
     state = OidcLoginState(
         state_id=state_id,
         nonce=nonce,
         code_verifier=code_verifier,
         return_to=return_to,
+        flow=flow,
+        user_id=user_id,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
     )
     db.add(state)
@@ -548,6 +576,59 @@ def _build_oidc_exchange_identity(grant: OidcExchangeGrant) -> dict[str, Any]:
     return identity
 
 
+def _require_oidc_subject(identity: dict[str, Any]) -> str:
+    subject = identity.get("subject")
+    if not isinstance(subject, str) or not subject.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.oidcSubjectClaimMissing"},
+        )
+    return subject.strip()
+
+
+def _find_user_by_oidc_subject(db: Session, subject: str) -> Optional[User]:
+    return db.query(User).filter(User.oidc_subject == subject).first()
+
+
+def _link_oidc_identity_to_user(
+    db: Session, *, user: User, identity: dict[str, Any], id_token_hint: Optional[str]
+) -> User:
+    subject = _require_oidc_subject(identity)
+    subject_user = _find_user_by_oidc_subject(db, subject)
+    if subject_user is not None and subject_user.id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"key": "backend.errors.auth.oidcIdentityConflict"},
+        )
+
+    incoming_email = identity.get("email")
+    if incoming_email and user.email != incoming_email:
+        existing_email_user = (
+            db.query(User)
+            .filter(User.email == incoming_email, User.id != user.id)
+            .first()
+        )
+        if existing_email_user is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"key": "backend.errors.auth.oidcEmailAlreadyInUse"},
+            )
+        user.email = incoming_email
+
+    incoming_full_name = identity.get("full_name")
+    if incoming_full_name:
+        user.full_name = incoming_full_name
+
+    user.auth_source = "oidc"
+    user.oidc_subject = subject
+    if id_token_hint:
+        user.oidc_last_id_token_encrypted = encrypt_secret(id_token_hint)
+    user.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def _is_same_origin_request(request: Request) -> bool:
     expected_origin = build_external_base_url(request).rstrip("/")
     header_value = request.headers.get("origin") or request.headers.get("referer")
@@ -557,6 +638,11 @@ def _is_same_origin_request(request: Request) -> bool:
     parsed = urlparse(header_value)
     received_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
     return hmac.compare_digest(received_origin, expected_origin)
+
+
+def _append_redirect_params(return_to: str, params: dict[str, str]) -> str:
+    separator = "&" if "?" in return_to else "?"
+    return f"{return_to}{separator}{urlencode(params)}"
 
 
 def _consume_oidc_login_state(
@@ -612,6 +698,9 @@ async def get_auth_config():
         "oidc_disable_local_auth": bool(
             oidc_settings and oidc_settings.oidc_disable_local_auth
         ),
+        "oidc_link_supported": bool(oidc_settings),
+        "oidc_unlink_supported": bool(oidc_settings),
+        "oidc_account_linking_supported": bool(oidc_settings),
         "proxy_auth_header": (
             settings.proxy_auth_header if proxy_auth_enabled else None
         ),
@@ -808,11 +897,9 @@ def _provision_oidc_user(
             detail={"key": "backend.errors.auth.oidcUsernameClaimMissing"},
         )
 
-    subject = (
-        identity.get("subject") if isinstance(identity.get("subject"), str) else None
-    )
+    subject = _require_oidc_subject(identity)
     user = _find_user_for_oidc_identity(db, username=username, subject=subject)
-    if user is not None and user.auth_source != "oidc":
+    if user is not None and not user.oidc_subject and user.auth_source != "oidc":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.auth.oidcAccountLinkRequired"},
@@ -932,12 +1019,21 @@ def _provision_oidc_user(
             detail={"key": "backend.errors.auth.inactiveUser"},
         )
 
-    role = _resolve_oidc_role(identity, settings_row)
-    all_repositories_role = _resolve_oidc_all_repositories_role(
-        identity, role, settings_row
-    )
-    user.role = role
-    user.all_repositories_role = all_repositories_role
+    if identity.get("role"):
+        role = _resolve_oidc_role(identity, settings_row)
+        user.role = role
+    else:
+        role = user.role
+
+    if identity.get("all_repositories_role"):
+        user.all_repositories_role = _resolve_oidc_all_repositories_role(
+            identity, role, settings_row
+        )
+    else:
+        user.all_repositories_role = normalize_repository_role_for_global_role(
+            role,
+            user.all_repositories_role or default_repository_role_for_global_role(role),
+        )
 
     incoming_email = identity.get("email")
     if incoming_email and user.email != incoming_email:
@@ -967,12 +1063,14 @@ def _provision_oidc_user(
     return user
 
 
-@router.get("/oidc/login")
-async def begin_oidc_login(
+async def _begin_oidc_flow(
     request: Request,
-    return_to: Optional[str] = None,
-    db: Session = Depends(get_db),
-):
+    db: Session,
+    *,
+    return_to: Optional[str],
+    flow: str,
+    user_id: Optional[int] = None,
+) -> RedirectResponse:
     settings_row = get_system_oidc_settings(db)
     if settings_row is None or not settings_row.oidc_client_secret_encrypted:
         raise HTTPException(
@@ -980,6 +1078,7 @@ async def begin_oidc_login(
             detail={"key": "backend.errors.auth.oidcNotConfigured"},
         )
 
+    _prune_expired_oidc_artifacts(db)
     provider = await discover_oidc_configuration(
         request,
         settings_row,
@@ -994,6 +1093,8 @@ async def begin_oidc_login(
         nonce=nonce,
         code_verifier=code_verifier,
         return_to=resolve_post_login_url(request, return_to),
+        flow=flow,
+        user_id=user_id,
     )
     state = create_oidc_state_token(state_id=state_id, nonce=nonce)
     return RedirectResponse(
@@ -1004,6 +1105,41 @@ async def begin_oidc_login(
             code_challenge=generate_pkce_code_challenge(code_verifier),
         ),
         status_code=status.HTTP_302_FOUND,
+    )
+
+
+@router.get("/oidc/login")
+async def begin_oidc_login(
+    request: Request,
+    return_to: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    return await _begin_oidc_flow(
+        request,
+        db,
+        return_to=return_to,
+        flow="login",
+    )
+
+
+@router.get("/oidc/link")
+async def begin_oidc_account_link(
+    request: Request,
+    return_to: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.oidc_subject:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.oidcAlreadyLinked"},
+        )
+    return await _begin_oidc_flow(
+        request,
+        db,
+        return_to=return_to,
+        flow="link",
+        user_id=current_user.id,
     )
 
 
@@ -1089,10 +1225,42 @@ async def complete_oidc_login(
             merge_claim_sets(id_claims, userinfo_claims),
             provider,
         )
+        identity["subject"] = id_claims["sub"]
         if not identity.get("username"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"key": "backend.errors.auth.oidcUsernameClaimMissing"},
+            )
+        if login_state.flow == "link":
+            if login_state.user_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
+                )
+            link_user = db.query(User).filter(User.id == login_state.user_id).first()
+            if link_user is None or not link_user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={"key": "backend.errors.auth.inactiveUser"},
+                )
+            linked_user = _link_oidc_identity_to_user(
+                db,
+                user=link_user,
+                identity=identity,
+                id_token_hint=id_token,
+            )
+            _record_auth_event(
+                db,
+                event_type="oidc_account_linked",
+                auth_source="oidc",
+                success=True,
+                username=linked_user.username,
+                email=linked_user.email,
+                actor_user_id=linked_user.id,
+            )
+            return RedirectResponse(
+                _append_redirect_params(return_to, {"oidc_link": "complete"}),
+                status_code=status.HTTP_302_FOUND,
             )
         _record_auth_event(
             db,
@@ -1101,9 +1269,6 @@ async def complete_oidc_login(
             success=True,
             username=identity.get("username"),
             email=identity.get("email"),
-        )
-        identity["subject"] = (
-            id_claims.get("sub") if isinstance(id_claims.get("sub"), str) else None
         )
         exchange_grant = _create_oidc_exchange_grant(
             db,
@@ -1202,6 +1367,7 @@ async def exchange_oidc_login(
             detail={"key": "backend.errors.auth.invalidOrExpiredToken"},
         )
 
+    _prune_expired_oidc_artifacts(db)
     exchange_grant = _consume_oidc_exchange_grant(db, grant_id=grant_id)
     if exchange_grant is None:
         _record_auth_event(
@@ -1239,6 +1405,46 @@ async def exchange_oidc_login(
         "expires_in": settings.access_token_expire_minutes * 60,
         "must_change_password": user.must_change_password,
     }
+
+
+@router.post("/oidc/unlink")
+@router.delete("/oidc/link")
+async def unlink_oidc_account(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    settings_row = get_system_oidc_settings(db)
+    if settings_row and settings_row.oidc_disable_local_auth:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.oidcCannotUnlinkWhenLocalAuthDisabled"},
+        )
+    if not current_user.oidc_subject:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.oidcNotLinked"},
+        )
+    if not current_user.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.localPasswordRequired"},
+        )
+
+    current_user.auth_source = "local"
+    current_user.oidc_subject = None
+    current_user.oidc_last_id_token_encrypted = None
+    current_user.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    _record_auth_event(
+        db,
+        event_type="oidc_account_unlinked",
+        auth_source="local",
+        success=True,
+        username=current_user.username,
+        email=current_user.email,
+        actor_user_id=current_user.id,
+    )
+    return {"message": "backend.success.auth.oidcUnlinked"}
 
 
 @router.post("/login/totp", response_model=Token)

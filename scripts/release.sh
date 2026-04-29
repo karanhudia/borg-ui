@@ -7,6 +7,12 @@
 set -e
 
 VERSION=$1
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$CURRENT_BRANCH" = "HEAD" ]; then
+  echo "Error: Cannot release from detached HEAD"
+  exit 1
+fi
 
 # Validate version argument
 if [ -z "$VERSION" ]; then
@@ -25,6 +31,7 @@ fi
 VERSION_NUMBER="${VERSION#v}"
 
 echo "Releasing version $VERSION..."
+echo "Release branch: $CURRENT_BRANCH"
 
 # Update VERSION file
 echo "$VERSION_NUMBER" > VERSION
@@ -51,7 +58,7 @@ git tag "$VERSION"
 echo "Created tag $VERSION"
 
 # Push
-git push origin main
+git push origin "$CURRENT_BRANCH"
 git push origin "$VERSION"
 echo "Pushed to origin"
 

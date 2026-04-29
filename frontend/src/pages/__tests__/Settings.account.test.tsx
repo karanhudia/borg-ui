@@ -70,6 +70,12 @@ vi.mock('../../services/api', () => ({
     deleteUser: vi.fn(),
     resetUserPassword: vi.fn(),
   },
+  authAPI: {
+    getAuthConfig: vi.fn(),
+    getTotpStatus: vi.fn(),
+    listPasskeys: vi.fn(),
+    unlinkOidc: vi.fn(),
+  },
 }))
 
 vi.mock('react-hot-toast', async () => {
@@ -116,6 +122,7 @@ describe('Settings account tab', () => {
         ),
       markRecentPasswordConfirmation: vi.fn(),
       refreshUser: vi.fn(),
+      proxyAuthEnabled: false,
     })
     vi.mocked(apiModule.settingsAPI.getSystemSettings).mockResolvedValue({
       data: { settings: {} },
@@ -124,6 +131,19 @@ describe('Settings account tab', () => {
       data: { users: [] },
     } as never)
     vi.mocked(apiModule.settingsAPI.changePassword).mockResolvedValue({ data: {} } as never)
+    vi.mocked(apiModule.authAPI.getAuthConfig).mockResolvedValue({
+      data: {
+        proxy_auth_enabled: false,
+        insecure_no_auth_enabled: false,
+        authentication_required: true,
+        oidc_enabled: false,
+      },
+    } as never)
+    vi.mocked(apiModule.authAPI.getTotpStatus).mockResolvedValue({
+      data: { enabled: false, recovery_codes_remaining: 0 },
+    } as never)
+    vi.mocked(apiModule.authAPI.listPasskeys).mockResolvedValue({ data: [] } as never)
+    vi.mocked(apiModule.authAPI.unlinkOidc).mockResolvedValue({ data: {} } as never)
   })
 
   it('tracks the account tab view on render', async () => {
@@ -165,6 +185,7 @@ describe('Settings account tab', () => {
         ),
       markRecentPasswordConfirmation: vi.fn(),
       refreshUser: vi.fn(),
+      proxyAuthEnabled: false,
     })
 
     renderWithProviders(
@@ -262,5 +283,53 @@ describe('Settings account tab', () => {
       section: 'account',
       operation: 'change_password',
     })
+  })
+
+  it('shows linked SSO state and can unlink when the backend advertises support', async () => {
+    const user = userEvent.setup()
+    const refreshUser = vi.fn()
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 1,
+        username: 'admin',
+        full_name: 'Admin User',
+        email: 'admin@example.com',
+        role: 'admin',
+        auth_source: 'oidc',
+        oidc_subject: 'issuer|admin',
+        oidc_unlink_supported: true,
+        created_at: '2024-01-01T00:00:00Z',
+        global_permissions: ['settings.system.manage', 'repositories.manage_all'],
+      },
+      hasGlobalPermission: (permission: string) =>
+        ['settings.system.manage', 'repositories.manage_all'].includes(permission),
+      markRecentPasswordConfirmation: vi.fn(),
+      refreshUser,
+      proxyAuthEnabled: false,
+    })
+    vi.mocked(apiModule.authAPI.getAuthConfig).mockResolvedValue({
+      data: {
+        proxy_auth_enabled: false,
+        insecure_no_auth_enabled: false,
+        authentication_required: true,
+        oidc_enabled: true,
+        oidc_unlink_supported: true,
+      },
+    } as never)
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    )
+
+    await user.click(await screen.findByRole('tab', { name: /security/i }))
+    await screen.findByText('Single sign-on linked')
+    await user.click(screen.getByRole('button', { name: /unlink sso/i }))
+
+    await waitFor(() => {
+      expect(apiModule.authAPI.unlinkOidc).toHaveBeenCalled()
+    })
+    expect(refreshUser).toHaveBeenCalled()
   })
 })

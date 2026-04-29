@@ -43,6 +43,19 @@ DEFAULT_TIMEOUTS = {
 }
 
 
+def _active_oidc_admin_count(db: Session) -> int:
+    return (
+        db.query(User)
+        .filter(
+            User.is_active.is_(True),
+            User.role == "admin",
+            User.oidc_subject.isnot(None),
+            User.oidc_subject != "",
+        )
+        .count()
+    )
+
+
 def get_effective_timeout(db_value, env_value, default_value):
     """
     Get the effective timeout value and its source.
@@ -87,6 +100,8 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     is_active: Optional[bool] = None
     role: Optional[str] = None
+    auth_source: Optional[str] = None
+    oidc_subject: Optional[str] = None
 
 
 class PasswordChange(BaseModel):
@@ -171,6 +186,7 @@ class SystemSettingsUpdate(BaseModel):
     oidc_client_id: Optional[str] = None
     oidc_client_secret: Optional[str] = None
     clear_oidc_client_secret: Optional[bool] = None
+    oidc_token_auth_method: Optional[str] = None
     oidc_scopes: Optional[str] = None
     oidc_redirect_uri_override: Optional[str] = None
     oidc_end_session_endpoint_override: Optional[str] = None
@@ -359,6 +375,8 @@ async def get_system_settings(
                 "oidc_discovery_url": settings.oidc_discovery_url,
                 "oidc_client_id": settings.oidc_client_id,
                 "oidc_client_secret_set": bool(settings.oidc_client_secret_encrypted),
+                "oidc_token_auth_method": settings.oidc_token_auth_method
+                or "client_secret_post",
                 "oidc_scopes": settings.oidc_scopes or "openid profile email",
                 "oidc_redirect_uri_override": settings.oidc_redirect_uri_override,
                 "oidc_end_session_endpoint_override": settings.oidc_end_session_endpoint_override,
@@ -375,6 +393,7 @@ async def get_system_settings(
                 "oidc_default_role": settings.oidc_default_role or "viewer",
                 "oidc_default_all_repositories_role": settings.oidc_default_all_repositories_role
                 or "viewer",
+                "oidc_active_admin_count": _active_oidc_admin_count(db),
             },
             "log_storage": log_storage_info,
         }
@@ -648,6 +667,22 @@ async def update_system_settings(
                 },
             )
 
+        valid_oidc_token_auth_methods = {"client_secret_post", "client_secret_basic"}
+        if (
+            settings_update.oidc_token_auth_method is not None
+            and settings_update.oidc_token_auth_method
+            not in valid_oidc_token_auth_methods
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.settings.invalidOidcTokenAuthMethod",
+                    "params": {
+                        "methods": ", ".join(sorted(valid_oidc_token_auth_methods))
+                    },
+                },
+            )
+
         if settings_update.oidc_enabled is not None:
             settings.oidc_enabled = settings_update.oidc_enabled
         if settings_update.oidc_disable_local_auth is not None:
@@ -671,6 +706,8 @@ async def update_system_settings(
                 settings.oidc_client_secret_encrypted = encrypt_secret(
                     settings_update.oidc_client_secret
                 )
+        if settings_update.oidc_token_auth_method is not None:
+            settings.oidc_token_auth_method = settings_update.oidc_token_auth_method
         if settings_update.oidc_scopes is not None:
             settings.oidc_scopes = (
                 settings_update.oidc_scopes.strip() or "openid profile email"
@@ -736,6 +773,14 @@ async def update_system_settings(
             raise HTTPException(
                 status_code=400,
                 detail={"key": "backend.errors.settings.oidcLocalAuthRequiresOidc"},
+            )
+
+        if settings.oidc_disable_local_auth and _active_oidc_admin_count(db) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.settings.oidcLocalAuthRequiresOidcAdmin"
+                },
             )
 
         if settings.oidc_enabled and (
@@ -1026,6 +1071,9 @@ async def update_user(
 ):
     """Update user (admin only)"""
     try:
+        fields_set = getattr(user_data, "model_fields_set", None)
+        if fields_set is None:
+            fields_set = getattr(user_data, "__fields_set__", set())
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(
@@ -1073,6 +1121,40 @@ async def update_user(
                 user.role,
                 user.all_repositories_role,
             )
+
+        if user_data.auth_source is not None:
+            if user_data.auth_source not in {"local", "oidc"}:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.settings.invalidAuthSource",
+                        "params": {"sources": "local, oidc"},
+                    },
+                )
+            user.auth_source = user_data.auth_source
+
+        if "oidc_subject" in fields_set:
+            oidc_subject = (
+                user_data.oidc_subject.strip() if user_data.oidc_subject else None
+            )
+            oidc_subject = oidc_subject or None
+            if oidc_subject:
+                existing_subject_user = (
+                    db.query(User)
+                    .filter(User.oidc_subject == oidc_subject, User.id != user_id)
+                    .first()
+                )
+                if existing_subject_user is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={"key": "backend.errors.auth.oidcIdentityConflict"},
+                    )
+                user.auth_source = "oidc"
+            else:
+                user.oidc_last_id_token_encrypted = None
+                if user.auth_source == "oidc":
+                    user.auth_source = "local"
+            user.oidc_subject = oidc_subject
 
         user.updated_at = datetime.utcnow()
         db.commit()

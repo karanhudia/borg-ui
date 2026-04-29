@@ -123,6 +123,8 @@ const UsersTab: React.FC = () => {
     password: '',
     role: 'viewer',
     full_name: '',
+    auth_source: 'local',
+    oidc_subject: '',
   })
   const [passwordForm, setPasswordForm] = useState({
     new_password: '',
@@ -239,15 +241,33 @@ const UsersTab: React.FC = () => {
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault()
-    createUserMutation.mutate(userForm)
+    createUserMutation.mutate({
+      username: userForm.username,
+      email: userForm.email,
+      password: userForm.password,
+      role: userForm.role,
+      full_name: userForm.full_name,
+    })
   }
 
   const handleUpdateUser = (e: React.FormEvent) => {
     e.preventDefault()
     if (editingUser) {
+      const updatePayload: Record<string, unknown> = {
+        username: userForm.username,
+        email: userForm.email,
+        password: userForm.password,
+        role: userForm.role,
+        full_name: userForm.full_name,
+      }
+      if (userOidcFieldsExposed) {
+        updatePayload.auth_source = userForm.auth_source
+        updatePayload.oidc_subject =
+          userForm.auth_source === 'oidc' ? userForm.oidc_subject.trim() || null : null
+      }
       updateUserMutation.mutate({
         userId: editingUser.id,
-        userData: userForm,
+        userData: updatePayload,
       })
     }
   }
@@ -282,6 +302,8 @@ const UsersTab: React.FC = () => {
       password: '',
       role: userToEdit.role || 'viewer',
       full_name: userToEdit.full_name || '',
+      auth_source: userToEdit.auth_source || 'local',
+      oidc_subject: userToEdit.oidc_subject || '',
     })
   }
 
@@ -293,10 +315,16 @@ const UsersTab: React.FC = () => {
       password: '',
       role: 'viewer',
       full_name: '',
+      auth_source: 'local',
+      oidc_subject: '',
     })
   }
 
   const users = useMemo<UserType[]>(() => usersData?.data?.users ?? [], [usersData?.data?.users])
+  const userOidcFieldsExposed = useMemo(
+    () => users.some((user) => 'auth_source' in user || 'oidc_subject' in user),
+    [users]
+  )
 
   const totalUsers = users.length
   const activeUsers = users.filter((u: UserType) => u.is_active).length
@@ -955,6 +983,52 @@ const UsersTab: React.FC = () => {
                   <MenuItem value="viewer">{t('settings.users.roles.viewerDescription')}</MenuItem>
                 </Select>
               </FormControl>
+
+              {editingUser && userOidcFieldsExposed && (
+                <>
+                  <Alert severity="info">
+                    <Typography variant="body2">
+                      {t('settings.users.ssoIdentity.selfLinkHint')}
+                    </Typography>
+                  </Alert>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '180px 1fr' },
+                      gap: 2,
+                    }}
+                  >
+                    <TextField
+                      select
+                      label={t('settings.users.fields.authSource')}
+                      value={userForm.auth_source}
+                      onChange={(e) =>
+                        setUserForm({
+                          ...userForm,
+                          auth_source: e.target.value,
+                          oidc_subject: e.target.value === 'oidc' ? userForm.oidc_subject : '',
+                        })
+                      }
+                      fullWidth
+                    >
+                      <MenuItem value="local">{t('settings.users.authSources.local')}</MenuItem>
+                      <MenuItem value="oidc">{t('settings.users.authSources.oidc')}</MenuItem>
+                    </TextField>
+                    <TextField
+                      label={t('settings.users.fields.oidcSubject')}
+                      value={userForm.oidc_subject}
+                      onChange={(e) => setUserForm({ ...userForm, oidc_subject: e.target.value })}
+                      disabled={userForm.auth_source !== 'oidc'}
+                      helperText={
+                        userForm.auth_source === 'oidc'
+                          ? t('settings.users.ssoIdentity.subjectHelper')
+                          : t('settings.users.ssoIdentity.clearHelper')
+                      }
+                      fullWidth
+                    />
+                  </Box>
+                </>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions>

@@ -84,6 +84,23 @@ environment:
 {: .new }
 > **New Feature**: Integrate with external authentication providers (Authentik, Authelia, Keycloak, etc.)
 
+For new SSO deployments, prefer built-in OIDC when Borg UI should talk directly to the identity provider. Configure it in the system settings with:
+
+- discovery URL
+- client ID and client secret
+- token authentication method: `client_secret_post` or `client_secret_basic`
+- scopes, usually `openid profile email`
+- username/email/full-name claim names
+- new-user mode: `viewer`, `pending`, `template`, or `deny`
+
+The OIDC browser exchange is same-origin only. Serve the frontend and backend from the same scheme/host/port unless the application is explicitly extended for cross-origin cookies and CORS.
+
+Only disable local auth after an active admin user is linked to OIDC. Borg UI rejects `oidc_disable_local_auth=true` without at least one active admin with a non-empty `oidc_subject` to prevent lockout.
+
+See [Security Guide - SSO Authentication](security.md#sso-authentication) for the full built-in OIDC setup and hardening notes.
+
+### Reverse-Proxy Header Authentication
+
 Disable the built-in login screen and use your reverse proxy for authentication:
 
 ```yaml

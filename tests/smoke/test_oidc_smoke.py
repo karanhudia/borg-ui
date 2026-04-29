@@ -127,6 +127,16 @@ class MockOidcProvider:
                     self.rfile.read(length).decode("utf-8"),
                     keep_blank_values=True,
                 )
+                auth_header = self.headers.get("Authorization", "")
+                expected_basic = "Basic " + base64.b64encode(
+                    b"borg-ui-smoke:smoke-secret"
+                ).decode("ascii")
+                if auth_header != expected_basic:
+                    self._json({"error": "invalid_client"}, status=401)
+                    return
+                if "client_secret" in payload:
+                    self._json({"error": "invalid_request"}, status=400)
+                    return
                 code = payload["code"][0]
                 code_verifier = payload["code_verifier"][0]
                 code_data = provider.codes.pop(code, None)
@@ -186,23 +196,26 @@ class MockOidcProvider:
             self.thread.join(timeout=5)
 
 
-def configure_oidc(client: SmokeClient, discovery_url: str) -> None:
+def configure_oidc(
+    client: SmokeClient, discovery_url: str, *, disable_local_auth: bool
+) -> None:
     response = client.request_ok("GET", "/api/settings/system")
     current = response.json().get("settings", {})
     payload = {
         "oidc_enabled": True,
-        "oidc_disable_local_auth": True,
+        "oidc_disable_local_auth": disable_local_auth,
         "oidc_provider_name": "Smoke OIDC",
         "oidc_discovery_url": discovery_url,
         "oidc_client_id": "borg-ui-smoke",
         "oidc_client_secret": "smoke-secret",
+        "oidc_token_auth_method": "client_secret_basic",
         "oidc_scopes": "openid profile email",
         "oidc_claim_username": "preferred_username",
         "oidc_claim_email": "email",
         "oidc_claim_full_name": "name",
         "oidc_new_user_mode": "viewer",
-        "oidc_default_role": "viewer",
-        "oidc_default_all_repositories_role": "viewer",
+        "oidc_default_role": "admin",
+        "oidc_default_all_repositories_role": "admin",
         "metrics_enabled": current.get("metrics_enabled", False),
         "metrics_require_auth": current.get("metrics_require_auth", False),
         "mqtt_password": "",
@@ -225,7 +238,11 @@ def main() -> int:
     try:
         provider.start()
         client.authenticate()
-        configure_oidc(client, f"{provider.issuer}/.well-known/openid-configuration")
+        configure_oidc(
+            client,
+            f"{provider.issuer}/.well-known/openid-configuration",
+            disable_local_auth=False,
+        )
 
         auth_config = client.request_ok("GET", "/api/auth/config").json()
         if not auth_config.get("oidc_enabled"):
@@ -261,6 +278,17 @@ def main() -> int:
         profile = profile_response.json()
         if profile["username"] != "oidc-smoke":
             raise SmokeFailure(f"Expected oidc-smoke profile, got {profile}")
+        if profile["role"] != "admin":
+            raise SmokeFailure(f"Expected OIDC smoke admin profile, got {profile}")
+
+        configure_oidc(
+            client,
+            f"{provider.issuer}/.well-known/openid-configuration",
+            disable_local_auth=True,
+        )
+        auth_config_after_guard = client.request_ok("GET", "/api/auth/config").json()
+        if not auth_config_after_guard.get("oidc_disable_local_auth"):
+            raise SmokeFailure("OIDC smoke expected oidc_disable_local_auth=true")
 
         events_response = client.request_ok(
             "GET", "/api/auth/events", params={"limit": 20}

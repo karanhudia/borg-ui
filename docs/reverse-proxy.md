@@ -9,6 +9,8 @@ description: "Configure Nginx, Traefik, Caddy, or Apache as a reverse proxy for 
 
 Complete guide for running Borg Web UI behind a reverse proxy with Nginx, Traefik, Caddy, or Apache. You can serve the app at the root of a (sub)domain (e.g., `backups.example.com`) or under a subfolder (e.g., `example.com/borg-ui`).
 
+When using built-in OIDC, serve Borg UI's frontend and API from the same public origin. The OIDC callback creates a short-lived local exchange grant and the frontend redeems it with a same-origin request. A split-origin setup such as `ui.example.com` for the frontend and `api.example.com` for the backend is not supported unless both frontend and backend are explicitly extended for cross-origin cookies, CORS, and matching public URL handling.
+
 ---
 
 ## Quick Start (Nginx)
@@ -104,6 +106,8 @@ environment:
 The app will then serve at `https://example.com/borg-ui` and use `/borg-ui` for all client-side routes and API calls.
 
 **Direct access:** With `BASE_PATH` set, you can also open the app at the same path on the container without a reverse proxy, e.g. `http://localhost:8081/borg-ui` (use the port you expose). Use this for local access or when the container port is exposed directly. Accessing the root URL (e.g. `http://localhost:8081/`) automatically redirects to the base path (e.g. `/borg-ui`).
+
+**OIDC note:** Register the callback URL with the same public origin and base path, for example `https://example.com/borg-ui/api/auth/oidc/callback`.
 
 ### With SSL/HTTPS (Let's Encrypt)
 

@@ -175,13 +175,15 @@ This keeps identity in the IdP while keeping Borg UI's own authorization model f
 Borg UI's OIDC flow includes the main hardening controls you should expect:
 - **PKCE** protects the authorization code flow against intercepted codes
 - **Signed and time-limited `state`** protects against CSRF and callback mix-up attacks
+- **Required ID token claims** reject tokens without `sub`, `exp`, or `iat`
 - **Provider logout support** can redirect the browser to the IdP's logout flow when configured
-- **Local session exchange** keeps the browser on Borg UI's normal token model after the callback
+- **Local session exchange** keeps the browser on Borg UI's normal token model after the callback and requires a same-origin exchange request
+- **Confidential client authentication** supports `client_secret_post` and `client_secret_basic` token exchanges
 
 Operationally, you should still:
 - terminate TLS in front of Borg UI
 - use the correct public URL and redirect URI
-- avoid mismatched internal and public callback URLs unless you intentionally configure an override
+- avoid split frontend/backend origins; the OIDC exchange is same-origin only unless both frontend and backend are explicitly changed to support cross-origin cookies and CORS
 - keep time synchronization correct on both Borg UI and the IdP
 
 ##### Built-in OIDC User Provisioning
@@ -216,9 +218,12 @@ At minimum you need:
 - OIDC discovery URL or provider endpoints
 - client ID
 - client secret for confidential-client deployments
+- token endpoint authentication method: `client_secret_post` or `client_secret_basic`
 - exact redirect URI registered in the provider
 - claim mapping for username, and optionally email/full name
 - a decision on new-user behavior: `viewer`, `pending`, `template`, or `deny`
+
+If you disable local password/passkey login after enabling OIDC, keep at least one active Borg UI admin with a non-empty `oidc_subject`. Borg UI blocks disabling local auth until an active OIDC-linked admin exists so administrators do not lock themselves out during initial setup.
 
 ##### Authentik Notes for Built-in OIDC
 
@@ -269,6 +274,7 @@ Test logout explicitly with your chosen provider. Do not assume all IdPs behave 
 - check the registered redirect URI exactly
 - check whether Borg UI is behind a reverse proxy with the correct public URL
 - check whether you need a redirect URI override for split internal/public URLs
+- ensure the frontend and API are served from the same public origin; split-origin deployments are not supported by the default OIDC exchange
 
 **Problem: Login succeeds at the IdP but Borg UI denies access**
 - review the new-user mode (`deny`, `pending`, `template`, `viewer`)
