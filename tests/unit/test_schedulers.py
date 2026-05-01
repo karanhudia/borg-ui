@@ -348,6 +348,101 @@ async def test_shared_scheduler_dispatch_limits_scheduled_checks(db_session):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_check_scheduler_cleans_stale_pending_checks_before_capacity_check(
+    db_session,
+):
+    db_session.add(SystemSettings(max_concurrent_scheduled_checks=1))
+    repo = Repository(
+        name="Repo",
+        path="/tmp/repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        check_cron_expression="0 2 * * *",
+        next_scheduled_check=datetime.utcnow() - timedelta(minutes=1),
+    )
+    db_session.add(repo)
+    db_session.flush()
+
+    stale_job = CheckJob(
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="pending",
+        scheduled_check=True,
+        created_at=datetime.utcnow() - timedelta(hours=1),
+    )
+    db_session.add(stale_job)
+    db_session.commit()
+
+    with patch(
+        "app.services.check_scheduler.start_background_maintenance_job",
+        side_effect=lambda db, repo, job_model, **kwargs: CheckJob(
+            id=100 + repo.id,
+            repository_id=repo.id,
+            status="pending",
+            max_duration=kwargs["extra_fields"]["max_duration"],
+            scheduled_check=True,
+        ),
+    ) as mock_start:
+        await run_due_scheduled_checks(db_session, datetime.utcnow())
+
+    db_session.refresh(stale_job)
+    assert stale_job.status == "failed"
+    assert stale_job.completed_at is not None
+    assert mock_start.call_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_check_scheduler_cleans_stale_running_checks_before_capacity_check(
+    db_session,
+):
+    db_session.add(SystemSettings(max_concurrent_scheduled_checks=1))
+    repo = Repository(
+        name="Repo",
+        path="/tmp/repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        check_cron_expression="0 2 * * *",
+        next_scheduled_check=datetime.utcnow() - timedelta(minutes=1),
+    )
+    db_session.add(repo)
+    db_session.flush()
+
+    stale_job = CheckJob(
+        repository_id=repo.id,
+        repository_path=repo.path,
+        status="running",
+        scheduled_check=True,
+        started_at=datetime.utcnow() - timedelta(hours=1),
+        created_at=datetime.utcnow() - timedelta(hours=1),
+        process_pid=999999,
+        process_start_time=123,
+    )
+    db_session.add(stale_job)
+    db_session.commit()
+
+    with patch(
+        "app.services.check_scheduler.start_background_maintenance_job",
+        side_effect=lambda db, repo, job_model, **kwargs: CheckJob(
+            id=100 + repo.id,
+            repository_id=repo.id,
+            status="pending",
+            max_duration=kwargs["extra_fields"]["max_duration"],
+            scheduled_check=True,
+        ),
+    ) as mock_start:
+        await run_due_scheduled_checks(db_session, datetime.utcnow())
+
+    db_session.refresh(stale_job)
+    assert stale_job.status == "failed"
+    assert stale_job.completed_at is not None
+    assert mock_start.call_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_stats_refresh_scheduler_updates_repositories_and_settings(db_session):
     repo1 = Repository(
         name="Repo 1",

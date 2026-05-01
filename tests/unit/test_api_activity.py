@@ -177,6 +177,7 @@ class TestRecentActivityEndpoint:
                 status="completed",
                 started_at=base + timedelta(minutes=3),
                 completed_at=base + timedelta(minutes=4),
+                scheduled_check=True,
             ),
             CompactJob(
                 repository_id=repository.id,
@@ -214,8 +215,59 @@ class TestRecentActivityEndpoint:
         assert activity[0]["schedule_id"] == schedule.id
         assert activity[0]["schedule_name"] == schedule.name
         assert activity[0]["repository"] == repository.name
+        check_activity = next(item for item in activity if item["type"] == "check")
+        assert check_activity["triggered_by"] == "schedule"
         assert activity[-1]["type"] == "package"
         assert activity[-1]["package_name"] == package.name
+
+    def test_recent_activity_uses_check_creation_time_when_start_time_is_missing(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import CheckJob, Repository
+
+        repository = Repository(
+            name="Pending Check Repo",
+            path="/tmp/pending-check-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+
+        completed_job = CheckJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="completed",
+            started_at=datetime(2024, 1, 1, 10, 0, 0),
+            completed_at=datetime(2024, 1, 1, 10, 5, 0),
+            created_at=datetime(2024, 1, 1, 9, 59, 0),
+        )
+        pending_job = CheckJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="pending",
+            started_at=None,
+            created_at=datetime(2024, 1, 1, 11, 0, 0),
+            scheduled_check=True,
+        )
+        test_db.add_all([completed_job, pending_job])
+        test_db.commit()
+        test_db.refresh(pending_job)
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=check&limit=1",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert len(activity) == 1
+        assert activity[0]["id"] == pending_job.id
+        assert activity[0]["status"] == "pending"
+        assert activity[0]["started_at"] is None
+        assert activity[0]["triggered_by"] == "schedule"
 
     def test_recent_activity_filters_by_type_and_status(
         self, test_client, admin_headers, test_db
