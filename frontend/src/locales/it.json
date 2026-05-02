@@ -3260,7 +3260,7 @@
     "instanceIdLabel": "ID istanza",
     "activeLicenseIdLabel": "Licenza attiva",
     "licenseKeyLabel": "Chiave di licenza",
-    "licenseKeyPlaceholder": "BORG-XXXX-XXXX-XXXX",
+    "licenseKeyPlaceholder": "BORG-0000-0000-0000",
     "activateLicenseButton": "Attiva licenza",
     "replaceLicenseButton": "Sostituisci licenza",
     "refreshLicenseButton": "Aggiorna stato",
@@ -3303,26 +3303,26 @@
     "licenseIdValue": "Licenza attiva: {{licenseId}}",
     "expiresAtValue": "Scade il: {{date}}",
     "viewPlanDetails": "Visualizza i dettagli del piano →"
-  },
+},
   "upgradePrompt": {
     "featureLabel": "Funzionalità {{plan}}",
     "defaultMessage": "Questa funzionalità richiede il piano {{plan}}.",
     "requiresPlan": "Richiede il piano {{plan}}",
     "buyLink": "Passa a borgui.com",
-    "learnMore": "See what's included →"
+    "learnMore": "Scopri cosa include →"
   },
   "announcements": {
-    "highlights": "What's new",
-    "viewDetails": "View details",
-    "remindLater": "Remind me later",
-    "gotIt": "Got it",
+    "highlights": "Novità",
+    "viewDetails": "Visualizza dettagli",
+    "remindLater": "Ricordamelo più tardi",
+    "gotIt": "Fatto",
     "types": {
-      "update_available": "Update available",
-      "release_highlight": "Release highlight",
-      "security_notice": "Security notice",
-      "maintenance_notice": "Maintenance notice",
-      "migration_notice": "Migration notice",
-      "custom_announcement": "Announcement"
+      "update_available": "Aggiornamento disponibile",
+      "release_highlight": "Novità del rilascio",
+      "security_notice": "Avviso di sicurezza",
+      "maintenance_notice": "Avviso di manutenzione",
+      "migration_notice": "Avviso di migrazione",
+      "custom_announcement": "Annuncio"
     }
   }
 }
