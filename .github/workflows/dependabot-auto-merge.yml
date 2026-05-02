@@ -36,7 +36,7 @@ jobs:
         if: |
           (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
            steps.metadata.outputs.update-type == 'version-update:semver-minor')
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             github.rest.issues.createComment({
@@ -58,7 +58,7 @@ jobs:
 
       - name: Label major updates
         if: steps.metadata.outputs.update-type == 'version-update:semver-major'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             github.rest.issues.addLabels({
