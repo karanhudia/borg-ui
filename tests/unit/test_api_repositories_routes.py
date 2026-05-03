@@ -256,6 +256,16 @@ class TestRepositoryHelperContracts:
             "ssh_path_prefix": "/volume1",
         }
 
+    def test_parse_borg_archive_time_treats_naive_values_as_utc(self):
+        parsed = repositories_api._parse_borg_archive_time("2026-04-27T03:00:06.000000")
+
+        assert parsed == datetime(2026, 4, 27, 3, 0, 6)
+
+    def test_parse_borg_archive_time_converts_offset_values_to_utc(self):
+        parsed = repositories_api._parse_borg_archive_time("2026-04-27T03:00:06-04:00")
+
+        assert parsed == datetime(2026, 4, 27, 7, 0, 6)
+
     @pytest.mark.asyncio
     async def test_update_repository_stats_updates_archive_count_size_and_last_backup(
         self, test_db
@@ -291,6 +301,8 @@ class TestRepositoryHelperContracts:
         assert repo.total_size == "2.00 MB"
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
+        assert mock_list.await_args.kwargs["env"]["TZ"] == "UTC"
+        assert mock_list.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
         assert mock_size.await_args.kwargs["use_bypass_lock"] is True
         assert mock_size.await_args.kwargs["env"]["BORG_PASSPHRASE"] == "secret"
 
@@ -330,6 +342,35 @@ class TestRepositoryHelperContracts:
         assert repo.archive_count == 2
         assert repo.last_backup == datetime(2024, 2, 1, 12, 0)
         mock_list.assert_awaited_once()
+        assert mock_list.await_args.kwargs["env"]["TZ"] == "UTC"
+
+    @pytest.mark.asyncio
+    async def test_update_repository_stats_chooses_latest_archive_by_utc_instant(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Repo", "/repos/main")
+
+        archives = [
+            {"name": "lexically-later", "time": "2024-02-01T15:30:00Z"},
+            {"name": "actually-later", "time": "2024-02-01T11:00:00-05:00"},
+        ]
+        with (
+            patch("app.api.repositories.resolve_repo_ssh_key_file", return_value=None),
+            patch.object(
+                repositories_api.BorgRouter,
+                "list_archives",
+                AsyncMock(return_value=archives),
+            ),
+            patch.object(
+                repositories_api.BorgRouter,
+                "calculate_total_size_bytes",
+                AsyncMock(return_value=0),
+            ),
+        ):
+            success = await repositories_api.update_repository_stats(repo, test_db)
+
+        assert success is True
+        assert repo.last_backup == datetime(2024, 2, 1, 16, 0)
 
     @pytest.mark.asyncio
     async def test_update_repository_stats_returns_false_on_unexpected_exception(

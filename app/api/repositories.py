@@ -158,6 +158,36 @@ def _prepare_repository_borg_env(repository: Repository, db: Session):
     return env, temp_key_file
 
 
+def _repository_stats_borg_env(env: Dict[str, str]) -> Dict[str, str]:
+    """Return a Borg environment that renders archive timestamps in UTC."""
+    stats_env = env.copy()
+    stats_env["TZ"] = "UTC"
+    return stats_env
+
+
+def _parse_borg_archive_time(value: Any) -> Optional[datetime]:
+    """Parse a Borg archive timestamp as a naive UTC database value."""
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, tz=timezone.utc).replace(tzinfo=None)
+
+    if not isinstance(value, str):
+        return None
+
+    normalized = value.strip()
+    if not normalized:
+        return None
+
+    dt = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.replace(tzinfo=None)
+
+
 def _load_repository_with_access(
     repo_id: int,
     current_user: User,
@@ -419,11 +449,12 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
             system_settings and system_settings.bypass_lock_on_list
         )
         env, temp_key_file = _prepare_repository_borg_env(repository, db)
+        stats_env = _repository_stats_borg_env(env)
 
         router = BorgRouter(repository)
 
         # Get archive list and count
-        archives = await router.list_archives(env=env)
+        archives = await router.list_archives(env=stats_env)
 
         archive_count = 0
         total_size = None
@@ -441,26 +472,28 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
             if isinstance(archives, list):
                 archive_count = len(archives)
 
-                if archives:
-                    most_recent = max(
-                        archives, key=lambda a: a.get("time", "") or a.get("start", "")
-                    )
-                    archive_time = most_recent.get("time") or most_recent.get("start")
-                    if archive_time:
-                        try:
-                            dt = datetime.fromisoformat(
-                                archive_time.replace("Z", "+00:00")
-                            )
-                            last_backup_time = dt.astimezone(timezone.utc).replace(
-                                tzinfo=None
-                            )
-                        except ValueError as te:
-                            logger.warning(
-                                "Failed to parse archive timestamp",
-                                repository=repository.name,
-                                timestamp=archive_time,
-                                error=str(te),
-                            )
+                archive_times = []
+                for archive in archives:
+                    archive_time = archive.get("time") or archive.get("start")
+                    if not archive_time:
+                        continue
+
+                    try:
+                        parsed_time = _parse_borg_archive_time(archive_time)
+                    except ValueError as te:
+                        logger.warning(
+                            "Failed to parse archive timestamp",
+                            repository=repository.name,
+                            timestamp=archive_time,
+                            error=str(te),
+                        )
+                        continue
+
+                    if parsed_time:
+                        archive_times.append(parsed_time)
+
+                if archive_times:
+                    last_backup_time = max(archive_times)
         except json.JSONDecodeError as e:
             logger.error(
                 "Failed to parse archive list JSON",
