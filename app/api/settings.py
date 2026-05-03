@@ -206,12 +206,8 @@ async def get_system_settings(
             log_storage_info = {
                 "total_size_mb": log_storage["total_size_mb"],
                 "file_count": log_storage["file_count"],
-                "oldest_log_date": log_storage["oldest_log_date"].isoformat()
-                if log_storage["oldest_log_date"]
-                else None,
-                "newest_log_date": log_storage["newest_log_date"].isoformat()
-                if log_storage["newest_log_date"]
-                else None,
+                "oldest_log_date": serialize_datetime(log_storage["oldest_log_date"]),
+                "newest_log_date": serialize_datetime(log_storage["newest_log_date"]),
                 "usage_percent": usage_percent,
                 "files_by_type": log_storage["files_by_type"],
             }
@@ -726,8 +722,8 @@ async def get_users(db: Session = Depends(get_db)):
                     "is_active": user.is_active,
                     "role": user.role,
                     "all_repositories_role": user.all_repositories_role,
-                    "created_at": user.created_at,
-                    "last_login": user.last_login,
+                    "created_at": serialize_datetime(user.created_at),
+                    "last_login": serialize_datetime(user.last_login),
                 }
                 for user in users
             ],
@@ -1059,8 +1055,8 @@ async def get_profile(
             "is_admin": current_user.is_admin,
             "role": current_user.role,
             "must_change_password": current_user.must_change_password,
-            "created_at": current_user.created_at,
-            "last_login": current_user.last_login,
+            "created_at": serialize_datetime(current_user.created_at),
+            "last_login": serialize_datetime(current_user.last_login),
             "deployment_type": deployment_type,
             "enterprise_name": enterprise_name,
         },
@@ -1283,12 +1279,8 @@ async def get_log_storage_stats(
                 "total_size_bytes": log_storage["total_size_bytes"],
                 "total_size_mb": log_storage["total_size_mb"],
                 "file_count": log_storage["file_count"],
-                "oldest_log_date": log_storage["oldest_log_date"].isoformat()
-                if log_storage["oldest_log_date"]
-                else None,
-                "newest_log_date": log_storage["newest_log_date"].isoformat()
-                if log_storage["newest_log_date"]
-                else None,
+                "oldest_log_date": serialize_datetime(log_storage["oldest_log_date"]),
+                "newest_log_date": serialize_datetime(log_storage["newest_log_date"]),
                 "files_by_type": log_storage["files_by_type"],
                 "usage_percent": usage_percent,
                 "limit_mb": settings.log_max_total_size_mb,

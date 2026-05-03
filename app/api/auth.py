@@ -46,6 +46,7 @@ from app.core.totp import (
     verify_totp_code,
 )
 from app.config import settings
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -139,6 +140,10 @@ class PasskeyCredentialResponse(BaseModel):
     created_at: datetime
     last_used_at: Optional[datetime] = None
 
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
+
 
 class PasskeyBeginRegistrationRequest(BaseModel):
     current_password: str
@@ -182,9 +187,9 @@ class UserResponse(BaseModel):
     created_at: datetime
     global_permissions: list[str] = []
 
-
-class Config:
-    from_attributes = True
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
 class AuthorizationModelResponse(BaseModel):

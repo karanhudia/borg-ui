@@ -16,6 +16,7 @@ from app.database.database import get_db
 from sqlalchemy.orm import Session
 from app.database.models import SSHKey
 from app.config import settings
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 
@@ -260,9 +261,9 @@ async def browse_local_filesystem(path: str) -> BrowseResponse:
                     path=full_path,
                     is_directory=is_dir,
                     size=stat_info.st_size if not is_dir else None,
-                    modified=datetime.fromtimestamp(
-                        stat_info.st_mtime, tz=timezone.utc
-                    ).isoformat(),
+                    modified=serialize_datetime(
+                        datetime.fromtimestamp(stat_info.st_mtime, tz=timezone.utc)
+                    ),
                     is_borg_repo=is_borg,
                     is_local_mount=is_local,
                     permissions=oct(stat_info.st_mode)[-3:],
@@ -477,9 +478,9 @@ async def browse_ssh_filesystem(
                     path=full_path,
                     is_directory=is_dir,
                     size=size if not is_dir else None,
-                    modified=datetime.fromtimestamp(
-                        timestamp, tz=timezone.utc
-                    ).isoformat(),
+                    modified=serialize_datetime(
+                        datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                    ),
                     is_borg_repo=is_borg,
                     is_local_mount=False,  # SSH paths are not local mounts
                     permissions=permissions[1:] if len(permissions) > 1 else None,

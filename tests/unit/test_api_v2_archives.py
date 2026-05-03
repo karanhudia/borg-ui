@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -860,6 +861,8 @@ class TestV2ArchiveRoutes:
             repository_path="/tmp/v2-archive-repo",
             archive_name="archive-1",
             status="completed",
+            started_at=datetime(2026, 4, 27, 3, 0, 6),
+            completed_at=datetime(2026, 4, 27, 3, 5, 6),
             log_file_path=str(log_file),
             has_logs=True,
         )
@@ -876,6 +879,8 @@ class TestV2ArchiveRoutes:
         body = response.json()
         assert body["logs"] == "archive deleted"
         assert body["has_logs"] is True
+        assert body["started_at"] == "2026-04-27T03:00:06+00:00"
+        assert body["completed_at"] == "2026-04-27T03:05:06+00:00"
 
     def test_delete_job_status_returns_404_when_missing(
         self, test_client: TestClient, admin_headers, test_db

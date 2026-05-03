@@ -10,6 +10,7 @@ from app.database.database import get_db
 from app.database.models import ApiToken
 from app.core.security import get_current_user, get_password_hash
 from app.database.models import User
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["tokens"])
@@ -28,6 +29,7 @@ class TokenResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
 class TokenCreatedResponse(BaseModel):
@@ -36,6 +38,9 @@ class TokenCreatedResponse(BaseModel):
     token: str
     prefix: str
     created_at: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
 @router.get("/settings/tokens", response_model=list[TokenResponse])

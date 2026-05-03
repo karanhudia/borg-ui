@@ -25,6 +25,7 @@ from app.database.models import (
     SystemSettings,
     ScheduledJob,
 )
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["metrics"])
@@ -118,7 +119,7 @@ async def get_metrics(
 
     # Header
     lines.append("# Prometheus metrics for borg-ui")
-    lines.append(f"# Generated at {datetime.now(timezone.utc).isoformat()}")
+    lines.append(f"# Generated at {serialize_datetime(datetime.now(timezone.utc))}")
     lines.append("")
 
     try:

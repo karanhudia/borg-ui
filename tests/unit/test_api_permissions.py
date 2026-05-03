@@ -163,6 +163,7 @@ class TestPermissions:
         assert len(perms) == 1
         assert perms[0]["repository_name"] == "my-repo"
         assert perms[0]["role"] == "operator"
+        assert perms[0]["created_at"].endswith("+00:00")
 
     def test_admin_can_set_user_wildcard_repository_role(
         self, test_client: TestClient, test_db, admin_headers
