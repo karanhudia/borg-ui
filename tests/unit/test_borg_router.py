@@ -291,7 +291,7 @@ async def test_list_archives_for_v2_returns_empty_on_invalid_json():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_archives_for_v1_returns_stdout_payload():
+async def test_list_archives_for_v1_parses_json_archives_payload():
     repo = SimpleNamespace(
         borg_version=1,
         path="/tmp/repo",
@@ -302,11 +302,34 @@ async def test_list_archives_for_v1_returns_stdout_payload():
 
     with patch(
         "app.core.borg.borg.list_archives",
-        new=AsyncMock(return_value={"success": True, "stdout": [{"archive": "a1"}]}),
+        new=AsyncMock(
+            return_value={"success": True, "stdout": '{"archives":[{"name":"a1"}]}'}
+        ),
     ) as mock_list:
         archives = await BorgRouter(repo).list_archives()
 
-    assert archives == [{"archive": "a1"}]
+    assert archives == [{"name": "a1"}]
+    mock_list.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_archives_for_v1_returns_empty_on_invalid_json():
+    repo = SimpleNamespace(
+        borg_version=1,
+        path="/tmp/repo",
+        passphrase="secret",
+        remote_path="/usr/bin/borg",
+        bypass_lock=True,
+    )
+
+    with patch(
+        "app.core.borg.borg.list_archives",
+        new=AsyncMock(return_value={"success": True, "stdout": "not-json"}),
+    ):
+        archives = await BorgRouter(repo).list_archives()
+
+    assert archives == []
 
 
 @pytest.mark.unit

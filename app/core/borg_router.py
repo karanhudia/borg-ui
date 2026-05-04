@@ -441,8 +441,23 @@ class BorgRouter:
         v2: calls borg2 list and parses the JSON archives array.
         v1: calls borg list and returns the archives list.
         """
+        import json
+
+        def _parse_archives_payload(payload) -> list:
+            if isinstance(payload, list):
+                return payload
+            if isinstance(payload, dict):
+                archives = payload.get("archives")
+                return archives if isinstance(archives, list) else []
+            if isinstance(payload, str):
+                try:
+                    parsed = json.loads(payload)
+                except Exception:
+                    return []
+                return _parse_archives_payload(parsed)
+            return []
+
         if self.is_v2:
-            import json
             from app.core.borg2 import borg2
 
             result = await borg2.list_archives(
@@ -454,11 +469,7 @@ class BorgRouter:
             )
             if not result["success"]:
                 return []
-            try:
-                data = json.loads(result.get("stdout", "{}"))
-                return data.get("archives", [])
-            except Exception:
-                return []
+            return _parse_archives_payload(result.get("stdout", "{}"))
         else:
             from app.core.borg import borg
 
@@ -471,7 +482,7 @@ class BorgRouter:
             )
             if not result["success"]:
                 return []
-            return result.get("stdout") or []
+            return _parse_archives_payload(result.get("stdout", ""))
 
     async def verify_repository(
         self, ssh_key_id: int = None, timeout: int = 60

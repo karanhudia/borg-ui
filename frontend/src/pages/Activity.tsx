@@ -116,6 +116,7 @@ const Activity: React.FC = () => {
           <MenuItem value="all">{t('activity.filters.allTypes')}</MenuItem>
           <MenuItem value="backup">{t('activity.filters.types.backup')}</MenuItem>
           <MenuItem value="restore">{t('activity.filters.types.restore')}</MenuItem>
+          <MenuItem value="restore_check">{t('activity.filters.types.restoreCheck')}</MenuItem>
           <MenuItem value="check">{t('activity.filters.types.check')}</MenuItem>
           <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
           <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>

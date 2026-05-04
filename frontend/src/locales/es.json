@@ -112,6 +112,7 @@
       "backup": "Respaldo manual",
       "archives": "Archivos",
       "restore": "Restaurar",
+      "integrity": "Integridad",
       "schedule": "Programación"
     },
     "settings": {
@@ -138,7 +139,7 @@
     },
     "menu": {
       "accountAndSecurityDesc": "Perfil, contraseña, 2FA, passkeys",
-      "appearanceDesc": "Tema, idioma",
+      "appearanceDesc": "Tema",
       "notificationsDesc": "Alertas y preferencias"
     },
     "versionInfo": "Información de versión",
@@ -188,6 +189,7 @@
         "backup": "BACKUP",
         "check": "CHECK",
         "compact": "COMPACT",
+        "restore": "RESTORE",
         "freshness": "VIGENCIA",
         "archives": "ARCHIVOS"
       },
@@ -238,6 +240,7 @@
         "backup": "backup",
         "check": "check",
         "compact": "compact",
+        "restore_check": "restore check",
         "restore": "restore",
         "prune": "prune"
       }
@@ -401,9 +404,11 @@
     "subtitle": "Gestiona copias de seguridad automatizadas y comprobaciones de repositorio",
     "createBackup": "Crear programación de copia de seguridad",
     "addCheck": "Agregar comprobación programada",
+    "addRestoreCheck": "Agregar comprobación de restauración",
     "tabs": {
       "backupJobs": "Trabajos de copia de seguridad",
-      "repositoryChecks": "Comprobaciones de repositorio"
+      "repositoryChecks": "Comprobaciones de repositorio",
+      "restoreChecks": "Comprobaciones de restauración"
     },
     "noRepositories": "Necesitas crear al menos un repositorio antes de programar copias de seguridad.",
     "maintenance": {
@@ -575,6 +580,7 @@
       "types": {
         "backup": "Copia de seguridad",
         "restore": "Restauración",
+        "restoreCheck": "Comprobación de restauración",
         "check": "Comprobación",
         "compact": "Compactación",
         "prune": "Poda",
@@ -1372,6 +1378,7 @@
     "types": {
       "backup": "Copia de seguridad",
       "restore": "Restauración",
+      "restoreCheck": "Comprobación de restauración",
       "check": "Verificación del repositorio",
       "compact": "Compactar",
       "prune": "Podar",
@@ -2122,6 +2129,8 @@
   },
   "scheduledChecks": {
     "title": "Comprobaciones programadas",
+    "sectionTitle": "Comprobaciones de integridad",
+    "sectionDescription": "Ejecuta Borg check de forma programada para detectar corrupción del repositorio con antelación.",
     "empty": "Sin comprobaciones programadas",
     "nextRun": "Próxima ejecución",
     "lastRun": "Última ejecución",
@@ -2171,6 +2180,112 @@
     },
     "checkScheduleHelperText": "¿Cuándo debe ejecutarse esta verificación del repositorio?",
     "checkScheduleBuilderTitle": "Constructor de programación de verificación"
+  },
+  "scheduledRestoreChecks": {
+    "sectionTitle": "Comprobaciones de restauración",
+    "sectionDescription": "Restaura periódicamente el archivo más reciente en un directorio desechable para verificar que los datos realmente se puedan recuperar.",
+    "repository": "Repositorio",
+    "addRestoreCheckSchedule": "Agregar comprobación de restauración",
+    "editRestoreCheckSchedule": "Editar comprobación de restauración",
+    "scheduleLabel": "Programación de restauración",
+    "timezoneLabel": "Zona horaria",
+    "scheduleHelperText": "¿Cuándo debe ejecutarse esta verificación de restauración?",
+    "scheduleBuilderTitle": "Constructor de programación de restauración",
+    "modeLabel": "Modo de verificación",
+    "modes": {
+      "canary": "Carga canaria administrada",
+      "probePaths": "Rutas de prueba seleccionadas",
+      "fullArchive": "Prueba de archivo completo"
+    },
+    "probePaths": "Rutas de prueba",
+    "probePathsHint": "Introduce una ruta de archivo por línea, o explora el archivo más reciente para importar archivos y carpetas representativos.",
+    "archivePicker": {
+      "open": "Explorar archivo más reciente",
+      "title": "Seleccionar rutas de prueba",
+      "subtitle": "Explora el archivo más reciente del repositorio seleccionado.",
+      "subtitleWithArchive": "Explorando el archivo más reciente: {{archive}}",
+      "browserTitle": "Elegir rutas de prueba",
+      "browserSubtitle": "Selecciona archivos o carpetas del archivo más reciente para verificarlos en cada comprobación de restauración.",
+      "browserHelpText": "Haz clic en archivos para seleccionarlos, o en carpetas para navegar. Usa la casilla junto a las carpetas para seleccionar directorios completos.",
+      "selectedCount_one": "{{count}} ruta seleccionada",
+      "selectedCount_other": "{{count}} rutas seleccionadas",
+      "import": "Importar rutas",
+      "loadFailed": "No se pudo cargar el archivo más reciente.",
+      "noArchives": "Aún no hay archivos disponibles para este repositorio."
+    },
+    "needRepository": "Necesitas crear al menos un repositorio antes de programar comprobaciones de restauración.",
+    "noScheduledChecks": "Sin comprobaciones de restauración programadas",
+    "noScheduledChecksDesc": "Configura verificación automática de restauración para que los problemas aparezcan antes de necesitar una restauración real.",
+    "confirmDisable": "¿Deshabilitar la comprobación de restauración para {{repositoryName}}?",
+    "update": "Actualizar",
+    "create": "Crear",
+    "stats": {
+      "notSet": "No configurado",
+      "lastVerifiedRestore": "Última restauración verificada",
+      "nextCheck": "Próxima comprobación",
+      "probePaths": "Rutas de prueba",
+      "pathCountValue": "{{count}} rutas",
+      "fullArchive": "Archivo completo",
+      "canary": "Canario administrado"
+    },
+    "actions": {
+      "editSchedule": "Editar programación",
+      "removeSchedule": "Eliminar programación",
+      "runRestoreCheck": "Ejecutar comprobación de restauración"
+    },
+    "badge": {
+      "restoreCheck": "Comprobación de restauración"
+    },
+    "validation": {
+      "selectRepository": "Por favor selecciona un repositorio",
+      "enterProbePath": "Introduce al menos una ruta de prueba"
+    },
+    "toasts": {
+      "scheduleUpdated": "Programación de restauración actualizada",
+      "updateFailed": "Error al actualizar la programación de restauración",
+      "restoreCheckStarted": "Comprobación de restauración iniciada",
+      "restoreCheckFailed": "Error al iniciar la comprobación de restauración"
+    },
+    "canaryModeHint": "El modo canario es la opción predeterminada más segura. Borg UI verifica una carga mínima administrada del archivo más reciente para que las comprobaciones sigan siendo rápidas incluso en repositorios muy grandes.",
+    "probeModeHint": "El modo de rutas de prueba restaura archivos reales que tú eliges. Úsalo para comprobaciones más profundas de rutas críticas sin extraer el archivo completo.",
+    "fullArchiveWarning": "Las pruebas de archivo completo pueden ser costosas en repositorios grandes. Úsalas con moderación y solo cuando tengas almacenamiento temporal y ventana de mantenimiento suficientes."
+  },
+  "integrity": {
+    "title": "Integridad",
+    "subtitle": "Supervisa la integridad del repositorio y la capacidad de restauración sin mezclarlo con la programación de copias de seguridad.",
+    "tabs": {
+      "repositoryChecks": "Comprobaciones del repositorio",
+      "restoreChecks": "Comprobaciones de restauración"
+    },
+    "noRepositories": "Crea primero un repositorio para configurar comprobaciones de integridad.",
+    "stats": {
+      "restoreSchedules": "Programaciones de restauración",
+      "canaryProtected": "Protegidos por canario",
+      "probeProtected": "Programaciones con rutas de prueba",
+      "fullDrills": "Pruebas de archivo completo"
+    },
+    "history": {
+      "title": "Comprobaciones de restauración recientes",
+      "description": "Revisa las verificaciones de restauración recientes y abre los registros cuando algo falle.",
+      "emptyTitle": "Aún no se ha ejecutado ninguna comprobación de restauración",
+      "emptyDescription": "Ejecuta una comprobación de restauración o espera al siguiente ciclo programado de integridad.",
+      "columns": {
+        "repository": "Repositorio",
+        "mode": "Modo",
+        "archive": "Archivo",
+        "started": "Iniciado"
+      },
+      "modes": {
+        "canary": "Canario",
+        "probePaths": "Rutas de prueba",
+        "fullArchive": "Archivo completo"
+      },
+      "actions": {
+        "viewLogs": "Ver registros"
+      },
+      "logTitle": "Registros de comprobación de restauración - {{job}}",
+      "noLogs": "No hay registros disponibles para esta comprobación de restauración."
+    }
   },
   "repositorySelectorCard": {
     "title": "Seleccionar repositorio",

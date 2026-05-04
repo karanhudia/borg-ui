@@ -249,6 +249,26 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
 
   return (
     <Box>
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
+          alignItems: { xs: 'stretch', sm: 'center' },
+          justifyContent: 'space-between',
+          gap: 1.5,
+        }}
+      >
+        <Box>
+          <Typography variant="h6" fontWeight={600}>
+            {t('scheduledChecks.sectionTitle')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {t('scheduledChecks.sectionDescription')}
+          </Typography>
+        </Box>
+      </Box>
+
       {/* No repositories warning */}
       {!loadingRepositories && manageableRepositories.length === 0 && (
         <Alert severity="info" sx={{ mb: 3 }}>

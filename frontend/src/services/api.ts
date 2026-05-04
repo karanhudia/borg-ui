@@ -525,6 +525,13 @@ export const repositoriesAPI = {
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
   checkRepository: (id: number, maxDuration: number = 3600) =>
     api.post(`/repositories/${id}/check`, { max_duration: maxDuration }),
+  restoreCheckRepository: (
+    id: number,
+    data?: {
+      paths?: string[]
+      full_archive?: boolean
+    }
+  ) => api.post(`/repositories/${id}/restore-check`, data || {}),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
   pruneRepository: (id: number, data: ApiData) => api.post(`/repositories/${id}/prune`, data),
   breakLock: (id: number) => api.post(`/repositories/${id}/break-lock`),
@@ -537,6 +544,9 @@ export const repositoriesAPI = {
     api.get(`/repositories/${id}/check-jobs`, {
       params: { limit, scheduled_only: scheduledOnly },
     }),
+  getRestoreCheckJobStatus: (jobId: number) => api.get(`/repositories/restore-check-jobs/${jobId}`),
+  getRepositoryRestoreCheckJobs: (id: number, limit?: number) =>
+    api.get(`/repositories/${id}/restore-check-jobs`, { params: { limit } }),
   getCompactJobStatus: (jobId: number) => api.get(`/repositories/compact-jobs/${jobId}`),
   getRepositoryCompactJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),
@@ -547,6 +557,9 @@ export const repositoriesAPI = {
   getCheckSchedule: (id: number) => api.get(`/repositories/${id}/check-schedule`),
   updateCheckSchedule: (id: number, data: ApiData) =>
     api.put(`/repositories/${id}/check-schedule`, data),
+  getRestoreCheckSchedule: (id: number) => api.get(`/repositories/${id}/restore-check-schedule`),
+  updateRestoreCheckSchedule: (id: number, data: ApiData) =>
+    api.put(`/repositories/${id}/restore-check-schedule`, data),
   list: () => api.get('/repositories/'),
   startCheck: (id: number, data: ApiData) => api.post(`/repositories/${id}/check`, data),
 }

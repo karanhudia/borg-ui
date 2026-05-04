@@ -24,6 +24,7 @@ from app.database.models import (
     CheckJob,
     LicensingState,
     Repository,
+    RestoreCheckJob,
     ScheduledJob,
     SSHConnection,
     SystemSettings,
@@ -1887,6 +1888,140 @@ class TestRepositoryCheckSchedule:
         )
 
         assert response.status_code == 404
+
+
+@pytest.mark.unit
+class TestRepositoryRestoreCheckSchedule:
+    def test_get_restore_check_schedule(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+            restore_check_cron_expression="0 5 * * 1",
+            restore_check_timezone="Europe/Berlin",
+            restore_check_paths='["etc/hostname"]',
+            notify_on_restore_check_success=False,
+            notify_on_restore_check_failure=True,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/restore-check-schedule", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository_id"] == repo.id
+        assert data["restore_check_cron_expression"] == "0 5 * * 1"
+        assert data["restore_check_timezone"] == "Europe/Berlin"
+        assert data["timezone"] == "Europe/Berlin"
+        assert data["restore_check_paths"] == ["etc/hostname"]
+        assert data["notify_on_restore_check_failure"] == True
+        assert data["restore_check_mode"] == "probe_paths"
+        assert data["enabled"] == True
+
+    def test_update_restore_check_schedule(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        payload = {
+            "cron_expression": "0 6 * * *",
+            "timezone": "Asia/Kolkata",
+            "paths": ["etc/hostname", "var/log"],
+            "notify_on_success": True,
+            "notify_on_failure": False,
+        }
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json=payload,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == True
+        assert data["repository"]["restore_check_cron_expression"] == "0 6 * * *"
+        assert data["repository"]["restore_check_timezone"] == "Asia/Kolkata"
+        assert data["repository"]["timezone"] == "Asia/Kolkata"
+        assert data["repository"]["restore_check_paths"] == [
+            "etc/hostname",
+            "var/log",
+        ]
+        assert data["repository"]["restore_check_mode"] == "probe_paths"
+        assert data["repository"]["notify_on_restore_check_success"] == True
+        assert data["repository"]["notify_on_restore_check_failure"] == False
+        assert data["repository"]["next_scheduled_restore_check"] is not None
+
+    def test_update_restore_check_schedule_defaults_to_canary_mode(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Canary Repo",
+            path="/tmp/canary",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={"cron_expression": "0 7 * * *", "paths": [], "full_archive": False},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository"]["restore_check_mode"] == "canary"
+
+    def test_start_restore_check_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+            restore_check_paths='["etc/hostname"]',
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job"
+        ) as mock_start:
+            mock_start.return_value = RestoreCheckJob(
+                id=501,
+                repository_id=repo.id,
+                status="pending",
+                probe_paths='["etc/hostname"]',
+            )
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/restore-check",
+                headers=admin_headers,
+                json={},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["job_id"] == 501
+        assert data["message"] == "backend.success.repo.restoreCheckJobStarted"
 
 
 @pytest.mark.unit

@@ -228,6 +228,33 @@ class Repository(Base):
     notify_on_check_failure = Column(
         Boolean, default=True, nullable=False
     )  # Per-repository override
+    restore_check_cron_expression = Column(
+        String, nullable=True
+    )  # NULL = disabled, cron expression for restore verification
+    restore_check_timezone = Column(
+        String, default="UTC", nullable=False
+    )  # IANA timezone used to interpret restore_check_cron_expression
+    restore_check_paths = Column(
+        Text, nullable=True
+    )  # JSON array of paths to restore into a disposable temp directory
+    restore_check_full_archive = Column(
+        Boolean, default=False, nullable=False
+    )  # Explicit opt-in to verify by extracting the full latest archive
+    last_restore_check = Column(
+        DateTime, nullable=True
+    )  # Last successful restore verification completion
+    last_scheduled_restore_check = Column(
+        DateTime, nullable=True
+    )  # Last scheduled restore verification execution time
+    next_scheduled_restore_check = Column(
+        DateTime, nullable=True
+    )  # Next scheduled restore verification time
+    notify_on_restore_check_success = Column(
+        Boolean, default=False, nullable=False
+    )  # Per-repository override
+    notify_on_restore_check_failure = Column(
+        Boolean, default=True, nullable=False
+    )  # Per-repository override
 
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
@@ -557,6 +584,48 @@ class CheckJob(Base):
         BigInteger, nullable=True
     )  # Process start time in jiffies for PID uniqueness
     scheduled_check = Column(
+        Boolean, default=False, nullable=False
+    )  # True if triggered by scheduler, False if manual
+    created_at = Column(DateTime, default=utc_now)
+
+
+class RestoreCheckJob(Base):
+    __tablename__ = "restore_check_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    repository_path = Column(
+        String, nullable=True
+    )  # Captured at job creation for display even if repo is deleted
+    archive_name = Column(
+        String, nullable=True
+    )  # Archive selected for verification, usually the latest archive
+    status = Column(
+        String, default="pending"
+    )  # pending, running, completed, completed_with_warnings, failed, cancelled
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    progress = Column(Integer, default=0)  # 0-100 percentage
+    progress_message = Column(
+        String, nullable=True
+    )  # Current progress message (e.g., "Restoring archive to temp dir")
+    error_message = Column(Text, nullable=True)
+    logs = Column(
+        Text, nullable=True
+    )  # Deprecated: kept for backwards compatibility, use log_file_path instead
+    log_file_path = Column(String, nullable=True)  # Path to log file on disk
+    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
+    probe_paths = Column(
+        Text, nullable=True
+    )  # JSON array of paths restored for verification
+    full_archive = Column(
+        Boolean, default=False, nullable=False
+    )  # Whether the verification extracted the full archive
+    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
+    process_start_time = Column(
+        BigInteger, nullable=True
+    )  # Process start time in jiffies for PID uniqueness
+    scheduled_restore_check = Column(
         Boolean, default=False, nullable=False
     )  # True if triggered by scheduler, False if manual
     created_at = Column(DateTime, default=utc_now)

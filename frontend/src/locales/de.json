@@ -112,6 +112,7 @@
       "backup": "Manuelles Backup",
       "archives": "Archive",
       "restore": "Wiederherstellen",
+      "integrity": "Integrität",
       "schedule": "Zeitplan"
     },
     "settings": {
@@ -138,7 +139,7 @@
     },
     "menu": {
       "accountAndSecurityDesc": "Profil, Passwort, 2FA, Passkeys",
-      "appearanceDesc": "Design, Sprache",
+      "appearanceDesc": "Design",
       "notificationsDesc": "Benachrichtigungen & Einstellungen"
     },
     "versionInfo": "Versionsinformationen",
@@ -188,6 +189,7 @@
         "backup": "BACKUP",
         "check": "CHECK",
         "compact": "COMPACT",
+        "restore": "RESTORE",
         "freshness": "AKTUELL",
         "archives": "ARCHIVE"
       },
@@ -238,6 +240,7 @@
         "backup": "backup",
         "check": "check",
         "compact": "compact",
+        "restore_check": "restore check",
         "restore": "restore",
         "prune": "prune"
       }
@@ -401,9 +404,11 @@
     "subtitle": "Verwalte automatische Sicherungen und Repository-Überprüfungen",
     "createBackup": "Sicherungszeitplan erstellen",
     "addCheck": "Überprüfungszeitplan hinzufügen",
+    "addRestoreCheck": "Restore-Prüfung hinzufügen",
     "tabs": {
       "backupJobs": "Sicherungsaufgaben",
-      "repositoryChecks": "Repository-Überprüfungen"
+      "repositoryChecks": "Repository-Überprüfungen",
+      "restoreChecks": "Restore-Prüfungen"
     },
     "noRepositories": "Du musst mindestens ein Repository erstellen, bevor du Sicherungen planst.",
     "maintenance": {
@@ -575,6 +580,7 @@
       "types": {
         "backup": "Sicherung",
         "restore": "Wiederherstellung",
+        "restoreCheck": "Restore-Prüfung",
         "check": "Überprüfung",
         "compact": "Komprimierung",
         "prune": "Bereinigung",
@@ -1372,6 +1378,7 @@
     "types": {
       "backup": "Sicherung",
       "restore": "Wiederherstellung",
+      "restoreCheck": "Restore-Prüfung",
       "check": "Repository-Überprüfung",
       "compact": "Komprimieren",
       "prune": "Bereinigen",
@@ -2122,6 +2129,8 @@
   },
   "scheduledChecks": {
     "title": "Geplante Überprüfungen",
+    "sectionTitle": "Integritätsprüfungen",
+    "sectionDescription": "Führe Borg-Prüfungen nach Zeitplan aus, um Repository-Korruption früh zu erkennen.",
     "empty": "Keine geplanten Überprüfungen",
     "nextRun": "Nächste Ausführung",
     "lastRun": "Letzte Ausführung",
@@ -2171,6 +2180,112 @@
     },
     "checkScheduleHelperText": "Wann soll diese Repository-Überprüfung ausgeführt werden?",
     "checkScheduleBuilderTitle": "Überprüfungs-Zeitplan-Builder"
+  },
+  "scheduledRestoreChecks": {
+    "sectionTitle": "Restore-Prüfungen",
+    "sectionDescription": "Stelle das neueste Archiv regelmäßig in ein temporäres Verzeichnis wieder her, um die tatsächliche Wiederherstellbarkeit zu verifizieren.",
+    "repository": "Repository",
+    "addRestoreCheckSchedule": "Restore-Prüfung hinzufügen",
+    "editRestoreCheckSchedule": "Restore-Prüfung bearbeiten",
+    "scheduleLabel": "Restore-Prüfungszeitplan",
+    "timezoneLabel": "Zeitzone",
+    "scheduleHelperText": "Wann soll diese Restore-Verifikation ausgeführt werden?",
+    "scheduleBuilderTitle": "Restore-Prüfungs-Zeitplan",
+    "modeLabel": "Verifikationsmodus",
+    "modes": {
+      "canary": "Verwalteter Canary-Payload",
+      "probePaths": "Ausgewählte Probe-Pfade",
+      "fullArchive": "Vollständiger Archiv-Drill"
+    },
+    "probePaths": "Probe-Pfade",
+    "probePathsHint": "Ein Archivpfad pro Zeile, oder das neueste Archiv durchsuchen, um repräsentative Dateien und Ordner zu importieren.",
+    "archivePicker": {
+      "open": "Neuestes Archiv durchsuchen",
+      "title": "Probe-Pfade auswählen",
+      "subtitle": "Durchsuche das neueste Archiv für das ausgewählte Repository.",
+      "subtitleWithArchive": "Neuestes Archiv wird durchsucht: {{archive}}",
+      "browserTitle": "Probe-Pfade auswählen",
+      "browserSubtitle": "Wähle Dateien oder Ordner aus dem neuesten Archiv aus, die bei jeder Restore-Prüfung geprüft werden.",
+      "browserHelpText": "Klicke auf Dateien, um sie auszuwählen, oder auf Ordner, um zu navigieren. Nutze das Kontrollkästchen neben Ordnern, um ganze Verzeichnisse auszuwählen.",
+      "selectedCount_one": "{{count}} Pfad ausgewählt",
+      "selectedCount_other": "{{count}} Pfade ausgewählt",
+      "import": "Pfade importieren",
+      "loadFailed": "Das neueste Archiv konnte nicht geladen werden.",
+      "noArchives": "Für dieses Repository sind noch keine Archive verfügbar."
+    },
+    "needRepository": "Du musst mindestens ein Repository erstellen, bevor du Restore-Prüfungen planst.",
+    "noScheduledChecks": "Keine geplanten Restore-Prüfungen",
+    "noScheduledChecksDesc": "Konfiguriere automatische Restore-Verifikation, damit Probleme vor einem echten Restore sichtbar werden.",
+    "confirmDisable": "Geplante Restore-Prüfung für {{repositoryName}} deaktivieren?",
+    "update": "Aktualisieren",
+    "create": "Erstellen",
+    "stats": {
+      "notSet": "Nicht gesetzt",
+      "lastVerifiedRestore": "Letzte verifizierte Wiederherstellung",
+      "nextCheck": "Nächste Prüfung",
+      "probePaths": "Probe-Pfade",
+      "pathCountValue": "{{count}} Pfade",
+      "fullArchive": "Vollständiges Archiv",
+      "canary": "Verwalteter Canary"
+    },
+    "actions": {
+      "editSchedule": "Zeitplan bearbeiten",
+      "removeSchedule": "Zeitplan entfernen",
+      "runRestoreCheck": "Restore-Prüfung ausführen"
+    },
+    "badge": {
+      "restoreCheck": "Restore-Prüfung"
+    },
+    "validation": {
+      "selectRepository": "Bitte Repository auswählen",
+      "enterProbePath": "Gib mindestens einen Probe-Pfad ein"
+    },
+    "toasts": {
+      "scheduleUpdated": "Restore-Prüfungszeitplan aktualisiert",
+      "updateFailed": "Restore-Prüfungszeitplan konnte nicht aktualisiert werden",
+      "restoreCheckStarted": "Restore-Prüfung gestartet",
+      "restoreCheckFailed": "Restore-Prüfung konnte nicht gestartet werden"
+    },
+    "canaryModeHint": "Der Canary-Modus ist der sicherste Standard. Borg UI überprüft einen winzigen verwalteten Payload aus dem neuesten Archiv, sodass Prüfungen auch bei sehr großen Repositories schnell bleiben.",
+    "probeModeHint": "Der Probe-Pfad-Modus stellt echte von dir gewählte Dateien wieder her. Nutze ihn für aussagekräftigere Prüfungen kritischer Pfade ohne das gesamte Archiv zu extrahieren.",
+    "fullArchiveWarning": "Vollständige Archiv-Drills können bei großen Repositories teuer sein. Nutze sie sparsam und nur mit ausreichend temporärem Speicher und Wartungsfenster."
+  },
+  "integrity": {
+    "title": "Integrität",
+    "subtitle": "Überwache Repository-Integrität und Wiederherstellbarkeit getrennt von der Backup-Planung.",
+    "tabs": {
+      "repositoryChecks": "Repository-Prüfungen",
+      "restoreChecks": "Restore-Prüfungen"
+    },
+    "noRepositories": "Erstelle zuerst ein Repository, um Integritätsprüfungen zu konfigurieren.",
+    "stats": {
+      "restoreSchedules": "Restore-Zeitpläne",
+      "canaryProtected": "Canary-geschützt",
+      "probeProtected": "Probe-Pfad-Zeitpläne",
+      "fullDrills": "Vollarchiv-Drills"
+    },
+    "history": {
+      "title": "Letzte Restore-Prüfungen",
+      "description": "Prüfe die letzten Restore-Verifikationen und öffne Logs, wenn etwas fehlschlägt.",
+      "emptyTitle": "Es wurden noch keine Restore-Prüfungen ausgeführt",
+      "emptyDescription": "Starte eine Restore-Prüfung oder warte auf den nächsten geplanten Integritätslauf.",
+      "columns": {
+        "repository": "Repository",
+        "mode": "Modus",
+        "archive": "Archiv",
+        "started": "Gestartet"
+      },
+      "modes": {
+        "canary": "Canary",
+        "probePaths": "Probe-Pfade",
+        "fullArchive": "Vollständiges Archiv"
+      },
+      "actions": {
+        "viewLogs": "Logs anzeigen"
+      },
+      "logTitle": "Restore-Prüfungs-Logs - {{job}}",
+      "noLogs": "Für diese Restore-Prüfung sind keine Logs verfügbar."
+    }
   },
   "repositorySelectorCard": {
     "title": "Repository auswählen",

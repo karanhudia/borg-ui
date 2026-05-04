@@ -1605,3 +1605,23 @@ class TestBackupServicePeriodicSync:
         assert captured["remote_paths"] == ["/etc/komodo"]
         assert processed_paths == ["etc/komodo"]
         assert ssh_mount_info == [("/tmp/sshfs_mount_test", "etc/komodo")]
+
+    def test_resolve_backup_command_paths_mixes_remote_source_and_local_canary(
+        self, backup_service
+    ):
+        data_dir = backup_service.log_dir.parent
+        canary_path = str(
+            data_dir / ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        )
+
+        backup_paths, backup_cwd = backup_service._resolve_backup_command_paths(
+            ["etc/komodo", canary_path],
+            [("/tmp/sshfs_mount_test", "etc/komodo")],
+            job_id=42,
+        )
+
+        assert backup_cwd == str(data_dir)
+        assert backup_paths == [
+            "/tmp/sshfs_mount_test/etc/komodo",
+            ".borg-ui/restore-canaries/repository-1/.borgui-canary",
+        ]

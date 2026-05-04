@@ -16,6 +16,7 @@ from app.database.models import (
     CheckJob,
     CompactJob,
     PruneJob,
+    RestoreCheckJob,
     ScheduledJob,
     ScheduledJobRepository,
     SystemSettings,
@@ -40,6 +41,7 @@ from app.core.borg_errors import is_lock_error
 from app.core.features import FEATURES, get_current_plan, plan_includes
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
+from app.services.restore_check_service import restore_check_service
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -70,6 +72,58 @@ V2_ONLY_ENCRYPTION_MODES = {
 
 # Initialize Borg interface
 borg = BorgInterface()
+
+
+def _normalize_restore_check_paths(paths: Any) -> list[str]:
+    if not paths:
+        return []
+    if not isinstance(paths, list):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.invalidRestoreCheckPaths"},
+        )
+
+    normalized_paths: list[str] = []
+    for path in paths:
+        if not isinstance(path, str) or not path.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.invalidRestoreCheckPaths"},
+            )
+        normalized_paths.append(path.strip())
+    return normalized_paths
+
+
+def _resolve_restore_check_targets(
+    *,
+    request: Optional[dict],
+    repository: Repository,
+) -> tuple[list[str], bool]:
+    request = request or {}
+    if "paths" in request:
+        probe_paths = _normalize_restore_check_paths(request.get("paths"))
+    else:
+        probe_paths = _normalize_restore_check_paths(
+            json.loads(repository.restore_check_paths)
+            if repository.restore_check_paths
+            else []
+        )
+
+    full_archive = request.get("full_archive")
+    if full_archive is None:
+        full_archive = bool(repository.restore_check_full_archive)
+    else:
+        full_archive = bool(full_archive)
+
+    return probe_paths, full_archive
+
+
+def _get_restore_check_mode(*, probe_paths: list[str], full_archive: bool) -> str:
+    if full_archive:
+        return "full_archive"
+    if probe_paths:
+        return "probe_paths"
+    return "canary"
 
 
 def get_connection_details(connection_id: int, db: Session) -> Dict[str, Any]:
@@ -113,6 +167,7 @@ def _empty_running_jobs_response() -> Dict[str, Any]:
         "check_job": None,
         "compact_job": None,
         "prune_job": None,
+        "restore_check_job": None,
     }
 
 
@@ -2185,6 +2240,65 @@ async def check_repository(
         )
 
 
+@router.post("/{repo_id}/restore-check")
+async def restore_check_repository(
+    repo_id: int,
+    request: dict = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Start a background restore verification job using the latest archive."""
+    try:
+        repository = get_repository_with_access(
+            db, current_user, repo_id, required_role="operator"
+        )
+        probe_paths, full_archive = _resolve_restore_check_targets(
+            request=request,
+            repository=repository,
+        )
+
+        restore_check_job = start_background_maintenance_job(
+            db,
+            repository,
+            RestoreCheckJob,
+            error_key="backend.errors.repo.restoreCheckAlreadyRunning",
+            dispatcher=lambda job: restore_check_service.execute_restore_check(
+                job.id, repository.id
+            ),
+            extra_fields={
+                "probe_paths": json.dumps(probe_paths),
+                "full_archive": full_archive,
+                "scheduled_restore_check": False,
+            },
+        )
+
+        logger.info(
+            "Restore check job created",
+            job_id=restore_check_job.id,
+            repository_id=repo_id,
+            user=current_user.username,
+        )
+
+        return {
+            "job_id": restore_check_job.id,
+            "status": "pending",
+            "message": "backend.success.repo.restoreCheckJobStarted",
+        }
+    except HTTPException:
+        raise
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.invalidRestoreCheckPaths"},
+        )
+    except Exception as e:
+        logger.error("Failed to start restore check job", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToStartRestoreCheck"},
+        )
+
+
 @router.post("/{repo_id}/compact")
 async def compact_repository(
     repo_id: int,
@@ -2891,6 +3005,87 @@ async def get_repository_check_jobs(
         )
 
 
+@router.get("/restore-check-jobs/{job_id}")
+async def get_restore_check_job_status(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get status of a restore verification job."""
+    try:
+        job, _ = get_job_with_repository(
+            db,
+            current_user,
+            RestoreCheckJob,
+            job_id,
+            not_found_key="backend.errors.repo.restoreCheckJobNotFound",
+        )
+        payload = serialize_job_status(
+            job, include_progress=True, include_logs=True, include_has_logs=True
+        )
+        probe_paths = json.loads(job.probe_paths) if job.probe_paths else []
+        payload["archive_name"] = job.archive_name
+        payload["probe_paths"] = probe_paths
+        payload["full_archive"] = bool(job.full_archive)
+        payload["mode"] = _get_restore_check_mode(
+            probe_paths=probe_paths,
+            full_archive=bool(job.full_archive),
+        )
+        return payload
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to get restore check job status", error=str(e), job_id=job_id
+        )
+        raise HTTPException(
+            status_code=500, detail={"key": "backend.errors.repo.failedToGetJobStatus"}
+        )
+
+
+@router.get("/{repo_id}/restore-check-jobs")
+async def get_repository_restore_check_jobs(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    limit: int = 10,
+):
+    """Get recent restore verification jobs for a repository."""
+    try:
+        jobs = get_repository_jobs(
+            db, current_user, repo_id, RestoreCheckJob, limit=limit
+        )
+        return {
+            "jobs": [
+                (
+                    lambda probe_paths: {
+                        **serialize_job_summary(
+                            job, include_progress=True, include_has_logs=True
+                        ),
+                        "archive_name": job.archive_name,
+                        "probe_paths": probe_paths,
+                        "full_archive": bool(job.full_archive),
+                        "mode": _get_restore_check_mode(
+                            probe_paths=probe_paths,
+                            full_archive=bool(job.full_archive),
+                        ),
+                    }
+                )(json.loads(job.probe_paths) if job.probe_paths else [])
+                for job in jobs
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to get restore check jobs", error=str(e), repository_id=repo_id
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToGetRestoreCheckJobs"},
+        )
+
+
 # Compact job endpoints
 @router.get("/compact-jobs/{job_id}")
 async def get_compact_job_status(
@@ -3021,8 +3216,19 @@ async def get_running_jobs(
             .first()
         )
 
+        restore_check_job = (
+            db.query(RestoreCheckJob)
+            .filter(
+                RestoreCheckJob.repository_id == repo_id,
+                RestoreCheckJob.status == "running",
+            )
+            .first()
+        )
+
         result = {
-            "has_running_jobs": bool(check_job or compact_job or prune_job),
+            "has_running_jobs": bool(
+                check_job or compact_job or prune_job or restore_check_job
+            ),
             "check_job": {
                 "id": check_job.id,
                 "progress": check_job.progress,
@@ -3044,6 +3250,14 @@ async def get_running_jobs(
                 "started_at": serialize_datetime(prune_job.started_at),
             }
             if prune_job
+            else None,
+            "restore_check_job": {
+                "id": restore_check_job.id,
+                "progress": restore_check_job.progress,
+                "progress_message": restore_check_job.progress_message,
+                "started_at": serialize_datetime(restore_check_job.started_at),
+            }
+            if restore_check_job
             else None,
         }
 
@@ -3184,6 +3398,142 @@ async def update_check_schedule(
         )
 
 
+@router.put("/{repo_id}/restore-check-schedule")
+async def update_restore_check_schedule(
+    repo_id: int,
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update scheduled restore verification configuration for a repository."""
+    try:
+        repo = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repo:
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.repo.repositoryNotFound"},
+            )
+        _require_repository_access(db, current_user, repo, "operator")
+
+        if "timezone" in request or "restore_check_timezone" in request:
+            try:
+                repo.restore_check_timezone = normalize_schedule_timezone(
+                    request.get("timezone", request.get("restore_check_timezone"))
+                )
+            except InvalidScheduleTimezone as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.schedule.invalidTimezone",
+                        "params": {"error": str(e)},
+                    },
+                )
+
+        cron_expression = request.get("cron_expression")
+        if cron_expression is not None:
+            if not cron_expression or cron_expression.strip() == "":
+                repo.restore_check_cron_expression = None
+            else:
+                try:
+                    calculate_next_cron_run(
+                        cron_expression,
+                        schedule_timezone=repo.restore_check_timezone
+                        or DEFAULT_SCHEDULE_TIMEZONE,
+                    )
+                    repo.restore_check_cron_expression = cron_expression
+                except InvalidScheduleTimezone as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.schedule.invalidTimezone",
+                            "params": {"error": str(e)},
+                        },
+                    )
+                except Exception:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.repo.invalidCronExpression"},
+                    )
+
+        if "paths" in request:
+            repo.restore_check_paths = json.dumps(
+                _normalize_restore_check_paths(request.get("paths"))
+            )
+
+        full_archive = request.get("full_archive")
+        if full_archive is not None:
+            repo.restore_check_full_archive = bool(full_archive)
+
+        notify_on_success = request.get("notify_on_success")
+        if notify_on_success is not None:
+            repo.notify_on_restore_check_success = notify_on_success
+
+        notify_on_failure = request.get("notify_on_failure")
+        if notify_on_failure is not None:
+            repo.notify_on_restore_check_failure = notify_on_failure
+
+        if repo.restore_check_cron_expression:
+            try:
+                repo.next_scheduled_restore_check = calculate_next_cron_run(
+                    repo.restore_check_cron_expression,
+                    schedule_timezone=repo.restore_check_timezone
+                    or DEFAULT_SCHEDULE_TIMEZONE,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to calculate next restore check time",
+                    error=str(e),
+                    repo_id=repo_id,
+                )
+                repo.next_scheduled_restore_check = None
+        else:
+            repo.next_scheduled_restore_check = None
+
+        db.commit()
+        db.refresh(repo)
+
+        restore_check_paths = (
+            json.loads(repo.restore_check_paths) if repo.restore_check_paths else []
+        )
+
+        return {
+            "success": True,
+            "repository": {
+                "id": repo.id,
+                "name": repo.name,
+                "restore_check_cron_expression": repo.restore_check_cron_expression,
+                "restore_check_timezone": repo.restore_check_timezone
+                or DEFAULT_SCHEDULE_TIMEZONE,
+                "timezone": repo.restore_check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                "restore_check_paths": restore_check_paths,
+                "restore_check_full_archive": repo.restore_check_full_archive,
+                "restore_check_mode": _get_restore_check_mode(
+                    probe_paths=restore_check_paths,
+                    full_archive=bool(repo.restore_check_full_archive),
+                ),
+                "last_restore_check": serialize_datetime(repo.last_restore_check),
+                "last_scheduled_restore_check": serialize_datetime(
+                    repo.last_scheduled_restore_check
+                ),
+                "next_scheduled_restore_check": serialize_datetime(
+                    repo.next_scheduled_restore_check
+                ),
+                "notify_on_restore_check_success": repo.notify_on_restore_check_success,
+                "notify_on_restore_check_failure": repo.notify_on_restore_check_failure,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to update restore check schedule", error=str(e), repo_id=repo_id
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToUpdateRestoreCheckSchedule"},
+        )
+
+
 @router.get("/{repo_id}/check-schedule")
 async def get_check_schedule(
     repo_id: int,
@@ -3222,4 +3572,62 @@ async def get_check_schedule(
         raise HTTPException(
             status_code=500,
             detail={"key": "backend.errors.repo.failedToGetCheckSchedule"},
+        )
+
+
+@router.get("/{repo_id}/restore-check-schedule")
+async def get_restore_check_schedule(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get scheduled restore verification configuration for a repository."""
+    try:
+        repo = db.query(Repository).filter(Repository.id == repo_id).first()
+        if not repo:
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.repo.repositoryNotFound"},
+            )
+        _require_repository_access(db, current_user, repo, "viewer")
+
+        restore_check_paths = (
+            json.loads(repo.restore_check_paths) if repo.restore_check_paths else []
+        )
+
+        return {
+            "repository_id": repo.id,
+            "repository_name": repo.name,
+            "repository_path": repo.path,
+            "restore_check_cron_expression": repo.restore_check_cron_expression,
+            "restore_check_timezone": repo.restore_check_timezone
+            or DEFAULT_SCHEDULE_TIMEZONE,
+            "timezone": repo.restore_check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
+            "restore_check_paths": restore_check_paths,
+            "restore_check_full_archive": repo.restore_check_full_archive,
+            "restore_check_mode": _get_restore_check_mode(
+                probe_paths=restore_check_paths,
+                full_archive=bool(repo.restore_check_full_archive),
+            ),
+            "last_restore_check": serialize_datetime(repo.last_restore_check),
+            "last_scheduled_restore_check": serialize_datetime(
+                repo.last_scheduled_restore_check
+            ),
+            "next_scheduled_restore_check": serialize_datetime(
+                repo.next_scheduled_restore_check
+            ),
+            "notify_on_restore_check_success": repo.notify_on_restore_check_success,
+            "notify_on_restore_check_failure": repo.notify_on_restore_check_failure,
+            "enabled": repo.restore_check_cron_expression is not None
+            and repo.restore_check_cron_expression != "",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to get restore check schedule", error=str(e), repo_id=repo_id
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToGetRestoreCheckSchedule"},
         )

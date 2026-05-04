@@ -1,5 +1,5 @@
 import React from 'react'
-import { Chip } from '@mui/material'
+import { Chip, Tooltip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 
 interface StatusBadgeProps {
@@ -59,14 +59,26 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     }
   }
 
+  const label = getStatusLabel(status)
+
   return (
-    <Chip
-      label={getStatusLabel(status)}
-      color={getStatusColor(status)}
-      size={size}
-      variant={variant}
-      sx={{ fontWeight: 500 }}
-    />
+    <Tooltip title={label} arrow>
+      <Chip
+        label={label}
+        color={getStatusColor(status)}
+        size={size}
+        variant={variant}
+        sx={{
+          fontWeight: 500,
+          maxWidth: '100%',
+          minWidth: 0,
+          '& .MuiChip-label': {
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          },
+        }}
+      />
+    </Tooltip>
   )
 }
 

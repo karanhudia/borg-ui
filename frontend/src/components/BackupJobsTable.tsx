@@ -90,6 +90,8 @@ const getTypeLabel = (type: string, t: (key: string) => string): string => {
       return t('backupJobsTable.types.backup')
     case 'restore':
       return t('backupJobsTable.types.restore')
+    case 'restore_check':
+      return t('backupJobsTable.types.restoreCheck')
     case 'check':
       return t('backupJobsTable.types.check')
     case 'compact':
@@ -111,6 +113,8 @@ const getTypeColor = (
       return 'primary'
     case 'restore':
       return 'secondary'
+    case 'restore_check':
+      return 'info'
     case 'check':
       return 'info'
     case 'compact':

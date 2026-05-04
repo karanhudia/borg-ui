@@ -7,7 +7,11 @@ from app.database.models import User, Repository, SystemSettings
 from app.database.database import get_db
 from app.api.auth import get_current_user
 from app.core.borg_router import BorgRouter
-from app.services.archive_browse_service import build_browse_items, parse_archive_items
+from app.services.archive_browse_service import (
+    build_browse_items,
+    is_hidden_system_archive_path,
+    parse_archive_items,
+)
 from app.services.cache_service import archive_cache
 from app.utils.borg_env import (
     get_standard_ssh_opts,
@@ -82,6 +86,11 @@ async def browse_archive_contents(
         result_cache_key = _get_browse_result_cache_key(archive_name, path)
         cached_result = await archive_cache.get(repository_id, result_cache_key)
         if cached_result is not None and _is_browse_result_payload(cached_result):
+            cached_result = [
+                item
+                for item in cached_result
+                if not is_hidden_system_archive_path(item.get("path") or "")
+            ]
             logger.info(
                 "Using cached archive browse result",
                 archive=archive_name,

@@ -70,6 +70,36 @@ class TestBrowseEndpoints:
         assert response.status_code == 200
         assert response.json()["items"][0]["name"] == "docs"
 
+    def test_browse_archive_filters_cached_canary_items(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repository(test_db)
+        cached_items = [
+            {
+                "name": ".borg-ui",
+                "path": ".borg-ui",
+                "type": "directory",
+                "size": 923,
+            },
+            {
+                "name": "docs",
+                "path": "docs",
+                "type": "directory",
+                "size": 12,
+            },
+        ]
+
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)
+        ):
+            response = test_client.get(
+                f"/api/browse/{repo.id}/test-archive",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert [item["name"] for item in response.json()["items"]] == ["docs"]
+
     def test_browse_archive_subdirectory(
         self, test_client: TestClient, admin_headers, test_db
     ):

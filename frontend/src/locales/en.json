@@ -112,6 +112,7 @@
       "backup": "Manual Backup",
       "archives": "Archives",
       "restore": "Restore",
+      "integrity": "Integrity",
       "schedule": "Schedule"
     },
     "settings": {
@@ -138,7 +139,7 @@
     },
     "menu": {
       "accountAndSecurityDesc": "Profile, password, 2FA, passkeys",
-      "appearanceDesc": "Theme, language",
+      "appearanceDesc": "Theme",
       "notificationsDesc": "Alerts & preferences"
     },
     "versionInfo": "Version Info",
@@ -188,6 +189,7 @@
         "backup": "BACKUP",
         "check": "CHECK",
         "compact": "COMPACT",
+        "restore": "RESTORE",
         "freshness": "FRESH",
         "archives": "ARCHIVES"
       },
@@ -238,6 +240,7 @@
         "backup": "backup",
         "check": "check",
         "compact": "compact",
+        "restore_check": "restore check",
         "restore": "restore",
         "prune": "prune"
       }
@@ -401,9 +404,11 @@
     "subtitle": "Manage automated backups and repository checks",
     "createBackup": "Create Backup Schedule",
     "addCheck": "Add Check Schedule",
+    "addRestoreCheck": "Add Restore Check",
     "tabs": {
       "backupJobs": "Backup Jobs",
-      "repositoryChecks": "Repository Checks"
+      "repositoryChecks": "Repository Checks",
+      "restoreChecks": "Restore Checks"
     },
     "noRepositories": "You need to create at least one repository before scheduling backups.",
     "maintenance": {
@@ -575,6 +580,7 @@
       "types": {
         "backup": "Backup",
         "restore": "Restore",
+        "restoreCheck": "Restore Check",
         "check": "Check",
         "compact": "Compact",
         "prune": "Prune",
@@ -1372,6 +1378,7 @@
     "types": {
       "backup": "Backup",
       "restore": "Restore",
+      "restoreCheck": "Restore Check",
       "check": "Repository Check",
       "compact": "Compact",
       "prune": "Prune",
@@ -2122,6 +2129,8 @@
   },
   "scheduledChecks": {
     "title": "Scheduled Checks",
+    "sectionTitle": "Integrity Checks",
+    "sectionDescription": "Run Borg check on a schedule to detect repository corruption early.",
     "empty": "No scheduled checks",
     "nextRun": "Next Run",
     "lastRun": "Last Run",
@@ -2171,6 +2180,112 @@
     },
     "checkScheduleHelperText": "When should this repository check run?",
     "checkScheduleBuilderTitle": "Check Schedule Builder"
+  },
+  "scheduledRestoreChecks": {
+    "sectionTitle": "Restore Checks",
+    "sectionDescription": "Periodically restore the latest archive into a disposable directory to verify that data can actually be recovered.",
+    "repository": "Repository",
+    "addRestoreCheckSchedule": "Add Restore Check",
+    "editRestoreCheckSchedule": "Edit Restore Check Schedule",
+    "scheduleLabel": "Restore Check Schedule",
+    "timezoneLabel": "Timezone",
+    "scheduleHelperText": "When should this restore verification run?",
+    "scheduleBuilderTitle": "Restore Check Schedule Builder",
+    "modeLabel": "Verification Mode",
+    "modes": {
+      "canary": "Managed canary payload",
+      "probePaths": "Selected probe paths",
+      "fullArchive": "Full archive drill"
+    },
+    "probePaths": "Probe Paths",
+    "probePathsHint": "Enter one archive path per line, or browse the latest archive to import representative files and folders.",
+    "archivePicker": {
+      "open": "Browse latest archive",
+      "title": "Select Probe Paths",
+      "subtitle": "Browse the latest archive for the selected repository.",
+      "subtitleWithArchive": "Browsing latest archive: {{archive}}",
+      "browserTitle": "Choose probe paths",
+      "browserSubtitle": "Select files or folders from the latest archive to verify during each restore check.",
+      "browserHelpText": "Click files to select them, or click folders to navigate. Use the checkbox next to folders to select entire directories.",
+      "selectedCount_one": "{{count}} path selected",
+      "selectedCount_other": "{{count}} paths selected",
+      "import": "Import Paths",
+      "loadFailed": "Failed to load the latest archive.",
+      "noArchives": "No archives are available for this repository yet."
+    },
+    "needRepository": "You need to create at least one repository before scheduling restore checks.",
+    "noScheduledChecks": "No scheduled restore checks",
+    "noScheduledChecksDesc": "Configure automatic restore verification so backup problems show up before you need a real restore.",
+    "confirmDisable": "Disable scheduled restore check for {{repositoryName}}?",
+    "update": "Update",
+    "create": "Create",
+    "stats": {
+      "notSet": "Not set",
+      "lastVerifiedRestore": "Last Verified Restore",
+      "nextCheck": "Next Check",
+      "probePaths": "Probe Paths",
+      "pathCountValue": "{{count}} paths",
+      "fullArchive": "Full archive",
+      "canary": "Managed canary"
+    },
+    "actions": {
+      "editSchedule": "Edit schedule",
+      "removeSchedule": "Remove schedule",
+      "runRestoreCheck": "Run Restore Check"
+    },
+    "badge": {
+      "restoreCheck": "Restore Check"
+    },
+    "validation": {
+      "selectRepository": "Please select a repository",
+      "enterProbePath": "Enter at least one probe path"
+    },
+    "toasts": {
+      "scheduleUpdated": "Restore check schedule updated",
+      "updateFailed": "Failed to update restore check schedule",
+      "restoreCheckStarted": "Restore check started",
+      "restoreCheckFailed": "Failed to start restore check"
+    },
+    "canaryModeHint": "Canary mode is the safest default. Borg UI verifies a tiny managed payload from the latest archive, so checks stay fast even for very large repositories.",
+    "probeModeHint": "Probe-path mode restores real files you choose. Use it for higher-confidence checks on critical paths without extracting the full archive.",
+    "fullArchiveWarning": "Full archive drills can be expensive on large repositories. Use this sparingly, and only when you have enough temporary storage and maintenance window budget."
+  },
+  "integrity": {
+    "title": "Integrity",
+    "subtitle": "Track repository integrity and restoreability without mixing it into backup scheduling.",
+    "tabs": {
+      "repositoryChecks": "Repository Checks",
+      "restoreChecks": "Restore Checks"
+    },
+    "noRepositories": "Create a repository first to configure integrity checks.",
+    "stats": {
+      "restoreSchedules": "Restore schedules",
+      "canaryProtected": "Canary-protected",
+      "probeProtected": "Probe-path schedules",
+      "fullDrills": "Full-archive drills"
+    },
+    "history": {
+      "title": "Recent Restore Checks",
+      "description": "Review recent restore verification runs and inspect logs when something fails.",
+      "emptyTitle": "No restore checks have run yet",
+      "emptyDescription": "Run a restore check or wait for the next scheduled integrity cycle.",
+      "columns": {
+        "repository": "Repository",
+        "mode": "Mode",
+        "archive": "Archive",
+        "started": "Started"
+      },
+      "modes": {
+        "canary": "Canary",
+        "probePaths": "Probe Paths",
+        "fullArchive": "Full Archive"
+      },
+      "actions": {
+        "viewLogs": "View logs"
+      },
+      "logTitle": "Restore Check Logs - {{job}}",
+      "noLogs": "No logs available for this restore check."
+    }
   },
   "repositorySelectorCard": {
     "title": "Select Repository",

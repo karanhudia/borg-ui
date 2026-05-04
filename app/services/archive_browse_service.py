@@ -6,6 +6,20 @@ import json
 from typing import Dict, List
 
 
+HIDDEN_SYSTEM_PATH_PREFIXES = (".borg-ui/",)
+HIDDEN_SYSTEM_PATH_NAMES = {".borg-ui"}
+
+
+def is_hidden_system_archive_path(path: str) -> bool:
+    normalized = (path or "").strip("/")
+    if not normalized:
+        return False
+    parts = normalized.split("/")
+    return parts[0] in HIDDEN_SYSTEM_PATH_NAMES or any(
+        normalized.startswith(prefix) for prefix in HIDDEN_SYSTEM_PATH_PREFIXES
+    )
+
+
 def parse_archive_items(stdout: str) -> List[Dict]:
     """Parse borg --json-lines output into normalized archive items."""
     items: List[Dict] = []
@@ -39,13 +53,18 @@ def build_browse_items(
 ) -> List[Dict]:
     """Build immediate children for a browse path from a full/raw item list."""
     normalized_path = path.strip("/")
+    visible_items = [
+        item
+        for item in all_items
+        if not is_hidden_system_archive_path(item.get("path") or "")
+    ]
 
     def calculate_directory_size(dir_path: str) -> int:
         total_size = 0
         normalized_dir_path = dir_path.strip("/")
         search_prefix = f"{normalized_dir_path}/" if normalized_dir_path else ""
 
-        for item in all_items:
+        for item in visible_items:
             item_path = (item.get("path") or "").strip("/")
             if not item_path:
                 continue
@@ -66,7 +85,7 @@ def build_browse_items(
     items: List[Dict] = []
     seen_paths = set()
 
-    for item in all_items:
+    for item in visible_items:
         item_path = (item.get("path") or "").strip("/")
         item_type = item.get("type", "")
         item_size = item.get("size")

@@ -81,6 +81,7 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         last_backup: '2026-03-30T10:00:00+00:00',
         last_check: '2026-03-29T10:00:00+00:00',
         last_compact: null,
+        last_restore_check: '2026-03-28T10:00:00+00:00',
         archive_count: 14,
         total_size: '6 GB',
         health_status: 'healthy' as const,
@@ -89,10 +90,14 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         has_schedule: true,
         schedule_enabled: true,
         schedule_name: 'Daily',
+        restore_check_configured: true,
+        latest_restore_check_status: 'completed',
+        latest_restore_check_error: null,
         dimension_health: {
           backup: 'healthy' as const,
           check: 'healthy' as const,
           compact: 'warning' as const,
+          restore: 'healthy' as const,
         },
       },
       {
@@ -103,6 +108,7 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         last_backup: null,
         last_check: null,
         last_compact: null,
+        last_restore_check: null,
         archive_count: 0,
         total_size: '0 B',
         health_status: 'critical' as const,
@@ -111,10 +117,14 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         has_schedule: false,
         schedule_enabled: false,
         schedule_name: null,
+        restore_check_configured: false,
+        latest_restore_check_status: null,
+        latest_restore_check_error: null,
         dimension_health: {
           backup: 'critical' as const,
           check: 'unknown' as const,
           compact: 'critical' as const,
+          restore: 'unknown' as const,
         },
       },
     ],
@@ -205,7 +215,12 @@ describe('DashboardV3', () => {
           {
             ...makeOverview().repository_health[0],
             health_status: 'healthy',
-            dimension_health: { backup: 'healthy', check: 'healthy', compact: 'healthy' },
+            dimension_health: {
+              backup: 'healthy',
+              check: 'healthy',
+              compact: 'healthy',
+              restore: 'healthy',
+            },
           },
         ],
       })
@@ -326,6 +341,17 @@ describe('DashboardV3', () => {
       await waitFor(() => expect(screen.getAllByText('Observe Only').length).toBeGreaterThan(0))
       expect(screen.getByText('FRESH')).toBeInTheDocument()
       expect(screen.getByText('ARCHIVES')).toBeInTheDocument()
+    })
+
+    it('shows restore verification as a health dimension for full repositories', async () => {
+      mockFetchSuccess(makeOverview())
+      renderDashboard()
+      await waitFor(() => screen.getAllByText('my-server'))
+
+      expect(screen.getByText('RESTORE')).toBeInTheDocument()
+      expect(
+        screen.getAllByLabelText(formatDateTimeFull('2026-03-28T10:00:00+00:00')).length
+      ).toBeGreaterThan(0)
     })
 
     it('adds full timestamp tooltips to relative health times', async () => {

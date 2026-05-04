@@ -25,6 +25,7 @@ from app.config import settings
 from app.api.maintenance_jobs import create_started_maintenance_job
 from app.services.notification_service import notification_service
 from app.services.check_scheduler import run_due_scheduled_checks
+from app.services.restore_check_scheduler import run_due_scheduled_restore_checks
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.archive_names import build_archive_name
 from app.utils.schedule_time import (
@@ -2641,6 +2642,7 @@ async def check_scheduled_jobs():
             now = datetime.now(timezone.utc)
             await dispatch_due_scheduled_backups(db, now)
             await run_due_scheduled_checks(db, now)
+            await run_due_scheduled_restore_checks(db, now)
 
         except Exception as e:
             logger.error("Error in scheduled job checker", error=str(e))

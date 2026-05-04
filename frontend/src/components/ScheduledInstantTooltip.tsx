@@ -3,6 +3,8 @@ import type { ScheduledInstantDisplay } from '../utils/dateUtils'
 
 interface ScheduledInstantTooltipProps {
   display: ScheduledInstantDisplay
+  scheduledLabel?: string
+  localLabel?: string
 }
 
 function TooltipRow({ label, time, timeZone }: { label: string; time: string; timeZone: string }) {
@@ -60,7 +62,11 @@ function TooltipRow({ label, time, timeZone }: { label: string; time: string; ti
   )
 }
 
-export default function ScheduledInstantTooltip({ display }: ScheduledInstantTooltipProps) {
+export default function ScheduledInstantTooltip({
+  display,
+  scheduledLabel = 'Schedule timezone',
+  localLabel = 'Your local timezone',
+}: ScheduledInstantTooltipProps) {
   return (
     <Stack
       spacing={0.72}
@@ -72,16 +78,12 @@ export default function ScheduledInstantTooltip({ display }: ScheduledInstantToo
       }}
     >
       <TooltipRow
-        label="Schedule timezone"
+        label={scheduledLabel}
         time={display.scheduledTime}
         timeZone={display.scheduledTimeZone}
       />
       {display.localTime && display.localTimeZone && (
-        <TooltipRow
-          label="Your local timezone"
-          time={display.localTime}
-          timeZone={display.localTimeZone}
-        />
+        <TooltipRow label={localLabel} time={display.localTime} timeZone={display.localTimeZone} />
       )}
     </Stack>
   )

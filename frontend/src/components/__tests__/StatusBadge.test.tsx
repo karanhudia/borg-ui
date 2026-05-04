@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, it, expect } from 'vitest'
 import StatusBadge from '../StatusBadge'
 
@@ -143,6 +144,17 @@ describe('StatusBadge', () => {
       const { container } = render(<StatusBadge status="completed" variant="outlined" />)
       const chip = container.firstChild as HTMLElement
       expect(chip.className).toContain('MuiChip-outlined')
+    })
+  })
+
+  describe('Tooltip', () => {
+    it('shows the full completed-with-warnings label on hover', async () => {
+      const user = userEvent.setup()
+      render(<StatusBadge status="completed_with_warnings" />)
+
+      await user.hover(screen.getByText('Completed with Warnings'))
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Completed with Warnings')
     })
   })
 })

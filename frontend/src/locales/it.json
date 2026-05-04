@@ -112,6 +112,7 @@
       "backup": "Backup manuale",
       "archives": "Archivi",
       "restore": "Ripristino",
+      "integrity": "Integrità",
       "schedule": "Pianificazione"
     },
     "settings": {
@@ -138,7 +139,7 @@
     },
     "menu": {
       "accountAndSecurityDesc": "Profilo, password, 2FA, passkey",
-      "appearanceDesc": "Tema, lingua",
+      "appearanceDesc": "Tema",
       "notificationsDesc": "Avvisi e preferenze"
     },
     "versionInfo": "Info Versione",
@@ -188,6 +189,7 @@
         "backup": "BACKUP",
         "check": "CHECK",
         "compact": "COMPACT",
+        "restore": "RESTORE",
         "freshness": "RECENTE",
         "archives": "ARCHIVI"
       },
@@ -238,6 +240,7 @@
         "backup": "backup",
         "check": "check",
         "compact": "compact",
+        "restore_check": "restore check",
         "restore": "restore",
         "prune": "prune"
       }
@@ -401,9 +404,11 @@
     "subtitle": "Gestisci backup automatizzati e controlli del repository",
     "createBackup": "Crea Pianificazione Backup",
     "addCheck": "Aggiungi Pianificazione Controllo",
+    "addRestoreCheck": "Aggiungi controllo di ripristino",
     "tabs": {
       "backupJobs": "Job di Backup",
-      "repositoryChecks": "Controlli Repository"
+      "repositoryChecks": "Controlli Repository",
+      "restoreChecks": "Controlli di ripristino"
     },
     "noRepositories": "Devi creare almeno un repository prima di pianificare i backup.",
     "maintenance": {
@@ -575,6 +580,7 @@
       "types": {
         "backup": "Backup",
         "restore": "Ripristino",
+        "restoreCheck": "Controllo di ripristino",
         "check": "Controllo",
         "compact": "Compattazione",
         "prune": "Pulizia",
@@ -1372,6 +1378,7 @@
     "types": {
       "backup": "Backup",
       "restore": "Ripristino",
+      "restoreCheck": "Controllo di ripristino",
       "check": "Controllo Repository",
       "compact": "Compattazione",
       "prune": "Pulizia",
@@ -2122,6 +2129,8 @@
   },
   "scheduledChecks": {
     "title": "Controlli Pianificati",
+    "sectionTitle": "Controlli di integrità",
+    "sectionDescription": "Esegui Borg check secondo pianificazione per rilevare in anticipo la corruzione del repository.",
     "empty": "Nessun controllo pianificato",
     "nextRun": "Prossima Esecuzione",
     "lastRun": "Ultima Esecuzione",
@@ -2171,6 +2180,112 @@
     },
     "checkScheduleHelperText": "Quando dovrebbe essere eseguito questo controllo del repository?",
     "checkScheduleBuilderTitle": "Costruttore Pianificazione Controllo"
+  },
+  "scheduledRestoreChecks": {
+    "sectionTitle": "Controlli di ripristino",
+    "sectionDescription": "Ripristina periodicamente l'archivio più recente in una directory temporanea per verificare che i dati siano davvero recuperabili.",
+    "repository": "Repository",
+    "addRestoreCheckSchedule": "Aggiungi controllo di ripristino",
+    "editRestoreCheckSchedule": "Modifica controllo di ripristino",
+    "scheduleLabel": "Pianificazione controllo di ripristino",
+    "timezoneLabel": "Fuso orario",
+    "scheduleHelperText": "Quando dovrebbe essere eseguita questa verifica di ripristino?",
+    "scheduleBuilderTitle": "Costruttore Pianificazione Ripristino",
+    "modeLabel": "Modalità di verifica",
+    "modes": {
+      "canary": "Payload canary gestito",
+      "probePaths": "Percorsi di prova selezionati",
+      "fullArchive": "Verifica archivio completo"
+    },
+    "probePaths": "Percorsi di prova",
+    "probePathsHint": "Inserisci un percorso archivio per riga, oppure esplora l'archivio più recente per importare file e cartelle rappresentativi.",
+    "archivePicker": {
+      "open": "Esplora archivio più recente",
+      "title": "Seleziona percorsi di prova",
+      "subtitle": "Esplora l'archivio più recente del repository selezionato.",
+      "subtitleWithArchive": "Esplorazione archivio più recente: {{archive}}",
+      "browserTitle": "Scegli percorsi di prova",
+      "browserSubtitle": "Seleziona file o cartelle dall'archivio più recente da verificare durante ogni controllo di ripristino.",
+      "browserHelpText": "Fai clic sui file per selezionarli, o sulle cartelle per navigare. Usa la casella accanto alle cartelle per selezionare intere directory.",
+      "selectedCount_one": "{{count}} percorso selezionato",
+      "selectedCount_other": "{{count}} percorsi selezionati",
+      "import": "Importa percorsi",
+      "loadFailed": "Impossibile caricare l'archivio più recente.",
+      "noArchives": "Nessun archivio ancora disponibile per questo repository."
+    },
+    "needRepository": "Devi creare almeno un repository prima di pianificare controlli di ripristino.",
+    "noScheduledChecks": "Nessun controllo di ripristino pianificato",
+    "noScheduledChecksDesc": "Configura la verifica automatica del ripristino così i problemi emergono prima di un ripristino reale.",
+    "confirmDisable": "Disabilitare il controllo di ripristino per {{repositoryName}}?",
+    "update": "Aggiorna",
+    "create": "Crea",
+    "stats": {
+      "notSet": "Non impostato",
+      "lastVerifiedRestore": "Ultimo ripristino verificato",
+      "nextCheck": "Prossimo controllo",
+      "probePaths": "Percorsi di prova",
+      "pathCountValue": "{{count}} percorsi",
+      "fullArchive": "Archivio completo",
+      "canary": "Canary gestito"
+    },
+    "actions": {
+      "editSchedule": "Modifica pianificazione",
+      "removeSchedule": "Rimuovi pianificazione",
+      "runRestoreCheck": "Esegui controllo di ripristino"
+    },
+    "badge": {
+      "restoreCheck": "Controllo di ripristino"
+    },
+    "validation": {
+      "selectRepository": "Seleziona un repository",
+      "enterProbePath": "Inserisci almeno un percorso di prova"
+    },
+    "toasts": {
+      "scheduleUpdated": "Pianificazione ripristino aggiornata",
+      "updateFailed": "Impossibile aggiornare la pianificazione del ripristino",
+      "restoreCheckStarted": "Controllo di ripristino avviato",
+      "restoreCheckFailed": "Impossibile avviare il controllo di ripristino"
+    },
+    "canaryModeHint": "La modalità canary è l'impostazione predefinita più sicura. Borg UI verifica un payload gestito molto piccolo dall'archivio più recente, così i controlli restano rapidi anche su repository molto grandi.",
+    "probeModeHint": "La modalità percorsi di prova ripristina file reali che scegli tu. Usala per verifiche più approfondite su percorsi critici senza estrarre l'intero archivio.",
+    "fullArchiveWarning": "Le verifiche dell'intero archivio possono essere costose su repository grandi. Usale raramente e solo se hai spazio temporaneo e una finestra di manutenzione adeguata."
+  },
+  "integrity": {
+    "title": "Integrità",
+    "subtitle": "Monitora l'integrità del repository e la ripristinabilità senza mescolarle alla pianificazione dei backup.",
+    "tabs": {
+      "repositoryChecks": "Controlli repository",
+      "restoreChecks": "Controlli di ripristino"
+    },
+    "noRepositories": "Crea prima un repository per configurare i controlli di integrità.",
+    "stats": {
+      "restoreSchedules": "Pianificazioni di ripristino",
+      "canaryProtected": "Protetti da canary",
+      "probeProtected": "Pianificazioni con percorsi di prova",
+      "fullDrills": "Verifiche archivio completo"
+    },
+    "history": {
+      "title": "Controlli di ripristino recenti",
+      "description": "Rivedi le verifiche di ripristino recenti e apri i log quando qualcosa fallisce.",
+      "emptyTitle": "Nessun controllo di ripristino è stato ancora eseguito",
+      "emptyDescription": "Esegui un controllo di ripristino o attendi il prossimo ciclo di integrità pianificato.",
+      "columns": {
+        "repository": "Repository",
+        "mode": "Modalità",
+        "archive": "Archivio",
+        "started": "Avviato"
+      },
+      "modes": {
+        "canary": "Canary",
+        "probePaths": "Percorsi di prova",
+        "fullArchive": "Archivio completo"
+      },
+      "actions": {
+        "viewLogs": "Visualizza log"
+      },
+      "logTitle": "Log controllo di ripristino - {{job}}",
+      "noLogs": "Nessun log disponibile per questo controllo di ripristino."
+    }
   },
   "repositorySelectorCard": {
     "title": "Seleziona Repository",
