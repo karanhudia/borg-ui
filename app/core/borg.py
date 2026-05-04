@@ -488,7 +488,6 @@ class BorgInterface:
         passphrase: str = None,
         bypass_lock: bool = False,
         env: dict = None,
-        strip_components: int = None,
     ) -> Dict:
         """List archives in repository"""
         cmd = [self.borg_cmd, "list"]
@@ -583,6 +582,7 @@ class BorgInterface:
         passphrase: str = None,
         bypass_lock: bool = False,
         env: dict = None,
+        strip_components: int = None,
     ) -> Dict:
         """Extract files from an archive"""
         cmd = [self.borg_cmd, "extract"]

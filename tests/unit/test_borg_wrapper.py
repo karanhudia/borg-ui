@@ -2,6 +2,8 @@
 Unit tests for borg wrapper utility
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from app.core.borg import BorgInterface
 
@@ -39,6 +41,62 @@ class TestBorgWrapper:
             assert BorgInterface._validated is True
         except RuntimeError:
             pytest.skip("Borg not installed")
+
+    @pytest.mark.asyncio
+    async def test_extract_archive_builds_command_without_strip_components(self):
+        borg = BorgInterface()
+        with patch.object(
+            borg,
+            "_execute_command",
+            new=AsyncMock(return_value={"success": True, "stdout": ""}),
+        ) as mock_execute:
+            await borg.extract_archive(
+                "/repo",
+                "archive-1",
+                ["home/user/file.txt"],
+                "/restore",
+            )
+
+        args, kwargs = mock_execute.await_args
+        assert args[0] == [
+            "borg",
+            "extract",
+            "--noacls",
+            "--noxattrs",
+            "--noflags",
+            "/repo::archive-1",
+            "home/user/file.txt",
+        ]
+        assert kwargs["cwd"] == "/restore"
+
+    @pytest.mark.asyncio
+    async def test_extract_archive_builds_command_with_strip_components(self):
+        borg = BorgInterface()
+        with patch.object(
+            borg,
+            "_execute_command",
+            new=AsyncMock(return_value={"success": True, "stdout": ""}),
+        ) as mock_execute:
+            await borg.extract_archive(
+                "/repo",
+                "archive-1",
+                ["home/user/file.txt"],
+                "/restore",
+                strip_components=2,
+            )
+
+        args, _ = mock_execute.await_args
+        assert args[0] == [
+            "borg",
+            "extract",
+            "--strip-components",
+            "2",
+            "--noacls",
+            "--noxattrs",
+            "--noflags",
+            "/repo::archive-1",
+            "home/user/file.txt",
+        ]
 
 
 @pytest.mark.unit

@@ -291,7 +291,6 @@ class Borg2Interface:
         remote_path: Optional[str] = None,
         bypass_lock: bool = False,
         env: Optional[Dict] = None,
-        strip_components: Optional[int] = None,
     ) -> Dict:
         """Get repository-level metadata only (no archive stats).
 
@@ -409,8 +408,6 @@ class Borg2Interface:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
             cmd.append("--bypass-lock")
-        if strip_components:
-            cmd.extend(["--strip-components", str(strip_components)])
         cmd.append(archive)
         if path:
             cmd.append(path.strip("/"))

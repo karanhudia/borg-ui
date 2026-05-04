@@ -215,7 +215,7 @@ def configure_oidc(
         "oidc_claim_full_name": "name",
         "oidc_new_user_mode": "viewer",
         "oidc_default_role": "admin",
-        "oidc_default_all_repositories_role": "admin",
+        "oidc_default_all_repositories_role": "operator",
         "metrics_enabled": current.get("metrics_enabled", False),
         "metrics_require_auth": current.get("metrics_require_auth", False),
         "mqtt_password": "",
