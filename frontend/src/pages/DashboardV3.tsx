@@ -15,7 +15,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Box, Skeleton, Alert, Button, Stack, Typography, Chip } from '@mui/material'
+import { Box, Skeleton, Alert, Button, Stack, Typography, Chip, Tooltip } from '@mui/material'
 import {
   XCircle,
   HardDrive,
@@ -34,6 +34,7 @@ import { formatDistanceToNow, differenceInDays, startOfDay, addDays, format } fr
 import { useTheme } from '../context/ThemeContext'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { dashboardAPI } from '../services/api'
+import { formatDateTimeFull } from '../utils/dateUtils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -463,6 +464,12 @@ function PulseDot({ color, glow }: { color: string; glow: string }) {
 }
 
 type DimHealth = { backup: string; check: string; compact: string }
+type DimStatusItem = {
+  label: string
+  status: string
+  value: string
+  tooltip?: string
+}
 
 const DIM_STATUS: Record<string, { color: string }> = {
   healthy: { color: '#22c55e' },
@@ -482,6 +489,10 @@ function dimSince(dt: string | null, t: (key: string) => string): string {
 
 function dimValue(value: string | null | undefined, t: (key: string) => string): string {
   return value ?? t('common.unknown')
+}
+
+function dimTimestampTooltip(dt: string | null): string | undefined {
+  return dt ? formatDateTimeFull(dt) : undefined
 }
 
 function DimIcon({ status, size = 11 }: { status: string; size?: number }) {
@@ -512,13 +523,14 @@ function DimStatusGrid({
   const T = useT()
   const { t } = useTranslation()
 
-  const items =
+  const items: DimStatusItem[] =
     mode === 'observe'
       ? [
           {
             label: t('dashboard.repositoryHealth.dimensionLabels.freshness'),
             status: dim?.backup ?? 'unknown',
             value: dimSince(lastBackup, t),
+            tooltip: dimTimestampTooltip(lastBackup),
           },
           {
             label: t('dashboard.repositoryHealth.dimensionLabels.archives'),
@@ -534,6 +546,7 @@ function DimStatusGrid({
               dim?.check === 'unknown'
                 ? t('scheduledChecks.notConfigured')
                 : dimSince(lastCheck, t),
+            tooltip: dim?.check === 'unknown' ? undefined : dimTimestampTooltip(lastCheck),
           },
         ]
       : [
@@ -541,16 +554,19 @@ function DimStatusGrid({
             label: t('dashboard.repositoryHealth.dimensionLabels.backup'),
             status: dim?.backup ?? 'unknown',
             value: dimSince(lastBackup, t),
+            tooltip: dimTimestampTooltip(lastBackup),
           },
           {
             label: t('dashboard.repositoryHealth.dimensionLabels.check'),
             status: dim?.check ?? 'unknown',
             value: dimSince(lastCheck, t),
+            tooltip: dimTimestampTooltip(lastCheck),
           },
           {
             label: t('dashboard.repositoryHealth.dimensionLabels.compact'),
             status: dim?.compact ?? 'unknown',
             value: dimSince(lastCompact, t),
+            tooltip: dimTimestampTooltip(lastCompact),
           },
         ]
 
@@ -583,17 +599,21 @@ function DimStatusGrid({
               </Typography>
             </Stack>
             {/* Time value */}
-            <Typography
-              sx={{
-                fontFamily: T.mono,
-                fontSize: '0.62rem',
-                fontWeight: 600,
-                color,
-                lineHeight: 1,
-              }}
-            >
-              {dimValue(item.value, t)}
-            </Typography>
+            <Tooltip title={item.tooltip ?? ''} arrow placement="top">
+              <Typography
+                sx={{
+                  cursor: item.tooltip ? 'help' : 'default',
+                  display: 'inline-block',
+                  fontFamily: T.mono,
+                  fontSize: '0.62rem',
+                  fontWeight: 600,
+                  color,
+                  lineHeight: 1,
+                }}
+              >
+                {dimValue(item.value, t)}
+              </Typography>
+            </Tooltip>
           </Box>
         )
       })}
@@ -1975,11 +1995,22 @@ export default function DashboardV3() {
                               >
                                 {a.repository}
                               </Typography>
-                              <Typography
-                                sx={{ fontFamily: T.mono, fontSize: '0.62rem', color: T.textMuted }}
+                              <Tooltip
+                                title={formatDateTimeFull(a.timestamp)}
+                                arrow
+                                placement="top"
                               >
-                                {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
-                              </Typography>
+                                <Typography
+                                  sx={{
+                                    cursor: 'help',
+                                    fontFamily: T.mono,
+                                    fontSize: '0.62rem',
+                                    color: T.textMuted,
+                                  }}
+                                >
+                                  {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
+                                </Typography>
+                              </Tooltip>
                             </Stack>
                             {a.error && (
                               <Typography

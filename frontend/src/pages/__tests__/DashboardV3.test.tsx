@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Dashboard from '../DashboardV3'
+import { formatDateTimeFull } from '../../utils/dateUtils'
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -325,6 +326,19 @@ describe('DashboardV3', () => {
       await waitFor(() => expect(screen.getAllByText('Observe Only').length).toBeGreaterThan(0))
       expect(screen.getByText('FRESH')).toBeInTheDocument()
       expect(screen.getByText('ARCHIVES')).toBeInTheDocument()
+    })
+
+    it('adds full timestamp tooltips to relative health times', async () => {
+      mockFetchSuccess(makeOverview())
+      renderDashboard()
+      await waitFor(() => screen.getAllByText('my-server'))
+
+      expect(
+        screen.getAllByLabelText(formatDateTimeFull('2026-03-30T10:00:00+00:00')).length
+      ).toBeGreaterThan(0)
+      expect(
+        screen.getAllByLabelText(formatDateTimeFull('2026-03-29T10:00:00+00:00')).length
+      ).toBeGreaterThan(0)
     })
   })
 

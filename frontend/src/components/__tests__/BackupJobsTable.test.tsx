@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/test-utils'
 import BackupJobsTable from '../BackupJobsTable'
 import { MockBackupJob, MockRepository } from '../../test/factories'
+import { formatDateTimeFull } from '../../utils/dateUtils'
 
 describe('BackupJobsTable', () => {
   const mockJobs: MockBackupJob[] = [
@@ -119,6 +120,12 @@ describe('BackupJobsTable', () => {
       // Check that dates are rendered (format will depend on dateUtils implementation)
       const startedCells = screen.getAllByText(/2024/i)
       expect(startedCells.length).toBeGreaterThan(0)
+    })
+
+    it('adds a full timestamp tooltip to started dates', () => {
+      renderWithProviders(<BackupJobsTable jobs={mockJobs} />)
+
+      expect(screen.getByLabelText(formatDateTimeFull(mockJobs[0].started_at))).toBeInTheDocument()
     })
 
     it('renders table headers', () => {
