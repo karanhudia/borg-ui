@@ -151,15 +151,14 @@ Use the **Test** button to execute the script with your parameter values before 
 
 In addition to your custom parameters, scripts have access to system-provided environment variables:
 
-- `REPOSITORY_ID`: Repository ID
-- `REPOSITORY_NAME`: Repository name
-- `REPOSITORY_PATH`: Full repository path
-- `BORG_REPO`: Alias for `REPOSITORY_PATH`
-- `BACKUP_STATUS`: Backup result (for post-backup scripts)
+- `BORG_UI_REPOSITORY_ID`: Repository ID
+- `BORG_UI_REPOSITORY_NAME`: Repository name
+- `BORG_UI_REPOSITORY_PATH`: Full repository path
+- `BORG_UI_BACKUP_STATUS`: Backup result (for post-backup scripts)
   - `success`: Backup completed successfully
   - `failure`: Backup failed
   - `warning`: Backup completed with warnings
-- `HOOK_TYPE`: Hook type
+- `BORG_UI_HOOK_TYPE`: Hook type
   - `pre-backup`: Script runs before backup
   - `post-backup`: Script runs after backup
 
@@ -173,7 +172,7 @@ WEBHOOK_URL="${WEBHOOK_URL}"
 SERVICE_NAME="${SERVICE_NAME}"
 
 # Use system variables
-MESSAGE="Backup of $REPOSITORY_NAME to $BORG_REPO completed with status: $BACKUP_STATUS"
+MESSAGE="Backup of $BORG_UI_REPOSITORY_NAME to $BORG_UI_REPOSITORY_PATH completed with status: $BORG_UI_BACKUP_STATUS"
 
 curl -X POST "$WEBHOOK_URL" \
   -H "Content-Type: application/json" \
@@ -303,10 +302,10 @@ WEBHOOK_URL="${WEBHOOK_URL}"
 MESSAGE_PREFIX="${MESSAGE_PREFIX:-Backup}"
 
 # Use system variables
-if [ "$BACKUP_STATUS" = "success" ]; then
+if [ "$BORG_UI_BACKUP_STATUS" = "success" ]; then
   COLOR="good"
   EMOJI="✅"
-elif [ "$BACKUP_STATUS" = "failure" ]; then
+elif [ "$BORG_UI_BACKUP_STATUS" = "failure" ]; then
   COLOR="danger"
   EMOJI="❌"
 else
@@ -314,7 +313,7 @@ else
   EMOJI="⚠️"
 fi
 
-MESSAGE="$EMOJI $MESSAGE_PREFIX of *$REPOSITORY_NAME* $BACKUP_STATUS"
+MESSAGE="$EMOJI $MESSAGE_PREFIX of *$BORG_UI_REPOSITORY_NAME* $BORG_UI_BACKUP_STATUS"
 
 curl -X POST "$WEBHOOK_URL" \
   -H "Content-Type: application/json" \
