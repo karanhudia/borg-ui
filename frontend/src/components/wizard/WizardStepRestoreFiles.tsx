@@ -21,6 +21,7 @@ import { BorgApiClient, type Repository } from '../../services/borgApi/client'
 import type { Archive } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { translateBackendKey } from '../../utils/translateBackendKey'
+import type { RestorePathMetadata } from '../../utils/restorePaths'
 
 interface ArchiveItem {
   name: string
@@ -31,6 +32,7 @@ interface ArchiveItem {
 
 export interface RestoreFilesStepData {
   selectedPaths: string[]
+  selectedItems?: RestorePathMetadata[]
 }
 
 interface WizardStepRestoreFilesProps {
@@ -52,6 +54,7 @@ export default function WizardStepRestoreFiles({
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const selectedPaths = new Set(data.selectedPaths || [])
+  const selectedItems = data.selectedItems || []
 
   // Fetch archive contents for current path
   useEffect(() => {
@@ -88,19 +91,24 @@ export default function WizardStepRestoreFiles({
     if (item.type === 'directory') {
       setCurrentPath(item.path)
     } else {
-      toggleSelection(item.path)
+      toggleSelection(item)
     }
   }
 
   // Toggle path selection
-  const toggleSelection = (path: string) => {
+  const toggleSelection = (item: ArchiveItem) => {
+    const path = item.path
     const newPaths = new Set(selectedPaths)
+    let newItems = selectedItems.filter((selectedItem) => selectedItem.path !== path)
+
     if (newPaths.has(path)) {
       newPaths.delete(path)
     } else {
       newPaths.add(path)
+      newItems = [...newItems, { path, type: item.type }]
     }
-    onChange({ selectedPaths: Array.from(newPaths) })
+
+    onChange({ selectedPaths: Array.from(newPaths), selectedItems: newItems })
   }
 
   // Navigate to path
@@ -250,7 +258,7 @@ export default function WizardStepRestoreFiles({
             <Chip
               label={t('wizard.restoreFiles.clearAll')}
               size="small"
-              onClick={() => onChange({ selectedPaths: [] })}
+              onClick={() => onChange({ selectedPaths: [], selectedItems: [] })}
               sx={{ ml: 'auto', cursor: 'pointer', height: 24 }}
             />
           )}
@@ -287,11 +295,7 @@ export default function WizardStepRestoreFiles({
                   secondaryAction={
                     item.type === 'directory' ? (
                       <Tooltip title={t('wizard.restoreFiles.selectDirTooltip')}>
-                        <IconButton
-                          edge="end"
-                          size="small"
-                          onClick={() => toggleSelection(item.path)}
-                        >
+                        <IconButton edge="end" size="small" onClick={() => toggleSelection(item)}>
                           {getDirectoryIcon(item)}
                         </IconButton>
                       </Tooltip>

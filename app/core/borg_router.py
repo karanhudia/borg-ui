@@ -133,6 +133,7 @@ class BorgRouter:
         paths: List[str],
         remote_path: str = None,
         bypass_lock: bool = False,
+        strip_components: Optional[int] = None,
     ) -> List[str]:
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
@@ -143,6 +144,7 @@ class BorgRouter:
                 paths=paths,
                 remote_path=remote_path,
                 bypass_lock=bypass_lock,
+                strip_components=strip_components,
             )
 
         cmd = ["borg", "extract", "--progress", "--log-json"]
@@ -150,6 +152,8 @@ class BorgRouter:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
             cmd.append("--bypass-lock")
+        if strip_components:
+            cmd.extend(["--strip-components", str(strip_components)])
         cmd.append(f"{repository_path}::{archive_name}")
         if paths:
             cmd.extend(paths)

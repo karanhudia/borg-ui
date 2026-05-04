@@ -22,6 +22,7 @@ import { Archive, Repository } from '@/types'
 import LockErrorDialog from '../components/LockErrorDialog'
 import { useAnalytics } from '../hooks/useAnalytics'
 import RestoreWizard, { RestoreData } from '../components/RestoreWizard'
+import type { RestoreLayout, RestorePathMetadata } from '../utils/restorePaths'
 import { getRepoCapabilities, getBorgVersion } from '../utils/repoCapabilities'
 import { usePermissions } from '../hooks/usePermissions'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
@@ -230,6 +231,8 @@ const Archives: React.FC = () => {
       repository_id,
       destination_type,
       destination_connection_id,
+      restore_layout,
+      path_metadata,
     }: {
       repository: string
       archive: string
@@ -238,6 +241,8 @@ const Archives: React.FC = () => {
       repository_id: number
       destination_type: string
       destination_connection_id: number | null
+      restore_layout: RestoreLayout
+      path_metadata: RestorePathMetadata[]
     }) =>
       restoreAPI.startRestore(
         repository,
@@ -246,7 +251,9 @@ const Archives: React.FC = () => {
         destination,
         repository_id,
         destination_type,
-        destination_connection_id
+        destination_connection_id,
+        restore_layout,
+        path_metadata
       ),
     onSuccess: (_response, variables) => {
       toast.success(t('archives.restoreStarted'), {
@@ -255,6 +262,7 @@ const Archives: React.FC = () => {
       trackArchive(EventAction.START, selectedRepository || undefined, {
         operation: 'restore',
         destination_type: variables.destination_type,
+        restore_layout: variables.restore_layout,
         restore_path_count: variables.paths.length,
         uses_custom_destination: variables.destination !== '/',
         archive_age_bucket: getArchiveAgeBucket(restoreArchive?.start),
@@ -358,6 +366,8 @@ const Archives: React.FC = () => {
       repository_id: selectedRepository.id,
       destination_type: data.destination_type,
       destination_connection_id: data.destination_connection_id,
+      restore_layout: data.restore_layout,
+      path_metadata: data.path_metadata,
     })
 
     setShowRestoreWizard(false)

@@ -21,6 +21,12 @@ import {
 import { Server, Cloud, FileCheck, FolderOpen } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
+import {
+  DEFAULT_RESTORE_LAYOUT,
+  getRestorePreviewDestination,
+  type RestoreLayout,
+  type RestorePathMetadata,
+} from '../../utils/restorePaths'
 
 interface SSHConnection {
   id: number
@@ -38,10 +44,12 @@ export interface RestoreDestinationStepData {
   destinationConnectionId: number | ''
   restoreStrategy: 'original' | 'custom'
   customPath: string
+  restoreLayout: RestoreLayout
 }
 
 interface WizardStepRestoreDestinationProps {
   data: RestoreDestinationStepData
+  selectedItems: RestorePathMetadata[]
   sshConnections: SSHConnection[]
   repositoryType: string
   onChange: (data: Partial<RestoreDestinationStepData>) => void
@@ -50,6 +58,7 @@ interface WizardStepRestoreDestinationProps {
 
 export default function WizardStepRestoreDestination({
   data,
+  selectedItems,
   sshConnections,
   repositoryType,
   onChange,
@@ -82,6 +91,29 @@ export default function WizardStepRestoreDestination({
     const path = data.customPath.startsWith('/') ? data.customPath : `/${data.customPath}`
     return `ssh://${selectedSshConnection.username}@${selectedSshConnection.host}:${selectedSshConnection.port}${path}`
   }
+
+  const sshPrefix = selectedSshConnection
+    ? `ssh://${selectedSshConnection.username}@${selectedSshConnection.host}:${selectedSshConnection.port}`
+    : ''
+
+  const restoreLayout = data.restoreLayout || DEFAULT_RESTORE_LAYOUT
+  const previewItems = selectedItems.slice(0, 3)
+  const hiddenPreviewCount = Math.max(selectedItems.length - previewItems.length, 0)
+
+  const getPreviewDestination = (item: RestorePathMetadata) =>
+    getRestorePreviewDestination(item.path, {
+      restoreStrategy: data.restoreStrategy,
+      customPath: data.customPath,
+      restoreLayout,
+      selectedItems,
+      sshPrefix,
+    })
+
+  const isContentsOnlyDirectoryPreview = (item: RestorePathMetadata) =>
+    data.restoreStrategy === 'custom' &&
+    restoreLayout === 'contents_only' &&
+    selectedItems.length === 1 &&
+    item.type === 'directory'
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -409,20 +441,141 @@ export default function WizardStepRestoreDestination({
               ),
             }}
           />
-          {data.customPath && (
-            <Alert
-              severity="info"
-              icon={data.destinationType === 'ssh' ? <Cloud size={18} /> : <Server size={18} />}
-              sx={{ mt: 1 }}
+
+          <FormControl component="fieldset">
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              {t('wizard.restoreDestination.pathLayout')}
+            </Typography>
+            <RadioGroup
+              value={restoreLayout}
+              onChange={(e) => onChange({ restoreLayout: e.target.value as RestoreLayout })}
             >
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {t('wizard.restoreDestination.filesWillBeRestoredTo')}
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#1976d2', mt: 0.5 }}
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  mb: 1,
+                  borderColor: restoreLayout === 'preserve_path' ? '#1976d2' : 'divider',
+                  bgcolor:
+                    restoreLayout === 'preserve_path'
+                      ? (theme) => alpha('#1976d2', theme.palette.mode === 'dark' ? 0.12 : 0.06)
+                      : 'background.paper',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s, background-color 0.2s',
+                  '&:hover': { borderColor: '#1976d2' },
+                }}
+                onClick={() => onChange({ restoreLayout: 'preserve_path' })}
               >
-                {data.destinationType === 'ssh' ? getSshUrlPreview() : data.customPath}
+                <FormControlLabel
+                  value="preserve_path"
+                  control={<Radio size="small" />}
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>
+                        {t('wizard.restoreDestination.preserveArchivePath')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('wizard.restoreDestination.preserveArchivePathDesc')}
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ m: 0, width: '100%' }}
+                />
+              </Paper>
+
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  borderColor: restoreLayout === 'contents_only' ? '#1976d2' : 'divider',
+                  bgcolor:
+                    restoreLayout === 'contents_only'
+                      ? (theme) => alpha('#1976d2', theme.palette.mode === 'dark' ? 0.12 : 0.06)
+                      : 'background.paper',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s, background-color 0.2s',
+                  '&:hover': { borderColor: '#1976d2' },
+                }}
+                onClick={() => onChange({ restoreLayout: 'contents_only' })}
+              >
+                <FormControlLabel
+                  value="contents_only"
+                  control={<Radio size="small" />}
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>
+                        {t('wizard.restoreDestination.restoreContentsHere')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('wizard.restoreDestination.restoreContentsHereDesc')}
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ m: 0, width: '100%' }}
+                />
+              </Paper>
+            </RadioGroup>
+          </FormControl>
+
+          {data.customPath && previewItems.length > 0 && (
+            <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'background.default' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                {t('wizard.restoreDestination.restorePathPreview')}
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                {previewItems.map((item) => (
+                  <Box
+                    key={item.path}
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '88px 1fr' },
+                      columnGap: 1,
+                      rowGap: 0.25,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {t('wizard.restoreDestination.archivePath')}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}
+                    >
+                      {item.path}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('wizard.restoreDestination.restorePath')}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                        color: '#1976d2',
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {getPreviewDestination(item)}
+                      {isContentsOnlyDirectoryPreview(item) && (
+                        <Box component="span" sx={{ color: 'text.secondary', ml: 0.5 }}>
+                          {t('wizard.restoreDestination.contentsOnlyMarker')}
+                        </Box>
+                      )}
+                    </Typography>
+                  </Box>
+                ))}
+                {hiddenPreviewCount > 0 && (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('wizard.restoreDestination.andMoreItems', { count: hiddenPreviewCount })}
+                  </Typography>
+                )}
+              </Box>
+            </Paper>
+          )}
+
+          {data.customPath && data.destinationType === 'ssh' && selectedSshConnection && (
+            <Alert severity="info" icon={<Cloud size={18} />} sx={{ mt: -1, py: 0.5 }}>
+              <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                {getSshUrlPreview()}
               </Typography>
             </Alert>
           )}

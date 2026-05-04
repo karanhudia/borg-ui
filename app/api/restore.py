@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 import structlog
-from typing import List, Optional
+from typing import List, Literal, Optional
 import json
 import os  # noqa: F401
 from datetime import timezone
@@ -46,6 +46,11 @@ def _build_repo_env(repo: Repository, db: Session):
     return env, temp_key_file
 
 
+class RestorePathMetadata(BaseModel):
+    path: str
+    type: Literal["file", "directory"]
+
+
 class RestoreRequest(BaseModel):
     repository: str
     archive: str
@@ -57,6 +62,14 @@ class RestoreRequest(BaseModel):
     destination_connection_id: Optional[int] = (
         None  # SSH connection ID for SSH destinations
     )
+    restore_layout: Literal["preserve_path", "contents_only"] = "preserve_path"
+    path_metadata: List[RestorePathMetadata] = Field(default_factory=list)
+
+
+def _restore_path_metadata_to_dict(item: RestorePathMetadata) -> dict:
+    if hasattr(item, "model_dump"):
+        return item.model_dump()
+    return item.dict()
 
 
 @router.post("/preview")
@@ -192,6 +205,11 @@ async def start_restore(
                 ssh_connection_id=repository.connection_id
                 if repository.repository_type == "ssh"
                 else None,
+                restore_layout=restore_request.restore_layout,
+                path_metadata=[
+                    _restore_path_metadata_to_dict(item)
+                    for item in restore_request.path_metadata
+                ],
             )
         )
 
@@ -200,6 +218,7 @@ async def start_restore(
             job_id=restore_job.id,
             user=current_user.username,
             execution_mode=execution_mode,
+            restore_layout=restore_request.restore_layout,
         )
 
         return {

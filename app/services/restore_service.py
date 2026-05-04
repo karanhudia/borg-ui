@@ -12,6 +12,10 @@ from app.database.database import SessionLocal
 from app.core.borg_router import BorgRouter
 from app.services.notification_service import notification_service
 from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
+from app.utils.restore_layout import (
+    RESTORE_LAYOUT_PRESERVE_PATH,
+    compute_restore_strip_components,
+)
 
 logger = structlog.get_logger()
 
@@ -33,6 +37,8 @@ class RestoreService:
         destination_type: str = "local",
         destination_connection_id: Optional[int] = None,
         ssh_connection_id: Optional[int] = None,
+        restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
+        path_metadata: Optional[list] = None,
     ):
         """
         Execute a restore operation with progress tracking
@@ -48,6 +54,8 @@ class RestoreService:
             destination_type: Type of destination ('local' or 'ssh')
             destination_connection_id: SSH connection ID for SSH destinations
             ssh_connection_id: SSH connection ID for SSH repositories
+            restore_layout: How selected archive paths should be laid out at destination
+            path_metadata: Selected path type metadata from the archive browser
         """
         # Determine execution mode and route to appropriate method
         execution_mode = f"{repository_type}_to_{destination_type}"
@@ -62,11 +70,23 @@ class RestoreService:
 
         if execution_mode == "local_to_local":
             await self._execute_local_to_local(
-                job_id, repository_path, archive_name, destination, paths
+                job_id,
+                repository_path,
+                archive_name,
+                destination,
+                paths,
+                restore_layout=restore_layout,
+                path_metadata=path_metadata,
             )
         elif execution_mode == "ssh_to_local":
             await self._execute_ssh_to_local(
-                job_id, repository_path, archive_name, destination, paths
+                job_id,
+                repository_path,
+                archive_name,
+                destination,
+                paths,
+                restore_layout=restore_layout,
+                path_metadata=path_metadata,
             )
         elif execution_mode == "local_to_ssh":
             await self._execute_local_to_ssh(
@@ -76,6 +96,8 @@ class RestoreService:
                 destination,
                 paths,
                 destination_connection_id,
+                restore_layout=restore_layout,
+                path_metadata=path_metadata,
             )
         else:
             # This should never happen due to API validation, but handle it gracefully
@@ -109,6 +131,8 @@ class RestoreService:
         archive_name: str,
         destination: str,
         paths: list = None,
+        restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
+        path_metadata: Optional[list] = None,
     ):
         """
         Execute restore from local repository to local destination
@@ -153,6 +177,7 @@ class RestoreService:
                 archive=archive_name,
                 destination=destination,
                 paths=paths,
+                restore_layout=restore_layout,
             )
 
             # Ensure destination directory exists
@@ -175,6 +200,11 @@ class RestoreService:
                     return
 
             try:
+                strip_components = compute_restore_strip_components(
+                    paths or [],
+                    restore_layout=restore_layout,
+                    path_metadata=path_metadata,
+                )
                 repo_for_routing = repository or SimpleNamespace(
                     borg_version=1,
                     path=repository_path,
@@ -188,6 +218,7 @@ class RestoreService:
                     paths=paths or [],
                     remote_path=repository.remote_path if repository else None,
                     bypass_lock=repository.bypass_lock if repository else False,
+                    strip_components=strip_components,
                 )
 
                 # Set up environment
@@ -710,6 +741,8 @@ class RestoreService:
         archive_name: str,
         destination: str,
         paths: list = None,
+        restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
+        path_metadata: Optional[list] = None,
     ):
         """
         Execute restore from SSH repository to local destination
@@ -719,7 +752,13 @@ class RestoreService:
         # This is essentially the same as local_to_local since borg handles SSH repos natively
         # The repository_path should already be in SSH URL format (ssh://user@host/path)
         await self._execute_local_to_local(
-            job_id, repository_path, archive_name, destination, paths
+            job_id,
+            repository_path,
+            archive_name,
+            destination,
+            paths,
+            restore_layout=restore_layout,
+            path_metadata=path_metadata,
         )
 
     async def _execute_local_to_ssh(
@@ -730,6 +769,8 @@ class RestoreService:
         destination: str,
         paths: list = None,
         destination_connection_id: int = None,
+        restore_layout: str = RESTORE_LAYOUT_PRESERVE_PATH,
+        path_metadata: Optional[list] = None,
     ):
         """
         Execute restore from local repository to SSH destination using SSHFS.
@@ -788,6 +829,7 @@ class RestoreService:
                 repository=repository_path,
                 archive=archive_name,
                 ssh_destination=f"{ssh_connection.username}@{ssh_connection.host}:{destination}",
+                restore_layout=restore_layout,
             )
 
             # Mount SSH destination via SSHFS
@@ -818,6 +860,11 @@ class RestoreService:
             # Ensure mount directory exists
             os.makedirs(mount_path, exist_ok=True)
 
+            strip_components = compute_restore_strip_components(
+                paths or [],
+                restore_layout=restore_layout,
+                path_metadata=path_metadata,
+            )
             repo_for_routing = repository or SimpleNamespace(
                 borg_version=1,
                 path=repository_path,
@@ -831,6 +878,7 @@ class RestoreService:
                 paths=paths or [],
                 remote_path=repository.remote_path if repository else None,
                 bypass_lock=repository.bypass_lock if repository else False,
+                strip_components=strip_components,
             )
 
             # Set up environment

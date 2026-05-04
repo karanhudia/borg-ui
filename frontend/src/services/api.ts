@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
 import { attachAccessTokenHeader } from './authHeaders'
+import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
 
 export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
@@ -356,7 +357,9 @@ export const restoreAPI = {
     destination: string,
     repository_id: number,
     destination_type: string = 'local',
-    destination_connection_id: number | null = null
+    destination_connection_id: number | null = null,
+    restore_layout: RestoreLayout = 'preserve_path',
+    path_metadata: RestorePathMetadata[] = []
   ) =>
     api.post('/restore/start', {
       repository,
@@ -366,6 +369,8 @@ export const restoreAPI = {
       repository_id,
       destination_type,
       destination_connection_id,
+      restore_layout,
+      path_metadata,
     }),
   getRestoreJobs: () => api.get('/restore/jobs'),
   getRestoreStatus: (jobId: number) => api.get(`/restore/status/${jobId}`),

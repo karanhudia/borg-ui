@@ -19,6 +19,8 @@ import {
 import FileExplorerDialog from './FileExplorerDialog'
 import { sshKeysAPI } from '../services/api'
 import type { Archive, Repository } from '../types'
+import type { RestoreLayout, RestorePathMetadata } from '../utils/restorePaths'
+import { DEFAULT_RESTORE_LAYOUT } from '../utils/restorePaths'
 
 interface SSHConnection {
   id: number
@@ -33,6 +35,7 @@ interface SSHConnection {
 
 interface ArchiveFile {
   path: string
+  type: 'file' | 'directory'
   mode: string
   user: string
   group: string
@@ -56,11 +59,14 @@ export interface RestoreData {
   destination_connection_id: number | null
   restore_strategy: 'original' | 'custom'
   custom_path: string | null
+  restore_layout: RestoreLayout
+  path_metadata: RestorePathMetadata[]
 }
 
 interface WizardState {
   // Step 0: Files
   selectedPaths: string[]
+  selectedItems: RestorePathMetadata[]
 
   // Step 1: Destination
   destinationType: 'local' | 'ssh'
@@ -69,14 +75,17 @@ interface WizardState {
   // Step 2: Path
   restoreStrategy: 'original' | 'custom'
   customPath: string
+  restoreLayout: RestoreLayout
 }
 
 const initialState: WizardState = {
   selectedPaths: [],
+  selectedItems: [],
   destinationType: 'local',
   destinationConnectionId: '',
   restoreStrategy: 'original',
   customPath: '',
+  restoreLayout: DEFAULT_RESTORE_LAYOUT,
 }
 
 const RestoreWizard = ({
@@ -153,7 +162,26 @@ const RestoreWizard = ({
     if (repositoryType === 'ssh' && updates.destinationType === 'ssh') {
       return // Silently ignore
     }
-    setWizardState((prev) => ({ ...prev, ...updates }))
+    setWizardState((prev) => {
+      const next: WizardState = { ...prev, ...updates }
+
+      if (updates.selectedPaths && !updates.selectedItems) {
+        const selectedPathSet = new Set(updates.selectedPaths)
+        const retainedItems = prev.selectedItems.filter((item) => selectedPathSet.has(item.path))
+        const retainedPathSet = new Set(retainedItems.map((item) => item.path))
+        const fallbackItems = updates.selectedPaths
+          .filter((path) => !retainedPathSet.has(path))
+          .map((path) => ({ path, type: 'file' as const }))
+
+        next.selectedItems = [...retainedItems, ...fallbackItems]
+      }
+
+      if (updates.restoreStrategy === 'original') {
+        next.restoreLayout = DEFAULT_RESTORE_LAYOUT
+      }
+
+      return next
+    })
   }
 
   // Handle SSH connection selection
@@ -213,6 +241,13 @@ const RestoreWizard = ({
           : null,
       restore_strategy: wizardState.restoreStrategy,
       custom_path: wizardState.restoreStrategy === 'custom' ? wizardState.customPath : null,
+      restore_layout:
+        wizardState.restoreStrategy === 'custom'
+          ? wizardState.restoreLayout
+          : DEFAULT_RESTORE_LAYOUT,
+      path_metadata: wizardState.selectedItems.filter((item) =>
+        wizardState.selectedPaths.includes(item.path)
+      ),
     }
 
     onRestore(data)
@@ -225,6 +260,7 @@ const RestoreWizard = ({
     // Convert selectedPaths to ArchiveFile format for compatibility
     const selectedFiles: ArchiveFile[] = wizardState.selectedPaths.map((path) => ({
       path,
+      type: wizardState.selectedItems.find((item) => item.path === path)?.type || 'file',
       mode: '',
       user: '',
       group: '',
@@ -241,6 +277,7 @@ const RestoreWizard = ({
             archive={archive}
             data={{
               selectedPaths: wizardState.selectedPaths,
+              selectedItems: wizardState.selectedItems,
             }}
             onChange={handleStateChange}
           />
@@ -254,7 +291,9 @@ const RestoreWizard = ({
               destinationConnectionId: wizardState.destinationConnectionId,
               restoreStrategy: wizardState.restoreStrategy,
               customPath: wizardState.customPath,
+              restoreLayout: wizardState.restoreLayout,
             }}
+            selectedItems={wizardState.selectedItems}
             sshConnections={sshConnections}
             repositoryType={repositoryType}
             onChange={(updates) => {
@@ -280,6 +319,7 @@ const RestoreWizard = ({
               destinationConnectionId: wizardState.destinationConnectionId,
               restoreStrategy: wizardState.restoreStrategy,
               customPath: wizardState.customPath,
+              restoreLayout: wizardState.restoreLayout,
             }}
             selectedFiles={selectedFiles}
             sshConnections={sshConnections}
