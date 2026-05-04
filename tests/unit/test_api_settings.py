@@ -209,6 +209,115 @@ class TestSystemSettings:
         test_db.refresh(settings)
         assert settings.metrics_token == body["generated_metrics_token"]
 
+    def test_update_system_settings_persists_oidc_client_secret_basic(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "oidc_token_auth_method": "client_secret_basic",
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(settings)
+        assert settings.oidc_token_auth_method == "client_secret_basic"
+
+        get_response = test_client.get("/api/settings/system", headers=admin_headers)
+        assert get_response.status_code == 200
+        assert (
+            get_response.json()["settings"]["oidc_token_auth_method"]
+            == "client_secret_basic"
+        )
+
+    def test_update_system_settings_rejects_invalid_oidc_token_auth_method(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "oidc_token_auth_method": "private_key_jwt",
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidOidcTokenAuthMethod"
+        )
+
+    def test_update_system_settings_rejects_disabling_local_auth_without_oidc_admin(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "oidc_enabled": True,
+                "oidc_disable_local_auth": True,
+                "oidc_discovery_url": "https://id.example.com/.well-known/openid-configuration",
+                "oidc_client_id": "borg-ui",
+                "oidc_client_secret": "secret-value",
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.oidcLocalAuthRequiresOidcAdmin"
+        )
+
+    def test_update_system_settings_allows_disabling_local_auth_with_linked_oidc_admin(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        oidc_admin = User(
+            username="oidc-admin",
+            email="oidc-admin@example.com",
+            password_hash="",
+            role="admin",
+            is_active=True,
+            auth_source="local",
+            oidc_subject="admin-subject",
+        )
+        test_db.add(settings)
+        test_db.add(oidc_admin)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "oidc_enabled": True,
+                "oidc_disable_local_auth": True,
+                "oidc_discovery_url": "https://id.example.com/.well-known/openid-configuration",
+                "oidc_client_id": "borg-ui",
+                "oidc_client_secret": "secret-value",
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(settings)
+        assert settings.oidc_disable_local_auth is True
+
     def test_update_system_settings_rotates_metrics_token(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -381,6 +490,55 @@ class TestUserManagement:
         assert "users" in data
         assert isinstance(data["users"], list)
 
+    def test_list_users_includes_auth_source_fields(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        oidc_user = User(
+            username="oidc-user",
+            email="oidc-user@example.com",
+            password_hash="",
+            role="viewer",
+            is_active=False,
+            auth_source="oidc",
+            oidc_subject="subject-xyz",
+        )
+        test_db.add(oidc_user)
+        test_db.commit()
+
+        response = test_client.get("/api/settings/users", headers=admin_headers)
+
+        assert response.status_code == 200
+        users = response.json()["users"]
+        oidc_payload = next(user for user in users if user["username"] == "oidc-user")
+        assert oidc_payload["auth_source"] == "oidc"
+        assert oidc_payload["oidc_subject"] == "subject-xyz"
+
+    def test_update_user_can_approve_pending_oidc_user(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        pending_user = User(
+            username="pending-oidc",
+            email="pending-oidc@example.com",
+            password_hash="",
+            role="viewer",
+            is_active=False,
+            auth_source="oidc",
+            oidc_subject="subject-pending",
+        )
+        test_db.add(pending_user)
+        test_db.commit()
+        test_db.refresh(pending_user)
+
+        response = test_client.put(
+            f"/api/settings/users/{pending_user.id}",
+            json={"is_active": True},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(pending_user)
+        assert pending_user.is_active is True
+
     def test_list_users_unauthorized(self, test_client: TestClient):
         """Test listing users without auth returns 403"""
         response = test_client.get("/api/settings/users")
@@ -461,6 +619,77 @@ class TestUserManagement:
         )
 
         assert response.status_code == 200
+
+    def test_update_user_can_set_and_clear_oidc_subject(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        user = User(
+            username="linkable-user",
+            email="linkable@example.com",
+            role="viewer",
+            password_hash="fakehash",
+            auth_source="local",
+        )
+        test_db.add(user)
+        test_db.commit()
+        test_db.refresh(user)
+
+        link_response = test_client.put(
+            f"/api/settings/users/{user.id}",
+            json={"auth_source": "oidc", "oidc_subject": "issuer|subject-123"},
+            headers=admin_headers,
+        )
+
+        assert link_response.status_code == 200
+        test_db.refresh(user)
+        assert user.auth_source == "oidc"
+        assert user.oidc_subject == "issuer|subject-123"
+
+        clear_response = test_client.put(
+            f"/api/settings/users/{user.id}",
+            json={"auth_source": "local", "oidc_subject": None},
+            headers=admin_headers,
+        )
+
+        assert clear_response.status_code == 200
+        test_db.refresh(user)
+        assert user.auth_source == "local"
+        assert user.oidc_subject is None
+
+    def test_update_user_rejects_duplicate_oidc_subject(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        existing_user = User(
+            username="existing-oidc-subject",
+            email="existing-oidc-subject@example.com",
+            role="viewer",
+            password_hash="",
+            auth_source="oidc",
+            oidc_subject="issuer|duplicate",
+        )
+        target_user = User(
+            username="target-oidc-subject",
+            email="target-oidc-subject@example.com",
+            role="viewer",
+            password_hash="fakehash",
+            auth_source="local",
+        )
+        test_db.add(existing_user)
+        test_db.add(target_user)
+        test_db.commit()
+        test_db.refresh(target_user)
+
+        response = test_client.put(
+            f"/api/settings/users/{target_user.id}",
+            json={"auth_source": "oidc", "oidc_subject": "issuer|duplicate"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 409
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.auth.oidcIdentityConflict"
+        )
 
     def test_update_user_nonexistent(self, test_client: TestClient, admin_headers):
         """Test updating non-existent user returns 404"""
