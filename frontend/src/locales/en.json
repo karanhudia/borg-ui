@@ -50,6 +50,7 @@
     "type": "Type",
     "repository": "Repository",
     "schedule": "Schedule",
+    "timezone": "Timezone",
     "created": "Created",
     "lastLogin": "Last Login",
     "undoneWarning": "This action cannot be undone.",
@@ -2004,6 +2005,7 @@
     "editCheckSchedule": "Edit Check Schedule",
     "addCheckSchedule": "Add Check Schedule",
     "checkScheduleLabel": "Check Schedule",
+    "timezoneLabel": "Timezone",
     "maxDuration": "Max Duration (seconds)",
     "maxDurationHint": "Time limit for check operation (3600 = 1 hour)",
     "maxDurationHintBorg2": "For Borg 2, a time limit runs a partial repository-only check (3600 = 1 hour). Use 0 to include archive checks.",
@@ -2286,6 +2288,7 @@
       "config": {
         "scheduleLabel": "Schedule (Cron Expression)",
         "scheduleHelper": "Click the clock icon to use the visual builder.",
+        "timezoneLabel": "Timezone",
         "nextRunTimes": "Next 3 Run Times:"
       },
       "review": {
@@ -2295,6 +2298,7 @@
         "name": "Name",
         "repositories": "Repositories ({{count}})",
         "schedule": "Schedule",
+        "timezone": "Timezone",
         "archiveNameTemplate": "Archive Name Template",
         "scriptsConfiguration": "Scripts Configuration",
         "preBackupScript": "Pre-Backup Script",

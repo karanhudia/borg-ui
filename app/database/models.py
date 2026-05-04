@@ -209,6 +209,9 @@ class Repository(Base):
     check_cron_expression = Column(
         String, nullable=True
     )  # NULL = disabled, cron expression for schedule
+    check_timezone = Column(
+        String, default="UTC", nullable=False
+    )  # IANA timezone used to interpret check_cron_expression
     last_scheduled_check = Column(
         DateTime, nullable=True
     )  # Last scheduled check execution time
@@ -427,6 +430,9 @@ class ScheduledJob(Base):
     cron_expression = Column(
         String, nullable=False
     )  # e.g., "0 2 * * *" for daily at 2 AM
+    timezone = Column(
+        String, default="UTC", nullable=False
+    )  # IANA timezone used to interpret cron_expression
     repository = Column(
         String, nullable=True
     )  # Repository path/ID to backup (legacy, for single-repo schedules)

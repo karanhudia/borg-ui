@@ -155,13 +155,14 @@ export default function RepositoryCard({
 
   const scheduleBadge = (() => {
     if (!repository.has_schedule) return null
+    const scheduleTimezone = repository.schedule_timezone || 'UTC'
 
     if (repository.schedule_enabled === false) {
       return {
         label: t('repositoryCard.schedulePaused'),
         title: repository.schedule_name
-          ? t('repositoryCard.schedulePausedWithName', { name: repository.schedule_name })
-          : t('repositoryCard.schedulePaused'),
+          ? `${t('repositoryCard.schedulePausedWithName', { name: repository.schedule_name })} (${scheduleTimezone})`
+          : `${t('repositoryCard.schedulePaused')} (${scheduleTimezone})`,
         color: theme.palette.warning.main,
         bg: alpha(theme.palette.warning.main, isDark ? 0.12 : 0.1),
         border: alpha(theme.palette.warning.main, isDark ? 0.34 : 0.28),
@@ -184,11 +185,13 @@ export default function RepositoryCard({
     return {
       label: t('repositoryCard.nextBackupBadge', { when: whenLabel }),
       title: repository.schedule_name
-        ? t('repositoryCard.nextBackupWithName', {
+        ? `${t('repositoryCard.nextBackupWithName', {
             name: repository.schedule_name,
             when: formatDateTimeFull(repository.next_run),
-          })
-        : t('repositoryCard.nextBackupBadge', { when: formatDateTimeFull(repository.next_run) }),
+          })} (${scheduleTimezone})`
+        : `${t('repositoryCard.nextBackupBadge', {
+            when: formatDateTimeFull(repository.next_run),
+          })} (${scheduleTimezone})`,
       color: theme.palette.success.main,
       bg: alpha(theme.palette.success.main, isDark ? 0.12 : 0.09),
       border: alpha(theme.palette.success.main, isDark ? 0.32 : 0.24),

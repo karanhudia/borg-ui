@@ -88,6 +88,42 @@ async def test_check_scheduler_ignores_invalid_cron_expression(db_session):
     assert repo.next_scheduled_check is None
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_check_scheduler_uses_repository_check_timezone(db_session):
+    repo = Repository(
+        name="Repo",
+        path="/tmp/repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        check_cron_expression="0 2 * * *",
+        check_timezone="Asia/Kolkata",
+    )
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+
+    fake_router = MagicMock()
+    fake_router.check.return_value = AsyncMock()
+    with patch("app.services.check_scheduler.BorgRouter", return_value=fake_router):
+        with patch(
+            "app.services.check_scheduler.start_background_maintenance_job"
+        ) as mock_start:
+            mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
+                id=44,
+                repository_id=repo.id,
+                status="pending",
+                scheduled_check=True,
+            )
+            await run_due_scheduled_checks(
+                db_session, datetime(2026, 1, 1, 20, 0, tzinfo=timezone.utc)
+            )
+
+    db_session.refresh(repo)
+    assert repo.next_scheduled_check == datetime(2026, 1, 1, 20, 30)
+
+
 class _AsyncLineStream:
     def __init__(self, lines):
         self._lines = [

@@ -50,6 +50,7 @@
     "type": "Tipo",
     "repository": "Repository",
     "schedule": "Pianificazione",
+    "timezone": "Fuso orario",
     "created": "Creato",
     "lastLogin": "Ultimo Accesso",
     "undoneWarning": "Questa azione non può essere annullata.",
@@ -2004,6 +2005,7 @@
     "editCheckSchedule": "Modifica Pianificazione Controllo",
     "addCheckSchedule": "Aggiungi Pianificazione Controllo",
     "checkScheduleLabel": "Pianificazione Controllo",
+    "timezoneLabel": "Fuso orario",
     "maxDuration": "Durata Massima (secondi)",
     "maxDurationHint": "Limite di tempo per l'operazione di controllo (3600 = 1 ora)",
     "maxDurationHintBorg2": "Con Borg 2, un limite di tempo esegue un controllo parziale del solo repository (3600 = 1 ora). Usa 0 per includere i controlli degli archivi.",
@@ -2286,6 +2288,7 @@
       "config": {
         "scheduleLabel": "Pianificazione (Espressione Cron)",
         "scheduleHelper": "Clicca l'icona dell'orologio per usare il costruttore visivo.",
+        "timezoneLabel": "Fuso orario",
         "nextRunTimes": "Prossimi 3 Orari di Esecuzione:"
       },
       "review": {
@@ -2295,6 +2298,7 @@
         "name": "Nome",
         "repositories": "Repository ({{count}})",
         "schedule": "Pianificazione",
+        "timezone": "Fuso orario",
         "archiveNameTemplate": "Template Nome Archivio",
         "scriptsConfiguration": "Configurazione Script",
         "preBackupScript": "Script Pre-Backup",

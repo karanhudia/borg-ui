@@ -72,6 +72,7 @@ interface DashboardOverview {
     has_schedule: boolean
     schedule_enabled: boolean
     schedule_name: string | null
+    schedule_timezone?: string | null
     dimension_health: {
       backup: 'healthy' | 'warning' | 'critical'
       check: 'healthy' | 'warning' | 'critical' | 'unknown'
@@ -614,16 +615,19 @@ function ScheduleBadge({
   hasSchedule,
   scheduleEnabled,
   scheduleName,
+  scheduleTimezone,
   nowMs,
 }: {
   nextRun: string | null
   hasSchedule: boolean
   scheduleEnabled: boolean
   scheduleName: string | null
+  scheduleTimezone?: string | null
   nowMs: number
 }) {
   const T = useT()
   const { t } = useTranslation()
+  const timezoneLabel = scheduleTimezone || 'UTC'
 
   // ── No schedule at all ─────────────────────────────────────────────
   if (!hasSchedule) {
@@ -653,8 +657,8 @@ function ScheduleBadge({
         alignItems="center"
         title={
           scheduleName
-            ? t('dashboard.scheduleBadge.pausedTitle', { name: scheduleName })
-            : t('dashboard.scheduleBadge.pausedTitleGeneric')
+            ? `${t('dashboard.scheduleBadge.pausedTitle', { name: scheduleName })} (${timezoneLabel})`
+            : `${t('dashboard.scheduleBadge.pausedTitleGeneric')} (${timezoneLabel})`
         }
         sx={{
           px: 0.8,
@@ -688,7 +692,7 @@ function ScheduleBadge({
         direction="row"
         spacing={0.4}
         alignItems="center"
-        title={scheduleName ?? t('dashboard.scheduleBadge.scheduled')}
+        title={`${scheduleName ?? t('dashboard.scheduleBadge.scheduled')} (${timezoneLabel})`}
         sx={{
           px: 0.8,
           py: 0.2,
@@ -735,8 +739,8 @@ function ScheduleBadge({
       alignItems="center"
       title={
         scheduleName
-          ? t('dashboard.scheduleBadge.nextRunTitle', { name: scheduleName, label })
-          : t('dashboard.scheduleBadge.nextRunTitleGeneric', { label })
+          ? `${t('dashboard.scheduleBadge.nextRunTitle', { name: scheduleName, label })} (${timezoneLabel})`
+          : `${t('dashboard.scheduleBadge.nextRunTitleGeneric', { label })} (${timezoneLabel})`
       }
       sx={{
         px: 0.8,
@@ -1819,6 +1823,7 @@ export default function DashboardV3() {
                           hasSchedule={repo.has_schedule}
                           scheduleEnabled={repo.schedule_enabled}
                           scheduleName={repo.schedule_name}
+                          scheduleTimezone={repo.schedule_timezone}
                           nowMs={nowMs}
                         />
                       </Stack>

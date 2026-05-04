@@ -1,9 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Optional
 
 import structlog
-from croniter import croniter
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
@@ -11,6 +10,11 @@ from app.api.maintenance_jobs import start_background_maintenance_job
 from app.core.borg_router import BorgRouter
 from app.database.models import CheckJob, Repository, SystemSettings
 from app.utils.process_utils import is_process_alive
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    calculate_next_cron_run,
+    to_utc_naive,
+)
 
 logger = structlog.get_logger()
 
@@ -18,9 +22,7 @@ STALE_PENDING_SCHEDULED_CHECK_AFTER = timedelta(minutes=15)
 
 
 def _utc_naive(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value
-    return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return to_utc_naive(value)
 
 
 def _mark_stale_scheduled_check_failed(
@@ -185,13 +187,17 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
             repo.last_scheduled_check = now
 
             try:
-                cron = croniter(repo.check_cron_expression, now)
-                repo.next_scheduled_check = cron.get_next(datetime)
+                repo.next_scheduled_check = calculate_next_cron_run(
+                    repo.check_cron_expression,
+                    now,
+                    repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                )
             except Exception as exc:
                 logger.error(
                     "Failed to calculate next check time",
                     repo_id=repo.id,
                     cron_expression=repo.check_cron_expression,
+                    check_timezone=repo.check_timezone,
                     error=str(exc),
                 )
                 repo.next_scheduled_check = None
@@ -204,6 +210,7 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
                 repo_name=repo.name,
                 next_check=repo.next_scheduled_check,
                 cron_expression=repo.check_cron_expression,
+                check_timezone=repo.check_timezone,
             )
 
             logger.info(

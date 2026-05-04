@@ -7,6 +7,7 @@ interface ScheduledJob {
   id: number
   name: string
   cron_expression: string
+  timezone?: string | null
   repository: string | null
   repository_id: number | null
   repository_ids: number[] | null

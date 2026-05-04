@@ -50,6 +50,7 @@
     "type": "Tipo",
     "repository": "Repositorio",
     "schedule": "Programación",
+    "timezone": "Zona horaria",
     "created": "Creado",
     "lastLogin": "Último acceso",
     "undoneWarning": "Esta acción no se puede deshacer.",
@@ -2004,6 +2005,7 @@
     "editCheckSchedule": "Editar comprobación programada",
     "addCheckSchedule": "Agregar comprobación programada",
     "checkScheduleLabel": "Programación de comprobación",
+    "timezoneLabel": "Zona horaria",
     "maxDuration": "Duración máxima (segundos)",
     "maxDurationHint": "Límite de tiempo para la operación de comprobación (3600 = 1 hora)",
     "maxDurationHintBorg2": "En Borg 2, un límite de tiempo ejecuta una comprobación parcial solo del repositorio (3600 = 1 hora). Usa 0 para incluir comprobaciones de archivos.",
@@ -2286,6 +2288,7 @@
       "config": {
         "scheduleLabel": "Programación (Expresión Cron)",
         "scheduleHelper": "Haz clic en el icono del reloj para usar el constructor visual.",
+        "timezoneLabel": "Zona horaria",
         "nextRunTimes": "Próximas 3 ejecuciones:"
       },
       "review": {
@@ -2295,6 +2298,7 @@
         "name": "Nombre",
         "repositories": "Repositorios ({{count}})",
         "schedule": "Programación",
+        "timezone": "Zona horaria",
         "archiveNameTemplate": "Plantilla de nombre de archivo",
         "scriptsConfiguration": "Configuración de scripts",
         "preBackupScript": "Script previo a la copia de seguridad",

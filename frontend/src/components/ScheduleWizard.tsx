@@ -11,7 +11,7 @@ import {
   WizardStepMaintenance,
   WizardStepScheduleReview,
 } from './wizard/schedule'
-import { convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
+import { getBrowserTimeZone } from '../utils/dateUtils'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { ScriptParameter } from './ScriptParameterInputs'
 import { Repository } from '../types'
@@ -20,6 +20,7 @@ export interface ScheduledJob {
   id: number
   name: string
   cron_expression: string
+  timezone?: string | null
   repository: string | null
   repository_id: number | null
   repository_ids: number[] | null
@@ -63,6 +64,7 @@ export interface ScheduleData {
   repository_ids: number[]
   enabled: boolean
   cron_expression: string
+  timezone: string
   archive_name_template: string
   pre_backup_script_id: number | null
   post_backup_script_id: number | null
@@ -88,6 +90,7 @@ interface WizardState {
 
   // Step 2: Schedule
   cronExpression: string
+  timezone: string
   archiveNameTemplate: string
 
   // Step 3: Scripts
@@ -108,11 +111,12 @@ interface WizardState {
   pruneKeepYearly: number
 }
 
-const initialState: WizardState = {
+const createInitialState = (): WizardState => ({
   name: '',
   description: '',
   repositoryIds: [],
   cronExpression: '0 2 * * *',
+  timezone: getBrowserTimeZone(),
   archiveNameTemplate: '{job_name}-{now}',
   preBackupScriptId: null,
   postBackupScriptId: null,
@@ -127,7 +131,7 @@ const initialState: WizardState = {
   pruneKeepMonthly: 6,
   pruneKeepQuarterly: 0,
   pruneKeepYearly: 1,
-}
+})
 
 const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
   open,
@@ -141,7 +145,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
   const { track, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
   const [activeStep, setActiveStep] = useState(0)
-  const [wizardState, setWizardState] = useState<WizardState>(initialState)
+  const [wizardState, setWizardState] = useState<WizardState>(createInitialState)
   const prevOpenRef = useRef(false)
 
   // Step definitions
@@ -177,14 +181,12 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
       }
     }
 
-    // Convert UTC cron expression from server to local time for editing
-    const localCron = convertCronToLocal(scheduledJob.cron_expression)
-
     setWizardState({
       name: scheduledJob.name,
       description: scheduledJob.description || '',
       repositoryIds: Array.from(new Set(repository_ids)),
-      cronExpression: localCron,
+      cronExpression: scheduledJob.cron_expression,
+      timezone: scheduledJob.timezone || 'UTC',
       archiveNameTemplate: scheduledJob.archive_name_template || '{job_name}-{now}',
       preBackupScriptId: scheduledJob.pre_backup_script_id || null,
       postBackupScriptId: scheduledJob.post_backup_script_id || null,
@@ -205,7 +207,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
   // Reset form
   const resetForm = () => {
     setActiveStep(0)
-    setWizardState(initialState)
+    setWizardState(createInitialState())
   }
 
   // Handle state changes
@@ -240,6 +242,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
 
       case 'schedule':
         if (!wizardState.cronExpression.trim()) return false
+        if (!wizardState.timezone.trim()) return false
         if (!wizardState.archiveNameTemplate.trim()) return false
         return true
 
@@ -262,15 +265,13 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
   }
 
   const handleSubmit = () => {
-    // Convert cron expression from local time to UTC before sending to server
-    const utcCron = convertCronToUTC(wizardState.cronExpression)
-
     const data: ScheduleData = {
       name: wizardState.name,
       description: wizardState.description || null,
       repository_ids: Array.from(new Set(wizardState.repositoryIds)),
       enabled: mode === 'edit' && scheduledJob ? scheduledJob.enabled : true,
-      cron_expression: utcCron,
+      cron_expression: wizardState.cronExpression,
+      timezone: wizardState.timezone,
       archive_name_template: wizardState.archiveNameTemplate,
       pre_backup_script_id: wizardState.preBackupScriptId,
       post_backup_script_id: wizardState.postBackupScriptId,
@@ -321,6 +322,7 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
           <WizardStepScheduleConfig
             data={{
               cronExpression: wizardState.cronExpression,
+              timezone: wizardState.timezone,
               archiveNameTemplate: wizardState.archiveNameTemplate,
             }}
             jobName={wizardState.name}

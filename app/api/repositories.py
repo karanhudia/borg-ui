@@ -42,6 +42,12 @@ from app.config import settings
 from app.services.mqtt_service import mqtt_service
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    InvalidScheduleTimezone,
+    calculate_next_cron_run,
+    normalize_schedule_timezone,
+)
 from app.utils.ssh_paths import apply_ssh_command_prefix
 from app.utils.borg_env import (
     get_standard_ssh_opts as shared_get_standard_ssh_opts,
@@ -246,6 +252,7 @@ def _get_repository_schedule_summary(repo_id: int, db: Session) -> Dict[str, Any
             "has_schedule": False,
             "schedule_enabled": False,
             "schedule_name": None,
+            "schedule_timezone": None,
             "next_run": None,
         }
 
@@ -254,6 +261,7 @@ def _get_repository_schedule_summary(repo_id: int, db: Session) -> Dict[str, Any
         "has_schedule": True,
         "schedule_enabled": bool(preferred.enabled),
         "schedule_name": preferred.name,
+        "schedule_timezone": preferred.timezone or DEFAULT_SCHEDULE_TIMEZONE,
         "next_run": format_datetime(preferred.next_run)
         if preferred.enabled and preferred.next_run
         else None,
@@ -820,6 +828,7 @@ async def get_repositories(
                     "has_schedule": schedule_summary["has_schedule"],
                     "schedule_enabled": schedule_summary["schedule_enabled"],
                     "schedule_name": schedule_summary["schedule_name"],
+                    "schedule_timezone": schedule_summary["schedule_timezone"],
                     "next_run": schedule_summary["next_run"],
                     "has_keyfile": repo.has_keyfile or False,
                     "source_ssh_connection_id": repo.source_ssh_connection_id,
@@ -3060,9 +3069,6 @@ async def update_check_schedule(
 ):
     """Update scheduled check configuration for repository"""
     try:
-        from datetime import datetime
-        from croniter import croniter
-
         repo = db.query(Repository).filter(Repository.id == repo_id).first()
         if not repo:
             raise HTTPException(
@@ -3072,6 +3078,20 @@ async def update_check_schedule(
         _require_repository_access(db, current_user, repo, "operator")
 
         # Update check schedule settings
+        if "timezone" in request or "check_timezone" in request:
+            try:
+                repo.check_timezone = normalize_schedule_timezone(
+                    request.get("timezone", request.get("check_timezone"))
+                )
+            except InvalidScheduleTimezone as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.schedule.invalidTimezone",
+                        "params": {"error": str(e)},
+                    },
+                )
+
         cron_expression = request.get("cron_expression")
         if cron_expression is not None:
             # Set to None if empty string or "disabled"
@@ -3080,9 +3100,21 @@ async def update_check_schedule(
             else:
                 # Validate cron expression
                 try:
-                    croniter(cron_expression)
+                    calculate_next_cron_run(
+                        cron_expression,
+                        schedule_timezone=repo.check_timezone
+                        or DEFAULT_SCHEDULE_TIMEZONE,
+                    )
                     repo.check_cron_expression = cron_expression
-                except Exception as e:
+                except InvalidScheduleTimezone as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.schedule.invalidTimezone",
+                            "params": {"error": str(e)},
+                        },
+                    )
+                except Exception:
                     raise HTTPException(
                         status_code=400,
                         detail={"key": "backend.errors.repo.invalidCronExpression"},
@@ -3103,9 +3135,10 @@ async def update_check_schedule(
         # Calculate next check time from cron expression
         if repo.check_cron_expression:
             try:
-                base_time = datetime.utcnow()
-                cron = croniter(repo.check_cron_expression, base_time)
-                repo.next_scheduled_check = cron.get_next(datetime)
+                repo.next_scheduled_check = calculate_next_cron_run(
+                    repo.check_cron_expression,
+                    schedule_timezone=repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                )
             except Exception as e:
                 logger.error(
                     "Failed to calculate next check time", error=str(e), repo_id=repo_id
@@ -3122,6 +3155,7 @@ async def update_check_schedule(
             "Check schedule updated",
             repo_id=repo_id,
             cron_expression=repo.check_cron_expression,
+            check_timezone=repo.check_timezone,
             next_check=repo.next_scheduled_check,
         )
 
@@ -3131,6 +3165,8 @@ async def update_check_schedule(
                 "id": repo.id,
                 "name": repo.name,
                 "check_cron_expression": repo.check_cron_expression,
+                "check_timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                "timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
                 "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
                 "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
                 "check_max_duration": repo.check_max_duration,
@@ -3169,6 +3205,8 @@ async def get_check_schedule(
             "repository_name": repo.name,
             "repository_path": repo.path,
             "check_cron_expression": repo.check_cron_expression,
+            "check_timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
+            "timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
             "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
             "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
             "check_max_duration": repo.check_max_duration,

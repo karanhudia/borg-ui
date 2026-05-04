@@ -11,11 +11,12 @@ import {
   Trash2,
 } from 'lucide-react'
 import EntityCard, { StatItem, MetaItem, ActionItem } from './EntityCard'
+import ScheduledInstantTooltip from './ScheduledInstantTooltip'
 import {
   formatDateCompact,
   formatDateTimeFull,
   formatCronHuman,
-  convertCronToLocal,
+  formatScheduledInstantDisplay,
 } from '../utils/dateUtils'
 
 interface Repository {
@@ -28,6 +29,7 @@ interface ScheduledJob {
   id: number
   name: string
   cron_expression: string
+  timezone?: string | null
   repository: string | null
   repository_id: number | null
   repository_ids: number[] | null
@@ -92,15 +94,18 @@ export default function ScheduleJobCard({
   isDuplicatePending,
 }: ScheduleJobCardProps) {
   const { t } = useTranslation()
-  const localCronExpression = convertCronToLocal(job.cron_expression)
-  const scheduleDisplay = formatCronHuman(localCronExpression)
+  const scheduleTimezone = job.timezone || 'UTC'
+  const scheduleDisplay = formatCronHuman(job.cron_expression)
+  const nextRunDisplay = job.next_run
+    ? formatScheduledInstantDisplay(job.next_run, scheduleTimezone)
+    : null
 
   const stats: StatItem[] = [
     {
       icon: <CalendarClock size={11} />,
       label: t('schedule.card.stats.schedule'),
       value: scheduleDisplay,
-      tooltip: localCronExpression,
+      tooltip: `${job.cron_expression} (${scheduleTimezone})`,
       color: 'info',
     },
     {
@@ -119,13 +124,17 @@ export default function ScheduleJobCard({
     {
       icon: <CalendarCheck size={11} />,
       label: t('schedule.card.stats.nextRun'),
-      value: job.next_run ? formatDateCompact(job.next_run) : t('common.never'),
-      tooltip: job.next_run ? formatDateTimeFull(job.next_run) : '',
+      value: nextRunDisplay?.value ?? t('common.never'),
+      tooltip: nextRunDisplay ? <ScheduledInstantTooltip display={nextRunDisplay} /> : '',
       color: 'success',
     },
   ]
 
   const meta: MetaItem[] = []
+  meta.push({
+    label: t('common.timezone', { defaultValue: 'Timezone' }),
+    value: scheduleTimezone,
+  })
   if (job.description) meta.push({ label: t('schedule.card.meta.note'), value: job.description })
   if (job.run_prune_after)
     meta.push({

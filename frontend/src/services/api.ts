@@ -80,6 +80,7 @@ export interface RepositoryData {
   has_schedule?: boolean
   schedule_enabled?: boolean
   schedule_name?: string | null
+  schedule_timezone?: string | null
   next_run?: string | null
   // Allow other properties for flexibility
   [key: string]: unknown

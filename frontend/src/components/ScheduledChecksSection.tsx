@@ -1,4 +1,4 @@
-import { useState, useImperativeHandle, forwardRef } from 'react'
+import { useState, useImperativeHandle, forwardRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -17,6 +17,7 @@ import {
   alpha,
   Select,
   MenuItem,
+  Autocomplete,
 } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
 import { Shield, Info } from 'lucide-react'
@@ -25,7 +26,7 @@ import { BorgApiClient } from '../services/borgApi'
 import RepoSelect from './RepoSelect'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import { convertCronToUTC, convertCronToLocal } from '../utils/dateUtils'
+import { getBrowserTimeZone, getSupportedTimeZones } from '../utils/dateUtils'
 import CronBuilderDialog from './CronBuilderDialog'
 import ScheduleCheckCard from './ScheduleCheckCard'
 import BackupJobsTable from './BackupJobsTable'
@@ -38,6 +39,8 @@ interface ScheduledCheck {
   repository_name: string
   repository_path: string
   check_cron_expression: string | null
+  check_timezone?: string | null
+  timezone?: string | null
   last_scheduled_check: string | null
   next_scheduled_check: string | null
   check_max_duration: number
@@ -64,8 +67,13 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
   const [selectedRepositoryId, setSelectedRepositoryId] = useState<number | null>(null)
   const [formData, setFormData] = useState({
     cron_expression: '0 2 * * 0', // Default: Weekly on Sunday at 2 AM
+    timezone: getBrowserTimeZone(),
     max_duration: 3600,
   })
+  const timezoneOptions = useMemo(
+    () => getSupportedTimeZones(formData.timezone),
+    [formData.timezone]
+  )
   const [historyRepositoryFilter, setHistoryRepositoryFilter] = useState<number | 'all'>('all')
   const [historyStatusFilter, setHistoryStatusFilter] = useState<string | 'all'>('all')
 
@@ -197,6 +205,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     setSelectedRepositoryId(null)
     setFormData({
       cron_expression: '0 2 * * 0', // Weekly on Sunday at 2 AM
+      timezone: getBrowserTimeZone(),
       max_duration: 3600,
     })
     setShowDialog(true)
@@ -204,12 +213,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
 
   const openEditDialog = (check: ScheduledCheck) => {
     setSelectedRepositoryId(check.repository_id)
-    // Convert UTC cron expression to local time for editing
-    const localCron = check.check_cron_expression
-      ? convertCronToLocal(check.check_cron_expression)
-      : '0 2 * * 0'
     setFormData({
-      cron_expression: localCron,
+      cron_expression: check.check_cron_expression || '0 2 * * 0',
+      timezone: check.check_timezone || check.timezone || 'UTC',
       max_duration: check.check_max_duration,
     })
     setShowDialog(true)
@@ -226,15 +232,9 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       return
     }
 
-    // Convert cron expression from local time to UTC before sending to server
-    const utcCron = convertCronToUTC(formData.cron_expression)
-
     updateMutation.mutate({
       repoId: selectedRepositoryId,
-      data: {
-        ...formData,
-        cron_expression: utcCron,
-      },
+      data: formData,
     })
   }
 
@@ -587,6 +587,26 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               InputLabelProps={{
                 sx: { fontSize: '1.1rem' },
               }}
+            />
+
+            <Autocomplete
+              options={timezoneOptions}
+              value={formData.timezone}
+              onChange={(_, value) => {
+                if (value) setFormData({ ...formData, timezone: value })
+              }}
+              disableClearable
+              fullWidth
+              size="medium"
+              autoHighlight
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={t('scheduledChecks.timezoneLabel', { defaultValue: 'Timezone' })}
+                  required
+                  placeholder="Asia/Kolkata"
+                />
+              )}
             />
 
             <TextField

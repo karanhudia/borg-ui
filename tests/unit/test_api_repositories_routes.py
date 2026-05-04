@@ -231,6 +231,26 @@ class TestRepositoryRouteContracts:
         assert body["check_max_duration"] == 120
         assert body["notify_on_check_success"] is True
 
+    def test_update_check_schedule_stores_timezone(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Repo", "/repos/main")
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            json={
+                "cron_expression": "0 2 * * *",
+                "timezone": "Asia/Kolkata",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()["repository"]
+        assert body["check_cron_expression"] == "0 2 * * *"
+        assert body["check_timezone"] == "Asia/Kolkata"
+        assert body["timezone"] == "Asia/Kolkata"
+
 
 @pytest.mark.unit
 class TestRepositoryHelperContracts:

@@ -50,6 +50,7 @@
     "type": "Typ",
     "repository": "Repository",
     "schedule": "Zeitplan",
+    "timezone": "Zeitzone",
     "created": "Erstellt",
     "lastLogin": "Letzte Anmeldung",
     "undoneWarning": "Diese Aktion kann nicht rückgängig gemacht werden.",
@@ -2004,6 +2005,7 @@
     "editCheckSchedule": "Überprüfungszeitplan bearbeiten",
     "addCheckSchedule": "Überprüfungszeitplan hinzufügen",
     "checkScheduleLabel": "Überprüfungszeitplan",
+    "timezoneLabel": "Zeitzone",
     "maxDuration": "Maximale Dauer (Sekunden)",
     "maxDurationHint": "Zeitlimit für den Überprüfungsvorgang (3600 = 1 Stunde)",
     "maxDurationHintBorg2": "Bei Borg 2 startet ein Zeitlimit eine partielle Repository-Prüfung (3600 = 1 Stunde). Verwende 0, um Archivprüfungen einzuschließen.",
@@ -2286,6 +2288,7 @@
       "config": {
         "scheduleLabel": "Zeitplan (Cron-Ausdruck)",
         "scheduleHelper": "Klicke auf das Uhr-Symbol, um den visuellen Builder zu verwenden.",
+        "timezoneLabel": "Zeitzone",
         "nextRunTimes": "Nächste 3 Ausführungszeiten:"
       },
       "review": {
@@ -2295,6 +2298,7 @@
         "name": "Name",
         "repositories": "Repositories ({{count}})",
         "schedule": "Zeitplan",
+        "timezone": "Zeitzone",
         "archiveNameTemplate": "Archivnamen-Vorlage",
         "scriptsConfiguration": "Skriptkonfiguration",
         "preBackupScript": "Pre-Backup-Skript",

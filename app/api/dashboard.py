@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import psutil
 import structlog
-import croniter
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
@@ -20,6 +19,11 @@ from app.database.models import (
 )
 from app.core.security import get_current_user
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    calculate_next_cron_run,
+    to_utc_naive,
+)
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -35,11 +39,16 @@ def resolve_schedule_next_run(
     schedule: ScheduledJob, now: datetime
 ) -> Optional[datetime]:
     """Resolve the next due time for a schedule, preferring stored future values."""
-    if schedule.next_run and schedule.next_run > now:
-        return schedule.next_run
+    now_utc = to_utc_naive(now)
+    if schedule.next_run and to_utc_naive(schedule.next_run) > now_utc:
+        return to_utc_naive(schedule.next_run)
 
     try:
-        return croniter.croniter(schedule.cron_expression, now).get_next(datetime)
+        return calculate_next_cron_run(
+            schedule.cron_expression,
+            now_utc,
+            schedule.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+        )
     except Exception:
         return None
 
@@ -61,6 +70,7 @@ class ScheduledJobInfo(BaseModel):
     id: int
     name: str
     cron_expression: str
+    timezone: str = DEFAULT_SCHEDULE_TIMEZONE
     repository: str = None
     enabled: bool
     last_run: str = None
@@ -629,6 +639,7 @@ async def get_dashboard_overview(
                     "name": schedule.name,
                     "repositories": repo_names,
                     "cron": schedule.cron_expression,
+                    "timezone": schedule.timezone or DEFAULT_SCHEDULE_TIMEZONE,
                     "next_run": serialize_datetime(next_run_dt),
                 }
             )
