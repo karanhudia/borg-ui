@@ -137,8 +137,8 @@ def _get_browse_cache_key(archive_ref: str, path: str) -> str:
     archive_key = _get_archive_selector(archive_ref)
     normalized_path = path.strip("/")
     if not normalized_path:
-        return archive_key
-    return f"{archive_key}::path::{normalized_path}"
+        return f"{archive_key}::managed-root"
+    return f"{archive_key}::managed-path::{normalized_path}"
 
 
 def _get_browse_raw_cache_key(archive_ref: str) -> str:

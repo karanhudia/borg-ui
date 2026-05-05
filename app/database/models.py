@@ -240,6 +240,9 @@ class Repository(Base):
     restore_check_full_archive = Column(
         Boolean, default=False, nullable=False
     )  # Explicit opt-in to verify by extracting the full latest archive
+    restore_check_canary_enabled = Column(
+        Boolean, default=False, nullable=False
+    )  # Whether future backups should include Borg UI's managed canary payload
     last_restore_check = Column(
         DateTime, nullable=True
     )  # Last successful restore verification completion
@@ -602,7 +605,7 @@ class RestoreCheckJob(Base):
     )  # Archive selected for verification, usually the latest archive
     status = Column(
         String, default="pending"
-    )  # pending, running, completed, completed_with_warnings, failed, cancelled
+    )  # pending, running, completed, completed_with_warnings, needs_backup, failed, cancelled
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     progress = Column(Integer, default=0)  # 0-100 percentage

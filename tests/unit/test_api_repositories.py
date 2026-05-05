@@ -31,6 +31,10 @@ from app.database.models import (
 )
 
 
+def _discard_background_coro(coro):
+    coro.close()
+
+
 def _enable_borg_v2(test_db):
     settings_row = test_db.query(SystemSettings).first()
     if settings_row is None:
@@ -1923,6 +1927,7 @@ class TestRepositoryRestoreCheckSchedule:
         assert data["restore_check_paths"] == ["etc/hostname"]
         assert data["notify_on_restore_check_failure"] == True
         assert data["restore_check_mode"] == "probe_paths"
+        assert data["restore_check_canary_enabled"] == False
         assert data["enabled"] == True
 
     def test_update_restore_check_schedule(
@@ -1962,6 +1967,7 @@ class TestRepositoryRestoreCheckSchedule:
             "var/log",
         ]
         assert data["repository"]["restore_check_mode"] == "probe_paths"
+        assert data["repository"]["restore_check_canary_enabled"] == False
         assert data["repository"]["notify_on_restore_check_success"] == True
         assert data["repository"]["notify_on_restore_check_failure"] == False
         assert data["repository"]["next_scheduled_restore_check"] is not None
@@ -1988,6 +1994,24 @@ class TestRepositoryRestoreCheckSchedule:
         assert response.status_code == 200
         data = response.json()
         assert data["repository"]["restore_check_mode"] == "canary"
+        assert data["repository"]["restore_check_canary_enabled"] == True
+
+        test_db.refresh(repo)
+        assert repo.restore_check_canary_enabled is True
+
+        disable_response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={"cron_expression": ""},
+        )
+
+        assert disable_response.status_code == 200
+        assert (
+            disable_response.json()["repository"]["restore_check_canary_enabled"]
+            == False
+        )
+        test_db.refresh(repo)
+        assert repo.restore_check_canary_enabled is False
 
     def test_start_restore_check_job(
         self, test_client: TestClient, admin_headers, test_db
@@ -2022,6 +2046,36 @@ class TestRepositoryRestoreCheckSchedule:
         data = response.json()
         assert data["job_id"] == 501
         assert data["message"] == "backend.success.repo.restoreCheckJobStarted"
+
+    def test_manual_canary_restore_check_marks_canary_for_future_backups(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Canary Repo",
+            path="/tmp/canary",
+            encryption="none",
+            repository_type="local",
+            restore_check_canary_enabled=False,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.maintenance_jobs.schedule_background_job",
+            side_effect=_discard_background_coro,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/restore-check",
+                headers=admin_headers,
+                json={"paths": [], "full_archive": False},
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.restore_check_canary_enabled is True
+        assert repo.restore_check_paths == "[]"
+        assert repo.restore_check_full_archive is False
 
 
 @pytest.mark.unit

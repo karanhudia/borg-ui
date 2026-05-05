@@ -1,6 +1,7 @@
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 from app.config import settings
 from app.database.models import Repository
@@ -49,6 +50,33 @@ def _build_canary_entries(repository: Repository) -> dict[str, bytes]:
         ).encode("utf-8"),
         f"{CANARY_DIRNAME}/binary/check.bin": binary_payload,
     }
+
+
+def _parse_restore_check_paths(raw_paths: Any) -> list[str]:
+    if not raw_paths:
+        return []
+    if isinstance(raw_paths, list):
+        return [path for path in raw_paths if isinstance(path, str) and path.strip()]
+    if not isinstance(raw_paths, str):
+        return []
+    try:
+        parsed = json.loads(raw_paths)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [path for path in parsed if isinstance(path, str) and path.strip()]
+
+
+def should_include_restore_canary(repository: Repository) -> bool:
+    """Return whether future backups for this repository should include canary files."""
+    if not bool(getattr(repository, "restore_check_canary_enabled", False)):
+        return False
+    if bool(getattr(repository, "restore_check_full_archive", False)):
+        return False
+    return not _parse_restore_check_paths(
+        getattr(repository, "restore_check_paths", None)
+    )
 
 
 def ensure_restore_canary(repository: Repository) -> Path:
@@ -127,13 +155,9 @@ def verify_restored_canary(repository: Repository, restore_destination: str) -> 
             break
 
     if manifest_path is None or archive_root is None:
-        expected_paths = [
-            str(restore_root / root / CANARY_DIRNAME / CANARY_MANIFEST)
-            for root in archive_roots
-        ]
         raise FileNotFoundError(
-            "Canary manifest not found in the latest archive. Run a new backup once, "
-            f"then run this restore check again. Expected one of: {', '.join(expected_paths)}"
+            "The Borg UI canary file was not found in the latest archive. "
+            "Run a backup while canary mode is enabled, then run this restore check again."
         )
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

@@ -354,6 +354,29 @@ describe('DashboardV3', () => {
       ).toBeGreaterThan(0)
     })
 
+    it('shows canary setup-needed restore checks as needs backup', async () => {
+      const data = makeOverview({
+        repository_health: makeOverview().repository_health.map((r, i) =>
+          i === 0
+            ? {
+                ...r,
+                last_restore_check: null,
+                latest_restore_check_status: 'needs_backup',
+                latest_restore_check_error: 'Run a backup, then run this restore check again.',
+                dimension_health: {
+                  ...r.dimension_health,
+                  restore: 'warning',
+                },
+              }
+            : r
+        ),
+      })
+      mockFetchSuccess(data)
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Needs backup')).toBeInTheDocument())
+    })
+
     it('adds full timestamp tooltips to relative health times', async () => {
       mockFetchSuccess(makeOverview())
       renderDashboard()

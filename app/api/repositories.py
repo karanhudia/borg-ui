@@ -126,6 +126,15 @@ def _get_restore_check_mode(*, probe_paths: list[str], full_archive: bool) -> st
     return "canary"
 
 
+def _is_restore_check_canary_mode(
+    *, probe_paths: list[str], full_archive: bool
+) -> bool:
+    return (
+        _get_restore_check_mode(probe_paths=probe_paths, full_archive=full_archive)
+        == "canary"
+    )
+
+
 def get_connection_details(connection_id: int, db: Session) -> Dict[str, Any]:
     """
     Get SSH connection details from connection_id.
@@ -2256,6 +2265,12 @@ async def restore_check_repository(
             request=request,
             repository=repository,
         )
+        if _is_restore_check_canary_mode(
+            probe_paths=probe_paths, full_archive=full_archive
+        ):
+            repository.restore_check_canary_enabled = True
+            repository.restore_check_paths = json.dumps([])
+            repository.restore_check_full_archive = False
 
         restore_check_job = start_background_maintenance_job(
             db,
@@ -3464,6 +3479,22 @@ async def update_restore_check_schedule(
         if full_archive is not None:
             repo.restore_check_full_archive = bool(full_archive)
 
+        restore_check_mode_changed = "paths" in request or full_archive is not None
+        restore_check_paths = (
+            json.loads(repo.restore_check_paths) if repo.restore_check_paths else []
+        )
+        if cron_expression is not None and (
+            not cron_expression or cron_expression.strip() == ""
+        ):
+            repo.restore_check_canary_enabled = False
+        elif repo.restore_check_cron_expression and (
+            cron_expression is not None or restore_check_mode_changed
+        ):
+            repo.restore_check_canary_enabled = _is_restore_check_canary_mode(
+                probe_paths=restore_check_paths,
+                full_archive=bool(repo.restore_check_full_archive),
+            )
+
         notify_on_success = request.get("notify_on_success")
         if notify_on_success is not None:
             repo.notify_on_restore_check_success = notify_on_success
@@ -3507,6 +3538,7 @@ async def update_restore_check_schedule(
                 "timezone": repo.restore_check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
                 "restore_check_paths": restore_check_paths,
                 "restore_check_full_archive": repo.restore_check_full_archive,
+                "restore_check_canary_enabled": repo.restore_check_canary_enabled,
                 "restore_check_mode": _get_restore_check_mode(
                     probe_paths=restore_check_paths,
                     full_archive=bool(repo.restore_check_full_archive),
@@ -3605,6 +3637,7 @@ async def get_restore_check_schedule(
             "timezone": repo.restore_check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
             "restore_check_paths": restore_check_paths,
             "restore_check_full_archive": repo.restore_check_full_archive,
+            "restore_check_canary_enabled": repo.restore_check_canary_enabled,
             "restore_check_mode": _get_restore_check_mode(
                 probe_paths=restore_check_paths,
                 full_archive=bool(repo.restore_check_full_archive),

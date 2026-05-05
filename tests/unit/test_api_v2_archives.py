@@ -451,7 +451,7 @@ class TestV2ArchiveRoutes:
             browse_depth=6,
         )
         mock_cache_set.assert_awaited_once_with(
-            repo.id, "archive-1::path::docs/sub::fast", []
+            repo.id, "archive-1::managed-path::docs/sub::fast", []
         )
 
     def test_get_archive_contents_hides_directory_size_when_fast_mode_enabled(
@@ -579,7 +579,9 @@ class TestV2ArchiveRoutes:
 
         assert response.status_code == 200
         assert response.json()["items"] == cached_items
-        mock_cache_get.assert_awaited_once_with(repo.id, "archive-1::path::docs")
+        mock_cache_get.assert_awaited_once_with(
+            repo.id, "archive-1::managed-path::docs"
+        )
         mock_contents.assert_not_called()
 
     def test_get_archive_contents_uses_archive_id_cache_key(
@@ -616,7 +618,7 @@ class TestV2ArchiveRoutes:
         assert response.status_code == 200
         assert response.json()["items"] == cached_items
         mock_cache_get.assert_awaited_once_with(
-            repo.id, f"aid:{archive_id}::path::docs"
+            repo.id, f"aid:{archive_id}::managed-path::docs"
         )
         mock_contents.assert_not_called()
 
@@ -672,9 +674,9 @@ class TestV2ArchiveRoutes:
         calls = [call.args for call in mock_cache_set.await_args_list]
         assert calls[0] == (repo.id, "archive-1::raw", parse_archive_items(stdout))
         assert calls[1][0] == repo.id
-        assert calls[1][1] == "archive-1"
+        assert calls[1][1] == "archive-1::managed-root"
         assert calls[2][0] == repo.id
-        assert calls[2][1] == "archive-1::path::docs"
+        assert calls[2][1] == "archive-1::managed-path::docs"
         assert calls[2][2] == response.json()["items"]
 
     def test_download_file_success(

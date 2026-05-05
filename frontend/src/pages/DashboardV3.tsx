@@ -508,6 +508,7 @@ function restoreDimValue(
 ): string {
   if (latestStatus === 'failed') return t('status.failed')
   if (latestStatus === 'completed_with_warnings') return t('status.completedWithWarnings')
+  if (latestStatus === 'needs_backup') return t('status.needsBackup')
   if (latestStatus === 'running') return t('status.running')
   if (latestStatus === 'pending') return t('status.pending')
   if (latestStatus === 'cancelled') return t('status.cancelled')

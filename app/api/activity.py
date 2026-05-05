@@ -40,9 +40,7 @@ router = APIRouter(prefix="/api/activity", tags=["activity"])
 class ActivityItem(BaseModel):
     id: int
     type: str  # 'backup', 'restore', 'check', 'restore_check', 'compact', 'package'
-    status: (
-        str  # 'pending', 'running', 'completed', 'failed', 'completed_with_warnings'
-    )
+    status: str  # 'pending', 'running', 'completed', 'needs_backup', 'failed', 'completed_with_warnings'
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     error_message: Optional[str]
@@ -624,6 +622,17 @@ async def get_job_logs(
             raise HTTPException(
                 status_code=500, detail=f"Failed to read log file: {str(e)}"
             )
+
+    error_message = getattr(job, "error_message", None)
+    if error_message:
+        lines = [str(error_message)]
+        return {
+            "lines": [
+                {"line_number": i + 1, "content": line} for i, line in enumerate(lines)
+            ],
+            "total_lines": len(lines),
+            "has_more": False,
+        }
 
     # No logs available
     return {"lines": [], "total_lines": 0, "has_more": False}

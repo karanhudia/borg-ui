@@ -144,6 +144,16 @@ def build_restore_check_health(
             "latest_error": latest_error,
         }
 
+    if latest_status == "needs_backup":
+        return {
+            "dimension": "warning",
+            "severity": "warning",
+            "warning": latest_error or "Restore check needs a backup first",
+            "configured": configured,
+            "latest_status": latest_status,
+            "latest_error": latest_error,
+        }
+
     if latest_status == "cancelled":
         return {
             "dimension": "warning",

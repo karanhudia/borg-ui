@@ -57,6 +57,7 @@ interface ScheduledRestoreCheck {
   timezone?: string | null
   restore_check_paths: string[]
   restore_check_full_archive: boolean
+  restore_check_canary_enabled: boolean
   restore_check_mode: 'canary' | 'probe_paths' | 'full_archive'
   last_restore_check: string | null
   last_scheduled_restore_check: string | null
@@ -274,7 +275,7 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
       id: 'status',
       label: t('common.status'),
       width: '120px',
-      render: (row) => <StatusBadge status={row.status} />,
+      render: (row) => <StatusBadge status={row.status} tooltip={row.error_message || undefined} />,
     },
     {
       id: 'mode',
@@ -292,9 +293,17 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
       width: '28%',
       minWidth: '220px',
       render: (row) => {
-        const archiveName = row.archive_name || t('common.na')
+        const needsBackupFirst =
+          row.mode === 'canary' && Boolean(row.error_message?.includes('Run a backup'))
+        const archiveName =
+          row.archive_name ||
+          (needsBackupFirst ? t('scheduledRestoreChecks.noBackupYet') : t('common.na'))
         return (
-          <Tooltip title={row.archive_name || ''} arrow disableHoverListener={!row.archive_name}>
+          <Tooltip
+            title={row.archive_name || row.error_message || ''}
+            arrow
+            disableHoverListener={!row.archive_name && !row.error_message}
+          >
             <Typography
               variant="body2"
               sx={{
@@ -349,7 +358,7 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
         }),
       color: 'primary',
       tooltip: t('integrity.history.actions.viewLogs'),
-      show: (row) => row.has_logs || row.status === 'running',
+      show: (row) => row.has_logs || Boolean(row.error_message) || row.status === 'running',
     },
   ]
 

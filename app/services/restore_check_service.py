@@ -116,6 +116,7 @@ class RestoreCheckService:
         job: RestoreCheckJob | None = None
         raw_logs: list[str] = []
         logs_saved = False
+        use_canary = False
 
         try:
             job = db.query(RestoreCheckJob).filter(RestoreCheckJob.id == job_id).first()
@@ -145,21 +146,43 @@ class RestoreCheckService:
                 keepalive=True,
                 show_progress=True,
             )
-            archives = await BorgRouter(repository).list_archives(env=env)
-            archive = _select_latest_archive(archives)
-            archive_name = _get_archive_name(archive)
-            if not archive_name:
-                job.status = "failed"
-                job.error_message = "No archives available for restore verification"
-                job.completed_at = datetime.utcnow()
-                db.commit()
-                return
-
             full_archive = bool(job.full_archive)
             probe_paths = _parse_probe_paths(
                 job.probe_paths or repository.restore_check_paths
             )
             use_canary = not full_archive and not probe_paths
+            archives = await BorgRouter(repository).list_archives(env=env)
+            archive = _select_latest_archive(archives)
+            archive_name = _get_archive_name(archive)
+            if not archive_name:
+                job.status = "needs_backup" if use_canary else "failed"
+                job.error_message = (
+                    "Canary mode needs a backup that contains the Borg UI canary file. "
+                    "Run a backup, then run this restore check again."
+                    if use_canary
+                    else "No archives available for restore verification. Run a backup, then run this restore check again."
+                )
+                job.progress = 100
+                job.progress_message = "Restore verification needs a backup first"
+                job.completed_at = datetime.utcnow()
+                raw_logs.extend(
+                    [
+                        f"Restore check started for repository: {repository.name} ({repository.id})",
+                        (
+                            "Mode: Canary"
+                            if use_canary
+                            else "Mode: Full Archive"
+                            if full_archive
+                            else "Mode: Probe Paths"
+                        ),
+                        job.error_message,
+                    ]
+                )
+                self._save_job_logs(job, job_id, raw_logs)
+                logs_saved = True
+                db.commit()
+                return
+
             job.archive_name = archive_name
             job.progress = 15
             job.progress_message = (
@@ -236,6 +259,7 @@ class RestoreCheckService:
 
             returncode = None
             verification = None
+            canary_prerequisite_error = None
             for attempt_index, attempt_paths in enumerate(restore_path_attempts):
                 if attempt_index > 0:
                     raw_logs.append(
@@ -256,14 +280,16 @@ class RestoreCheckService:
                         )
                         restore_paths = attempt_paths
                         break
-                    except FileNotFoundError:
+                    except FileNotFoundError as exc:
                         if attempt_index < len(restore_path_attempts) - 1:
                             raw_logs.append(
                                 "Canary manifest not found at this archive path; "
                                 "trying the legacy path"
                             )
                             continue
-                        raise
+                        canary_prerequisite_error = str(exc)
+                        raw_logs.append(canary_prerequisite_error)
+                        break
                 elif attempt_index < len(restore_path_attempts) - 1:
                     raw_logs.append(
                         f"Canary extract failed with exit code {returncode}; "
@@ -273,7 +299,14 @@ class RestoreCheckService:
                 break
 
             warning_exit = _is_borg_warning_exit_code(returncode)
-            if returncode == 0 or warning_exit:
+            if canary_prerequisite_error:
+                job.status = "needs_backup"
+                job.progress = 100
+                job.completed_at = datetime.utcnow()
+                job.error_message = canary_prerequisite_error
+                job.progress_message = "Restore verification needs a backup first"
+                raw_logs.append(job.progress_message)
+            elif returncode == 0 or warning_exit:
                 if use_canary and verification:
                     raw_logs.append(
                         f"Verified canary files: {', '.join(verification['verified_files'])}"

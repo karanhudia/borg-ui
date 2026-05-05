@@ -21,6 +21,11 @@ describe('StatusBadge', () => {
       expect(screen.getByText('Completed with Warnings')).toBeInTheDocument()
     })
 
+    it('renders correct label for "needs_backup"', () => {
+      render(<StatusBadge status="needs_backup" />)
+      expect(screen.getByText('Needs backup')).toBeInTheDocument()
+    })
+
     it('renders correct label for "failed"', () => {
       render(<StatusBadge status="failed" />)
       expect(screen.getByText('Failed')).toBeInTheDocument()
@@ -78,6 +83,12 @@ describe('StatusBadge', () => {
 
     it('renders warning color for "completed_with_warnings"', () => {
       const { container } = render(<StatusBadge status="completed_with_warnings" />)
+      const chip = container.firstChild as HTMLElement
+      expect(chip.className).toContain('MuiChip-colorWarning')
+    })
+
+    it('renders warning color for "needs_backup"', () => {
+      const { container } = render(<StatusBadge status="needs_backup" />)
       const chip = container.firstChild as HTMLElement
       expect(chip.className).toContain('MuiChip-colorWarning')
     })

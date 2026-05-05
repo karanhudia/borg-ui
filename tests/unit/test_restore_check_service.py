@@ -43,6 +43,11 @@ class FakeBorgRouter:
         return ["borg", "extract", f"{repository_path}::{archive_name}", *paths]
 
 
+class FakeEmptyArchiveBorgRouter(FakeBorgRouter):
+    async def list_archives(self, env=None):
+        return []
+
+
 @pytest.fixture
 def testing_session_local(db_session):
     return sessionmaker(bind=db_session.get_bind(), autocommit=False, autoflush=False)
@@ -216,7 +221,7 @@ async def test_restore_check_error_exit_still_fails(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_restore_check_canary_verification_failure_saves_logs(
+async def test_restore_check_canary_missing_payload_needs_backup_and_saves_logs(
     testing_session_local,
     db_session,
     restore_check_repository,
@@ -257,13 +262,60 @@ async def test_restore_check_canary_verification_failure_saves_logs(
     refreshed_job = verification.get(RestoreCheckJob, job.id)
     refreshed_repo = verification.get(Repository, restore_check_repository.id)
 
-    assert refreshed_job.status == "failed"
+    assert refreshed_job.status == "needs_backup"
     assert refreshed_job.progress == 100
-    assert "Canary manifest not found" in refreshed_job.error_message
+    assert "Borg UI canary file was not found" in refreshed_job.error_message
     assert refreshed_job.has_logs is True
     assert refreshed_job.log_file_path is not None
     log_text = Path(refreshed_job.log_file_path).read_text(encoding="utf-8")
     assert "extract completed" in log_text
-    assert "Canary manifest not found" in log_text
+    assert "Borg UI canary file was not found" in log_text
     assert refreshed_repo.last_restore_check is None
+    verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_restore_check_canary_without_archives_saves_actionable_logs(
+    testing_session_local,
+    db_session,
+    restore_check_repository,
+):
+    job = RestoreCheckJob(
+        repository_id=restore_check_repository.id,
+        repository_path=restore_check_repository.path,
+        status="pending",
+        full_archive=False,
+    )
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+
+    service = RestoreCheckService()
+
+    with (
+        patch("app.services.restore_check_service.SessionLocal", testing_session_local),
+        patch(
+            "app.services.restore_check_service.BorgRouter",
+            FakeEmptyArchiveBorgRouter,
+        ),
+        patch(
+            "app.services.restore_check_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch("app.services.restore_check_service.cleanup_temp_key_file"),
+    ):
+        await service.execute_restore_check(job.id, restore_check_repository.id)
+
+    verification = testing_session_local()
+    refreshed_job = verification.get(RestoreCheckJob, job.id)
+
+    assert refreshed_job.status == "needs_backup"
+    assert refreshed_job.progress == 100
+    assert "Run a backup" in refreshed_job.error_message
+    assert refreshed_job.has_logs is True
+    assert refreshed_job.log_file_path is not None
+    log_text = Path(refreshed_job.log_file_path).read_text(encoding="utf-8")
+    assert "Mode: Canary" in log_text
+    assert "Run a backup" in log_text
     verification.close()

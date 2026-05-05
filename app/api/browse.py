@@ -8,8 +8,8 @@ from app.database.database import get_db
 from app.api.auth import get_current_user
 from app.core.borg_router import BorgRouter
 from app.services.archive_browse_service import (
+    add_managed_archive_metadata_to_items,
     build_browse_items,
-    is_hidden_system_archive_path,
     parse_archive_items,
 )
 from app.services.cache_service import archive_cache
@@ -42,8 +42,8 @@ def _build_repo_env(repo: Repository, db: Session):
 def _get_browse_result_cache_key(archive_name: str, path: str) -> str:
     normalized_path = path.strip("/")
     if not normalized_path:
-        return f"{archive_name}::browse-root"
-    return f"{archive_name}::browse::{normalized_path}"
+        return f"{archive_name}::browse-managed-root"
+    return f"{archive_name}::browse-managed::{normalized_path}"
 
 
 def _is_browse_result_payload(items) -> bool:
@@ -86,11 +86,7 @@ async def browse_archive_contents(
         result_cache_key = _get_browse_result_cache_key(archive_name, path)
         cached_result = await archive_cache.get(repository_id, result_cache_key)
         if cached_result is not None and _is_browse_result_payload(cached_result):
-            cached_result = [
-                item
-                for item in cached_result
-                if not is_hidden_system_archive_path(item.get("path") or "")
-            ]
+            cached_result = add_managed_archive_metadata_to_items(cached_result)
             logger.info(
                 "Using cached archive browse result",
                 archive=archive_name,

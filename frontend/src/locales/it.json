@@ -152,6 +152,7 @@
   "status": {
     "completed": "Completato",
     "completedWithWarnings": "Completato con Avvisi",
+    "needsBackup": "Backup richiesto",
     "failed": "Fallito",
     "running": "In esecuzione",
     "pending": "In attesa",
@@ -588,6 +589,7 @@
       },
       "statuses": {
         "completed": "Completato",
+        "needsBackup": "Backup richiesto",
         "failed": "Fallito",
         "running": "In Esecuzione",
         "pending": "In Attesa"
@@ -2246,7 +2248,8 @@
       "restoreCheckStarted": "Controllo di ripristino avviato",
       "restoreCheckFailed": "Impossibile avviare il controllo di ripristino"
     },
-    "canaryModeHint": "La modalità canary è l'impostazione predefinita più sicura. Borg UI verifica un payload gestito molto piccolo dall'archivio più recente, così i controlli restano rapidi anche su repository molto grandi.",
+    "canaryModeHint": "La modalità canary aggiunge un piccolo file canary di Borg UI ai backup futuri finché è attiva, poi lo verifica dall'archivio più recente. Funziona dopo il prossimo backup.",
+    "noBackupYet": "Nessun backup",
     "probeModeHint": "La modalità percorsi di prova ripristina file reali che scegli tu. Usala per verifiche più approfondite su percorsi critici senza estrarre l'intero archivio.",
     "fullArchiveWarning": "Le verifiche dell'intero archivio possono essere costose su repository grandi. Usale raramente e solo se hai spazio temporaneo e una finestra di manutenzione adeguata."
   },
@@ -2637,7 +2640,11 @@
     "emptyArchiveDesc": "Nessun file è stato salvato in questo archivio. Questo può accadere se la directory sorgente era vuota o inaccessibile durante il backup.",
     "noInfo": "Nessuna informazione sull'archivio disponibile",
     "root": "Root",
-    "downloadFile": "Scarica file"
+    "downloadFile": "Scarica file",
+    "managedCanaryLabel": "Canary Borg UI",
+    "managedCanaryDescription": "File canary gestiti per i controlli di ripristino. Borg UI li aggiunge ai backup mentre la modalità canary è attiva.",
+    "managedCanaryBanner": "Questa cartella è gestita da Borg UI per i controlli di ripristino canary. Puoi lasciarla invariata.",
+    "managedCanaryProbeDisabled": "I percorsi canary vengono verificati automaticamente dalla modalità canary."
   },
   "codeEditor": {
     "loading": "Caricamento editor..."

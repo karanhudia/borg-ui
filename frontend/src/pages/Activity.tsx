@@ -131,6 +131,7 @@ const Activity: React.FC = () => {
         >
           <MenuItem value="all">{t('activity.filters.allStatus')}</MenuItem>
           <MenuItem value="completed">{t('activity.filters.statuses.completed')}</MenuItem>
+          <MenuItem value="needs_backup">{t('activity.filters.statuses.needsBackup')}</MenuItem>
           <MenuItem value="failed">{t('activity.filters.statuses.failed')}</MenuItem>
           <MenuItem value="running">{t('activity.filters.statuses.running')}</MenuItem>
           <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>

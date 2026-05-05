@@ -134,6 +134,7 @@ describe('ScheduledRestoreChecksSection', () => {
         restore_check_cron_expression: null,
         restore_check_paths: [],
         restore_check_full_archive: false,
+        restore_check_canary_enabled: true,
         restore_check_mode: 'canary',
         last_restore_check: null,
         last_scheduled_restore_check: null,
@@ -234,6 +235,41 @@ describe('ScheduledRestoreChecksSection', () => {
 
     expect(await screen.findByText('Restore Check Logs - Job #44')).toBeInTheDocument()
     expect(screen.getByTestId('terminal-log-viewer')).toBeInTheDocument()
+  })
+
+  it('shows a clear backup-required state for canary checks without logs', async () => {
+    const user = userEvent.setup()
+    vi.mocked(repositoriesAPI.getRepositoryRestoreCheckJobs).mockResolvedValue({
+      data: {
+        jobs: [
+          {
+            id: 46,
+            repository_id: 1,
+            status: 'needs_backup',
+            started_at: '2026-01-02T00:00:00Z',
+            completed_at: '2026-01-02T00:01:00Z',
+            archive_name: null,
+            has_logs: false,
+            error_message:
+              'Canary mode needs a backup that contains the Borg UI canary file. Run a backup, then run this restore check again.',
+            probe_paths: [],
+            mode: 'canary',
+          },
+        ],
+      },
+    } as AxiosResponse)
+
+    renderWithProviders(<ScheduledRestoreChecksSection />)
+
+    expect(await screen.findByText('No backup yet')).toBeInTheDocument()
+    expect(screen.getByText('Needs backup')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View logs' })).toBeInTheDocument()
+
+    await user.hover(screen.getByText('Needs backup'))
+    expect(await screen.findByText(/Run a backup/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'View logs' }))
+    expect(await screen.findByText('Restore Check Logs - Job #46')).toBeInTheDocument()
   })
 
   it('shows UTC context in the started time tooltip', async () => {

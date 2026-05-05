@@ -152,6 +152,7 @@
   "status": {
     "completed": "Abgeschlossen",
     "completedWithWarnings": "Abgeschlossen mit Warnungen",
+    "needsBackup": "Backup erforderlich",
     "failed": "Fehlgeschlagen",
     "running": "Läuft",
     "pending": "Ausstehend",
@@ -588,6 +589,7 @@
       },
       "statuses": {
         "completed": "Abgeschlossen",
+        "needsBackup": "Backup erforderlich",
         "failed": "Fehlgeschlagen",
         "running": "Läuft",
         "pending": "Ausstehend"
@@ -2246,7 +2248,8 @@
       "restoreCheckStarted": "Restore-Prüfung gestartet",
       "restoreCheckFailed": "Restore-Prüfung konnte nicht gestartet werden"
     },
-    "canaryModeHint": "Der Canary-Modus ist der sicherste Standard. Borg UI überprüft einen winzigen verwalteten Payload aus dem neuesten Archiv, sodass Prüfungen auch bei sehr großen Repositories schnell bleiben.",
+    "canaryModeHint": "Der Canary-Modus fügt künftigen Sicherungen eine winzige Borg UI-Canary-Datei hinzu, solange er aktiviert ist, und prüft sie aus dem neuesten Archiv. Er funktioniert nach der nächsten Sicherung.",
+    "noBackupYet": "Noch keine Sicherung",
     "probeModeHint": "Der Probe-Pfad-Modus stellt echte von dir gewählte Dateien wieder her. Nutze ihn für aussagekräftigere Prüfungen kritischer Pfade ohne das gesamte Archiv zu extrahieren.",
     "fullArchiveWarning": "Vollständige Archiv-Drills können bei großen Repositories teuer sein. Nutze sie sparsam und nur mit ausreichend temporärem Speicher und Wartungsfenster."
   },
@@ -2637,7 +2640,11 @@
     "emptyArchiveDesc": "In diesem Archiv wurden keine Dateien gesichert. Dies kann passieren, wenn das Quellverzeichnis während der Sicherung leer oder nicht zugänglich war.",
     "noInfo": "Keine Archivinformationen verfügbar",
     "root": "Wurzel",
-    "downloadFile": "Datei herunterladen"
+    "downloadFile": "Datei herunterladen",
+    "managedCanaryLabel": "Borg UI Canary",
+    "managedCanaryDescription": "Verwaltete Canary-Dateien für Restore-Prüfungen. Borg UI fügt sie zu Backups hinzu, solange der Canary-Modus aktiviert ist.",
+    "managedCanaryBanner": "Dieser Ordner wird von Borg UI für Canary-Restore-Prüfungen verwaltet. Du kannst ihn unverändert lassen.",
+    "managedCanaryProbeDisabled": "Canary-Pfade werden automatisch vom Canary-Modus geprüft."
   },
   "codeEditor": {
     "loading": "Editor wird geladen..."

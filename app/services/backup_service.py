@@ -18,6 +18,7 @@ from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
 from app.services.restore_check_canary import (
     ensure_restore_canary,
+    should_include_restore_canary,
     to_restore_canary_archive_source_path,
 )
 from app.utils.ssh_paths import resolve_sshfs_source_path
@@ -1492,15 +1493,16 @@ class BackupService:
 
             router.validate_local_repository_access()
 
-            canary_path = ensure_restore_canary(repo_record)
-            if str(canary_path) not in source_paths:
-                source_paths = [*source_paths, str(canary_path)]
-                logger.info(
-                    "Added restore canary to backup source paths",
-                    job_id=job_id,
-                    repository_id=repo_record.id,
-                    canary_path=str(canary_path),
-                )
+            if should_include_restore_canary(repo_record):
+                canary_path = ensure_restore_canary(repo_record)
+                if str(canary_path) not in source_paths:
+                    source_paths = [*source_paths, str(canary_path)]
+                    logger.info(
+                        "Added restore canary to backup source paths",
+                        job_id=job_id,
+                        repository_id=repo_record.id,
+                        canary_path=str(canary_path),
+                    )
 
             # Use repository path as-is (already contains full SSH URL for SSH repos)
             actual_repository_path = repository

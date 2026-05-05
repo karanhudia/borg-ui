@@ -17,7 +17,16 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { CheckSquare, ChevronRight, File, Folder, Home, MinusSquare, Square } from 'lucide-react'
+import {
+  CheckSquare,
+  ChevronRight,
+  File,
+  Folder,
+  Home,
+  MinusSquare,
+  ShieldCheck,
+  Square,
+} from 'lucide-react'
 import { BorgApiClient, type Repository } from '../services/borgApi/client'
 import type { Archive } from '../types'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -28,6 +37,19 @@ interface ArchiveItem {
   type: 'file' | 'directory'
   path: string
   size?: number
+  managed?: boolean
+  managed_type?: string
+}
+
+const RESTORE_CANARY_MANAGED_TYPE = 'restore_canary'
+
+function isRestoreCanaryPath(path?: string) {
+  const normalized = (path || '').replace(/^\/+/, '').replace(/\/+$/, '')
+  return normalized === '.borg-ui' || normalized.startsWith('.borg-ui/')
+}
+
+function isRestoreCanaryItem(item: Pick<ArchiveItem, 'path' | 'managed_type'>) {
+  return item.managed_type === RESTORE_CANARY_MANAGED_TYPE || isRestoreCanaryPath(item.path)
 }
 
 export interface ArchivePathSelectionData {
@@ -93,12 +115,16 @@ export default function ArchivePathSelector({
   const handleItemClick = (item: ArchiveItem) => {
     if (item.type === 'directory') {
       setCurrentPath(item.path)
-    } else {
+    } else if (!isRestoreCanaryItem(item)) {
       toggleSelection(item)
     }
   }
 
   const toggleSelection = (item: ArchiveItem) => {
+    if (isRestoreCanaryItem(item)) {
+      return
+    }
+
     const path = item.path
     const newPaths = new Set(selectedPaths)
     let newItems = selectedItems.filter((selectedItem) => selectedItem.path !== path)
@@ -134,6 +160,9 @@ export default function ArchivePathSelector({
   }
 
   const getDirectoryIcon = (item: ArchiveItem) => {
+    if (isRestoreCanaryItem(item)) {
+      return <Square size={20} color="rgba(0, 0, 0, 0.35)" />
+    }
     if (isSelected(item.path)) {
       return <CheckSquare size={20} color="#1976d2" />
     } else if (hasSelectedChildren(item.path)) {
@@ -142,6 +171,8 @@ export default function ArchivePathSelector({
       return <Square size={20} />
     }
   }
+  const isInsideCanaryPath = isRestoreCanaryPath(currentPath)
+  const canaryDescription = t('archiveContents.managedCanaryDescription')
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -226,6 +257,27 @@ export default function ArchivePathSelector({
           overflow: 'hidden',
         }}
       >
+        {isInsideCanaryPath && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 1,
+              px: 1.5,
+              py: 1,
+              borderBottom: '1px solid',
+              borderColor: (theme) => alpha(theme.palette.info.main, 0.22),
+              bgcolor: (theme) => alpha(theme.palette.info.main, 0.07),
+              flexShrink: 0,
+            }}
+          >
+            <ShieldCheck size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+            <Typography variant="body2" color="text.secondary">
+              {t('archiveContents.managedCanaryProbeDisabled')}
+            </Typography>
+          </Box>
+        )}
+
         <Box
           sx={{
             px: 2,
@@ -280,48 +332,120 @@ export default function ArchivePathSelector({
 
           {!loading && !error && items.length > 0 && (
             <List dense disablePadding>
-              {items.map((item) => (
-                <ListItem
-                  key={item.path}
-                  disablePadding
-                  secondaryAction={
-                    item.type === 'directory' ? (
-                      <Tooltip title={t('wizard.restoreFiles.selectDirTooltip')}>
-                        <IconButton edge="end" size="small" onClick={() => toggleSelection(item)}>
-                          {getDirectoryIcon(item)}
-                        </IconButton>
-                      </Tooltip>
-                    ) : null
-                  }
-                >
-                  <ListItemButton
-                    onClick={() => handleItemClick(item)}
-                    sx={{
-                      '&:hover': {
-                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
-                      },
-                    }}
+              {items.map((item) => {
+                const managedCanary = isRestoreCanaryItem(item)
+                const managedTooltip =
+                  item.type === 'directory'
+                    ? canaryDescription
+                    : t('archiveContents.managedCanaryProbeDisabled')
+                return (
+                  <Tooltip
+                    key={item.path}
+                    title={managedCanary ? managedTooltip : ''}
+                    arrow
+                    disableHoverListener={!managedCanary}
                   >
-                    <ListItemIcon sx={{ minWidth: 36 }}>
-                      {item.type === 'directory' ? (
-                        <Folder size={20} />
-                      ) : isSelected(item.path) ? (
-                        <CheckSquare size={20} color="#1976d2" />
-                      ) : (
-                        <File size={20} />
-                      )}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={item.name}
-                      secondary={item.size ? formatSize(item.size) : undefined}
-                      primaryTypographyProps={{
-                        sx: { fontSize: '0.875rem', fontWeight: isSelected(item.path) ? 600 : 400 },
-                      }}
-                      secondaryTypographyProps={{ sx: { fontSize: '0.75rem' } }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              ))}
+                    <ListItem
+                      disablePadding
+                      secondaryAction={
+                        item.type === 'directory' ? (
+                          <Tooltip
+                            title={
+                              managedCanary
+                                ? t('archiveContents.managedCanaryProbeDisabled')
+                                : t('wizard.restoreFiles.selectDirTooltip')
+                            }
+                            describeChild
+                          >
+                            <span>
+                              <IconButton
+                                edge="end"
+                                size="small"
+                                aria-label={
+                                  managedCanary
+                                    ? t('archiveContents.managedCanaryProbeDisabled')
+                                    : t('wizard.restoreFiles.selectDirTooltip')
+                                }
+                                disabled={managedCanary}
+                                onClick={() => toggleSelection(item)}
+                              >
+                                {getDirectoryIcon(item)}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        ) : null
+                      }
+                    >
+                      <ListItemButton
+                        onClick={() => handleItemClick(item)}
+                        sx={{
+                          border: '1px solid',
+                          borderColor: (theme) =>
+                            managedCanary ? alpha(theme.palette.info.main, 0.25) : 'transparent',
+                          bgcolor: (theme) =>
+                            managedCanary ? alpha(theme.palette.info.main, 0.05) : 'transparent',
+                          cursor:
+                            item.type === 'directory'
+                              ? 'pointer'
+                              : managedCanary
+                                ? 'default'
+                                : 'pointer',
+                          '&:hover': {
+                            bgcolor: (theme) =>
+                              managedCanary
+                                ? alpha(theme.palette.info.main, 0.09)
+                                : alpha(theme.palette.primary.main, 0.08),
+                          },
+                        }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 36 }}>
+                          {managedCanary ? (
+                            <ShieldCheck size={20} />
+                          ) : item.type === 'directory' ? (
+                            <Folder size={20} />
+                          ) : isSelected(item.path) ? (
+                            <CheckSquare size={20} color="#1976d2" />
+                          ) : (
+                            <File size={20} />
+                          )}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={
+                            <Box
+                              sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}
+                            >
+                              <Typography
+                                component="span"
+                                variant="body2"
+                                sx={{
+                                  fontSize: '0.875rem',
+                                  fontWeight: isSelected(item.path) ? 600 : 400,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {item.name}
+                              </Typography>
+                              {managedCanary && (
+                                <Chip
+                                  label={t('archiveContents.managedCanaryLabel')}
+                                  size="small"
+                                  color="info"
+                                  variant="outlined"
+                                  sx={{ height: 20, flexShrink: 0 }}
+                                />
+                              )}
+                            </Box>
+                          }
+                          secondary={item.size ? formatSize(item.size) : undefined}
+                          secondaryTypographyProps={{ sx: { fontSize: '0.75rem' } }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  </Tooltip>
+                )
+              })}
             </List>
           )}
         </Box>

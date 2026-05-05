@@ -152,6 +152,7 @@
   "status": {
     "completed": "Completed",
     "completedWithWarnings": "Completed with Warnings",
+    "needsBackup": "Needs backup",
     "failed": "Failed",
     "running": "Running",
     "pending": "Pending",
@@ -588,6 +589,7 @@
       },
       "statuses": {
         "completed": "Completed",
+        "needsBackup": "Needs backup",
         "failed": "Failed",
         "running": "Running",
         "pending": "Pending"
@@ -2246,7 +2248,8 @@
       "restoreCheckStarted": "Restore check started",
       "restoreCheckFailed": "Failed to start restore check"
     },
-    "canaryModeHint": "Canary mode is the safest default. Borg UI verifies a tiny managed payload from the latest archive, so checks stay fast even for very large repositories.",
+    "canaryModeHint": "Canary mode adds a tiny Borg UI canary file to future backups while enabled, then verifies it from the latest archive. It works after the next backup.",
+    "noBackupYet": "No backup yet",
     "probeModeHint": "Probe-path mode restores real files you choose. Use it for higher-confidence checks on critical paths without extracting the full archive.",
     "fullArchiveWarning": "Full archive drills can be expensive on large repositories. Use this sparingly, and only when you have enough temporary storage and maintenance window budget."
   },
@@ -2637,7 +2640,11 @@
     "emptyArchiveDesc": "No files were backed up in this archive. This may happen if the source directory was empty or inaccessible during the backup.",
     "noInfo": "No archive information available",
     "root": "Root",
-    "downloadFile": "Download file"
+    "downloadFile": "Download file",
+    "managedCanaryLabel": "Borg UI canary",
+    "managedCanaryDescription": "Managed restore-check canary files. Borg UI adds these to backups while canary mode is enabled.",
+    "managedCanaryBanner": "This folder is managed by Borg UI for canary restore checks. It is safe to leave untouched.",
+    "managedCanaryProbeDisabled": "Canary paths are verified automatically by canary mode."
   },
   "codeEditor": {
     "loading": "Loading editor..."

@@ -381,6 +381,33 @@ class TestDashboardHelpers:
         assert health["latest_restore_check_error"] == "Canary manifest not found"
         assert "Restore check failed: Canary manifest not found" in health["warnings"]
 
+    def test_full_repository_health_marks_canary_needs_backup_as_warning(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=8,
+            name="Restore Needs Backup Repo",
+            path="/srv/backups/restore-needs-backup",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression="0 4 * * *",
+        )
+        job = RestoreCheckJob(
+            repository_id=8,
+            repository_path=repo.path,
+            status="needs_backup",
+            error_message="Run a backup, then run this restore check again.",
+            started_at=now - timedelta(minutes=30),
+        )
+
+        health = build_full_repository_health(repo, now, job)
+
+        assert health["health_status"] == "warning"
+        assert health["dimension_health"]["restore"] == "warning"
+        assert health["latest_restore_check_status"] == "needs_backup"
+        assert any("Run a backup" in warning for warning in health["warnings"])
+
     def test_get_recent_jobs_normalizes_trigger_state_and_logs(self):
         now = datetime.now(timezone.utc)
         jobs = [
