@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Testing
 nav_order: 11
 description: "Local and CI checks for Borg UI"

@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Cache
 nav_order: 7
 description: "Redis and archive browsing cache behavior"

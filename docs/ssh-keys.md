@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Remote Machines
 nav_order: 6
 description: "Configure remote machines and the system SSH key"

@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Development
 nav_order: 10
 description: "Set up a Borg UI development environment"

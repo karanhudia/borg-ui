@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Mounting Archives
 nav_order: 7
 description: "Mount Borg archives as read-only filesystems"

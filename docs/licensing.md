@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Licensing
 nav_order: 12
 ---

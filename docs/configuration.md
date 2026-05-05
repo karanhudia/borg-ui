@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Configuration
 nav_order: 3
 description: "Environment variables, volumes, settings, and runtime defaults"

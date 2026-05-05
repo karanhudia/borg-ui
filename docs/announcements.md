@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Announcements
 nav_order: 99
 ---

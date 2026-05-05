@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Reverse Proxy
 nav_order: 4
 description: "Run Borg UI behind Nginx, Caddy, Traefik, or another reverse proxy"

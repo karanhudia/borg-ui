@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Plan Content Manifest
 nav_order: 100
 ---

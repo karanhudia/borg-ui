@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Architecture
 nav_order: 8
 description: "How Borg UI is built and where the important state lives"

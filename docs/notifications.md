@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Notifications
 nav_order: 5
 description: "Configure Apprise notifications and JSON webhooks"

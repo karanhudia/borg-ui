@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Usage Guide
 nav_order: 4
 description: "Create repositories, run backups, browse archives, and restore files"

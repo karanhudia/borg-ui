@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Contributing
 nav_order: 9
 description: "How to contribute to Borg UI"

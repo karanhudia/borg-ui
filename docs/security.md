@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Security
 nav_order: 7
 description: "Security practices for Borg UI deployments"
