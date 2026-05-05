@@ -83,22 +83,37 @@
   border-radius: 8px;
 }
 
-/* Hero image: cap at native size to avoid upscale pixelation
- * (source PNG is 264px, hi-res variant 528px) */
-.VPHero .image-container {
-  width: 320px !important;
-  height: 320px !important;
-}
-
-.VPHero .image-bg {
-  width: 280px !important;
-  height: 280px !important;
-}
-
+/* Hero image: cap PNG render size with max-* so VitePress can still shrink
+ * on smaller viewports. Source is 264px native; 528px @2x for retina. */
 .VPHero .image-src {
-  max-width: 280px !important;
-  max-height: 280px !important;
+  max-width: 280px;
+  max-height: 280px;
   image-rendering: -webkit-optimize-contrast;
+}
+
+/* Desktop: cap the orb container so the green halo doesn't bleed everywhere */
+@media (min-width: 960px) {
+  .VPHero .image-container {
+    max-width: 320px;
+    max-height: 320px;
+  }
+  .VPHero .image-bg {
+    max-width: 280px;
+    max-height: 280px;
+  }
+}
+
+/* Mobile: shrink the orb + reduce blur so it doesn't overlap the heading */
+@media (max-width: 768px) {
+  .VPHero .image-src {
+    max-width: 180px;
+    max-height: 180px;
+  }
+  .VPHero .image-bg {
+    filter: blur(32px);
+    max-width: 200px;
+    max-height: 200px;
+  }
 }
 
 /* Feature cards: icon + title inline, details below */
