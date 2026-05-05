@@ -1,5 +1,4 @@
 ---
-layout: default
 title: Plan Content Manifest
 nav_order: 100
 ---
@@ -18,9 +17,9 @@ This feed controls the text shown in the plan drawer for:
 
 ## Update Flow
 
-1. Edit [docs/plan-content.json](/Users/karanhudia/Documents/Projects/borg-ui/docs/plan-content.json).
+1. Edit `docs/plan-content.json`.
 2. Commit and push to `main`.
-3. Wait for GitHub Pages to rebuild.
+3. Wait for the docs deployment to finish.
 4. Verify the live manifest URL returns JSON.
 
 ## Format
