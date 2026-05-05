@@ -77,6 +77,63 @@ System settings control:
 - total log size cap
 - cleanup on startup
 
+## Restart Cleanup
+
+On application startup, Borg UI checks for jobs that were left in `running` states by a container restart or crash.
+
+Startup cleanup currently covers:
+
+- backup jobs
+- restore jobs
+- check jobs
+- restore-check jobs
+- prune jobs
+- compact jobs
+
+What happens:
+
+- running backup jobs are marked `failed`
+- running restore jobs are marked `failed`
+- running prune jobs are marked `failed`
+- running check, restore-check, and compact jobs are marked `failed` when their recorded process is no longer alive
+- backup rows left in `running_prune` or `running_compact` maintenance states are marked `failed`, with maintenance state changed to `prune_failed` or `compact_failed`
+- orphaned prune and compact jobs update the related backup maintenance state when possible
+
+For local check and compact jobs, Borg UI attempts to break the repository lock after detecting an orphaned process. For remote repositories, it does not automatically break the lock because the remote Borg process may still be running.
+
+Archive-delete and package-install jobs are not part of this startup orphan-job cleanup path.
+
+## Stale Scheduled Checks
+
+Scheduled check jobs have an additional stale-job cleanup in the scheduled-check dispatcher.
+
+The dispatcher marks these scheduled checks as `failed`:
+
+- `pending` scheduled checks older than 15 minutes
+- `running` scheduled checks older than 15 minutes when the recorded process is no longer alive
+
+This prevents stale scheduled checks from permanently consuming scheduled-check concurrency slots.
+
+## Deleting Job Entries
+
+Admins can delete job history entries from the activity/job views.
+
+The delete endpoint supports these job types:
+
+- backup
+- restore
+- check
+- restore check
+- compact
+- prune
+- package install
+
+Deleting a job entry removes the database row and tries to delete the associated log file when the job has a `log_file_path`.
+
+It does not delete Borg repositories, backup archives, or restored files. Archive deletion is a separate archive operation.
+
+Running jobs cannot be deleted. Pending jobs can be deleted, which is useful for cleaning up stuck pending rows.
+
 ## Concurrency
 
 System settings control concurrent work:
