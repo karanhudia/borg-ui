@@ -13,10 +13,23 @@ Borg UI uses global roles for app-wide permissions and repository roles for repo
 | Role | What it means |
 | --- | --- |
 | `viewer` | Can use repositories they have access to |
-| `operator` | Can operate repositories they have access to, plus use operator-level tools such as schedules and mounts |
+| `operator` | Can operate repositories they have access to and use operator-level tools such as schedules and mounts |
 | `admin` | Can manage users, settings, repositories, SSH, packages, scripts, logs, cache, and permissions |
 
 Admins have access to every repository.
+
+## Global Permissions
+
+Current global permissions are:
+
+| Capability | Required global role |
+| --- | --- |
+| Create, import, edit, and delete repositories | `admin` |
+| Manage users and repository permissions | `admin` |
+| Manage system, cache, logs, packages, SSH, scripts, export/import, beta, and MQTT settings | `admin` |
+| View all activity across users | `admin` |
+| Create, edit, run, duplicate, and delete schedules | `operator`, plus operator access to the schedule repositories |
+| Mount and unmount Borg archives | `operator` |
 
 ## Repository Roles
 
@@ -26,6 +39,16 @@ Admins have access to every repository.
 | `operator` | Everything viewer can do, plus run backups, maintenance, and archive deletion |
 
 Repository roles are assigned per user.
+
+Repository action rules are:
+
+| Action | Required repository role |
+| --- | --- |
+| View repository and browse archives | `viewer` |
+| Restore files | `viewer` |
+| Run backups | `operator` |
+| Run repository maintenance such as check, restore check, prune, and compact | `operator` |
+| Delete archives | `operator` |
 
 ## All-Repositories Access
 
@@ -41,7 +64,7 @@ Explicit per-repository access can grant a specific repository to a restricted u
 
 A per-repository role does not reduce an all-repositories role. For example, if a user has all-repositories `operator`, adding `viewer` on one repository does not downgrade that repository.
 
-A user's repository role cannot be higher than their global role. Viewers can only receive repository `viewer`. Operators can receive repository `viewer` or `operator`.
+The UI only offers repository roles that match the user's global role. Viewers are assigned repository `viewer`; operators can be assigned repository `viewer` or `operator`.
 
 ## Managing Access
 

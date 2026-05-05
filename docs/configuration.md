@@ -100,7 +100,7 @@ environment:
 
 Mount the socket into the container at the same path when using `unix://`.
 
-The UI can override Redis URL, cache TTL, and max cache size in Settings > System > Cache.
+Settings > System > Cache can update Redis URL, cache TTL, and max cache size at runtime.
 
 To run without Redis, set:
 
@@ -111,11 +111,14 @@ environment:
 
 That forces the in-memory cache backend. Backups and restores still work.
 
-Priority for UI-managed cache settings:
+Runtime Redis connection priority:
 
-1. saved database value, when changed from default
-2. environment variable
-3. built-in default
+1. saved Redis URL from the Cache settings, when present
+2. `REDIS_URL`
+3. `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB`
+4. in-memory fallback
+
+Use environment variables for startup defaults that must be reproducible from Compose or `.env`.
 
 ## Operation Timeouts
 
@@ -135,7 +138,7 @@ Environment defaults:
 
 Priority for UI-managed timeout settings:
 
-1. saved database value, when changed from default
+1. saved UI value, when changed from the default or environment value
 2. environment variable
 3. built-in default
 
@@ -163,6 +166,8 @@ Related settings:
 | `PROXY_AUTH_EMAIL_HEADER` | empty | Optional email header |
 | `PROXY_AUTH_FULL_NAME_HEADER` | empty | Optional display-name header |
 | `PUBLIC_BASE_URL` | empty | Public URL used by auth flows when needed |
+| `TRUSTED_PROXIES` | `127.0.0.1,::1` | Proxy IPs whose forwarded headers may be trusted |
+| `OIDC_ALLOWED_RETURN_ORIGINS` | empty | Extra safe return origins for OIDC login redirects |
 
 Built-in OIDC is configured in the UI, not through a long list of environment variables.
 

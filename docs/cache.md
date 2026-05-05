@@ -73,12 +73,14 @@ Valid UI ranges:
 
 Set `REDIS_HOST=disabled` to force in-memory cache.
 
-Priority:
+Runtime connection priority:
 
-1. saved UI setting
+1. saved Redis URL from Settings > System > Cache, when present
 2. `REDIS_URL`
 3. `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB`
 4. in-memory fallback
+
+Environment variables set startup defaults. Cache settings in the UI update the running service; keep important deployment defaults in Compose or `.env`.
 
 ## External Redis
 

@@ -154,6 +154,8 @@ Typical flow:
 
 The old `/ssh-keys` route redirects to Remote Machines.
 
+Remote source backups and SSH restore destinations use SSHFS. The container needs FUSE access for those flows; see [Installation](installation#optional-fuse-access).
+
 ## Schedules
 
 Schedules run backups automatically.
@@ -199,9 +201,9 @@ See [Notifications](notifications).
 
 ## Job Logs
 
-Activity and job views show backup, restore, check, prune, compact, and archive-delete history.
+Activity and job views show backup, restore, restore-check, check, prune, compact, and package-install history.
 
-Admins can delete job entries and associated log files. This removes UI history; it does not delete Borg archives unless the job was an archive-delete operation.
+Admins can delete supported job entries and associated log files. This removes UI history; it does not delete Borg archives. Archive deletion is a separate archive operation.
 
 ## Troubleshooting
 

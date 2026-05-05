@@ -15,6 +15,8 @@ Use archive mounting when you need filesystem access to archive contents. For no
 
 Archive mounting requires FUSE support from the Docker host.
 
+The same Docker FUSE access is also needed for SSHFS-based remote source backups and SSH restore destinations.
+
 Add this to the Borg UI service:
 
 ```yaml
@@ -27,8 +29,6 @@ security_opt:
 environment:
   - BORG_FUSE_IMPL=pyfuse3
 ```
-
-This is separate from SSHFS or remote-to-remote backup requirements.
 
 ## Mount an Archive
 

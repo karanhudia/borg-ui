@@ -316,9 +316,11 @@ volumes:
 
 This grants powerful host access to the Borg UI container. See [Docker Hooks](docker-hooks).
 
-## Optional Archive Mounting
+## Optional FUSE Access
 
-Archive mounting requires FUSE access:
+Archive mounting uses `borg mount` and requires FUSE access.
+
+Remote source backups and SSH restore destinations use SSHFS and also require FUSE access.
 
 ```yaml
 cap_add:
@@ -327,9 +329,11 @@ devices:
   - /dev/fuse:/dev/fuse
 security_opt:
   - apparmor:unconfined
+environment:
+  - BORG_FUSE_IMPL=pyfuse3
 ```
 
-Add this only if you need `borg mount` support. See [Mounting Archives](mounting).
+Add this only if you need archive mounts, SSHFS remote source backups, or SSH restore destinations. See [Mounting Archives](mounting).
 
 ## Docker Run
 
