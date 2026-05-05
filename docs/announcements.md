@@ -16,7 +16,7 @@ This file is sourced from `docs/announcements.json`.
 
 1. Edit `docs/announcements.json`.
 2. Commit and push to `main`.
-3. Wait for GitHub Pages to rebuild.
+3. Wait for the docs deployment to finish.
 4. Verify the live manifest URL returns JSON.
 
 ## Localization

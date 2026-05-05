@@ -73,7 +73,8 @@ export default defineConfig({
       {
         text: 'Reference',
         items: [
-          { text: 'Specification', link: '/SPECIFICATION' },
+          { text: 'Architecture', link: '/SPECIFICATION' },
+          { text: 'Job System', link: '/architecture/job-system' },
           { text: 'Development', link: '/development' },
           { text: 'Testing', link: '/testing' },
           { text: 'Contributing', link: '/contributing' },

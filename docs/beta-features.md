@@ -1,160 +1,44 @@
 # Beta Features
 
-Beta features allow gradual rollout of new functionality while maintaining stability. Admin users can enable beta features via the Settings UI to test new capabilities.
+Beta features are admin-controlled switches under Settings > Advanced > Beta.
 
-## Available Features
+They are off by default. Enable them only when you need the behavior and are prepared to turn it off again.
 
-### MQTT & Home Assistant Integration (Beta)
+## Current Beta Switches
 
-> - Publish backup status and repository metrics to MQTT brokers.
-> 
-> - Monitor your backups directly in Home Assistant with automatic sensor discovery and real-time status updates.
+| Setting | What it does | When to use it |
+| --- | --- | --- |
+| Bypass locks for info commands | Adds `--bypass-lock` to Borg `info` commands | When read-only info calls hit lock contention |
+| Bypass locks for list commands | Adds `--bypass-lock` to Borg `list` commands | When archive/file listing hits lock contention |
+| Fast Borg 2 archive browse | Uses a faster Borg 2 browsing mode with smaller payloads | Very large Borg 2 archives |
+| MQTT integration | Shows MQTT settings and enables MQTT runtime configuration | Home Assistant or MQTT monitoring tests |
 
+## Lock Bypass Warnings
 
-**Status:** Beta
-**Default:** Disabled
-**Added:** ~
+Bypass-lock is for read-only operations. It can help when Borg UI is only trying to inspect a repository but another operation holds a lock.
 
-**Features:**
-- Publish backup status, progress, and ETA to MQTT topics
-- Automatic Home Assistant MQTT discovery for sensors
-- Per-repository sensors for status, size, archive count, and last backup time
-- Server-wide sensors for overall backup state
-- TLS support for secure MQTT connections
-- Authentication support (username/password)
-- Configurable QoS (Quality of Service)
+Do not use bypass-lock as a fix for unsafe concurrent writes. If a backup, prune, compact, restore, or external Borg process is running, wait for it to finish.
 
-**Home Assistant Sensors:**
+## Borg 2 Fast Browse
 
-**Server Sensors:**
-- `sensor.borg_ui_last_backup` - Timestamp of last completed backup
-- `binary_sensor.borg_ui_backup_success` - Success/failure state of last backup
+Fast Borg 2 archive browsing reduces payload size and can make large archives more responsive.
 
-**Per-Repository Sensors:**
-- `sensor.borg_ui_repo_{id}_status` - Repository health status (healthy, warning, stale, failed, no_backup)
-- `sensor.borg_ui_repo_{id}_size` - Repository size in bytes
-- `sensor.borg_ui_repo_{id}_archives` - Number of archives
-- `sensor.borg_ui_repo_{id}_last_backup` - Timestamp of last backup
-- `sensor.borg_ui_repo_{id}_backup_status` - Current backup status (idle, initializing, processing files, finalizing)
-- `sensor.borg_ui_repo_{id}_backup_progress` - Backup progress percentage (0-100)
-- `sensor.borg_ui_repo_{id}_backup_eta` - Estimated time of arrival for current backup
+Tradeoff: recursive folder sizes may be unavailable in this mode.
 
-**Setup Instructions:**
+## MQTT Integration
 
-1. **Enable MQTT in Settings:**
-   - Navigate to **Settings** > **System** tab
-   - Scroll to **MQTT Configuration** section
-   - Toggle "MQTT Enabled"
+When the MQTT beta flag is enabled, MQTT settings appear in Settings > System > MQTT.
 
-2. **Configure MQTT Broker:**
-   - Enter your MQTT broker URL (e.g., `localhost`, `192.168.1.100`, `mqtt.example.com`)
-     Note: **don't** enter the scheme (e.g., `mqtt://`)
-   - Set the broker port (default: `1883` for plaintext, `8883` for TLS)
-   - If your broker requires authentication, enter username and password
-   - Configure TLS settings if using encrypted connections
+The runtime supports broker URL, port, username/password, client ID, QoS, retained messages, and TLS certificate paths.
 
-3. **Configure Home Assistant:**
-   - Ensure Home Assistant is running and can reach your MQTT broker
-   - Home Assistant will automatically discover Borg UI sensors
-   - Sensors will appear in **Settings** > **Devices & Services** > **MQTT**
-   - Add the discovered devices to your dashboard
+MQTT is still treated as beta. Validate topics and payloads against your own broker before relying on it for alerting.
 
-4. **Verify Integration:**
-   - View MQTT messages in your broker (e.g., using MQTT Explorer)
-   - Verify sensors appear in Home Assistant with current data
+## Reporting Issues
 
-**MQTT Topics:**
+When reporting beta issues, include:
 
-All MQTT messages are published under the fixed base topic `borg-ui`:
-
-- `borg-ui/status` - Server connection status (online/offline)
-- `borg-ui/backup/status` - Current backup status
-- `borg-ui/backup/progress` - Backup progress and ETA
-- `borg-ui/backup/last` - Last backup information
-- `borg-ui/backup/success` - Success/failure state
-- `borg-ui/repositories/{id}/status` - Repository health status
-- `borg-ui/repositories/{id}/size` - Repository size metrics
-- `borg-ui/repositories/{id}/archives` - Archive count
-- `borg-ui/repositories/{id}/last_backup` - Last backup timestamp
-- `borg-ui/repositories/{id}/backup/status` - Backup status
-- `borg-ui/repositories/{id}/backup/progress` - Backup progress
-
-**TLS Configuration:**
-
-For secure MQTT connections (recommended for production):
-
-- **TLS Enabled**: Check this box to enable TLS
-- **TLS CA Cert**: Path to CA certificate file (e.g., `/local/ca.crt`)
-- **TLS Client Cert**: Path to client certificate file (e.g., `/local/client.crt`)
-- **TLS Client Key**: Path to client private key file (e.g., `/local/client.key`)
-
-**Note:** Certificate files must be accessible from within the container. Use paths starting with `/local/` to access files on your host filesystem.
-
-**Troubleshooting:**
-
-- **Connection Failed**: Verify broker URL and port are correct
-- **Authentication Failed**: Check username and password
-- **TLS Errors**: Verify certificate paths and permissions
-- **No Data**: Verify MQTT is enabled in Borg UI and broker is reachable
-
-**Security Considerations:**
-
-- Use TLS for all production deployments
-- Use strong authentication (username/password)
-- Restrict broker access to trusted networks
-
-### New Repository Wizard (Beta)
-
-A redesigned step-based repository wizard with improved UX, validation, and mobile support.
-
-**Status:** Beta
-**Default:** Disabled
-**Added:** v1.46.0
-
-**Features:**
-- Step-based workflow with progress tracking
-- Card-based UI for location selection
-- Improved validation and error messages
-- Responsive mobile design
-- Live command preview
-- Better SSH connection management
-
-## Enabling Beta Features
-
-**For Admin Users:**
-
-1. Navigate to **Settings** > **Appearance** tab
-2. Scroll to the **Beta Features** section
-3. Toggle "Use New Repository Wizard" to enable/disable
-4. Changes take effect immediately (no rebuild required)
-
-**Note:** Only admin users can access beta feature toggles.
-
-## Beta Testing
-
-To help test beta features:
-
-1. Enable the feature via Settings UI
-2. Report issues at https://github.com/karanhudia/borg-ui/issues
-3. Test thoroughly before using in production
-4. You can switch back to stable anytime via Settings
-
-## Feature Lifecycle
-
-Beta features follow this progression:
-
-1. **Beta** (current) - Default disabled, admin opt-in testing
-2. **General Availability** - Default enabled for all users
-3. **Deprecated** - Legacy code scheduled for removal
-4. **Removed** - Only new version remains
-
-Current timeline:
-- New Repository Wizard: Beta → GA in v1.47.0 → Legacy removed in v1.48.0
-
-## Notes
-
-- Beta features are runtime settings (no rebuild required)
-- Stored in database, persists across restarts
-- No data loss when switching between versions
-- Both versions use the same database
-- Can switch back anytime via Settings UI
+- Borg UI version
+- which beta switch is enabled
+- Borg version
+- repository type
+- relevant job logs

@@ -1,147 +1,66 @@
-# Analytics & Privacy
+# Analytics and Privacy
 
-Borg UI collects **anonymous usage statistics** to help improve the product. We believe in **radical transparency**.
+Borg UI has optional product analytics. The goal is to understand which parts of the app are used and where users hit errors, without sending backup contents, repository secrets, or private hostnames.
 
-## Full Transparency
+Analytics is shown behind a consent banner after login. Users can change the setting later in Settings > Preferences.
 
-**[View our analytics dashboard publicly](https://analytics.nullcodeai.dev/)** - See exactly what we collect in real-time. No login required.
+## Provider
 
-## What We Track
+Borg UI uses Umami Cloud:
 
-### We DO Collect
+```text
+https://cloud.umami.is
+```
 
-**Page Views:**
-- Which pages you visit (Dashboard, Repositories, Archives, etc.)
-- Navigation patterns and page transitions
-- Session duration and visit frequency
+The public dashboard is:
 
-**Feature Usage:**
-- Button clicks (Backup Now, Create Repository, etc.)
-- Feature interactions (mounting archives, scheduling backups)
-- Settings changes (non-sensitive preferences)
-- Search queries within the app
+```text
+https://analytics.nullcodeai.dev/
+```
 
-**Technical Information:**
-- Browser type and version
-- Operating system
-- Screen resolution and device type
-- Language preferences
-- Error rates and crash reports
+## What Can Be Sent
 
-**Events We Track:**
-- Repository actions (create, edit, delete, view info)
-- Backup operations (start, complete, fail)
-- Archive browsing (mount, unmount, file extraction)
-- Schedule operations (create, edit, delete, enable/disable)
-- SSH connection management (create, test, delete)
-- Maintenance tasks (compact, check, prune)
-- Authentication events (login, logout)
+When analytics is enabled, the frontend can send:
 
-### We DO NOT Collect
+- page views
+- UI events, such as create, edit, delete, start, complete, fail, test, search, filter, export
+- broad feature categories, such as repository, backup, archive, mount, SSH connection, settings, plan, announcement
+- app version
+- browser language
+- document title
+- a hashed per-install user identifier
 
-- **Passwords** or authentication tokens
-- **Encryption keys** or passphrases
-- **Backup data** or file contents
-- **File paths** or repository names
-- **SSH keys** or connection credentials
-- **IP addresses** - We do NOT collect or store IP addresses. All tracking is done without any IP address logging.
-- **Hostnames** - We do NOT collect computer names or hostnames
-- **User identifiers** - We do NOT track individual users across sessions
-- **Repository URLs** or storage locations
-- **Personal information** beyond voluntary submissions
-- **Archive contents** or file names
-- **Cookies** - We do NOT use cookies for tracking
+The real browser hostname and URL are masked before sending. Borg UI reports them as:
 
-## Why We Collect This
+```text
+app.borgui
+```
 
-We use analytics data to:
-- **Understand feature usage** - Which features are most valuable
-- **Fix bugs faster** - Identify where users encounter errors
-- **Prioritize development** - Focus on what users need most
-- **Improve UX** - Discover pain points in user workflows
-- **Platform compatibility** - Ensure compatibility across browsers/devices
-- **Measure success** - Track adoption and retention
+## What Is Not Intentionally Sent
 
-## How to Opt-Out
+Borg UI should not send:
 
-Analytics stays disabled until you respond to the consent banner. After opting in, you can disable it anytime:
+- file contents
+- Borg repository contents
+- passphrases
+- SSH private keys
+- real hostnames or private IP addresses
+- real repository names or paths as raw values
 
-1. Open Borg UI
-2. Navigate to **Settings → Preferences**
-3. Toggle off **"Enable anonymous usage analytics"**
-4. Page will reload with tracking disabled
+Analytics code must keep this boundary. If a future event needs extra metadata, prefer counts, categories, durations, or anonymized values.
 
-Your preference is stored in the database and respected across all sessions.
+## Identifier Behavior
 
-## Technical Implementation
+For logged-in users, Borg UI creates a random install ID in browser local storage and combines it with the username. The combined value is hashed before it is sent as `user_id`.
 
-**Analytics Platform:** [Umami Cloud](https://umami.is/) (privacy-focused, cookieless analytics)
-- **Instance:** `https://analytics.nullcodeai.dev`
-- **No third-party services** (no Google Analytics, no Mixpanel)
-- **Data stays under our control**
-- **Open source** - You can inspect the code
+This means analytics can count repeated use from the same browser/user without receiving the raw username.
 
-**Privacy Protections:**
-- **No IP tracking** - We do NOT log or store IP addresses
-- **No cookies** - Tracking is completely cookieless
-- **No user IDs** - We do NOT track individual users
-- **No persistent identifiers** - Each session is anonymous
-- **Respect Do Not Track** - Browser DNT setting is honored
+## Consent Event
 
-**Tracking Method:**
-- JavaScript tracking code loaded from Umami Cloud only after analytics is enabled
-- Consent and opt-out events are sent directly so accept and decline are both measurable
-- All data is completely anonymous and cannot be tied to individuals
-- User preference checked before every tracking call
+The consent banner records whether analytics was accepted or declined. That event can be sent before the preference is saved.
 
-**Data Flow:**
-1. User performs action (e.g., clicks "Backup Now")
-2. Frontend checks if analytics is enabled (from database)
-3. If enabled, sends anonymous events to Umami (no IP, no user ID, no cookies)
-4. If disabled, event is discarded client-side (never sent)
+## Disable Analytics
 
-## Data Retention
+Open Settings > Preferences and turn analytics off.
 
-- **Aggregate data:** Kept indefinitely for trend analysis (page view counts, feature usage stats)
-- **No individual-level data:** We do not collect any data that can identify individuals, so there is no individual data to delete
-- **User preferences:** Stored only in your local Borg UI database (not sent to analytics server)
-
-## Privacy Rights
-
-You have the right to:
-- **Opt-out** at any time via Settings → Preferences
-- **View collected data** on the public dashboard (all data is aggregated and anonymous)
-- **Ask questions** about our practices
-- **Provide feedback** on what we track - If you disagree with any data collection, please [open an issue](https://github.com/karanhudia/borg-ui/issues) and we will consider adjusting our tracking practices
-
-**Important:** Since we do not collect any personally identifiable information (no IPs, no user IDs, no cookies), there is no individual-level data to delete. All data is anonymous aggregate statistics only.
-
-## Centralized Analytics Model
-
-**Important:** Borg UI uses a **centralized analytics model**:
-- ALL Borg UI installations worldwide send data to ONE Umami instance
-- This allows us to understand global usage patterns
-- Individual installations are not identifiable
-- No tracking between instances (each install is anonymous)
-
-This is different from per-install analytics setups where each user runs their own analytics. We chose centralized analytics to better understand how the product is used globally while maintaining user privacy through anonymization.
-
-## Open Source & Transparency
-
-- All tracking code is open source (inspect `frontend/src/utils/analytics.ts`)
-- Public analytics dashboard (no secrets, no hiding data)
-- Privacy policy available in repository (`PRIVACY.md`)
-- Opt-out mechanism built into the product
-
-## Contact
-
-Questions about analytics or privacy?
-- **Open an issue:** [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
-- **View live data:** [Analytics Dashboard](https://analytics.nullcodeai.dev/)
-
----
-
-**Last Updated:** January 18, 2026
-
-**Our Promise:** We collect only what helps us build a better product. No hidden tracking, no selling data, no dark patterns. Just transparent, user-focused analytics.
+If analytics is disabled or preferences cannot be loaded, normal tracking is skipped.

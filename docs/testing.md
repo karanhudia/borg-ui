@@ -2,54 +2,65 @@
 layout: default
 title: Testing
 nav_order: 11
-description: "What Borg Web UI tests before you trust it with production backups"
+description: "Local and CI checks for Borg UI"
 permalink: /testing
 ---
 
 # Testing
 
-Borg Web UI prioritizes API-driven tests for the Borg 1 workflows that can affect production backups and restores.
+Run checks that match the area you changed.
 
-## API Integration Coverage
+## Docs
 
-- Repository create, import, info, stats, keyfile upload, and keyfile download
-- Manual backup start, job status polling, archive creation, and encrypted repository backups
-- Archive list, info, contents browsing, file download, and delete-job completion
-- Restore preview, archive tree browsing, selected-path restore, restore start, job status polling, and restored file verification
-- Repository maintenance: check, compact, prune, break-lock, and job-history/status endpoints
-- Scheduled backup creation, duplication, and `run-now` execution across one or many repositories
+```bash
+cd docs
+npm ci
+npm run build
+```
 
-## Smoke Coverage
+## Frontend
 
-Core smoke runs against a built app and a live FastAPI server:
+```bash
+cd frontend
+npm install
+npm run typecheck
+npm run lint
+npm run format:check
+npm test
+npm run build
+```
 
-- App boot, routing, auth, and protected endpoint reachability
-- Repository create plus repository list through the public API
-- Manual backup, backup cancel, failed-backup log download, archive list, archive info, file download, selected-path restore, and archive delete
-- Schedule `run-now`, permissions enforcement, and key failure-path contracts
+## Backend
 
-Extended smoke covers slower Borg-heavy black-box checks:
+```bash
+ruff check app tests
+ruff format --check app tests
+pytest
+```
 
-- Encrypted repositories, keyfile upload/download, and restore
-- Maintenance APIs: check, compact, prune, break-lock, restore cancel, and archive delete cancel
-- Localhost SSH repository smoke when the environment provides an SSH server and Borg remotely
-- Multi-source backup correctness
-- Archive contents parity between Borg CLI and the API
-- Deep archive directory browsing behavior
+## Smoke Tests
 
-## Mount Coverage
+Smoke tests need a running Borg UI instance.
 
-- Archive mount and unmount are tested through the FastAPI API when the environment supports `borg mount` and FUSE
-- In environments without FUSE support, mount API tests are skipped instead of producing false negatives
+```bash
+docker compose up -d --build
+python3 tests/smoke/run_core_smoke.py --url http://localhost:8081
+```
 
-## Test Philosophy
+Run broader suites when touching backup, restore, repository, archive, SSH, or scheduling behavior.
 
-- Exercise the same FastAPI endpoints the frontend uses
-- Run real Borg commands against temporary repositories whenever the feature ends in a real Borg operation
-- Verify both the API response and the resulting repository or filesystem state
+Some smoke tests require host capabilities or external setup:
 
-## Backend Linting
+- FUSE archive mounting tests require FUSE support.
+- Remote SSH tests require SSH test configuration.
+- OIDC tests require an OIDC test setup.
 
-- Backend CI runs `ruff check app tests` for linting and `ruff format --check app tests` for formatting
-- The current lint ruleset is scoped to unused imports (`F401`)
-- `tests/fixtures/database.py` is intentionally exempt because the import registers SQLAlchemy models with metadata as a side effect
+## What To Run
+
+| Change | Minimum check |
+| --- | --- |
+| Docs only | `cd docs && npm run build` |
+| Frontend UI | frontend typecheck, lint, tests |
+| Backend API | backend lint and relevant pytest |
+| Backup/restore core | relevant unit tests plus smoke tests |
+| Docker/runtime | build image and run smoke tests |
