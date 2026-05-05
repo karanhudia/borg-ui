@@ -8,20 +8,31 @@ description: "Recover Borg UI, restore data, and validate backups with restore c
 
 A backup is useful only when you can restore it.
 
-Use this page as an operator checklist for Borg UI deployments.
+Borg UI uses Borg Backup behind the scenes. Your backup data lives in standard Borg repositories, not in a proprietary Borg UI format.
 
-## Keep These Recoverable
+That means Borg UI does not need to be running for a data recovery. If you have the Borg repository, the required secrets, and access to the storage location, you can restore with the Borg CLI.
 
-You need all of this during a real recovery:
+Borg UI adds the web interface, schedules, repository checks, restore checks, logs, notifications, and remote-machine management around Borg.
+
+## Recovery Priorities
+
+The minimum needed to recover data is:
 
 | Item | Why it matters |
 | --- | --- |
-| Borg repositories | This is the backup data |
-| Repository passphrases or keyfiles | Encrypted Borg repositories cannot be restored without them |
+| Borg repository | This is the backup data |
+| Repository passphrase or keyfile | Encrypted Borg repositories cannot be restored without it |
+| Storage access | Local path, SSH access, or remote repository credentials |
+| Restore machine | Any machine or container with Borg installed and enough space to restore |
+
+The extra items needed to rebuild the same Borg UI instance are:
+
+| Item | Why it matters |
+| --- | --- |
 | Borg UI `/data` volume | Contains the database, generated secret key, logs, SSH material, schedules, and job metadata |
 | Compose file and `.env` | Recreates ports, volume mounts, user IDs, path mappings, and deployment settings |
-| SSH access | Needed for SSH repositories and remote machines |
-| Restore destination | A writable container path where restored data can be staged |
+| Same container path mappings | Lets existing repositories, sources, and restore destinations keep working |
+| Remote-machine SSH access | Needed for Borg UI-managed SSH repositories and remote sources |
 
 Keep repository passphrases outside Borg UI too. If the only copy of a passphrase was in Borg UI and `/data` is gone, Borg UI cannot recover that encrypted repository for you.
 
