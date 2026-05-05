@@ -8,9 +8,11 @@ description: "Recover Borg UI, restore data, and validate backups with restore c
 
 A backup is useful only when you can restore it.
 
+::: tip Recovery boundary
 Borg UI uses Borg Backup behind the scenes. Your backup data lives in standard Borg repositories, not in a proprietary Borg UI format.
 
-That means Borg UI does not need to be running for a data recovery. If you have the Borg repository, the required secrets, and access to the storage location, you can restore with the Borg CLI.
+Borg UI does not need to be running for a data recovery. If you have the Borg repository, the required secrets, and access to the storage location, you can restore with the Borg CLI.
+:::
 
 Borg UI adds the web interface, schedules, repository checks, restore checks, logs, notifications, and remote-machine management around Borg.
 
