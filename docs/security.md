@@ -59,6 +59,8 @@ Use built-in OIDC when Borg UI should talk directly to the identity provider.
 
 Keep frontend and API on the same public origin. Split-origin setups need explicit CORS/cookie work and are not the default supported path.
 
+See [Authentication and SSO](authentication) for setup details.
+
 ## Trusted-Header Auth
 
 Trusted-header auth reads identity from proxy-set headers.
@@ -70,6 +72,8 @@ Safe only when:
 - only the proxy can set the trusted headers
 
 If direct access is possible, a user can spoof headers and impersonate another user.
+
+See [Authentication and SSO](authentication) for header settings.
 
 ## Metrics
 

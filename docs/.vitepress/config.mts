@@ -64,6 +64,7 @@ export default defineConfig({
         text: 'Operations',
         items: [
           { text: 'Security', link: '/security' },
+          { text: 'Authentication and SSO', link: '/authentication' },
           { text: 'Analytics', link: '/analytics' },
           { text: 'Beta Features', link: '/beta-features' },
           { text: 'Docker Hooks', link: '/docker-hooks' },

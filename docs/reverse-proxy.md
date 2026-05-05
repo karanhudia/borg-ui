@@ -127,6 +127,8 @@ Valid role values:
 
 If users can reach Borg UI directly, they can spoof these headers. Isolate the container on a private Docker network or bind it only to localhost.
 
+See [Authentication and SSO](authentication) for auth mode details.
+
 ## WebSockets and Streaming
 
 Borg UI uses streaming for job progress and logs. The proxy must support:
@@ -140,3 +142,4 @@ Borg UI uses streaming for job progress and logs. The proxy must support:
 
 - [Security](security)
 - [Configuration](configuration)
+- [Authentication and SSO](authentication)

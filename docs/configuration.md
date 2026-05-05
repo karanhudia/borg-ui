@@ -149,6 +149,8 @@ Built-in OIDC is configured in the UI, not through a long list of environment va
 
 Use trusted-header auth only when the Borg UI container is reachable exclusively through the trusted proxy. Otherwise anyone who reaches the app directly can spoof identity headers.
 
+See [Authentication and SSO](authentication).
+
 ## Licensing and Activation
 
 | Variable | Default | Purpose |
@@ -175,4 +177,5 @@ Your proxy must strip `/borg-ui` before forwarding requests to the container. Se
 - [Installation](installation)
 - [Cache](cache)
 - [Security](security)
+- [Authentication and SSO](authentication)
 - [Remote Machines](ssh-keys)
