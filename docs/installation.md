@@ -8,9 +8,49 @@ description: "Install Borg UI with Docker"
 
 Borg UI is distributed as a Docker image.
 
-Use Docker Compose unless you only need a quick local test. The recommended Compose example gives you persistent app data, Borg cache, Redis, and clear volume mappings.
+Use Docker Compose unless you only need a quick local test.
 
-## Recommended Docker Compose
+Pick one Compose workflow:
+
+- [No Redis](#option-1-no-redis-simple): simplest setup. Uses in-memory archive cache.
+- [With Redis](#option-2-with-redis-recommended): recommended for normal installs.
+- [External Redis](#option-3-external-redis): use Redis from another host, stack, or managed service.
+
+## Option 1: No Redis (Simple)
+
+Use this for small installs or occasional archive browsing. Backups and restores work normally. Archive browsing cache is kept in memory and is lost when the app restarts.
+
+Create `docker-compose.yml`:
+
+```yaml
+services:
+  app:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8081}:${PORT:-8081}"
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /etc/localtime:/etc/localtime:ro
+      - ${LOCAL_STORAGE_PATH:-/home/youruser}:/local:rw
+    environment:
+      - PORT=${PORT:-8081}
+      - PUID=${PUID:-1001}
+      - PGID=${PGID:-1001}
+      - TZ=${TZ:-UTC}
+      - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
+      - REDIS_HOST=disabled
+
+volumes:
+  borg_data:
+  borg_cache:
+```
+
+## Option 2: With Redis (Recommended)
+
+Use this for normal deployments. Redis makes repeated archive browsing faster and keeps cache across app container restarts.
 
 Create `docker-compose.yml`:
 
@@ -61,7 +101,54 @@ volumes:
   borg_cache:
 ```
 
-Start it:
+## Option 3: External Redis
+
+Use this when Redis already runs somewhere else.
+
+Create `docker-compose.yml` on the Borg UI host:
+
+```yaml
+services:
+  app:
+    image: ainullcode/borg-ui:latest
+    container_name: borg-web-ui
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8081}:${PORT:-8081}"
+    volumes:
+      - borg_data:/data
+      - borg_cache:/home/borg/.cache/borg
+      - /etc/localtime:/etc/localtime:ro
+      - ${LOCAL_STORAGE_PATH:-/home/youruser}:/local:rw
+    environment:
+      - PORT=${PORT:-8081}
+      - PUID=${PUID:-1001}
+      - PGID=${PGID:-1001}
+      - TZ=${TZ:-UTC}
+      - LOCAL_MOUNT_POINTS=${LOCAL_MOUNT_POINTS:-/local}
+      - REDIS_URL=redis://redis.example.com:6379/0
+      - REDIS_HOST=disabled
+
+volumes:
+  borg_data:
+  borg_cache:
+```
+
+Replace `redis.example.com` with your Redis host.
+
+Examples:
+
+```text
+redis://redis.example.com:6379/0
+redis://:password@redis.example.com:6379/0
+rediss://:password@redis.example.com:6379/0
+```
+
+`REDIS_URL` takes precedence over `REDIS_HOST`. Keeping `REDIS_HOST=disabled` prevents Borg UI from trying `localhost:6379` if the external URL is unavailable.
+
+## Start Borg UI
+
+From the directory containing `docker-compose.yml`:
 
 ```bash
 docker compose up -d
@@ -81,17 +168,6 @@ password: admin123
 ```
 
 Change the password immediately after first login. You can set a different first password with `INITIAL_ADMIN_PASSWORD`.
-
-## Install Without Redis
-
-Redis is optional. If you do not want to run Redis, remove the `redis` service and `depends_on` block from the Compose file, then add this environment variable to the app service:
-
-```yaml
-environment:
-  - REDIS_HOST=disabled
-```
-
-With Redis disabled, Borg UI uses in-memory archive browsing cache. Backups and restores still work. Repeated archive browsing can be slower, and the cache is lost when the app restarts.
 
 ## Pick the Right Host Path
 
