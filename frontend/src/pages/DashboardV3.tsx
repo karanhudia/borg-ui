@@ -552,6 +552,13 @@ function DimStatusGrid({
   const T = useT()
   const { t } = useTranslation()
 
+  const restoreItem: DimStatusItem = {
+    label: t('dashboard.repositoryHealth.dimensionLabels.restore'),
+    status: dim?.restore ?? 'unknown',
+    value: restoreDimValue(latestRestoreCheckStatus, lastRestoreCheck, restoreCheckConfigured, t),
+    tooltip: latestRestoreCheckError ?? dimTimestampTooltip(lastRestoreCheck),
+  }
+
   const items: DimStatusItem[] =
     mode === 'observe'
       ? [
@@ -577,6 +584,7 @@ function DimStatusGrid({
                 : dimSince(lastCheck, t),
             tooltip: dim?.check === 'unknown' ? undefined : dimTimestampTooltip(lastCheck),
           },
+          restoreItem,
         ]
       : [
           {
@@ -597,17 +605,7 @@ function DimStatusGrid({
             value: dimSince(lastCompact, t),
             tooltip: dimTimestampTooltip(lastCompact),
           },
-          {
-            label: t('dashboard.repositoryHealth.dimensionLabels.restore'),
-            status: dim?.restore ?? 'unknown',
-            value: restoreDimValue(
-              latestRestoreCheckStatus,
-              lastRestoreCheck,
-              restoreCheckConfigured,
-              t
-            ),
-            tooltip: latestRestoreCheckError ?? dimTimestampTooltip(lastRestoreCheck),
-          },
+          restoreItem,
         ]
 
   return (

@@ -341,6 +341,26 @@ describe('DashboardV3', () => {
       await waitFor(() => expect(screen.getAllByText('Observe Only').length).toBeGreaterThan(0))
       expect(screen.getByText('FRESH')).toBeInTheDocument()
       expect(screen.getByText('ARCHIVES')).toBeInTheDocument()
+      expect(screen.getAllByText('RESTORE').length).toBeGreaterThan(0)
+    })
+
+    it('shows restore check status for observe repositories', async () => {
+      const observeRepo = {
+        ...makeOverview().repository_health[1],
+        restore_check_configured: true,
+        latest_restore_check_status: 'failed',
+        latest_restore_check_error: 'Probe path missing',
+        dimension_health: {
+          ...makeOverview().repository_health[1].dimension_health,
+          restore: 'critical',
+        },
+      }
+      mockFetchSuccess(makeOverview({ repository_health: [observeRepo] }))
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Observe Only')).toBeInTheDocument())
+      expect(screen.getByText('RESTORE')).toBeInTheDocument()
+      expect(screen.getByText('Failed')).toBeInTheDocument()
     })
 
     it('shows restore verification as a health dimension for full repositories', async () => {
@@ -348,7 +368,7 @@ describe('DashboardV3', () => {
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
 
-      expect(screen.getByText('RESTORE')).toBeInTheDocument()
+      expect(screen.getAllByText('RESTORE').length).toBeGreaterThan(0)
       expect(
         screen.getAllByLabelText(formatDateTimeFull('2026-03-28T10:00:00+00:00')).length
       ).toBeGreaterThan(0)

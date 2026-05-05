@@ -2249,6 +2249,7 @@
       "restoreCheckFailed": "Error al iniciar la comprobación de restauración"
     },
     "canaryModeHint": "El modo canario añade un pequeño archivo canario de Borg UI a las copias de seguridad futuras mientras esté activado, y luego lo verifica desde el archivo más reciente. Funciona después de la próxima copia de seguridad.",
+    "canaryUnavailableObserveOnly": "El modo canario no está disponible para repositorios solo de observación porque Borg UI no crea sus copias. Usa rutas de prueba seleccionadas o una prueba de archivo completo.",
     "noBackupYet": "Aún no hay copia",
     "probeModeHint": "El modo de rutas de prueba restaura archivos reales que tú eliges. Úsalo para comprobaciones más profundas de rutas críticas sin extraer el archivo completo.",
     "fullArchiveWarning": "Las pruebas de archivo completo pueden ser costosas en repositorios grandes. Úsalas con moderación y solo cuando tengas almacenamiento temporal y ventana de mantenimiento suficientes."
@@ -3152,6 +3153,7 @@
         "cannotDeleteRepoWithArchives": "No se puede eliminar el repositorio con archivos existentes. Elimine todos los archivos primero.",
         "checkAlreadyRunning": "Ya hay una operación de verificación en curso para este repositorio",
         "compactAlreadyRunning": "Ya hay una operación de compactación en curso para este repositorio",
+        "restoreCheckCanaryUnsupportedObserve": "Las comprobaciones de restauración canaria no están disponibles para repositorios solo de observación. Usa rutas de prueba seleccionadas o una prueba de archivo completo.",
         "breakLockTimeout": "Tiempo de espera al intentar romper el bloqueo",
         "checkJobNotFound": "Trabajo de verificación no encontrado",
         "compactJobNotFound": "Trabajo de compactación no encontrado",

@@ -2249,6 +2249,7 @@
       "restoreCheckFailed": "Impossibile avviare il controllo di ripristino"
     },
     "canaryModeHint": "La modalità canary aggiunge un piccolo file canary di Borg UI ai backup futuri finché è attiva, poi lo verifica dall'archivio più recente. Funziona dopo il prossimo backup.",
+    "canaryUnavailableObserveOnly": "La modalità canary non è disponibile per i repository solo osservazione perché Borg UI non crea i loro backup. Usa percorsi di prova selezionati o una verifica dell'intero archivio.",
     "noBackupYet": "Nessun backup",
     "probeModeHint": "La modalità percorsi di prova ripristina file reali che scegli tu. Usala per verifiche più approfondite su percorsi critici senza estrarre l'intero archivio.",
     "fullArchiveWarning": "Le verifiche dell'intero archivio possono essere costose su repository grandi. Usale raramente e solo se hai spazio temporaneo e una finestra di manutenzione adeguata."
@@ -3152,6 +3153,7 @@
         "cannotDeleteRepoWithArchives": "Impossibile eliminare il repository con archivi esistenti. Elimina prima tutti gli archivi.",
         "checkAlreadyRunning": "Un'operazione di controllo è già in esecuzione per questo repository",
         "compactAlreadyRunning": "Un'operazione di compattazione è già in esecuzione per questo repository",
+        "restoreCheckCanaryUnsupportedObserve": "I controlli di ripristino canary non sono disponibili per i repository solo osservazione. Usa percorsi di prova selezionati o una verifica dell'intero archivio.",
         "breakLockTimeout": "Timeout durante il tentativo di rompere il blocco",
         "checkJobNotFound": "Job di controllo non trovato",
         "compactJobNotFound": "Job di compattazione non trovato",

@@ -207,6 +207,66 @@ describe('ScheduledRestoreChecksSection', () => {
     expect(screen.getByLabelText('Probe Paths')).toHaveValue('etc\nsrv/app/config.yml')
   })
 
+  it('supports observe-only repositories while disabling canary mode', async () => {
+    const user = userEvent.setup()
+    vi.mocked(repositoriesAPI.getRepositories).mockResolvedValue({
+      data: {
+        repositories: [
+          {
+            id: 2,
+            name: 'Observe Repo',
+            path: '/observe-repo',
+            borg_version: 1,
+            mode: 'observe',
+          },
+        ],
+      },
+    } as AxiosResponse)
+    vi.mocked(repositoriesAPI.getRestoreCheckSchedule).mockResolvedValue({
+      data: {
+        repository_id: 2,
+        repository_name: 'Observe Repo',
+        repository_path: '/observe-repo',
+        restore_check_cron_expression: null,
+        restore_check_paths: [],
+        restore_check_full_archive: false,
+        restore_check_canary_enabled: false,
+        restore_check_mode: 'probe_paths',
+        last_restore_check: null,
+        last_scheduled_restore_check: null,
+        next_scheduled_restore_check: null,
+        notify_on_restore_check_success: false,
+        notify_on_restore_check_failure: true,
+        enabled: false,
+      },
+    } as AxiosResponse)
+    vi.mocked(repositoriesAPI.updateRestoreCheckSchedule).mockResolvedValue({
+      data: { success: true },
+    } as AxiosResponse)
+
+    renderWithProviders(<TestHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Open restore check dialog' }))
+    await user.selectOptions(await screen.findByLabelText('Repository'), '2')
+
+    expect(screen.getByLabelText('Managed canary payload')).toBeDisabled()
+    expect(await screen.findByLabelText('Probe Paths')).toBeInTheDocument()
+    expect(screen.getByText(/Canary mode is unavailable/)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Probe Paths'), 'etc/hostname')
+    await user.click(screen.getByRole('button', { name: 'Update' }))
+
+    await waitFor(() =>
+      expect(repositoriesAPI.updateRestoreCheckSchedule).toHaveBeenCalledWith(
+        2,
+        expect.objectContaining({
+          paths: ['etc/hostname'],
+          full_archive: false,
+        })
+      )
+    )
+  })
+
   it('opens restore-check logs in the generic log viewer dialog', async () => {
     const user = userEvent.setup()
     vi.mocked(repositoriesAPI.getRepositoryRestoreCheckJobs).mockResolvedValue({

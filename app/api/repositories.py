@@ -135,6 +135,18 @@ def _is_restore_check_canary_mode(
     )
 
 
+def _ensure_restore_check_mode_allowed(
+    *, repository: Repository, probe_paths: list[str], full_archive: bool
+) -> None:
+    if repository.mode == "observe" and _is_restore_check_canary_mode(
+        probe_paths=probe_paths, full_archive=full_archive
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.restoreCheckCanaryUnsupportedObserve"},
+        )
+
+
 def get_connection_details(connection_id: int, db: Session) -> Dict[str, Any]:
     """
     Get SSH connection details from connection_id.
@@ -2265,9 +2277,15 @@ async def restore_check_repository(
             request=request,
             repository=repository,
         )
-        if _is_restore_check_canary_mode(
+        _ensure_restore_check_mode_allowed(
+            repository=repository,
+            probe_paths=probe_paths,
+            full_archive=full_archive,
+        )
+        is_canary_mode = _is_restore_check_canary_mode(
             probe_paths=probe_paths, full_archive=full_archive
-        ):
+        )
+        if is_canary_mode:
             repository.restore_check_canary_enabled = True
             repository.restore_check_paths = json.dumps([])
             repository.restore_check_full_archive = False
@@ -3430,6 +3448,30 @@ async def update_restore_check_schedule(
             )
         _require_repository_access(db, current_user, repo, "operator")
 
+        if repo.mode == "observe":
+            if "paths" in request:
+                requested_paths = _normalize_restore_check_paths(request.get("paths"))
+            else:
+                requested_paths = _normalize_restore_check_paths(
+                    json.loads(repo.restore_check_paths)
+                    if repo.restore_check_paths
+                    else []
+                )
+            requested_full_archive = (
+                bool(request.get("full_archive"))
+                if "full_archive" in request
+                else bool(repo.restore_check_full_archive)
+            )
+            requested_cron_expression = request.get(
+                "cron_expression", repo.restore_check_cron_expression
+            )
+            if requested_cron_expression and requested_cron_expression.strip():
+                _ensure_restore_check_mode_allowed(
+                    repository=repo,
+                    probe_paths=requested_paths,
+                    full_archive=requested_full_archive,
+                )
+
         if "timezone" in request or "restore_check_timezone" in request:
             try:
                 repo.restore_check_timezone = normalize_schedule_timezone(
@@ -3483,9 +3525,19 @@ async def update_restore_check_schedule(
         restore_check_paths = (
             json.loads(repo.restore_check_paths) if repo.restore_check_paths else []
         )
+        restore_check_enabled = bool(repo.restore_check_cron_expression)
+        if restore_check_enabled:
+            _ensure_restore_check_mode_allowed(
+                repository=repo,
+                probe_paths=restore_check_paths,
+                full_archive=bool(repo.restore_check_full_archive),
+            )
+
         if cron_expression is not None and (
             not cron_expression or cron_expression.strip() == ""
         ):
+            repo.restore_check_canary_enabled = False
+        elif repo.mode == "observe":
             repo.restore_check_canary_enabled = False
         elif repo.restore_check_cron_expression and (
             cron_expression is not None or restore_check_mode_changed

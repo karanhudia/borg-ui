@@ -321,6 +321,51 @@ async def test_restore_check_scheduler_creates_job_and_updates_next_run(db_sessi
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_restore_check_scheduler_skips_canary_for_observe_repositories(
+    db_session,
+):
+    repo = Repository(
+        name="Observe Repo",
+        path="/tmp/observe",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        mode="observe",
+        restore_check_cron_expression="0 4 * * *",
+        restore_check_timezone="Asia/Kolkata",
+        restore_check_paths="[]",
+        restore_check_full_archive=False,
+        restore_check_canary_enabled=True,
+    )
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+
+    scheduler = RestoreCheckScheduler()
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
+
+    with patch(
+        "app.services.restore_check_scheduler.SessionLocal", testing_session_local
+    ):
+        with patch(
+            "app.services.restore_check_scheduler.start_background_maintenance_job"
+        ) as mock_start:
+            await scheduler.run_scheduled_restore_checks()
+
+    verification_session = testing_session_local()
+    repo = (
+        verification_session.query(Repository).filter(Repository.id == repo.id).first()
+    )
+    assert repo.restore_check_canary_enabled is False
+    assert repo.next_scheduled_restore_check is not None
+    mock_start.assert_not_called()
+    verification_session.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_shared_scheduler_loop_runs_due_checks_each_cycle(db_session):
     repo = Repository(
         name="Repo",

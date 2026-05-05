@@ -11,6 +11,7 @@ from app.api.dashboard import (
     ScheduledJobInfo,
     SystemMetrics,
     build_full_repository_health,
+    build_observe_repository_health,
     format_bytes,
     get_recent_jobs,
     parse_size_to_bytes,
@@ -407,6 +408,35 @@ class TestDashboardHelpers:
         assert health["dimension_health"]["restore"] == "warning"
         assert health["latest_restore_check_status"] == "needs_backup"
         assert any("Run a backup" in warning for warning in health["warnings"])
+
+    def test_observe_repository_health_includes_restore_check_signal(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=9,
+            name="Observe Restore Repo",
+            path="/srv/backups/observe-restore",
+            mode="observe",
+            archive_count=4,
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression="0 4 * * *",
+        )
+        job = RestoreCheckJob(
+            repository_id=9,
+            repository_path=repo.path,
+            status="failed",
+            error_message="Probe path missing",
+            started_at=now - timedelta(minutes=30),
+        )
+
+        health = build_observe_repository_health(repo, now, job)
+
+        assert health["health_status"] == "critical"
+        assert health["dimension_health"]["restore"] == "critical"
+        assert health["restore_check_configured"] is True
+        assert health["latest_restore_check_status"] == "failed"
+        assert "Restore check failed: Probe path missing" in health["warnings"]
 
     def test_get_recent_jobs_normalizes_trigger_state_and_logs(self):
         now = datetime.now(timezone.utc)

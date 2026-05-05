@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -86,6 +86,8 @@ interface RestoreCheckLogJob extends RestoreCheckJobRow {
   type: 'restore_check'
 }
 
+type RestoreCheckMode = 'canary' | 'probe_paths' | 'full_archive'
+
 export interface ScheduledRestoreChecksSectionRef {
   openAddDialog: () => void
 }
@@ -135,7 +137,7 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
     cron_expression: DEFAULT_CRON,
     timezone: getBrowserTimeZone(),
     restore_check_paths: '',
-    mode: 'canary' as 'canary' | 'probe_paths' | 'full_archive',
+    mode: 'canary' as RestoreCheckMode,
   })
   const timezoneOptions = useMemo(
     () => getSupportedTimeZones(formData.timezone),
@@ -152,6 +154,14 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
   const selectedRepository = selectedRepositoryId
     ? manageableRepositories.find((repo) => repo.id === selectedRepositoryId)
     : undefined
+  const selectedRepositoryIsObserveOnly = selectedRepository?.mode === 'observe'
+
+  useEffect(() => {
+    if (!showDialog || !selectedRepositoryIsObserveOnly || formData.mode !== 'canary') {
+      return
+    }
+    setFormData((current) => ({ ...current, mode: 'probe_paths' }))
+  }, [formData.mode, selectedRepositoryIsObserveOnly, showDialog])
 
   const { data: scheduledChecks, isLoading } = useQuery({
     queryKey: ['scheduled-restore-checks', repositories.map((repo) => repo.id)],
@@ -418,12 +428,17 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
   }
 
   const openEditDialog = (check: ScheduledRestoreCheck) => {
+    const repository = repositories.find((repo) => repo.id === check.repository_id)
+    const restoreCheckMode = (check.restore_check_mode || 'canary') as RestoreCheckMode
     setSelectedRepositoryId(check.repository_id)
     setFormData({
       cron_expression: check.restore_check_cron_expression || DEFAULT_CRON,
       timezone: check.restore_check_timezone || check.timezone || 'UTC',
       restore_check_paths: check.restore_check_paths.join('\n'),
-      mode: check.restore_check_mode || 'canary',
+      mode:
+        repository?.mode === 'observe' && restoreCheckMode === 'canary'
+          ? 'probe_paths'
+          : restoreCheckMode,
     })
     setShowDialog(true)
   }
@@ -467,6 +482,10 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
       formData.mode === 'probe_paths' ? parsePaths(formData.restore_check_paths) : []
     if (formData.mode === 'probe_paths' && probePaths.length === 0) {
       toast.error(t('scheduledRestoreChecks.validation.enterProbePath'))
+      return
+    }
+    if (selectedRepositoryIsObserveOnly && formData.mode === 'canary') {
+      toast.error(t('scheduledRestoreChecks.canaryUnavailableObserveOnly'))
       return
     }
 
@@ -634,7 +653,18 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
             <RepoSelect
               repositories={manageableRepositories}
               value={selectedRepositoryId || ''}
-              onChange={(value) => setSelectedRepositoryId(value ? Number(value) : null)}
+              onChange={(value) => {
+                const repoId = value ? Number(value) : null
+                const repository = repoId
+                  ? manageableRepositories.find((repo) => repo.id === repoId)
+                  : undefined
+                setSelectedRepositoryId(repoId)
+                if (repository?.mode === 'observe') {
+                  setFormData((current) =>
+                    current.mode === 'canary' ? { ...current, mode: 'probe_paths' } : current
+                  )
+                }
+              }}
               loading={loadingRepositories}
               valueKey="id"
               label={t('scheduledRestoreChecks.repository')}
@@ -692,7 +722,7 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
                 onChange={(event) =>
                   setFormData({
                     ...formData,
-                    mode: event.target.value as 'canary' | 'probe_paths' | 'full_archive',
+                    mode: event.target.value as RestoreCheckMode,
                   })
                 }
               >
@@ -700,6 +730,7 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
                   value="canary"
                   control={<Radio />}
                   label={t('scheduledRestoreChecks.modes.canary')}
+                  disabled={selectedRepositoryIsObserveOnly}
                 />
                 <FormControlLabel
                   value="probe_paths"
@@ -757,7 +788,14 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
             {formData.mode === 'full_archive' ? (
               <Alert severity="warning">{t('scheduledRestoreChecks.fullArchiveWarning')}</Alert>
             ) : formData.mode === 'probe_paths' ? (
-              <Alert severity="info">{t('scheduledRestoreChecks.probeModeHint')}</Alert>
+              <Stack spacing={1}>
+                {selectedRepositoryIsObserveOnly && (
+                  <Alert severity="info">
+                    {t('scheduledRestoreChecks.canaryUnavailableObserveOnly')}
+                  </Alert>
+                )}
+                <Alert severity="info">{t('scheduledRestoreChecks.probeModeHint')}</Alert>
+              </Stack>
             ) : (
               <Alert severity="success">{t('scheduledRestoreChecks.canaryModeHint')}</Alert>
             )}

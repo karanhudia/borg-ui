@@ -2249,6 +2249,7 @@
       "restoreCheckFailed": "Restore-Prüfung konnte nicht gestartet werden"
     },
     "canaryModeHint": "Der Canary-Modus fügt künftigen Sicherungen eine winzige Borg UI-Canary-Datei hinzu, solange er aktiviert ist, und prüft sie aus dem neuesten Archiv. Er funktioniert nach der nächsten Sicherung.",
+    "canaryUnavailableObserveOnly": "Der Canary-Modus ist für Observe-only-Repositories nicht verfügbar, weil Borg UI deren Backups nicht erstellt. Nutze ausgewählte Probe-Pfade oder einen vollständigen Archiv-Drill.",
     "noBackupYet": "Noch keine Sicherung",
     "probeModeHint": "Der Probe-Pfad-Modus stellt echte von dir gewählte Dateien wieder her. Nutze ihn für aussagekräftigere Prüfungen kritischer Pfade ohne das gesamte Archiv zu extrahieren.",
     "fullArchiveWarning": "Vollständige Archiv-Drills können bei großen Repositories teuer sein. Nutze sie sparsam und nur mit ausreichend temporärem Speicher und Wartungsfenster."
@@ -3152,6 +3153,7 @@
         "cannotDeleteRepoWithArchives": "Repository mit vorhandenen Archiven kann nicht gelöscht werden. Bitte löschen Sie zuerst alle Archive.",
         "checkAlreadyRunning": "Für dieses Repository wird bereits eine Überprüfungsoperation ausgeführt",
         "compactAlreadyRunning": "Für dieses Repository wird bereits eine Komprimierungsoperation ausgeführt",
+        "restoreCheckCanaryUnsupportedObserve": "Canary-Restore-Prüfungen sind für Observe-only-Repositories nicht verfügbar. Nutze ausgewählte Probe-Pfade oder einen vollständigen Archiv-Drill.",
         "breakLockTimeout": "Timeout beim Versuch, die Sperre aufzuheben",
         "checkJobNotFound": "Prüfauftrag nicht gefunden",
         "compactJobNotFound": "Komprimierungsauftrag nicht gefunden",

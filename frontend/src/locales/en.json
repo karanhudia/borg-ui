@@ -2249,6 +2249,7 @@
       "restoreCheckFailed": "Failed to start restore check"
     },
     "canaryModeHint": "Canary mode adds a tiny Borg UI canary file to future backups while enabled, then verifies it from the latest archive. It works after the next backup.",
+    "canaryUnavailableObserveOnly": "Canary mode is unavailable for observe-only repositories because Borg UI does not create their backups. Use selected probe paths or a full archive drill.",
     "noBackupYet": "No backup yet",
     "probeModeHint": "Probe-path mode restores real files you choose. Use it for higher-confidence checks on critical paths without extracting the full archive.",
     "fullArchiveWarning": "Full archive drills can be expensive on large repositories. Use this sparingly, and only when you have enough temporary storage and maintenance window budget."
@@ -3152,6 +3153,7 @@
         "cannotDeleteRepoWithArchives": "Cannot delete repository with existing archives. Please delete all archives first.",
         "checkAlreadyRunning": "A check operation is already running for this repository",
         "compactAlreadyRunning": "A compact operation is already running for this repository",
+        "restoreCheckCanaryUnsupportedObserve": "Canary restore checks are unavailable for observe-only repositories. Use selected probe paths or a full archive drill.",
         "breakLockTimeout": "Timeout while trying to break lock",
         "checkJobNotFound": "Check job not found",
         "compactJobNotFound": "Compact job not found",

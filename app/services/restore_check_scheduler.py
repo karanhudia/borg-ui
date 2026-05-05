@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -17,6 +18,14 @@ from app.utils.schedule_time import (
 )
 
 logger = structlog.get_logger()
+
+
+def _scheduled_restore_check_is_canary(repo: Repository) -> bool:
+    try:
+        probe_paths = json.loads(repo.restore_check_paths or "[]")
+    except (TypeError, json.JSONDecodeError):
+        probe_paths = []
+    return not bool(repo.restore_check_full_archive) and not bool(probe_paths)
 
 
 async def run_due_scheduled_restore_checks(
@@ -43,6 +52,23 @@ async def run_due_scheduled_restore_checks(
 
     for repo in repos:
         try:
+            if repo.mode == "observe" and _scheduled_restore_check_is_canary(repo):
+                repo.restore_check_canary_enabled = False
+                try:
+                    repo.next_scheduled_restore_check = calculate_next_cron_run(
+                        repo.restore_check_cron_expression,
+                        now,
+                        repo.restore_check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                    )
+                except Exception:
+                    repo.next_scheduled_restore_check = None
+                db.commit()
+                logger.warning(
+                    "Skipped canary restore check for observe-only repository",
+                    repo_id=repo.id,
+                )
+                continue
+
             start_background_maintenance_job(
                 db,
                 repo,

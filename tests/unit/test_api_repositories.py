@@ -2013,6 +2013,61 @@ class TestRepositoryRestoreCheckSchedule:
         test_db.refresh(repo)
         assert repo.restore_check_canary_enabled is False
 
+    def test_update_restore_check_schedule_rejects_canary_for_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={"cron_expression": "0 7 * * *", "paths": [], "full_archive": False},
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.restoreCheckCanaryUnsupportedObserve"
+        )
+
+    def test_update_restore_check_schedule_allows_probe_paths_for_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 7 * * *",
+                "paths": ["etc/hostname"],
+                "full_archive": False,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository"]["restore_check_mode"] == "probe_paths"
+        assert data["repository"]["restore_check_canary_enabled"] == False
+
     def test_start_restore_check_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -2076,6 +2131,58 @@ class TestRepositoryRestoreCheckSchedule:
         assert repo.restore_check_canary_enabled is True
         assert repo.restore_check_paths == "[]"
         assert repo.restore_check_full_archive is False
+
+    def test_manual_canary_restore_check_rejects_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/restore-check",
+            headers=admin_headers,
+            json={"paths": [], "full_archive": False},
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.restoreCheckCanaryUnsupportedObserve"
+        )
+
+    def test_manual_probe_restore_check_allows_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.maintenance_jobs.schedule_background_job",
+            side_effect=_discard_background_coro,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/restore-check",
+                headers=admin_headers,
+                json={"paths": ["etc/hostname"], "full_archive": False},
+            )
+
+        assert response.status_code == 200
 
 
 @pytest.mark.unit

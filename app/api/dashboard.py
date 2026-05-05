@@ -304,7 +304,11 @@ def build_full_repository_health(
     }
 
 
-def build_observe_repository_health(repo: Repository, now: datetime) -> Dict[str, Any]:
+def build_observe_repository_health(
+    repo: Repository,
+    now: datetime,
+    latest_restore_check: Optional[RestoreCheckJob] = None,
+) -> Dict[str, Any]:
     """Build monitoring-oriented health signals for observe-only repositories."""
     freshness_dim = "healthy"
     check_dim = "unknown"
@@ -355,16 +359,27 @@ def build_observe_repository_health(repo: Repository, now: datetime) -> Dict[str
             health_status = "warning"
             health_color = "warning"
 
+    restore_check_health = build_restore_check_health(repo, now, latest_restore_check)
+    if restore_check_health["severity"]:
+        health_status, health_color = promote_repository_health(
+            health_status, health_color, restore_check_health["severity"]
+        )
+    if restore_check_health["warning"]:
+        warnings.append(restore_check_health["warning"])
+
     return {
         "health_status": health_status,
         "health_color": health_color,
         "warnings": warnings,
+        "restore_check_configured": restore_check_health["configured"],
+        "latest_restore_check_status": restore_check_health["latest_status"],
+        "latest_restore_check_error": restore_check_health["latest_error"],
         "dimension_health": {
             # Reused as Freshness / Check / Archives on the frontend for observe-only repos.
             "backup": freshness_dim,
             "check": check_dim,
             "compact": archives_dim,
-            "restore": "unknown",
+            "restore": restore_check_health["dimension"],
         },
     }
 
@@ -709,7 +724,8 @@ async def get_dashboard_overview(
 
         for repo in observe_only_repos:
             size_bytes = parse_size_to_bytes(repo.total_size)
-            health = build_observe_repository_health(repo, now)
+            latest_restore_check = latest_restore_checks.get(repo.id)
+            health = build_observe_repository_health(repo, now, latest_restore_check)
 
             repo_health.append(
                 {
@@ -728,9 +744,11 @@ async def get_dashboard_overview(
                     "health_status": health["health_status"],
                     "health_color": health["health_color"],
                     "warnings": health["warnings"],
-                    "restore_check_configured": False,
-                    "latest_restore_check_status": None,
-                    "latest_restore_check_error": None,
+                    "restore_check_configured": health["restore_check_configured"],
+                    "latest_restore_check_status": health[
+                        "latest_restore_check_status"
+                    ],
+                    "latest_restore_check_error": health["latest_restore_check_error"],
                     "dedup_ratio": None,
                     "has_schedule": False,
                     "schedule_enabled": False,
