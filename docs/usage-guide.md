@@ -165,6 +165,8 @@ Repository maintenance actions include:
 
 Use check and restore verification regularly. A backup that cannot be restored is not useful.
 
+See [Disaster Recovery](disaster-recovery) for restore-check modes and recovery drills.
+
 ## Notifications
 
 Configure notifications in Settings > Notifications.
