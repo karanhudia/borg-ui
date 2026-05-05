@@ -47,6 +47,22 @@ Username: backup
 Default path: /backups
 ```
 
+## Connection Options
+
+Common options:
+
+| Option | Use when |
+| --- | --- |
+| Default path | File browsing should start from a specific remote directory |
+| SFTP deployment mode | Key deployment needs SFTP mode, for example Hetzner Storage Box |
+| SSH path prefix | SSH commands need a prefix that SFTP browsing does not, for example some NAS paths |
+| Logical mount point | You want a friendly name for the remote machine in path pickers |
+| Use sudo | SSHFS access needs the remote SFTP server to run through sudo |
+
+SFTP deployment mode can break some older SSH servers or NAS devices. Disable it when key deployment fails on those systems.
+
+Remote Machines can also refresh storage usage by running `df` on the remote host.
+
 ## Manual Public Key Install
 
 On the remote server:

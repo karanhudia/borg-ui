@@ -26,10 +26,12 @@ Current global permissions are:
 | --- | --- |
 | Create, import, edit, and delete repositories | `admin` |
 | Manage users and repository permissions | `admin` |
-| Manage system, cache, logs, packages, SSH, scripts, export/import, beta, and MQTT settings | `admin` |
-| View all activity across users | `admin` |
+| Manage system, licensing, cache, logs, packages, SSH, scripts, export/import, beta, and MQTT settings | `admin` |
+| Delete job history entries and associated log files | `admin` |
 | Create, edit, run, duplicate, and delete schedules | `operator`, plus operator access to the schedule repositories |
 | Mount and unmount Borg archives | `operator` |
+
+Activity and job history are visible to signed-in users. Admins can delete supported job entries and their log files.
 
 ## Repository Roles
 
