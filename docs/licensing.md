@@ -7,23 +7,11 @@ nav_order: 12
 
 Borg UI is open-source software licensed under the GNU AGPL v3.
 
-The app also has plan-based feature gates for some product features.
+The app also has plan-based feature gates for some product features. See the current plan details at:
 
-## Current Plan Gates
-
-| Feature | Community | Pro | Enterprise |
-| --- | --- | --- | --- |
-| Borg 1 repositories | yes | yes | yes |
-| Scheduled backups | yes | yes | yes |
-| Archive browsing and restore | yes | yes | yes |
-| Notifications | yes | yes | yes |
-| Script hooks | yes | yes | yes |
-| Prometheus metrics | yes | yes | yes |
-| Users | up to 5 | up to 10 | unlimited |
-| Borg 2 beta access | no | yes | yes |
-| RBAC | no | no | yes |
-
-Roadmap items may appear in the plan drawer, but they should not be documented as current behavior until code ships.
+```text
+https://borgui.com/buy
+```
 
 ## Full Access Period
 
