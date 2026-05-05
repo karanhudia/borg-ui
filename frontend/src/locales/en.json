@@ -1754,6 +1754,7 @@
     "category": {
       "backupEvents": "Backup Events",
       "restoreEvents": "Restore Events",
+      "restoreCheckEvents": "Restore Check Events",
       "checkJobs": "Check Jobs",
       "systemEvents": "System Events"
     },
@@ -1771,6 +1772,7 @@
       "categories": {
         "backup": "Backup",
         "restore": "Restore",
+        "restoreCheck": "Restore Check",
         "check": "Check",
         "schedule": "Schedule"
       },

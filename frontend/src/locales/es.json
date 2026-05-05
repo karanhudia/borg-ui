@@ -1754,6 +1754,7 @@
     "category": {
       "backupEvents": "Eventos de copia de seguridad",
       "restoreEvents": "Eventos de restauración",
+      "restoreCheckEvents": "Eventos de comprobación de restauración",
       "checkJobs": "Trabajos de verificación",
       "systemEvents": "Eventos del sistema"
     },
@@ -1771,6 +1772,7 @@
       "categories": {
         "backup": "Backup",
         "restore": "Restore",
+        "restoreCheck": "Restore Check",
         "check": "Check",
         "schedule": "Schedule"
       },

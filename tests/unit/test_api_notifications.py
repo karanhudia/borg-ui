@@ -43,6 +43,8 @@ class TestNotificationSettingsAPI:
         assert data["enabled"] is True
         assert data["monitor_all_repositories"] is True
         assert data["notify_on_backup_warning"] is False
+        assert data["notify_on_restore_check_success"] is False
+        assert data["notify_on_restore_check_failure"] is True
         assert data["repositories"] == []
 
         setting = (
@@ -191,6 +193,41 @@ class TestNotificationSettingsAPI:
             .first()
         )
         assert refreshed.notify_on_backup_warning is True
+
+    def test_update_notification_setting_restore_check_toggle(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        setting = NotificationSettings(
+            name="Restore Check Toggle",
+            service_url="slack://token/",
+            notify_on_restore_check_success=False,
+            notify_on_restore_check_failure=True,
+        )
+        test_db.add(setting)
+        test_db.commit()
+        test_db.refresh(setting)
+
+        response = test_client.put(
+            f"/api/notifications/{setting.id}",
+            json={
+                "notify_on_restore_check_success": True,
+                "notify_on_restore_check_failure": False,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["notify_on_restore_check_success"] is True
+        assert data["notify_on_restore_check_failure"] is False
+
+        refreshed = (
+            test_db.query(NotificationSettings)
+            .filter(NotificationSettings.id == setting.id)
+            .first()
+        )
+        assert refreshed.notify_on_restore_check_success is True
+        assert refreshed.notify_on_restore_check_failure is False
 
     def test_delete_notification_setting_success(
         self, test_client: TestClient, admin_headers, test_db

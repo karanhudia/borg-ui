@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy.orm import sessionmaker
@@ -217,6 +217,50 @@ async def test_restore_check_error_exit_still_fails(
     assert "exit code 2" in refreshed_job.error_message
     assert refreshed_repo.last_restore_check is None
     verification.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_restore_check_success_sends_notification(
+    testing_session_local,
+    restore_check_repository,
+    restore_check_job,
+):
+    service = RestoreCheckService()
+    process = FakeRestoreCheckProcess(returncode=0)
+
+    with (
+        patch("app.services.restore_check_service.SessionLocal", testing_session_local),
+        patch("app.services.restore_check_service.BorgRouter", FakeBorgRouter),
+        patch(
+            "app.services.restore_check_service.build_repository_borg_env",
+            return_value=({}, None),
+        ),
+        patch("app.services.restore_check_service.cleanup_temp_key_file"),
+        patch(
+            "app.services.restore_check_service.get_process_start_time",
+            return_value=123456,
+        ),
+        patch(
+            "app.services.restore_check_service.asyncio.create_subprocess_exec",
+            return_value=process,
+        ),
+        patch(
+            "app.services.restore_check_service.NotificationService.send_restore_check_completion",
+            new_callable=AsyncMock,
+        ) as notify_mock,
+    ):
+        await service.execute_restore_check(
+            restore_check_job.id, restore_check_repository.id
+        )
+
+    notify_mock.assert_awaited_once()
+    call = notify_mock.await_args.kwargs
+    assert call["repository_name"] == restore_check_repository.name
+    assert call["status"] == "completed"
+    assert call["mode"] == "full_archive"
+    assert call["archive_name"] == "archive-1"
+    assert call["check_type"] == "manual"
 
 
 @pytest.mark.unit

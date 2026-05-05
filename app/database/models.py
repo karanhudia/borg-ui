@@ -1025,6 +1025,8 @@ class NotificationSettings(Base):
     notify_on_schedule_failure = Column(Boolean, default=True, nullable=False)
     notify_on_check_success = Column(Boolean, default=False, nullable=False)
     notify_on_check_failure = Column(Boolean, default=True, nullable=False)
+    notify_on_restore_check_success = Column(Boolean, default=False, nullable=False)
+    notify_on_restore_check_failure = Column(Boolean, default=True, nullable=False)
 
     # Repository filtering
     monitor_all_repositories = Column(

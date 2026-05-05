@@ -1754,6 +1754,7 @@
     "category": {
       "backupEvents": "Sicherungsereignisse",
       "restoreEvents": "Wiederherstellungsereignisse",
+      "restoreCheckEvents": "Restore-Prüfungsereignisse",
       "checkJobs": "Überprüfungsaufgaben",
       "systemEvents": "Systemereignisse"
     },
@@ -1771,6 +1772,7 @@
       "categories": {
         "backup": "Backup",
         "restore": "Restore",
+        "restoreCheck": "Restore Check",
         "check": "Check",
         "schedule": "Schedule"
       },

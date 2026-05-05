@@ -13,6 +13,7 @@ from app.config import settings
 from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
 from app.database.models import Repository, RestoreCheckJob
+from app.services.notification_service import NotificationService
 from app.services.restore_check_canary import (
     get_legacy_restore_canary_archive_paths,
     get_restore_canary_archive_paths,
@@ -109,11 +110,69 @@ class RestoreCheckService:
             job.has_logs = False
             job.logs = f"Failed to save logs: {exc}"
 
+    async def _send_completion_notification(
+        self,
+        *,
+        db,
+        repository: Repository,
+        job: RestoreCheckJob,
+    ) -> None:
+        if job.status not in {
+            "completed",
+            "completed_with_warnings",
+            "failed",
+            "needs_backup",
+        }:
+            return
+
+        try:
+            duration_seconds = None
+            if job.started_at and job.completed_at:
+                duration_seconds = int(
+                    (job.completed_at - job.started_at).total_seconds()
+                )
+
+            full_archive = bool(job.full_archive)
+            probe_paths = _parse_probe_paths(
+                job.probe_paths or repository.restore_check_paths
+            )
+            mode = (
+                "full_archive"
+                if full_archive
+                else "probe_paths"
+                if probe_paths
+                else "canary"
+            )
+
+            await NotificationService.send_restore_check_completion(
+                db=db,
+                repository_name=repository.name,
+                repository_path=repository.path,
+                status=job.status,
+                mode=mode,
+                archive_name=job.archive_name,
+                duration_seconds=duration_seconds,
+                error_message=job.error_message,
+                check_type="scheduled" if job.scheduled_restore_check else "manual",
+                probe_paths=probe_paths,
+                full_archive=full_archive,
+            )
+            logger.info(
+                "Restore check notification sent", job_id=job.id, status=job.status
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to send restore check notification",
+                job_id=job.id,
+                error=str(exc),
+            )
+
     async def execute_restore_check(self, job_id: int, repository_id: int):
         db = SessionLocal()
         temp_key_file = None
         temp_restore_dir = None
         job: RestoreCheckJob | None = None
+        repository: Repository | None = None
         raw_logs: list[str] = []
         logs_saved = False
         use_canary = False
@@ -181,6 +240,9 @@ class RestoreCheckService:
                 self._save_job_logs(job, job_id, raw_logs)
                 logs_saved = True
                 db.commit()
+                await self._send_completion_notification(
+                    db=db, repository=repository, job=job
+                )
                 return
 
             job.archive_name = archive_name
@@ -338,6 +400,9 @@ class RestoreCheckService:
                 logs_saved = True
 
             db.commit()
+            await self._send_completion_notification(
+                db=db, repository=repository, job=job
+            )
         except Exception as exc:
             logger.error(
                 "Restore check execution failed", job_id=job_id, error=str(exc)
@@ -360,6 +425,10 @@ class RestoreCheckService:
                     if raw_logs and not logs_saved:
                         self._save_job_logs(job, job_id, raw_logs)
                     db.commit()
+                    if repository:
+                        await self._send_completion_notification(
+                            db=db, repository=repository, job=job
+                        )
             except Exception:
                 db.rollback()
         finally:
