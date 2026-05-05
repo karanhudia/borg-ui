@@ -162,6 +162,7 @@ class TestProcessUtils:
             [mock_backup_job],  # running backup jobs
             [],  # running restore jobs
             [],  # running check jobs
+            [],  # running restore check jobs
             [mock_prune_job],  # running prune jobs
             [mock_compact_job],  # running compact jobs
             [mock_backup_job],  # backup jobs stuck in running_prune
@@ -228,6 +229,7 @@ class TestProcessUtils:
             [],  # running backup jobs
             [],  # running restore jobs
             [],  # running check jobs
+            [],  # running restore check jobs
             [],  # running prune jobs
             [],  # running compact jobs
         ]
