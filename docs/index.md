@@ -40,6 +40,7 @@ features:
 docker run -d \
   --name borg-web-ui \
   -p 8081:8081 \
+  -e REDIS_HOST=disabled \
   -v borg_data:/data \
   -v borg_cache:/home/borg/.cache/borg \
   -v /home/youruser:/local:rw \

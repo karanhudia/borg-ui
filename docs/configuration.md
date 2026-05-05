@@ -89,6 +89,17 @@ Redis settings:
 | `CACHE_TTL_SECONDS` | `7200` | Archive cache TTL |
 | `CACHE_MAX_SIZE_MB` | `2048` | Cache size target |
 
+`REDIS_URL` accepts `redis://`, `rediss://`, and `unix://` URLs.
+
+Example Unix socket URL:
+
+```yaml
+environment:
+  - REDIS_URL=unix:///run/redis/redis.sock?db=0
+```
+
+Mount the socket into the container at the same path when using `unix://`.
+
 The UI can override Redis URL, cache TTL, and max cache size in Settings > System > Cache.
 
 To run without Redis, set:
@@ -127,6 +138,14 @@ Priority for UI-managed timeout settings:
 1. saved database value, when changed from default
 2. environment variable
 3. built-in default
+
+## System Packages
+
+Admins can install extra system packages from Settings > System > Packages.
+
+Use this when scripts need tools that are not in the base container, for example the Docker CLI for Docker hook scripts.
+
+Packages are stored in Borg UI state and reinstalled when the container is recreated. Only install packages and commands you trust.
 
 ## Authentication
 

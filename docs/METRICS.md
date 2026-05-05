@@ -95,8 +95,17 @@ Restore metrics:
 Maintenance metrics:
 
 - `borg_check_jobs_total`
+- `borg_check_last_duration_seconds`
 - `borg_compact_jobs_total`
+- `borg_compact_last_duration_seconds`
 - `borg_prune_jobs_total`
+
+System metrics:
+
+- `borg_ui_repositories_total`
+- `borg_ui_scheduled_jobs_total`
+- `borg_ui_scheduled_jobs_enabled`
+- `borg_ui_active_jobs`
 
 ## Useful Queries
 
@@ -112,10 +121,10 @@ Time since last backup:
 time() - borg_repository_last_backup_timestamp{repository="my-repo"}
 ```
 
-Failed backups in the last 24 hours:
+Current failed backup job count:
 
 ```text
-sum(increase(borg_backup_jobs_total{status="failed"}[24h])) by (repository)
+sum(borg_backup_jobs_total{status="failed"}) by (repository)
 ```
 
 ## Troubleshooting

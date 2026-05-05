@@ -53,23 +53,31 @@ export default defineConfig({
       {
         text: 'Features',
         items: [
+          { text: 'Remote Machines', link: '/ssh-keys' },
           { text: 'Notifications', link: '/notifications' },
           { text: 'Mounting Archives', link: '/mounting' },
-          { text: 'Remote Machines', link: '/ssh-keys' },
           { text: 'Cache (Redis)', link: '/cache' },
+        ],
+      },
+      {
+        text: 'Security',
+        items: [
+          { text: 'Authentication and SSO', link: '/authentication' },
+          { text: 'Access Control', link: '/access-control' },
+          { text: 'Security', link: '/security' },
           { text: 'Reverse Proxy', link: '/reverse-proxy' },
         ],
       },
       {
         text: 'Operations',
         items: [
-          { text: 'Security', link: '/security' },
           { text: 'Disaster Recovery', link: '/disaster-recovery' },
-          { text: 'Authentication and SSO', link: '/authentication' },
-          { text: 'Analytics', link: '/analytics' },
-          { text: 'Beta Features', link: '/beta-features' },
+          { text: 'Export and Import', link: '/export-import' },
+          { text: 'Script Parameters', link: '/script-parameters' },
           { text: 'Docker Hooks', link: '/docker-hooks' },
           { text: 'Metrics', link: '/METRICS' },
+          { text: 'Beta Features', link: '/beta-features' },
+          { text: 'Analytics', link: '/analytics' },
         ],
       },
       {

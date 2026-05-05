@@ -64,6 +64,18 @@ Use the container path in repositories, sources, and restore destinations.
 
 Keep repository passphrases and keyfiles safe. Borg UI can help manage repositories, but Borg encryption recovery still depends on your secrets.
 
+## Import an Existing Repository
+
+Use Import Existing when a Borg repository already exists and you want Borg UI to manage or monitor it.
+
+1. Go to Repositories.
+2. Choose Import Existing.
+3. Select the repository location.
+4. Enter the passphrase or upload the keyfile if the repository needs one.
+5. Save, then verify archives can be listed.
+
+Full mode lets Borg UI run backups for the repository. Observability-only mode is for repositories backed up by something else; Borg UI can browse archives, restore files, run checks, and show health, but it will not run backups or scheduled backups for that repository.
+
 ## Add Backup Sources
 
 Use paths that exist inside the container.
@@ -152,6 +164,8 @@ Schedules run backups automatically.
 4. Set the cron expression and timezone.
 5. Save.
 
+Schedules can also run prune and compact after a successful backup.
+
 Use notifications for scheduled backup failures so failures do not go unnoticed.
 
 ## Maintenance
@@ -164,6 +178,8 @@ Repository maintenance actions include:
 - break lock, when you are certain no Borg process is running
 
 Use check and restore verification regularly. A backup that cannot be restored is not useful.
+
+Scheduled repository checks and restore checks are managed from Schedule.
 
 See [Disaster Recovery](disaster-recovery) for restore-check modes and recovery drills.
 

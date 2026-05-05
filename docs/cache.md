@@ -69,6 +69,8 @@ Valid UI ranges:
 | `CACHE_TTL_SECONDS` | `7200` | Initial TTL default |
 | `CACHE_MAX_SIZE_MB` | `2048` | Initial max cache size |
 
+`REDIS_URL` accepts `redis://`, `rediss://`, and `unix://` URLs.
+
 Set `REDIS_HOST=disabled` to force in-memory cache.
 
 Priority:
@@ -100,6 +102,22 @@ With TLS:
 environment:
   - REDIS_URL=rediss://:password@redis.example.com:6379/0
 ```
+
+With a Unix socket:
+
+```yaml
+environment:
+  - REDIS_URL=unix:///run/redis/redis.sock?db=0
+```
+
+With a Unix socket and password:
+
+```yaml
+environment:
+  - REDIS_URL=unix:///run/redis/redis.sock?db=0&password=password
+```
+
+For `unix://` URLs, mount the Redis socket into the Borg UI container at the same path used in `REDIS_URL`.
 
 ## When to Clear Cache
 

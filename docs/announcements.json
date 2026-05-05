@@ -155,7 +155,7 @@
       "highlights": [
         "Borg 2 beta support across core repository flows",
         "Responsive UI built for desktop and mobile",
-        "RBAC, permissions, and API tokens for multi-user setups",
+        "RBAC and repository permissions for multi-user setups",
         "A redesigned interface with a fresh new look across the app",
         "Community stays available, with most features continuing to stay free",
         "Pro and Enterprise are available for users who need more advanced capabilities",
@@ -166,7 +166,7 @@
         "es": [
           "Soporte beta para Borg 2 en los flujos principales de repositorios",
           "Interfaz adaptable pensada para escritorio y movil",
-          "RBAC, permisos y tokens API para entornos multiusuario",
+          "RBAC y permisos de repositorio para entornos multiusuario",
           "Una interfaz redisenada con un aspecto nuevo en toda la app",
           "Community sigue disponible y la mayoria de las funciones continuan siendo gratuitas",
           "Pro y Enterprise estan disponibles para quienes necesiten capacidades mas avanzadas",
@@ -176,7 +176,7 @@
         "de": [
           "Borg-2-Beta-Unterstutzung in den zentralen Repository-Ablaufen",
           "Responsive Oberflache fur Desktop und Mobilgerate",
-          "RBAC, Berechtigungen und API-Tokens fur Multi-User-Umgebungen",
+          "RBAC und Repository-Berechtigungen fur Multi-User-Umgebungen",
           "Eine neu gestaltete Oberflache mit frischem Look in der ganzen App",
           "Community bleibt verfugbar und die meisten Funktionen bleiben kostenlos",
           "Pro und Enterprise stehen fur Nutzer bereit, die erweiterte Funktionen brauchen",
@@ -186,7 +186,7 @@
         "it": [
           "Supporto beta per Borg 2 nei flussi principali dei repository",
           "Interfaccia reattiva progettata per desktop e mobile",
-          "RBAC, permessi e token API per configurazioni multiutente",
+          "RBAC e permessi dei repository per configurazioni multiutente",
           "Un'interfaccia riprogettata con un look nuovo in tutta l'app",
           "Community resta disponibile e la maggior parte delle funzionalita continua a essere gratuita",
           "Pro ed Enterprise sono disponibili per chi ha bisogno di capacita piu avanzate",

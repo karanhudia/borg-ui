@@ -73,9 +73,20 @@ Injected variables include:
 | `BORG_UI_REPOSITORY_NAME` | repository name |
 | `BORG_UI_REPOSITORY_PATH` | repository path |
 | `BORG_UI_JOB_ID` | backup job ID |
-| `BORG_UI_SOURCE_HOST` | remote source host, when available |
-| `BORG_UI_SOURCE_PORT` | remote source SSH port |
-| `BORG_UI_SOURCE_USERNAME` | remote source username |
+| `BORG_UI_REMOTE_HOST` | remote source host for script library execution and script tests, when available |
+| `BORG_UI_REMOTE_PORT` | remote source SSH port for script library execution and script tests |
+| `BORG_UI_REMOTE_USERNAME` | remote source username for script library execution and script tests |
+| `BORG_UI_SOURCE_HOST` | remote source host for legacy inline repository hooks, when available |
+| `BORG_UI_SOURCE_PORT` | remote source SSH port for legacy inline repository hooks |
+| `BORG_UI_SOURCE_USERNAME` | remote source username for legacy inline repository hooks |
+
+If a script must work in both paths, read `REMOTE` first and fall back to `SOURCE`:
+
+```bash
+remote_host="${BORG_UI_REMOTE_HOST:-${BORG_UI_SOURCE_HOST:-}}"
+remote_port="${BORG_UI_REMOTE_PORT:-${BORG_UI_SOURCE_PORT:-22}}"
+remote_user="${BORG_UI_REMOTE_USERNAME:-${BORG_UI_SOURCE_USERNAME:-}}"
+```
 
 ## Example
 

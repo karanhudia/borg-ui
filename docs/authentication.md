@@ -1,7 +1,7 @@
 ---
 title: Authentication and SSO
 nav_order: 8
-description: "Local auth, passkeys, OIDC SSO, and trusted-header authentication"
+description: "Local auth, TOTP, passkeys, OIDC SSO, and trusted-header authentication"
 ---
 
 # Authentication and SSO
@@ -11,6 +11,7 @@ Borg UI supports these auth options:
 | Option | Use when |
 | --- | --- |
 | Local auth | You want Borg UI to manage usernames and passwords |
+| TOTP | Local users should add authenticator-app codes and recovery codes |
 | Passkeys | Local users should sign in with WebAuthn passkeys instead of typing a password |
 | Built-in OIDC SSO | Borg UI should authenticate users through an OIDC provider |
 | Trusted-header auth | A reverse proxy authenticates users and passes trusted headers |
@@ -20,7 +21,7 @@ Do not expose trusted-header auth or no-auth mode directly to users.
 
 ## Local Auth
 
-Local username/password auth is the default. Users can also add passkeys to local password-backed accounts.
+Local username/password auth is the default. Local password-backed accounts can also use TOTP and passkeys.
 
 The first admin user is created with:
 
@@ -34,6 +35,22 @@ Change the password after first login. For new deployments, set a stronger first
 environment:
   - INITIAL_ADMIN_PASSWORD=change-this-password
 ```
+
+## Two-Factor Authentication (TOTP)
+
+Borg UI supports authenticator-app TOTP for local accounts.
+
+Users can enable or disable TOTP from:
+
+```text
+Settings > Account
+```
+
+Setup requires the user's current local password. Borg UI shows a QR code, the raw secret, and recovery codes. Save the recovery codes before finishing setup.
+
+After TOTP is enabled, password login requires a TOTP code or a recovery code. Disabling TOTP also requires the current password and a valid TOTP or recovery code.
+
+TOTP protects local Borg UI login. For SSO-only deployments, enforce MFA in the identity provider.
 
 ## Passkeys
 
@@ -59,7 +76,7 @@ Requirements:
 
 Use built-in OIDC when Borg UI should talk directly to your identity provider.
 
-OIDC users can still use local password and passkey login only if their Borg UI account has local credentials and local login remains enabled.
+OIDC users can still use local password, TOTP, and passkey login only if their Borg UI account has local credentials and local login remains enabled.
 
 Configure it in:
 
@@ -160,6 +177,8 @@ Admin role claims are only honored when the user also belongs to one of the conf
 
 If no valid role claim is present, Borg UI uses the configured default role.
 
+See [Access Control](access-control) for what each role can do.
+
 ## Account Linking
 
 Existing local users can link SSO from:
@@ -174,7 +193,7 @@ Users can unlink SSO only when local auth is still enabled and the account has a
 
 ## Disable Local Auth
 
-After OIDC works, you can disable local password and passkey login from the OIDC settings.
+After OIDC works, you can disable local password, TOTP, and passkey login from the OIDC settings.
 
 Do this only after at least one active admin has successfully linked or logged in through OIDC. Otherwise you can lock yourself out.
 
@@ -227,6 +246,10 @@ OIDC must be enabled.
 ### Passkey login is missing
 
 Passkey login is hidden when local login is disabled for OIDC. It also needs browser WebAuthn support and a registered passkey for this Borg UI origin.
+
+### TOTP code is rejected
+
+Check the device clock, try a recovery code, and confirm the user is entering the code for this Borg UI account.
 
 ### Passkey registration fails
 

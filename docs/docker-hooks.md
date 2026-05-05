@@ -15,6 +15,18 @@ volumes:
 
 This gives the Borg UI container control over the host Docker daemon. Treat it as host-level access.
 
+## Docker CLI
+
+The socket exposes the Docker daemon, but scripts still need the `docker` command inside the Borg UI container.
+
+If a hook fails with `docker: command not found`, install `docker.io` from:
+
+```text
+Settings > System > Packages
+```
+
+You can also use a custom image that includes the Docker CLI.
+
 ## Typical Flow
 
 1. Create a script in the script library.
@@ -40,9 +52,12 @@ Borg UI injects these variables when scripts run:
 | `BORG_UI_REPOSITORY_NAME` | Repository name |
 | `BORG_UI_REPOSITORY_PATH` | Repository path |
 | `BORG_UI_JOB_ID` | Backup job ID, when available |
-| `BORG_UI_SOURCE_HOST` | Remote source host, when backing up from SSH |
-| `BORG_UI_SOURCE_PORT` | Remote source SSH port |
-| `BORG_UI_SOURCE_USERNAME` | Remote source username |
+| `BORG_UI_REMOTE_HOST` | Remote source host for script library execution and script tests |
+| `BORG_UI_REMOTE_PORT` | Remote source SSH port for script library execution and script tests |
+| `BORG_UI_REMOTE_USERNAME` | Remote source username for script library execution and script tests |
+| `BORG_UI_SOURCE_HOST` | Remote source host for legacy inline repository hooks |
+| `BORG_UI_SOURCE_PORT` | Remote source SSH port for legacy inline repository hooks |
+| `BORG_UI_SOURCE_USERNAME` | Remote source username for legacy inline repository hooks |
 
 Variables starting with `BORG_UI_` are reserved by Borg UI and are not treated as script parameters.
 

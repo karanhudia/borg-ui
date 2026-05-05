@@ -85,6 +85,7 @@ If you import from the host filesystem, mount the key read-only into the contain
 docker run -d \
   --name borg-web-ui \
   -p 8081:8081 \
+  -e REDIS_HOST=disabled \
   -v borg_data:/data \
   -v ~/.ssh:/host-ssh:ro \
   ainullcode/borg-ui:latest

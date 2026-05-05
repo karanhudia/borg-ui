@@ -16,6 +16,8 @@ Pick one Compose workflow:
 - [With Redis](#option-2-with-redis-recommended): recommended for normal installs.
 - [External Redis](#option-3-external-redis): use Redis from another host, stack, or managed service.
 
+For Portainer or Unraid, use the same settings and see the platform notes below.
+
 ## Option 1: No Redis (Simple)
 
 Use this for small installs or occasional archive browsing. Backups and restores work normally. Archive browsing cache is kept in memory and is lost when the app restarts.
@@ -142,9 +144,38 @@ Examples:
 redis://redis.example.com:6379/0
 redis://:password@redis.example.com:6379/0
 rediss://:password@redis.example.com:6379/0
+unix:///run/redis/redis.sock?db=0
+unix:///run/redis/redis.sock?db=0&password=password
 ```
 
 `REDIS_URL` takes precedence over `REDIS_HOST`. Keeping `REDIS_HOST=disabled` prevents Borg UI from trying `localhost:6379` if the external URL is unavailable.
+
+For `unix://` Redis URLs, mount the Redis socket into the Borg UI container at the same path used in `REDIS_URL`.
+
+If you need to create the external Redis instance too, run Redis on that host with a small Compose file:
+
+```yaml
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: borg-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+```
+
+Only expose Redis to trusted networks. If Redis is reachable across a network, use firewall rules, a private network, or Redis authentication.
 
 ## Start Borg UI
 
@@ -168,6 +199,50 @@ password: admin123
 ```
 
 Change the password immediately after first login. You can set a different first password with `INITIAL_ADMIN_PASSWORD`.
+
+## Portainer
+
+In Portainer, create a Stack and paste one of the Compose files above.
+
+Use real host paths for volumes. Paths are evaluated on the Docker host, not on your laptop or browser session.
+
+Recommended checks before deploying:
+
+- keep `/data` persistent with `borg_data` or a host bind mount
+- set `PUID` and `PGID` for the host user that should own restored files
+- set `LOCAL_STORAGE_PATH` to the host path that contains repositories or backup sources
+- keep `LOCAL_MOUNT_POINTS=/local` unless you change the container mount path
+- use the Redis Compose option, external Redis, or `REDIS_HOST=disabled`
+
+If you mount the Docker socket for hooks, remember that the container may still need the Docker CLI installed. See [Docker Hooks](docker-hooks).
+
+## Unraid
+
+On Unraid, use either the Docker Compose Manager plugin or the Docker web UI.
+
+Recommended defaults:
+
+```text
+PUID=99
+PGID=100
+TZ=<your timezone>
+```
+
+Common path mapping:
+
+```text
+/mnt/user/appdata/borg-ui -> /data
+/mnt/user/appdata/borg-ui/cache -> /home/borg/.cache/borg
+/mnt/user/backups -> /local
+```
+
+Then use `/local/...` paths inside Borg UI.
+
+Set `LOCAL_MOUNT_POINTS=/local` unless you use a different container path.
+
+For Redis, use the Compose Redis option, an existing Redis container, an external Redis URL, or `REDIS_HOST=disabled`.
+
+If you use the Docker web UI instead of Compose, add the same container paths and environment variables manually. Make sure `/data` points to persistent appdata storage.
 
 ## Pick the Right Host Path
 
@@ -264,6 +339,7 @@ For a quick test:
 docker run -d \
   --name borg-web-ui \
   -p 8081:8081 \
+  -e REDIS_HOST=disabled \
   -v borg_data:/data \
   -v borg_cache:/home/borg/.cache/borg \
   -v /home/youruser:/local:rw \
