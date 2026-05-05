@@ -637,7 +637,6 @@ Each job entry shows:
 
 ### Deleting Job Entries (Admin Only)
 
-{: .warning }
 > **Admin Access Required:** Only administrator users can delete job entries. This feature is restricted to prevent accidental data loss.
 
 **When to delete job entries:**
@@ -651,7 +650,6 @@ Each job entry shows:
 - ✅ Associated log files from disk
 - ✅ All job metadata
 
-{: .note }
 > **Cannot be undone:** Deletion is permanent. Job history and logs cannot be recovered after deletion.
 
 **How to delete a job:**
@@ -813,7 +811,7 @@ Restart container: `docker compose down && docker compose up -d`
 
 - **[Scheduling Guide](https://github.com/karanhudia/borg-ui#scheduling)** - Automate your backups
 - **[Archives Browser](https://github.com/karanhudia/borg-ui#archive-browser)** - Browse and restore files
-- **[API Documentation](http://localhost:8081/api/docs)** - Integrate with other tools
+- **API Documentation** - Swagger UI at `http://localhost:8081/api/docs` after installation
 - **[Troubleshooting Guide](https://github.com/karanhudia/borg-ui#troubleshooting)** - Common issues
 
 ---

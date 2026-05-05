@@ -100,7 +100,6 @@ Borg UI also supports WebAuthn passkeys for local accounts.
 
 Use this procedure when a user (including the admin) is locked out of the web UI and cannot change their password through **Settings > Profile**.
 
-{: .warning }
 > **Security warning:** This tool requires shell access to the container or host. Treat shell access as equivalent to full admin access — anyone who can run `docker exec` can reset any password.
 
 **Docker (primary method):**
@@ -129,7 +128,6 @@ BORG_DB_PATH=/custom/path/borg.db python -m app.scripts.reset_password admin new
 
 ### SSO Authentication
 
-{: .new }
 > Borg UI supports two enterprise SSO patterns: built-in OIDC and reverse-proxy header authentication.
 
 Use **built-in OIDC** when you want Borg UI to be the OIDC client itself. Use **proxy-header mode** when an existing access gateway or authenticated reverse proxy already sits in front of Borg UI and you want Borg UI to trust only that proxy.

@@ -81,7 +81,6 @@ environment:
 
 ### Proxy/OIDC Authentication
 
-{: .new }
 > **New Feature**: Integrate with external authentication providers (Authentik, Authelia, Keycloak, etc.)
 
 For new SSO deployments, prefer built-in OIDC when Borg UI should talk directly to the identity provider. Configure it in the system settings with:
@@ -156,8 +155,7 @@ See [Security Guide - Proxy/OIDC Authentication](security.md#proxyoidc-authentic
 
 ### File Browser Mount Points
 
-{: .new }
-> **New in vX.Y.Z**: LOCAL_MOUNT_POINTS for improved file browser navigation
+> Configure `LOCAL_MOUNT_POINTS` to improve file browser navigation.
 
 Specify which container paths are host filesystem mounts to highlight them in the file browser:
 
@@ -369,8 +367,7 @@ services:
 
 ### For Large Repositories
 
-{: .new }
-> **New in vX.Y.Z**: Configurable operation timeouts for very large repositories
+> Operation timeouts can be increased for very large repositories.
 
 Increase Borg cache size by mounting to fast storage:
 
@@ -471,8 +468,7 @@ environment:
 
 ## Redis Cache Configuration
 
-{: .new }
-> **New in vX.Y.Z**: Redis-based archive caching for 600x faster browsing
+> Redis-based archive caching speeds up repeated archive browsing.
 
 Borg Web UI includes Redis caching for dramatically faster archive browsing. Without cache, navigating folders in large archives (1M+ files) takes 60-90 seconds. With cache, it takes less than 100ms.
 

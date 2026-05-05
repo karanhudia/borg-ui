@@ -7,17 +7,7 @@ description: "Configure Redis cache for 600x faster archive browsing"
 
 # Archive Cache Configuration
 
-{: .no_toc }
-
 Redis caching improves archive browsing from 60-90 seconds → <100ms for large repositories (600x faster). Redis is included in the recommended [installation](installation) setup.
-
----
-
-## Table of Contents
-{: .no_toc .text-delta }
-
-1. TOC
-{:toc}
 
 ---
 

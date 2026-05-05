@@ -10,11 +10,11 @@ The production announcement feed is published from:
 
 `https://docs.borgui.com/announcements.json`
 
-This file is sourced from [docs/announcements.json](/Users/karanhudia/Documents/Redundancy/borg-ui/docs/announcements.json) because GitHub Pages in this repository publishes the `docs/` site.
+This file is sourced from `docs/announcements.json`.
 
 ## Update Flow
 
-1. Edit [docs/announcements.json](/Users/karanhudia/Documents/Redundancy/borg-ui/docs/announcements.json).
+1. Edit `docs/announcements.json`.
 2. Commit and push to `main`.
 3. Wait for GitHub Pages to rebuild.
 4. Verify the live manifest URL returns JSON.
@@ -72,7 +72,7 @@ Resolution order is:
 
 ## Local Development
 
-Local frontend development does not use [frontend/public/announcements.json](/Users/karanhudia/Documents/Redundancy/borg-ui/frontend/public/announcements.json) automatically.
+Local frontend development does not use the published announcement feed automatically.
 
 The app defaults to the published GitHub Pages manifest unless `VITE_ANNOUNCEMENTS_URL` is explicitly set.
 

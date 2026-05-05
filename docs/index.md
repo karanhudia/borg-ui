@@ -74,7 +74,7 @@ See [Installation Guide](installation) for other methods and security best pract
 
 ### Reference
 
-- **[API Documentation](http://localhost:8081/api/docs)** - Interactive Swagger UI (after installation)
+- **API Documentation** - Interactive Swagger UI at `http://localhost:8081/api/docs` after installation
 - **[System Specification](SPECIFICATION)** - Architecture and technical details
 - **[Development Guide](development)** - Setting up a development environment with hot reload
 - **[Testing](testing)** - Production-critical Borg workflows covered by API-driven integration and smoke tests

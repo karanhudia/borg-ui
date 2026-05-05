@@ -36,7 +36,6 @@ The archive is mounted at a path like `/data/mounts/my-backup` inside the contai
 - **Settings → Management → Mounts** shows all active Borg archive mounts.
 - Use **Unmount** to unmount when done. **Force unmount** is available if the mount is busy.
 
-{: .note }
 > Mounts do not survive container restarts. Unmount before restarting if you need a clean shutdown, or they will be cleared on next start.
 
 ---
@@ -68,15 +67,9 @@ with `bind.propagation: shared` as shown below.
 
 ### Development Compose
 
-There is a Linux-only development override in
-[`docker-compose.dev.mount.yml`](/Users/karanhudia/Documents/Projects/borg-ui/docker-compose.dev.mount.yml).
-To test archive mounting in development:
-
-1. Start the normal dev stack. It now goes through the same
-   [`entrypoint.sh`](/Users/karanhudia/Documents/Projects/borg-ui/entrypoint.sh)
-   runtime setup as the regular compose path, while still enabling code reload.
-2. On a **native Linux Docker host**, add the FUSE override:
-   `docker compose -f docker-compose.dev.yml -f docker-compose.dev.mount.yml up`
+Archive mounting requires a native Linux Docker host with FUSE exposed to the
+container. For development, start from `docker-compose.dev.yml` and add the same
+FUSE settings shown above.
 3. Verify the FUSE device exists:
    `docker exec borg-web-ui-dev ls -l /dev/fuse`
 4. Verify Borg sees the selected backend:

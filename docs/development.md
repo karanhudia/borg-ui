@@ -38,12 +38,12 @@ Copy `.env.example` to `.env` if it exists, or create a `.env` file:
 # .env
 PUID=501          # your user ID (id -u)
 PGID=20           # your group ID (id -g)
-PORT=8082         # production backend port
+PORT=8081         # production backend port
 DEV_PORT=8083     # dev backend port (must differ from PORT)
 TZ=Asia/Kolkata   # your timezone
 ```
 
-If `.env` is absent, defaults are `PORT=8082` and `DEV_PORT=8083`.
+If `.env` is absent, defaults are `PORT=8081` and `DEV_PORT=8083`.
 
 ---
 
@@ -62,7 +62,7 @@ This script:
 4. Starts the Vite frontend dev server locally
 
 **Access:**
-- Frontend (hot reload): [http://localhost:7879](http://localhost:7879)
+- Frontend (hot reload): `http://localhost:7879`
 - Dev backend API: `http://localhost:DEV_PORT` (default `8083`)
 
 **Stop:** Press `Ctrl+C` — containers are torn down automatically.
@@ -77,7 +77,7 @@ To build and test the full production image locally (frontend bundled, gunicorn,
 docker-compose up -d --build
 ```
 
-**Access:** [http://localhost:PORT](http://localhost:PORT) (default `8082`)
+**Access:** `http://localhost:$PORT` (default `http://localhost:8081`)
 
 Production and dev environments use different container names and ports, so they can run simultaneously:
 
@@ -85,7 +85,7 @@ Production and dev environments use different container names and ports, so they
 |---|---|---|
 | Backend container | `borg-web-ui` | `borg-web-ui-dev` |
 | Redis container | `borg-redis` | optional only |
-| Backend port | `PORT` (default `8082`) | `DEV_PORT` (default `8083`) |
+| Backend port | `PORT` (default `8081`) | `DEV_PORT` (default `8083`) |
 | Redis port | `6379` | optional only |
 | Frontend | built into image | Vite dev server on `7879` |
 | Data | `borg_data` Docker volume | `.local-data/` folder |
@@ -218,8 +218,8 @@ See [Testing](testing) for the short list of scenarios we treat as mandatory bef
 CI separates fast coverage jobs from black-box smoke jobs. The main `Tests` workflow handles backend coverage plus frontend quality, tests, and build in parallel, while `Smoke Tests` runs a built app against core and extended Borg production flows.
 
 ```bash
-python3 tests/smoke/run_core_smoke.py --url http://localhost:8082
-python3 tests/smoke/run_extended_smoke.py --url http://localhost:8082
+python3 tests/smoke/run_core_smoke.py --url http://localhost:8081
+python3 tests/smoke/run_extended_smoke.py --url http://localhost:8081
 ```
 
 ---

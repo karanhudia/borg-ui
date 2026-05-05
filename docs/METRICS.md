@@ -65,12 +65,12 @@ scrape_configs:
 
 An example monitoring stack is included in this repository:
 
-- [examples/monitoring/docker-compose.yml](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/docker-compose.yml)
-- [examples/monitoring/prometheus.yml](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/prometheus.yml)
-- [examples/monitoring/grafana/provisioning/datasources/prometheus.yml](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/grafana/provisioning/datasources/prometheus.yml)
-- [examples/monitoring/grafana/provisioning/dashboards/dashboards.yml](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/grafana/provisioning/dashboards/dashboards.yml)
-- [examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-overview.json](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-overview.json)
-- [examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-jobs.json](/Users/karanhudia/Documents/Projects/borg-ui/examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-jobs.json)
+- [examples/monitoring/docker-compose.yml](https://github.com/karanhudia/borg-ui/blob/main/examples/monitoring/docker-compose.yml)
+- [examples/monitoring/prometheus.yml](https://github.com/karanhudia/borg-ui/blob/main/examples/monitoring/prometheus.yml)
+- [examples/monitoring/grafana/provisioning/datasources/prometheus.yml](https://github.com/karanhudia/borg-ui/blob/main/examples/monitoring/grafana/provisioning/datasources/prometheus.yml)
+- [examples/monitoring/grafana/provisioning/dashboards/dashboards.yml](https://github.com/karanhudia/borg-ui/blob/main/examples/monitoring/grafana/provisioning/dashboards/dashboards.yml)
+- [examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-overview.json](https://github.com/karanhudia/borg-ui/blob/main/examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-overview.json)
+- [examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-jobs.json](https://github.com/karanhudia/borg-ui/blob/main/examples/monitoring/grafana/provisioning/dashboards/json/borg-ui-jobs.json)
 
 Bring it up with:
 

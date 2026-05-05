@@ -115,7 +115,7 @@ See the full [Development Guide](development.md) for detailed instructions. Quic
 ./scripts/dev.sh
 ```
 
-- Frontend: [http://localhost:7879](http://localhost:7879)
+- Frontend: `http://localhost:7879`
 - Dev backend: `http://localhost:DEV_PORT` (default `8083`, set in `.env`)
 
 ```bash
