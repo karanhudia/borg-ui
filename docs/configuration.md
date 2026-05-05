@@ -91,6 +91,15 @@ Redis settings:
 
 The UI can override Redis URL, cache TTL, and max cache size in Settings > System > Cache.
 
+To run without Redis, set:
+
+```yaml
+environment:
+  - REDIS_HOST=disabled
+```
+
+That forces the in-memory cache backend. Backups and restores still work.
+
 Priority for UI-managed cache settings:
 
 1. saved database value, when changed from default

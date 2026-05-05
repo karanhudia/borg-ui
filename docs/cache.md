@@ -19,6 +19,8 @@ Borg UI supports:
 
 Redis is recommended for normal Docker Compose deployments. In-memory cache works, but it is lost whenever the app restarts.
 
+To intentionally run without Redis, set `REDIS_HOST=disabled`. Borg UI will use in-memory cache and will not try to connect to `localhost:6379`.
+
 ## Default Compose Behavior
 
 The recommended Compose setup includes Redis:
@@ -66,6 +68,8 @@ Valid UI ranges:
 | `REDIS_PASSWORD` | empty | Redis password |
 | `CACHE_TTL_SECONDS` | `7200` | Initial TTL default |
 | `CACHE_MAX_SIZE_MB` | `2048` | Initial max cache size |
+
+Set `REDIS_HOST=disabled` to force in-memory cache.
 
 Priority:
 

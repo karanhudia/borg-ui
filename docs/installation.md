@@ -8,7 +8,7 @@ description: "Install Borg UI with Docker"
 
 Borg UI is distributed as a Docker image.
 
-Use Docker Compose unless you only need a quick local test. Compose gives you persistent app data, Borg cache, Redis, and clear volume mappings.
+Use Docker Compose unless you only need a quick local test. The recommended Compose example gives you persistent app data, Borg cache, Redis, and clear volume mappings.
 
 ## Recommended Docker Compose
 
@@ -82,6 +82,17 @@ password: admin123
 
 Change the password immediately after first login. You can set a different first password with `INITIAL_ADMIN_PASSWORD`.
 
+## Install Without Redis
+
+Redis is optional. If you do not want to run Redis, remove the `redis` service and `depends_on` block from the Compose file, then add this environment variable to the app service:
+
+```yaml
+environment:
+  - REDIS_HOST=disabled
+```
+
+With Redis disabled, Borg UI uses in-memory archive browsing cache. Backups and restores still work. Repeated archive browsing can be slower, and the cache is lost when the app restarts.
+
 ## Pick the Right Host Path
 
 The `LOCAL_STORAGE_PATH` host path is mounted into the container at `/local`.
@@ -130,7 +141,7 @@ TZ=America/Chicago
 
 ## Redis
 
-Redis is used as an archive-browsing cache. It is not required for backups.
+Redis is used as an archive-browsing cache. It is not required for backups or restores.
 
 The Compose example uses Redis without disk persistence:
 
@@ -140,6 +151,8 @@ The Compose example uses Redis without disk persistence:
 ```
 
 That means cached archive listings survive app container restarts while Redis keeps running, but they do not survive a Redis container restart. This is fine because Borg UI can rebuild the cache.
+
+Set `REDIS_HOST=disabled` when you intentionally run without Redis. Otherwise the app tries the configured Redis host first and falls back to in-memory cache if it cannot connect.
 
 ## Optional Docker Socket
 
