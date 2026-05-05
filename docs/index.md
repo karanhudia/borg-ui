@@ -49,16 +49,3 @@ docker run -d \
 Open `http://localhost:8081` and log in with `admin` / `admin123`.
 
 Use Docker Compose for normal deployments. See [Installation](installation).
-
-## Main Docs
-
-- [Installation](installation)
-- [Configuration](configuration)
-- [Usage Guide](usage-guide)
-- [Security](security)
-- [Reverse Proxy](reverse-proxy)
-- [Notifications](notifications)
-- [Cache](cache)
-- [Prometheus Metrics](METRICS)
-- [Development](development)
-- [Testing](testing)
