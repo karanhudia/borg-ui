@@ -7,14 +7,18 @@ const configDir = dirname(fileURLToPath(import.meta.url));
 const docsRoot = resolve(configDir, '..');
 const outDir = resolve(configDir, 'dist');
 const publicManifests = ['announcements.json', 'plan-content.json'];
+const rawBase = process.env.VITEPRESS_BASE ?? '/';
+const siteBase = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
+const withBase = (path: string) => `${siteBase}${path.replace(/^\/+/, '')}`;
 
 export default defineConfig({
+  base: siteBase,
   title: 'Borg Web UI',
   description: 'A modern web interface for Borg Backup management',
   cleanUrls: true,
   lastUpdated: true,
   appearance: 'dark',
-  head: [['link', { rel: 'icon', href: '/favicon.png' }]],
+  head: [['link', { rel: 'icon', href: withBase('/favicon.png') }]],
   vite: {
     plugins: [
       {
