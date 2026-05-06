@@ -14,7 +14,8 @@ Integration tests (test_api_archives_integration.py) handle:
 - Encryption
 """
 
-from unittest.mock import AsyncMock, patch
+import asyncio
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -96,6 +97,51 @@ class TestArchivesResourceValidation:
 
         assert response.status_code == 200
         mock_delete.assert_awaited_once()
+
+    def test_delete_archive_route_constructs_router_with_stable_repo_identity(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        fake_router = Mock(delete_archive=AsyncMock())
+        created = {}
+
+        def fake_create_task(coro):
+            created["coro"] = coro
+            return object()
+
+        with (
+            patch(
+                "app.api.archives.BorgRouter", return_value=fake_router
+            ) as mock_router,
+            patch("app.api.archives.asyncio.create_task", side_effect=fake_create_task),
+        ):
+            response = test_client.delete(
+                "/api/archives/archive-1",
+                params={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        routed_repo = mock_router.call_args.args[0]
+        assert not isinstance(routed_repo, Repository)
+        assert routed_repo.id == repo.id
+        assert routed_repo.borg_version == repo.borg_version
+
+        asyncio.run(created["coro"])
+        fake_router.delete_archive.assert_awaited_once()
 
 
 @pytest.mark.unit

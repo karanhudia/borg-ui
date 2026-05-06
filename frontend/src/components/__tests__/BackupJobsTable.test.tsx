@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/test-utils'
 import BackupJobsTable from '../BackupJobsTable'
 import { MockBackupJob, MockRepository } from '../../test/factories'
+import { formatDateTimeFull } from '../../utils/dateUtils'
 
 describe('BackupJobsTable', () => {
   const mockJobs: MockBackupJob[] = [
@@ -121,6 +122,12 @@ describe('BackupJobsTable', () => {
       expect(startedCells.length).toBeGreaterThan(0)
     })
 
+    it('adds a full timestamp tooltip to started dates', () => {
+      renderWithProviders(<BackupJobsTable jobs={mockJobs} />)
+
+      expect(screen.getByLabelText(formatDateTimeFull(mockJobs[0].started_at))).toBeInTheDocument()
+    })
+
     it('renders table headers', () => {
       renderWithProviders(<BackupJobsTable jobs={mockJobs} />)
 
@@ -208,19 +215,26 @@ describe('BackupJobsTable', () => {
         {
           id: 4,
           repository: '/test',
-          type: 'compact',
+          type: 'restore_check',
           status: 'completed',
           started_at: '2024-01-20T10:00:00Z',
         },
         {
           id: 5,
           repository: '/test',
-          type: 'prune',
+          type: 'compact',
           status: 'completed',
           started_at: '2024-01-20T10:00:00Z',
         },
         {
           id: 6,
+          repository: '/test',
+          type: 'prune',
+          status: 'completed',
+          started_at: '2024-01-20T10:00:00Z',
+        },
+        {
+          id: 7,
           repository: '/test',
           type: 'package',
           status: 'completed',
@@ -232,6 +246,8 @@ describe('BackupJobsTable', () => {
 
       expect(screen.getByText('Backup')).toBeInTheDocument()
       expect(screen.getByText('Restore')).toBeInTheDocument()
+      expect(screen.getByText('Restore Check')).toBeInTheDocument()
+      expect(screen.queryByText('restore_check')).not.toBeInTheDocument()
       expect(screen.getByText('Repository Check')).toBeInTheDocument()
       expect(screen.getByText('Compact')).toBeInTheDocument()
       expect(screen.getByText('Prune')).toBeInTheDocument()

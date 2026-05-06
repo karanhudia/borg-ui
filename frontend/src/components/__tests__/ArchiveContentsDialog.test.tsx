@@ -157,6 +157,67 @@ describe('ArchiveContentsDialog', () => {
     })
   })
 
+  it('shows Borg UI canary folders as managed archive content', async () => {
+    mockGetArchiveContents.mockImplementation((_archiveId, _archiveName, path) => {
+      if (path === '') {
+        return Promise.resolve({
+          data: {
+            items: [
+              {
+                name: '.borg-ui',
+                path: '.borg-ui',
+                type: 'directory',
+                size: 923,
+                managed: true,
+                managed_type: 'restore_canary',
+              },
+            ],
+          },
+        } as AxiosResponse)
+      }
+
+      return Promise.resolve({
+        data: {
+          items: [
+            {
+              name: 'manifest.json',
+              path: '.borg-ui/restore-canaries/repository-1/.borgui-canary/manifest.json',
+              type: 'file',
+              size: 128,
+              managed: true,
+              managed_type: 'restore_canary',
+            },
+          ],
+        },
+      } as AxiosResponse)
+    })
+
+    renderWithProviders(
+      <ArchiveContentsDialog
+        open={true}
+        archive={mockArchive}
+        repository={mockRepository}
+        {...mockHandlers}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('.borg-ui')).toBeInTheDocument()
+      expect(screen.getByText('Borg UI canary')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('.borg-ui'))
+
+    await waitFor(() => {
+      expect(screen.getByText('manifest.json')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'This folder is managed by Borg UI for canary restore checks. It is safe to leave untouched.'
+        )
+      ).toBeInTheDocument()
+    })
+  })
+
   it('hides folder size when the backend omits it', async () => {
     mockGetArchiveContents.mockResolvedValue({
       data: {

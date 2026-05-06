@@ -73,6 +73,7 @@ class TestScriptUsageCount:
         test_script = next((s for s in scripts if s["name"] == "test-script"), None)
         assert test_script is not None
         assert test_script["usage_count"] == 1
+        assert test_script["created_at"].endswith("+00:00")
 
     def test_usage_count_single_repository_two_hooks(
         self, test_client, admin_headers, test_db

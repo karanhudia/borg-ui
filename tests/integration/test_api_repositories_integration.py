@@ -482,50 +482,6 @@ class TestRepositoryWithArchives:
             if our_repo and "archive_count" in our_repo:
                 assert our_repo["archive_count"] >= 2
 
-    def test_list_archive_files_uses_api_for_real_archive_contents(
-        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
-    ):
-        """Test listing archive files through the repository API."""
-        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
-
-        response = test_client.get(
-            f"/api/repositories/{repo.id}/archives/{archive_names[1]}/files",
-            headers=admin_headers,
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["success"] is True
-        assert data["archive_name"] == archive_names[1]
-        assert data["total_count"] >= 5
-
-        file_paths = [entry["path"] for entry in data["files"]]
-        assert any(path.endswith("/file1.txt") for path in file_paths)
-        assert any(path.endswith("/file2.txt") for path in file_paths)
-        assert any(path.endswith("/file5.txt") for path in file_paths)
-        assert any(path.endswith("/subdir/file3.txt") for path in file_paths)
-        assert any(path.endswith("/subdir/file4.log") for path in file_paths)
-
-    def test_list_archive_files_honors_limit_parameter(
-        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
-    ):
-        """Test archive file listing limit is applied by the API."""
-        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
-
-        response = test_client.get(
-            f"/api/repositories/{repo.id}/archives/{archive_names[1]}/files?limit=2",
-            headers=admin_headers,
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["success"] is True
-        assert data["archive_name"] == archive_names[1]
-        assert data["total_count"] == 2
-        assert len(data["files"]) == 2
-
     def test_list_repository_archives_returns_real_borg_archives(
         self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
@@ -545,28 +501,6 @@ class TestRepositoryWithArchives:
 
         returned_names = [archive["name"] for archive in data["archives"]]
         assert returned_names == archive_names
-
-    def test_get_repository_archive_info_returns_stats_and_files(
-        self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
-    ):
-        """Test repository archive info includes stats and file details."""
-        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
-
-        response = test_client.get(
-            f"/api/repositories/{repo.id}/archives/{archive_names[1]}/info?include_files=true&file_limit=3",
-            headers=admin_headers,
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert data["archive"]["name"] == archive_names[1]
-        assert "stats" in data["archive"]
-        assert data["archive"]["file_count"] == 3
-        assert len(data["archive"]["files"]) == 3
-        assert isinstance(data["repository"], dict)
-        assert isinstance(data["cache"], dict)
-        assert isinstance(data["encryption"], dict)
 
 
 @pytest.mark.integration

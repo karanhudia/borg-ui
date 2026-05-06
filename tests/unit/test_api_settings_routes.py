@@ -37,6 +37,8 @@ class TestSystemSettingsContracts:
         assert body["success"] is True
         settings = body["settings"]
         assert settings["max_concurrent_backups"] == 2
+        assert settings["max_concurrent_scheduled_backups"] == 2
+        assert settings["max_concurrent_scheduled_checks"] == 4
         assert settings["log_retention_days"] == 30
         assert settings["timeout_sources"]["backup_timeout"] in (None, "env")
         assert settings["app_version"] == "2.0.0"
@@ -85,6 +87,21 @@ class TestSystemSettingsContracts:
         assert (
             response.json()["detail"]["key"]
             == "backend.errors.settings.logSizeTooSmall"
+        )
+
+    def test_update_system_settings_rejects_negative_scheduler_limit(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"max_concurrent_scheduled_checks": -1},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidConcurrencyLimit"
         )
 
     def test_update_system_settings_returns_warning_when_new_log_limit_is_below_current_usage(

@@ -53,7 +53,7 @@ class SmokeClient:
         headers = {}
         auth_token = token or self.token
         if auth_token:
-            headers["Authorization"] = f"Bearer {auth_token}"
+            headers["X-Borg-Authorization"] = f"Bearer {auth_token}"
         if json_body:
             headers["Content-Type"] = "application/json"
         return headers
@@ -607,7 +607,7 @@ class SmokeClient:
         params = {"path": path} if path else None
         response = self.request_ok(
             "GET",
-            f"/api/restore/contents/{repo_id}/{archive_name}",
+            f"/api/browse/{repo_id}/{archive_name}",
             token=token,
             params=params,
         )
@@ -754,6 +754,52 @@ class SmokeClient:
         self, schedule_id: int, *, token: Optional[str] = None
     ) -> None:
         self.request_ok("POST", f"/api/schedule/{schedule_id}/run-now", token=token)
+
+    def update_restore_check_schedule(
+        self,
+        repo_id: int,
+        *,
+        cron_expression: str,
+        timezone: Optional[str] = None,
+        paths: Optional[list[str]] = None,
+        full_archive: bool = False,
+        token: Optional[str] = None,
+    ) -> dict:
+        payload = {
+            "cron_expression": cron_expression,
+            "paths": paths or [],
+            "full_archive": full_archive,
+        }
+        if timezone:
+            payload["timezone"] = timezone
+
+        response = self.request_ok(
+            "PUT",
+            f"/api/repositories/{repo_id}/restore-check-schedule",
+            token=token,
+            headers=self._headers(token=token, json_body=True),
+            json=payload,
+        )
+        return response.json()
+
+    def start_restore_check(
+        self,
+        repo_id: int,
+        *,
+        paths: Optional[list[str]] = None,
+        full_archive: bool = False,
+        token: Optional[str] = None,
+    ) -> int:
+        response = self.request_ok(
+            "POST",
+            f"/api/repositories/{repo_id}/restore-check",
+            token=token,
+            headers=self._headers(token=token, json_body=True),
+            json={"paths": paths or [], "full_archive": full_archive},
+            expected=(200, 201, 202),
+        )
+        payload = response.json()
+        return payload["job_id"]
 
     def download_keyfile(self, repo_id: int) -> bytes:
         response = self.request_ok("GET", f"/api/repositories/{repo_id}/keyfile")

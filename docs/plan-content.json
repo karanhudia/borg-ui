@@ -157,7 +157,7 @@
     },
     {
       "id": "passkeys",
-      "plan": "pro",
+      "plan": "community",
       "label": "Passkeys",
       "label_localized": {
         "es": "Passkeys",
@@ -170,7 +170,7 @@
         "de": "Melden Sie sich mit Biometrie oder einem Hardware-Sicherheitsschlüssel statt mit einem Passwort an.",
         "it": "Accedi con biometria o una chiave di sicurezza hardware invece di una password."
       },
-      "available_in": "2.0.3"
+      "availability": "included"
     },
     {
       "id": "borg_v2",
@@ -392,23 +392,6 @@
         "it": "Usa la stessa chiave di licenza Enterprise su fino a 15 server Borg UI."
       },
       "availability": "included"
-    },
-    {
-      "id": "enterprise_auth",
-      "plan": "enterprise",
-      "label": "SSO, 2FA, passkeys, and OIDC",
-      "label_localized": {
-        "es": "SSO, 2FA, passkeys y OIDC",
-        "de": "SSO, 2FA, Passkeys und OIDC",
-        "it": "SSO, 2FA, passkey e OIDC"
-      },
-      "description": "Enterprise authentication and identity integration for larger teams.",
-      "description_localized": {
-        "es": "Autenticación empresarial e integración de identidad para equipos más grandes.",
-        "de": "Enterprise-Authentifizierung und Identitätsintegration für größere Teams.",
-        "it": "Autenticazione enterprise e integrazione dell'identità per team più grandi."
-      },
-      "availability": "coming_soon"
     },
     {
       "id": "centralized_management",

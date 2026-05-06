@@ -119,6 +119,7 @@ class TestRecentActivityEndpoint:
             PackageInstallJob,
             PruneJob,
             Repository,
+            RestoreCheckJob,
             RestoreJob,
             ScheduledJob,
         )
@@ -177,6 +178,17 @@ class TestRecentActivityEndpoint:
                 status="completed",
                 started_at=base + timedelta(minutes=3),
                 completed_at=base + timedelta(minutes=4),
+                scheduled_check=True,
+            ),
+            RestoreCheckJob(
+                repository_id=repository.id,
+                repository_path=repository.path,
+                archive_name="archive-restore-check",
+                status="completed",
+                started_at=base + timedelta(minutes=2, seconds=30),
+                completed_at=base + timedelta(minutes=3),
+                scheduled_restore_check=True,
+                logs="restore check complete",
             ),
             CompactJob(
                 repository_id=repository.id,
@@ -208,14 +220,71 @@ class TestRecentActivityEndpoint:
 
         assert response.status_code == 200
         activity = response.json()
-        assert len(activity) == 6
+        assert len(activity) == 7
         assert activity[0]["type"] == "backup"
         assert activity[0]["triggered_by"] == "schedule"
         assert activity[0]["schedule_id"] == schedule.id
         assert activity[0]["schedule_name"] == schedule.name
         assert activity[0]["repository"] == repository.name
+        check_activity = next(item for item in activity if item["type"] == "check")
+        assert check_activity["triggered_by"] == "schedule"
+        restore_check_activity = next(
+            item for item in activity if item["type"] == "restore_check"
+        )
+        assert restore_check_activity["triggered_by"] == "schedule"
+        assert restore_check_activity["archive_name"] == "archive-restore-check"
+        assert restore_check_activity["has_logs"] is True
         assert activity[-1]["type"] == "package"
         assert activity[-1]["package_name"] == package.name
+
+    def test_recent_activity_uses_check_creation_time_when_start_time_is_missing(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import CheckJob, Repository
+
+        repository = Repository(
+            name="Pending Check Repo",
+            path="/tmp/pending-check-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+
+        completed_job = CheckJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="completed",
+            started_at=datetime(2024, 1, 1, 10, 0, 0),
+            completed_at=datetime(2024, 1, 1, 10, 5, 0),
+            created_at=datetime(2024, 1, 1, 9, 59, 0),
+        )
+        pending_job = CheckJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="pending",
+            started_at=None,
+            created_at=datetime(2024, 1, 1, 11, 0, 0),
+            scheduled_check=True,
+        )
+        test_db.add_all([completed_job, pending_job])
+        test_db.commit()
+        test_db.refresh(pending_job)
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=check&limit=1",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert len(activity) == 1
+        assert activity[0]["id"] == pending_job.id
+        assert activity[0]["status"] == "pending"
+        assert activity[0]["started_at"] is None
+        assert activity[0]["triggered_by"] == "schedule"
 
     def test_recent_activity_filters_by_type_and_status(
         self, test_client, admin_headers, test_db
@@ -415,6 +484,44 @@ class TestActivityLogContracts:
         assert payload["total_lines"] == 3
         assert payload["has_more"] is True
         assert payload["lines"][0]["content"] == "db line 2"
+
+    def test_get_restore_check_job_logs_uses_activity_log_contract(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Repository, RestoreCheckJob
+
+        repository = Repository(
+            name="Restore Check Repo",
+            path="/tmp/restore-check-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+
+        job = RestoreCheckJob(
+            repository_id=repository.id,
+            repository_path=repository.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            logs="restore check line 1\nrestore check line 2",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            f"/api/activity/restore_check/{job.id}/logs?offset=1&limit=1",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["total_lines"] == 2
+        assert payload["has_more"] is False
+        assert payload["lines"][0]["content"] == "restore check line 2"
 
     def test_download_job_logs_uses_database_logs_when_no_file(
         self, test_client, admin_headers, test_db

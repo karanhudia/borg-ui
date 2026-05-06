@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 import structlog
-from typing import List, Optional
+from typing import List, Literal, Optional
 import json
 import os  # noqa: F401
 from datetime import timezone
@@ -17,9 +17,6 @@ from app.core.security import (
     require_repository_access_by_path,
 )
 from app.services.restore_service import restore_service
-from app.services.archive_browse_service import build_browse_items, parse_archive_items
-from app.services.cache_service import archive_cache
-from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.borg_env import (
     get_standard_ssh_opts,
@@ -49,24 +46,9 @@ def _build_repo_env(repo: Repository, db: Session):
     return env, temp_key_file
 
 
-def _get_restore_result_cache_key(archive_name: str, path: str, fast_v2: bool) -> str:
-    normalized_path = path.strip("/")
-    if fast_v2:
-        if normalized_path:
-            return f"{archive_name}::path::{normalized_path}::fast::result"
-        return f"{archive_name}::fast::result"
-    if not normalized_path:
-        return f"{archive_name}::restore-root"
-    return f"{archive_name}::restore::{normalized_path}"
-
-
-def _get_restore_raw_cache_key(archive_name: str, path: str, fast_v2: bool) -> str:
-    normalized_path = path.strip("/")
-    if fast_v2:
-        if normalized_path:
-            return f"{archive_name}::path::{normalized_path}::fast::raw"
-        return f"{archive_name}::fast::raw"
-    return archive_name
+class RestorePathMetadata(BaseModel):
+    path: str
+    type: Literal["file", "directory"]
 
 
 class RestoreRequest(BaseModel):
@@ -80,6 +62,14 @@ class RestoreRequest(BaseModel):
     destination_connection_id: Optional[int] = (
         None  # SSH connection ID for SSH destinations
     )
+    restore_layout: Literal["preserve_path", "contents_only"] = "preserve_path"
+    path_metadata: List[RestorePathMetadata] = Field(default_factory=list)
+
+
+def _restore_path_metadata_to_dict(item: RestorePathMetadata) -> dict:
+    if hasattr(item, "model_dump"):
+        return item.model_dump()
+    return item.dict()
 
 
 @router.post("/preview")
@@ -215,6 +205,11 @@ async def start_restore(
                 ssh_connection_id=repository.connection_id
                 if repository.repository_type == "ssh"
                 else None,
+                restore_layout=restore_request.restore_layout,
+                path_metadata=[
+                    _restore_path_metadata_to_dict(item)
+                    for item in restore_request.path_metadata
+                ],
             )
         )
 
@@ -223,6 +218,7 @@ async def start_restore(
             job_id=restore_job.id,
             user=current_user.username,
             execution_mode=execution_mode,
+            restore_layout=restore_request.restore_layout,
         )
 
         return {
@@ -238,189 +234,6 @@ async def start_restore(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "key": "backend.errors.restore.failedStartRestore",
-                "params": {"error": str(e)},
-            },
-        )
-
-
-@router.get("/repositories")
-async def get_repositories(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
-    """Get all repositories available for restore"""
-    try:
-        repositories = db.query(Repository).all()
-        visible_repositories = []
-        for repo in repositories:
-            try:
-                check_repo_access(db, current_user, repo, "viewer")
-                visible_repositories.append(repo)
-            except HTTPException:
-                continue
-        return {
-            "repositories": [
-                {
-                    "id": repo.id,
-                    "name": repo.name,
-                    "path": repo.path,
-                    "repository_type": repo.repository_type,
-                }
-                for repo in visible_repositories
-            ]
-        }
-    except Exception as e:
-        logger.error("Failed to fetch repositories", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"key": "backend.errors.restore.failedFetchRepositories"},
-        )
-
-
-@router.get("/archives/{repository_id}")
-async def get_archives(
-    repository_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get all archives for a repository - delegates to repositories API"""
-    try:
-        # Use the existing repositories API implementation
-        from app.api.repositories import list_repository_archives
-
-        return await list_repository_archives(repository_id, current_user, db)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "Failed to fetch archives", repository_id=repository_id, error=str(e)
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "key": "backend.errors.restore.failedFetchArchives",
-                "params": {"error": str(e)},
-            },
-        )
-
-
-@router.get("/contents/{repository_id}/{archive_name}")
-async def get_archive_contents(
-    repository_id: int,
-    archive_name: str,
-    path: str = Query("", description="Path within archive to browse"),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get contents of an archive at a specific path"""
-    try:
-        repository = db.query(Repository).filter(Repository.id == repository_id).first()
-        if not repository:
-            raise HTTPException(
-                status_code=404,
-                detail={"key": "backend.errors.restore.repositoryNotFound"},
-            )
-        check_repo_access(db, current_user, repository, "viewer")
-        fast_v2_browse = (repository.borg_version or 1) == 2 and is_fast_browse_enabled(
-            db
-        )
-        normalized_path = path.lstrip("/") if path else ""
-        result_cache_key = _get_restore_result_cache_key(
-            archive_name, path, fast_v2_browse
-        )
-        raw_cache_key = _get_restore_raw_cache_key(archive_name, path, fast_v2_browse)
-
-        cached_result = await archive_cache.get(repository_id, result_cache_key)
-        if cached_result is not None:
-            logger.info(
-                "Using cached restore archive browse result",
-                archive=archive_name,
-                path=path,
-                items_count=len(cached_result),
-            )
-            return {"items": cached_result}
-
-        # Check cache first
-        all_items = await archive_cache.get(repository_id, raw_cache_key)
-
-        if all_items is not None:
-            logger.info(
-                "Using cached archive contents",
-                archive=archive_name,
-                items_count=len(all_items),
-            )
-        else:
-            # Default browse fetches the whole archive for accurate recursive folder sizes.
-            # Fast Borg2 browse fetches only the requested subtree and hides folder sizes.
-            env, temp_key_file = _build_repo_env(repository, db)
-            try:
-                result = await BorgRouter(repository).list_archive_contents(
-                    archive=archive_name,
-                    path=path if fast_v2_browse else "",
-                    browse_depth=get_browse_depth(repository, path)
-                    if fast_v2_browse
-                    else None,
-                    env=env,
-                )
-            finally:
-                try:
-                    cleanup_temp_key_file(temp_key_file)
-                except Exception:
-                    pass
-
-            # Parse all items
-            all_items = []
-            if result.get("stdout"):
-                lines = result["stdout"].strip().split("\n")
-                logger.info(
-                    "Fetching and caching archive contents",
-                    archive=archive_name,
-                    total_lines=len(lines),
-                )
-                all_items = parse_archive_items(result["stdout"])
-
-                # Store in cache
-                await archive_cache.set(
-                    repository_id,
-                    raw_cache_key,
-                    all_items,
-                )
-                logger.info(
-                    "Cached archive contents",
-                    archive=archive_name,
-                    items_count=len(all_items),
-                )
-
-        items = build_browse_items(
-            all_items,
-            path,
-            hide_directory_sizes=fast_v2_browse,
-        )
-
-        logger.info(
-            "Archive contents parsed",
-            archive=archive_name,
-            path=path,
-            items_count=len(items),
-            first_few_items=[item["name"] for item in items[:10]],
-        )
-
-        await archive_cache.set(repository_id, result_cache_key, items)
-
-        return {"items": items}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "Failed to fetch archive contents",
-            repository_id=repository_id,
-            archive_name=archive_name,
-            path=path,
-            error=str(e),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "key": "backend.errors.restore.failedFetchArchiveContents",
                 "params": {"error": str(e)},
             },
         )

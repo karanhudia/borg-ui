@@ -6,6 +6,38 @@ import json
 from typing import Dict, List
 
 
+MANAGED_RESTORE_CANARY_PATH_PREFIXES = (".borg-ui/",)
+MANAGED_RESTORE_CANARY_PATH_NAMES = {".borg-ui"}
+RESTORE_CANARY_MANAGED_TYPE = "restore_canary"
+
+
+def get_managed_archive_path_type(path: str) -> str | None:
+    normalized = (path or "").strip("/")
+    if not normalized:
+        return None
+    parts = normalized.split("/")
+    if parts[0] in MANAGED_RESTORE_CANARY_PATH_NAMES or any(
+        normalized.startswith(prefix) for prefix in MANAGED_RESTORE_CANARY_PATH_PREFIXES
+    ):
+        return RESTORE_CANARY_MANAGED_TYPE
+    return None
+
+
+def add_managed_archive_metadata(item: Dict) -> Dict:
+    managed_type = get_managed_archive_path_type(item.get("path") or "")
+    if not managed_type:
+        return item
+    return {
+        **item,
+        "managed": True,
+        "managed_type": managed_type,
+    }
+
+
+def add_managed_archive_metadata_to_items(items: List[Dict]) -> List[Dict]:
+    return [add_managed_archive_metadata(item) for item in items]
+
+
 def parse_archive_items(stdout: str) -> List[Dict]:
     """Parse borg --json-lines output into normalized archive items."""
     items: List[Dict] = []
@@ -39,13 +71,14 @@ def build_browse_items(
 ) -> List[Dict]:
     """Build immediate children for a browse path from a full/raw item list."""
     normalized_path = path.strip("/")
+    visible_items = all_items
 
     def calculate_directory_size(dir_path: str) -> int:
         total_size = 0
         normalized_dir_path = dir_path.strip("/")
         search_prefix = f"{normalized_dir_path}/" if normalized_dir_path else ""
 
-        for item in all_items:
+        for item in visible_items:
             item_path = (item.get("path") or "").strip("/")
             if not item_path:
                 continue
@@ -66,7 +99,7 @@ def build_browse_items(
     items: List[Dict] = []
     seen_paths = set()
 
-    for item in all_items:
+    for item in visible_items:
         item_path = (item.get("path") or "").strip("/")
         item_type = item.get("type", "")
         item_size = item.get("size")
@@ -96,15 +129,17 @@ def build_browse_items(
                 f"{normalized_path}/{dir_name}" if normalized_path else dir_name
             )
             items.append(
-                {
-                    "name": dir_name,
-                    "type": "directory",
-                    "size": None
-                    if hide_directory_sizes
-                    else calculate_directory_size(full_dir_path),
-                    "mtime": None,
-                    "path": full_dir_path,
-                }
+                add_managed_archive_metadata(
+                    {
+                        "name": dir_name,
+                        "type": "directory",
+                        "size": None
+                        if hide_directory_sizes
+                        else calculate_directory_size(full_dir_path),
+                        "mtime": None,
+                        "path": full_dir_path,
+                    }
+                )
             )
             continue
 
@@ -117,25 +152,29 @@ def build_browse_items(
 
         if item_type == "d":
             items.append(
-                {
-                    "name": relative_path,
-                    "type": "directory",
-                    "size": None
-                    if hide_directory_sizes
-                    else calculate_directory_size(full_path),
-                    "mtime": item_mtime,
-                    "path": full_path,
-                }
+                add_managed_archive_metadata(
+                    {
+                        "name": relative_path,
+                        "type": "directory",
+                        "size": None
+                        if hide_directory_sizes
+                        else calculate_directory_size(full_path),
+                        "mtime": item_mtime,
+                        "path": full_path,
+                    }
+                )
             )
         else:
             items.append(
-                {
-                    "name": relative_path,
-                    "type": "file",
-                    "size": item_size,
-                    "mtime": item_mtime,
-                    "path": full_path,
-                }
+                add_managed_archive_metadata(
+                    {
+                        "name": relative_path,
+                        "type": "file",
+                        "size": item_size,
+                        "mtime": item_mtime,
+                        "path": full_path,
+                    }
+                )
             )
 
     items.sort(key=lambda entry: (entry["type"] != "directory", entry["name"].lower()))

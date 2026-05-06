@@ -59,9 +59,6 @@ vi.mock('../pages/Backup', () => ({
 vi.mock('../pages/Archives', () => ({
   default: () => <div>Archives Page</div>,
 }))
-vi.mock('../pages/Restore', () => ({
-  default: () => <div>Restore Page</div>,
-}))
 vi.mock('../pages/Schedule', () => ({
   default: () => <div>Schedule Page</div>,
 }))
@@ -86,6 +83,7 @@ describe('App', () => {
       isLoading: false,
       mustChangePassword: false,
       proxyAuthEnabled: false,
+      insecureNoAuthEnabled: false,
       proxyAuthWarnings: [],
       user: { username: 'admin', must_change_password: false },
     })
@@ -97,6 +95,7 @@ describe('App', () => {
       isLoading: true,
       mustChangePassword: false,
       proxyAuthEnabled: false,
+      insecureNoAuthEnabled: false,
       proxyAuthWarnings: [],
       user: null,
     })
@@ -113,6 +112,7 @@ describe('App', () => {
       isLoading: false,
       mustChangePassword: false,
       proxyAuthEnabled: true,
+      insecureNoAuthEnabled: false,
       proxyAuthHeader: 'X-Forwarded-User',
       proxyAuthWarnings: [],
       authError: null,
@@ -131,6 +131,7 @@ describe('App', () => {
       isLoading: false,
       mustChangePassword: false,
       proxyAuthEnabled: true,
+      insecureNoAuthEnabled: false,
       proxyAuthHeader: 'X-Forwarded-User',
       proxyAuthWarnings: [{ code: 'broad_bind', message: 'Bound broadly' }],
       authError: 'Reverse proxy authentication header "X-Forwarded-User" is required',
@@ -154,6 +155,7 @@ describe('App', () => {
       isLoading: false,
       mustChangePassword: false,
       proxyAuthEnabled: false,
+      insecureNoAuthEnabled: false,
       proxyAuthWarnings: [],
       user: null,
     })
@@ -179,6 +181,7 @@ describe('App', () => {
       isLoading: false,
       mustChangePassword: true,
       proxyAuthEnabled: false,
+      insecureNoAuthEnabled: false,
       proxyAuthWarnings: [],
       user: { username: 'admin', must_change_password: true },
     })
@@ -216,5 +219,24 @@ describe('App', () => {
       expect(loadUserPreferenceMock).toHaveBeenCalledTimes(1)
       expect(initAnalyticsIfEnabledMock).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it('skips the local login shell in insecure no-auth mode', async () => {
+    useAuthMock.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      mustChangePassword: true,
+      proxyAuthEnabled: false,
+      insecureNoAuthEnabled: true,
+      proxyAuthWarnings: [],
+      authError: null,
+      user: { username: 'admin', must_change_password: true },
+    })
+
+    renderWithProviders(<App />, { initialRoute: '/dashboard' })
+
+    expect(await screen.findByText('Dashboard Page')).toBeInTheDocument()
+    expect(screen.queryByText('Login Page')).not.toBeInTheDocument()
+    expect(screen.queryByText('Proxy authentication required')).not.toBeInTheDocument()
   })
 })

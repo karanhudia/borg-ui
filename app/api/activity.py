@@ -21,6 +21,7 @@ from app.database.models import (
     CheckJob,
     CompactJob,
     PruneJob,
+    RestoreCheckJob,
     PackageInstallJob,
     Repository,
     InstalledPackage,
@@ -38,10 +39,8 @@ router = APIRouter(prefix="/api/activity", tags=["activity"])
 
 class ActivityItem(BaseModel):
     id: int
-    type: str  # 'backup', 'restore', 'check', 'compact', 'package'
-    status: (
-        str  # 'pending', 'running', 'completed', 'failed', 'completed_with_warnings'
-    )
+    type: str  # 'backup', 'restore', 'check', 'restore_check', 'compact', 'package'
+    status: str  # 'pending', 'running', 'completed', 'needs_backup', 'failed', 'completed_with_warnings'
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     error_message: Optional[str]
@@ -169,9 +168,7 @@ async def list_recent_activity(
 
     # Fetch check jobs
     if not job_type or job_type == "check":
-        check_jobs = (
-            db.query(CheckJob).order_by(CheckJob.started_at.desc()).limit(limit).all()
-        )
+        check_jobs = db.query(CheckJob).order_by(CheckJob.id.desc()).limit(limit).all()
         for job in check_jobs:
             if status and job.status != status:
                 continue
@@ -181,6 +178,9 @@ async def list_recent_activity(
             )
             repo_name = repo.name if repo else f"Repository #{job.repository_id}"
             repo_path = repo.path if repo else job.repository_path
+            triggered_by = (
+                "schedule" if getattr(job, "scheduled_check", False) else "manual"
+            )
 
             activities.append(
                 {
@@ -193,11 +193,58 @@ async def list_recent_activity(
                     "repository": repo_name,
                     "repository_path": repo_path,
                     "log_file_path": getattr(job, "log_file_path", None),
-                    "triggered_by": "manual",  # Check jobs are always manual
+                    "triggered_by": triggered_by,
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
                     "has_logs": bool(getattr(job, "log_file_path", None)),
+                    "_sort_at": job.started_at or job.created_at,
+                }
+            )
+
+    # Fetch restore check jobs
+    if not job_type or job_type == "restore_check":
+        restore_check_jobs = (
+            db.query(RestoreCheckJob)
+            .order_by(RestoreCheckJob.id.desc())
+            .limit(limit)
+            .all()
+        )
+        for job in restore_check_jobs:
+            if status and job.status != status:
+                continue
+            repo = (
+                db.query(Repository).filter(Repository.id == job.repository_id).first()
+            )
+            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
+            repo_path = repo.path if repo else job.repository_path
+            triggered_by = (
+                "schedule"
+                if getattr(job, "scheduled_restore_check", False)
+                else "manual"
+            )
+
+            activities.append(
+                {
+                    "id": job.id,
+                    "type": "restore_check",
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
+                    "error_message": job.error_message,
+                    "repository": repo_name,
+                    "repository_path": repo_path,
+                    "log_file_path": getattr(job, "log_file_path", None),
+                    "triggered_by": triggered_by,
+                    "schedule_id": None,
+                    "archive_name": job.archive_name,
+                    "package_name": None,
+                    "has_logs": bool(
+                        getattr(job, "has_logs", False)
+                        or getattr(job, "log_file_path", None)
+                        or getattr(job, "logs", None)
+                    ),
+                    "_sort_at": job.started_at or job.created_at,
                 }
             )
 
@@ -319,13 +366,16 @@ async def list_recent_activity(
                 }
             )
 
-    # Sort by started_at (most recent first)
+    # Sort by start time, falling back to creation time for pending jobs.
     activities.sort(
-        key=lambda x: x["started_at"] if x["started_at"] else datetime.min, reverse=True
+        key=lambda x: x.get("_sort_at") or x["started_at"] or datetime.min,
+        reverse=True,
     )
 
     # Apply limit to combined results
     activities = activities[:limit]
+    for activity in activities:
+        activity.pop("_sort_at", None)
 
     return activities
 
@@ -351,6 +401,7 @@ async def get_job_logs(
         "backup": BackupJob,
         "restore": RestoreJob,
         "check": CheckJob,
+        "restore_check": RestoreCheckJob,
         "compact": CompactJob,
         "prune": PruneJob,
         "package": PackageInstallJob,
@@ -502,7 +553,7 @@ async def get_job_logs(
                     "",
                     "Note: Showing last 500 lines from in-memory buffer. Full logs not saved to disk.",
                 ]
-        elif job_type in ["check", "compact"]:
+        elif job_type in ["check", "restore_check", "compact"]:
             # Check/compact show progress message
             progress_msg = getattr(job, "progress_message", None)
             if progress_msg:
@@ -572,6 +623,17 @@ async def get_job_logs(
                 status_code=500, detail=f"Failed to read log file: {str(e)}"
             )
 
+    error_message = getattr(job, "error_message", None)
+    if error_message:
+        lines = [str(error_message)]
+        return {
+            "lines": [
+                {"line_number": i + 1, "content": line} for i, line in enumerate(lines)
+            ],
+            "total_lines": len(lines),
+            "has_more": False,
+        }
+
     # No logs available
     return {"lines": [], "total_lines": 0, "has_more": False}
 
@@ -589,6 +651,7 @@ async def download_job_logs(
         "backup": BackupJob,
         "restore": RestoreJob,
         "check": CheckJob,
+        "restore_check": RestoreCheckJob,
         "compact": CompactJob,
         "prune": PruneJob,
         "package": PackageInstallJob,
@@ -682,6 +745,7 @@ async def delete_job(
         "backup": BackupJob,
         "restore": RestoreJob,
         "check": CheckJob,
+        "restore_check": RestoreCheckJob,
         "compact": CompactJob,
         "prune": PruneJob,
         "package": PackageInstallJob,

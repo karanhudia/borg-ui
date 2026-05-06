@@ -1,7 +1,145 @@
 {
   "version": 1,
-  "generated_at": "2026-04-14T00:00:00Z",
+  "generated_at": "2026-05-05T00:00:00Z",
   "announcements": [
+    {
+      "id": "update-2.0.9-available",
+      "type": "update_available",
+      "priority": 95,
+      "title": "Borg UI 2.0.9 is available",
+      "title_localized": {
+        "es": "Borg UI 2.0.9 ya esta disponible",
+        "de": "Borg UI 2.0.9 ist verfugbar",
+        "it": "Borg UI 2.0.9 e disponibile"
+      },
+      "message": "Update to Borg UI 2.0.9 for Enterprise OIDC SSO, timezone-aware schedules, scheduled restore checks, clearer restore destinations, and stronger dashboard visibility for backup health.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.0.9 para obtener SSO OIDC Enterprise, horarios con zona horaria, verificaciones de restauracion programadas, destinos de restauracion mas claros y mejor visibilidad del estado en el panel.",
+        "de": "Aktualisieren Sie auf Borg UI 2.0.9 fur Enterprise-OIDC-SSO, zeitzonenbewusste Zeitplane, geplante Wiederherstellungsprufungen, klarere Wiederherstellungsziele und bessere Sichtbarkeit des Backup-Zustands im Dashboard.",
+        "it": "Aggiorna a Borg UI 2.0.9 per SSO OIDC Enterprise, pianificazioni con fuso orario, verifiche di ripristino pianificate, destinazioni di ripristino piu chiare e maggiore visibilita dello stato dei backup nella dashboard."
+      },
+      "highlights": [
+        "Enterprise OIDC SSO and hardened auth/proxy flows",
+        "Timezone-aware backup and check schedules with clear next-run tooltips",
+        "Scheduled restore checks with Canary and probe-path verification modes",
+        "Restore check health in Dashboard, Schedule, Activity, and Notifications",
+        "Clearer restore destination previews for selected files and full archives",
+        "Managed Canary payload shown as Borg UI-owned archive content",
+        "Security dependency updates for Axios and PostCSS"
+      ],
+      "highlights_localized": {
+        "es": [
+          "SSO OIDC Enterprise y flujos de autenticacion/proxy reforzados",
+          "Horarios de copias y comprobaciones con zona horaria y tooltips claros de proxima ejecucion",
+          "Verificaciones de restauracion programadas con modos Canary y rutas de prueba",
+          "Estado de verificaciones de restauracion en Panel, Programacion, Actividad y Notificaciones",
+          "Vista previa mas clara del destino para archivos seleccionados y archivos completos",
+          "Carga Canary gestionada visible como contenido del archivo propiedad de Borg UI",
+          "Actualizaciones de seguridad para Axios y PostCSS"
+        ],
+        "de": [
+          "Enterprise-OIDC-SSO und gehartete Auth-/Proxy-Ablaufe",
+          "Zeitzonenbewusste Backup- und Prufzeitplane mit klaren Tooltips zur nachsten Ausfuhrung",
+          "Geplante Wiederherstellungsprufungen mit Canary- und Probe-Pfad-Modus",
+          "Status der Wiederherstellungsprufungen in Dashboard, Zeitplan, Aktivitat und Benachrichtigungen",
+          "Klarere Zielvorschau fur ausgewahlte Dateien und komplette Archive",
+          "Verwaltete Canary-Nutzlast ist im Archiv als Borg-UI-Inhalt erkennbar",
+          "Sicherheitsupdates fur Axios und PostCSS"
+        ],
+        "it": [
+          "SSO OIDC Enterprise e flussi auth/proxy rafforzati",
+          "Pianificazioni di backup e verifica con fuso orario e tooltip chiari sulla prossima esecuzione",
+          "Verifiche di ripristino pianificate con modalita Canary e percorsi di prova",
+          "Stato delle verifiche di ripristino in Dashboard, Schedule, Attivita e Notifiche",
+          "Anteprima piu chiara della destinazione per file selezionati e archivi completi",
+          "Payload Canary gestito visibile come contenuto dell'archivio di Borg UI",
+          "Aggiornamenti di sicurezza per Axios e PostCSS"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualizacion",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.0.9",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-05-05T00:00:00Z",
+      "ends_at": "2027-05-05T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.0.8",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.0.9-whats-new",
+      "type": "release_highlight",
+      "priority": 70,
+      "title": "What's new in 2.0.9",
+      "title_localized": {
+        "es": "Novedades de la version 2.0.9",
+        "de": "Neu in Version 2.0.9",
+        "it": "Novita della versione 2.0.9"
+      },
+      "message": "Borg UI 2.0.9 adds Enterprise OIDC SSO, timezone-aware schedules, scheduled restore verification with Canary and probe-path modes, clearer restore destination previews, restore-check notifications, and security dependency updates.",
+      "message_localized": {
+        "es": "Borg UI 2.0.9 agrega SSO OIDC Enterprise, horarios con zona horaria, verificacion de restauracion programada con modos Canary y rutas de prueba, vistas previas mas claras del destino de restauracion, notificaciones de verificaciones de restauracion y actualizaciones de seguridad.",
+        "de": "Borg UI 2.0.9 bringt Enterprise-OIDC-SSO, zeitzonenbewusste Zeitplane, geplante Wiederherstellungsprufungen mit Canary- und Probe-Pfad-Modus, klarere Zielvorschauen, Benachrichtigungen fur Wiederherstellungsprufungen und Sicherheitsupdates.",
+        "it": "Borg UI 2.0.9 aggiunge SSO OIDC Enterprise, pianificazioni con fuso orario, verifiche di ripristino pianificate con modalita Canary e percorsi di prova, anteprime piu chiare della destinazione, notifiche per le verifiche di ripristino e aggiornamenti di sicurezza."
+      },
+      "highlights": [
+        "Enterprise OIDC SSO and hardened auth/proxy flows",
+        "Timezone-aware backup and check schedules with clear next-run tooltips",
+        "Scheduled restore checks with Canary and probe-path verification modes",
+        "Restore check health in Dashboard, Schedule, Activity, and Notifications",
+        "Clearer restore destination previews for selected files and full archives",
+        "Managed Canary payload shown as Borg UI-owned archive content",
+        "Security dependency updates for Axios and PostCSS"
+      ],
+      "highlights_localized": {
+        "es": [
+          "SSO OIDC Enterprise y flujos de autenticacion/proxy reforzados",
+          "Horarios de copias y comprobaciones con zona horaria y tooltips claros de proxima ejecucion",
+          "Verificaciones de restauracion programadas con modos Canary y rutas de prueba",
+          "Estado de verificaciones de restauracion en Panel, Programacion, Actividad y Notificaciones",
+          "Vista previa mas clara del destino para archivos seleccionados y archivos completos",
+          "Carga Canary gestionada visible como contenido del archivo propiedad de Borg UI",
+          "Actualizaciones de seguridad para Axios y PostCSS"
+        ],
+        "de": [
+          "Enterprise-OIDC-SSO und gehartete Auth-/Proxy-Ablaufe",
+          "Zeitzonenbewusste Backup- und Prufzeitplane mit klaren Tooltips zur nachsten Ausfuhrung",
+          "Geplante Wiederherstellungsprufungen mit Canary- und Probe-Pfad-Modus",
+          "Status der Wiederherstellungsprufungen in Dashboard, Zeitplan, Aktivitat und Benachrichtigungen",
+          "Klarere Zielvorschau fur ausgewahlte Dateien und komplette Archive",
+          "Verwaltete Canary-Nutzlast ist im Archiv als Borg-UI-Inhalt erkennbar",
+          "Sicherheitsupdates fur Axios und PostCSS"
+        ],
+        "it": [
+          "SSO OIDC Enterprise e flussi auth/proxy rafforzati",
+          "Pianificazioni di backup e verifica con fuso orario e tooltip chiari sulla prossima esecuzione",
+          "Verifiche di ripristino pianificate con modalita Canary e percorsi di prova",
+          "Stato delle verifiche di ripristino in Dashboard, Schedule, Attivita e Notifiche",
+          "Anteprima piu chiara della destinazione per file selezionati e archivi completi",
+          "Payload Canary gestito visibile come contenuto dell'archivio di Borg UI",
+          "Aggiornamenti di sicurezza per Axios e PostCSS"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.0.9",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-05-05T00:00:00Z",
+      "ends_at": "2027-05-05T00:00:00Z",
+      "min_app_version": "2.0.9",
+      "max_app_version": "2.0.9",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
     {
       "id": "update-2.0.3-available",
       "type": "update_available",
@@ -155,7 +293,7 @@
       "highlights": [
         "Borg 2 beta support across core repository flows",
         "Responsive UI built for desktop and mobile",
-        "RBAC, permissions, and API tokens for multi-user setups",
+        "RBAC and repository permissions for multi-user setups",
         "A redesigned interface with a fresh new look across the app",
         "Community stays available, with most features continuing to stay free",
         "Pro and Enterprise are available for users who need more advanced capabilities",
@@ -166,7 +304,7 @@
         "es": [
           "Soporte beta para Borg 2 en los flujos principales de repositorios",
           "Interfaz adaptable pensada para escritorio y movil",
-          "RBAC, permisos y tokens API para entornos multiusuario",
+          "RBAC y permisos de repositorio para entornos multiusuario",
           "Una interfaz redisenada con un aspecto nuevo en toda la app",
           "Community sigue disponible y la mayoria de las funciones continuan siendo gratuitas",
           "Pro y Enterprise estan disponibles para quienes necesiten capacidades mas avanzadas",
@@ -176,7 +314,7 @@
         "de": [
           "Borg-2-Beta-Unterstutzung in den zentralen Repository-Ablaufen",
           "Responsive Oberflache fur Desktop und Mobilgerate",
-          "RBAC, Berechtigungen und API-Tokens fur Multi-User-Umgebungen",
+          "RBAC und Repository-Berechtigungen fur Multi-User-Umgebungen",
           "Eine neu gestaltete Oberflache mit frischem Look in der ganzen App",
           "Community bleibt verfugbar und die meisten Funktionen bleiben kostenlos",
           "Pro und Enterprise stehen fur Nutzer bereit, die erweiterte Funktionen brauchen",
@@ -186,7 +324,7 @@
         "it": [
           "Supporto beta per Borg 2 nei flussi principali dei repository",
           "Interfaccia reattiva progettata per desktop e mobile",
-          "RBAC, permessi e token API per configurazioni multiutente",
+          "RBAC e permessi dei repository per configurazioni multiutente",
           "Un'interfaccia riprogettata con un look nuovo in tutta l'app",
           "Community resta disponibile e la maggior parte delle funzionalita continua a essere gratuita",
           "Pro ed Enterprise sono disponibili per chi ha bisogno di capacita piu avanzate",

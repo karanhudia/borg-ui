@@ -1,11 +1,12 @@
 import React from 'react'
-import { Chip } from '@mui/material'
+import { Chip, Tooltip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 
 interface StatusBadgeProps {
   status: string
   size?: 'small' | 'medium'
   variant?: 'filled' | 'outlined'
+  tooltip?: React.ReactNode
 }
 
 /**
@@ -16,6 +17,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   status,
   size = 'small',
   variant = 'outlined',
+  tooltip,
 }) => {
   const { t } = useTranslation()
 
@@ -25,6 +27,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
       case 'success':
         return 'success'
       case 'completed_with_warnings':
+      case 'needs_backup':
         return 'warning'
       case 'failed':
       case 'error':
@@ -45,6 +48,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
         return t('status.completed')
       case 'completed_with_warnings':
         return t('status.completedWithWarnings')
+      case 'needs_backup':
+        return t('status.needsBackup')
       case 'failed':
         return t('status.failed')
       case 'running':
@@ -59,14 +64,26 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
     }
   }
 
+  const label = getStatusLabel(status)
+
   return (
-    <Chip
-      label={getStatusLabel(status)}
-      color={getStatusColor(status)}
-      size={size}
-      variant={variant}
-      sx={{ fontWeight: 500 }}
-    />
+    <Tooltip title={tooltip || label} arrow>
+      <Chip
+        label={label}
+        color={getStatusColor(status)}
+        size={size}
+        variant={variant}
+        sx={{
+          fontWeight: 500,
+          maxWidth: '100%',
+          minWidth: 0,
+          '& .MuiChip-label': {
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          },
+        }}
+      />
+    </Tooltip>
   )
 }
 

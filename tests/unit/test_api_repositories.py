@@ -21,12 +21,18 @@ from datetime import datetime
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from app.database.models import (
+    CheckJob,
     LicensingState,
     Repository,
+    RestoreCheckJob,
     ScheduledJob,
     SSHConnection,
     SystemSettings,
 )
+
+
+def _discard_background_coro(coro):
+    coro.close()
 
 
 def _enable_borg_v2(test_db):
@@ -1421,38 +1427,6 @@ class TestRepositoriesStatistics:
 
         assert stats["archive_count"] == 0
 
-    def test_list_archive_files_uses_v2_router_for_borg2_repo(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        repo = Repository(
-            name="V2 Files Repo",
-            path="/tmp/v2-files-repo",
-            encryption="none",
-            compression="lz4",
-            repository_type="local",
-            borg_version=2,
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with patch(
-            "app.api.repositories.BorgRouter.list_archive_contents",
-            new_callable=AsyncMock,
-        ) as mock_list:
-            mock_list.return_value = {
-                "success": True,
-                "stdout": '{"path":"photo.jpg","type":"-","size":42}\n',
-            }
-            response = test_client.get(
-                f"/api/repositories/{repo.id}/archives/archive-1/files",
-                headers=admin_headers,
-            )
-
-        assert response.status_code == 200
-        assert response.json()["success"] is True
-        mock_list.assert_awaited_once()
-
 
 @pytest.mark.unit
 class TestRepositoriesImport:
@@ -1622,6 +1596,45 @@ class TestRepositoriesJobStatus:
         )
 
         assert response.status_code == 200
+
+    def test_get_repository_check_jobs_scheduled_only(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Scheduled Check Repo",
+            path="/job/scheduled-check-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        test_db.add_all(
+            [
+                CheckJob(
+                    repository_id=repo.id,
+                    status="completed",
+                    scheduled_check=True,
+                ),
+                CheckJob(
+                    repository_id=repo.id,
+                    status="completed",
+                    scheduled_check=False,
+                ),
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/check-jobs?scheduled_only=true",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        jobs = response.json()["jobs"]
+        assert len(jobs) == 1
+        assert jobs[0]["scheduled_check"] is True
 
     def test_get_repository_compact_jobs(
         self, test_client: TestClient, admin_headers, test_db
@@ -1879,6 +1892,297 @@ class TestRepositoryCheckSchedule:
         )
 
         assert response.status_code == 404
+
+
+@pytest.mark.unit
+class TestRepositoryRestoreCheckSchedule:
+    def test_get_restore_check_schedule(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+            restore_check_cron_expression="0 5 * * 1",
+            restore_check_timezone="Europe/Berlin",
+            restore_check_paths='["etc/hostname"]',
+            notify_on_restore_check_success=False,
+            notify_on_restore_check_failure=True,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/restore-check-schedule", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository_id"] == repo.id
+        assert data["restore_check_cron_expression"] == "0 5 * * 1"
+        assert data["restore_check_timezone"] == "Europe/Berlin"
+        assert data["timezone"] == "Europe/Berlin"
+        assert data["restore_check_paths"] == ["etc/hostname"]
+        assert data["notify_on_restore_check_failure"] == True
+        assert data["restore_check_mode"] == "probe_paths"
+        assert data["restore_check_canary_enabled"] == False
+        assert data["enabled"] == True
+
+    def test_update_restore_check_schedule(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        payload = {
+            "cron_expression": "0 6 * * *",
+            "timezone": "Asia/Kolkata",
+            "paths": ["etc/hostname", "var/log"],
+            "notify_on_success": True,
+            "notify_on_failure": False,
+        }
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json=payload,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] == True
+        assert data["repository"]["restore_check_cron_expression"] == "0 6 * * *"
+        assert data["repository"]["restore_check_timezone"] == "Asia/Kolkata"
+        assert data["repository"]["timezone"] == "Asia/Kolkata"
+        assert data["repository"]["restore_check_paths"] == [
+            "etc/hostname",
+            "var/log",
+        ]
+        assert data["repository"]["restore_check_mode"] == "probe_paths"
+        assert data["repository"]["restore_check_canary_enabled"] == False
+        assert data["repository"]["notify_on_restore_check_success"] == True
+        assert data["repository"]["notify_on_restore_check_failure"] == False
+        assert data["repository"]["next_scheduled_restore_check"] is not None
+
+    def test_update_restore_check_schedule_defaults_to_canary_mode(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Canary Repo",
+            path="/tmp/canary",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={"cron_expression": "0 7 * * *", "paths": [], "full_archive": False},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository"]["restore_check_mode"] == "canary"
+        assert data["repository"]["restore_check_canary_enabled"] == True
+
+        test_db.refresh(repo)
+        assert repo.restore_check_canary_enabled is True
+
+        disable_response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={"cron_expression": ""},
+        )
+
+        assert disable_response.status_code == 200
+        assert (
+            disable_response.json()["repository"]["restore_check_canary_enabled"]
+            == False
+        )
+        test_db.refresh(repo)
+        assert repo.restore_check_canary_enabled is False
+
+    def test_update_restore_check_schedule_rejects_canary_for_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={"cron_expression": "0 7 * * *", "paths": [], "full_archive": False},
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.restoreCheckCanaryUnsupportedObserve"
+        )
+
+    def test_update_restore_check_schedule_allows_probe_paths_for_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/restore-check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 7 * * *",
+                "paths": ["etc/hostname"],
+                "full_archive": False,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository"]["restore_check_mode"] == "probe_paths"
+        assert data["repository"]["restore_check_canary_enabled"] == False
+
+    def test_start_restore_check_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+            restore_check_paths='["etc/hostname"]',
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job"
+        ) as mock_start:
+            mock_start.return_value = RestoreCheckJob(
+                id=501,
+                repository_id=repo.id,
+                status="pending",
+                probe_paths='["etc/hostname"]',
+            )
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/restore-check",
+                headers=admin_headers,
+                json={},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["job_id"] == 501
+        assert data["message"] == "backend.success.repo.restoreCheckJobStarted"
+
+    def test_manual_canary_restore_check_marks_canary_for_future_backups(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Canary Repo",
+            path="/tmp/canary",
+            encryption="none",
+            repository_type="local",
+            restore_check_canary_enabled=False,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.maintenance_jobs.schedule_background_job",
+            side_effect=_discard_background_coro,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/restore-check",
+                headers=admin_headers,
+                json={"paths": [], "full_archive": False},
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.restore_check_canary_enabled is True
+        assert repo.restore_check_paths == "[]"
+        assert repo.restore_check_full_archive is False
+
+    def test_manual_canary_restore_check_rejects_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.post(
+            f"/api/repositories/{repo.id}/restore-check",
+            headers=admin_headers,
+            json={"paths": [], "full_archive": False},
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.repo.restoreCheckCanaryUnsupportedObserve"
+        )
+
+    def test_manual_probe_restore_check_allows_observe_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Observe Repo",
+            path="/tmp/observe",
+            encryption="none",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.maintenance_jobs.schedule_background_job",
+            side_effect=_discard_background_coro,
+        ):
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/restore-check",
+                headers=admin_headers,
+                json={"paths": ["etc/hostname"], "full_archive": False},
+            )
+
+        assert response.status_code == 200
 
 
 @pytest.mark.unit

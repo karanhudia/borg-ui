@@ -41,10 +41,10 @@ const { usePlanContentMock } = vi.hoisted(() => ({
       },
       {
         id: 'passkeys',
-        plan: 'pro',
+        plan: 'community',
         label: 'Passkeys',
         description: 'Sign in with biometrics or a hardware security key instead of a password.',
-        available_in: '2.0.3',
+        availability: 'included',
       },
       {
         id: 'totp_2fa',
@@ -135,17 +135,19 @@ describe('PlanInfoDrawer', () => {
     expect(screen.getByText('Upcoming for Enterprise')).toBeInTheDocument()
   })
 
-  it('shows a separate versioned section when the selected plan has version-targeted features', () => {
+  it('does not show a versioned roadmap section when the selected plan has no version-targeted features', () => {
     renderWithProviders(
       <PlanInfoDrawer open={true} onClose={vi.fn()} plan="community" features={featureMap} />
     )
 
     expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
-    expect(screen.getByText('Included in upcoming releases for Pro')).toBeInTheDocument()
-    expect(screen.getByText('Available in 2.0.3')).toBeInTheDocument()
+    expect(screen.queryByText('Included in upcoming releases for Pro')).not.toBeInTheDocument()
+    expect(screen.queryByText('Available in 2.0.3')).not.toBeInTheDocument()
   })
 
-  it('shows versioned features as upcoming when the installed version is lower', () => {
+  it('shows community features including passkeys in the your plan tab', async () => {
+    const user = userEvent.setup()
+
     renderWithProviders(
       <PlanInfoDrawer
         open={true}
@@ -156,24 +158,25 @@ describe('PlanInfoDrawer', () => {
       />
     )
 
-    expect(screen.getByText('Included in upcoming releases for Pro')).toBeInTheDocument()
-    expect(screen.getAllByText('Passkeys').length).toBeGreaterThan(0)
-    expect(screen.getByText('Available in 2.0.3')).toBeInTheDocument()
+    await user.click(screen.getAllByText('Your Plan')[1])
+
+    expect(screen.getByText('Free Forever')).toBeInTheDocument()
+    expect(screen.getByText('Passkeys')).toBeInTheDocument()
+    expect(screen.queryByText('Available in 2.0.3')).not.toBeInTheDocument()
   })
 
-  it('treats versioned upgrade features as included when the installed version is equal or newer', () => {
+  it('does not show passkeys in the Pro upgrade list', () => {
     renderWithProviders(
       <PlanInfoDrawer
         open={true}
         onClose={vi.fn()}
         plan="community"
-        appVersion="2.0.3"
+        appVersion="2.0.2"
         features={featureMap}
       />
     )
 
-    expect(screen.getAllByText('Passkeys').length).toBeGreaterThan(0)
-    expect(screen.queryByText('Available in 2.0.3')).not.toBeInTheDocument()
+    expect(screen.queryByText('Passkeys')).not.toBeInTheDocument()
   })
 
   it('treats versioned community features as included when the installed version is equal or newer', () => {

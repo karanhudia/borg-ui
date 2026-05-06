@@ -205,7 +205,7 @@ describe('UpcomingJobsTable', () => {
     await user.hover(screen.getByText('Daily Backup'))
 
     const formattedDate = new Date('2024-01-01T14:00:00Z').toLocaleDateString()
-    expect(await screen.findByText(formattedDate)).toBeInTheDocument()
+    expect(await screen.findByText(new RegExp(formattedDate))).toBeInTheDocument()
   })
 
   it('displays relative time using formatRelativeTime', () => {

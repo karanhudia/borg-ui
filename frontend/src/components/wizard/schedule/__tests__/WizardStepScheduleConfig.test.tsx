@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import WizardStepScheduleConfig from '../WizardStepScheduleConfig'
+import CronExpressionParser from 'cron-parser'
 
 // Mock cron-parser
 vi.mock('cron-parser', () => ({
@@ -11,7 +12,7 @@ vi.mock('cron-parser', () => ({
       }
       return {
         next: vi.fn(() => ({
-          toDate: vi.fn(() => new Date('2024-01-01T02:00:00')),
+          toDate: vi.fn(() => new Date('2024-01-01T02:00:00Z')),
         })),
       }
     }),
@@ -21,6 +22,7 @@ vi.mock('cron-parser', () => ({
 describe('WizardStepScheduleConfig', () => {
   const defaultData = {
     cronExpression: '0 2 * * *',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     archiveNameTemplate: '{job_name}-{now}',
   }
 
@@ -164,7 +166,7 @@ describe('WizardStepScheduleConfig', () => {
     render(<WizardStepScheduleConfig {...defaultProps} />)
 
     // First run time is shown inline
-    const dates = screen.getAllByText(/1\/1\/2024/i)
+    const dates = screen.getAllByText(/2024/i)
     expect(dates.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -181,6 +183,36 @@ describe('WizardStepScheduleConfig', () => {
     rerender(<WizardStepScheduleConfig {...defaultProps} data={newData} />)
 
     expect(screen.queryByText(/Next 3 Run Times:/i)).not.toBeInTheDocument()
+  })
+
+  it('updates next run preview when timezone changes', () => {
+    const { rerender } = render(
+      <WizardStepScheduleConfig {...defaultProps} data={{ ...defaultData, timezone: 'UTC' }} />
+    )
+
+    expect(CronExpressionParser.parse).toHaveBeenLastCalledWith('0 2 * * *', { tz: 'UTC' })
+
+    rerender(
+      <WizardStepScheduleConfig
+        {...defaultProps}
+        data={{ ...defaultData, timezone: 'Asia/Kolkata' }}
+      />
+    )
+
+    expect(CronExpressionParser.parse).toHaveBeenLastCalledWith('0 2 * * *', {
+      tz: 'Asia/Kolkata',
+    })
+
+    const kolkataRunTime = new Date('2024-01-01T02:00:00Z').toLocaleString(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'Asia/Kolkata',
+    })
+
+    expect(
+      screen.getAllByText((_, element) => element?.textContent?.includes(kolkataRunTime) ?? false)
+        .length
+    ).toBeGreaterThan(0)
   })
 
   it('handles multiple onChange calls', () => {

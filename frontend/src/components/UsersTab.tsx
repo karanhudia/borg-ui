@@ -8,6 +8,7 @@ import {
   TextField,
   CircularProgress,
   Stack,
+  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -55,6 +56,8 @@ interface UserType {
   is_active: boolean
   role: string
   all_repositories_role?: string | null
+  auth_source?: string | null
+  oidc_subject?: string | null
   created_at: string
   last_login: string | null
   // Legacy fields that may still appear in API responses
@@ -79,7 +82,7 @@ const getInitials = (user: UserType): string => {
 }
 
 type RoleFilter = 'all' | 'admin' | 'operator' | 'viewer'
-type StatusFilter = 'all' | 'active' | 'inactive'
+type StatusFilter = 'all' | 'active' | 'inactive' | 'pending_sso'
 
 const UsersTab: React.FC = () => {
   const { t } = useTranslation()
@@ -120,6 +123,8 @@ const UsersTab: React.FC = () => {
     password: '',
     role: 'viewer',
     full_name: '',
+    auth_source: 'local',
+    oidc_subject: '',
   })
   const [passwordForm, setPasswordForm] = useState({
     new_password: '',
@@ -198,6 +203,24 @@ const UsersTab: React.FC = () => {
     },
   })
 
+  const approveUserMutation = useMutation({
+    mutationFn: (userId: number) => settingsAPI.updateUser(userId, { is_active: true }),
+    onSuccess: () => {
+      toast.success(t('settings.toasts.userUpdated'))
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      trackSettings(EventAction.EDIT, {
+        section: 'users',
+        operation: 'approve_pending_oidc_user',
+      })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('settings.toasts.failedToUpdateUser')
+      )
+    },
+  })
+
   const resetPasswordMutation = useMutation({
     mutationFn: ({ userId, newPassword }: { userId: number; newPassword: string }) =>
       settingsAPI.resetUserPassword(userId, newPassword),
@@ -218,15 +241,33 @@ const UsersTab: React.FC = () => {
 
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault()
-    createUserMutation.mutate(userForm)
+    createUserMutation.mutate({
+      username: userForm.username,
+      email: userForm.email,
+      password: userForm.password,
+      role: userForm.role,
+      full_name: userForm.full_name,
+    })
   }
 
   const handleUpdateUser = (e: React.FormEvent) => {
     e.preventDefault()
     if (editingUser) {
+      const updatePayload: Record<string, unknown> = {
+        username: userForm.username,
+        email: userForm.email,
+        password: userForm.password,
+        role: userForm.role,
+        full_name: userForm.full_name,
+      }
+      if (userOidcFieldsExposed) {
+        updatePayload.auth_source = userForm.auth_source
+        updatePayload.oidc_subject =
+          userForm.auth_source === 'oidc' ? userForm.oidc_subject.trim() || null : null
+      }
       updateUserMutation.mutate({
         userId: editingUser.id,
-        userData: userForm,
+        userData: updatePayload,
       })
     }
   }
@@ -261,6 +302,8 @@ const UsersTab: React.FC = () => {
       password: '',
       role: userToEdit.role || 'viewer',
       full_name: userToEdit.full_name || '',
+      auth_source: userToEdit.auth_source || 'local',
+      oidc_subject: userToEdit.oidc_subject || '',
     })
   }
 
@@ -272,13 +315,21 @@ const UsersTab: React.FC = () => {
       password: '',
       role: 'viewer',
       full_name: '',
+      auth_source: 'local',
+      oidc_subject: '',
     })
   }
 
   const users = useMemo<UserType[]>(() => usersData?.data?.users ?? [], [usersData?.data?.users])
+  const userOidcFieldsExposed = users.some(
+    (user) => 'auth_source' in user || 'oidc_subject' in user
+  )
 
   const totalUsers = users.length
   const activeUsers = users.filter((u: UserType) => u.is_active).length
+  const pendingSsoUsers = users.filter(
+    (u: UserType) => !u.is_active && u.auth_source === 'oidc'
+  ).length
   const adminUsers = users.filter((u: UserType) => getRolePresentation(u.role).isAdminRole).length
   const operatorUsers = users.filter(
     (u: UserType) => getRolePresentation(u.role).isOperatorRole
@@ -290,7 +341,9 @@ const UsersTab: React.FC = () => {
     const q = searchQuery.trim().toLowerCase()
     return users.filter((user) => {
       if (q) {
-        const haystack = [user.username, user.full_name ?? '', user.email].join(' ').toLowerCase()
+        const haystack = [user.username, user.full_name ?? '', user.email, user.oidc_subject ?? '']
+          .join(' ')
+          .toLowerCase()
         if (!haystack.includes(q)) return false
       }
       if (roleFilter !== 'all') {
@@ -302,6 +355,9 @@ const UsersTab: React.FC = () => {
       }
       if (statusFilter === 'active' && !user.is_active) return false
       if (statusFilter === 'inactive' && user.is_active) return false
+      if (statusFilter === 'pending_sso' && (user.is_active || user.auth_source !== 'oidc')) {
+        return false
+      }
       return true
     })
   }, [users, searchQuery, roleFilter, statusFilter, getRolePresentation])
@@ -346,14 +402,41 @@ const UsersTab: React.FC = () => {
                 <Typography variant="body2" fontWeight={600} noWrap>
                   {user.full_name || user.username}
                 </Typography>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  noWrap
-                  sx={{ display: 'block', lineHeight: 1.4 }}
-                >
-                  {user.email || `@${user.username}`}
-                </Typography>
+                <Stack spacing={0.4} sx={{ minWidth: 0 }}>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    noWrap
+                    sx={{ display: 'block', lineHeight: 1.4 }}
+                  >
+                    {user.email || `@${user.username}`}
+                  </Typography>
+                  {(user.auth_source === 'oidc' || user.oidc_subject) && (
+                    <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+                      {user.auth_source === 'oidc' && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          color="info"
+                          label={t('settings.users.badges.oidc')}
+                          sx={{ height: 20 }}
+                        />
+                      )}
+                      {user.oidc_subject && (
+                        <Tooltip title={user.oidc_subject}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            noWrap
+                            sx={{ display: 'block', minWidth: 0 }}
+                          >
+                            {t('settings.users.labels.subject', { subject: user.oidc_subject })}
+                          </Typography>
+                        </Tooltip>
+                      )}
+                    </Stack>
+                  )}
+                </Stack>
               </Box>
             </Box>
           )
@@ -393,8 +476,18 @@ const UsersTab: React.FC = () => {
             >
               {user.is_active
                 ? t('settings.users.status.active')
-                : t('settings.users.status.inactive')}
+                : user.auth_source === 'oidc'
+                  ? t('settings.users.status.pendingSso')
+                  : t('settings.users.status.inactive')}
             </Typography>
+            {!user.is_active && user.auth_source === 'oidc' && (
+              <Chip
+                size="small"
+                color="warning"
+                variant="outlined"
+                label={t('settings.users.badges.sso')}
+              />
+            )}
           </Box>
         ),
       },
@@ -423,39 +516,43 @@ const UsersTab: React.FC = () => {
   )
 
   // Table row actions
-  const tableActions: ActionButton<UserType>[] = useMemo(
-    () => [
-      {
-        icon: <UserCheck size={15} />,
-        label: t('settings.users.actions.manageAccess'),
-        onClick: (user) => setAccessUser(user),
-        color: 'primary',
-        show: () => canManageUsers,
-      },
-      {
-        icon: <Edit size={15} />,
-        label: t('settings.users.actions.edit'),
-        onClick: (user) => openEditUser(user),
-        color: 'default',
-        show: () => canManageUsers,
-      },
-      {
-        icon: <Key size={15} />,
-        label: t('settings.users.actions.resetPassword'),
-        onClick: (user) => openPasswordModal(user.id),
-        color: 'warning',
-        show: () => canManageUsers,
-      },
-      {
-        icon: <Trash2 size={15} />,
-        label: t('settings.users.actions.delete'),
-        onClick: (user) => setDeleteConfirmUser(user),
-        color: 'error',
-        show: () => canManageUsers,
-      },
-    ],
-    [t, canManageUsers]
-  )
+  const tableActions: ActionButton<UserType>[] = [
+    {
+      icon: <ShieldCheck size={15} />,
+      label: t('settings.users.actions.approveSsoUser'),
+      onClick: (user) => approveUserMutation.mutate(user.id),
+      color: 'success',
+      show: (user) => canManageUsers && !user.is_active && user.auth_source === 'oidc',
+    },
+    {
+      icon: <UserCheck size={15} />,
+      label: t('settings.users.actions.manageAccess'),
+      onClick: (user) => setAccessUser(user),
+      color: 'primary',
+      show: () => canManageUsers,
+    },
+    {
+      icon: <Edit size={15} />,
+      label: t('settings.users.actions.edit'),
+      onClick: (user) => openEditUser(user),
+      color: 'default',
+      show: () => canManageUsers,
+    },
+    {
+      icon: <Key size={15} />,
+      label: t('settings.users.actions.resetPassword'),
+      onClick: (user) => openPasswordModal(user.id),
+      color: 'warning',
+      show: (user) => canManageUsers && user.auth_source !== 'oidc',
+    },
+    {
+      icon: <Trash2 size={15} />,
+      label: t('settings.users.actions.delete'),
+      onClick: (user) => setDeleteConfirmUser(user),
+      color: 'error',
+      show: () => canManageUsers,
+    },
+  ]
 
   const roleFilterOptions: { value: RoleFilter; label: string; color?: string }[] = [
     { value: 'all', label: t('settings.users.filter.allRoles') },
@@ -468,6 +565,7 @@ const UsersTab: React.FC = () => {
     { value: 'all', label: t('settings.users.filter.allStatuses') },
     { value: 'active', label: t('settings.users.status.active') },
     { value: 'inactive', label: t('settings.users.status.inactive') },
+    { value: 'pending_sso', label: t('settings.users.status.pendingSso') },
   ]
 
   const hasActiveFilters =
@@ -514,6 +612,11 @@ const UsersTab: React.FC = () => {
           {[
             { label: t('settings.users.stats.total'), value: totalUsers, color: 'text.primary' },
             { label: t('settings.users.stats.active'), value: activeUsers, color: 'success.main' },
+            {
+              label: t('settings.users.stats.pendingSso'),
+              value: pendingSsoUsers,
+              color: 'warning.main',
+            },
             { label: t('settings.users.stats.admins'), value: adminUsers, color: 'secondary.main' },
             {
               label: t('settings.users.stats.operators'),
@@ -540,6 +643,27 @@ const UsersTab: React.FC = () => {
             </Box>
           ))}
         </Box>
+
+        {pendingSsoUsers > 0 && (
+          <Alert
+            severity="warning"
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => setStatusFilter('pending_sso')}
+                disabled={statusFilter === 'pending_sso'}
+              >
+                {t('settings.users.pendingReview.action')}
+              </Button>
+            }
+          >
+            <Typography variant="body2" fontWeight={600}>
+              {t('settings.users.pendingReview.title', { count: pendingSsoUsers })}
+            </Typography>
+            <Typography variant="body2">{t('settings.users.pendingReview.description')}</Typography>
+          </Alert>
+        )}
 
         {/* Search + filter toolbar */}
         {!loadingUsers && users.length > 0 && (
@@ -628,7 +752,9 @@ const UsersTab: React.FC = () => {
                       ? theme.palette.success.main
                       : opt.value === 'inactive'
                         ? theme.palette.error.main
-                        : undefined
+                        : opt.value === 'pending_sso'
+                          ? theme.palette.warning.main
+                          : undefined
                   return (
                     <Chip
                       key={opt.value}
@@ -853,6 +979,52 @@ const UsersTab: React.FC = () => {
                   <MenuItem value="viewer">{t('settings.users.roles.viewerDescription')}</MenuItem>
                 </Select>
               </FormControl>
+
+              {editingUser && userOidcFieldsExposed && (
+                <>
+                  <Alert severity="info">
+                    <Typography variant="body2">
+                      {t('settings.users.ssoIdentity.selfLinkHint')}
+                    </Typography>
+                  </Alert>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: '180px 1fr' },
+                      gap: 2,
+                    }}
+                  >
+                    <TextField
+                      select
+                      label={t('settings.users.fields.authSource')}
+                      value={userForm.auth_source}
+                      onChange={(e) =>
+                        setUserForm({
+                          ...userForm,
+                          auth_source: e.target.value,
+                          oidc_subject: e.target.value === 'oidc' ? userForm.oidc_subject : '',
+                        })
+                      }
+                      fullWidth
+                    >
+                      <MenuItem value="local">{t('settings.users.authSources.local')}</MenuItem>
+                      <MenuItem value="oidc">{t('settings.users.authSources.oidc')}</MenuItem>
+                    </TextField>
+                    <TextField
+                      label={t('settings.users.fields.oidcSubject')}
+                      value={userForm.oidc_subject}
+                      onChange={(e) => setUserForm({ ...userForm, oidc_subject: e.target.value })}
+                      disabled={userForm.auth_source !== 'oidc'}
+                      helperText={
+                        userForm.auth_source === 'oidc'
+                          ? t('settings.users.ssoIdentity.subjectHelper')
+                          : t('settings.users.ssoIdentity.clearHelper')
+                      }
+                      fullWidth
+                    />
+                  </Box>
+                </>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions>

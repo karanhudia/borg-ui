@@ -13,6 +13,12 @@ from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.database.models import Repository, ScheduledJob, ScheduledJobRepository
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    InvalidScheduleTimezone,
+    calculate_next_cron_run,
+    normalize_schedule_timezone,
+)
 
 
 class BorgmaticExportService:
@@ -808,6 +814,14 @@ class BorgmaticImportService:
         scheduled_job.cron_expression = schedule_metadata.get(
             "cron_expression", "0 2 * * *"
         )
+        try:
+            scheduled_job.timezone = normalize_schedule_timezone(
+                schedule_metadata.get("timezone")
+                or schedule_metadata.get("schedule_timezone")
+                or DEFAULT_SCHEDULE_TIMEZONE
+            )
+        except InvalidScheduleTimezone:
+            scheduled_job.timezone = DEFAULT_SCHEDULE_TIMEZONE
         scheduled_job.enabled = schedule_metadata.get("enabled", True)
         scheduled_job.archive_name_template = schedule_metadata.get(
             "archive_name_template", "{hostname}-{now}"
@@ -823,6 +837,13 @@ class BorgmaticImportService:
         scheduled_job.prune_keep_weekly = retention.get("keep_weekly", 4)
         scheduled_job.prune_keep_monthly = retention.get("keep_monthly", 6)
         scheduled_job.prune_keep_yearly = retention.get("keep_yearly", 1)
+        try:
+            scheduled_job.next_run = calculate_next_cron_run(
+                scheduled_job.cron_expression,
+                schedule_timezone=scheduled_job.timezone,
+            )
+        except Exception:
+            scheduled_job.next_run = None
 
         if not dry_run and result["created"]:
             self.db.add(scheduled_job)

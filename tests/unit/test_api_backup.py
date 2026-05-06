@@ -5,7 +5,7 @@ Comprehensive unit tests for backup API endpoints
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import Repository, BackupJob
+from app.database.models import Repository, BackupJob, PruneJob, CompactJob
 from datetime import datetime
 from tests.unit.helpers import assert_auth_required
 
@@ -293,6 +293,61 @@ class TestBackupJobs:
 
         assert response.status_code == 200
 
+    def test_list_manual_backup_jobs_filtered_by_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        primary_repo = Repository(
+            name="Primary Repo",
+            path="/repos/primary",
+            encryption="none",
+            repository_type="local",
+        )
+        secondary_repo = Repository(
+            name="Secondary Repo",
+            path="/repos/secondary",
+            encryption="none",
+            repository_type="local",
+        )
+        matching_manual_job = BackupJob(
+            repository=primary_repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+        )
+        other_manual_job = BackupJob(
+            repository=secondary_repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+        )
+        scheduled_job = BackupJob(
+            repository=primary_repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            scheduled_job_id=123,
+        )
+        test_db.add_all(
+            [
+                primary_repo,
+                secondary_repo,
+                matching_manual_job,
+                other_manual_job,
+                scheduled_job,
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/backup/jobs?manual_only=true&repository=/repos/primary",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        jobs = response.json()["jobs"]
+        assert [job["id"] for job in jobs] == [matching_manual_job.id]
+        assert all(job["repository"] == "/repos/primary" for job in jobs)
+
     def test_list_backup_jobs_unauthorized(self, test_client: TestClient):
         """Test listing backup jobs without authentication"""
         response = test_client.get("/api/backup/jobs")
@@ -489,6 +544,100 @@ class TestBackupCancel:
         )
 
         assert response.status_code == 400
+
+    def test_cancel_backup_running_prune_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=1,
+        )
+        job = BackupJob(
+            repository=repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_prune",
+        )
+        test_db.add_all([repo, job])
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.refresh(job)
+
+        prune_job = PruneJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+        )
+        test_db.add(prune_job)
+        test_db.commit()
+        test_db.refresh(prune_job)
+
+        with patch(
+            "app.services.prune_service.prune_service.cancel_prune",
+            new=AsyncMock(return_value=True),
+        ) as mock_cancel:
+            response = test_client.post(
+                f"/api/backup/cancel/{job.id}", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        test_db.refresh(prune_job)
+        assert job.status == "completed"
+        assert job.maintenance_status == "prune_failed"
+        assert prune_job.status == "cancelled"
+        mock_cancel.assert_awaited_once_with(prune_job.id)
+
+    def test_cancel_backup_running_compact_success(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=1,
+        )
+        job = BackupJob(
+            repository=repo.path,
+            status="completed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            maintenance_status="running_compact",
+        )
+        test_db.add_all([repo, job])
+        test_db.commit()
+        test_db.refresh(repo)
+        test_db.refresh(job)
+
+        compact_job = CompactJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            status="running",
+        )
+        test_db.add(compact_job)
+        test_db.commit()
+        test_db.refresh(compact_job)
+
+        with patch(
+            "app.services.compact_service.compact_service.cancel_compact",
+            new=AsyncMock(return_value=True),
+        ) as mock_cancel:
+            response = test_client.post(
+                f"/api/backup/cancel/{job.id}", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        test_db.refresh(compact_job)
+        assert job.status == "completed"
+        assert job.maintenance_status == "compact_failed"
+        assert compact_job.status == "cancelled"
+        mock_cancel.assert_awaited_once_with(compact_job.id)
 
     def test_cancel_backup_unauthorized(self, test_client: TestClient):
         """Test cancelling backup without auth returns 403"""

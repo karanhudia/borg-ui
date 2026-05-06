@@ -111,6 +111,65 @@ async def test_send_backup_failure_discord(
 
 
 @pytest.mark.asyncio
+async def test_send_backup_warning_uses_warning_toggle_only(
+    test_db, mock_apprise, mock_repository
+):
+    setting = NotificationSettings(
+        name="Warning Alert",
+        service_url="slack://token/channel",
+        enabled=True,
+        notify_on_backup_success=False,
+        notify_on_backup_warning=True,
+        monitor_all_repositories=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    await notification_service.send_backup_warning(
+        test_db,
+        mock_repository.name,
+        "archive-warning",
+        "File changed while reading",
+    )
+
+    assert apprise_instance.notify.call_count == 1
+    call_args = apprise_instance.notify.call_args[1]
+    assert call_args["title"] == "[WARNING] Backup Completed with Warnings"
+    assert "File changed while reading" in call_args["body"]
+
+
+@pytest.mark.asyncio
+async def test_send_backup_warning_not_sent_without_warning_toggle(
+    test_db, mock_apprise, mock_repository
+):
+    setting = NotificationSettings(
+        name="Success Only Alert",
+        service_url="slack://token/channel",
+        enabled=True,
+        notify_on_backup_success=True,
+        notify_on_backup_warning=False,
+        monitor_all_repositories=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+
+    await notification_service.send_backup_warning(
+        test_db,
+        mock_repository.name,
+        "archive-warning",
+        "File changed while reading",
+    )
+
+    apprise_instance.notify.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_repo_filtering(
     test_db, mock_apprise, mock_repository, email_notification_setting
 ):
@@ -168,6 +227,7 @@ async def test_global_repo_setting(
 from app.services.notification_service import (
     _is_webhook_service,
     _is_email_service,
+    _build_test_notification_failure_message,
     _should_include_json,
     _build_json_data,
     _append_json_to_body,
@@ -189,6 +249,23 @@ class TestHelperFunctions:
         assert not _is_email_service("slack://token/channel")
         assert not _is_email_service("discord://webhook")
         assert not _is_email_service("https://webhook.site/abc123")
+
+    def test_build_test_notification_failure_message_for_ntfys(self):
+        message = _build_test_notification_failure_message(
+            "ntfys://user:pass@example.com/topic"
+        )
+
+        assert "ntfy" in message
+        assert "URL format was accepted" in message
+        assert "percent-encoded" in message
+
+    def test_build_test_notification_failure_message_for_email(self):
+        message = _build_test_notification_failure_message(
+            "mailtos://user:pass@smtp.example.com"
+        )
+
+        assert "Gmail" in message
+        assert "SMTP server is reachable" in message
 
     def test_is_webhook_service(self):
         """Test webhook service detection"""
@@ -632,6 +709,8 @@ async def test_all_notification_methods_support_job_name(
         notify_on_schedule_failure=True,
         notify_on_check_success=True,
         notify_on_check_failure=True,
+        notify_on_restore_check_success=True,
+        notify_on_restore_check_failure=True,
         include_job_name_in_title=True,
         monitor_all_repositories=True,
     )
@@ -682,6 +761,98 @@ async def test_all_notification_methods_support_job_name(
         job_name,
     )
     assert "Test Job" in apprise_instance.notify.call_args[1]["title"]
+
+    await notification_service.send_restore_check_completion(
+        test_db,
+        mock_repository.name,
+        mock_repository.path,
+        "completed",
+        "probe_paths",
+        "archive",
+        None,
+        None,
+        "manual",
+        "Test Job",
+        ["etc/hostname"],
+        False,
+    )
+    assert "Test Job" in apprise_instance.notify.call_args[1]["title"]
+
+
+@pytest.mark.asyncio
+async def test_restore_check_notification_success(
+    test_db, mock_apprise, mock_repository
+):
+    setting = NotificationSettings(
+        name="Restore Check Alerts",
+        service_url="slack://token/channel",
+        enabled=True,
+        notify_on_restore_check_success=True,
+        notify_on_restore_check_failure=False,
+        monitor_all_repositories=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    await notification_service.send_restore_check_completion(
+        test_db,
+        mock_repository.name,
+        mock_repository.path,
+        "completed",
+        "probe_paths",
+        archive_name="archive-1",
+        duration_seconds=75,
+        check_type="scheduled",
+        probe_paths=["etc/hostname"],
+    )
+
+    call_args = apprise_instance.notify.call_args[1]
+    assert "Restore Check Completed" in call_args["title"]
+    assert "archive-1" in call_args["body"]
+    assert "Selected Probe Paths" in call_args["body"]
+    assert "etc/hostname" in call_args["body"]
+
+
+@pytest.mark.asyncio
+async def test_restore_check_notification_failure_json_payload(
+    test_db, mock_apprise, mock_repository
+):
+    setting = NotificationSettings(
+        name="Restore Check Webhook",
+        service_url="jsons://webhook.site/restore-check",
+        enabled=True,
+        notify_on_restore_check_success=False,
+        notify_on_restore_check_failure=True,
+        monitor_all_repositories=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    await notification_service.send_restore_check_completion(
+        test_db,
+        mock_repository.name,
+        mock_repository.path,
+        "needs_backup",
+        "canary",
+        error_message="Run a backup first",
+        check_type="scheduled",
+    )
+
+    body = apprise_instance.notify.call_args[1]["body"]
+    parsed = json_module.loads(body)
+    assert parsed["event_type"] == "restore_check_needs_backup"
+    assert parsed["repository_name"] == mock_repository.name
+    assert parsed["status"] == "needs_backup"
+    assert parsed["mode"] == "canary"
+    assert parsed["error_message"] == "Run a backup first"
 
 
 @pytest.mark.asyncio

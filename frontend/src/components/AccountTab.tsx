@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
+  Alert,
   Box,
   Button,
   Card,
+  CircularProgress,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -76,6 +78,14 @@ const AccountTab: React.FC = () => {
   const [totpDisableCode, setTotpDisableCode] = useState('')
   const [showPasskeyDialog, setShowPasskeyDialog] = useState(false)
   const [passkeyPassword, setPasskeyPassword] = useState('')
+  const { data: authConfig } = useQuery({
+    queryKey: ['authConfig'],
+    queryFn: async () => {
+      const response = await authAPI.getAuthConfig()
+      return response.data
+    },
+    enabled: !!user,
+  })
   const { data: totpStatus, refetch: refetchTotpStatus } = useQuery({
     queryKey: ['auth', 'totp-status'],
     queryFn: async () => {
@@ -219,6 +229,25 @@ const AccountTab: React.FC = () => {
     },
   })
 
+  const unlinkOidcMutation = useMutation({
+    mutationFn: () => authAPI.unlinkOidc(),
+    onSuccess: async () => {
+      toast.success(t('settings.account.security.ssoUnlinkedToast'))
+      await refreshUser()
+      trackSettings(EventAction.DELETE, {
+        section: 'account',
+        operation: 'unlink_oidc',
+        surface: 'security',
+      })
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        translateBackendKey(getApiErrorDetail(error)) ||
+          t('settings.account.security.ssoUnlinkFailed')
+      )
+    },
+  })
+
   const updateProfileMutation = useMutation({
     mutationFn: async (data: AccountProfileFormData) => {
       await settingsAPI.updateProfile({
@@ -279,6 +308,20 @@ const AccountTab: React.FC = () => {
 
   const currentUserRolePresentation = getGlobalRolePresentation(user?.role, t)
   const showSecurityTab = !proxyAuthEnabled
+  const oidcLinkSupported =
+    authConfig?.oidc_link_supported === true ||
+    authConfig?.oidc_account_linking_supported === true ||
+    user?.oidc_link_supported === true
+  const oidcUnlinkSupported =
+    authConfig?.oidc_unlink_supported === true || user?.oidc_unlink_supported === true
+  const isOidcLinked = user?.auth_source === 'oidc' || Boolean(user?.oidc_subject)
+  const showOidcAccountLinking =
+    Boolean(authConfig?.oidc_enabled) &&
+    (oidcLinkSupported || (isOidcLinked && oidcUnlinkSupported))
+  const handleStartOidcLink = () => {
+    const returnTo = `${window.location.pathname}${window.location.search}`
+    window.location.assign(authAPI.getOidcLinkUrl(returnTo))
+  }
 
   useEffect(() => {
     if (!userId) return
@@ -390,21 +433,58 @@ const AccountTab: React.FC = () => {
             )}
 
             {accountView === 'security' && showSecurityTab && (
-              <AccountSecuritySettingsSection
-                totpEnabled={!!user?.totp_enabled}
-                recoveryCodesRemaining={totpStatus?.recovery_codes_remaining ?? 0}
-                totpLoading={
-                  beginTotpSetupMutation.isPending ||
-                  enableTotpMutation.isPending ||
-                  disableTotpMutation.isPending
-                }
-                onEnableTotp={() => setShowTotpSetupDialog(true)}
-                onDisableTotp={() => setShowTotpDisableDialog(true)}
-                passkeys={passkeys}
-                passkeysLoading={addPasskeyMutation.isPending || deletePasskeyMutation.isPending}
-                onAddPasskey={() => setShowPasskeyDialog(true)}
-                onDeletePasskey={(passkeyId) => deletePasskeyMutation.mutate(passkeyId)}
-              />
+              <Stack spacing={3}>
+                {showOidcAccountLinking && (
+                  <Alert
+                    severity={isOidcLinked ? 'success' : 'info'}
+                    action={
+                      isOidcLinked && oidcUnlinkSupported ? (
+                        <Button
+                          color="inherit"
+                          size="small"
+                          disabled={unlinkOidcMutation.isPending}
+                          onClick={() => unlinkOidcMutation.mutate()}
+                          startIcon={
+                            unlinkOidcMutation.isPending ? <CircularProgress size={14} /> : null
+                          }
+                        >
+                          {t('settings.account.security.ssoUnlinkButton')}
+                        </Button>
+                      ) : !isOidcLinked && oidcLinkSupported ? (
+                        <Button color="inherit" size="small" onClick={handleStartOidcLink}>
+                          {t('settings.account.security.ssoLinkButton')}
+                        </Button>
+                      ) : undefined
+                    }
+                  >
+                    <Typography variant="body2" fontWeight={600}>
+                      {isOidcLinked
+                        ? t('settings.account.security.ssoLinkedTitle')
+                        : t('settings.account.security.ssoLinkTitle')}
+                    </Typography>
+                    <Typography variant="body2">
+                      {isOidcLinked
+                        ? t('settings.account.security.ssoLinkedDescription')
+                        : t('settings.account.security.ssoLinkDescription')}
+                    </Typography>
+                  </Alert>
+                )}
+                <AccountSecuritySettingsSection
+                  totpEnabled={!!user?.totp_enabled}
+                  recoveryCodesRemaining={totpStatus?.recovery_codes_remaining ?? 0}
+                  totpLoading={
+                    beginTotpSetupMutation.isPending ||
+                    enableTotpMutation.isPending ||
+                    disableTotpMutation.isPending
+                  }
+                  onEnableTotp={() => setShowTotpSetupDialog(true)}
+                  onDisableTotp={() => setShowTotpDisableDialog(true)}
+                  passkeys={passkeys}
+                  passkeysLoading={addPasskeyMutation.isPending || deletePasskeyMutation.isPending}
+                  onAddPasskey={() => setShowPasskeyDialog(true)}
+                  onDeletePasskey={(passkeyId) => deletePasskeyMutation.mutate(passkeyId)}
+                />
+              </Stack>
             )}
 
             {accountView === 'access' && (

@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import datetime, timedelta
+from typing import Optional
 import jwt
 from jwt.exceptions import PyJWTError as JWTError
 import bcrypt
@@ -26,6 +26,13 @@ logger = structlog.get_logger()
 
 ROLE_RANK = GLOBAL_ROLE_RANK
 REPO_ROLE_RANK = REPOSITORY_ROLE_RANK
+DEFAULT_PROXY_AUTH_HEADER = "X-Forwarded-User"
+FALLBACK_PROXY_AUTH_HEADERS = (
+    "X-Remote-User",
+    "Remote-User",
+    "X-authentik-username",
+    DEFAULT_PROXY_AUTH_HEADER,
+)
 
 # JWT token security
 security = HTTPBearer()
@@ -58,104 +65,87 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
             minutes=settings.access_token_expire_minutes
         )
 
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "purpose": "access"})
     encoded_jwt = jwt.encode(
         to_encode, settings.secret_key, algorithm=settings.algorithm
     )
     return encoded_jwt
 
 
-def _create_scoped_token(
-    token_type: str, data: dict[str, Any], expires_delta: timedelta
-) -> str:
-    payload = data.copy()
-    payload.update(
-        {
-            "type": token_type,
-            "exp": datetime.now(timezone.utc) + expires_delta,
-        }
-    )
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
-
-
-def _verify_scoped_token(token: str, expected_type: str) -> Optional[dict[str, Any]]:
+def decode_token(token: str) -> Optional[dict]:
+    """Decode a JWT token and return its payload."""
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=[settings.algorithm]
-        )
+        return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
     except JWTError:
         return None
 
-    if payload.get("type") != expected_type:
+
+def verify_token(token: str) -> Optional[str]:
+    """Verify and decode a JWT access token."""
+    payload = decode_token(token)
+    if payload is None:
         return None
-    return payload
+    purpose = payload.get("purpose")
+    if purpose not in (None, "access"):
+        return None
+    username: str = payload.get("sub")
+    if username is None:
+        return None
+    return username
 
 
 def create_login_challenge_token(username: str) -> str:
-    return _create_scoped_token(
-        LOGIN_CHALLENGE_TOKEN_TYPE,
-        {"sub": username},
-        timedelta(minutes=LOGIN_CHALLENGE_EXPIRE_MINUTES),
-    )
+    """Create a short-lived token for completing TOTP login."""
+    expire = datetime.utcnow() + timedelta(minutes=LOGIN_CHALLENGE_EXPIRE_MINUTES)
+    payload = {
+        "sub": username,
+        "purpose": "totp_login",
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
 
 
 def verify_login_challenge_token(token: str) -> Optional[str]:
-    payload = _verify_scoped_token(token, LOGIN_CHALLENGE_TOKEN_TYPE)
-    username = payload.get("sub") if payload else None
-    return username if isinstance(username, str) and username else None
-
-
-def create_totp_setup_token(
-    username: str, secret: str, recovery_codes: list[str]
-) -> str:
-    return _create_scoped_token(
-        TOTP_SETUP_TOKEN_TYPE,
-        {
-            "sub": username,
-            "secret": secret,
-            "recovery_codes": recovery_codes,
-        },
-        timedelta(minutes=TOTP_SETUP_EXPIRE_MINUTES),
-    )
-
-
-def verify_totp_setup_token(token: str) -> Optional[dict[str, Any]]:
-    payload = _verify_scoped_token(token, TOTP_SETUP_TOKEN_TYPE)
-    if not payload:
-        return None
-
-    username = payload.get("sub")
-    secret = payload.get("secret")
-    recovery_codes = payload.get("recovery_codes")
-    if not isinstance(username, str) or not isinstance(secret, str):
-        return None
-    if not isinstance(recovery_codes, list) or not all(
-        isinstance(code, str) for code in recovery_codes
-    ):
-        return None
-
-    return {
-        "username": username,
-        "secret": secret,
-        "recovery_codes": recovery_codes,
-    }
-
-
-def verify_token(token: str) -> Optional[str]:
-    """Verify and decode a JWT token"""
     payload = decode_token(token)
-    if payload is None:
+    if payload is None or payload.get("purpose") != "totp_login":
         return None
     username = payload.get("sub")
     return username if isinstance(username, str) else None
 
 
-def decode_token(token: str) -> Optional[dict[str, Any]]:
-    """Decode a JWT token and return its payload if valid."""
-    try:
-        return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-    except JWTError:
+def create_totp_setup_token(
+    username: str, secret: str, recovery_codes: list[str]
+) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=TOTP_SETUP_EXPIRE_MINUTES)
+    payload = {
+        "sub": username,
+        "purpose": "totp_setup",
+        "secret": secret,
+        "recovery_codes": recovery_codes,
+        "exp": expire,
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+
+
+def verify_totp_setup_token(token: str) -> Optional[dict]:
+    payload = decode_token(token)
+    if payload is None or payload.get("purpose") != "totp_setup":
         return None
+    secret = payload.get("secret")
+    recovery_codes = payload.get("recovery_codes")
+    username = payload.get("sub")
+    if (
+        not isinstance(username, str)
+        or not isinstance(secret, str)
+        or not isinstance(recovery_codes, list)
+        or not all(isinstance(code, str) for code in recovery_codes)
+    ):
+        return None
+    return {
+        "username": username,
+        "secret": secret,
+        "recovery_codes": recovery_codes,
+    }
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
@@ -164,9 +154,12 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)) -> U
     if cached_user is not None:
         return cached_user
 
-    # Check if proxy authentication is enabled
+    if settings.allow_insecure_no_auth:
+        user = _get_current_user_insecure_no_auth(db)
+        request.state.current_user = user
+        return user
+
     if settings.disable_authentication:
-        # Use proxy authentication
         user = await get_current_user_proxy(request, db)
         request.state.current_user = user
         return user
@@ -200,23 +193,7 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
     by binding to localhost (127.0.0.1) or using firewall rules.
     """
 
-    # Read username from configured proxy header
-    username = request.headers.get(settings.proxy_auth_header)
-
-    # Try alternative headers if configured one isn't present
-    if not username:
-        alternative_headers = [
-            "X-Remote-User",
-            "Remote-User",
-            "X-authentik-username",
-            "X-Forwarded-User",
-        ]
-        for header in alternative_headers:
-            if header != settings.proxy_auth_header:
-                username = request.headers.get(header)
-                if username:
-                    logger.debug("Found username in alternative header", header=header)
-                    break
+    username = _resolve_proxy_username(request)
 
     if not username:
         raise HTTPException(
@@ -236,53 +213,12 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
             detail="Empty username in proxy header",
         )
 
-    def get_configured_header(header_name: str) -> Optional[str]:
-        if not header_name:
-            return None
-        value = request.headers.get(header_name)
-        if value is None:
-            return None
-        value = value.strip()
-        return value or None
-
-    def normalize_global_role(value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        normalized = value.strip().lower()
-        return normalized if normalized in GLOBAL_ROLE_RANK else None
-
-    def normalize_repository_role(value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        normalized = value.strip().lower()
-        return normalized if normalized in REPO_ROLE_RANK else None
-
-    role_from_header = normalize_global_role(
-        get_configured_header(settings.proxy_auth_role_header)
+    proxy_role = _resolve_proxy_global_role(request)
+    proxy_all_repositories_role = _resolve_proxy_all_repositories_role(
+        request, proxy_role
     )
-    all_repositories_role_from_header = normalize_repository_role(
-        get_configured_header(settings.proxy_auth_all_repositories_role_header)
-    )
-    email_from_header = get_configured_header(settings.proxy_auth_email_header)
-    full_name_from_header = get_configured_header(settings.proxy_auth_full_name_header)
-
-    resolved_role = role_from_header or "viewer"
-    resolved_all_repositories_role = (
-        normalize_repository_role_for_global_role(
-            resolved_role, all_repositories_role_from_header
-        )
-        if all_repositories_role_from_header is not None
-        else default_repository_role_for_global_role(resolved_role)
-    )
-
-    fallback_email = f"{username}@proxy.local"
-    resolved_email = fallback_email
-    if email_from_header:
-        existing_email_owner = (
-            db.query(User).filter(User.email == email_from_header).first()
-        )
-        if existing_email_owner is None or existing_email_owner.username == username:
-            resolved_email = email_from_header
+    proxy_email = _resolve_proxy_email(request)
+    proxy_full_name = _resolve_proxy_full_name(request)
 
     # Check if user exists
     user = db.query(User).filter(User.username == username).first()
@@ -291,13 +227,23 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
     if not user:
         logger.info("Auto-creating user from proxy authentication", username=username)
 
+        user_email = proxy_email or f"{username}@proxy.local"
+        if proxy_email and not _proxy_email_is_available(db, proxy_email):
+            logger.warning(
+                "Ignoring proxy email header because the value is already in use",
+                username=username,
+                email=proxy_email,
+            )
+            user_email = f"{username}@proxy.local"
+
         user = User(
             username=username,
             password_hash="",  # No password for proxy auth users
-            email=resolved_email,
-            full_name=full_name_from_header,
-            role=resolved_role,
-            all_repositories_role=resolved_all_repositories_role,
+            email=user_email,
+            full_name=proxy_full_name,
+            role=proxy_role or "viewer",
+            all_repositories_role=proxy_all_repositories_role
+            or default_repository_role_for_global_role(proxy_role or "viewer"),
             is_active=True,
             must_change_password=False,
         )
@@ -313,32 +259,148 @@ async def get_current_user_proxy(request: Request, db: Session) -> User:
             status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled"
         )
 
-    if role_from_header is not None:
-        user.role = role_from_header
-        user.all_repositories_role = (
-            normalize_repository_role_for_global_role(
-                user.role, all_repositories_role_from_header
+    if proxy_role and user.role != proxy_role:
+        user.role = proxy_role
+        user.all_repositories_role = normalize_repository_role_for_global_role(
+            proxy_role,
+            proxy_all_repositories_role
+            or default_repository_role_for_global_role(proxy_role),
+        )
+    elif (
+        proxy_all_repositories_role is not None
+        and user.role in ROLE_RANK
+        and user.all_repositories_role != proxy_all_repositories_role
+    ):
+        user.all_repositories_role = normalize_repository_role_for_global_role(
+            user.role, proxy_all_repositories_role
+        )
+
+    if proxy_email and user.email != proxy_email:
+        if _proxy_email_is_available(db, proxy_email, current_user_id=user.id):
+            user.email = proxy_email
+        else:
+            logger.warning(
+                "Ignoring proxy email header because the value is already in use",
+                username=username,
+                email=proxy_email,
             )
-            if all_repositories_role_from_header is not None
-            else default_repository_role_for_global_role(user.role)
-        )
 
-    if email_from_header:
-        existing_email_owner = (
-            db.query(User)
-            .filter(User.email == email_from_header, User.username != username)
-            .first()
-        )
-        if existing_email_owner is None:
-            user.email = email_from_header
+    if proxy_full_name and user.full_name != proxy_full_name:
+        user.full_name = proxy_full_name
 
-    if full_name_from_header:
-        user.full_name = full_name_from_header
+    # Update last login timestamp
+    from datetime import timezone
 
     user.last_login = datetime.now(timezone.utc)
     db.commit()
 
     return user
+
+
+def _resolve_proxy_username(request: Request) -> Optional[str]:
+    configured_header = settings.proxy_auth_header.strip()
+    username = request.headers.get(configured_header)
+    if username:
+        return username
+
+    # If a custom identity header is configured, trust only that header.
+    if configured_header.lower() != DEFAULT_PROXY_AUTH_HEADER.lower():
+        return None
+
+    for header in FALLBACK_PROXY_AUTH_HEADERS:
+        if header.lower() == configured_header.lower():
+            continue
+        username = request.headers.get(header)
+        if username:
+            logger.debug("Found username in fallback proxy header", header=header)
+            return username
+    return None
+
+
+def _get_optional_proxy_header(
+    request: Request, header_name: Optional[str]
+) -> Optional[str]:
+    if not header_name:
+        return None
+    value = request.headers.get(header_name)
+    if value is None:
+        return None
+    value = value.strip().lower()
+    return value or None
+
+
+def _get_optional_proxy_text_header(
+    request: Request, header_name: Optional[str]
+) -> Optional[str]:
+    if not header_name:
+        return None
+    value = request.headers.get(header_name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _resolve_proxy_global_role(request: Request) -> Optional[str]:
+    raw_role = _get_optional_proxy_header(request, settings.proxy_auth_role_header)
+    if not raw_role:
+        return None
+    if raw_role not in ROLE_RANK:
+        logger.warning(
+            "Ignoring invalid proxy role header value",
+            header=settings.proxy_auth_role_header,
+            value=raw_role,
+        )
+        return None
+    return raw_role
+
+
+def _resolve_proxy_all_repositories_role(
+    request: Request, proxy_role: Optional[str]
+) -> Optional[str]:
+    raw_role = _get_optional_proxy_header(
+        request, settings.proxy_auth_all_repositories_role_header
+    )
+    if not raw_role:
+        return (
+            default_repository_role_for_global_role(proxy_role)
+            if proxy_role is not None
+            else None
+        )
+
+    target_global_role = proxy_role or "viewer"
+    normalized_role = normalize_repository_role_for_global_role(
+        target_global_role, raw_role
+    )
+    if normalized_role != raw_role:
+        logger.warning(
+            "Ignoring invalid proxy all-repositories role header value",
+            header=settings.proxy_auth_all_repositories_role_header,
+            value=raw_role,
+            normalized=normalized_role,
+        )
+    return normalized_role
+
+
+def _resolve_proxy_email(request: Request) -> Optional[str]:
+    return _get_optional_proxy_header(request, settings.proxy_auth_email_header)
+
+
+def _resolve_proxy_full_name(request: Request) -> Optional[str]:
+    return _get_optional_proxy_text_header(
+        request, settings.proxy_auth_full_name_header
+    )
+
+
+def _proxy_email_is_available(
+    db: Session, email: Optional[str], current_user_id: Optional[int] = None
+) -> bool:
+    if not email:
+        return True
+    query = db.query(User).filter(User.email == email)
+    if current_user_id is not None:
+        query = query.filter(User.id != current_user_id)
+    return query.first() is None
 
 
 def _get_active_user_from_token(
@@ -365,10 +427,42 @@ def _get_active_user_from_token(
     return user
 
 
+def _get_current_user_insecure_no_auth(db: Session) -> User:
+    """Resolve a deterministic local user for intentionally insecure anonymous mode."""
+    user = (
+        db.query(User)
+        .filter(User.username == "admin", User.is_active.is_(True))
+        .first()
+    )
+    if user is None:
+        user = (
+            db.query(User)
+            .filter(User.role == "admin", User.is_active.is_(True))
+            .order_by(User.id.asc())
+            .first()
+        )
+    if user is None:
+        user = (
+            db.query(User)
+            .filter(User.is_active.is_(True))
+            .order_by(User.id.asc())
+            .first()
+        )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Insecure no-auth mode is enabled but no active local user exists",
+        )
+    return user
+
+
 async def get_current_download_user(
     request: Request, db: Session = Depends(get_db)
 ) -> User:
     """Authenticate download endpoints for both JWT and proxy-auth modes."""
+    if settings.allow_insecure_no_auth:
+        return _get_current_user_insecure_no_auth(db)
+
     if settings.disable_authentication:
         return await get_current_user_proxy(request, db)
 

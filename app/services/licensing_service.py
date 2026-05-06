@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.models import LicensingState
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 PLAN_RANK = {"community": 0, "pro": 1, "enterprise": 2}
@@ -141,18 +142,16 @@ def get_entitlement_summary(db: Session) -> dict[str, Any]:
         "access_level": _access_level(state),
         "is_full_access": is_full_access,
         "full_access_consumed": state.trial_consumed,
-        "expires_at": state.expires_at.isoformat() if state.expires_at else None,
-        "starts_at": state.starts_at.isoformat() if state.starts_at else None,
-        "refresh_after": refresh_after.isoformat() if refresh_after else None,
+        "expires_at": serialize_datetime(state.expires_at),
+        "starts_at": serialize_datetime(state.starts_at),
+        "refresh_after": serialize_datetime(refresh_after),
         "instance_id": state.instance_id,
         "entitlement_id": state.entitlement_id,
         "key_id": state.key_id,
         "license_id": state.license_id,
         "customer_id": state.customer_id,
         "ui_state": _ui_state(state),
-        "last_refresh_at": state.last_refresh_at.isoformat()
-        if state.last_refresh_at
-        else None,
+        "last_refresh_at": serialize_datetime(state.last_refresh_at),
         "last_refresh_error": state.last_refresh_error,
     }
 

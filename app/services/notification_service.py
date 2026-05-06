@@ -238,6 +238,38 @@ def _is_email_service(service_url: str) -> bool:
     return any(service_url.lower().startswith(prefix) for prefix in email_prefixes)
 
 
+def _build_test_notification_failure_message(service_url: str) -> str:
+    """Return a service-specific test notification failure message."""
+    service_type = (
+        service_url.split(":")[0].lower() if ":" in service_url else "unknown"
+    )
+
+    if service_type in {"ntfy", "ntfys"}:
+        return (
+            "Failed to send test notification to ntfy. The URL format was accepted, "
+            "but delivery failed. Possible causes:\n"
+            "• The ntfy server is unreachable from Borg UI\n"
+            "• TLS/certificate issues on the self-hosted ntfy server\n"
+            "• Invalid username/password\n"
+            "• Username or password contains reserved URL characters and must be percent-encoded"
+        )
+
+    if _is_email_service(service_url):
+        return (
+            "Failed to send test notification. Possible causes:\n"
+            "• For Gmail: Check App Password is correct (16 chars, no spaces)\n"
+            "• For Gmail: Ensure 2-Step Verification is enabled\n"
+            "• Check SMTP server is reachable (firewall/network)\n"
+            "• Verify credentials are correct"
+        )
+
+    return (
+        f"Failed to send test notification to '{service_type}'. "
+        "The URL format was accepted, but delivery failed. Check network reachability, "
+        "credentials, and the remote service configuration."
+    )
+
+
 def _create_html_email(title: str, content_blocks: list, footer: str = None) -> str:
     """
     Create a well-formatted HTML email template.
@@ -1051,8 +1083,7 @@ class NotificationService:
             db.query(NotificationSettings)
             .filter(
                 NotificationSettings.enabled == True,
-                NotificationSettings.notify_on_backup_success
-                == True,  # Use success setting for warnings
+                NotificationSettings.notify_on_backup_warning == True,
             )
             .all()
         )
@@ -1712,11 +1743,7 @@ class NotificationService:
                 )
                 return {
                     "success": False,
-                    "message": "Failed to send test notification. Possible causes:\n"
-                    + "• For Gmail: Check App Password is correct (16 chars, no spaces)\n"
-                    + "• For Gmail: Ensure 2-Step Verification is enabled\n"
-                    + "• Check SMTP server is reachable (firewall/network)\n"
-                    + "• Verify credentials are correct",
+                    "message": _build_test_notification_failure_message(service_url),
                 }
 
         except Exception as e:
@@ -1798,6 +1825,182 @@ class NotificationService:
         """
         for setting in settings:
             await NotificationService._send_to_service(db, setting, title, body)
+
+    @staticmethod
+    async def send_restore_check_completion(
+        db: Session,
+        repository_name: str,
+        repository_path: str,
+        status: str,
+        mode: str,
+        archive_name: Optional[str] = None,
+        duration_seconds: Optional[int] = None,
+        error_message: Optional[str] = None,
+        check_type: str = "manual",
+        job_name: Optional[str] = None,
+        probe_paths: Optional[list[str]] = None,
+        full_archive: bool = False,
+    ) -> None:
+        """
+        Send notification for restore verification completion.
+
+        Args:
+            db: Database session
+            repository_name: Name of repository
+            repository_path: Path to repository
+            status: Restore check status
+            mode: "canary", "probe_paths", or "full_archive"
+            archive_name: Archive that was restored, if available
+            duration_seconds: How long the restore check took
+            error_message: Error/warning message when applicable
+            check_type: "manual" or "scheduled"
+            job_name: Name of the job/schedule (optional, for enhanced titles)
+            probe_paths: Probe paths restored for probe-path checks
+            full_archive: Whether the full archive was restored
+        """
+        success_statuses = {"completed"}
+        if status in success_statuses:
+            settings = (
+                db.query(NotificationSettings)
+                .filter(
+                    NotificationSettings.enabled == True,
+                    NotificationSettings.notify_on_restore_check_success == True,
+                )
+                .all()
+            )
+        else:
+            settings = (
+                db.query(NotificationSettings)
+                .filter(
+                    NotificationSettings.enabled == True,
+                    NotificationSettings.notify_on_restore_check_failure == True,
+                )
+                .all()
+            )
+
+        if not settings:
+            return
+
+        status_labels = {
+            "completed": ("success", "Restore Check Completed"),
+            "completed_with_warnings": (
+                "warning",
+                "Restore Check Completed with Warnings",
+            ),
+            "needs_backup": ("warning", "Restore Check Needs Backup"),
+            "failed": ("failed", "Restore Check Failed"),
+            "cancelled": ("warning", "Restore Check Cancelled"),
+        }
+        badge_type, title_text = status_labels.get(
+            status, ("warning", f"Restore Check {status.replace('_', ' ').title()}")
+        )
+        mode_labels = {
+            "canary": "Managed Canary",
+            "probe_paths": "Selected Probe Paths",
+            "full_archive": "Full Archive",
+        }
+        mode_label = mode_labels.get(mode, mode.replace("_", " ").title())
+
+        content_blocks = [
+            {"label": "Repository", "value": repository_name},
+            {"label": "Path", "value": _sanitize_ssh_url(repository_path)},
+            {"label": "Type", "value": check_type.capitalize()},
+            {"label": "Mode", "value": mode_label},
+        ]
+
+        if archive_name:
+            content_blocks.append({"label": "Archive", "value": archive_name})
+
+        if duration_seconds is not None:
+            if duration_seconds < 60:
+                duration_str = f"{duration_seconds}s"
+            elif duration_seconds < 3600:
+                duration_str = f"{duration_seconds // 60}m {duration_seconds % 60}s"
+            else:
+                hours = duration_seconds // 3600
+                mins = (duration_seconds % 3600) // 60
+                duration_str = f"{hours}h {mins}m"
+            content_blocks.append({"label": "Duration", "value": duration_str})
+
+        if probe_paths:
+            paths_text = "\n".join(f"• {path}" for path in probe_paths[:10])
+            if len(probe_paths) > 10:
+                paths_text += f"\n• ...and {len(probe_paths) - 10} more"
+            content_blocks.append({"label": "Probe Paths", "value": paths_text})
+
+        if status != "completed" and error_message:
+            error_display = (
+                error_message
+                if len(error_message) <= 300
+                else error_message[:300] + "..."
+            )
+            content_blocks.append({"label": "Details", "value": error_display})
+
+        completion_time = datetime.now()
+        timestamp_str = completion_time.strftime("%Y-%m-%d %H:%M:%S")
+
+        html_title = f"{_get_status_badge(badge_type, is_html=True)} {title_text}"
+        html_body = _create_html_email(
+            title=html_title,
+            content_blocks=content_blocks,
+            footer=f"Completed at {timestamp_str}",
+        )
+
+        markdown_title = f"{_get_status_badge(badge_type, is_html=False)} {title_text}"
+        markdown_body = _create_markdown_message(
+            title=markdown_title,
+            content_blocks=content_blocks,
+            footer=f"Completed at {timestamp_str}",
+        )
+
+        for setting in settings:
+            if not _notification_applies_to_repository(db, setting, repository_name):
+                continue
+
+            status_badge_text = _get_status_badge(badge_type, is_html=False)
+            title = f"{status_badge_text} {title_text}"
+            if setting.include_job_name_in_title and job_name:
+                title = f"{status_badge_text} {title_text} - {job_name}"
+            if setting.title_prefix:
+                title = f"{setting.title_prefix} {title}"
+
+            final_html_body = html_body
+            final_markdown_body = markdown_body
+
+            if _should_include_json(setting):
+                json_data = _build_json_data(
+                    f"restore_check_{status}",
+                    {
+                        "repository_name": repository_name,
+                        "repository_path": repository_path,
+                        "job_name": job_name,
+                        "check_type": check_type,
+                        "status": status,
+                        "mode": mode,
+                        "archive_name": archive_name,
+                        "probe_paths": probe_paths or [],
+                        "full_archive": full_archive,
+                        "duration_seconds": duration_seconds,
+                        "error_message": error_message
+                        if status != "completed"
+                        else None,
+                        "completed_at": completion_time.isoformat(),
+                    },
+                    compact=_is_json_webhook(setting.service_url),
+                )
+                final_html_body = _append_json_to_body(
+                    html_body, json_data, is_html=True, service_url=setting.service_url
+                )
+                final_markdown_body = _append_json_to_body(
+                    markdown_body,
+                    json_data,
+                    is_html=False,
+                    service_url=setting.service_url,
+                )
+
+            await NotificationService._send_to_service(
+                db, setting, title, final_html_body, final_markdown_body
+            )
 
     @staticmethod
     async def send_check_completion(

@@ -2,12 +2,15 @@ import axios from 'axios'
 import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
+import { attachAccessTokenHeader } from './authHeaders'
+import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
 
-// Track if proxy auth is enabled (set during auth config check)
-let proxyAuthMode = false
+export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
-export const setProxyAuthMode = (enabled: boolean) => {
-  proxyAuthMode = enabled
+let authTransportMode: AuthTransportMode = 'jwt'
+
+export const setAuthTransportMode = (mode: AuthTransportMode) => {
+  authTransportMode = mode
 }
 
 const api = axios.create({
@@ -18,13 +21,7 @@ const api = axios.create({
 })
 
 // Request interceptor to add auth token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
-  if (token) {
-    config.headers['X-Borg-Authorization'] = `Bearer ${token}`
-  }
-  return config
-})
+api.interceptors.request.use(attachAccessTokenHeader)
 
 // Response interceptor to handle auth errors
 api.interceptors.response.use(
@@ -44,7 +41,7 @@ api.interceptors.response.use(
       error.config?.url !== '/auth/login/totp' &&
       error.config?.url !== '/auth/passkeys/authenticate/verify' &&
       error.config?.url !== '/auth/config' &&
-      !proxyAuthMode // Don't redirect in proxy auth mode
+      authTransportMode === 'jwt'
     ) {
       localStorage.removeItem('access_token')
       window.location.href = `${BASE_PATH}/login`
@@ -84,6 +81,7 @@ export interface RepositoryData {
   has_schedule?: boolean
   schedule_enabled?: boolean
   schedule_name?: string | null
+  schedule_timezone?: string | null
   next_run?: string | null
   // Allow other properties for flexibility
   [key: string]: unknown
@@ -95,6 +93,8 @@ export interface SystemSettings {
   list_timeout?: number
   init_timeout?: number
   backup_timeout?: number
+  max_concurrent_scheduled_backups?: number
+  max_concurrent_scheduled_checks?: number
   stats_refresh_interval_minutes?: number
   bypass_lock_on_info?: boolean
   bypass_lock_on_list?: boolean
@@ -130,6 +130,10 @@ export interface AuthUserResponse {
   is_active: boolean
   role: string
   all_repositories_role?: string | null
+  auth_source?: string | null
+  oidc_subject?: string | null
+  oidc_link_supported?: boolean
+  oidc_unlink_supported?: boolean
   must_change_password?: boolean
   totp_enabled?: boolean
   passkey_count?: number
@@ -149,6 +153,11 @@ export interface AuthLoginResponse {
 
 export interface PasswordSetupCompleteResponse {
   must_change_password: boolean
+}
+
+export interface LogoutResponse {
+  message: string
+  logout_url?: string | null
 }
 
 export interface TotpStatusResponse {
@@ -187,7 +196,14 @@ export interface ProxyAuthWarning {
 
 export interface AuthConfigResponse {
   proxy_auth_enabled: boolean
+  insecure_no_auth_enabled: boolean
   authentication_required: boolean
+  oidc_enabled?: boolean
+  oidc_provider_name?: string | null
+  oidc_disable_local_auth?: boolean
+  oidc_link_supported?: boolean
+  oidc_unlink_supported?: boolean
+  oidc_account_linking_supported?: boolean
   proxy_auth_header?: string | null
   proxy_auth_role_header?: string | null
   proxy_auth_all_repositories_role_header?: string | null
@@ -204,6 +220,24 @@ type ApiData = Record<string, unknown>
 
 export const authAPI = {
   getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
+  getOidcLoginUrl: (returnTo?: string) => {
+    const params = new URLSearchParams()
+    if (returnTo) {
+      params.set('return_to', returnTo)
+    }
+    const suffix = params.toString()
+    return `${API_BASE_URL}/auth/oidc/login${suffix ? `?${suffix}` : ''}`
+  },
+  getOidcLinkUrl: (returnTo?: string) => {
+    const params = new URLSearchParams()
+    if (returnTo) {
+      params.set('return_to', returnTo)
+    }
+    const suffix = params.toString()
+    return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
+  },
+  exchangeOidcToken: () => api.post<AuthLoginResponse>('/auth/oidc/exchange'),
+  unlinkOidc: () => api.post('/auth/oidc/unlink'),
 
   login: (username: string, password: string) =>
     api.post<AuthLoginResponse>(
@@ -220,7 +254,7 @@ export const authAPI = {
       code,
     }),
 
-  logout: () => api.post('/auth/logout'),
+  logout: () => api.post<LogoutResponse>('/auth/logout'),
 
   refresh: () => api.post('/auth/refresh'),
 
@@ -279,7 +313,13 @@ export const backupAPI = {
   startBackup: (repository?: string) => api.post('/backup/start', { repository }),
   getStatus: (jobId: string) => api.get(`/backup/status/${jobId}`),
   getAllJobs: () => api.get('/backup/jobs'),
-  getManualJobs: () => api.get('/backup/jobs?manual_only=true'),
+  getManualJobs: (repository?: string) =>
+    api.get('/backup/jobs', {
+      params: {
+        manual_only: true,
+        ...(repository ? { repository } : {}),
+      },
+    }),
   getScheduledJobs: () => api.get('/backup/jobs?scheduled_only=true'),
   cancelJob: (jobId: string) => api.post(`/backup/cancel/${jobId}`),
   // Download logs as file (only for failed/cancelled backups)
@@ -308,12 +348,6 @@ export const archivesAPI = {
 }
 
 export const restoreAPI = {
-  getRepositories: () => api.get('/restore/repositories'),
-  getArchives: (repositoryId: number) => api.get(`/restore/archives/${repositoryId}`),
-  getArchiveContents: (repositoryId: number, archiveName: string, path: string = '') =>
-    api.get(`/restore/contents/${repositoryId}/${encodeURIComponent(archiveName)}`, {
-      params: { path },
-    }),
   previewRestore: (repository: string, archive: string, paths: string[]) =>
     api.post('/restore/preview', { repository, archive, paths }),
   startRestore: (
@@ -323,7 +357,9 @@ export const restoreAPI = {
     destination: string,
     repository_id: number,
     destination_type: string = 'local',
-    destination_connection_id: number | null = null
+    destination_connection_id: number | null = null,
+    restore_layout: RestoreLayout = 'preserve_path',
+    path_metadata: RestorePathMetadata[] = []
   ) =>
     api.post('/restore/start', {
       repository,
@@ -333,6 +369,8 @@ export const restoreAPI = {
       repository_id,
       destination_type,
       destination_connection_id,
+      restore_layout,
+      path_metadata,
     }),
   getRestoreJobs: () => api.get('/restore/jobs'),
   getRestoreStatus: (jobId: number) => api.get(`/restore/status/${jobId}`),
@@ -429,6 +467,18 @@ export interface PermissionScopeResponse {
   all_repositories_role: string | null
 }
 
+export interface AuthEventRecord {
+  id: number
+  event_type: string
+  auth_source: string
+  username: string | null
+  email: string | null
+  success: boolean
+  detail: string | null
+  actor_user_id: number | null
+  created_at: string
+}
+
 export const permissionsAPI = {
   getMyPermissions: () => api.get<PermissionResponse[]>('/settings/permissions/me'),
   getMyPermissionScope: () => api.get<PermissionScopeResponse>('/settings/permissions/me/scope'),
@@ -446,6 +496,13 @@ export const permissionsAPI = {
     }),
   remove: (userId: number, repoId: number) =>
     api.delete(`/settings/users/${userId}/permissions/${repoId}`),
+}
+
+export const authAPIAdmin = {
+  listEvents: (limit: number = 50) =>
+    api.get<AuthEventRecord[]>('/auth/events', {
+      params: { limit },
+    }),
 }
 
 // Repositories API
@@ -468,6 +525,13 @@ export const repositoriesAPI = {
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
   checkRepository: (id: number, maxDuration: number = 3600) =>
     api.post(`/repositories/${id}/check`, { max_duration: maxDuration }),
+  restoreCheckRepository: (
+    id: number,
+    data?: {
+      paths?: string[]
+      full_archive?: boolean
+    }
+  ) => api.post(`/repositories/${id}/restore-check`, data || {}),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
   pruneRepository: (id: number, data: ApiData) => api.post(`/repositories/${id}/prune`, data),
   breakLock: (id: number) => api.post(`/repositories/${id}/break-lock`),
@@ -476,31 +540,26 @@ export const repositoriesAPI = {
   getRepositoryInfo: (id: number) => api.get(`/repositories/${id}/info`),
   // Check/Compact job management
   getCheckJobStatus: (jobId: number) => api.get(`/repositories/check-jobs/${jobId}`),
-  getRepositoryCheckJobs: (id: number, limit?: number) =>
-    api.get(`/repositories/${id}/check-jobs`, { params: { limit } }),
+  getRepositoryCheckJobs: (id: number, limit?: number, scheduledOnly: boolean = false) =>
+    api.get(`/repositories/${id}/check-jobs`, {
+      params: { limit, scheduled_only: scheduledOnly },
+    }),
+  getRestoreCheckJobStatus: (jobId: number) => api.get(`/repositories/restore-check-jobs/${jobId}`),
+  getRepositoryRestoreCheckJobs: (id: number, limit?: number) =>
+    api.get(`/repositories/${id}/restore-check-jobs`, { params: { limit } }),
   getCompactJobStatus: (jobId: number) => api.get(`/repositories/compact-jobs/${jobId}`),
   getRepositoryCompactJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),
   getRepositoryPruneJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/prune-jobs`, { params: { limit } }),
   getRunningJobs: (id: number) => api.get(`/repositories/${id}/running-jobs`),
-  getArchiveInfo: (
-    repoId: number,
-    archiveName: string,
-    includeFiles: boolean = true,
-    fileLimit: number = 1000
-  ) =>
-    api.get(`/repositories/${repoId}/archives/${archiveName}/info`, {
-      params: { include_files: includeFiles, file_limit: fileLimit },
-    }),
-  getArchiveFiles: (repoId: number, archiveName: string, limit?: number) =>
-    api.get(`/repositories/${repoId}/archives/${archiveName}/files`, {
-      params: limit ? { limit } : undefined,
-    }),
   // Check schedule management
   getCheckSchedule: (id: number) => api.get(`/repositories/${id}/check-schedule`),
   updateCheckSchedule: (id: number, data: ApiData) =>
     api.put(`/repositories/${id}/check-schedule`, data),
+  getRestoreCheckSchedule: (id: number) => api.get(`/repositories/${id}/restore-check-schedule`),
+  updateRestoreCheckSchedule: (id: number, data: ApiData) =>
+    api.put(`/repositories/${id}/restore-check-schedule`, data),
   list: () => api.get('/repositories/'),
   startCheck: (id: number, data: ApiData) => api.post(`/repositories/${id}/check`, data),
 }
@@ -563,8 +622,12 @@ export const notificationsAPI = {
 
 export const activityAPI = {
   list: (params?: ApiData) => api.get('/activity/recent', { params }),
-  getLogs: (jobType: string, jobId: number, offset: number = 0) =>
+  getLogs: (jobType: string, jobId: string | number, offset: number = 0) =>
     api.get(`/activity/${jobType}/${jobId}/logs`, { params: { offset } }),
+  cancelJob: (jobType: string, jobId: string | number) =>
+    api.post(`/activity/${jobType}/${jobId}/cancel`),
+  deleteJob: (jobType: string, jobId: string | number) =>
+    api.delete(`/activity/${jobType}/${jobId}`),
   downloadLogs: (jobType: string, jobId: number) =>
     window.open(buildDownloadUrl(`/activity/${jobType}/${jobId}/logs/download`), '_blank'),
 }

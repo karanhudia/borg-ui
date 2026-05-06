@@ -5,14 +5,14 @@ export interface StatItem {
   icon: ReactNode
   label: string
   value: string
-  tooltip?: string
+  tooltip?: ReactNode
   color?: 'primary' | 'success' | 'warning' | 'info' | 'secondary'
 }
 
 export interface MetaItem {
   label: string
   value: string
-  tooltip?: string
+  tooltip?: ReactNode
 }
 
 export interface ActionItem {
@@ -152,7 +152,12 @@ export default function EntityCard({
               ? alpha((theme.palette[stat.color] as { main: string }).main, 0.7)
               : undefined
             return (
-              <Tooltip key={stat.label} title={stat.tooltip || ''} arrow>
+              <Tooltip
+                key={stat.label}
+                title={stat.tooltip || ''}
+                arrow
+                slotProps={{ tooltip: { sx: { whiteSpace: 'pre-line' } } }}
+              >
                 <Box
                   sx={{
                     px: 1.5,
@@ -214,7 +219,12 @@ export default function EntityCard({
             }}
           >
             {meta.map((m) => (
-              <Tooltip key={m.label} title={m.tooltip || ''} arrow>
+              <Tooltip
+                key={m.label}
+                title={m.tooltip || ''}
+                arrow
+                slotProps={{ tooltip: { sx: { whiteSpace: 'pre-line' } } }}
+              >
                 <Box
                   sx={{
                     display: 'flex',

@@ -153,7 +153,7 @@ class TestRestoreOperation:
         repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
 
         root_response = test_client.get(
-            f"/api/restore/contents/{repo.id}/{archive_names[0]}",
+            f"/api/browse/{repo.id}/{archive_names[0]}",
             headers=admin_headers,
         )
         assert root_response.status_code == 200
@@ -165,7 +165,7 @@ class TestRestoreOperation:
 
         archive_root_path = test_data_path.as_posix().lstrip("/")
         nested_response = test_client.get(
-            f"/api/restore/contents/{repo.id}/{archive_names[0]}?path={archive_root_path}",
+            f"/api/browse/{repo.id}/{archive_names[0]}?path={archive_root_path}",
             headers=admin_headers,
         )
         assert nested_response.status_code == 200
@@ -175,7 +175,7 @@ class TestRestoreOperation:
         assert "subdir" in nested_names
 
         subdir_response = test_client.get(
-            f"/api/restore/contents/{repo.id}/{archive_names[0]}?path={archive_root_path}/subdir",
+            f"/api/browse/{repo.id}/{archive_names[0]}?path={archive_root_path}/subdir",
             headers=admin_headers,
         )
         assert subdir_response.status_code == 200
@@ -372,14 +372,14 @@ class TestRestoreOperationBorg2:
         archive_root_path = test_data_path.as_posix().lstrip("/")
 
         root_response = test_client.get(
-            f"/api/restore/contents/{repo.id}/{archive_names[0]}",
+            f"/api/v2/archives/{archive_names[0]}/contents?repository={repo.id}",
             headers=admin_headers,
         )
         assert root_response.status_code == 200
         assert "items" in root_response.json()
 
         nested_response = test_client.get(
-            f"/api/restore/contents/{repo.id}/{archive_names[0]}?path={archive_root_path}",
+            f"/api/v2/archives/{archive_names[0]}/contents?repository={repo.id}&path={archive_root_path}",
             headers=admin_headers,
         )
         assert nested_response.status_code == 200
@@ -388,7 +388,7 @@ class TestRestoreOperationBorg2:
         assert "subdir" in nested_names
 
         subdir_response = test_client.get(
-            f"/api/restore/contents/{repo.id}/{archive_names[0]}?path={archive_root_path}/subdir",
+            f"/api/v2/archives/{archive_names[0]}/contents?repository={repo.id}&path={archive_root_path}/subdir",
             headers=admin_headers,
         )
         assert subdir_response.status_code == 200

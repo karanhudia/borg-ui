@@ -3,331 +3,10 @@ Comprehensive unit tests for restore API endpoints
 """
 
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import ANY, patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import Repository, RestoreJob, SystemSettings
+from app.database.models import Repository, RestoreJob
 from tests.unit.helpers import assert_auth_required
-
-
-@pytest.mark.unit
-class TestRestoreRepositories:
-    """Test restore repositories listing"""
-
-    def test_list_restore_repositories_success(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        """Test listing repositories for restore returns 200"""
-        repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
-            encryption="none",
-            repository_type="local",
-        )
-        test_db.add(repo)
-        test_db.commit()
-
-        response = test_client.get("/api/restore/repositories", headers=admin_headers)
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "repositories" in data
-        assert any(item["path"] == "/test/repo" for item in data["repositories"])
-
-    def test_list_restore_repositories_empty(
-        self, test_client: TestClient, admin_headers
-    ):
-        """Test listing repositories returns 200 when empty"""
-        response = test_client.get("/api/restore/repositories", headers=admin_headers)
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data == {"repositories": []}
-
-    def test_list_restore_repositories_unauthorized(self, test_client: TestClient):
-        """Test listing repositories without auth returns 403"""
-        response = test_client.get("/api/restore/repositories")
-
-        assert_auth_required(response)
-
-
-@pytest.mark.unit
-class TestRestoreArchives:
-    """Test restore archives listing"""
-
-    def test_list_archives_success(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        """Test listing archives for repository returns 200"""
-        repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
-            encryption="none",
-            repository_type="local",
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        process = AsyncMock()
-        process.returncode = 0
-        process.communicate = AsyncMock(
-            return_value=(b'{"archives":[{"name":"archive1"}]}', b"")
-        )
-        with (
-            patch(
-                "app.api.repositories.asyncio.create_subprocess_exec",
-                new=AsyncMock(return_value=process),
-            ),
-            patch(
-                "app.api.repositories.asyncio.wait_for",
-                new=AsyncMock(
-                    return_value=(b'{"archives":[{"name":"archive1"}]}', b"")
-                ),
-            ),
-        ):
-            response = test_client.get(
-                f"/api/restore/archives/{repo.id}", headers=admin_headers
-            )
-
-            assert response.status_code == 200
-
-    def test_list_archives_nonexistent_repo(
-        self, test_client: TestClient, admin_headers
-    ):
-        """Test listing archives for non-existent repository returns 404"""
-        response = test_client.get("/api/restore/archives/99999", headers=admin_headers)
-
-        assert response.status_code == 404
-
-    def test_list_archives_unauthorized(self, test_client: TestClient):
-        """Test listing archives without auth returns 403"""
-        response = test_client.get("/api/restore/archives/1")
-
-        assert_auth_required(response)
-
-
-@pytest.mark.unit
-class TestRestoreContents:
-    """Test restore archive contents"""
-
-    def test_list_contents_success(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        """Test listing archive contents returns 200"""
-        repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
-            encryption="none",
-            repository_type="local",
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with patch(
-            "app.api.restore.BorgRouter.list_archive_contents", new_callable=AsyncMock
-        ) as mock_list:
-            mock_list.return_value = {
-                "success": True,
-                "stdout": '{"path": "/file.txt", "type": "f"}\n',
-            }
-
-            response = test_client.get(
-                f"/api/restore/contents/{repo.id}/test-archive", headers=admin_headers
-            )
-
-            assert response.status_code == 200
-
-    def test_list_contents_with_path_filter(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        """Test listing archive contents with path filter returns 200"""
-        repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
-            encryption="none",
-            repository_type="local",
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with patch(
-            "app.api.restore.BorgRouter.list_archive_contents", new_callable=AsyncMock
-        ) as mock_list:
-            mock_list.return_value = {
-                "success": True,
-                "stdout": '{"path": "/subdir/file.txt"}\n',
-            }
-
-            response = test_client.get(
-                f"/api/restore/contents/{repo.id}/test-archive?path=/subdir",
-                headers=admin_headers,
-            )
-
-            assert response.status_code == 200
-
-    def test_list_contents_uses_fast_borg2_browse_mode_when_enabled(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        repo = Repository(
-            name="Test Borg2 Repo",
-            path="/test/repo-v2",
-            encryption="none",
-            repository_type="local",
-            borg_version=2,
-            source_directories='["/local/Users/karanhudia/Downloads"]',
-        )
-        settings = SystemSettings(borg2_fast_browse_beta_enabled=True)
-        test_db.add(settings)
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with patch(
-            "app.api.restore.BorgRouter.list_archive_contents", new_callable=AsyncMock
-        ) as mock_list:
-            mock_list.return_value = {
-                "success": True,
-                "stdout": '{"path": "docs/sub", "type": "d"}\n{"path": "docs/sub/file.txt", "type": "f", "size": 12}\n',
-            }
-
-            response = test_client.get(
-                f"/api/restore/contents/{repo.id}/test-archive?path=docs",
-                headers=admin_headers,
-            )
-
-        assert response.status_code == 200
-        mock_list.assert_awaited_once()
-        _, kwargs = mock_list.await_args
-        assert kwargs["path"] == "docs"
-        assert kwargs["browse_depth"] == 5
-        assert response.json()["items"][0]["size"] is None
-
-    def test_list_contents_uses_repo_ssh_environment(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        repo = Repository(
-            name="SSH Repo",
-            path="ssh://borgsmoke@127.0.0.1:2222/home/borgsmoke/remote-repo",
-            encryption="none",
-            repository_type="ssh",
-            connection_id=1,
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        fake_key_path = "/tmp/test-ssh.key"
-        with (
-            patch(
-                "app.api.restore.archive_cache.get",
-                new_callable=AsyncMock,
-                return_value=None,
-            ),
-            patch(
-                "app.api.restore.resolve_repo_ssh_key_file", return_value=fake_key_path
-            ),
-            patch(
-                "app.api.restore.os.path.exists",
-                side_effect=lambda path: path == fake_key_path,
-            ),
-            patch("app.api.restore.os.unlink") as mock_unlink,
-            patch(
-                "app.api.restore.BorgRouter.list_archive_contents",
-                new_callable=AsyncMock,
-            ) as mock_list,
-        ):
-            mock_list.return_value = {
-                "success": True,
-                "stdout": '{"path": "/ssh-remote.txt", "type": "f"}\n',
-            }
-
-            response = test_client.get(
-                f"/api/restore/contents/{repo.id}/test-archive", headers=admin_headers
-            )
-
-        assert response.status_code == 200
-        _, kwargs = mock_list.await_args
-        assert kwargs["env"]["BORG_RSH"].startswith("ssh -i /tmp/test-ssh.key")
-        mock_unlink.assert_called_once_with(fake_key_path)
-
-    def test_list_contents_nonexistent_repo(
-        self, test_client: TestClient, admin_headers
-    ):
-        """Test listing contents for non-existent repository returns 404"""
-        response = test_client.get(
-            "/api/restore/contents/99999/test-archive", headers=admin_headers
-        )
-
-        assert response.status_code == 404
-
-    def test_list_contents_unauthorized(self, test_client: TestClient):
-        """Test listing contents without auth returns 403"""
-        response = test_client.get("/api/restore/contents/1/test-archive")
-
-        assert_auth_required(response)
-
-    def test_list_contents_empty_archive_name(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        """Whitespace archive names are passed through and still return a payload."""
-        repo = Repository(
-            name="Test Repo",
-            path="/test/repo",
-            encryption="none",
-            repository_type="local",
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with patch(
-            "app.api.restore.archive_cache.get", new_callable=AsyncMock, return_value=[]
-        ):
-            response = test_client.get(
-                f"/api/restore/contents/{repo.id}/ ", headers=admin_headers
-            )
-
-        assert response.status_code == 200
-        assert response.json()["items"] == []
-
-    def test_list_contents_uses_v2_router_for_borg2_repositories(
-        self, test_client: TestClient, admin_headers, test_db
-    ):
-        repo = Repository(
-            name="V2 Repo",
-            path="/test/v2-repo",
-            encryption="none",
-            repository_type="local",
-            borg_version=2,
-        )
-        test_db.add(repo)
-        test_db.commit()
-        test_db.refresh(repo)
-
-        with (
-            patch(
-                "app.api.restore.archive_cache.get",
-                new_callable=AsyncMock,
-                return_value=None,
-            ),
-            patch(
-                "app.api.restore.BorgRouter.list_archive_contents",
-                new_callable=AsyncMock,
-            ) as mock_list,
-        ):
-            mock_list.return_value = {
-                "success": True,
-                "stdout": '{"path": "photo.jpg", "type": "f"}\n',
-            }
-
-            response = test_client.get(
-                f"/api/restore/contents/{repo.id}/test-archive", headers=admin_headers
-            )
-
-        assert response.status_code == 200
-        mock_list.assert_awaited_once()
 
 
 @pytest.mark.unit
@@ -673,6 +352,66 @@ class TestRestoreStart:
         job = test_db.query(RestoreJob).order_by(RestoreJob.id.desc()).first()
         assert job is not None
         assert job.repository == repo.path
+        scheduled = mock_create_task.call_args.args[0]
+        scheduled.close()
+
+    def test_start_restore_passes_restore_layout_and_path_metadata(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.restore.restore_service.execute_restore",
+                new_callable=AsyncMock,
+            ) as mock_execute_restore,
+            patch(
+                "app.api.restore.asyncio.create_task", return_value=object()
+            ) as mock_create_task,
+        ):
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository_id": repo.id,
+                    "repository": repo.path,
+                    "archive": "test-archive",
+                    "paths": ["home/username/folder1/folder2"],
+                    "destination": "/recovery/folder1/folder2",
+                    "restore_layout": "contents_only",
+                    "path_metadata": [
+                        {
+                            "path": "home/username/folder1/folder2",
+                            "type": "directory",
+                        }
+                    ],
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        mock_execute_restore.assert_called_once_with(
+            ANY,
+            repo.path,
+            "test-archive",
+            "/recovery/folder1/folder2",
+            ["home/username/folder1/folder2"],
+            repository_type="local",
+            destination_type="local",
+            destination_connection_id=None,
+            ssh_connection_id=None,
+            restore_layout="contents_only",
+            path_metadata=[
+                {"path": "home/username/folder1/folder2", "type": "directory"}
+            ],
+        )
         scheduled = mock_create_task.call_args.args[0]
         scheduled.close()
 

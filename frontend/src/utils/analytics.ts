@@ -8,7 +8,8 @@
  * Users can opt-out anytime in Settings → Preferences.
  */
 
-import { BASE_PATH } from './basePath'
+import { authAPI } from '../services/api'
+import { fetchJsonForAuthMode } from '../services/authRequest'
 
 const UMAMI_WEBSITE_ID = '870dcd0c-2fa3-4f78-8180-d0d7895c5d8c'
 const UMAMI_SCRIPT_URL = 'https://cloud.umami.is/script.js'
@@ -93,34 +94,28 @@ export const initAnalyticsIfEnabled = (): void => {
  */
 export const loadUserPreference = async (): Promise<void> => {
   try {
-    const authConfigResponse = await fetch(`${BASE_PATH}/api/auth/config`)
-    const authConfig = await authConfigResponse.json()
+    const authConfigResponse = await authAPI.getAuthConfig()
+    const authConfig = authConfigResponse.data
     const proxyAuthEnabled = authConfig.proxy_auth_enabled
+    const insecureNoAuthEnabled = authConfig.insecure_no_auth_enabled
 
     const token = localStorage.getItem('access_token')
 
-    if (!token && !proxyAuthEnabled) {
+    if (!token && !proxyAuthEnabled && !insecureNoAuthEnabled) {
       userOptedOut = true
       consentGiven = false
       preferenceLoaded = true
       return
     }
 
-    const headers: Record<string, string> = {}
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
-    }
-
-    const response = await fetch(`${BASE_PATH}/api/settings/preferences`, { headers })
-
-    if (response.ok) {
-      const data = await response.json()
-      userOptedOut = !data.preferences?.analytics_enabled
-      consentGiven = data.preferences?.analytics_consent_given ?? false
-    } else {
-      userOptedOut = true
-      consentGiven = false
-    }
+    const response = await fetchJsonForAuthMode(
+      '/settings/preferences',
+      {},
+      insecureNoAuthEnabled ? 'insecure-no-auth' : proxyAuthEnabled ? 'proxy' : 'jwt'
+    )
+    const data = await response.json()
+    userOptedOut = !data.preferences?.analytics_enabled
+    consentGiven = data.preferences?.analytics_consent_given ?? false
   } catch {
     userOptedOut = true
     consentGiven = false

@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -286,6 +287,39 @@ class TestV2BackupRoutes:
         assert response.json()["message"] == "backend.success.repo.compactJobStarted"
         mock_start.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_backup_compact_dispatcher_uses_stable_repo_id(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/data/source"])
+        dispatched = {}
+
+        def fake_start(db, repository, job_model, **kwargs):
+            dispatched["dispatcher"] = kwargs["dispatcher"]
+            return CompactJob(id=5, repository_id=repository.id, status="running")
+
+        with (
+            patch(
+                "app.api.v2.backups.start_background_maintenance_job",
+                side_effect=fake_start,
+            ),
+            patch(
+                "app.api.v2.backups.compact_v2_service.execute_compact",
+                new=AsyncMock(),
+            ) as mock_execute,
+        ):
+            response = test_client.post(
+                "/api/v2/backup/compact",
+                json={"repository_id": repo.id},
+                headers=admin_headers,
+            )
+            test_db.expunge_all()
+            await dispatched["dispatcher"](SimpleNamespace(id=44))
+
+        assert response.status_code == 200
+        mock_execute.assert_awaited_once_with(44, repo.id)
+
     def test_backup_compact_rejects_duplicate_running_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -332,6 +366,39 @@ class TestV2BackupRoutes:
         assert response.json()["message"] == "backend.success.repo.checkJobStarted"
         mock_start.assert_called_once()
         assert mock_start.call_args.kwargs["extra_fields"] == {"max_duration": 3600}
+
+    @pytest.mark.asyncio
+    async def test_backup_check_dispatcher_uses_stable_repo_id(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/data/source"])
+        dispatched = {}
+
+        def fake_start(db, repository, job_model, **kwargs):
+            dispatched["dispatcher"] = kwargs["dispatcher"]
+            return CheckJob(id=7, repository_id=repository.id, status="running")
+
+        with (
+            patch(
+                "app.api.v2.backups.start_background_maintenance_job",
+                side_effect=fake_start,
+            ),
+            patch(
+                "app.api.v2.backups.check_v2_service.execute_check",
+                new=AsyncMock(),
+            ) as mock_execute,
+        ):
+            response = test_client.post(
+                "/api/v2/backup/check",
+                json={"repository_id": repo.id, "max_duration": 3600},
+                headers=admin_headers,
+            )
+            test_db.expunge_all()
+            await dispatched["dispatcher"](SimpleNamespace(id=55))
+
+        assert response.status_code == 200
+        mock_execute.assert_awaited_once_with(55, repo.id)
 
     def test_backup_check_rejects_duplicate_running_job(
         self, test_client: TestClient, admin_headers, test_db

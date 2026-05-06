@@ -8,7 +8,7 @@ from app.utils.process_utils import (
     cleanup_orphaned_jobs,
     cleanup_orphaned_mounts,
 )
-from app.database.models import Repository, BackupJob
+from app.database.models import Repository, BackupJob, PruneJob, CompactJob
 
 # ==========================================
 # Datetime Utils Tests
@@ -137,28 +137,51 @@ class TestProcessUtils:
         mock_backup_job = MagicMock(spec=BackupJob)
         mock_backup_job.id = 1
         mock_backup_job.repository = "repo1"
+        mock_backup_job.maintenance_status = "running_prune"
+
+        mock_prune_job = MagicMock(spec=PruneJob)
+        mock_prune_job.id = 2
+        mock_prune_job.repository_id = 10
+        mock_prune_job.repository_path = "repo1"
+
+        mock_compact_job = MagicMock(spec=CompactJob)
+        mock_compact_job.id = 3
+        mock_compact_job.repository_id = 11
+        mock_compact_job.repository_path = "repo2"
+        mock_compact_job.process_pid = 123
+        mock_compact_job.process_start_time = 456
+
+        mock_compact_backup_job = MagicMock(spec=BackupJob)
+        mock_compact_backup_job.id = 4
+        mock_compact_backup_job.repository = "repo2"
+        mock_compact_backup_job.maintenance_status = "running_compact"
 
         # Setup query chain
-        # db.query(Model).filter(...).all()
-        # We need to handle multiple queries for different job types
-
-        # Mock the query method to return a mock query object
-        mock_query = MagicMock()
-        mock_db.query.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-
-        # Configure .all() to return our jobs ONLY for BackupJob query
-        # This is simplified; in a real scenario we'd check the model passed to query()
-        # But for this test, returning [job] for the first call (backup) and [] for others works
-        mock_query.all.side_effect = [
-            [mock_backup_job],  # BackupJob
-            [],  # RestoreJob
-            [],  # CheckJob
-            [],  # CompactJob
+        query_results = [
+            [mock_backup_job],  # stale backup maintenance jobs
+            [mock_backup_job],  # running backup jobs
+            [],  # running restore jobs
+            [],  # running check jobs
+            [],  # running restore check jobs
+            [mock_prune_job],  # running prune jobs
+            [mock_compact_job],  # running compact jobs
+            [mock_backup_job],  # backup jobs stuck in running_prune
+            [],  # repository lookup for orphaned compact job
+            [mock_compact_backup_job],  # backup jobs stuck in running_compact
         ]
 
+        def build_query(result):
+            mock_query = MagicMock()
+            mock_query.filter.return_value = mock_query
+            mock_query.all.return_value = result
+            mock_query.first.return_value = None
+            return mock_query
+
+        mock_db.query.side_effect = [build_query(result) for result in query_results]
+
         # Execute
-        cleanup_orphaned_jobs(mock_db)
+        with patch("app.utils.process_utils.is_process_alive", return_value=False):
+            cleanup_orphaned_jobs(mock_db)
 
         # Verify backup job was marked failed
         assert mock_backup_job.status == "failed"
@@ -167,8 +190,68 @@ class TestProcessUtils:
             == "backend.errors.service.containerRestartedDuringBackup"
         )
         assert mock_backup_job.completed_at is not None
+        assert mock_backup_job.maintenance_status == "prune_failed"
+
+        assert mock_prune_job.status == "failed"
+        assert (
+            json.loads(mock_prune_job.error_message)["key"]
+            == "backend.errors.service.containerRestartedDuringOperation"
+        )
+        assert mock_prune_job.completed_at is not None
+
+        assert mock_compact_job.status == "failed"
+        assert (
+            json.loads(mock_compact_job.error_message.split("\n")[0])["key"]
+            == "backend.errors.service.containerRestartedDuringOperation"
+        )
+        assert mock_compact_job.completed_at is not None
+        assert mock_compact_backup_job.maintenance_status == "compact_failed"
 
         # Verify commit was called
+        mock_db.commit.assert_called_once()
+
+    def test_cleanup_orphaned_jobs_normalizes_stale_backup_maintenance_without_child_job(
+        self,
+    ):
+        """Test stale backup maintenance state is repaired even without a running child job"""
+        mock_db = MagicMock()
+
+        stale_backup_job = MagicMock(spec=BackupJob)
+        stale_backup_job.id = 10
+        stale_backup_job.repository = "repo-stale"
+        stale_backup_job.status = "running"
+        stale_backup_job.maintenance_status = "running_prune"
+        stale_backup_job.completed_at = None
+        stale_backup_job.error_message = None
+
+        query_results = [
+            [stale_backup_job],  # stale backup maintenance jobs
+            [],  # running backup jobs
+            [],  # running restore jobs
+            [],  # running check jobs
+            [],  # running restore check jobs
+            [],  # running prune jobs
+            [],  # running compact jobs
+        ]
+
+        def build_query(result):
+            mock_query = MagicMock()
+            mock_query.filter.return_value = mock_query
+            mock_query.all.return_value = result
+            mock_query.first.return_value = None
+            return mock_query
+
+        mock_db.query.side_effect = [build_query(result) for result in query_results]
+
+        cleanup_orphaned_jobs(mock_db)
+
+        assert stale_backup_job.status == "failed"
+        assert stale_backup_job.maintenance_status == "prune_failed"
+        assert stale_backup_job.completed_at is not None
+        assert (
+            json.loads(stale_backup_job.error_message)["key"]
+            == "backend.errors.service.containerRestartedDuringOperation"
+        )
         mock_db.commit.assert_called_once()
 
     @patch("app.utils.process_utils.settings")

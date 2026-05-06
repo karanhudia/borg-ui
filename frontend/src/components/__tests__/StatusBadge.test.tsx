@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, it, expect } from 'vitest'
 import StatusBadge from '../StatusBadge'
 
@@ -18,6 +19,11 @@ describe('StatusBadge', () => {
     it('renders correct label for "completed_with_warnings"', () => {
       render(<StatusBadge status="completed_with_warnings" />)
       expect(screen.getByText('Completed with Warnings')).toBeInTheDocument()
+    })
+
+    it('renders correct label for "needs_backup"', () => {
+      render(<StatusBadge status="needs_backup" />)
+      expect(screen.getByText('Needs backup')).toBeInTheDocument()
     })
 
     it('renders correct label for "failed"', () => {
@@ -77,6 +83,12 @@ describe('StatusBadge', () => {
 
     it('renders warning color for "completed_with_warnings"', () => {
       const { container } = render(<StatusBadge status="completed_with_warnings" />)
+      const chip = container.firstChild as HTMLElement
+      expect(chip.className).toContain('MuiChip-colorWarning')
+    })
+
+    it('renders warning color for "needs_backup"', () => {
+      const { container } = render(<StatusBadge status="needs_backup" />)
       const chip = container.firstChild as HTMLElement
       expect(chip.className).toContain('MuiChip-colorWarning')
     })
@@ -143,6 +155,17 @@ describe('StatusBadge', () => {
       const { container } = render(<StatusBadge status="completed" variant="outlined" />)
       const chip = container.firstChild as HTMLElement
       expect(chip.className).toContain('MuiChip-outlined')
+    })
+  })
+
+  describe('Tooltip', () => {
+    it('shows the full completed-with-warnings label on hover', async () => {
+      const user = userEvent.setup()
+      render(<StatusBadge status="completed_with_warnings" />)
+
+      await user.hover(screen.getByText('Completed with Warnings'))
+
+      expect(await screen.findByRole('tooltip')).toHaveTextContent('Completed with Warnings')
     })
   })
 })

@@ -90,6 +90,8 @@ vi.mock('../../components/RestoreWizard', () => ({
       selected_paths: string[]
       destination_type: string
       destination_connection_id: number | null
+      restore_layout: string
+      path_metadata: Array<{ path: string; type: 'file' | 'directory' }>
     }) => void
   }) =>
     open ? (
@@ -101,6 +103,8 @@ vi.mock('../../components/RestoreWizard', () => ({
             selected_paths: ['/var/lib/app'],
             destination_type: 'local',
             destination_connection_id: null,
+            restore_layout: 'contents_only',
+            path_metadata: [{ path: '/var/lib/app', type: 'directory' }],
           })
         }
       >
@@ -261,7 +265,9 @@ describe('Archives page actions', () => {
         '/restore/here',
         1,
         'local',
-        null
+        null,
+        'contents_only',
+        [{ path: '/var/lib/app', type: 'directory' }]
       )
     })
     expect(trackArchive).toHaveBeenCalledWith('View', repository, {
@@ -272,6 +278,7 @@ describe('Archives page actions', () => {
     expect(trackArchive).toHaveBeenCalledWith('Start', repository, {
       operation: 'restore',
       destination_type: 'local',
+      restore_layout: 'contents_only',
       restore_path_count: 1,
       uses_custom_destination: true,
       archive_age_bucket: expect.any(String),

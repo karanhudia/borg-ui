@@ -9,6 +9,10 @@ const { toastSuccess, toastError, buildDownloadUrlMock, repositoriesListMock } =
   buildDownloadUrlMock: vi.fn((path: string) => `https://example.test${path}`),
   repositoriesListMock: vi.fn(),
 }))
+const { cancelJobMock, deleteJobMock } = vi.hoisted(() => ({
+  cancelJobMock: vi.fn(),
+  deleteJobMock: vi.fn(),
+}))
 const borgDownloadFileMock = vi.fn()
 
 vi.mock('react-hot-toast', async () => {
@@ -138,6 +142,10 @@ vi.mock('../../services/api', () => ({
   repositoriesAPI: {
     list: repositoriesListMock,
   },
+  activityAPI: {
+    cancelJob: cancelJobMock,
+    deleteJob: deleteJobMock,
+  },
 }))
 
 vi.mock('../../services/borgApi', () => ({
@@ -169,10 +177,6 @@ describe('BackupJobsTable action internals', () => {
         ],
       },
     })
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn(),
-    } as never)
   })
 
   it('downloads logs through the generated activity URL when no custom callback is provided', async () => {
@@ -272,22 +276,14 @@ describe('BackupJobsTable action internals', () => {
     await user.click(screen.getByRole('button', { name: /confirm cancel/i }))
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/activity/restore/20/cancel', {
-        method: 'POST',
-        headers: {
-          'X-Borg-Authorization': 'Bearer token-123',
-        },
-      })
+      expect(cancelJobMock).toHaveBeenCalledWith('restore', 20)
     })
     expect(toastSuccess).toHaveBeenCalled()
   })
 
   it('shows an error toast when built-in job cancellation fails', async () => {
     const user = userEvent.setup()
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: false,
-      json: vi.fn(),
-    } as never)
+    cancelJobMock.mockRejectedValueOnce(new Error('cancel failed'))
 
     renderWithProviders(
       <BackupJobsTable
@@ -354,10 +350,7 @@ describe('BackupJobsTable action internals', () => {
 
     queryClient.setQueryData(['backup-status-manual'], initialManualJobs)
     queryClient.setQueryData(['activity'], initialActivityData)
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: false,
-      json: vi.fn().mockResolvedValue({ detail: 'Delete failed from API' }),
-    } as never)
+    deleteJobMock.mockRejectedValueOnce(new Error('Delete failed from API'))
 
     renderWithProviders(
       <BackupJobsTable
@@ -382,12 +375,7 @@ describe('BackupJobsTable action internals', () => {
     await user.click(screen.getByRole('button', { name: /confirm delete/i }))
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('/api/activity/backup/40', {
-        method: 'DELETE',
-        headers: {
-          'X-Borg-Authorization': 'Bearer token-123',
-        },
-      })
+      expect(deleteJobMock).toHaveBeenCalledWith('backup', 40)
     })
     await waitFor(() => {
       expect(toastError).toHaveBeenCalledWith('Delete failed from API')

@@ -1,13 +1,17 @@
 """Borg 2 prune service for shared scheduled/manual maintenance flows."""
 
+import asyncio
+import contextlib
 from datetime import datetime, timezone
 from pathlib import Path
 import structlog
 
 from app.config import settings
-from app.core.borg2 import borg2
+from app.core.borg2 import _get_borg2_binary, borg2
 from app.database.database import SessionLocal
 from app.database.models import PruneJob, Repository
+from app.utils.db_retries import commit_with_retry
+from app.utils.borg_env import build_repository_borg_env, cleanup_temp_key_file
 
 logger = structlog.get_logger()
 
@@ -16,6 +20,33 @@ class PruneV2Service:
     def __init__(self):
         self.log_dir = Path(settings.data_dir) / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.running_processes: dict = {}
+
+    async def cancel_prune(self, job_id: int) -> bool:
+        """Cancel a running borg2 prune job by terminating its tracked process."""
+        if job_id not in self.running_processes:
+            logger.warning(
+                "No running borg2 prune process found for job", job_id=job_id
+            )
+            return False
+
+        process = self.running_processes[job_id]
+        try:
+            process.terminate()
+            logger.info(
+                "Sent SIGTERM to borg2 prune process", job_id=job_id, pid=process.pid
+            )
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+            return True
+        except Exception as e:
+            logger.error(
+                "Failed to cancel borg2 prune process", job_id=job_id, error=str(e)
+            )
+            return False
 
     async def run_prune(
         self,
@@ -57,6 +88,7 @@ class PruneV2Service:
     ):
         """Execute borg2 prune and persist results to the shared PruneJob model."""
         db = SessionLocal()
+        temp_key_file = None
         try:
             job = db.query(PruneJob).filter(PruneJob.id == job_id).first()
             if not job:
@@ -65,31 +97,99 @@ class PruneV2Service:
 
             repo = db.query(Repository).filter(Repository.id == repository_id).first()
             if not repo:
-                job.status = "failed"
-                job.error_message = f"Repository not found (ID: {repository_id})"
-                job.completed_at = datetime.now(timezone.utc)
-                db.commit()
+                completed_at = datetime.now(timezone.utc)
+
+                def persist_missing_repo_state():
+                    job.status = "failed"
+                    job.error_message = f"Repository not found (ID: {repository_id})"
+                    job.completed_at = completed_at
+
+                await commit_with_retry(
+                    db,
+                    prepare=persist_missing_repo_state,
+                    logger=logger,
+                    action="borg2_prune_missing_repo",
+                    job_id=job_id,
+                    repository_id=repository_id,
+                )
                 return
 
-            job.status = "running"
-            job.started_at = datetime.now(timezone.utc)
-            job.progress = 10
-            job.progress_message = "Pruning archives"
-            db.commit()
+            started_at = datetime.now(timezone.utc)
 
-            result = await self.run_prune(
-                repo=repo,
-                keep_hourly=keep_hourly,
-                keep_daily=keep_daily,
-                keep_weekly=keep_weekly,
-                keep_monthly=keep_monthly,
-                keep_quarterly=keep_quarterly,
-                keep_yearly=keep_yearly,
-                dry_run=dry_run,
+            def persist_start_state():
+                job.status = "running"
+                job.started_at = started_at
+                job.progress = 10
+                job.progress_message = "Pruning archives"
+
+            await commit_with_retry(
+                db,
+                prepare=persist_start_state,
+                logger=logger,
+                action="borg2_prune_start",
+                job_id=job_id,
+                repository_id=repository_id,
             )
 
-            stdout = result.get("stdout", "") or ""
-            stderr = result.get("stderr", "") or ""
+            env, temp_key_file = build_repository_borg_env(repo, db, keepalive=True)
+            borg_cmd = _get_borg2_binary()
+            cmd = [borg_cmd, "-r", repo.path, "prune", "--list"]
+            if repo.remote_path:
+                cmd.extend(["--remote-path", repo.remote_path])
+            if keep_hourly > 0:
+                cmd.extend(["--keep-hourly", str(keep_hourly)])
+            if keep_daily > 0:
+                cmd.extend(["--keep-daily", str(keep_daily)])
+            if keep_weekly > 0:
+                cmd.extend(["--keep-weekly", str(keep_weekly)])
+            if keep_monthly > 0:
+                cmd.extend(["--keep-monthly", str(keep_monthly)])
+            if keep_quarterly > 0:
+                cmd.extend(["--keep-3monthly", str(keep_quarterly)])
+            if keep_yearly > 0:
+                cmd.extend(["--keep-yearly", str(keep_yearly)])
+            if dry_run:
+                cmd.append("--dry-run")
+
+            logger.info(
+                "Starting borg2 prune",
+                job_id=job_id,
+                repository=repo.path,
+                command=" ".join(cmd),
+            )
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            self.running_processes[job_id] = process
+
+            async def check_cancellation():
+                while process.returncode is None:
+                    await asyncio.sleep(1)
+                    db.refresh(job)
+                    if job.status == "cancelled":
+                        logger.info("Borg2 prune cancelled, terminating", job_id=job_id)
+                        process.terminate()
+                        try:
+                            await asyncio.wait_for(process.wait(), timeout=5.0)
+                        except asyncio.TimeoutError:
+                            process.kill()
+                            await process.wait()
+                        break
+
+            check_task = asyncio.create_task(check_cancellation())
+            try:
+                stdout_bytes, stderr_bytes = await process.communicate()
+            finally:
+                check_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await check_task
+
+            stdout = stdout_bytes.decode() if stdout_bytes else ""
+            stderr = stderr_bytes.decode() if stderr_bytes else ""
             combined_output = "\n".join(
                 part for part in [stdout, stderr] if part
             ).strip()
@@ -100,7 +200,9 @@ class PruneV2Service:
                 job.log_file_path = str(log_file)
                 job.has_logs = True
 
-            if result.get("success"):
+            if job.status == "cancelled":
+                job.progress_message = "Prune cancelled"
+            elif process.returncode == 0:
                 job.status = "completed"
                 job.progress = 100
                 job.progress_message = "Prune completed successfully"
@@ -109,20 +211,56 @@ class PruneV2Service:
                 job.progress_message = "Prune failed"
                 job.error_message = stderr or stdout or "Prune failed"
 
-            job.completed_at = datetime.now(timezone.utc)
-            db.commit()
+            completed_at = datetime.now(timezone.utc)
+            final_status = job.status
+            final_progress = job.progress
+            final_progress_message = job.progress_message
+            final_error_message = job.error_message
+            final_log_file_path = job.log_file_path
+            final_has_logs = job.has_logs
+
+            def persist_final_state():
+                job.status = final_status
+                job.progress = final_progress
+                job.progress_message = final_progress_message
+                job.error_message = final_error_message
+                job.log_file_path = final_log_file_path
+                job.has_logs = final_has_logs
+                job.completed_at = completed_at
+
+            await commit_with_retry(
+                db,
+                prepare=persist_final_state,
+                logger=logger,
+                action="borg2_prune_finalize",
+                job_id=job_id,
+                repository_id=repository_id,
+            )
         except Exception as e:
             logger.error("Borg2 prune service error", job_id=job_id, error=str(e))
             try:
                 job = db.query(PruneJob).filter(PruneJob.id == job_id).first()
                 if job:
-                    job.status = "failed"
-                    job.error_message = str(e)
-                    job.completed_at = datetime.now(timezone.utc)
-                    db.commit()
+                    completed_at = datetime.now(timezone.utc)
+
+                    def persist_failure_state():
+                        job.status = "failed"
+                        job.error_message = str(e)
+                        job.completed_at = completed_at
+
+                    await commit_with_retry(
+                        db,
+                        prepare=persist_failure_state,
+                        logger=logger,
+                        action="borg2_prune_fail",
+                        job_id=job_id,
+                        repository_id=repository_id,
+                    )
             except Exception:
                 pass
         finally:
+            self.running_processes.pop(job_id, None)
+            cleanup_temp_key_file(temp_key_file)
             db.close()
 
 

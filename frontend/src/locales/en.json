@@ -50,6 +50,7 @@
     "type": "Type",
     "repository": "Repository",
     "schedule": "Schedule",
+    "timezone": "Timezone",
     "created": "Created",
     "lastLogin": "Last Login",
     "undoneWarning": "This action cannot be undone.",
@@ -76,6 +77,10 @@
     "totpLabel": "Authentication code",
     "totpHint": "Use your current authenticator code or a recovery code.",
     "verifyTotp": "Verify code",
+    "ssoSubmit": "Continue with {{provider}}",
+    "ssoDefaultProvider": "single sign-on",
+    "ssoOrLocalHint": "Or continue with a local Borg UI account.",
+    "localAuthDisabledHint": "Local Borg UI passwords and passkeys are disabled for this deployment. Continue with your identity provider.",
     "passkeySubmit": "Sign in with passkey",
     "passkeyCancelled": "Passkey sign-in was cancelled or no matching passkey was available",
     "failed": "Login failed",
@@ -107,6 +112,7 @@
       "backup": "Manual Backup",
       "archives": "Archives",
       "restore": "Restore",
+      "integrity": "Integrity",
       "schedule": "Schedule"
     },
     "settings": {
@@ -133,7 +139,7 @@
     },
     "menu": {
       "accountAndSecurityDesc": "Profile, password, 2FA, passkeys",
-      "appearanceDesc": "Theme, language",
+      "appearanceDesc": "Theme",
       "notificationsDesc": "Alerts & preferences"
     },
     "versionInfo": "Version Info",
@@ -146,6 +152,7 @@
   "status": {
     "completed": "Completed",
     "completedWithWarnings": "Completed with Warnings",
+    "needsBackup": "Needs backup",
     "failed": "Failed",
     "running": "Running",
     "pending": "Pending",
@@ -183,6 +190,7 @@
         "backup": "BACKUP",
         "check": "CHECK",
         "compact": "COMPACT",
+        "restore": "RESTORE",
         "freshness": "FRESH",
         "archives": "ARCHIVES"
       },
@@ -233,6 +241,7 @@
         "backup": "backup",
         "check": "check",
         "compact": "compact",
+        "restore_check": "restore check",
         "restore": "restore",
         "prune": "prune"
       }
@@ -322,8 +331,8 @@
       }
     },
     "recentJobs": {
-      "title": "Recent Jobs",
-      "subtitle": "History of backup operations",
+      "title": "Recent Manual Jobs",
+      "subtitle": "History of manual backup operations for the selected repository",
       "empty": "No backup jobs found"
     },
     "toasts": {
@@ -396,9 +405,11 @@
     "subtitle": "Manage automated backups and repository checks",
     "createBackup": "Create Backup Schedule",
     "addCheck": "Add Check Schedule",
+    "addRestoreCheck": "Add Restore Check",
     "tabs": {
       "backupJobs": "Backup Jobs",
-      "repositoryChecks": "Repository Checks"
+      "repositoryChecks": "Repository Checks",
+      "restoreChecks": "Restore Checks"
     },
     "noRepositories": "You need to create at least one repository before scheduling backups.",
     "maintenance": {
@@ -570,6 +581,7 @@
       "types": {
         "backup": "Backup",
         "restore": "Restore",
+        "restoreCheck": "Restore Check",
         "check": "Check",
         "compact": "Compact",
         "prune": "Prune",
@@ -577,6 +589,7 @@
       },
       "statuses": {
         "completed": "Completed",
+        "needsBackup": "Needs backup",
         "failed": "Failed",
         "running": "Running",
         "pending": "Pending"
@@ -624,6 +637,7 @@
       "stats": {
         "total": "Total",
         "active": "Active",
+        "pendingSso": "Pending SSO",
         "admins": "Admins",
         "operators": "Operators",
         "viewers": "Viewers"
@@ -634,10 +648,23 @@
         "status": "Status"
       },
       "actions": {
+        "approveSsoUser": "Approve SSO User",
         "edit": "Edit User",
         "resetPassword": "Reset Password",
         "delete": "Delete User",
         "manageAccess": "Manage Access"
+      },
+      "badges": {
+        "sso": "SSO",
+        "oidc": "OIDC"
+      },
+      "labels": {
+        "subject": "Subject: {{subject}}"
+      },
+      "pendingReview": {
+        "title": "{{count}} SSO account is waiting for approval",
+        "description": "Review pending OIDC users before they can sign in fully and access repositories.",
+        "action": "Review pending users"
       },
       "repositoryAccess": {
         "title": "Repository Access",
@@ -666,7 +693,8 @@
       },
       "status": {
         "active": "Active",
-        "inactive": "Inactive"
+        "inactive": "Inactive",
+        "pendingSso": "Pending SSO"
       },
       "createDialog": {
         "title": "Create User"
@@ -679,7 +707,18 @@
         "email": "Email",
         "password": "Password",
         "fullName": "Full name",
-        "role": "Role"
+        "role": "Role",
+        "authSource": "Auth source",
+        "oidcSubject": "OIDC subject"
+      },
+      "authSources": {
+        "local": "Local",
+        "oidc": "OIDC"
+      },
+      "ssoIdentity": {
+        "selfLinkHint": "Prefer asking the user to link their own local account from Account & Security. Manual edits are for recovery when the backend supports these fields.",
+        "subjectHelper": "Paste the exact stable subject claim from the identity provider.",
+        "clearHelper": "Local auth clears the stored OIDC subject on save."
       },
       "buttons": {
         "cancel": "Cancel",
@@ -876,7 +915,15 @@
         "passkeyDeletedToast": "Passkey deleted",
         "passkeyDeleteFailed": "Failed to delete passkey",
         "passkeyLastUsed": "Last used {{date}}",
-        "passkeyNeverUsed": "Not used yet"
+        "passkeyNeverUsed": "Not used yet",
+        "ssoLinkTitle": "Link single sign-on",
+        "ssoLinkDescription": "Start a provider redirect to attach this local account to your SSO identity.",
+        "ssoLinkButton": "Link SSO",
+        "ssoLinkedTitle": "Single sign-on linked",
+        "ssoLinkedDescription": "This account can sign in through the configured identity provider.",
+        "ssoUnlinkButton": "Unlink SSO",
+        "ssoUnlinkedToast": "Single sign-on unlinked",
+        "ssoUnlinkFailed": "Failed to unlink single sign-on"
       },
       "access": {
         "title": "Access",
@@ -1333,6 +1380,7 @@
     "types": {
       "backup": "Backup",
       "restore": "Restore",
+      "restoreCheck": "Restore Check",
       "check": "Repository Check",
       "compact": "Compact",
       "prune": "Prune",
@@ -1443,6 +1491,10 @@
     "repositoryMonitoringTitle": "Repository Monitoring",
     "repositoryMonitoringDescription": "Configure automatic refresh of repository statistics. This keeps dashboard data up-to-date, especially useful for observe-only repositories where backups are managed externally.",
     "statsRefreshIntervalLabel": "Stats Refresh Interval (minutes)",
+    "maxConcurrentScheduledBackupsLabel": "Max Concurrent Scheduled Backups",
+    "maxConcurrentScheduledBackupsHelper": "How many scheduled backup executions the shared scheduler may run at once. Set to 0 to pause scheduled backups.",
+    "maxConcurrentScheduledChecksLabel": "Max Concurrent Scheduled Checks",
+    "maxConcurrentScheduledChecksHelper": "How many scheduled repository checks the shared scheduler may run at once. Set to 0 to pause scheduled checks.",
     "statsRefreshDisabled": "Automatic stats refresh is disabled",
     "statsRefreshRangeError": "Must be between 0 and {{max}} minutes",
     "statsRefreshIntervalHelper": "Repository stats (archive count, size, last backup) will be refreshed every {{interval}} minutes",
@@ -1481,6 +1533,98 @@
     "proxyAuthNotConfigured": "Not configured",
     "proxyAuthWarningsTitle": "Configuration warnings",
     "proxyAuthNoWarnings": "No proxy-auth configuration warnings detected.",
+    "oidcTitle": "Single Sign-On",
+    "oidcDescription": "Configure Borg UI as an OpenID Connect client with user provisioning and optional local-login disablement.",
+    "oidcEnabledLabel": "Enable built-in OIDC",
+    "oidcDisableLocalAuthLabel": "Disable local password and passkey login",
+    "oidcProviderNameLabel": "Provider display name",
+    "oidcProviderNameHelper": "Shown on the login button.",
+    "oidcTokenAuthMethodLabel": "Token auth method",
+    "oidcTokenAuthMethodHelper": "Choose how Borg UI authenticates to the provider token endpoint.",
+    "oidcTokenAuthMethodPost": "client_secret_post",
+    "oidcTokenAuthMethodBasic": "client_secret_basic",
+    "oidcDiscoveryUrlLabel": "Discovery URL",
+    "oidcDiscoveryUrlHelper": "Example: https://id.example.com/application/o/borg-ui/.well-known/openid-configuration",
+    "oidcClientIdLabel": "Client ID",
+    "oidcClientSecretLabel": "Client secret",
+    "oidcClientSecretConfigured": "A client secret is already stored. Leave this blank to keep it.",
+    "oidcClientSecretRequiredHelper": "Required when OIDC is enabled.",
+    "oidcClearClientSecretLabel": "Clear stored client secret on save",
+    "oidcEventsTitle": "Recent auth events",
+    "oidcEventsDescription": "Review the latest local, OIDC, TOTP, passkey, and logout events from the admin side.",
+    "oidcEventsEmpty": "No auth events recorded yet.",
+    "oidcEventsFilteredEmpty": "No auth events match the current filter.",
+    "oidcEventsRefresh": "Refresh auth events",
+    "oidcScopesLabel": "Scopes",
+    "oidcRedirectUriOverrideLabel": "Redirect URI override",
+    "oidcRedirectUriOverrideHelper": "Optional public callback URL override for reverse-proxy or split-origin setups.",
+    "oidcEndSessionEndpointOverrideLabel": "End-session endpoint override",
+    "oidcEndSessionEndpointOverrideHelper": "Optional logout endpoint override if discovery metadata is incomplete.",
+    "oidcClaimUsernameLabel": "Username claim",
+    "oidcClaimEmailLabel": "Email claim",
+    "oidcClaimFullNameLabel": "Full name claim",
+    "oidcGroupClaimLabel": "Groups claim",
+    "oidcGroupClaimHelper": "Optional claim that contains IdP groups for admin allow-list checks.",
+    "oidcRoleClaimLabel": "Global role claim",
+    "oidcAdminGroupsLabel": "Admin allow-list groups",
+    "oidcAdminGroupsHelper": "Comma-separated groups allowed to receive the admin role claim.",
+    "oidcAllRepositoriesRoleClaimLabel": "All repositories role claim",
+    "oidcNewUserModeLabel": "New user handling",
+    "oidcTemplateUsernameLabel": "Template username",
+    "oidcDefaultRoleLabel": "Default global role",
+    "oidcDefaultAllRepositoriesRoleLabel": "Default all-repositories role",
+    "oidcModeDeny": "Deny",
+    "oidcModeViewer": "Create as viewer",
+    "oidcModePending": "Create pending approval",
+    "oidcModeTemplate": "Copy template user",
+    "oidcRequiredFieldsError": "OIDC requires a discovery URL and client ID.",
+    "oidcClientSecretRequired": "OIDC requires a client secret before it can be enabled.",
+    "oidcTemplateUserRequired": "Template mode requires a template username.",
+    "oidcDisableLocalAuthWarning": "Before disabling local login, confirm at least one active admin can sign in with OIDC.",
+    "oidcActiveAdminRequired": "Local auth cannot be disabled until an active OIDC admin exists.",
+    "authEventSuccess": "Success",
+    "authEventFailed": "Failed",
+    "authEventPending": "Pending approval",
+    "authEventAnonymous": "Unknown identity",
+    "authEventActor": "Admin #{{id}}",
+    "authEventFilters": {
+      "all": "All events",
+      "failed": "Failures",
+      "oidc": "OIDC",
+      "pending": "Pending approvals"
+    },
+    "authEventSummary": {
+      "total": "Total: {{count}}",
+      "success": "Succeeded: {{count}}",
+      "failed": "Failed: {{count}}",
+      "pending": "Pending: {{count}}"
+    },
+    "authEventSources": {
+      "local": "Local",
+      "oidc": "OIDC",
+      "proxy": "Proxy",
+      "passkey": "Passkey",
+      "totp": "TOTP"
+    },
+    "authEventTypes": {
+      "local_login_failed": "Local login failed",
+      "local_login_succeeded": "Local login succeeded",
+      "oidc_account_linked": "OIDC account linked",
+      "oidc_account_unlinked": "OIDC account unlinked",
+      "oidc_user_pending": "OIDC user pending approval",
+      "oidc_user_provisioned": "OIDC user provisioned",
+      "oidc_user_denied": "OIDC user denied",
+      "oidc_callback_success": "OIDC callback succeeded",
+      "oidc_callback_failed": "OIDC callback failed",
+      "oidc_exchange_failed": "OIDC session exchange failed",
+      "oidc_login_succeeded": "OIDC login succeeded",
+      "totp_login_succeeded": "TOTP login succeeded",
+      "passkey_login_succeeded": "Passkey login succeeded",
+      "logout": "User logged out"
+    },
+    "roleViewer": "Viewer",
+    "roleOperator": "Operator",
+    "roleAdmin": "Admin",
     "maxFilesToLoadLabel": "Max Files to Load",
     "maxFilesRangeError": "Must be between {{min}} and {{max}}",
     "maxFilesHelperText": "Maximum files when browsing. Current: {{current}}M files",
@@ -1596,6 +1740,7 @@
       "notifyOn": "Notify on:",
       "started": "Started",
       "success": "Success",
+      "warning": "Warning",
       "failure": "Failure",
       "schedulerErrors": "Scheduler Errors",
       "schedulerErrorsHelper": "Notifies when the scheduler fails to start a backup (e.g., system errors). Regular backup failures are handled above.",
@@ -1609,6 +1754,7 @@
     "category": {
       "backupEvents": "Backup Events",
       "restoreEvents": "Restore Events",
+      "restoreCheckEvents": "Restore Check Events",
       "checkJobs": "Check Jobs",
       "systemEvents": "System Events"
     },
@@ -1626,12 +1772,14 @@
       "categories": {
         "backup": "Backup",
         "restore": "Restore",
+        "restoreCheck": "Restore Check",
         "check": "Check",
         "schedule": "Schedule"
       },
       "events": {
         "start": "Start",
         "success": "Success",
+        "warning": "Warning",
         "failure": "Failure",
         "off": "Off",
         "errors": "Errors"
@@ -1985,6 +2133,8 @@
   },
   "scheduledChecks": {
     "title": "Scheduled Checks",
+    "sectionTitle": "Integrity Checks",
+    "sectionDescription": "Run Borg check on a schedule to detect repository corruption early.",
     "empty": "No scheduled checks",
     "nextRun": "Next Run",
     "lastRun": "Last Run",
@@ -1998,6 +2148,7 @@
     "editCheckSchedule": "Edit Check Schedule",
     "addCheckSchedule": "Add Check Schedule",
     "checkScheduleLabel": "Check Schedule",
+    "timezoneLabel": "Timezone",
     "maxDuration": "Max Duration (seconds)",
     "maxDurationHint": "Time limit for check operation (3600 = 1 hour)",
     "maxDurationHintBorg2": "For Borg 2, a time limit runs a partial repository-only check (3600 = 1 hour). Use 0 to include archive checks.",
@@ -2005,6 +2156,13 @@
     "noScheduledChecks": "No scheduled checks",
     "noScheduledChecksDesc": "Configure automatic repository checks to ensure data integrity",
     "needRepository": "You need to create at least one repository before scheduling checks.",
+    "historyTitle": "Scheduled Check History",
+    "historyShowing": "Showing {{filtered}} of {{total}} scheduled check jobs",
+    "historyShowingFiltered": "Showing {{filtered}} of {{total}} scheduled check jobs (filtered)",
+    "allRepositories": "All Repositories",
+    "allStatus": "All Status",
+    "noHistoryTitle": "No scheduled check jobs found",
+    "noHistoryDescription": "Scheduled check runs will appear here once they start executing.",
     "disableConfirm": "Disable scheduled check for {{name}}?",
     "noRepositoriesAvailable": "No repositories available",
     "update": "Update",
@@ -2026,6 +2184,114 @@
     },
     "checkScheduleHelperText": "When should this repository check run?",
     "checkScheduleBuilderTitle": "Check Schedule Builder"
+  },
+  "scheduledRestoreChecks": {
+    "sectionTitle": "Restore Checks",
+    "sectionDescription": "Periodically restore the latest archive into a disposable directory to verify that data can actually be recovered.",
+    "repository": "Repository",
+    "addRestoreCheckSchedule": "Add Restore Check",
+    "editRestoreCheckSchedule": "Edit Restore Check Schedule",
+    "scheduleLabel": "Restore Check Schedule",
+    "timezoneLabel": "Timezone",
+    "scheduleHelperText": "When should this restore verification run?",
+    "scheduleBuilderTitle": "Restore Check Schedule Builder",
+    "modeLabel": "Verification Mode",
+    "modes": {
+      "canary": "Managed canary payload",
+      "probePaths": "Selected probe paths",
+      "fullArchive": "Full archive drill"
+    },
+    "probePaths": "Probe Paths",
+    "probePathsHint": "Enter one archive path per line, or browse the latest archive to import representative files and folders.",
+    "archivePicker": {
+      "open": "Browse latest archive",
+      "title": "Select Probe Paths",
+      "subtitle": "Browse the latest archive for the selected repository.",
+      "subtitleWithArchive": "Browsing latest archive: {{archive}}",
+      "browserTitle": "Choose probe paths",
+      "browserSubtitle": "Select files or folders from the latest archive to verify during each restore check.",
+      "browserHelpText": "Click files to select them, or click folders to navigate. Use the checkbox next to folders to select entire directories.",
+      "selectedCount_one": "{{count}} path selected",
+      "selectedCount_other": "{{count}} paths selected",
+      "import": "Import Paths",
+      "loadFailed": "Failed to load the latest archive.",
+      "noArchives": "No archives are available for this repository yet."
+    },
+    "needRepository": "You need to create at least one repository before scheduling restore checks.",
+    "noScheduledChecks": "No scheduled restore checks",
+    "noScheduledChecksDesc": "Configure automatic restore verification so backup problems show up before you need a real restore.",
+    "confirmDisable": "Disable scheduled restore check for {{repositoryName}}?",
+    "update": "Update",
+    "create": "Create",
+    "stats": {
+      "notSet": "Not set",
+      "lastVerifiedRestore": "Last Verified Restore",
+      "nextCheck": "Next Check",
+      "probePaths": "Probe Paths",
+      "pathCountValue": "{{count}} paths",
+      "fullArchive": "Full archive",
+      "canary": "Managed canary"
+    },
+    "actions": {
+      "editSchedule": "Edit schedule",
+      "removeSchedule": "Remove schedule",
+      "runRestoreCheck": "Run Restore Check"
+    },
+    "badge": {
+      "restoreCheck": "Restore Check"
+    },
+    "validation": {
+      "selectRepository": "Please select a repository",
+      "enterProbePath": "Enter at least one probe path"
+    },
+    "toasts": {
+      "scheduleUpdated": "Restore check schedule updated",
+      "updateFailed": "Failed to update restore check schedule",
+      "restoreCheckStarted": "Restore check started",
+      "restoreCheckFailed": "Failed to start restore check"
+    },
+    "canaryModeHint": "Canary mode adds a tiny Borg UI canary file to future backups while enabled, then verifies it from the latest archive. It works after the next backup.",
+    "canaryUnavailableObserveOnly": "Canary mode is unavailable for observe-only repositories because Borg UI does not create their backups. Use selected probe paths or a full archive drill.",
+    "noBackupYet": "No backup yet",
+    "probeModeHint": "Probe-path mode restores real files you choose. Use it for higher-confidence checks on critical paths without extracting the full archive.",
+    "fullArchiveWarning": "Full archive drills can be expensive on large repositories. Use this sparingly, and only when you have enough temporary storage and maintenance window budget."
+  },
+  "integrity": {
+    "title": "Integrity",
+    "subtitle": "Track repository integrity and restoreability without mixing it into backup scheduling.",
+    "tabs": {
+      "repositoryChecks": "Repository Checks",
+      "restoreChecks": "Restore Checks"
+    },
+    "noRepositories": "Create a repository first to configure integrity checks.",
+    "stats": {
+      "restoreSchedules": "Restore schedules",
+      "canaryProtected": "Canary-protected",
+      "probeProtected": "Probe-path schedules",
+      "fullDrills": "Full-archive drills"
+    },
+    "history": {
+      "title": "Recent Restore Checks",
+      "description": "Review recent restore verification runs and inspect logs when something fails.",
+      "emptyTitle": "No restore checks have run yet",
+      "emptyDescription": "Run a restore check or wait for the next scheduled integrity cycle.",
+      "columns": {
+        "repository": "Repository",
+        "mode": "Mode",
+        "archive": "Archive",
+        "started": "Started"
+      },
+      "modes": {
+        "canary": "Canary",
+        "probePaths": "Probe Paths",
+        "fullArchive": "Full Archive"
+      },
+      "actions": {
+        "viewLogs": "View logs"
+      },
+      "logTitle": "Restore Check Logs - {{job}}",
+      "noLogs": "No logs available for this restore check."
+    }
   },
   "repositorySelectorCard": {
     "title": "Select Repository",
@@ -2130,7 +2396,18 @@
       "customPathHelperRemote": "Choose a writable directory on the remote machine",
       "browseFilesystem": "Browse filesystem",
       "browseRemoteFilesystem": "Browse remote filesystem",
-      "filesWillBeRestoredTo": "Files will be restored to:"
+      "filesWillBeRestoredTo": "Files will be restored to:",
+      "pathLayout": "Path layout",
+      "preserveArchivePath": "Preserve archive path",
+      "preserveArchivePathDesc": "Recreate the full selected archive path under the custom destination.",
+      "restoreContentsHere": "Restore selected contents here",
+      "restoreContentsHereDesc": "Place the selected file, or the contents of the selected folder, directly in the custom destination.",
+      "restorePathPreview": "Restore path preview",
+      "archivePath": "Archive",
+      "restorePath": "Restore",
+      "contentsOnlyMarker": "(contents)",
+      "andMoreItems_one": "... and {{count}} more item",
+      "andMoreItems_other": "... and {{count}} more items"
     },
     "restoreFiles": {
       "title": "Select files to restore",
@@ -2174,6 +2451,9 @@
       "originalLocation": "Original Location",
       "customLocation": "Custom Location",
       "customPath": "Custom Path",
+      "restoreLayout": "Path Layout",
+      "preserveArchivePath": "Preserve archive path",
+      "restoreContentsHere": "Restore selected contents here",
       "notSet": "(not set)",
       "restorePreview": "Restore Preview",
       "previewNote": "Preview of where your files will be restored:",
@@ -2273,6 +2553,7 @@
       "config": {
         "scheduleLabel": "Schedule (Cron Expression)",
         "scheduleHelper": "Click the clock icon to use the visual builder.",
+        "timezoneLabel": "Timezone",
         "nextRunTimes": "Next 3 Run Times:"
       },
       "review": {
@@ -2282,6 +2563,7 @@
         "name": "Name",
         "repositories": "Repositories ({{count}})",
         "schedule": "Schedule",
+        "timezone": "Timezone",
         "archiveNameTemplate": "Archive Name Template",
         "scriptsConfiguration": "Scripts Configuration",
         "preBackupScript": "Pre-Backup Script",
@@ -2361,7 +2643,11 @@
     "emptyArchiveDesc": "No files were backed up in this archive. This may happen if the source directory was empty or inaccessible during the backup.",
     "noInfo": "No archive information available",
     "root": "Root",
-    "downloadFile": "Download file"
+    "downloadFile": "Download file",
+    "managedCanaryLabel": "Borg UI canary",
+    "managedCanaryDescription": "Managed restore-check canary files. Borg UI adds these to backups while canary mode is enabled.",
+    "managedCanaryBanner": "This folder is managed by Borg UI for canary restore checks. It is safe to leave untouched.",
+    "managedCanaryProbeDisabled": "Canary paths are verified automatically by canary mode."
   },
   "codeEditor": {
     "loading": "Loading editor..."
@@ -2821,14 +3107,32 @@
         "invalidAuthToken": "Invalid authentication token",
         "invalidOrExpiredToken": "Invalid or expired token",
         "proxyHeaderRequired": "Reverse proxy authentication header \"{{header}}\" is required",
+        "localLoginDisabled": "Built-in password and passkey login is disabled because single sign-on is enforced",
         "invalidTotpCode": "Invalid authentication code",
-        "localPasswordRequired": "This account must use built-in password authentication to manage TOTP",
+        "tooManyAttempts": "Too many sign-in attempts. Try again in {{retryAfterSeconds}} seconds.",
+        "tooManyRequests": "Too many sign-in attempts. Try again in {{retryAfterSeconds}} seconds.",
+        "localPasswordRequired": "This account must have a local password before this action can continue",
         "totpNotEnabled": "Two-factor authentication is not enabled for this account",
         "invalidPasskey": "Invalid passkey response",
         "passkeyUserVerificationRequired": "Passkey verification is required on this device. Unlock the device with Touch ID, Face ID, or the device passcode and try again.",
         "passkeysUnavailable": "Passkeys are unavailable because the WebAuthn dependency is not installed",
         "passkeyAlreadyRegistered": "This passkey is already registered",
-        "passkeyNotFound": "Passkey not found"
+        "passkeyNotFound": "Passkey not found",
+        "oidcNotConfigured": "Single sign-on is not configured",
+        "oidcAuthenticationCancelled": "Single sign-on login was cancelled or denied by the identity provider",
+        "oidcAuthenticationFailed": "Single sign-on login failed",
+        "oidcIdTokenInvalid": "The identity provider returned an invalid sign-in token",
+        "oidcUsernameClaimMissing": "Single sign-on did not provide a usable username claim",
+        "oidcSubjectClaimMissing": "Single sign-on did not provide a usable subject claim",
+        "oidcUserAccessDenied": "Your single sign-on account is not allowed to access Borg UI",
+        "oidcAccountLinkRequired": "A local Borg UI account already uses this username. Link the account explicitly before using single sign-on.",
+        "oidcAlreadyLinked": "This account is already linked to single sign-on",
+        "oidcCannotUnlinkWhenLocalAuthDisabled": "Single sign-on cannot be unlinked while local login is disabled",
+        "oidcNotLinked": "This account is not linked to single sign-on",
+        "oidcIdentityConflict": "This single sign-on identity conflicts with an existing Borg UI account.",
+        "oidcEmailAlreadyInUse": "This single sign-on email is already used by another Borg UI account.",
+        "oidcPendingApproval": "Your single sign-on account is waiting for administrator approval",
+        "oidcTemplateUserNotFound": "The configured single sign-on template user was not found"
       },
       "repo": {
         "repositoryNotFound": "Repository not found",
@@ -2851,6 +3155,7 @@
         "cannotDeleteRepoWithArchives": "Cannot delete repository with existing archives. Please delete all archives first.",
         "checkAlreadyRunning": "A check operation is already running for this repository",
         "compactAlreadyRunning": "A compact operation is already running for this repository",
+        "restoreCheckCanaryUnsupportedObserve": "Canary restore checks are unavailable for observe-only repositories. Use selected probe paths or a full archive drill.",
         "breakLockTimeout": "Timeout while trying to break lock",
         "checkJobNotFound": "Check job not found",
         "compactJobNotFound": "Compact job not found",
@@ -3007,7 +3312,16 @@
         "failedRunLogCleanup": "Failed to run log cleanup: {{error}}",
         "failedGetCacheStats": "Failed to get cache statistics: {{error}}",
         "failedClearCache": "Failed to clear cache: {{error}}",
-        "failedUpdateCacheSettings": "Failed to update cache settings: {{error}}"
+        "failedUpdateCacheSettings": "Failed to update cache settings: {{error}}",
+        "invalidOidcNewUserMode": "Invalid oidc_new_user_mode. Must be one of: {{modes}}",
+        "invalidOidcDefaultRole": "Invalid OIDC default global role",
+        "invalidOidcDefaultRepositoryRole": "Invalid OIDC default repository role",
+        "invalidOidcTokenAuthMethod": "Invalid OIDC token auth method. Must be one of: {{methods}}",
+        "invalidAuthSource": "Invalid auth source. Must be one of: {{sources}}",
+        "oidcTemplateUserRequired": "A template username is required when OIDC new-user mode is set to template",
+        "oidcLocalAuthRequiresOidc": "OIDC must be enabled before local authentication can be disabled",
+        "oidcLocalAuthRequiresOidcAdmin": "At least one active admin must be linked to OIDC before local authentication can be disabled",
+        "oidcConfigurationIncomplete": "OIDC is enabled but the discovery URL, client ID, or client secret is missing"
       },
       "activity": {
         "adminOnlyDelete": "Only administrators can delete job entries",
@@ -3137,7 +3451,8 @@
       "auth": {
         "loggedOut": "Successfully logged out",
         "userDeleted": "User deleted successfully",
-        "passwordChanged": "Password changed successfully"
+        "passwordChanged": "Password changed successfully",
+        "oidcUnlinked": "Single sign-on unlinked successfully"
       },
       "repo": {
         "repositoryImported": "Repository imported successfully",
@@ -3270,7 +3585,7 @@
     "buyLink": "Upgrade to {{plan}}",
     "yourPlanTab": "Your Plan",
     "upgradeTab": "Upgrade",
-    "communityIncluded": "Included in Community Edition",
+    "communityIncluded": "Free Forever",
     "fullAccessCountdown_one": "{{count}} day of full access remaining",
     "fullAccessCountdown_other": "{{count}} days of full access remaining",
     "fullAccessEndsNotice": "On {{date}}, Pro & Enterprise features will deactivate. Everything below is yours, forever.",

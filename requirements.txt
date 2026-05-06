@@ -17,13 +17,14 @@ pytest-cov==7.1.0
 pytest==9.0.3
 python-dotenv==1.2.2
 PyJWT==2.12.1
-python-multipart==0.0.24
+python-multipart==0.0.26
 pyyaml==6.0.3
 redis==7.4.0
 requests==2.33.1
 ruff==0.14.0
 sqlalchemy==2.0.49
 structlog==25.5.0
+tzdata==2026.2
 uvicorn[standard]==0.44.0
 paho-mqtt==2.1.0
 webauthn==2.7.1

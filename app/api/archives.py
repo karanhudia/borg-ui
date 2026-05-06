@@ -5,6 +5,7 @@ import structlog
 import json
 import os
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
+from types import SimpleNamespace
 
 from app.api.archive_download import extract_file_download
 from app.database.database import get_db
@@ -25,6 +26,7 @@ from app.utils.borg_env import (
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
 )  # Backward-compatible patch target for tests
+from app.utils.datetime_utils import serialize_datetime
 import asyncio
 
 logger = structlog.get_logger()
@@ -289,7 +291,11 @@ async def delete_archive(
         db.refresh(delete_job)
 
         # Execute delete asynchronously (non-blocking)
-        asyncio.create_task(BorgRouter(repo).delete_archive(delete_job.id, archive_id))
+        asyncio.create_task(
+            BorgRouter(
+                SimpleNamespace(id=repo.id, borg_version=repo.borg_version)
+            ).delete_archive(delete_job.id, archive_id)
+        )
 
         logger.info(
             "Delete archive job created",
@@ -406,8 +412,8 @@ async def get_delete_job_status(
             "repository_id": job.repository_id,
             "archive_name": job.archive_name,
             "status": job.status,
-            "started_at": job.started_at.isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "started_at": serialize_datetime(job.started_at),
+            "completed_at": serialize_datetime(job.completed_at),
             "progress": job.progress,
             "progress_message": job.progress_message,
             "error_message": job.error_message,

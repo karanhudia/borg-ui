@@ -1,5 +1,12 @@
 import React, { useState, useEffect, createContext, useContext } from 'react'
-import { authAPI, setProxyAuthMode, AuthUserResponse, ProxyAuthWarning } from '../services/api'
+import {
+  authAPI,
+  setAuthTransportMode,
+  AuthTransportMode,
+  AuthUserResponse,
+  ProxyAuthWarning,
+} from '../services/api'
+import { fetchJsonForAuthMode, setFetchAuthMode } from '../services/authRequest'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { clearRecentPasswordLogin, markRecentPasswordLogin } from '../utils/passkeyPrompt'
 import { getDefaultPasskeyDeviceName } from '../utils/passkeyDeviceName'
@@ -14,7 +21,11 @@ interface AuthContextType {
   isLoading: boolean
   hasGlobalPermission: (permission: string) => boolean
   mustChangePassword: boolean
+  oidcEnabled: boolean
+  oidcProviderName: string | null
+  oidcDisableLocalAuth: boolean
   proxyAuthEnabled: boolean
+  insecureNoAuthEnabled: boolean
   proxyAuthHeader: string | null
   proxyAuthWarnings: ProxyAuthWarning[]
   authError: string | null
@@ -29,6 +40,7 @@ interface AuthContextType {
     loginChallengeToken: string,
     code: string
   ) => Promise<{ mustChangePassword: boolean }>
+  loginWithOidcExchangeToken: () => Promise<{ mustChangePassword: boolean }>
   loginWithPasskey: () => Promise<{ mustChangePassword: boolean }>
   canEnrollPasskeyFromRecentLogin: boolean
   enrollPasskeyFromRecentLogin: () => Promise<void>
@@ -46,7 +58,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [oidcEnabled, setOidcEnabled] = useState(false)
+  const [oidcProviderName, setOidcProviderName] = useState<string | null>(null)
+  const [oidcDisableLocalAuth, setOidcDisableLocalAuth] = useState(false)
   const [proxyAuthEnabled, setProxyAuthEnabled] = useState(false)
+  const [insecureNoAuthEnabled, setInsecureNoAuthEnabled] = useState(false)
   const [proxyAuthHeader, setProxyAuthHeader] = useState<string | null>(null)
   const [proxyAuthWarnings, setProxyAuthWarnings] = useState<ProxyAuthWarning[]>([])
   const [authError, setAuthError] = useState<string | null>(null)
@@ -64,7 +80,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRecentPasswordForPasskeyPrompt(password)
   }
 
-  const refreshUser = async () => {
+  const refreshUser = async (mode: AuthTransportMode = 'jwt') => {
+    if (mode !== 'jwt') {
+      const response = await fetchJsonForAuthMode('/auth/me', {}, mode)
+
+      if (!response.ok) {
+        const error = new Error(`Failed to fetch profile (${response.status})`)
+        ;(error as Error & { response?: { status: number; data?: unknown } }).response = {
+          status: response.status,
+          data: await response.json().catch(() => undefined),
+        }
+        throw error
+      }
+
+      const profile = (await response.json()) as User
+      setUser(profile)
+      return
+    }
+
     const profileResponse = await authAPI.getProfile()
     setUser(profileResponse.data)
   }
@@ -96,14 +129,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // First, check if proxy authentication is enabled
         const configResponse = await authAPI.getAuthConfig()
-        const { proxy_auth_enabled, proxy_auth_header, proxy_auth_health } = configResponse.data
+        const {
+          oidc_enabled,
+          oidc_provider_name,
+          oidc_disable_local_auth,
+          proxy_auth_enabled,
+          insecure_no_auth_enabled,
+          proxy_auth_header,
+          proxy_auth_health,
+        } = configResponse.data
+        const authTransportMode: AuthTransportMode = insecure_no_auth_enabled
+          ? 'insecure-no-auth'
+          : proxy_auth_enabled
+            ? 'proxy'
+            : 'jwt'
+
+        setOidcEnabled(oidc_enabled ?? false)
+        setOidcProviderName(oidc_provider_name ?? null)
+        setOidcDisableLocalAuth(oidc_disable_local_auth ?? false)
         setProxyAuthEnabled(proxy_auth_enabled)
+        setInsecureNoAuthEnabled(insecure_no_auth_enabled ?? false)
         setProxyAuthHeader(proxy_auth_header ?? null)
         setProxyAuthWarnings(proxy_auth_health?.warnings ?? [])
-        setProxyAuthMode(proxy_auth_enabled) // Update API interceptor
+        setAuthTransportMode(authTransportMode)
+        setFetchAuthMode(authTransportMode)
         setAuthError(null)
 
-        if (proxy_auth_enabled) {
+        if (insecure_no_auth_enabled) {
+          localStorage.removeItem('access_token')
+          try {
+            await refreshUser('insecure-no-auth')
+            setAuthError(null)
+          } catch (error) {
+            console.error('Failed to get profile in insecure no-auth mode:', error)
+            const { detail } = extractAuthError(error)
+            setUser(null)
+            setAuthError(
+              translateBackendKey(
+                detail as
+                  | string
+                  | { key: string; params?: Record<string, unknown> }
+                  | null
+                  | undefined
+              ) || 'Insecure no-auth mode is enabled but Borg UI could not resolve a local user.'
+            )
+          }
+        } else if (proxy_auth_enabled) {
           // Proxy auth mode: trust the reverse proxy, but fail closed when no identity header arrives.
           let retries = 3
           let success = false
@@ -162,7 +233,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Failed to check auth config:', error)
         // Default to JWT auth mode if config check fails
+        setAuthTransportMode('jwt')
+        setFetchAuthMode('jwt')
+        setOidcEnabled(false)
+        setOidcProviderName(null)
+        setOidcDisableLocalAuth(false)
         setProxyAuthEnabled(false)
+        setInsecureNoAuthEnabled(false)
         setProxyAuthWarnings([])
         const token = localStorage.getItem('access_token')
         if (token) {
@@ -213,6 +290,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mustChangePassword: must_change_password || false,
       totpRequired: false,
     }
+  }
+
+  const loginWithOidcExchangeToken = async (): Promise<{ mustChangePassword: boolean }> => {
+    const response = await authAPI.exchangeOidcToken()
+    const { access_token, must_change_password } = response.data
+    if (!access_token) {
+      throw new Error('Missing access token')
+    }
+
+    localStorage.setItem('access_token', access_token)
+    setAuthTransportMode('jwt')
+    setFetchAuthMode('jwt')
+    await refreshUser('jwt')
+
+    return { mustChangePassword: must_change_password || false }
   }
 
   const verifyTotpLogin = async (loginChallengeToken: string, code: string) => {
@@ -280,8 +372,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const logout = async () => {
+    let logoutUrl: string | null | undefined
     try {
-      await authAPI.logout()
+      const response = await authAPI.logout()
+      logoutUrl = response.data.logout_url
     } catch {
       // Ignore logout errors
     }
@@ -289,6 +383,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearRecentPasswordLogin()
     clearRecentPasskeyEnrollmentState()
     setUser(null)
+    if (logoutUrl) {
+      window.location.assign(logoutUrl)
+    }
   }
 
   const hasGlobalPermission = (permission: string) => {
@@ -301,12 +398,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading,
     hasGlobalPermission,
     mustChangePassword: user?.must_change_password || false,
+    oidcEnabled,
+    oidcProviderName,
+    oidcDisableLocalAuth,
     proxyAuthEnabled,
+    insecureNoAuthEnabled,
     proxyAuthHeader,
     proxyAuthWarnings,
     authError,
     login,
     verifyTotpLogin,
+    loginWithOidcExchangeToken,
     loginWithPasskey,
     canEnrollPasskeyFromRecentLogin: !!recentPasswordForPasskeyPrompt,
     enrollPasskeyFromRecentLogin,

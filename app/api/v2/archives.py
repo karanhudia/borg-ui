@@ -28,6 +28,7 @@ from app.services.archive_browse_service import (
 from app.services.cache_service import archive_cache
 from app.services.v2.archive_browse import get_browse_depth, is_fast_browse_enabled
 from app.utils.borg_env import repository_borg_env
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Archives v2"], dependencies=[require_feature("borg_v2")])
@@ -136,8 +137,8 @@ def _get_browse_cache_key(archive_ref: str, path: str) -> str:
     archive_key = _get_archive_selector(archive_ref)
     normalized_path = path.strip("/")
     if not normalized_path:
-        return archive_key
-    return f"{archive_key}::path::{normalized_path}"
+        return f"{archive_key}::managed-root"
+    return f"{archive_key}::managed-path::{normalized_path}"
 
 
 def _get_browse_raw_cache_key(archive_ref: str) -> str:
@@ -556,8 +557,8 @@ async def get_delete_job_status(
         "repository_id": job.repository_id,
         "archive_name": job.archive_name,
         "status": job.status,
-        "started_at": job.started_at.isoformat() if job.started_at else None,
-        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        "started_at": serialize_datetime(job.started_at),
+        "completed_at": serialize_datetime(job.completed_at),
         "progress": job.progress,
         "progress_message": job.progress_message,
         "error_message": job.error_message,

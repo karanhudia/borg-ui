@@ -38,6 +38,7 @@ from app.routers import config
 from app.database.database import engine
 from app.database.models import Base
 from app.config import get_runtime_app_version, settings
+from app.core.proxy_auth import inspect_proxy_auth_config
 from app.core.security import create_first_user
 from app.services.licensing_service import sync_licensing_state
 
@@ -91,6 +92,37 @@ def _spawn_background_task(coro):
     if not isinstance(task, asyncio.Task):
         coro.close()
     return task
+
+
+def _log_proxy_auth_security_warnings() -> None:
+    inspection = inspect_proxy_auth_config()
+    if not inspection["enabled"]:
+        return
+
+    for warning in inspection["warnings"]:
+        logger.warning(
+            "Proxy authentication configuration warning",
+            code=warning["code"],
+            message=warning["message"],
+        )
+
+
+def _log_insecure_no_auth_warning() -> None:
+    if not settings.allow_insecure_no_auth:
+        return
+
+    logger.warning(
+        "Insecure no-auth mode enabled",
+        code="insecure_no_auth_enabled",
+        message="ALLOW_INSECURE_NO_AUTH is enabled. Borg UI will allow unauthenticated access and impersonate a local user. Use only for local development or explicitly trusted environments.",
+    )
+
+    if settings.disable_authentication:
+        logger.warning(
+            "Proxy auth setting ignored because insecure no-auth is enabled",
+            code="auth_mode_conflict",
+            message="DISABLE_AUTHENTICATION is ignored while ALLOW_INSECURE_NO_AUTH is enabled. Disable one of the modes so the deployment intent is unambiguous.",
+        )
 
 
 # Configure structured logging
@@ -192,6 +224,8 @@ app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 async def startup_event():
     """Initialize application on startup"""
     logger.info("Starting Borg Web UI")
+    _log_insecure_no_auth_warning()
+    _log_proxy_auth_security_warnings()
     from app.database.database import SessionLocal
 
     # Run database migrations
@@ -327,20 +361,13 @@ async def startup_event():
 
     task1 = _spawn_background_task(check_scheduled_jobs())
     app.state.background_tasks.append(task1)
-    logger.info("Scheduled backup checker started")
-
-    # Start check scheduler (background task)
-    from app.services.check_scheduler import check_scheduler
-
-    task2 = asyncio.create_task(check_scheduler.start())
-    app.state.background_tasks.append(task2)
-    logger.info("Check scheduler started")
+    logger.info("Scheduled job checker started")
 
     # Start stats refresh scheduler (background task)
     from app.services.stats_refresh_scheduler import stats_refresh_scheduler
 
-    task3 = asyncio.create_task(stats_refresh_scheduler.start())
-    app.state.background_tasks.append(task3)
+    task2 = asyncio.create_task(stats_refresh_scheduler.start())
+    app.state.background_tasks.append(task2)
     logger.info("Stats refresh scheduler started")
 
     # Initialize MQTT service from database settings (using new implementation)

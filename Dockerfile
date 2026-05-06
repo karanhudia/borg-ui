@@ -22,6 +22,41 @@ COPY requirements.txt .
 # Install Python packages
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Development stage
+FROM ${BASE_IMAGE} AS development
+
+# Build arguments
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+
+WORKDIR /app
+
+# Copy Python dependencies
+COPY --from=backend-builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=backend-builder /usr/local/bin /usr/local/bin
+
+# Copy application code. Frontend assets are not required in dev because
+# the Vite dev server runs locally and proxies API requests to this backend.
+COPY app/ ./app/
+COPY VERSION ./VERSION
+
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV PYTHONPATH=/app
+ENV DATA_DIR=/data
+ENV DATABASE_URL=sqlite:////data/borg.db
+ENV BORG_BACKUP_PATH=/backups
+ENV ENABLE_CRON_BACKUPS=false
+ENV PORT=8081
+ENV ACTIVATION_SERVICE_URL=https://license.borgui.com
+ENV ENABLE_STARTUP_LICENSE_SYNC=true
+
+EXPOSE 8081
+
+ENTRYPOINT ["/entrypoint.sh"]
+
 # Production stage
 FROM ${BASE_IMAGE} AS production
 

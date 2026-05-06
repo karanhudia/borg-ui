@@ -27,7 +27,7 @@ def _start_borg2_backup(
         response = requests.post(
             f"{base_url.rstrip('/')}/api/v2/backup/run",
             headers={
-                "Authorization": f"Bearer {token}",
+                "X-Borg-Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
             },
             json={"repository_id": repository_id},

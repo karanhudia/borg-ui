@@ -14,21 +14,15 @@ import { BASE_PATH } from '@/utils/basePath'
 import type { Repository } from '@/types'
 import { isV2Repo } from '@/utils/repoCapabilities'
 import { buildDownloadUrl } from '@/utils/downloadUrl'
+import { attachAccessTokenHeader } from '../authHeaders'
 
-// Re-use the same axios instance (with auth interceptors) from api.ts
-// by importing only the create pattern — auth token injection is handled
-// by the global interceptor already set up in api.ts.
 export const httpClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || `${BASE_PATH}/api`,
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Mirror the auth interceptor so this client also attaches tokens
-httpClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+// Mirror the shared auth interceptor so this client also attaches tokens.
+httpClient.interceptors.request.use(attachAccessTokenHeader)
 
 httpClient.interceptors.response.use(
   (response) => response,

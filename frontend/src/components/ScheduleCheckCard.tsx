@@ -1,12 +1,13 @@
 import { Chip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { CalendarClock, History, CalendarCheck, Timer, Play, Pencil, Trash2 } from 'lucide-react'
-import EntityCard, { StatItem, ActionItem } from './EntityCard'
+import EntityCard, { StatItem, ActionItem, MetaItem } from './EntityCard'
+import ScheduledInstantTooltip from './ScheduledInstantTooltip'
 import {
   formatDateCompact,
   formatDateTimeFull,
   formatCronHuman,
-  convertCronToLocal,
+  formatScheduledInstantDisplay,
 } from '../utils/dateUtils'
 
 interface ScheduledCheck {
@@ -14,6 +15,8 @@ interface ScheduledCheck {
   repository_name: string
   repository_path: string
   check_cron_expression: string | null
+  check_timezone?: string | null
+  timezone?: string | null
   last_scheduled_check: string | null
   next_scheduled_check: string | null
   check_max_duration: number
@@ -38,19 +41,22 @@ export default function ScheduleCheckCard({
   onRunNow,
 }: ScheduleCheckCardProps) {
   const { t } = useTranslation()
-  const localCronExpression = check.check_cron_expression
-    ? convertCronToLocal(check.check_cron_expression)
-    : ''
-  const scheduleDisplay = localCronExpression
-    ? formatCronHuman(localCronExpression)
+  const scheduleTimezone = check.check_timezone || check.timezone || 'UTC'
+  const scheduleDisplay = check.check_cron_expression
+    ? formatCronHuman(check.check_cron_expression)
     : t('schedule.checkCard.stats.notSet')
+  const nextCheckDisplay = check.next_scheduled_check
+    ? formatScheduledInstantDisplay(check.next_scheduled_check, scheduleTimezone)
+    : null
 
   const stats: StatItem[] = [
     {
       icon: <CalendarClock size={11} />,
       label: t('common.schedule'),
       value: scheduleDisplay,
-      tooltip: localCronExpression,
+      tooltip: check.check_cron_expression
+        ? `${check.check_cron_expression} (${scheduleTimezone})`
+        : undefined,
       color: 'info',
     },
     {
@@ -65,10 +71,8 @@ export default function ScheduleCheckCard({
     {
       icon: <CalendarCheck size={11} />,
       label: t('schedule.checkCard.stats.nextCheck'),
-      value: check.next_scheduled_check
-        ? formatDateCompact(check.next_scheduled_check)
-        : t('common.never'),
-      tooltip: check.next_scheduled_check ? formatDateTimeFull(check.next_scheduled_check) : '',
+      value: nextCheckDisplay?.value ?? t('common.never'),
+      tooltip: nextCheckDisplay ? <ScheduledInstantTooltip display={nextCheckDisplay} /> : '',
       color: 'success',
     },
     {
@@ -78,6 +82,13 @@ export default function ScheduleCheckCard({
         ? `${Math.round(check.check_max_duration / 60)}m`
         : t('schedule.checkCard.stats.unlimited'),
       color: 'secondary',
+    },
+  ]
+
+  const meta: MetaItem[] = [
+    {
+      label: t('common.timezone', { defaultValue: 'Timezone' }),
+      value: scheduleTimezone,
     },
   ]
 
@@ -114,6 +125,7 @@ export default function ScheduleCheckCard({
       subtitle={check.repository_path}
       badge={badge}
       stats={stats}
+      meta={meta}
       actions={actions}
       primaryAction={
         canManage

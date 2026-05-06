@@ -216,7 +216,9 @@ async def compact_repository(
         repo,
         CompactJob,
         error_key="backend.errors.compact.alreadyRunning",
-        dispatcher=lambda job: compact_v2_service.execute_compact(job.id, repo.id),
+        dispatcher=lambda job, repo_id=repo.id: compact_v2_service.execute_compact(
+            job.id, repo_id
+        ),
         status="running",
     )
 
@@ -258,7 +260,9 @@ async def check_repository(
         repo,
         CheckJob,
         error_key="backend.errors.repo.checkAlreadyRunning",
-        dispatcher=lambda job: check_v2_service.execute_check(job.id, repo.id),
+        dispatcher=lambda job, repo_id=repo.id: check_v2_service.execute_check(
+            job.id, repo_id
+        ),
         status="running",
         extra_fields={
             "max_duration": data.max_duration,

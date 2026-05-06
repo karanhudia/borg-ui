@@ -13,6 +13,7 @@ from app.core.security import get_current_user
 from app.database.models import User, InstalledPackage, PackageInstallJob
 from app.database.database import get_db
 from app.services.package_service import package_service
+from app.utils.datetime_utils import serialize_datetime
 
 router = APIRouter(dependencies=[Depends(authorize_request)])
 logger = structlog.get_logger()
@@ -38,6 +39,7 @@ class PackageResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
 class PackageInstallResponse(BaseModel):
@@ -260,8 +262,8 @@ async def get_job_status(job_id: int, db: Session = Depends(get_db)):
         "id": job.id,
         "package_id": job.package_id,
         "status": job.status,
-        "started_at": job.started_at,
-        "completed_at": job.completed_at,
+        "started_at": serialize_datetime(job.started_at),
+        "completed_at": serialize_datetime(job.completed_at),
         "exit_code": job.exit_code,
         "stdout": job.stdout,
         "stderr": job.stderr,
@@ -284,10 +286,10 @@ async def list_jobs(db: Session = Depends(get_db)):
             "id": job.id,
             "package_id": job.package_id,
             "status": job.status,
-            "started_at": job.started_at,
-            "completed_at": job.completed_at,
+            "started_at": serialize_datetime(job.started_at),
+            "completed_at": serialize_datetime(job.completed_at),
             "exit_code": job.exit_code,
-            "created_at": job.created_at,
+            "created_at": serialize_datetime(job.created_at),
         }
         for job in jobs
     ]

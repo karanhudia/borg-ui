@@ -21,23 +21,30 @@ class Settings(BaseSettings):
     secret_key: str = ""  # Will be auto-generated on first run
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440  # 24 hours
+    auth_rate_limit_enabled: bool = True
+    auth_rate_limit_window_seconds: int = 900
+    auth_rate_limit_max_attempts: int = 5
+    auth_rate_limit_lockout_seconds: int = 900
 
     # Proxy authentication settings
     disable_authentication: bool = (
         False  # Disable built-in auth, trust reverse proxy headers
     )
+    allow_insecure_no_auth: bool = False  # Disable all auth checks and impersonate a local user; unsafe outside local/dev use
     proxy_auth_header: str = (
         "X-Forwarded-User"  # Header containing authenticated username
     )
-    proxy_auth_role_header: str = (
-        "X-Forwarded-Role"  # Optional header containing global role
+    proxy_auth_role_header: Optional[str] = (
+        None  # Optional header containing global role
     )
-    proxy_auth_all_repositories_role_header: str = "X-Forwarded-All-Repositories-Role"  # Optional header containing repository-wide role
-    proxy_auth_email_header: str = (
-        "X-Forwarded-Email"  # Optional header containing authenticated email
+    proxy_auth_all_repositories_role_header: Optional[str] = (
+        None  # Optional header containing repository-wide role
     )
-    proxy_auth_full_name_header: str = (
-        "X-Forwarded-Full-Name"  # Optional header containing authenticated full name
+    proxy_auth_email_header: Optional[str] = (
+        None  # Optional header containing authenticated email
+    )
+    proxy_auth_full_name_header: Optional[str] = (
+        None  # Optional header containing authenticated full name
     )
 
     # Licensing / activation settings
@@ -61,6 +68,9 @@ class Settings(BaseSettings):
 
     # CORS settings - comma-separated string that gets parsed to list
     _cors_origins_str: str = "http://localhost:7879,http://localhost:8000"
+    _trusted_proxies_str: str = "127.0.0.1,::1"
+    _oidc_allowed_return_origins_str: str = ""
+    public_base_url: Optional[str] = None
 
     @property
     def cors_origins(self) -> List[str]:
@@ -78,6 +88,22 @@ class Settings(BaseSettings):
             self._cors_origins_str = ",".join(value)
         else:
             self._cors_origins_str = value
+
+    @property
+    def trusted_proxies(self) -> List[str]:
+        return [
+            proxy.strip()
+            for proxy in self._trusted_proxies_str.split(",")
+            if proxy.strip()
+        ]
+
+    @property
+    def oidc_allowed_return_origins(self) -> List[str]:
+        return [
+            origin.strip().rstrip("/")
+            for origin in self._oidc_allowed_return_origins_str.split(",")
+            if origin.strip()
+        ]
 
     def get_local_mount_points(self) -> List[str]:
         """Get local mount points as list"""
@@ -149,8 +175,12 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
         extra = "ignore"
-        # Map CORS_ORIGINS env var to _cors_origins_str field
-        fields = {"_cors_origins_str": {"env": "CORS_ORIGINS"}}
+        # Map env vars to internal string fields
+        fields = {
+            "_cors_origins_str": {"env": "CORS_ORIGINS"},
+            "_trusted_proxies_str": {"env": "TRUSTED_PROXIES"},
+            "_oidc_allowed_return_origins_str": {"env": "OIDC_ALLOWED_RETURN_ORIGINS"},
+        }
 
 
 # Create settings instance

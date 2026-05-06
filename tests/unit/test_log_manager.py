@@ -9,7 +9,7 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
 from app.services.log_manager import LogManager, log_manager
@@ -123,8 +123,8 @@ class TestCalculateLogStorage:
         newest = result["newest_log_date"]
 
         assert oldest < newest
-        assert (datetime.now() - oldest).days >= 9  # ~10 days old
-        assert (datetime.now() - newest).days >= 0  # ~1 day old
+        assert (datetime.now(timezone.utc) - oldest).days >= 9  # ~10 days old
+        assert (datetime.now(timezone.utc) - newest).days >= 0  # ~1 day old
 
 
 class TestGetRunningJobLogPaths:

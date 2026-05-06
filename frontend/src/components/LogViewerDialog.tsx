@@ -14,7 +14,7 @@ import { ContentCopy } from '@mui/icons-material'
 import ResponsiveDialog from './ResponsiveDialog'
 import StatusBadge from './StatusBadge'
 import { TerminalLogViewer, TerminalLogViewerHandle } from './TerminalLogViewer'
-import { BASE_PATH } from '@/utils/basePath'
+import { activityAPI } from '../services/api'
 
 interface JobWithLogs {
   id: string | number
@@ -59,13 +59,8 @@ export default function LogViewerDialog<T extends JobWithLogs>({
     if (!open || !jobId || currentStatus !== 'running') return
     const poll = async () => {
       try {
-        const res = await fetch(`${BASE_PATH}/api/activity/recent?job_type=${jobType}&limit=100`, {
-          headers: {
-            'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
-          },
-        })
-        if (!res.ok) return
-        const items: Array<{ id: number; type: string; status: string }> = await res.json()
+        const response = await activityAPI.list({ job_type: jobType, limit: 100 })
+        const items: Array<{ id: number; type: string; status: string }> = response.data
         const item = items.find((i) => String(i.id) === String(jobId) && i.type === jobType)
         if (item && item.status !== 'running') setCurrentStatus(item.status)
       } catch {
@@ -81,18 +76,8 @@ export default function LogViewerDialog<T extends JobWithLogs>({
     async (offset: number) => {
       if (!jobId) return { lines: [], total_lines: 0, has_more: false }
 
-      const response = await fetch(
-        `${BASE_PATH}/api/activity/${jobType}/${jobId}/logs?offset=${offset}&limit=500`,
-        {
-          headers: {
-            'X-Borg-Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
-          },
-        }
-      )
-      if (!response.ok) {
-        throw new Error('Failed to fetch logs')
-      }
-      return response.json()
+      const response = await activityAPI.getLogs(jobType, jobId, offset)
+      return response.data
     },
     [jobType, jobId]
   )
@@ -141,6 +126,8 @@ function getTypeLabel(type: string, t: (key: string) => string): string {
       return t('logViewer.typeRestore')
     case 'check':
       return t('logViewer.typeCheck')
+    case 'restore_check':
+      return t('scheduledRestoreChecks.badge.restoreCheck')
     case 'compact':
       return t('logViewer.typeCompact')
     case 'prune':

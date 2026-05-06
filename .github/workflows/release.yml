@@ -29,6 +29,11 @@ jobs:
           VERSION="${VERSION#v}"  # Remove 'v' prefix
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          if [[ "$VERSION" == *-* ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Get previous tag
         id: previous_tag
@@ -62,7 +67,9 @@ jobs:
             echo "Published to Docker Hub:"
             echo '```'
             echo "docker pull ainullcode/borg-ui:${{ steps.version.outputs.version }}"
-            echo "docker pull ainullcode/borg-ui:latest"
+            if [[ "${{ steps.version.outputs.is_prerelease }}" != "true" ]]; then
+              echo "docker pull ainullcode/borg-ui:latest"
+            fi
             echo '```'
             echo ""
             echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.tag }}...${{ github.ref_name }}"
@@ -70,13 +77,13 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.changelog }}
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

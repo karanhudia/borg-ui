@@ -16,6 +16,11 @@ from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
+from app.services.restore_check_canary import (
+    ensure_restore_canary,
+    should_include_restore_canary,
+    to_restore_canary_archive_source_path,
+)
 from app.utils.ssh_paths import resolve_sshfs_source_path
 from app.utils.borg_env import (
     build_repository_borg_env,
@@ -1182,6 +1187,73 @@ class BackupService:
         # Remove from tracking
         del self.ssh_mounts[job_id]
 
+    def _resolve_backup_command_paths(
+        self,
+        processed_source_paths: list[str],
+        ssh_mount_info: list[tuple[str, str]],
+        job_id: int,
+    ) -> tuple[list[str], str | None]:
+        backup_cwd = None
+        backup_paths = processed_source_paths
+
+        if ssh_mount_info and len(ssh_mount_info) == len(processed_source_paths):
+            temp_roots = list(set(temp_root for temp_root, _ in ssh_mount_info))
+
+            if len(temp_roots) == 1:
+                backup_cwd = temp_roots[0]
+                logger.info(
+                    "Using cwd for SSH mount backup (preserves original path structure)",
+                    cwd=backup_cwd,
+                    backup_paths=backup_paths,
+                    job_id=job_id,
+                )
+            else:
+                logger.warning(
+                    "Multiple SSH mounts with different temp roots - using absolute paths",
+                    temp_root_count=len(temp_roots),
+                    job_id=job_id,
+                )
+                backup_paths = [
+                    os.path.join(temp_root, relative_path)
+                    for temp_root, relative_path in ssh_mount_info
+                ]
+        elif ssh_mount_info:
+            ssh_path_count = len(ssh_mount_info)
+            backup_paths = [
+                os.path.join(temp_root, relative_path)
+                for temp_root, relative_path in ssh_mount_info
+            ]
+            backup_paths.extend(processed_source_paths[ssh_path_count:])
+            logger.info(
+                "Using absolute SSH mount paths for mixed source backup",
+                ssh_path_count=ssh_path_count,
+                local_path_count=len(processed_source_paths) - ssh_path_count,
+                job_id=job_id,
+            )
+
+        rewritten_paths = []
+        has_canary_path = False
+        for path in backup_paths:
+            canary_archive_path = to_restore_canary_archive_source_path(
+                path, settings.data_dir
+            )
+            if canary_archive_path:
+                rewritten_paths.append(canary_archive_path)
+                has_canary_path = True
+            else:
+                rewritten_paths.append(path)
+
+        if has_canary_path:
+            backup_paths = rewritten_paths
+            backup_cwd = str(Path(settings.data_dir))
+            logger.info(
+                "Using hidden archive path for restore canary",
+                cwd=backup_cwd,
+                job_id=job_id,
+            )
+
+        return backup_paths, backup_cwd
+
     async def execute_backup(
         self,
         job_id: int,
@@ -1421,12 +1493,26 @@ class BackupService:
 
             router.validate_local_repository_access()
 
+            if should_include_restore_canary(repo_record):
+                canary_path = ensure_restore_canary(repo_record)
+                if str(canary_path) not in source_paths:
+                    source_paths = [*source_paths, str(canary_path)]
+                    logger.info(
+                        "Added restore canary to backup source paths",
+                        job_id=job_id,
+                        repository_id=repo_record.id,
+                        canary_path=str(canary_path),
+                    )
+
             # Use repository path as-is (already contains full SSH URL for SSH repos)
             actual_repository_path = repository
 
             # Setup SSH-specific configuration if this is an SSH repository
             env, temp_key_file = build_repository_borg_env(
-                repo_record, db, base_env=env
+                repo_record,
+                db,
+                keepalive=True,
+                base_env=env,
             )
             if temp_key_file:
                 logger.info(
@@ -1636,45 +1722,11 @@ class BackupService:
                 custom_flags=custom_flag_list,
             )
 
-            # Determine if we should use cwd for SSH mounts to avoid /tmp/sshfs_mount_xxx/ in archive
-            # With the new mount structure, paths already preserve original directory structure
-            # Example: /var/snap/docker/.../portainer/_data appears as var/snap/docker/.../portainer/_data in archive
-            backup_cwd = None
-            backup_paths = processed_source_paths
-
-            if ssh_mount_info and len(ssh_mount_info) == len(processed_source_paths):
-                # All paths are SSH mounts
-                # Extract unique temp_roots
-                temp_roots = list(set(temp_root for temp_root, _ in ssh_mount_info))
-
-                if len(temp_roots) == 1:
-                    # All SSH mounts share the same temp_root - use it as cwd
-                    # This allows relative paths to work and strips the /tmp/sshfs_mount_xxx prefix
-                    backup_cwd = temp_roots[0]
-                    # processed_source_paths already contains relative paths that preserve structure
-                    # e.g., "var/snap/docker/.../portainer/_data"
-                    backup_paths = processed_source_paths
-                    logger.info(
-                        "Using cwd for SSH mount backup (preserves original path structure)",
-                        cwd=backup_cwd,
-                        backup_paths=backup_paths,
-                        job_id=job_id,
-                    )
-                else:
-                    # Multiple SSH mounts with different temp_roots
-                    # Need to use absolute paths or run multiple backup commands
-                    # For now, fall back to absolute paths (each mount has different temp dir)
-                    logger.warning(
-                        "Multiple SSH mounts with different temp roots - using absolute paths",
-                        temp_root_count=len(temp_roots),
-                        job_id=job_id,
-                    )
-                    # Convert relative paths back to absolute by prefixing with temp_root
-                    backup_paths = []
-                    for i, (temp_root, relative_path) in enumerate(ssh_mount_info):
-                        absolute_path = os.path.join(temp_root, relative_path)
-                        backup_paths.append(absolute_path)
-                    backup_cwd = None
+            backup_paths, backup_cwd = self._resolve_backup_command_paths(
+                processed_source_paths,
+                ssh_mount_info,
+                job_id,
+            )
 
             # Add all source paths to the command
             cmd.extend(backup_paths)

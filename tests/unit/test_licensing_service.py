@@ -102,6 +102,10 @@ def test_import_offline_entitlement_sets_active_trial(db_session, activation_key
     assert summary["access_level"] == "full_access"
     assert summary["is_full_access"] is True
     assert summary["instance_id"] == state.instance_id
+    assert summary["expires_at"].endswith("+00:00")
+    assert summary["starts_at"].endswith("+00:00")
+    assert summary["refresh_after"].endswith("+00:00")
+    assert summary["last_refresh_at"].endswith("+00:00")
 
 
 @pytest.mark.unit

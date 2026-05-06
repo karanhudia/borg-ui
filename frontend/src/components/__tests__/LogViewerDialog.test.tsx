@@ -3,6 +3,20 @@ import { describe, it, expect, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import LogViewerDialog from '../LogViewerDialog'
 
+const { activityListMock, activityLogsMock } = vi.hoisted(() => ({
+  activityListMock: vi.fn().mockResolvedValue({ data: [] }),
+  activityLogsMock: vi.fn().mockResolvedValue({
+    data: { lines: [], total_lines: 0, has_more: false },
+  }),
+}))
+
+vi.mock('../../services/api', () => ({
+  activityAPI: {
+    list: activityListMock,
+    getLogs: activityLogsMock,
+  },
+}))
+
 // Mock the TerminalLogViewer component
 vi.mock('../TerminalLogViewer', () => ({
   TerminalLogViewer: ({

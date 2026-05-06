@@ -13,7 +13,6 @@ const BetaFeaturesTab: React.FC = () => {
   const { trackSettings, EventAction } = useAnalytics()
   const [bypassLockOnInfo, setBypassLockOnInfo] = useState(false)
   const [bypassLockOnList, setBypassLockOnList] = useState(false)
-  const [showRestoreTab, setShowRestoreTab] = useState(false)
   const [borg2FastBrowseBetaEnabled, setBorg2FastBrowseBetaEnabled] = useState(false)
   const [mqttBetaEnabled, setMqttBetaEnabled] = useState(false)
 
@@ -33,7 +32,6 @@ const BetaFeaturesTab: React.FC = () => {
     if (systemSettings) {
       setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
       setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
-      setShowRestoreTab(systemSettings.show_restore_tab ?? false)
       setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
       setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
     }
@@ -44,7 +42,6 @@ const BetaFeaturesTab: React.FC = () => {
     mutationFn: async (settings: {
       bypass_lock_on_info?: boolean
       bypass_lock_on_list?: boolean
-      show_restore_tab?: boolean
       borg2_fast_browse_beta_enabled?: boolean
       mqtt_beta_enabled?: boolean
     }) => {
@@ -60,7 +57,6 @@ const BetaFeaturesTab: React.FC = () => {
       if (systemSettings) {
         setBypassLockOnInfo(systemSettings.bypass_lock_on_info ?? false)
         setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
-        setShowRestoreTab(systemSettings.show_restore_tab ?? false)
         setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
         setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
       }
@@ -85,16 +81,6 @@ const BetaFeaturesTab: React.FC = () => {
       enabled: checked,
     })
     saveSettingsMutation.mutate({ bypass_lock_on_list: checked })
-  }
-
-  const handleRestoreTabToggle = (checked: boolean) => {
-    setShowRestoreTab(checked)
-    trackSettings(EventAction.EDIT, {
-      section: 'beta_features',
-      feature: 'show_restore_tab',
-      enabled: checked,
-    })
-    saveSettingsMutation.mutate({ show_restore_tab: checked })
   }
 
   const handleBorg2FastBrowseToggle = (checked: boolean) => {
@@ -184,34 +170,6 @@ const BetaFeaturesTab: React.FC = () => {
                   <Typography variant="body1">{t('betaFeatures.enableBypassLocksList')}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     {t('betaFeatures.bypassLocksListDescription')}
-                  </Typography>
-                </Box>
-              }
-            />
-          </Box>
-
-          {/* Show Restore Tab */}
-          <Box>
-            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
-              {t('betaFeatures.showLegacyRestoreTabTitle')}
-            </Typography>
-
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={showRestoreTab}
-                  onChange={(e) => handleRestoreTabToggle(e.target.checked)}
-                  disabled={saveSettingsMutation.isPending}
-                  color="primary"
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body1">
-                    {t('betaFeatures.showLegacyRestoreTabLabel')}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('betaFeatures.showLegacyRestoreTabDescription')}
                   </Typography>
                 </Box>
               }

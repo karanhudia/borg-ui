@@ -582,6 +582,7 @@ class BorgInterface:
         passphrase: str = None,
         bypass_lock: bool = False,
         env: dict = None,
+        strip_components: int = None,
     ) -> Dict:
         """Extract files from an archive"""
         cmd = [self.borg_cmd, "extract"]
@@ -594,6 +595,9 @@ class BorgInterface:
 
         if bypass_lock:
             cmd.append("--bypass-lock")
+
+        if strip_components:
+            cmd.extend(["--strip-components", str(strip_components)])
 
         # Skip extended attributes and ACLs to avoid errors on filesystems that don't support them
         # This prevents "Operation not supported" errors when extracting files with NFS4 ACLs, etc.

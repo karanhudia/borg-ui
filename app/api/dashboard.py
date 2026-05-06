@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import psutil
 import structlog
-import croniter
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
@@ -16,13 +16,22 @@ from app.database.models import (
     ScheduledJobRepository,
     CheckJob,
     CompactJob,
+    RestoreCheckJob,
     SSHConnection,
 )
 from app.core.security import get_current_user
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    calculate_next_cron_run,
+    to_utc_naive,
+)
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+RESTORE_CHECK_WARNING_DAYS = 14
+RESTORE_CHECK_CRITICAL_DAYS = 30
 
 
 # Helper function to format datetime with timezone
@@ -35,11 +44,16 @@ def resolve_schedule_next_run(
     schedule: ScheduledJob, now: datetime
 ) -> Optional[datetime]:
     """Resolve the next due time for a schedule, preferring stored future values."""
-    if schedule.next_run and schedule.next_run > now:
-        return schedule.next_run
+    now_utc = to_utc_naive(now)
+    if schedule.next_run and to_utc_naive(schedule.next_run) > now_utc:
+        return to_utc_naive(schedule.next_run)
 
     try:
-        return croniter.croniter(schedule.cron_expression, now).get_next(datetime)
+        return calculate_next_cron_run(
+            schedule.cron_expression,
+            now_utc,
+            schedule.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+        )
     except Exception:
         return None
 
@@ -61,6 +75,7 @@ class ScheduledJobInfo(BaseModel):
     id: int
     name: str
     cron_expression: str
+    timezone: str = DEFAULT_SCHEDULE_TIMEZONE
     repository: str = None
     enabled: bool
     last_run: str = None
@@ -88,7 +103,134 @@ class ScheduleResponse(BaseModel):
     next_execution: str = None
 
 
-def build_full_repository_health(repo: Repository, now: datetime) -> Dict[str, Any]:
+def promote_repository_health(
+    health_status: str, health_color: str, severity: str
+) -> tuple[str, str]:
+    if severity == "critical":
+        return "critical", "error"
+    if severity == "warning" and health_status != "critical":
+        return "warning", "warning"
+    return health_status, health_color
+
+
+def build_restore_check_health(
+    repo: Repository,
+    now: datetime,
+    latest_restore_check: Optional[RestoreCheckJob] = None,
+) -> Dict[str, Any]:
+    """Build restore-verification health without penalizing unconfigured repos."""
+    configured = bool(repo.restore_check_cron_expression)
+    latest_status = latest_restore_check.status if latest_restore_check else None
+    latest_error = latest_restore_check.error_message if latest_restore_check else None
+    last_success = repo.last_restore_check
+
+    if latest_status == "failed":
+        return {
+            "dimension": "critical",
+            "severity": "critical",
+            "warning": f"Restore check failed: {latest_error or 'unknown error'}",
+            "configured": configured,
+            "latest_status": latest_status,
+            "latest_error": latest_error,
+        }
+
+    if latest_status == "completed_with_warnings":
+        return {
+            "dimension": "warning",
+            "severity": "warning",
+            "warning": "Restore check completed with warnings",
+            "configured": configured,
+            "latest_status": latest_status,
+            "latest_error": latest_error,
+        }
+
+    if latest_status == "needs_backup":
+        return {
+            "dimension": "warning",
+            "severity": "warning",
+            "warning": latest_error or "Restore check needs a backup first",
+            "configured": configured,
+            "latest_status": latest_status,
+            "latest_error": latest_error,
+        }
+
+    if latest_status == "cancelled":
+        return {
+            "dimension": "warning",
+            "severity": "warning",
+            "warning": "Latest restore check was cancelled",
+            "configured": configured,
+            "latest_status": latest_status,
+            "latest_error": latest_error,
+        }
+
+    if latest_status in ("pending", "running") and not last_success:
+        return {
+            "dimension": "warning",
+            "severity": "warning",
+            "warning": "Restore check has not completed yet",
+            "configured": configured,
+            "latest_status": latest_status,
+            "latest_error": latest_error,
+        }
+
+    if latest_status == "completed" and not last_success and latest_restore_check:
+        last_success = latest_restore_check.completed_at
+
+    if last_success:
+        days_since_restore_check = (now - last_success).days
+        if days_since_restore_check > RESTORE_CHECK_CRITICAL_DAYS:
+            return {
+                "dimension": "critical",
+                "severity": "critical",
+                "warning": f"No restore check in {days_since_restore_check} days",
+                "configured": configured,
+                "latest_status": latest_status,
+                "latest_error": latest_error,
+            }
+        if days_since_restore_check > RESTORE_CHECK_WARNING_DAYS:
+            return {
+                "dimension": "warning",
+                "severity": "warning",
+                "warning": f"Last restore check {days_since_restore_check} days ago",
+                "configured": configured,
+                "latest_status": latest_status,
+                "latest_error": latest_error,
+            }
+        return {
+            "dimension": "healthy",
+            "severity": None,
+            "warning": None,
+            "configured": configured,
+            "latest_status": latest_status,
+            "latest_error": latest_error,
+        }
+
+    if configured:
+        return {
+            "dimension": "warning",
+            "severity": "warning",
+            "warning": "Restore check configured but never completed",
+            "configured": configured,
+            "latest_status": latest_status,
+            "latest_error": latest_error,
+        }
+
+    return {
+        "dimension": "unknown",
+        "severity": None,
+        "warning": None,
+        "configured": configured,
+        "latest_status": latest_status,
+        "latest_error": latest_error,
+    }
+
+
+def build_full_repository_health(
+    repo: Repository,
+    now: datetime,
+    latest_restore_check: Optional[RestoreCheckJob] = None,
+) -> Dict[str, Any]:
     """Build health signals for repositories managed directly by Borg UI."""
     health_status = "healthy"
     health_color = "success"
@@ -138,19 +280,35 @@ def build_full_repository_health(repo: Repository, now: datetime) -> Dict[str, A
     else:
         compact_dim = "critical"
 
+    restore_check_health = build_restore_check_health(repo, now, latest_restore_check)
+    if restore_check_health["severity"]:
+        health_status, health_color = promote_repository_health(
+            health_status, health_color, restore_check_health["severity"]
+        )
+    if restore_check_health["warning"]:
+        warnings.append(restore_check_health["warning"])
+
     return {
         "health_status": health_status,
         "health_color": health_color,
         "warnings": warnings,
+        "restore_check_configured": restore_check_health["configured"],
+        "latest_restore_check_status": restore_check_health["latest_status"],
+        "latest_restore_check_error": restore_check_health["latest_error"],
         "dimension_health": {
             "backup": backup_dim,
             "check": check_dim,
             "compact": compact_dim,
+            "restore": restore_check_health["dimension"],
         },
     }
 
 
-def build_observe_repository_health(repo: Repository, now: datetime) -> Dict[str, Any]:
+def build_observe_repository_health(
+    repo: Repository,
+    now: datetime,
+    latest_restore_check: Optional[RestoreCheckJob] = None,
+) -> Dict[str, Any]:
     """Build monitoring-oriented health signals for observe-only repositories."""
     freshness_dim = "healthy"
     check_dim = "unknown"
@@ -201,15 +359,27 @@ def build_observe_repository_health(repo: Repository, now: datetime) -> Dict[str
             health_status = "warning"
             health_color = "warning"
 
+    restore_check_health = build_restore_check_health(repo, now, latest_restore_check)
+    if restore_check_health["severity"]:
+        health_status, health_color = promote_repository_health(
+            health_status, health_color, restore_check_health["severity"]
+        )
+    if restore_check_health["warning"]:
+        warnings.append(restore_check_health["warning"])
+
     return {
         "health_status": health_status,
         "health_color": health_color,
         "warnings": warnings,
+        "restore_check_configured": restore_check_health["configured"],
+        "latest_restore_check_status": restore_check_health["latest_status"],
+        "latest_restore_check_error": restore_check_health["latest_error"],
         "dimension_health": {
             # Reused as Freshness / Check / Archives on the frontend for observe-only repos.
             "backup": freshness_dim,
             "check": check_dim,
             "compact": archives_dim,
+            "restore": restore_check_health["dimension"],
         },
     }
 
@@ -434,6 +604,28 @@ async def get_dashboard_overview(
         # Get SSH connections
         ssh_connections = db.query(SSHConnection).all()
 
+        latest_restore_checks = {}
+        repository_ids = [repo.id for repo in repositories]
+        if repository_ids:
+            latest_restore_check_ids = (
+                db.query(func.max(RestoreCheckJob.id).label("id"))
+                .filter(RestoreCheckJob.repository_id.in_(repository_ids))
+                .group_by(RestoreCheckJob.repository_id)
+                .subquery()
+            )
+            restore_check_jobs = (
+                db.query(RestoreCheckJob)
+                .join(
+                    latest_restore_check_ids,
+                    RestoreCheckJob.id == latest_restore_check_ids.c.id,
+                )
+                .all()
+            )
+            for restore_check_job in restore_check_jobs:
+                latest_restore_checks[restore_check_job.repository_id] = (
+                    restore_check_job
+                )
+
         # Calculate repository health (only for full-mode repos that do backups)
         repo_health = []
         total_size_bytes = 0
@@ -449,7 +641,8 @@ async def get_dashboard_overview(
         for repo in full_mode_repos:
             # Parse size for this repo
             size_bytes = parse_size_to_bytes(repo.total_size)
-            health = build_full_repository_health(repo, now)
+            latest_restore_check = latest_restore_checks.get(repo.id)
+            health = build_full_repository_health(repo, now, latest_restore_check)
 
             # Get associated schedule — prefer enabled over disabled when multiple match
             repo_schedule = None
@@ -500,12 +693,18 @@ async def get_dashboard_overview(
                     "last_backup": serialize_datetime(repo.last_backup),
                     "last_check": serialize_datetime(repo.last_check),
                     "last_compact": serialize_datetime(repo.last_compact),
+                    "last_restore_check": serialize_datetime(repo.last_restore_check),
                     "archive_count": repo.archive_count or 0,
                     "total_size": repo.total_size,
                     "size_bytes": size_bytes,
                     "health_status": health["health_status"],
                     "health_color": health["health_color"],
                     "warnings": health["warnings"],
+                    "restore_check_configured": health["restore_check_configured"],
+                    "latest_restore_check_status": health[
+                        "latest_restore_check_status"
+                    ],
+                    "latest_restore_check_error": health["latest_restore_check_error"],
                     "dedup_ratio": dedup_ratio,
                     "has_schedule": repo_schedule is not None,
                     "schedule_enabled": repo_schedule.enabled
@@ -525,7 +724,8 @@ async def get_dashboard_overview(
 
         for repo in observe_only_repos:
             size_bytes = parse_size_to_bytes(repo.total_size)
-            health = build_observe_repository_health(repo, now)
+            latest_restore_check = latest_restore_checks.get(repo.id)
+            health = build_observe_repository_health(repo, now, latest_restore_check)
 
             repo_health.append(
                 {
@@ -537,12 +737,18 @@ async def get_dashboard_overview(
                     "last_backup": serialize_datetime(repo.last_backup),
                     "last_check": serialize_datetime(repo.last_check),
                     "last_compact": serialize_datetime(repo.last_compact),
+                    "last_restore_check": serialize_datetime(repo.last_restore_check),
                     "archive_count": repo.archive_count or 0,
                     "total_size": repo.total_size,
                     "size_bytes": size_bytes,
                     "health_status": health["health_status"],
                     "health_color": health["health_color"],
                     "warnings": health["warnings"],
+                    "restore_check_configured": health["restore_check_configured"],
+                    "latest_restore_check_status": health[
+                        "latest_restore_check_status"
+                    ],
+                    "latest_restore_check_error": health["latest_restore_check_error"],
                     "dedup_ratio": None,
                     "has_schedule": False,
                     "schedule_enabled": False,
@@ -629,6 +835,7 @@ async def get_dashboard_overview(
                     "name": schedule.name,
                     "repositories": repo_names,
                     "cron": schedule.cron_expression,
+                    "timezone": schedule.timezone or DEFAULT_SCHEDULE_TIMEZONE,
                     "next_run": serialize_datetime(next_run_dt),
                 }
             )
@@ -702,6 +909,11 @@ async def get_dashboard_overview(
         recent_compacts = (
             db.query(CompactJob)
             .filter(CompactJob.started_at >= fourteen_days_ago)
+            .all()
+        )
+        recent_restore_checks = (
+            db.query(RestoreCheckJob)
+            .filter(RestoreCheckJob.started_at >= fourteen_days_ago)
             .all()
         )
 
@@ -816,6 +1028,35 @@ async def get_dashboard_overview(
                     "repository": repo_name,
                     "timestamp": serialize_datetime(job.started_at),
                     "message": f"Compact {job.status}",
+                    "error": job.error_message if job.status == "failed" else None,
+                }
+            )
+
+        for job in recent_restore_checks:
+            repo_name = None
+            if job.repository_path in repo_name_map:
+                repo_name = repo_name_map[job.repository_path]
+            elif (
+                job.repository_path and job.repository_path.rstrip("/") in repo_name_map
+            ):
+                repo_name = repo_name_map[job.repository_path.rstrip("/")]
+            elif job.repository_id and job.repository_id in repo_id_map:
+                repo_name = repo_id_map[job.repository_id]
+            else:
+                repo_name = (
+                    job.repository_path.rstrip("/").split("/")[-1]
+                    if job.repository_path
+                    else "Unknown"
+                )
+
+            activity_feed.append(
+                {
+                    "id": job.id,
+                    "type": "restore_check",
+                    "status": job.status,
+                    "repository": repo_name,
+                    "timestamp": serialize_datetime(job.started_at),
+                    "message": f"Restore check {job.status}",
                     "error": job.error_message if job.status == "failed" else None,
                 }
             )

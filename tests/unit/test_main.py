@@ -54,29 +54,24 @@ class TestStartupEvent:
                                                     return_value=AsyncMock(),
                                                 ):
                                                     with patch(
-                                                        "app.services.check_scheduler.check_scheduler"
+                                                        "app.services.stats_refresh_scheduler.stats_refresh_scheduler"
                                                     ):
                                                         with patch(
-                                                            "app.services.stats_refresh_scheduler.stats_refresh_scheduler"
+                                                            "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
+                                                            return_value=AsyncMock(),
                                                         ):
                                                             with patch(
-                                                                "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
-                                                                return_value=AsyncMock(),
+                                                                "asyncio.create_task"
                                                             ):
-                                                                with patch(
-                                                                    "asyncio.create_task"
-                                                                ):
-                                                                    from app.main import (
-                                                                        startup_event,
-                                                                        app,
-                                                                    )
+                                                                from app.main import (
+                                                                    startup_event,
+                                                                    app,
+                                                                )
 
-                                                                    app.state.background_tasks = []
-                                                                    await (
-                                                                        startup_event()
-                                                                    )
-                                                                    mock_mqtt.configure.assert_called_once()
-                                                                    mock_mqtt.sync_state_with_db.assert_called_once()
+                                                                app.state.background_tasks = []
+                                                                await startup_event()
+                                                                mock_mqtt.configure.assert_called_once()
+                                                                mock_mqtt.sync_state_with_db.assert_called_once()
 
     async def test_startup_configures_cache_even_when_license_sync_disabled(
         self, mock_db
@@ -98,7 +93,6 @@ class TestStartupEvent:
             patch("app.utils.process_utils.cleanup_orphaned_jobs"),
             patch("app.utils.process_utils.cleanup_orphaned_mounts"),
             patch("app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()),
-            patch("app.services.check_scheduler.check_scheduler"),
             patch("app.services.stats_refresh_scheduler.stats_refresh_scheduler"),
             patch(
                 "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
@@ -155,7 +149,6 @@ class TestStartupEvent:
             patch("app.utils.process_utils.cleanup_orphaned_jobs"),
             patch("app.utils.process_utils.cleanup_orphaned_mounts"),
             patch("app.api.schedule.check_scheduled_jobs", return_value=AsyncMock()),
-            patch("app.services.check_scheduler.check_scheduler"),
             patch("app.services.stats_refresh_scheduler.stats_refresh_scheduler"),
             patch(
                 "app.services.mqtt_sync_scheduler.start_mqtt_sync_scheduler",
@@ -172,6 +165,93 @@ class TestStartupEvent:
             assert captured_refresh_coro.cr_frame is not None
             assert captured_refresh_coro.cr_frame.f_locals["app_version"] == "9.9.9"
             captured_refresh_coro.close()
+
+
+@pytest.mark.unit
+class TestProxyAuthStartupWarnings:
+    def test_no_proxy_warning_when_proxy_auth_disabled(self):
+        with (
+            patch("app.main.settings.disable_authentication", False),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_proxy_auth_security_warnings
+
+            _log_proxy_auth_security_warnings()
+
+        mock_warning.assert_not_called()
+
+    def test_warns_when_proxy_auth_binds_broadly(self):
+        with (
+            patch("app.main.settings.disable_authentication", True),
+            patch("app.main.settings.host", "0.0.0.0"),
+            patch("app.main.settings.proxy_auth_header", "X-Forwarded-User"),
+            patch("app.main.settings.proxy_auth_role_header", None),
+            patch("app.main.settings.proxy_auth_all_repositories_role_header", None),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_proxy_auth_security_warnings
+
+            _log_proxy_auth_security_warnings()
+
+        mock_warning.assert_called_once()
+        assert mock_warning.call_args.kwargs["code"] == "broad_bind"
+
+    def test_warns_on_conflicting_proxy_auth_headers(self):
+        with (
+            patch("app.main.settings.disable_authentication", True),
+            patch("app.main.settings.host", "127.0.0.1"),
+            patch("app.main.settings.proxy_auth_header", "Authorization"),
+            patch("app.main.settings.proxy_auth_role_header", "Authorization"),
+            patch(
+                "app.main.settings.proxy_auth_all_repositories_role_header",
+                "Authorization",
+            ),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_proxy_auth_security_warnings
+
+            _log_proxy_auth_security_warnings()
+
+        assert mock_warning.call_count == 4
+
+
+@pytest.mark.unit
+class TestInsecureNoAuthStartupWarnings:
+    def test_no_insecure_warning_when_disabled(self):
+        with (
+            patch("app.main.settings.allow_insecure_no_auth", False),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_insecure_no_auth_warning
+
+            _log_insecure_no_auth_warning()
+
+        mock_warning.assert_not_called()
+
+    def test_warns_when_insecure_no_auth_enabled(self):
+        with (
+            patch("app.main.settings.allow_insecure_no_auth", True),
+            patch("app.main.settings.disable_authentication", False),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_insecure_no_auth_warning
+
+            _log_insecure_no_auth_warning()
+
+        mock_warning.assert_called_once()
+        assert mock_warning.call_args.kwargs["code"] == "insecure_no_auth_enabled"
+
+    def test_warns_when_insecure_no_auth_conflicts_with_proxy_auth(self):
+        with (
+            patch("app.main.settings.allow_insecure_no_auth", True),
+            patch("app.main.settings.disable_authentication", True),
+            patch("app.main.logger.warning") as mock_warning,
+        ):
+            from app.main import _log_insecure_no_auth_warning
+
+            _log_insecure_no_auth_warning()
+
+        assert mock_warning.call_count == 2
 
 
 @pytest.mark.unit

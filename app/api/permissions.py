@@ -12,6 +12,7 @@ from app.core.permissions import (
     is_repository_role_assignable_to_global_role,
 )
 from app.core.security import get_current_user, get_current_admin_user
+from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["permissions"])
@@ -38,6 +39,7 @@ class PermissionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
 class PermissionScopeResponse(BaseModel):
