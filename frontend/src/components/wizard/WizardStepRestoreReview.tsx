@@ -2,6 +2,11 @@ import React from 'react'
 import { Box, Typography, Alert, Paper, Chip, Divider } from '@mui/material'
 import { HardDrive, Cloud, FolderOpen, FileCheck, CheckCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import {
+  DEFAULT_RESTORE_LAYOUT,
+  getRestorePreviewDestination,
+  type RestoreLayout,
+} from '../../utils/restorePaths'
 
 interface SSHConnection {
   id: number
@@ -16,6 +21,7 @@ interface SSHConnection {
 
 interface ArchiveFile {
   path: string
+  type?: 'file' | 'directory'
   mode: string
   user: string
   group: string
@@ -29,6 +35,7 @@ export interface RestoreReviewData {
   destinationConnectionId: number | ''
   restoreStrategy: 'original' | 'custom'
   customPath: string
+  restoreLayout: RestoreLayout
 }
 
 interface WizardStepRestoreReviewProps {
@@ -80,28 +87,27 @@ export default function WizardStepRestoreReview({
     ? `ssh://${destinationConnection.username}@${destinationConnection.host}:${destinationConnection.port}`
     : ''
 
+  const selectedItems = selectedFiles.map((file) => ({
+    path: file.path,
+    type: file.type || ('file' as const),
+  }))
+
   // Get destination path with SSH prefix if applicable
-  const getDestinationPath = (originalPath: string) => {
-    let path: string
-    if (data.restoreStrategy === 'custom' && data.customPath) {
-      // Borg recreates the full archive path structure under the custom destination.
-      // Archive paths have no leading slash (e.g. "home/user/file.txt"), so the result
-      // is customPath + "/" + archivePath (e.g. "/mnt/disk/home/user/file.txt").
-      const archivePath = originalPath.startsWith('/') ? originalPath.slice(1) : originalPath
-      path = `${data.customPath.replace(/\/$/, '')}/${archivePath}`
-    } else {
-      // Original location: borg extracts to cwd=/, preserving the full archive path.
-      path = originalPath
-    }
+  const getDestinationPath = (originalPath: string) =>
+    getRestorePreviewDestination(originalPath, {
+      restoreStrategy: data.restoreStrategy,
+      customPath: data.customPath,
+      restoreLayout: data.restoreLayout || DEFAULT_RESTORE_LAYOUT,
+      selectedItems,
+      sshPrefix,
+    })
 
-    // Ensure path starts with / for proper display
-    if (path && !path.startsWith('/')) {
-      path = '/' + path
-    }
-
-    // Add SSH prefix if restoring to SSH destination
-    return sshPrefix ? `${sshPrefix}${path}` : path
-  }
+  const isContentsOnlyDirectoryPreview = (path: string) =>
+    data.restoreStrategy === 'custom' &&
+    data.restoreLayout === 'contents_only' &&
+    selectedItems.length === 1 &&
+    selectedItems[0].type === 'directory' &&
+    selectedItems[0].path === path
 
   // Get example paths to show
   const examplePaths = selectedFiles.length > 0 ? selectedFiles.slice(0, 3).map((f) => f.path) : []
@@ -185,6 +191,18 @@ export default function WizardStepRestoreReview({
                   {data.customPath || t('wizard.restoreReview.notSet')}
                 </Typography>
               </SummaryRow>
+              <Divider sx={{ my: 1 }} />
+              <SummaryRow label={t('wizard.restoreReview.restoreLayout')}>
+                <Chip
+                  label={
+                    data.restoreLayout === 'contents_only'
+                      ? t('wizard.restoreReview.restoreContentsHere')
+                      : t('wizard.restoreReview.preserveArchivePath')
+                  }
+                  size="small"
+                  color={data.restoreLayout === 'contents_only' ? 'primary' : 'default'}
+                />
+              </SummaryRow>
             </>
           )}
         </Box>
@@ -250,6 +268,11 @@ export default function WizardStepRestoreReview({
                       }}
                     >
                       → {getDestinationPath(path)}
+                      {isContentsOnlyDirectoryPreview(path) && (
+                        <Box component="span" sx={{ color: 'text.secondary', ml: 0.5 }}>
+                          {t('wizard.restoreDestination.contentsOnlyMarker')}
+                        </Box>
+                      )}
                     </Typography>
                   </Box>
                 ))}

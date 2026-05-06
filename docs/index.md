@@ -1,17 +1,37 @@
 ---
-layout: default
-title: Home
-nav_order: 1
-description: "A modern web interface for Borg Backup"
-permalink: /
----
-
-# Borg Web UI
-
-A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Manage backups through a clean UI instead of complex terminal commands.
-
-**[GitHub](https://github.com/karanhudia/borg-ui)** • **[Docker Hub](https://hub.docker.com/r/ainullcode/borg-ui)** • **[Latest Release](https://github.com/karanhudia/borg-ui/releases)**
-
+layout: home
+title: Borg UI
+hero:
+  name: Borg UI
+  text: Borg backups, with a web UI.
+  tagline: Create repositories, run backups, browse archives, restore files, and manage schedules from one self-hosted interface.
+  image:
+    src: /hero-icon@2x.png
+    alt: Borg UI
+  actions:
+    - theme: brand
+      text: Install
+      link: /installation
+    - theme: alt
+      text: GitHub
+      link: https://github.com/karanhudia/borg-ui
+features:
+  - icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>'
+    title: Backup
+    details: Run Borg backups with live progress, logs, schedules, and maintenance jobs.
+    link: /usage-guide
+  - icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg>'
+    title: Restore
+    details: Browse archives, restore selected files, and verify restore paths.
+    link: /usage-guide
+  - icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="3" rx="2"/><rect width="20" height="8" x="2" y="13" rx="2"/><path d="M6 7h.01"/><path d="M6 17h.01"/></svg>'
+    title: Remote Machines
+    details: Manage SSH connections and remote backup targets from the UI.
+    link: /ssh-keys
+  - icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>'
+    title: Operations
+    details: Configure notifications, metrics, cache, security, and reverse proxy deployments.
+    link: /configuration
 ---
 
 ## Quick Start
@@ -20,229 +40,13 @@ A modern web interface for [Borg Backup](https://borgbackup.readthedocs.io/). Ma
 docker run -d \
   --name borg-web-ui \
   -p 8081:8081 \
+  -e REDIS_HOST=disabled \
   -v borg_data:/data \
   -v borg_cache:/home/borg/.cache/borg \
-  -v /home/yourusername:/local:rw \
+  -v /home/youruser:/local:rw \
   ainullcode/borg-ui:latest
 ```
 
-**Note:** Replace `/home/yourusername` with your actual directory path.
+Open `http://localhost:8081` and log in with `admin` / `admin123`.
 
-Access at `http://localhost:8081` • Default login: `admin` / `admin123`
-
-See [Installation Guide](installation) for other methods and security best practices.
-
----
-
-## Features
-
-**Core Functionality**
-- Backup management with live progress tracking
-- Archive browser with file-level restore
-- Repository management (local, SSH, SFTP)
-- Visual cron scheduler
-- Notifications via 100+ services (Email, Slack, Discord, Telegram, etc.)
-- SSH key management
-- Real-time system monitoring
-
-**Technical**
-- Zero configuration - auto-generates security keys
-- Multi-platform - amd64, arm64, armv7
-- Responsive design - works on mobile
-- Production-ready with comprehensive test suite
-- API-driven Borg 1 integration coverage for backup, archive, restore, maintenance, and schedule workflows
-- Separate smoke workflows against a running build for core and extended Borg scenarios
-
----
-
-## Documentation
-
-### Getting Started
-
-- **[Installation Guide](installation)** - Docker Compose, Portainer, Unraid installation
-- **[Configuration Guide](configuration)** - Environment variables, volumes, permissions
-- **[Usage Guide](usage-guide)** - Create your first backup
-- **[Licensing](licensing)** - Community, Pro, and Enterprise tiers, full access period, and activation
-
-### Features
-
-- **[Notifications Setup](notifications)** - Email, Slack, Discord, and 100+ services
-- **[Mounting Archives](mounting)** - Mount Borg archives as a read-only filesystem
-- **[SSH Keys Guide](ssh-keys)** - Remote backup configuration
-- **[Cache Configuration](cache)** - Redis setup for 600x faster archive browsing
-- **[Security Guide](security)** - Hardening and best practices
-
-### Reference
-
-- **[API Documentation](http://localhost:8081/api/docs)** - Interactive Swagger UI (after installation)
-- **[System Specification](SPECIFICATION)** - Architecture and technical details
-- **[Development Guide](development)** - Setting up a development environment with hot reload
-- **[Testing](testing)** - Production-critical Borg workflows covered by API-driven integration and smoke tests
-
----
-
-## Screenshots
-
-### Dashboard
-![Dashboard](https://github.com/user-attachments/assets/9478189e-4b47-46ae-b672-ad77df6d7040)
-
-### Live Backup Progress
-![Backup Progress](https://github.com/user-attachments/assets/550e396e-ec36-4737-9821-899c99265f64)
-
-### Repository Management
-![Repository Details](https://github.com/user-attachments/assets/4d85cc2f-cfe6-489f-bdb9-67c1ca2e4035)
-
----
-
-## Installation
-
-### Docker Compose
-
-Create `docker-compose.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    container_name: borg-web-ui
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    volumes:
-      - borg_data:/data
-      - borg_cache:/home/borg/.cache/borg
-      - /home/yourusername:/local:rw  # Replace with your directory
-    environment:
-      - PUID=1000
-      - PGID=1000
-
-volumes:
-  borg_data:
-  borg_cache:
-```
-
-Start: `docker compose up -d`
-
-**Other platforms:** [Installation Guide](installation) • **Security:** [Volume Mount Best Practices](configuration#filesystem-access)
-
----
-
-## Configuration
-
-### Environment Variables
-
-```yaml
-environment:
-  - PORT=8081              # Application port
-  - PUID=1000              # User ID for file permissions
-  - PGID=1000              # Group ID for file permissions
-  - LOG_LEVEL=INFO         # Logging level
-```
-
-### Volume Mounts
-
-**⚠️ Security Best Practice:**
-
-Mount only the directories you need to backup:
-
-```yaml
-volumes:
-  # ✅ Recommended: Specific directories
-  - /home/yourusername:/local:rw       # Replace with your path
-  - /mnt/data:/local/data:rw           # Additional directories
-
-  # ❌ NOT Recommended: Full filesystem
-  # - /:/local:rw  # Avoid in production - use for testing only
-```
-
-**Common Patterns:**
-- **Single directory:** `-v /home/john:/local:rw`
-- **Multiple directories:** Add more `-v` flags for each directory
-- **Read-only:** Use `:ro` for backup-only directories
-
-See [Configuration Guide](configuration#filesystem-access) for detailed examples.
-
----
-
-## Common Use Cases
-
-### Home Server / NAS
-Back up your Synology NAS, Unraid server, or personal data to:
-- External USB drives
-- Network storage
-- Remote servers via SSH
-- Cloud storage
-
-### Raspberry Pi
-Lightweight enough for Pi while backing up to:
-- USB storage
-- Another Pi on your network
-- Cloud services
-- NAS devices
-
-### Production Servers
-Manage infrastructure backups from one interface:
-- Automated scheduled backups
-- Health monitoring
-- Quick file restoration
-- Retention policy management
-
----
-
-## Security
-
-**Built-in Security:**
-- Auto-generated SECRET_KEY on first run
-- JWT authentication with secure sessions
-- Runs as non-root user (configurable PUID/PGID)
-- Encrypted repository support
-
-**Best Practices:**
-- Change default password immediately
-- Use HTTPS in production (reverse proxy)
-- Restrict volume mounts to necessary directories
-- Use SSH keys (not passwords) for remote repositories
-- Enable firewall rules
-
-See [Security Guide](security) for complete recommendations.
-
----
-
-## Notifications
-
-Get alerts for backup events via:
-- **Email** (Gmail, Outlook, custom SMTP)
-- **Messaging** (Slack, Discord, Telegram, Microsoft Teams)
-- **Push** (Pushover, Pushbullet, ntfy)
-- **SMS** (Twilio, AWS SNS)
-- **100+ other services** via [Apprise](https://github.com/caronc/apprise)
-
-Configure in **Settings > Notifications** tab.
-
-See [Notifications Setup](notifications) for detailed configuration.
-
----
-
-## Support
-
-**Documentation:** You're reading it!
-
-**Issues:** [GitHub Issues](https://github.com/karanhudia/borg-ui/issues)
-
-**Discussions:** [GitHub Discussions](https://github.com/karanhudia/borg-ui/discussions)
-
----
-
-## License
-
-GNU Affero General Public License v3.0 - See [LICENSE](https://github.com/karanhudia/borg-ui/blob/main/LICENSE)
-
----
-
-## Acknowledgments
-
-Built with [Borg Backup](https://borgbackup.readthedocs.io/), [FastAPI](https://fastapi.tiangolo.com/), [React](https://react.dev/), and [Material-UI](https://mui.com/)
-
-Made by [Karan Hudia](https://github.com/karanhudia)
+Use Docker Compose for normal deployments. See [Installation](installation).

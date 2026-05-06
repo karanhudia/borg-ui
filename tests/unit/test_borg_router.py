@@ -291,7 +291,7 @@ async def test_list_archives_for_v2_returns_empty_on_invalid_json():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_list_archives_for_v1_returns_stdout_payload():
+async def test_list_archives_for_v1_parses_json_archives_payload():
     repo = SimpleNamespace(
         borg_version=1,
         path="/tmp/repo",
@@ -302,11 +302,34 @@ async def test_list_archives_for_v1_returns_stdout_payload():
 
     with patch(
         "app.core.borg.borg.list_archives",
-        new=AsyncMock(return_value={"success": True, "stdout": [{"archive": "a1"}]}),
+        new=AsyncMock(
+            return_value={"success": True, "stdout": '{"archives":[{"name":"a1"}]}'}
+        ),
     ) as mock_list:
         archives = await BorgRouter(repo).list_archives()
 
-    assert archives == [{"archive": "a1"}]
+    assert archives == [{"name": "a1"}]
+    mock_list.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_archives_for_v1_returns_empty_on_invalid_json():
+    repo = SimpleNamespace(
+        borg_version=1,
+        path="/tmp/repo",
+        passphrase="secret",
+        remote_path="/usr/bin/borg",
+        bypass_lock=True,
+    )
+
+    with patch(
+        "app.core.borg.borg.list_archives",
+        new=AsyncMock(return_value={"success": True, "stdout": "not-json"}),
+    ):
+        archives = await BorgRouter(repo).list_archives()
+
+    assert archives == []
 
 
 @pytest.mark.unit
@@ -595,6 +618,60 @@ def test_build_stats_commands_use_v2_binaries():
     mock_archive.assert_called_once_with("/repos/v2", "a1")
     mock_list.assert_called_once_with("/repos/v2")
     mock_info.assert_called_once_with("/repos/v2")
+
+
+@pytest.mark.unit
+def test_build_restore_extract_command_adds_strip_components_for_v1():
+    repo = SimpleNamespace(borg_version=1)
+
+    cmd = BorgRouter(repo).build_restore_extract_command(
+        repository_path="/repos/v1",
+        archive_name="manual-1",
+        paths=["home/user/folder"],
+        remote_path="/usr/bin/borg",
+        bypass_lock=True,
+        strip_components=3,
+    )
+
+    assert cmd == [
+        "borg",
+        "extract",
+        "--progress",
+        "--log-json",
+        "--remote-path",
+        "/usr/bin/borg",
+        "--bypass-lock",
+        "--strip-components",
+        "3",
+        "/repos/v1::manual-1",
+        "home/user/folder",
+    ]
+
+
+@pytest.mark.unit
+def test_build_restore_extract_command_delegates_strip_components_for_v2():
+    repo = SimpleNamespace(borg_version=2)
+
+    with patch(
+        "app.services.v2.restore_service.restore_v2_service.build_extract_command",
+        return_value=["borg2", "extract"],
+    ) as mock_build:
+        cmd = BorgRouter(repo).build_restore_extract_command(
+            repository_path="/repos/v2",
+            archive_name="manual-1",
+            paths=["home/user/folder"],
+            strip_components=3,
+        )
+
+    assert cmd == ["borg2", "extract"]
+    mock_build.assert_called_once_with(
+        repository_path="/repos/v2",
+        archive_name="manual-1",
+        paths=["home/user/folder"],
+        remote_path=None,
+        bypass_lock=False,
+        strip_components=3,
+    )
 
 
 @pytest.mark.unit

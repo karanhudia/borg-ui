@@ -37,6 +37,8 @@ class TestPackagesAPI:
         data = response.json()
         assert data["name"] == "wakeonlan"
         assert data["status"] == "pending"
+        assert data["created_at"].endswith("+00:00")
+        assert data["updated_at"].endswith("+00:00")
 
         package = (
             test_db.query(InstalledPackage)
@@ -288,6 +290,8 @@ class TestPackagesAPI:
         job = PackageInstallJob(
             package_id=package.id,
             status="installing",
+            started_at=datetime(2026, 4, 27, 3, 0, 6),
+            completed_at=datetime(2026, 4, 27, 3, 5, 6),
             exit_code=None,
             stdout="",
             stderr="",
@@ -305,6 +309,8 @@ class TestPackagesAPI:
         assert data["id"] == job.id
         assert data["package_id"] == package.id
         assert data["status"] == "installing"
+        assert data["started_at"] == "2026-04-27T03:00:06+00:00"
+        assert data["completed_at"] == "2026-04-27T03:05:06+00:00"
 
     def test_get_job_status_not_found(self, test_client: TestClient, admin_headers):
         response = test_client.get("/api/packages/jobs/999999", headers=admin_headers)
@@ -323,7 +329,11 @@ class TestPackagesAPI:
         test_db.commit()
         test_db.refresh(package)
 
-        job1 = PackageInstallJob(package_id=package.id, status="completed")
+        job1 = PackageInstallJob(
+            package_id=package.id,
+            status="completed",
+            started_at=datetime(2026, 4, 27, 3, 0, 6),
+        )
         job2 = PackageInstallJob(package_id=package.id, status="failed")
         test_db.add_all([job1, job2])
         test_db.commit()
@@ -334,3 +344,6 @@ class TestPackagesAPI:
         data = response.json()
         assert isinstance(data, list)
         assert len(data) >= 2
+        completed_job = next(job for job in data if job["id"] == job1.id)
+        assert completed_job["started_at"] == "2026-04-27T03:00:06+00:00"
+        assert completed_job["created_at"].endswith("+00:00")

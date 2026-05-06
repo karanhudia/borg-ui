@@ -15,7 +15,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Box, Skeleton, Alert, Button, Stack, Typography, Chip } from '@mui/material'
+import { Box, Skeleton, Alert, Button, Stack, Typography, Chip, Tooltip } from '@mui/material'
 import {
   XCircle,
   HardDrive,
@@ -34,6 +34,7 @@ import { formatDistanceToNow, differenceInDays, startOfDay, addDays, format } fr
 import { useTheme } from '../context/ThemeContext'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { dashboardAPI } from '../services/api'
+import { formatDateTimeFull } from '../utils/dateUtils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,7 @@ interface DashboardOverview {
     last_backup: string | null
     last_check: string | null
     last_compact: string | null
+    last_restore_check: string | null
     archive_count: number
     total_size: string
     health_status: 'healthy' | 'warning' | 'critical'
@@ -72,10 +74,15 @@ interface DashboardOverview {
     has_schedule: boolean
     schedule_enabled: boolean
     schedule_name: string | null
+    schedule_timezone?: string | null
+    restore_check_configured?: boolean
+    latest_restore_check_status?: string | null
+    latest_restore_check_error?: string | null
     dimension_health: {
-      backup: 'healthy' | 'warning' | 'critical'
+      backup: 'healthy' | 'warning' | 'critical' | 'unknown'
       check: 'healthy' | 'warning' | 'critical' | 'unknown'
       compact: 'healthy' | 'warning' | 'critical' | 'unknown'
+      restore?: 'healthy' | 'warning' | 'critical' | 'unknown'
     }
   }>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -461,7 +468,13 @@ function PulseDot({ color, glow }: { color: string; glow: string }) {
   )
 }
 
-type DimHealth = { backup: string; check: string; compact: string }
+type DimHealth = { backup: string; check: string; compact: string; restore?: string }
+type DimStatusItem = {
+  label: string
+  status: string
+  value: string
+  tooltip?: string
+}
 
 const DIM_STATUS: Record<string, { color: string }> = {
   healthy: { color: '#22c55e' },
@@ -483,6 +496,26 @@ function dimValue(value: string | null | undefined, t: (key: string) => string):
   return value ?? t('common.unknown')
 }
 
+function dimTimestampTooltip(dt: string | null): string | undefined {
+  return dt ? formatDateTimeFull(dt) : undefined
+}
+
+function restoreDimValue(
+  latestStatus: string | null | undefined,
+  lastRestoreCheck: string | null,
+  configured: boolean | undefined,
+  t: (key: string) => string
+): string {
+  if (latestStatus === 'failed') return t('status.failed')
+  if (latestStatus === 'completed_with_warnings') return t('status.completedWithWarnings')
+  if (latestStatus === 'needs_backup') return t('status.needsBackup')
+  if (latestStatus === 'running') return t('status.running')
+  if (latestStatus === 'pending') return t('status.pending')
+  if (latestStatus === 'cancelled') return t('status.cancelled')
+  if (!configured && !lastRestoreCheck) return t('scheduledChecks.notConfigured')
+  return dimSince(lastRestoreCheck, t)
+}
+
 function DimIcon({ status, size = 11 }: { status: string; size?: number }) {
   const { color } = DIM_STATUS[status] ?? DIM_STATUS.unknown
   if (status === 'healthy') return <CheckCircle2 size={size} color={color} />
@@ -492,7 +525,7 @@ function DimIcon({ status, size = 11 }: { status: string; size?: number }) {
 }
 
 /**
- * DimStatusGrid — explicit 3-column health footer: BKP · CHK · CPT
+ * DimStatusGrid — compact health footer for repository operation dimensions.
  * Shows icon + label + time-since for each operation dimension.
  */
 function DimStatusGrid({
@@ -501,23 +534,39 @@ function DimStatusGrid({
   lastBackup,
   lastCheck,
   lastCompact,
+  lastRestoreCheck,
+  latestRestoreCheckStatus,
+  latestRestoreCheckError,
+  restoreCheckConfigured,
 }: {
   mode: 'full' | 'observe'
   dim: DimHealth | undefined
   lastBackup: string | null
   lastCheck: string | null
   lastCompact: string | null
+  lastRestoreCheck: string | null
+  latestRestoreCheckStatus?: string | null
+  latestRestoreCheckError?: string | null
+  restoreCheckConfigured?: boolean
 }) {
   const T = useT()
   const { t } = useTranslation()
 
-  const items =
+  const restoreItem: DimStatusItem = {
+    label: t('dashboard.repositoryHealth.dimensionLabels.restore'),
+    status: dim?.restore ?? 'unknown',
+    value: restoreDimValue(latestRestoreCheckStatus, lastRestoreCheck, restoreCheckConfigured, t),
+    tooltip: latestRestoreCheckError ?? dimTimestampTooltip(lastRestoreCheck),
+  }
+
+  const items: DimStatusItem[] =
     mode === 'observe'
       ? [
           {
             label: t('dashboard.repositoryHealth.dimensionLabels.freshness'),
             status: dim?.backup ?? 'unknown',
             value: dimSince(lastBackup, t),
+            tooltip: dimTimestampTooltip(lastBackup),
           },
           {
             label: t('dashboard.repositoryHealth.dimensionLabels.archives'),
@@ -533,70 +582,95 @@ function DimStatusGrid({
               dim?.check === 'unknown'
                 ? t('scheduledChecks.notConfigured')
                 : dimSince(lastCheck, t),
+            tooltip: dim?.check === 'unknown' ? undefined : dimTimestampTooltip(lastCheck),
           },
+          restoreItem,
         ]
       : [
           {
             label: t('dashboard.repositoryHealth.dimensionLabels.backup'),
             status: dim?.backup ?? 'unknown',
             value: dimSince(lastBackup, t),
+            tooltip: dimTimestampTooltip(lastBackup),
           },
           {
             label: t('dashboard.repositoryHealth.dimensionLabels.check'),
             status: dim?.check ?? 'unknown',
             value: dimSince(lastCheck, t),
+            tooltip: dimTimestampTooltip(lastCheck),
           },
           {
             label: t('dashboard.repositoryHealth.dimensionLabels.compact'),
             status: dim?.compact ?? 'unknown',
             value: dimSince(lastCompact, t),
+            tooltip: dimTimestampTooltip(lastCompact),
           },
+          restoreItem,
         ]
 
   return (
-    <Stack direction="row" sx={{ width: '100%', gap: 0 }}>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
+        width: '100%',
+        gap: 0,
+      }}
+    >
       {items.map((item, i) => {
         const { color } = DIM_STATUS[item.status] ?? DIM_STATUS.unknown
         return (
           <Box
             key={item.label}
             sx={{
-              flex: 1,
-              pl: i > 0 ? 1 : 0,
+              minWidth: 0,
+              pl: i > 0 ? 0.8 : 0,
+              pr: i < items.length - 1 ? 0.8 : 0,
               borderLeft: i > 0 ? `1px solid ${T.border}` : 'none',
             }}
           >
             {/* Label row */}
-            <Stack direction="row" spacing={0.4} alignItems="center" sx={{ mb: 0.3 }}>
-              <DimIcon status={item.status} size={10} />
+            <Stack direction="row" spacing={0.4} alignItems="center" sx={{ mb: 0.2, minWidth: 0 }}>
+              <DimIcon status={item.status} size={9} />
               <Typography
                 sx={{
-                  fontSize: '0.52rem',
+                  fontSize: '0.49rem',
                   fontWeight: 600,
                   color: T.textDim,
                   letterSpacing: 0.8,
                   textTransform: 'uppercase',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {item.label}
               </Typography>
             </Stack>
             {/* Time value */}
-            <Typography
-              sx={{
-                fontFamily: T.mono,
-                fontSize: '0.62rem',
-                fontWeight: 600,
-                color,
-                lineHeight: 1,
-              }}
-            >
-              {dimValue(item.value, t)}
-            </Typography>
+            <Tooltip title={item.tooltip ?? ''} arrow placement="top">
+              <Typography
+                sx={{
+                  cursor: item.tooltip ? 'help' : 'default',
+                  display: 'inline-block',
+                  fontFamily: T.mono,
+                  fontSize: '0.58rem',
+                  fontWeight: 600,
+                  color,
+                  lineHeight: 1,
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {dimValue(item.value, t)}
+              </Typography>
+            </Tooltip>
           </Box>
         )
       })}
-    </Stack>
+    </Box>
   )
 }
 
@@ -614,16 +688,19 @@ function ScheduleBadge({
   hasSchedule,
   scheduleEnabled,
   scheduleName,
+  scheduleTimezone,
   nowMs,
 }: {
   nextRun: string | null
   hasSchedule: boolean
   scheduleEnabled: boolean
   scheduleName: string | null
+  scheduleTimezone?: string | null
   nowMs: number
 }) {
   const T = useT()
   const { t } = useTranslation()
+  const timezoneLabel = scheduleTimezone || 'UTC'
 
   // ── No schedule at all ─────────────────────────────────────────────
   if (!hasSchedule) {
@@ -653,8 +730,8 @@ function ScheduleBadge({
         alignItems="center"
         title={
           scheduleName
-            ? t('dashboard.scheduleBadge.pausedTitle', { name: scheduleName })
-            : t('dashboard.scheduleBadge.pausedTitleGeneric')
+            ? `${t('dashboard.scheduleBadge.pausedTitle', { name: scheduleName })} (${timezoneLabel})`
+            : `${t('dashboard.scheduleBadge.pausedTitleGeneric')} (${timezoneLabel})`
         }
         sx={{
           px: 0.8,
@@ -688,7 +765,7 @@ function ScheduleBadge({
         direction="row"
         spacing={0.4}
         alignItems="center"
-        title={scheduleName ?? t('dashboard.scheduleBadge.scheduled')}
+        title={`${scheduleName ?? t('dashboard.scheduleBadge.scheduled')} (${timezoneLabel})`}
         sx={{
           px: 0.8,
           py: 0.2,
@@ -735,8 +812,8 @@ function ScheduleBadge({
       alignItems="center"
       title={
         scheduleName
-          ? t('dashboard.scheduleBadge.nextRunTitle', { name: scheduleName, label })
-          : t('dashboard.scheduleBadge.nextRunTitleGeneric', { label })
+          ? `${t('dashboard.scheduleBadge.nextRunTitle', { name: scheduleName, label })} (${timezoneLabel})`
+          : `${t('dashboard.scheduleBadge.nextRunTitleGeneric', { label })} (${timezoneLabel})`
       }
       sx={{
         px: 0.8,
@@ -1739,10 +1816,8 @@ export default function DashboardV3() {
                 }}
               >
                 {repos.map((repo) => {
-                  // Card color rules — backup EXCLUSIVELY owns red:
-                  //   critical (red)  → backup is overdue/never
-                  //   warning (amber) → backup slightly stale OR check/compact need attention
-                  //   healthy (green) → everything fine
+                  // Card color follows the backend's aggregate repository health.
+                  // Failed restore verification can make the card critical because recovery is at risk.
                   const cardStatus: keyof typeof STATUS =
                     repo.health_status === 'critical'
                       ? 'critical'
@@ -1766,7 +1841,7 @@ export default function DashboardV3() {
                         bgcolor: cs.dim,
                         border: `1px solid ${cs.color}30`,
                         borderRadius: '10px',
-                        p: 1.5,
+                        p: 1.25,
                         cursor: 'pointer',
                         transition: 'all 0.18s',
                         '&:hover': {
@@ -1781,7 +1856,7 @@ export default function DashboardV3() {
                         direction="row"
                         alignItems="center"
                         justifyContent="space-between"
-                        sx={{ mb: 0.75 }}
+                        sx={{ mb: 0.55 }}
                       >
                         <Stack direction="row" spacing={0.75} alignItems="center">
                           <PulseDot color={cs.color} glow={cs.glow} />
@@ -1819,6 +1894,7 @@ export default function DashboardV3() {
                           hasSchedule={repo.has_schedule}
                           scheduleEnabled={repo.schedule_enabled}
                           scheduleName={repo.schedule_name}
+                          scheduleTimezone={repo.schedule_timezone}
                           nowMs={nowMs}
                         />
                       </Stack>
@@ -1829,7 +1905,7 @@ export default function DashboardV3() {
                           fontSize: '0.78rem',
                           fontWeight: 600,
                           color: T.textPrimary,
-                          mb: 0.3,
+                          mb: 0.2,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
@@ -1837,7 +1913,7 @@ export default function DashboardV3() {
                       >
                         {repo.name}
                       </Typography>
-                      <Stack direction="row" spacing={1.5} sx={{ mb: 0.9 }}>
+                      <Stack direction="row" spacing={1.35} sx={{ mb: 0.65 }}>
                         <Typography
                           sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}
                         >
@@ -1853,9 +1929,9 @@ export default function DashboardV3() {
                       </Stack>
 
                       {/* ── Divider ── */}
-                      <Box sx={{ height: '1px', bgcolor: T.border, mb: 0.9 }} />
+                      <Box sx={{ height: '1px', bgcolor: T.border, mb: 0.65 }} />
 
-                      {/* ── Dimension status grid: BACKUP · CHECK · COMPACT ── */}
+                      {/* ── Dimension status row: BACKUP · CHECK · COMPACT · RESTORE ── */}
                       <DimStatusGrid
                         mode={repo.mode}
                         dim={repo.dimension_health}
@@ -1864,6 +1940,10 @@ export default function DashboardV3() {
                         lastCompact={
                           repo.mode === 'observe' ? String(repo.archive_count) : repo.last_compact
                         }
+                        lastRestoreCheck={repo.last_restore_check}
+                        latestRestoreCheckStatus={repo.latest_restore_check_status}
+                        latestRestoreCheckError={repo.latest_restore_check_error}
+                        restoreCheckConfigured={repo.restore_check_configured}
                       />
                     </Box>
                   )
@@ -1970,11 +2050,22 @@ export default function DashboardV3() {
                               >
                                 {a.repository}
                               </Typography>
-                              <Typography
-                                sx={{ fontFamily: T.mono, fontSize: '0.62rem', color: T.textMuted }}
+                              <Tooltip
+                                title={formatDateTimeFull(a.timestamp)}
+                                arrow
+                                placement="top"
                               >
-                                {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
-                              </Typography>
+                                <Typography
+                                  sx={{
+                                    cursor: 'help',
+                                    fontFamily: T.mono,
+                                    fontSize: '0.62rem',
+                                    color: T.textMuted,
+                                  }}
+                                >
+                                  {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
+                                </Typography>
+                              </Tooltip>
                             </Stack>
                             {a.error && (
                               <Typography

@@ -50,6 +50,7 @@
     "type": "Typ",
     "repository": "Repository",
     "schedule": "Zeitplan",
+    "timezone": "Zeitzone",
     "created": "Erstellt",
     "lastLogin": "Letzte Anmeldung",
     "undoneWarning": "Diese Aktion kann nicht rückgängig gemacht werden.",
@@ -76,6 +77,10 @@
     "totpLabel": "Authentifizierungscode",
     "totpHint": "Verwende deinen aktuellen Authenticator-Code oder einen Wiederherstellungscode.",
     "verifyTotp": "Code bestätigen",
+    "ssoSubmit": "Mit {{provider}} fortfahren",
+    "ssoDefaultProvider": "Single Sign-on",
+    "ssoOrLocalHint": "Oder mit einem lokalen Borg-UI-Konto fortfahren.",
+    "localAuthDisabledHint": "Lokale Borg-UI-Passwörter und Passkeys sind für diese Bereitstellung deaktiviert. Fahre mit deinem Identitätsanbieter fort.",
     "passkeySubmit": "Mit Passkey anmelden",
     "passkeyCancelled": "Die Passkey-Anmeldung wurde abgebrochen oder es war kein passender Passkey verfügbar",
     "failed": "Anmeldung fehlgeschlagen",
@@ -107,6 +112,7 @@
       "backup": "Manuelles Backup",
       "archives": "Archive",
       "restore": "Wiederherstellen",
+      "integrity": "Integrität",
       "schedule": "Zeitplan"
     },
     "settings": {
@@ -133,7 +139,7 @@
     },
     "menu": {
       "accountAndSecurityDesc": "Profil, Passwort, 2FA, Passkeys",
-      "appearanceDesc": "Design, Sprache",
+      "appearanceDesc": "Design",
       "notificationsDesc": "Benachrichtigungen & Einstellungen"
     },
     "versionInfo": "Versionsinformationen",
@@ -146,6 +152,7 @@
   "status": {
     "completed": "Abgeschlossen",
     "completedWithWarnings": "Abgeschlossen mit Warnungen",
+    "needsBackup": "Backup erforderlich",
     "failed": "Fehlgeschlagen",
     "running": "Läuft",
     "pending": "Ausstehend",
@@ -183,6 +190,7 @@
         "backup": "BACKUP",
         "check": "CHECK",
         "compact": "COMPACT",
+        "restore": "RESTORE",
         "freshness": "AKTUELL",
         "archives": "ARCHIVE"
       },
@@ -233,6 +241,7 @@
         "backup": "backup",
         "check": "check",
         "compact": "compact",
+        "restore_check": "restore check",
         "restore": "restore",
         "prune": "prune"
       }
@@ -396,9 +405,11 @@
     "subtitle": "Verwalte automatische Sicherungen und Repository-Überprüfungen",
     "createBackup": "Sicherungszeitplan erstellen",
     "addCheck": "Überprüfungszeitplan hinzufügen",
+    "addRestoreCheck": "Restore-Prüfung hinzufügen",
     "tabs": {
       "backupJobs": "Sicherungsaufgaben",
-      "repositoryChecks": "Repository-Überprüfungen"
+      "repositoryChecks": "Repository-Überprüfungen",
+      "restoreChecks": "Restore-Prüfungen"
     },
     "noRepositories": "Du musst mindestens ein Repository erstellen, bevor du Sicherungen planst.",
     "maintenance": {
@@ -570,6 +581,7 @@
       "types": {
         "backup": "Sicherung",
         "restore": "Wiederherstellung",
+        "restoreCheck": "Restore-Prüfung",
         "check": "Überprüfung",
         "compact": "Komprimierung",
         "prune": "Bereinigung",
@@ -577,6 +589,7 @@
       },
       "statuses": {
         "completed": "Abgeschlossen",
+        "needsBackup": "Backup erforderlich",
         "failed": "Fehlgeschlagen",
         "running": "Läuft",
         "pending": "Ausstehend"
@@ -624,6 +637,7 @@
       "stats": {
         "total": "Total",
         "active": "Active",
+        "pendingSso": "Ausstehendes SSO",
         "admins": "Admins",
         "operators": "Operators",
         "viewers": "Viewers"
@@ -634,10 +648,23 @@
         "status": "Status"
       },
       "actions": {
+        "approveSsoUser": "SSO-Benutzer freigeben",
         "edit": "Benutzer bearbeiten",
         "resetPassword": "Passwort zurücksetzen",
         "delete": "Benutzer löschen",
         "manageAccess": "Manage Access"
+      },
+      "badges": {
+        "sso": "SSO",
+        "oidc": "OIDC"
+      },
+      "labels": {
+        "subject": "Subjekt: {{subject}}"
+      },
+      "pendingReview": {
+        "title": "{{count}} SSO-Konto wartet auf Freigabe",
+        "description": "Prüfe ausstehende OIDC-Benutzer, bevor sie sich vollständig anmelden und auf Repositorys zugreifen können.",
+        "action": "Ausstehende Benutzer prüfen"
       },
       "repositoryAccess": {
         "title": "Repository Access",
@@ -666,7 +693,8 @@
       },
       "status": {
         "active": "Aktiv",
-        "inactive": "Inaktiv"
+        "inactive": "Inaktiv",
+        "pendingSso": "SSO ausstehend"
       },
       "createDialog": {
         "title": "Benutzer erstellen"
@@ -679,7 +707,18 @@
         "email": "E-Mail",
         "password": "Passwort",
         "fullName": "Full name",
-        "role": "Role"
+        "role": "Role",
+        "authSource": "Auth source",
+        "oidcSubject": "OIDC subject"
+      },
+      "authSources": {
+        "local": "Local",
+        "oidc": "OIDC"
+      },
+      "ssoIdentity": {
+        "selfLinkHint": "Prefer asking the user to link their own local account from Account & Security. Manual edits are for recovery when the backend supports these fields.",
+        "subjectHelper": "Paste the exact stable subject claim from the identity provider.",
+        "clearHelper": "Local auth clears the stored OIDC subject on save."
       },
       "buttons": {
         "cancel": "Abbrechen",
@@ -876,7 +915,15 @@
         "passkeyDeletedToast": "Passkey gelöscht",
         "passkeyDeleteFailed": "Passkey konnte nicht gelöscht werden",
         "passkeyLastUsed": "Zuletzt verwendet {{date}}",
-        "passkeyNeverUsed": "Noch nicht verwendet"
+        "passkeyNeverUsed": "Noch nicht verwendet",
+        "ssoLinkTitle": "Link single sign-on",
+        "ssoLinkDescription": "Start a provider redirect to attach this local account to your SSO identity.",
+        "ssoLinkButton": "Link SSO",
+        "ssoLinkedTitle": "Single sign-on linked",
+        "ssoLinkedDescription": "This account can sign in through the configured identity provider.",
+        "ssoUnlinkButton": "Unlink SSO",
+        "ssoUnlinkedToast": "Single sign-on unlinked",
+        "ssoUnlinkFailed": "Failed to unlink single sign-on"
       },
       "access": {
         "title": "Access",
@@ -1333,6 +1380,7 @@
     "types": {
       "backup": "Sicherung",
       "restore": "Wiederherstellung",
+      "restoreCheck": "Restore-Prüfung",
       "check": "Repository-Überprüfung",
       "compact": "Komprimieren",
       "prune": "Bereinigen",
@@ -1485,6 +1533,98 @@
     "proxyAuthNotConfigured": "Nicht konfiguriert",
     "proxyAuthWarningsTitle": "Konfigurationswarnungen",
     "proxyAuthNoWarnings": "Keine Warnungen zur Proxy-Auth-Konfiguration erkannt.",
+    "oidcTitle": "Single Sign-on",
+    "oidcDescription": "Konfiguriere Borg UI als OpenID-Connect-Client mit Benutzerbereitstellung und optionaler Deaktivierung lokaler Anmeldungen.",
+    "oidcEnabledLabel": "Integriertes OIDC aktivieren",
+    "oidcDisableLocalAuthLabel": "Lokale Passwort- und Passkey-Anmeldung deaktivieren",
+    "oidcProviderNameLabel": "Anzeigename des Anbieters",
+    "oidcProviderNameHelper": "Wird auf dem Anmeldebutton angezeigt.",
+    "oidcTokenAuthMethodLabel": "Token auth method",
+    "oidcTokenAuthMethodHelper": "Choose how Borg UI authenticates to the provider token endpoint.",
+    "oidcTokenAuthMethodPost": "client_secret_post",
+    "oidcTokenAuthMethodBasic": "client_secret_basic",
+    "oidcDiscoveryUrlLabel": "Discovery-URL",
+    "oidcDiscoveryUrlHelper": "Beispiel: https://id.example.com/application/o/borg-ui/.well-known/openid-configuration",
+    "oidcClientIdLabel": "Client-ID",
+    "oidcClientSecretLabel": "Client-Secret",
+    "oidcClientSecretConfigured": "Ein Client-Secret ist bereits gespeichert. Leer lassen, um es beizubehalten.",
+    "oidcClientSecretRequiredHelper": "Erforderlich, wenn OIDC aktiviert ist.",
+    "oidcClearClientSecretLabel": "Gespeichertes Client-Secret beim Speichern löschen",
+    "oidcEventsTitle": "Letzte Authentifizierungsereignisse",
+    "oidcEventsDescription": "Zeigt die neuesten lokalen, OIDC-, TOTP-, Passkey- und Abmeldeereignisse aus Administratorsicht an.",
+    "oidcEventsEmpty": "Es wurden noch keine Authentifizierungsereignisse erfasst.",
+    "oidcEventsFilteredEmpty": "Keine Authentifizierungsereignisse entsprechen dem aktuellen Filter.",
+    "oidcEventsRefresh": "Authentifizierungsereignisse aktualisieren",
+    "oidcScopesLabel": "Scopes",
+    "oidcRedirectUriOverrideLabel": "Redirect-URI-Override",
+    "oidcRedirectUriOverrideHelper": "Optionale öffentliche Callback-URL für Reverse-Proxy- oder getrennte Origin-Setups.",
+    "oidcEndSessionEndpointOverrideLabel": "End-Session-Endpoint-Override",
+    "oidcEndSessionEndpointOverrideHelper": "Optionaler Logout-Endpunkt, falls die Discovery-Metadaten unvollständig sind.",
+    "oidcClaimUsernameLabel": "Benutzernamen-Claim",
+    "oidcClaimEmailLabel": "E-Mail-Claim",
+    "oidcClaimFullNameLabel": "Vollständiger-Name-Claim",
+    "oidcGroupClaimLabel": "Gruppen-Claim",
+    "oidcGroupClaimHelper": "Optionaler Claim mit den IdP-Gruppen für Prüfungen der Admin-Zulassungsliste.",
+    "oidcRoleClaimLabel": "Claim für globale Rolle",
+    "oidcAdminGroupsLabel": "Admin-Zulassungsgruppen",
+    "oidcAdminGroupsHelper": "Kommagetrennte Gruppen, die den Admin-Rollen-Claim erhalten dürfen.",
+    "oidcAllRepositoriesRoleClaimLabel": "Claim für alle-Repositorys-Rolle",
+    "oidcNewUserModeLabel": "Behandlung neuer Benutzer",
+    "oidcTemplateUsernameLabel": "Vorlagenbenutzername",
+    "oidcDefaultRoleLabel": "Standardmäßige globale Rolle",
+    "oidcDefaultAllRepositoriesRoleLabel": "Standardrolle für alle Repositorys",
+    "oidcModeDeny": "Ablehnen",
+    "oidcModeViewer": "Als Viewer erstellen",
+    "oidcModePending": "Zur Freigabe erstellen",
+    "oidcModeTemplate": "Vorlagenbenutzer kopieren",
+    "oidcRequiredFieldsError": "OIDC benötigt eine Discovery-URL und eine Client-ID.",
+    "oidcClientSecretRequired": "OIDC benötigt ein Client-Secret, bevor es aktiviert werden kann.",
+    "oidcTemplateUserRequired": "Der Vorlagenmodus benötigt einen Vorlagenbenutzernamen.",
+    "oidcDisableLocalAuthWarning": "Before disabling local login, confirm at least one active admin can sign in with OIDC.",
+    "oidcActiveAdminRequired": "Local auth cannot be disabled until an active OIDC admin exists.",
+    "authEventSuccess": "Erfolgreich",
+    "authEventFailed": "Fehlgeschlagen",
+    "authEventPending": "Freigabe ausstehend",
+    "authEventAnonymous": "Unbekannte Identität",
+    "authEventActor": "Admin #{{id}}",
+    "authEventFilters": {
+      "all": "Alle Ereignisse",
+      "failed": "Fehlgeschlagen",
+      "oidc": "OIDC",
+      "pending": "Ausstehende Freigaben"
+    },
+    "authEventSummary": {
+      "total": "Gesamt: {{count}}",
+      "success": "Erfolgreich: {{count}}",
+      "failed": "Fehlgeschlagen: {{count}}",
+      "pending": "Ausstehend: {{count}}"
+    },
+    "authEventSources": {
+      "local": "Lokal",
+      "oidc": "OIDC",
+      "proxy": "Proxy",
+      "passkey": "Passkey",
+      "totp": "TOTP"
+    },
+    "authEventTypes": {
+      "local_login_failed": "Lokale Anmeldung fehlgeschlagen",
+      "local_login_succeeded": "Lokale Anmeldung erfolgreich",
+      "oidc_account_linked": "OIDC-Konto verknüpft",
+      "oidc_account_unlinked": "OIDC-Konto getrennt",
+      "oidc_user_pending": "OIDC-Benutzer wartet auf Freigabe",
+      "oidc_user_provisioned": "OIDC-Benutzer bereitgestellt",
+      "oidc_user_denied": "OIDC-Benutzer abgelehnt",
+      "oidc_callback_success": "OIDC-Callback erfolgreich",
+      "oidc_callback_failed": "OIDC-Callback fehlgeschlagen",
+      "oidc_exchange_failed": "OIDC-Sitzungsaustausch fehlgeschlagen",
+      "oidc_login_succeeded": "OIDC-Anmeldung erfolgreich",
+      "totp_login_succeeded": "TOTP-Anmeldung erfolgreich",
+      "passkey_login_succeeded": "Passkey-Anmeldung erfolgreich",
+      "logout": "Benutzer abgemeldet"
+    },
+    "roleViewer": "Viewer",
+    "roleOperator": "Operator",
+    "roleAdmin": "Admin",
     "maxFilesToLoadLabel": "Maximale zu ladende Dateien",
     "maxFilesRangeError": "Muss zwischen {{min}} und {{max}} liegen",
     "maxFilesHelperText": "Maximale Dateien beim Durchsuchen. Aktuell: {{current}}M Dateien",
@@ -1614,6 +1754,7 @@
     "category": {
       "backupEvents": "Sicherungsereignisse",
       "restoreEvents": "Wiederherstellungsereignisse",
+      "restoreCheckEvents": "Restore-Prüfungsereignisse",
       "checkJobs": "Überprüfungsaufgaben",
       "systemEvents": "Systemereignisse"
     },
@@ -1631,6 +1772,7 @@
       "categories": {
         "backup": "Backup",
         "restore": "Restore",
+        "restoreCheck": "Restore Check",
         "check": "Check",
         "schedule": "Schedule"
       },
@@ -1991,6 +2133,8 @@
   },
   "scheduledChecks": {
     "title": "Geplante Überprüfungen",
+    "sectionTitle": "Integritätsprüfungen",
+    "sectionDescription": "Führe Borg-Prüfungen nach Zeitplan aus, um Repository-Korruption früh zu erkennen.",
     "empty": "Keine geplanten Überprüfungen",
     "nextRun": "Nächste Ausführung",
     "lastRun": "Letzte Ausführung",
@@ -2004,6 +2148,7 @@
     "editCheckSchedule": "Überprüfungszeitplan bearbeiten",
     "addCheckSchedule": "Überprüfungszeitplan hinzufügen",
     "checkScheduleLabel": "Überprüfungszeitplan",
+    "timezoneLabel": "Zeitzone",
     "maxDuration": "Maximale Dauer (Sekunden)",
     "maxDurationHint": "Zeitlimit für den Überprüfungsvorgang (3600 = 1 Stunde)",
     "maxDurationHintBorg2": "Bei Borg 2 startet ein Zeitlimit eine partielle Repository-Prüfung (3600 = 1 Stunde). Verwende 0, um Archivprüfungen einzuschließen.",
@@ -2039,6 +2184,114 @@
     },
     "checkScheduleHelperText": "Wann soll diese Repository-Überprüfung ausgeführt werden?",
     "checkScheduleBuilderTitle": "Überprüfungs-Zeitplan-Builder"
+  },
+  "scheduledRestoreChecks": {
+    "sectionTitle": "Restore-Prüfungen",
+    "sectionDescription": "Stelle das neueste Archiv regelmäßig in ein temporäres Verzeichnis wieder her, um die tatsächliche Wiederherstellbarkeit zu verifizieren.",
+    "repository": "Repository",
+    "addRestoreCheckSchedule": "Restore-Prüfung hinzufügen",
+    "editRestoreCheckSchedule": "Restore-Prüfung bearbeiten",
+    "scheduleLabel": "Restore-Prüfungszeitplan",
+    "timezoneLabel": "Zeitzone",
+    "scheduleHelperText": "Wann soll diese Restore-Verifikation ausgeführt werden?",
+    "scheduleBuilderTitle": "Restore-Prüfungs-Zeitplan",
+    "modeLabel": "Verifikationsmodus",
+    "modes": {
+      "canary": "Verwalteter Canary-Payload",
+      "probePaths": "Ausgewählte Probe-Pfade",
+      "fullArchive": "Vollständiger Archiv-Drill"
+    },
+    "probePaths": "Probe-Pfade",
+    "probePathsHint": "Ein Archivpfad pro Zeile, oder das neueste Archiv durchsuchen, um repräsentative Dateien und Ordner zu importieren.",
+    "archivePicker": {
+      "open": "Neuestes Archiv durchsuchen",
+      "title": "Probe-Pfade auswählen",
+      "subtitle": "Durchsuche das neueste Archiv für das ausgewählte Repository.",
+      "subtitleWithArchive": "Neuestes Archiv wird durchsucht: {{archive}}",
+      "browserTitle": "Probe-Pfade auswählen",
+      "browserSubtitle": "Wähle Dateien oder Ordner aus dem neuesten Archiv aus, die bei jeder Restore-Prüfung geprüft werden.",
+      "browserHelpText": "Klicke auf Dateien, um sie auszuwählen, oder auf Ordner, um zu navigieren. Nutze das Kontrollkästchen neben Ordnern, um ganze Verzeichnisse auszuwählen.",
+      "selectedCount_one": "{{count}} Pfad ausgewählt",
+      "selectedCount_other": "{{count}} Pfade ausgewählt",
+      "import": "Pfade importieren",
+      "loadFailed": "Das neueste Archiv konnte nicht geladen werden.",
+      "noArchives": "Für dieses Repository sind noch keine Archive verfügbar."
+    },
+    "needRepository": "Du musst mindestens ein Repository erstellen, bevor du Restore-Prüfungen planst.",
+    "noScheduledChecks": "Keine geplanten Restore-Prüfungen",
+    "noScheduledChecksDesc": "Konfiguriere automatische Restore-Verifikation, damit Probleme vor einem echten Restore sichtbar werden.",
+    "confirmDisable": "Geplante Restore-Prüfung für {{repositoryName}} deaktivieren?",
+    "update": "Aktualisieren",
+    "create": "Erstellen",
+    "stats": {
+      "notSet": "Nicht gesetzt",
+      "lastVerifiedRestore": "Letzte verifizierte Wiederherstellung",
+      "nextCheck": "Nächste Prüfung",
+      "probePaths": "Probe-Pfade",
+      "pathCountValue": "{{count}} Pfade",
+      "fullArchive": "Vollständiges Archiv",
+      "canary": "Verwalteter Canary"
+    },
+    "actions": {
+      "editSchedule": "Zeitplan bearbeiten",
+      "removeSchedule": "Zeitplan entfernen",
+      "runRestoreCheck": "Restore-Prüfung ausführen"
+    },
+    "badge": {
+      "restoreCheck": "Restore-Prüfung"
+    },
+    "validation": {
+      "selectRepository": "Bitte Repository auswählen",
+      "enterProbePath": "Gib mindestens einen Probe-Pfad ein"
+    },
+    "toasts": {
+      "scheduleUpdated": "Restore-Prüfungszeitplan aktualisiert",
+      "updateFailed": "Restore-Prüfungszeitplan konnte nicht aktualisiert werden",
+      "restoreCheckStarted": "Restore-Prüfung gestartet",
+      "restoreCheckFailed": "Restore-Prüfung konnte nicht gestartet werden"
+    },
+    "canaryModeHint": "Der Canary-Modus fügt künftigen Sicherungen eine winzige Borg UI-Canary-Datei hinzu, solange er aktiviert ist, und prüft sie aus dem neuesten Archiv. Er funktioniert nach der nächsten Sicherung.",
+    "canaryUnavailableObserveOnly": "Der Canary-Modus ist für Observe-only-Repositories nicht verfügbar, weil Borg UI deren Backups nicht erstellt. Nutze ausgewählte Probe-Pfade oder einen vollständigen Archiv-Drill.",
+    "noBackupYet": "Noch keine Sicherung",
+    "probeModeHint": "Der Probe-Pfad-Modus stellt echte von dir gewählte Dateien wieder her. Nutze ihn für aussagekräftigere Prüfungen kritischer Pfade ohne das gesamte Archiv zu extrahieren.",
+    "fullArchiveWarning": "Vollständige Archiv-Drills können bei großen Repositories teuer sein. Nutze sie sparsam und nur mit ausreichend temporärem Speicher und Wartungsfenster."
+  },
+  "integrity": {
+    "title": "Integrität",
+    "subtitle": "Überwache Repository-Integrität und Wiederherstellbarkeit getrennt von der Backup-Planung.",
+    "tabs": {
+      "repositoryChecks": "Repository-Prüfungen",
+      "restoreChecks": "Restore-Prüfungen"
+    },
+    "noRepositories": "Erstelle zuerst ein Repository, um Integritätsprüfungen zu konfigurieren.",
+    "stats": {
+      "restoreSchedules": "Restore-Zeitpläne",
+      "canaryProtected": "Canary-geschützt",
+      "probeProtected": "Probe-Pfad-Zeitpläne",
+      "fullDrills": "Vollarchiv-Drills"
+    },
+    "history": {
+      "title": "Letzte Restore-Prüfungen",
+      "description": "Prüfe die letzten Restore-Verifikationen und öffne Logs, wenn etwas fehlschlägt.",
+      "emptyTitle": "Es wurden noch keine Restore-Prüfungen ausgeführt",
+      "emptyDescription": "Starte eine Restore-Prüfung oder warte auf den nächsten geplanten Integritätslauf.",
+      "columns": {
+        "repository": "Repository",
+        "mode": "Modus",
+        "archive": "Archiv",
+        "started": "Gestartet"
+      },
+      "modes": {
+        "canary": "Canary",
+        "probePaths": "Probe-Pfade",
+        "fullArchive": "Vollständiges Archiv"
+      },
+      "actions": {
+        "viewLogs": "Logs anzeigen"
+      },
+      "logTitle": "Restore-Prüfungs-Logs - {{job}}",
+      "noLogs": "Für diese Restore-Prüfung sind keine Logs verfügbar."
+    }
   },
   "repositorySelectorCard": {
     "title": "Repository auswählen",
@@ -2143,7 +2396,18 @@
       "customPathHelperRemote": "Wähle ein beschreibbares Verzeichnis auf der Remote-Maschine",
       "browseFilesystem": "Dateisystem durchsuchen",
       "browseRemoteFilesystem": "Remote-Dateisystem durchsuchen",
-      "filesWillBeRestoredTo": "Dateien werden wiederhergestellt nach:"
+      "filesWillBeRestoredTo": "Dateien werden wiederhergestellt nach:",
+      "pathLayout": "Pfadlayout",
+      "preserveArchivePath": "Archivpfad beibehalten",
+      "preserveArchivePathDesc": "Den vollständigen ausgewählten Archivpfad unter dem benutzerdefinierten Ziel wiederherstellen.",
+      "restoreContentsHere": "Ausgewählte Inhalte hier wiederherstellen",
+      "restoreContentsHereDesc": "Die ausgewählte Datei oder den Inhalt des ausgewählten Ordners direkt im benutzerdefinierten Ziel ablegen.",
+      "restorePathPreview": "Vorschau des Wiederherstellungspfads",
+      "archivePath": "Archiv",
+      "restorePath": "Ziel",
+      "contentsOnlyMarker": "(Inhalt)",
+      "andMoreItems_one": "... und {{count}} weiteres Element",
+      "andMoreItems_other": "... und {{count}} weitere Elemente"
     },
     "restoreFiles": {
       "title": "Wiederherzustellende Dateien auswählen",
@@ -2187,6 +2451,9 @@
       "originalLocation": "Ursprünglicher Speicherort",
       "customLocation": "Benutzerdefinierter Speicherort",
       "customPath": "Benutzerdefinierter Pfad",
+      "restoreLayout": "Pfadlayout",
+      "preserveArchivePath": "Archivpfad beibehalten",
+      "restoreContentsHere": "Ausgewählte Inhalte hier wiederherstellen",
       "notSet": "(nicht gesetzt)",
       "restorePreview": "Wiederherstellungsvorschau",
       "previewNote": "Vorschau, wo deine Dateien wiederhergestellt werden:",
@@ -2286,6 +2553,7 @@
       "config": {
         "scheduleLabel": "Zeitplan (Cron-Ausdruck)",
         "scheduleHelper": "Klicke auf das Uhr-Symbol, um den visuellen Builder zu verwenden.",
+        "timezoneLabel": "Zeitzone",
         "nextRunTimes": "Nächste 3 Ausführungszeiten:"
       },
       "review": {
@@ -2295,6 +2563,7 @@
         "name": "Name",
         "repositories": "Repositories ({{count}})",
         "schedule": "Zeitplan",
+        "timezone": "Zeitzone",
         "archiveNameTemplate": "Archivnamen-Vorlage",
         "scriptsConfiguration": "Skriptkonfiguration",
         "preBackupScript": "Pre-Backup-Skript",
@@ -2374,7 +2643,11 @@
     "emptyArchiveDesc": "In diesem Archiv wurden keine Dateien gesichert. Dies kann passieren, wenn das Quellverzeichnis während der Sicherung leer oder nicht zugänglich war.",
     "noInfo": "Keine Archivinformationen verfügbar",
     "root": "Wurzel",
-    "downloadFile": "Datei herunterladen"
+    "downloadFile": "Datei herunterladen",
+    "managedCanaryLabel": "Borg UI Canary",
+    "managedCanaryDescription": "Verwaltete Canary-Dateien für Restore-Prüfungen. Borg UI fügt sie zu Backups hinzu, solange der Canary-Modus aktiviert ist.",
+    "managedCanaryBanner": "Dieser Ordner wird von Borg UI für Canary-Restore-Prüfungen verwaltet. Du kannst ihn unverändert lassen.",
+    "managedCanaryProbeDisabled": "Canary-Pfade werden automatisch vom Canary-Modus geprüft."
   },
   "codeEditor": {
     "loading": "Editor wird geladen..."
@@ -2834,14 +3107,32 @@
         "invalidAuthToken": "Ungültiges Authentifizierungstoken",
         "invalidOrExpiredToken": "Ungültiges oder abgelaufenes Token",
         "proxyHeaderRequired": "Der Reverse-Proxy-Authentifizierungsheader \"{{header}}\" ist erforderlich",
+        "localLoginDisabled": "Die integrierte Passwort- und Passkey-Anmeldung ist deaktiviert, weil Single Sign-on erzwungen wird",
         "invalidTotpCode": "Ungültiger Authentifizierungscode",
-        "localPasswordRequired": "Dieses Konto muss die integrierte Passwortanmeldung verwenden, um TOTP zu verwalten",
+        "tooManyAttempts": "Zu viele Anmeldeversuche. Bitte in {{retryAfterSeconds}} Sekunden erneut versuchen.",
+        "tooManyRequests": "Zu viele Anmeldeversuche. Bitte in {{retryAfterSeconds}} Sekunden erneut versuchen.",
+        "localPasswordRequired": "Dieses Konto benötigt ein lokales Passwort, bevor diese Aktion fortgesetzt werden kann",
         "totpNotEnabled": "Die Zwei-Faktor-Authentifizierung ist für dieses Konto nicht aktiviert",
         "invalidPasskey": "Ungültige Passkey-Antwort",
         "passkeyUserVerificationRequired": "Für diesen Passkey ist eine Gerätebestätigung erforderlich. Entsperre das Gerät mit Touch ID, Face ID oder dem Gerätecode und versuche es erneut.",
         "passkeysUnavailable": "Passkeys sind nicht verfügbar, weil die WebAuthn-Abhängigkeit nicht installiert ist",
         "passkeyAlreadyRegistered": "Dieser Passkey ist bereits registriert",
-        "passkeyNotFound": "Passkey nicht gefunden"
+        "passkeyNotFound": "Passkey nicht gefunden",
+        "oidcNotConfigured": "Single Sign-on ist nicht konfiguriert",
+        "oidcAuthenticationCancelled": "Die Single-Sign-on-Anmeldung wurde vom Identitätsanbieter abgebrochen oder verweigert",
+        "oidcAuthenticationFailed": "Die Single-Sign-on-Anmeldung ist fehlgeschlagen",
+        "oidcIdTokenInvalid": "Der Identitätsanbieter hat ein ungültiges Anmelde-Token zurückgegeben",
+        "oidcUsernameClaimMissing": "Single Sign-on hat keinen verwendbaren Benutzernamen-Claim geliefert",
+        "oidcSubjectClaimMissing": "Single Sign-on hat keinen verwendbaren Subject-Claim geliefert",
+        "oidcUserAccessDenied": "Dein Single-Sign-on-Konto darf nicht auf Borg UI zugreifen",
+        "oidcAccountLinkRequired": "Ein lokales Borg-UI-Konto verwendet bereits diesen Benutzernamen. Verknüpfe das Konto ausdrücklich, bevor du Single Sign-on verwendest.",
+        "oidcAlreadyLinked": "Dieses Konto ist bereits mit Single Sign-on verknüpft",
+        "oidcCannotUnlinkWhenLocalAuthDisabled": "Single Sign-on kann nicht getrennt werden, solange die lokale Anmeldung deaktiviert ist",
+        "oidcNotLinked": "Dieses Konto ist nicht mit Single Sign-on verknüpft",
+        "oidcIdentityConflict": "Diese Single-Sign-on-Identität steht im Konflikt mit einem bestehenden Borg-UI-Konto.",
+        "oidcEmailAlreadyInUse": "Diese Single-Sign-on-E-Mail wird bereits von einem anderen Borg-UI-Konto verwendet.",
+        "oidcPendingApproval": "Dein Single-Sign-on-Konto wartet auf die Freigabe durch einen Administrator",
+        "oidcTemplateUserNotFound": "Der konfigurierte Single-Sign-on-Vorlagenbenutzer wurde nicht gefunden"
       },
       "repo": {
         "repositoryNotFound": "Repository nicht gefunden",
@@ -2864,6 +3155,7 @@
         "cannotDeleteRepoWithArchives": "Repository mit vorhandenen Archiven kann nicht gelöscht werden. Bitte löschen Sie zuerst alle Archive.",
         "checkAlreadyRunning": "Für dieses Repository wird bereits eine Überprüfungsoperation ausgeführt",
         "compactAlreadyRunning": "Für dieses Repository wird bereits eine Komprimierungsoperation ausgeführt",
+        "restoreCheckCanaryUnsupportedObserve": "Canary-Restore-Prüfungen sind für Observe-only-Repositories nicht verfügbar. Nutze ausgewählte Probe-Pfade oder einen vollständigen Archiv-Drill.",
         "breakLockTimeout": "Timeout beim Versuch, die Sperre aufzuheben",
         "checkJobNotFound": "Prüfauftrag nicht gefunden",
         "compactJobNotFound": "Komprimierungsauftrag nicht gefunden",
@@ -3020,7 +3312,16 @@
         "failedRunLogCleanup": "Fehler beim Ausführen der Protokollbereinigung: {{error}}",
         "failedGetCacheStats": "Fehler beim Abrufen der Cache-Statistiken: {{error}}",
         "failedClearCache": "Fehler beim Leeren des Caches: {{error}}",
-        "failedUpdateCacheSettings": "Fehler beim Aktualisieren der Cache-Einstellungen: {{error}}"
+        "failedUpdateCacheSettings": "Fehler beim Aktualisieren der Cache-Einstellungen: {{error}}",
+        "invalidOidcNewUserMode": "Ungültiger oidc_new_user_mode. Erlaubte Werte: {{modes}}",
+        "invalidOidcDefaultRole": "Ungültige OIDC-Standardrolle",
+        "invalidOidcDefaultRepositoryRole": "Ungültige OIDC-Standardrolle für Repository-Zugriff",
+        "invalidOidcTokenAuthMethod": "Ungültige OIDC-Token-Authentifizierungsmethode. Erlaubte Werte: {{methods}}",
+        "invalidAuthSource": "Ungültige Authentifizierungsquelle. Erlaubte Werte: {{sources}}",
+        "oidcTemplateUserRequired": "Ein Vorlagenbenutzername ist erforderlich, wenn der OIDC-Neubenutzermodus auf template gesetzt ist",
+        "oidcLocalAuthRequiresOidc": "OIDC muss aktiviert sein, bevor die lokale Authentifizierung deaktiviert werden kann",
+        "oidcLocalAuthRequiresOidcAdmin": "Mindestens ein aktiver Administrator muss mit OIDC verknüpft sein, bevor die lokale Authentifizierung deaktiviert werden kann",
+        "oidcConfigurationIncomplete": "OIDC ist aktiviert, aber Discovery-URL, Client-ID oder Client-Secret fehlen"
       },
       "activity": {
         "adminOnlyDelete": "Nur Administratoren können Auftragseinträge löschen",
@@ -3150,7 +3451,8 @@
       "auth": {
         "loggedOut": "Erfolgreich abgemeldet",
         "userDeleted": "Benutzer erfolgreich gelöscht",
-        "passwordChanged": "Passwort erfolgreich geändert"
+        "passwordChanged": "Passwort erfolgreich geändert",
+        "oidcUnlinked": "Single Sign-on erfolgreich getrennt"
       },
       "repo": {
         "repositoryImported": "Repository erfolgreich importiert",

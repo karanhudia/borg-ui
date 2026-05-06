@@ -1,707 +1,205 @@
 ---
-layout: default
 title: Configuration
 nav_order: 3
-description: "Environment variables, volumes, and settings"
+description: "Environment variables, volumes, settings, and runtime defaults"
 ---
 
-# Configuration Guide
+# Configuration
 
-Customize Borg Web UI for your environment.
+Most configuration is available in the UI under Settings. Use environment variables for deployment-time defaults and settings that must exist before the app starts.
 
----
+## Core Environment Variables
 
-## Auto-Configured Settings
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `8081` | HTTP port inside the container and usually on the host |
+| `ENVIRONMENT` | `production` | Runtime mode |
+| `PUID` | `1001` | Host user ID for file ownership |
+| `PGID` | `1001` | Host group ID for file ownership |
+| `TZ` | host/default | Timezone used for logs and schedules |
+| `DATA_DIR` | `/data` | App database, logs, SSH material, generated secret |
+| `SECRET_KEY` | generated | JWT/session signing key. Auto-generated into `/data/.secret_key` if omitted |
+| `INITIAL_ADMIN_PASSWORD` | `admin123` | Password for the first `admin` user |
+| `LOG_LEVEL` | `INFO` | Backend log level |
+| `LOCAL_MOUNT_POINTS` | `/local` | Comma-separated container paths shown as local mounts in the file browser |
+| `BASE_PATH` | empty | Sub-path deployment, for example `/borg-ui` |
 
-These are automatically set up on first run - no configuration needed:
+## Volumes
 
-| Setting | Auto-Configuration |
-|---------|-------------------|
-| **SECRET_KEY** | Randomly generated (32 bytes), persisted to `/data/.secret_key` |
-| **DATABASE_URL** | SQLite at `/data/borg.db` (includes encrypted SSH keys) |
-| **JOB_LOGS** | Stored in `/data/logs/` (backup_job_*.log, check_job_*.log, compact_job_*.log) |
-| **SSH_KEYS_DIR** | `/data/ssh_keys` (used for temporary files during SSH operations) |
+Required:
 
-**Note:** Application logs (FastAPI, uvicorn) are sent to Docker logs (stdout/stderr). View with `docker logs borg-web-ui`.
-
----
-
-## Environment Variables
-
-### Port Configuration
-
-```yaml
-environment:
-  - PORT=8082  # Default: 8081
-```
-
-Access at `http://localhost:8082`
-
-### User/Group IDs
-
-Match your host user for proper permissions:
-
-```yaml
-environment:
-  - PUID=1000  # Your user ID
-  - PGID=1000  # Your group ID
-```
-
-Find your IDs:
-```bash
-id -u  # User ID
-id -g  # Group ID
-```
-
-**Common IDs:**
-- Linux/Raspberry Pi: `1000:1000`
-- Unraid: `99:100`
-- macOS: `501:20`
-
-**Note:** When `PUID=0` (running as root), SSH keys are symlinked from `/root/.ssh` to `/home/borg/.ssh` automatically.
-
-### Logging
-
-```yaml
-environment:
-  - LOG_LEVEL=DEBUG  # Default: INFO
-  # Options: DEBUG, INFO, WARNING, ERROR
-```
-
-### Initial Admin Password
-
-Set a custom admin password on first run:
-
-```yaml
-environment:
-  - INITIAL_ADMIN_PASSWORD=your-secure-password
-```
-
-**Note:** If not set, defaults to `admin123`. You'll be prompted to change it on first login.
-
-### Proxy/OIDC Authentication
-
-{: .new }
-> **New Feature**: Integrate with external authentication providers (Authentik, Authelia, Keycloak, etc.)
-
-Disable the built-in login screen and use your reverse proxy for authentication:
-
-```yaml
-environment:
-  - DISABLE_AUTHENTICATION=true          # Disable built-in login screen
-  - PROXY_AUTH_HEADER=X-Forwarded-User   # Header containing authenticated username (optional, default shown)
-  - PROXY_AUTH_ROLE_HEADER=X-Borg-Role   # Optional trusted Borg UI global role header
-  - PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER=X-Borg-All-Repositories-Role   # Optional trusted default repository role header
-  - PROXY_AUTH_EMAIL_HEADER=X-Borg-Email   # Optional trusted email header
-  - PROXY_AUTH_FULL_NAME_HEADER=X-Borg-Full-Name   # Optional trusted display-name header
-```
-
-**How it works:**
-- Borg UI reads the authenticated username from HTTP headers set by your reverse proxy
-- Users are auto-created on first access
-- New users are created as `viewer` by default
-- Optionally, trusted proxy headers can assign Borg UI `viewer`, `operator`, or `admin` roles
-- Optionally, trusted proxy headers can assign a default repository role (`viewer` or `operator`)
-- Optionally, trusted proxy headers can populate `email` and `full_name`
-
-**Supported authentication providers:**
-- **Authentik** (header: `X-authentik-username`)
-- **Authelia** (header: `X-Remote-User`)
-- **Keycloak** (header: `X-Forwarded-User`)
-- **Cloudflare Access** (header: `Cf-Access-Authenticated-User-Email`)
-- **Google IAP** (header: `X-Goog-Authenticated-User-Email`)
-- **Azure AD** (header: `X-MS-CLIENT-PRINCIPAL-NAME`)
-- Any proxy that sets authentication headers
-
-**Security Requirements:**
-
-⚠️ **CRITICAL**: You MUST ensure Borg UI is only accessible through your authenticated proxy:
-
-```yaml
-ports:
-  - "127.0.0.1:8081:8081"  # Only accessible via localhost
-```
-
-And block direct access with firewall rules:
-
-```bash
-sudo ufw deny 8081
-sudo ufw allow from 127.0.0.1 to any port 8081
-```
-
-**Why:** If Borg UI is directly accessible, anyone can spoof the authentication header and gain access.
-
-See [Security Guide - Proxy/OIDC Authentication](security.md#proxyoidc-authentication) for:
-- Complete setup examples (Authentik, Authelia, Cloudflare Access, etc.)
-- Security best practices
-- Troubleshooting guide
-- User management
-
-### File Browser Mount Points
-
-{: .new }
-> **New in vX.Y.Z**: LOCAL_MOUNT_POINTS for improved file browser navigation
-
-Specify which container paths are host filesystem mounts to highlight them in the file browser:
-
-```yaml
-environment:
-  - LOCAL_MOUNT_POINTS=/local  # Default
-```
-
-**What it does:**
-- Highlights host filesystem mounts with a 💾 **HardDrive** icon and **"Host"** badge
-- Makes it easy to identify where your actual data lives
-- Similar to how SSH mount points are displayed with **"Remote"** badge
-
-**Custom configurations:**
-
-```yaml
-# Single mount (default)
-volumes:
-  - /:/local:rw
-environment:
-  - LOCAL_MOUNT_POINTS=/local
-
-# Multiple mounts (comma-separated)
-volumes:
-  - /home/john:/mylocalserver:rw
-  - /mnt/nas:/nas:rw
-environment:
-  - LOCAL_MOUNT_POINTS=/mylocalserver,/nas
-
-# No highlighting (empty string)
-environment:
-  - LOCAL_MOUNT_POINTS=
-```
-
-**In the file browser:**
-- 💾 `/local` **[Host]** - Highlighted as host mount
-- 🌐 `/mnt/ssh-connection` **[Remote]** - SSH mount point
-- 📦 `/backups/repo1` **[Borg]** - Borg repository
-- 📁 `/data` - Regular directory
-
----
-
-## Volume Mounts
-
-### Application Data
-
-**Required volumes:**
-
-```yaml
-volumes:
-  - borg_data:/data                       # Application data
-  - borg_cache:/home/borg/.cache/borg    # Borg cache
-```
-
-**What's stored in `/data`:**
-- SQLite database (includes encrypted SSH keys)
-- Job logs (backup, check, compact operations) in `/data/logs/`
-- Auto-generated SECRET_KEY
-- Temporary SSH key files during deployment/testing in `/data/ssh_keys/`
-
-### Filesystem Access
-
-**⚠️ Important Security Note**
-
-The container needs access to directories you want to backup. **For production, mount only specific directories** you need:
-
-```yaml
-volumes:
-  # ✅ Recommended: Mount specific directories
-  - /home/yourusername:/local:rw      # Replace with your path
-  - /mnt/data:/local/data:rw          # Additional directories
-
-  # ❌ NOT Recommended: Full filesystem access
-  # - /:/local:rw  # Development/testing only - avoid in production
-```
-
-**Why limit filesystem access?**
-- Reduces security risk (principle of least privilege)
-- Prevents accidental access to sensitive system files
-- Makes it clear which directories are being backed up
-- Easier to troubleshoot permission issues
-
-### Mount Pattern Examples
-
-**Personal Computer:**
 ```yaml
 volumes:
   - borg_data:/data
   - borg_cache:/home/borg/.cache/borg
-  - /home/john:/local:rw              # Mount home directory
+  - /host/path:/local:rw
 ```
 
-**Server with Multiple Directories:**
-```yaml
-volumes:
-  - borg_data:/data
-  - borg_cache:/home/borg/.cache/borg
-  - /var/www:/local/www:ro            # Website files (read-only)
-  - /home/appuser:/local/app:rw       # Application data
-  - /var/lib/postgresql:/local/db:rw  # Database directory
-```
+What they mean:
 
-**NAS Backup (Unraid/TrueNAS):**
-```yaml
-volumes:
-  - borg_data:/data
-  - borg_cache:/home/borg/.cache/borg
-  - /mnt/user/Documents:/local:ro     # Documents (read-only)
-  - /mnt/user/Media:/local/media:ro   # Media files
-  - /mnt/backup:/local/backup:rw      # Backup destination
-```
+- `/data`: Borg UI application state. Back this up.
+- `/home/borg/.cache/borg`: Borg cache. Keep it for performance.
+- `/local`: host data exposed to Borg UI for local backups and repositories.
 
-**Best Practices:**
-- Use simple `/local` mount for single directory
-- Use `/local/subdir` pattern for multiple directories
-- Use `:ro` (read-only) when you only need to backup, not restore
-- Mount backup destinations as `:rw` if storing repositories locally
+If you mount a different container path, update `LOCAL_MOUNT_POINTS`.
 
----
-
-## Custom Volume Locations
-
-Store application data in a specific location:
+Example:
 
 ```yaml
 volumes:
-  borg_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /mnt/storage/borg-data
-
-  borg_cache:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /mnt/storage/borg-cache
+  - /mnt/photos:/photos:ro
+  - /mnt/backups:/backups:rw
+environment:
+  - LOCAL_MOUNT_POINTS=/photos,/backups
 ```
 
----
+## Local Path Mapping
 
-## Repository Configuration
+Container paths are what Borg UI can see.
 
-**Important:** Repositories are configured through the web UI, not Docker volumes.
-
-Supported repository types:
-- **Local paths**: `/local/backups/my-repo`, `/backups/my-repo`
-- **SSH/SFTP**: `user@host:/path/to/repo`
-
-No need for a separate `borg_backups` volume!
-
----
-
-## Network Configuration
-
-### Using a Reverse Proxy
-
-Borg Web UI supports running behind a reverse proxy on a dedicated (sub)domain (e.g., `backups.example.com`).
-
-**Quick Example (Nginx):**
-
-```nginx
-server {
-    listen 80;
-    server_name backups.example.com;
-
-    location / {
-        proxy_pass http://localhost:8081;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # WebSocket/SSE support
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 86400;
-    }
-}
-```
-
-**For complete reverse proxy setup including:**
-- Nginx, Traefik, Caddy, Apache configurations
-- SSL/HTTPS setup
-- Docker network integration
-- Troubleshooting
-
-See the **[Reverse Proxy Setup Guide](reverse-proxy.md)**
-
-### Custom Network
+If this is your volume:
 
 ```yaml
-networks:
-  borg-network:
-    driver: bridge
-
-services:
-  borg-ui:
-    networks:
-      - borg-network
+- /mnt/usb-drive:/local:rw
 ```
 
----
+Then use this in Borg UI:
 
-## Performance Tuning
-
-### For Large Repositories
-
-{: .new }
-> **New in vX.Y.Z**: Configurable operation timeouts for very large repositories
-
-Increase Borg cache size by mounting to fast storage:
-
-```yaml
-volumes:
-  - /path/to/ssd/borg-cache:/home/borg/.cache/borg
+```text
+/local/some-folder
 ```
 
-#### Operation Timeouts for Very Large Repositories
+not:
 
-For repositories with:
-- Multi-terabyte deduplicated size
-- Hundreds of archives
-- Long cache build times on first access
+```text
+/mnt/usb-drive/some-folder
+```
 
-You can configure operation timeouts via **two methods**:
+## Redis Cache
 
-##### Method 1: Web UI (Recommended)
+Redis settings:
 
-Go to **Settings → System** to configure timeouts with a user-friendly interface:
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `REDIS_HOST` | `localhost` | Redis hostname |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_DB` | `0` | Redis database number |
+| `REDIS_PASSWORD` | empty | Redis password |
+| `REDIS_URL` | empty | Full Redis URL. Takes precedence over host/port/db |
+| `CACHE_TTL_SECONDS` | `7200` | Archive cache TTL |
+| `CACHE_MAX_SIZE_MB` | `2048` | Cache size target |
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| Mount Timeout | Time to wait for archive mounts | 120s (2 min) |
-| Info Timeout | Borg info operations (verification, stats) | 600s (10 min) |
-| List Timeout | Listing archives and files | 600s (10 min) |
-| Init Timeout | Creating new repositories | 300s (5 min) |
-| Backup/Restore Timeout | Backup and restore operations | 3600s (1 hour) |
-| Source Size Timeout | `du`-based source size calculation before backup | 3600s (1 hour) |
+`REDIS_URL` accepts `redis://`, `rediss://`, and `unix://` URLs.
 
-**Advantages of UI configuration:**
-- No container restart required
-- Changes take effect immediately
-- Easier to adjust on-the-fly
-
-##### Method 2: Environment Variables
-
-Set timeouts via Docker environment variables:
+Example Unix socket URL:
 
 ```yaml
 environment:
-  # Borg operation timeouts (in seconds)
-  - BORG_INFO_TIMEOUT=7200      # 2 hours for borg info (default: 600 = 10 min)
-  - BORG_LIST_TIMEOUT=3600      # 1 hour for borg list (default: 600 = 10 min)
-  - BORG_INIT_TIMEOUT=900       # 15 min for borg init (default: 300 = 5 min)
-  - BORG_EXTRACT_TIMEOUT=7200   # 2 hours for restore (default: 3600 = 1 hour)
-  - SCRIPT_TIMEOUT=300          # 5 min for hooks (default: 120 = 2 min)
-  - SOURCE_SIZE_TIMEOUT=7200    # 2 hours for source size calc (default: 3600 = 1 hour)
+  - REDIS_URL=unix:///run/redis/redis.sock?db=0
 ```
 
-##### Priority Order
+Mount the socket into the container at the same path when using `unix://`.
 
-The system checks settings in the following order:
+Settings > System > Cache can update Redis URL, cache TTL, and max cache size at runtime.
 
-| Priority | Source | Notes |
-|----------|--------|-------|
-| 1 (Highest) | UI Settings (Settings → System) | Stored in database, persists across restarts |
-| 2 | Environment Variables | Used if no UI setting is configured |
-| 3 | Built-in Defaults | Used if neither UI nor env vars are set |
-
-**How it works:** If you set a timeout in the UI, that value is used. If you haven't configured a UI setting for a particular timeout, the environment variable is used. Both approaches are valid - use whichever fits your workflow better.
-
-**Timeout Usage Reference:**
-
-| Operation | When Used | Default | Recommended for Large Repos |
-|-----------|-----------|---------|------------------------------|
-| Mount | Mounting archives for browsing | 2 min | 5-10 min (10TB+ repos) |
-| Info | Repository verification, stats, import | 10 min | 1-4 hours (based on cache build time) |
-| List | Listing archives/files, restore browser | 10 min | 30-60 min |
-| Init | Creating new repositories | 5 min | 10-15 min |
-| Backup/Restore | Backup and restore operations | 1 hour | 2-4 hours |
-| Source Size | `du`-based source size calculation before backup | 1 hour | 2+ hours (10TB+ sources) |
-
-**Example for very large repository (via UI):**
-1. Go to **Settings → System**
-2. Under "Operation Timeouts", set:
-   - Mount Timeout: 600 (10 minutes)
-   - Info Timeout: 7200 (2 hours)
-   - List Timeout: 3600 (1 hour)
-3. Click **Save Settings**
-
-**Symptoms you need higher timeouts:**
-- "Repository verification timed out" during import
-- "Mount timeout" errors when browsing archives or using **Mount Archive** (Archives → Mount)
-- Operations fail with timeout errors in logs
-- Large operations (info/list) succeed when run manually but fail in UI
-
-For **Mount Archive** specifically, see the [Mounting Archives](mounting) guide for how to mount and when to increase the Mount Timeout (e.g. for 10TB+ repositories).
-
-### For Raspberry Pi / Low Memory
+To run without Redis, set:
 
 ```yaml
 environment:
-  - WORKERS=1  # Reduce concurrent workers
+  - REDIS_HOST=disabled
 ```
 
----
+That forces the in-memory cache backend. Backups and restores still work.
 
-## Redis Cache Configuration
+Runtime Redis connection priority:
 
-{: .new }
-> **New in vX.Y.Z**: Redis-based archive caching for 600x faster browsing
+1. saved Redis URL from the Cache settings, when present
+2. `REDIS_URL`
+3. `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB`
+4. in-memory fallback
 
-Borg Web UI includes Redis caching for dramatically faster archive browsing. Without cache, navigating folders in large archives (1M+ files) takes 60-90 seconds. With cache, it takes less than 100ms.
+Use environment variables for startup defaults that must be reproducible from Compose or `.env`.
 
-### Default Setup (Local Redis)
+## Operation Timeouts
 
-Redis is included in `docker-compose.yml` - no configuration needed.
+Timeout settings can be changed in Settings > System > Operation Timeouts.
+
+Environment defaults:
+
+| Variable | Default | Used for |
+| --- | --- | --- |
+| `BORG_MOUNT_TIMEOUT` | `120` | `borg mount` |
+| `BORG_INFO_TIMEOUT` | `600` | repository info and stats |
+| `BORG_LIST_TIMEOUT` | `600` | archive and file listing |
+| `BORG_INIT_TIMEOUT` | `300` | repository initialization |
+| `BACKUP_TIMEOUT` | `3600` | backup and restore commands |
+| `SOURCE_SIZE_TIMEOUT` | `3600` | source size calculation |
+| `SCRIPT_TIMEOUT` | `120` | pre/post-backup scripts |
+
+Priority for UI-managed timeout settings:
+
+1. saved UI value, when changed from the default or environment value
+2. environment variable
+3. built-in default
+
+## System Packages
+
+Admins can install extra system packages from Settings > System > Packages.
+
+Use this when scripts need tools that are not in the base container, for example the Docker CLI for Docker hook scripts.
+
+Packages are stored in Borg UI state and reinstalled when the container is recreated. Only install packages and commands you trust.
+
+## Authentication
+
+Default mode is local username/password auth.
+
+Related settings:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DISABLE_AUTHENTICATION` | `false` | Trust a reverse proxy auth header |
+| `ALLOW_INSECURE_NO_AUTH` | `false` | Disable auth entirely. Use only for local development |
+| `PROXY_AUTH_HEADER` | `X-Forwarded-User` | Username header for trusted-header auth |
+| `PROXY_AUTH_ROLE_HEADER` | empty | Optional global role header |
+| `PROXY_AUTH_ALL_REPOSITORIES_ROLE_HEADER` | empty | Optional default repository role header |
+| `PROXY_AUTH_EMAIL_HEADER` | empty | Optional email header |
+| `PROXY_AUTH_FULL_NAME_HEADER` | empty | Optional display-name header |
+| `PUBLIC_BASE_URL` | empty | Public URL used by auth flows when needed |
+| `TRUSTED_PROXIES` | `127.0.0.1,::1` | Proxy IPs whose forwarded headers may be trusted |
+| `OIDC_ALLOWED_RETURN_ORIGINS` | empty | Extra safe return origins for OIDC login redirects |
+
+Built-in OIDC is configured in the UI, not through a long list of environment variables.
+
+Use trusted-header auth only when the Borg UI container is reachable exclusively through the trusted proxy. Otherwise anyone who reaches the app directly can spoof identity headers.
+
+See [Authentication and SSO](authentication).
+
+## Licensing and Activation
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ACTIVATION_SERVICE_URL` | `https://license.borgui.com` | License activation endpoint |
+| `ACTIVATION_TIMEOUT_SECONDS` | `10` | Activation request timeout |
+| `ENABLE_STARTUP_LICENSE_SYNC` | `true` in production | Sync license/full-access state at startup |
+
+Set `ENABLE_STARTUP_LICENSE_SYNC=false` to prevent startup contact with the activation service.
+
+## Reverse Proxy Sub-Path
+
+Set `BASE_PATH` only when serving under a sub-path:
 
 ```yaml
-# Already configured in docker-compose.yml
-redis:
-  image: redis:7-alpine
-  command: redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru
+environment:
+  - BASE_PATH=/borg-ui
 ```
 
-**Manage via UI:**
-- Go to **Settings → Cache** tab
-- View statistics, configure TTL/size, clear cache
-- Default: 2-hour TTL, 2GB size limit
+Your proxy must strip `/borg-ui` before forwarding requests to the container. See [Reverse Proxy](reverse-proxy).
 
-### External Redis (For Large Repositories)
+## Related
 
-Connect to Redis on a separate machine with more RAM:
-
-```yaml
-# docker-compose.yml
-services:
-  app:
-    environment:
-      # External Redis URL (can also configure via Settings → Cache in UI)
-      - REDIS_URL=redis://192.168.1.100:6379/0
-
-      # Or with password
-      # - REDIS_URL=redis://:password@192.168.1.100:6379/0
-
-      # Or with Unix socket (when Redis and Borg UI are on same system)
-      # - REDIS_URL=unix:///run/redis-socket/redis.sock?db=0&password=password
-
-      # Cache settings
-      - CACHE_TTL_SECONDS=7200    # 2 hours
-      - CACHE_MAX_SIZE_MB=2048    # 2GB
-```
-
-**When to use external Redis:**
-- Repositories with 5M+ files
-- Multiple large archives
-- Limited RAM on Borg Web UI host
-- NAS/workstation with spare RAM available
-
-**Full setup guide with examples:** [Cache Configuration](cache)
-
----
-
-## Security Configuration
-
-### Change SECRET_KEY
-
-The SECRET_KEY is auto-generated on first run. To rotate it:
-
-```bash
-docker exec borg-web-ui rm /data/.secret_key
-docker restart borg-web-ui
-```
-
-**Note:** This invalidates all user sessions.
-
-### Enable HTTPS
-
-Use a reverse proxy (Nginx, Traefik, Caddy) with Let's Encrypt certificates.
-
-**Never expose the application directly to the internet without HTTPS.**
-
-### Restrict Access
-
-**Using firewall:**
-```bash
-# Allow only from local network
-sudo ufw allow from 192.168.1.0/24 to any port 8081
-```
-
-**Using Docker:**
-```yaml
-ports:
-  - "127.0.0.1:8081:8081"  # Only accessible from localhost
-```
-
-Then access via reverse proxy or SSH tunnel.
-
----
-
-## Backup Configuration Data
-
-### Backup Application Data
-
-```bash
-# Backup borg_data volume
-docker run --rm \
-  -v borg_data:/data \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/borg-data-backup.tar.gz -C /data .
-```
-
-### Restore Application Data
-
-```bash
-# Restore borg_data volume
-docker run --rm \
-  -v borg_data:/data \
-  -v $(pwd):/backup \
-  alpine tar xzf /backup/borg-data-backup.tar.gz -C /data
-```
-
----
-
-## Example Configurations
-
-### Basic Home Setup
-
-```yaml
-version: '3.8'
-
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    container_name: borg-web-ui
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    volumes:
-      - borg_data:/data
-      - borg_cache:/home/borg/.cache/borg
-      - /home/yourusername:/local:rw  # Replace with your home directory
-    environment:
-      - PUID=1000
-      - PGID=1000
-
-volumes:
-  borg_data:
-  borg_cache:
-```
-
-### Production Setup with Restricted Access
-
-```yaml
-version: '3.8'
-
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    container_name: borg-web-ui
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8081:8081"  # Only localhost
-    volumes:
-      # Application data
-      - borg_data:/data
-      - borg_cache:/home/borg/.cache/borg
-
-      # Backup sources (read-only)
-      - /var/www:/local/www:ro
-      - /home/appuser:/local/app:ro
-
-      # Backup destination
-      - /mnt/backups:/local/backup:rw
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - LOG_LEVEL=INFO
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.borg-ui.rule=Host(`backups.example.com`)"
-      - "traefik.http.routers.borg-ui.tls=true"
-
-volumes:
-  borg_data:
-  borg_cache:
-```
-
-### NAS Setup (Unraid/TrueNAS)
-
-```yaml
-services:
-  borg-ui:
-    image: ainullcode/borg-ui:latest
-    container_name: borg-web-ui
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    volumes:
-      - /mnt/user/appdata/borg-ui:/data
-      - /mnt/user/appdata/borg-ui/cache:/home/borg/.cache/borg
-      - /mnt/user/Documents:/local:ro         # Documents share
-      - /mnt/user/Media:/local/media:ro       # Media share
-      - /mnt/user/Backups:/local/backup:rw    # Backup destination
-    environment:
-      - PUID=99
-      - PGID=100
-```
-
----
-
-## Troubleshooting
-
-### Database Locked Error
-
-If multiple containers are using the same database:
-
-```bash
-# Stop all containers
-docker stop borg-web-ui
-
-# Check for locks
-docker exec borg-web-ui ls -la /data/
-
-# Restart
-docker start borg-web-ui
-```
-
-### Permission Issues
-
-Verify PUID/PGID match your host user:
-
-```bash
-# Check file ownership
-docker exec borg-web-ui ls -la /data/
-
-# Check container user
-docker exec borg-web-ui id
-
-# Fix ownership if needed
-docker exec borg-web-ui chown -R borg:borg /data
-```
-
-### High Memory Usage
-
-Reduce Borg cache or move to disk-based cache:
-
-```yaml
-volumes:
-  - /path/to/slower/storage:/home/borg/.cache/borg
-```
-
----
-
-## Next Steps
-
-- [Cache Configuration](cache.md) - Set up external Redis for 600x faster browsing
-- [Notifications Setup](notifications.md) - Configure alerts
-- [SSH Keys Guide](ssh-keys.md) - Set up remote backups
-- [Usage Guide](usage-guide.md) - Create your first backup
+- [Installation](installation)
+- [Cache](cache)
+- [Security](security)
+- [Authentication and SSO](authentication)
+- [Remote Machines](ssh-keys)

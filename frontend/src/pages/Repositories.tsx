@@ -50,6 +50,7 @@ interface Repository extends RepositoryData {
   has_schedule?: boolean
   schedule_enabled?: boolean
   schedule_name?: string | null
+  schedule_timezone?: string | null
   next_run?: string | null
   total_size: string | null
   archive_count: number

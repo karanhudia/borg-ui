@@ -7,7 +7,14 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 from datetime import datetime, timedelta, timezone
 
-from app.database.models import CheckJob, Repository, ScheduledJob, SystemSettings
+from app.database.models import (
+    CheckJob,
+    Repository,
+    RestoreCheckJob,
+    ScheduledJob,
+    SystemSettings,
+)
+from app.services.restore_check_scheduler import RestoreCheckScheduler
 from app.services.check_scheduler import run_due_scheduled_checks
 from app.services.mqtt_sync_scheduler import (
     periodic_mqtt_sync,
@@ -86,6 +93,42 @@ async def test_check_scheduler_ignores_invalid_cron_expression(db_session):
     db_session.refresh(repo)
     assert repo.last_scheduled_check is not None
     assert repo.next_scheduled_check is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_check_scheduler_uses_repository_check_timezone(db_session):
+    repo = Repository(
+        name="Repo",
+        path="/tmp/repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        check_cron_expression="0 2 * * *",
+        check_timezone="Asia/Kolkata",
+    )
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+
+    fake_router = MagicMock()
+    fake_router.check.return_value = AsyncMock()
+    with patch("app.services.check_scheduler.BorgRouter", return_value=fake_router):
+        with patch(
+            "app.services.check_scheduler.start_background_maintenance_job"
+        ) as mock_start:
+            mock_start.side_effect = lambda db, repo, job_model, **kwargs: CheckJob(
+                id=44,
+                repository_id=repo.id,
+                status="pending",
+                scheduled_check=True,
+            )
+            await run_due_scheduled_checks(
+                db_session, datetime(2026, 1, 1, 20, 0, tzinfo=timezone.utc)
+            )
+
+    db_session.refresh(repo)
+    assert repo.next_scheduled_check == datetime(2026, 1, 1, 20, 30)
 
 
 class _AsyncLineStream:
@@ -223,6 +266,102 @@ async def test_check_scheduler_runs_all_due_checks_despite_transient_sqlite_lock
         assert not any(job.status == "pending" for job in check_jobs)
     finally:
         verification_session.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_restore_check_scheduler_creates_job_and_updates_next_run(db_session):
+    repo = Repository(
+        name="Repo",
+        path="/tmp/repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        restore_check_cron_expression="0 4 * * *",
+        restore_check_timezone="Asia/Kolkata",
+        restore_check_paths='["etc/hostname"]',
+    )
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+
+    scheduler = RestoreCheckScheduler()
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
+
+    with patch(
+        "app.services.restore_check_scheduler.SessionLocal", testing_session_local
+    ):
+        with patch(
+            "app.services.restore_check_scheduler.start_background_maintenance_job"
+        ) as mock_start:
+            mock_start.side_effect = (
+                lambda db, repo, job_model, **kwargs: RestoreCheckJob(
+                    id=84,
+                    repository_id=repo.id,
+                    status="pending",
+                    probe_paths=kwargs["extra_fields"]["probe_paths"],
+                    scheduled_restore_check=True,
+                )
+            )
+            await scheduler.run_scheduled_restore_checks()
+
+    verification_session = testing_session_local()
+    repo = (
+        verification_session.query(Repository).filter(Repository.id == repo.id).first()
+    )
+    assert repo.last_scheduled_restore_check is not None
+    assert repo.next_scheduled_restore_check is not None
+    assert repo.next_scheduled_restore_check.hour == 22
+    assert repo.next_scheduled_restore_check.minute == 30
+    mock_start.assert_called_once()
+    verification_session.close()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_restore_check_scheduler_skips_canary_for_observe_repositories(
+    db_session,
+):
+    repo = Repository(
+        name="Observe Repo",
+        path="/tmp/observe",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        mode="observe",
+        restore_check_cron_expression="0 4 * * *",
+        restore_check_timezone="Asia/Kolkata",
+        restore_check_paths="[]",
+        restore_check_full_archive=False,
+        restore_check_canary_enabled=True,
+    )
+    db_session.add(repo)
+    db_session.commit()
+    db_session.refresh(repo)
+
+    scheduler = RestoreCheckScheduler()
+    testing_session_local = sessionmaker(
+        bind=db_session.get_bind(), autocommit=False, autoflush=False
+    )
+
+    with patch(
+        "app.services.restore_check_scheduler.SessionLocal", testing_session_local
+    ):
+        with patch(
+            "app.services.restore_check_scheduler.start_background_maintenance_job"
+        ) as mock_start:
+            await scheduler.run_scheduled_restore_checks()
+
+    verification_session = testing_session_local()
+    repo = (
+        verification_session.query(Repository).filter(Repository.id == repo.id).first()
+    )
+    assert repo.restore_check_canary_enabled is False
+    assert repo.next_scheduled_restore_check is not None
+    mock_start.assert_not_called()
+    verification_session.close()
 
 
 @pytest.mark.unit

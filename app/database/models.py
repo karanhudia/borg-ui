@@ -31,6 +31,9 @@ class User(Base):
     password_hash = Column(String)
     email = Column(String, unique=True, index=True)
     is_active = Column(Boolean, default=True)
+    auth_source = Column(String, default="local", nullable=False)
+    oidc_subject = Column(String, nullable=True, index=True)
+    oidc_last_id_token_encrypted = Column(Text, nullable=True)
     role = Column(String, default="viewer", nullable=False)
     all_repositories_role = Column(String, nullable=True)
 
@@ -209,6 +212,9 @@ class Repository(Base):
     check_cron_expression = Column(
         String, nullable=True
     )  # NULL = disabled, cron expression for schedule
+    check_timezone = Column(
+        String, default="UTC", nullable=False
+    )  # IANA timezone used to interpret check_cron_expression
     last_scheduled_check = Column(
         DateTime, nullable=True
     )  # Last scheduled check execution time
@@ -220,6 +226,36 @@ class Repository(Base):
         Boolean, default=False, nullable=False
     )  # Per-repository override
     notify_on_check_failure = Column(
+        Boolean, default=True, nullable=False
+    )  # Per-repository override
+    restore_check_cron_expression = Column(
+        String, nullable=True
+    )  # NULL = disabled, cron expression for restore verification
+    restore_check_timezone = Column(
+        String, default="UTC", nullable=False
+    )  # IANA timezone used to interpret restore_check_cron_expression
+    restore_check_paths = Column(
+        Text, nullable=True
+    )  # JSON array of paths to restore into a disposable temp directory
+    restore_check_full_archive = Column(
+        Boolean, default=False, nullable=False
+    )  # Explicit opt-in to verify by extracting the full latest archive
+    restore_check_canary_enabled = Column(
+        Boolean, default=False, nullable=False
+    )  # Whether future backups should include Borg UI's managed canary payload
+    last_restore_check = Column(
+        DateTime, nullable=True
+    )  # Last successful restore verification completion
+    last_scheduled_restore_check = Column(
+        DateTime, nullable=True
+    )  # Last scheduled restore verification execution time
+    next_scheduled_restore_check = Column(
+        DateTime, nullable=True
+    )  # Next scheduled restore verification time
+    notify_on_restore_check_success = Column(
+        Boolean, default=False, nullable=False
+    )  # Per-repository override
+    notify_on_restore_check_failure = Column(
         Boolean, default=True, nullable=False
     )  # Per-repository override
 
@@ -427,6 +463,9 @@ class ScheduledJob(Base):
     cron_expression = Column(
         String, nullable=False
     )  # e.g., "0 2 * * *" for daily at 2 AM
+    timezone = Column(
+        String, default="UTC", nullable=False
+    )  # IANA timezone used to interpret cron_expression
     repository = Column(
         String, nullable=True
     )  # Repository path/ID to backup (legacy, for single-repo schedules)
@@ -548,6 +587,48 @@ class CheckJob(Base):
         BigInteger, nullable=True
     )  # Process start time in jiffies for PID uniqueness
     scheduled_check = Column(
+        Boolean, default=False, nullable=False
+    )  # True if triggered by scheduler, False if manual
+    created_at = Column(DateTime, default=utc_now)
+
+
+class RestoreCheckJob(Base):
+    __tablename__ = "restore_check_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"), nullable=False)
+    repository_path = Column(
+        String, nullable=True
+    )  # Captured at job creation for display even if repo is deleted
+    archive_name = Column(
+        String, nullable=True
+    )  # Archive selected for verification, usually the latest archive
+    status = Column(
+        String, default="pending"
+    )  # pending, running, completed, completed_with_warnings, needs_backup, failed, cancelled
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    progress = Column(Integer, default=0)  # 0-100 percentage
+    progress_message = Column(
+        String, nullable=True
+    )  # Current progress message (e.g., "Restoring archive to temp dir")
+    error_message = Column(Text, nullable=True)
+    logs = Column(
+        Text, nullable=True
+    )  # Deprecated: kept for backwards compatibility, use log_file_path instead
+    log_file_path = Column(String, nullable=True)  # Path to log file on disk
+    has_logs = Column(Boolean, default=False)  # Flag indicating if logs are available
+    probe_paths = Column(
+        Text, nullable=True
+    )  # JSON array of paths restored for verification
+    full_archive = Column(
+        Boolean, default=False, nullable=False
+    )  # Whether the verification extracted the full archive
+    process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
+    process_start_time = Column(
+        BigInteger, nullable=True
+    )  # Process start time in jiffies for PID uniqueness
+    scheduled_restore_check = Column(
         Boolean, default=False, nullable=False
     )  # True if triggered by scheduler, False if manual
     created_at = Column(DateTime, default=utc_now)
@@ -747,12 +828,102 @@ class SystemSettings(Base):
     metrics_require_auth = Column(Boolean, default=False, nullable=False)
     metrics_token = Column(String, nullable=True)
 
+    # Built-in OIDC / SSO settings
+    oidc_enabled = Column(Boolean, default=False, nullable=False)
+    oidc_disable_local_auth = Column(Boolean, default=False, nullable=False)
+    oidc_provider_name = Column(String, nullable=True)
+    oidc_discovery_url = Column(String, nullable=True)
+    oidc_client_id = Column(String, nullable=True)
+    oidc_client_secret_encrypted = Column(String, nullable=True)
+    oidc_token_auth_method = Column(
+        String, default="client_secret_post", nullable=False
+    )
+    oidc_scopes = Column(String, default="openid profile email", nullable=False)
+    oidc_redirect_uri_override = Column(String, nullable=True)
+    oidc_end_session_endpoint_override = Column(String, nullable=True)
+    oidc_claim_username = Column(String, default="preferred_username", nullable=False)
+    oidc_claim_email = Column(String, default="email", nullable=False)
+    oidc_claim_full_name = Column(String, default="name", nullable=False)
+    oidc_group_claim = Column(String, nullable=True)
+    oidc_role_claim = Column(String, nullable=True)
+    oidc_admin_groups = Column(Text, nullable=True)
+    oidc_all_repositories_role_claim = Column(String, nullable=True)
+    oidc_new_user_mode = Column(String, default="viewer", nullable=False)
+    oidc_new_user_template_username = Column(String, nullable=True)
+    oidc_default_role = Column(String, default="viewer", nullable=False)
+    oidc_default_all_repositories_role = Column(
+        String, default="viewer", nullable=False
+    )
+
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
     # Deployment profile
     deployment_type = Column(String, default="individual", nullable=False)
     enterprise_name = Column(String, nullable=True)
+
+
+class OidcLoginState(Base):
+    __tablename__ = "oidc_login_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    state_id = Column(String, unique=True, nullable=False, index=True)
+    nonce = Column(String, nullable=False)
+    code_verifier = Column(Text, nullable=False)
+    return_to = Column(Text, nullable=False)
+    flow = Column(String, default="login", nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+
+class AuthEvent(Base):
+    __tablename__ = "auth_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    auth_source = Column(String, nullable=False, index=True)
+    username = Column(String, nullable=True, index=True)
+    email = Column(String, nullable=True)
+    success = Column(Boolean, default=True, nullable=False, index=True)
+    detail = Column(Text, nullable=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
+
+
+class OidcExchangeGrant(Base):
+    __tablename__ = "oidc_exchange_grants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    grant_id = Column(String, unique=True, nullable=False, index=True)
+    username = Column(String, nullable=False, index=True)
+    oidc_subject = Column(String, nullable=True, index=True)
+    email = Column(String, nullable=True)
+    full_name = Column(String, nullable=True)
+    groups_json = Column(Text, nullable=True)
+    role = Column(String, nullable=True)
+    all_repositories_role = Column(String, nullable=True)
+    id_token_hint_encrypted = Column(Text, nullable=True)
+    used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+
+class AuthRateLimitBucket(Base):
+    __tablename__ = "auth_rate_limit_buckets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bucket_key = Column(String, nullable=False, unique=True, index=True)
+    scope = Column(String, nullable=False, index=True)
+    subject = Column(String, nullable=False)
+    client_ip = Column(String, nullable=False, index=True)
+    failure_count = Column(Integer, default=0, nullable=False)
+    window_started_at = Column(DateTime, default=utc_now, nullable=False)
+    last_attempt_at = Column(DateTime, default=utc_now, nullable=False)
+    locked_until = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
 
 class LicensingState(Base):
@@ -854,6 +1025,8 @@ class NotificationSettings(Base):
     notify_on_schedule_failure = Column(Boolean, default=True, nullable=False)
     notify_on_check_success = Column(Boolean, default=False, nullable=False)
     notify_on_check_failure = Column(Boolean, default=True, nullable=False)
+    notify_on_restore_check_success = Column(Boolean, default=False, nullable=False)
+    notify_on_restore_check_failure = Column(Boolean, default=True, nullable=False)
 
     # Repository filtering
     monitor_all_repositories = Column(

@@ -10,6 +10,8 @@ from unittest.mock import MagicMock, patch
 from app.api.dashboard import (
     ScheduledJobInfo,
     SystemMetrics,
+    build_full_repository_health,
+    build_observe_repository_health,
     format_bytes,
     get_recent_jobs,
     parse_size_to_bytes,
@@ -19,6 +21,7 @@ from app.database.models import (
     CheckJob,
     CompactJob,
     Repository,
+    RestoreCheckJob,
     ScheduledJob,
     SSHConnection,
 )
@@ -311,6 +314,130 @@ class TestDashboardHelpers:
     def test_format_bytes(self, size_value, expected):
         assert format_bytes(size_value) == expected
 
+    def test_full_repository_health_keeps_unconfigured_restore_check_unknown(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            name="Healthy Repo",
+            path="/srv/backups/healthy",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression=None,
+        )
+
+        health = build_full_repository_health(repo, now)
+
+        assert health["health_status"] == "healthy"
+        assert health["dimension_health"]["restore"] == "unknown"
+        assert health["restore_check_configured"] is False
+        assert not any("Restore check" in warning for warning in health["warnings"])
+
+    def test_full_repository_health_warns_when_restore_check_configured_never_ran(
+        self,
+    ):
+        now = datetime.utcnow()
+        repo = Repository(
+            name="Restore Pending Repo",
+            path="/srv/backups/restore-pending",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression="0 4 * * *",
+        )
+
+        health = build_full_repository_health(repo, now)
+
+        assert health["health_status"] == "warning"
+        assert health["dimension_health"]["restore"] == "warning"
+        assert health["restore_check_configured"] is True
+        assert "Restore check configured but never completed" in health["warnings"]
+
+    def test_full_repository_health_marks_latest_restore_check_failure_critical(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=7,
+            name="Restore Failed Repo",
+            path="/srv/backups/restore-failed",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=now - timedelta(days=1),
+            restore_check_cron_expression="0 4 * * *",
+        )
+        job = RestoreCheckJob(
+            repository_id=7,
+            repository_path=repo.path,
+            status="failed",
+            error_message="Canary manifest not found",
+            started_at=now - timedelta(minutes=30),
+        )
+
+        health = build_full_repository_health(repo, now, job)
+
+        assert health["health_status"] == "critical"
+        assert health["dimension_health"]["restore"] == "critical"
+        assert health["latest_restore_check_status"] == "failed"
+        assert health["latest_restore_check_error"] == "Canary manifest not found"
+        assert "Restore check failed: Canary manifest not found" in health["warnings"]
+
+    def test_full_repository_health_marks_canary_needs_backup_as_warning(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=8,
+            name="Restore Needs Backup Repo",
+            path="/srv/backups/restore-needs-backup",
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression="0 4 * * *",
+        )
+        job = RestoreCheckJob(
+            repository_id=8,
+            repository_path=repo.path,
+            status="needs_backup",
+            error_message="Run a backup, then run this restore check again.",
+            started_at=now - timedelta(minutes=30),
+        )
+
+        health = build_full_repository_health(repo, now, job)
+
+        assert health["health_status"] == "warning"
+        assert health["dimension_health"]["restore"] == "warning"
+        assert health["latest_restore_check_status"] == "needs_backup"
+        assert any("Run a backup" in warning for warning in health["warnings"])
+
+    def test_observe_repository_health_includes_restore_check_signal(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            id=9,
+            name="Observe Restore Repo",
+            path="/srv/backups/observe-restore",
+            mode="observe",
+            archive_count=4,
+            last_backup=now - timedelta(hours=1),
+            last_check=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression="0 4 * * *",
+        )
+        job = RestoreCheckJob(
+            repository_id=9,
+            repository_path=repo.path,
+            status="failed",
+            error_message="Probe path missing",
+            started_at=now - timedelta(minutes=30),
+        )
+
+        health = build_observe_repository_health(repo, now, job)
+
+        assert health["health_status"] == "critical"
+        assert health["dimension_health"]["restore"] == "critical"
+        assert health["restore_check_configured"] is True
+        assert health["latest_restore_check_status"] == "failed"
+        assert "Restore check failed: Probe path missing" in health["warnings"]
+
     def test_get_recent_jobs_normalizes_trigger_state_and_logs(self):
         now = datetime.now(timezone.utc)
         jobs = [
@@ -587,6 +714,14 @@ class TestDashboardScheduleAndOverview:
                     started_at=now - timedelta(days=4),
                     completed_at=now - timedelta(days=4, minutes=20),
                 ),
+                RestoreCheckJob(
+                    repository_id=full_repo.id,
+                    repository_path=full_repo.path,
+                    status="failed",
+                    started_at=now - timedelta(hours=1),
+                    completed_at=now - timedelta(minutes=55),
+                    error_message="Canary manifest not found",
+                ),
             ]
         )
         test_db.commit()
@@ -628,17 +763,24 @@ class TestDashboardScheduleAndOverview:
         repo_health = {item["name"]: item for item in data["repository_health"]}
         assert repo_health["Full Repo"]["health_status"] == "critical"
         assert repo_health["Full Repo"]["schedule_name"] == "Nightly Full Repo"
+        assert repo_health["Full Repo"]["dimension_health"]["restore"] == "critical"
+        assert repo_health["Full Repo"]["latest_restore_check_status"] == "failed"
+        assert (
+            repo_health["Full Repo"]["latest_restore_check_error"]
+            == "Canary manifest not found"
+        )
         assert repo_health["Observe Repo"]["mode"] == "observe"
         assert repo_health["Observe Repo"]["dimension_health"] == {
             "backup": "healthy",
             "check": "unknown",
             "compact": "healthy",
+            "restore": "unknown",
         }
         assert len(data["repository_health"]) == 2
         assert [item["type"] for item in data["activity_feed"]][:3] == [
+            "restore_check",
             "backup",
             "backup",
-            "check",
         ]
         assert data["activity_feed"][0]["repository"] == "Full Repo"
         assert [item["name"] for item in data["upcoming_tasks"]] == [

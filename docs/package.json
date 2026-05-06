@@ -1,0 +1,16 @@
+{
+  "name": "borg-ui-docs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev .",
+    "build": "vitepress build .",
+    "preview": "vitepress preview ."
+  },
+  "license": "AGPL-3.0",
+  "description": "Borg UI documentation site",
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}

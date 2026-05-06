@@ -26,6 +26,7 @@ from app.utils.borg_env import (
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
 )  # Backward-compatible patch target for tests
+from app.utils.datetime_utils import serialize_datetime
 import asyncio
 
 logger = structlog.get_logger()
@@ -411,8 +412,8 @@ async def get_delete_job_status(
             "repository_id": job.repository_id,
             "archive_name": job.archive_name,
             "status": job.status,
-            "started_at": job.started_at.isoformat() if job.started_at else None,
-            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "started_at": serialize_datetime(job.started_at),
+            "completed_at": serialize_datetime(job.completed_at),
             "progress": job.progress,
             "progress_message": job.progress_message,
             "error_message": job.error_message,

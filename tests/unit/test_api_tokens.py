@@ -31,6 +31,7 @@ class TestApiTokens:
         assert data["token"].startswith("borgui_")
         assert len(data["token"]) > 20
         assert data["prefix"] == data["token"][:12]
+        assert data["created_at"].endswith("+00:00")
 
     def test_list_tokens_after_generate_shows_prefix_not_token(
         self, test_client: TestClient, admin_headers
@@ -45,6 +46,7 @@ class TestApiTokens:
         assert len(tokens) == 1
         assert "token" not in tokens[0]
         assert tokens[0]["prefix"].startswith("borgui_")
+        assert tokens[0]["created_at"].endswith("+00:00")
 
     def test_generate_token_empty_name_returns_422(
         self, test_client: TestClient, admin_headers

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen } from '../../test/test-utils'
 import ScheduleJobCard from '../ScheduleJobCard'
-import { convertCronToLocal, formatCronHuman } from '../../utils/dateUtils'
+import { formatCronHuman } from '../../utils/dateUtils'
 
 const { entityCardMock } = vi.hoisted(() => ({
   entityCardMock: vi.fn(),
@@ -18,6 +18,7 @@ const baseJob = {
   id: 1,
   name: 'Daily Backup',
   cron_expression: '0 10 * * *',
+  timezone: 'Asia/Kolkata',
   repository: null,
   repository_id: 1,
   repository_ids: null,
@@ -42,7 +43,7 @@ describe('ScheduleJobCard', () => {
     entityCardMock.mockClear()
   })
 
-  it('shows the localized schedule while keeping the local cron expression in the tooltip', () => {
+  it('shows the schedule in its stored timezone intent', () => {
     renderWithProviders(
       <ScheduleJobCard
         job={baseJob}
@@ -58,22 +59,69 @@ describe('ScheduleJobCard', () => {
 
     expect(screen.getByTestId('entity-card')).toBeInTheDocument()
 
-    const expectedLocalCron = convertCronToLocal(baseJob.cron_expression)
-    const expectedSchedule = formatCronHuman(expectedLocalCron)
+    const expectedSchedule = formatCronHuman(baseJob.cron_expression)
     const props = entityCardMock.mock.lastCall?.[0] as
       | {
           stats: Array<{ label: string; value: string; tooltip?: string }>
+          meta: Array<{ label: string; value: string }>
         }
       | undefined
     expect(props).toBeDefined()
     const scheduleStat = props?.stats.find(
-      (stat) => stat.value === expectedSchedule && stat.tooltip === expectedLocalCron
+      (stat) =>
+        stat.value === expectedSchedule &&
+        stat.tooltip === `${baseJob.cron_expression} (${baseJob.timezone})`
     )
 
     expect(scheduleStat).toMatchObject({
       value: expectedSchedule,
-      tooltip: expectedLocalCron,
+      tooltip: `${baseJob.cron_expression} (${baseJob.timezone})`,
     })
     expect(scheduleStat?.tooltip).not.toBe(expectedSchedule)
+    expect(props?.meta).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: baseJob.timezone })])
+    )
+  })
+
+  it('shows next run in the schedule timezone', () => {
+    const nextRun = '2024-01-01T20:30:00Z'
+
+    renderWithProviders(
+      <ScheduleJobCard
+        job={{ ...baseJob, next_run: nextRun }}
+        repositories={[{ id: 1, name: 'My Repo', path: '/backups/my-repo' }]}
+        canManage
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onDuplicate={vi.fn()}
+        onRunNow={vi.fn()}
+        onToggle={vi.fn()}
+      />
+    )
+
+    const props = entityCardMock.mock.lastCall?.[0] as
+      | {
+          stats: Array<{
+            label: string
+            value: string
+            tooltip?: { props?: { display?: { scheduledTimeZone?: string } } }
+            color?: string
+          }>
+        }
+      | undefined
+    const nextRunStat = props?.stats.find((stat) => stat.color === 'success')
+    const expectedScheduleTime = new Date(nextRun).toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: baseJob.timezone,
+    })
+
+    expect(nextRunStat).toMatchObject({
+      value: expectedScheduleTime,
+    })
+    expect(nextRunStat?.tooltip?.props?.display?.scheduledTimeZone).toBe(baseJob.timezone)
   })
 })

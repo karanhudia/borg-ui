@@ -37,6 +37,7 @@ def main() -> int:
         ("tests/smoke/test_schedule_run_now_smoke.py", "--url", args.url),
         ("tests/smoke/test_permissions_failure_smoke.py", "--url", args.url),
         ("tests/smoke/test_failed_backup_logs_smoke.py", "--url", args.url),
+        ("tests/smoke/test_oidc_smoke.py", "--url", args.url),
     ]
 
     for script in scripts:

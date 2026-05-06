@@ -18,7 +18,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query'
 import DataTable, { Column, ActionButton } from './DataTable'
 import StatusBadge from './StatusBadge'
 import RepositoryCell from './RepositoryCell'
-import { formatDate, formatTimeRange } from '../utils/dateUtils'
+import { formatDate, formatDateTimeFull, formatTimeRange } from '../utils/dateUtils'
 import { Job, Repository } from '../types/jobs'
 import ErrorDetailsDialog from './ErrorDetailsDialog'
 import LogViewerDialog from './LogViewerDialog'
@@ -90,6 +90,8 @@ const getTypeLabel = (type: string, t: (key: string) => string): string => {
       return t('backupJobsTable.types.backup')
     case 'restore':
       return t('backupJobsTable.types.restore')
+    case 'restore_check':
+      return t('backupJobsTable.types.restoreCheck')
     case 'check':
       return t('backupJobsTable.types.check')
     case 'compact':
@@ -111,6 +113,8 @@ const getTypeColor = (
       return 'primary'
     case 'restore':
       return 'secondary'
+    case 'restore_check':
+      return 'info'
     case 'check':
       return 'info'
     case 'compact':
@@ -458,9 +462,15 @@ export const BackupJobsTable = <T extends Job = Job>({
       align: 'left',
       width: '160px',
       render: (job: T) => (
-        <Typography variant="body2" color="text.secondary">
-          {job.started_at ? formatDate(job.started_at) : '-'}
-        </Typography>
+        <Tooltip title={job.started_at ? formatDateTimeFull(job.started_at) : ''} arrow>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ cursor: job.started_at ? 'help' : 'default', display: 'inline-block' }}
+          >
+            {job.started_at ? formatDate(job.started_at) : '-'}
+          </Typography>
+        </Tooltip>
       ),
     },
     {

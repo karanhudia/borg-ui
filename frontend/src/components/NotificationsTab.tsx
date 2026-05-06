@@ -25,7 +25,16 @@ import {
   Radio,
   alpha,
 } from '@mui/material'
-import { Plus, Bell, Info, ExternalLink, Archive, RotateCcw, Settings } from 'lucide-react'
+import {
+  Plus,
+  Bell,
+  Info,
+  ExternalLink,
+  Archive,
+  RotateCcw,
+  Settings,
+  ShieldCheck,
+} from 'lucide-react'
 import { notificationsAPI, repositoriesAPI } from '../services/api'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
@@ -50,6 +59,8 @@ interface NotificationSetting {
   notify_on_restore_failure: boolean
   notify_on_check_success: boolean
   notify_on_check_failure: boolean
+  notify_on_restore_check_success: boolean
+  notify_on_restore_check_failure: boolean
   notify_on_schedule_failure: boolean
   monitor_all_repositories: boolean
   repositories: Repository[]
@@ -82,6 +93,8 @@ const NotificationsTab: React.FC = () => {
     notify_on_restore_failure: true,
     notify_on_check_success: false,
     notify_on_check_failure: true,
+    notify_on_restore_check_success: false,
+    notify_on_restore_check_failure: true,
     notify_on_schedule_failure: true,
     monitor_all_repositories: true,
     repository_ids: [] as number[],
@@ -202,6 +215,8 @@ const NotificationsTab: React.FC = () => {
       notify_on_restore_failure: true,
       notify_on_check_success: false,
       notify_on_check_failure: true,
+      notify_on_restore_check_success: false,
+      notify_on_restore_check_failure: true,
       notify_on_schedule_failure: true,
       monitor_all_repositories: true,
       repository_ids: [],
@@ -224,6 +239,8 @@ const NotificationsTab: React.FC = () => {
       notify_on_restore_failure: notification.notify_on_restore_failure,
       notify_on_check_success: notification.notify_on_check_success,
       notify_on_check_failure: notification.notify_on_check_failure,
+      notify_on_restore_check_success: notification.notify_on_restore_check_success,
+      notify_on_restore_check_failure: notification.notify_on_restore_check_failure,
       notify_on_schedule_failure: notification.notify_on_schedule_failure,
       monitor_all_repositories: notification.monitor_all_repositories,
       repository_ids: Array.isArray(notification.repositories)
@@ -251,6 +268,8 @@ const NotificationsTab: React.FC = () => {
       notify_on_restore_failure: notification.notify_on_restore_failure,
       notify_on_check_success: notification.notify_on_check_success,
       notify_on_check_failure: notification.notify_on_check_failure,
+      notify_on_restore_check_success: notification.notify_on_restore_check_success,
+      notify_on_restore_check_failure: notification.notify_on_restore_check_failure,
       notify_on_schedule_failure: notification.notify_on_schedule_failure,
       monitor_all_repositories: notification.monitor_all_repositories,
       repository_ids: Array.isArray(notification.repositories)
@@ -747,6 +766,46 @@ const NotificationsTab: React.FC = () => {
                       checked={formData.notify_on_restore_failure}
                       onChange={(e) =>
                         setFormData({ ...formData, notify_on_restore_failure: e.target.checked })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.failure')}
+                />
+              </Box>
+            </Box>
+
+            {/* Restore Check Events Category */}
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                <ShieldCheck size={16} />
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                  {t('notifications.category.restoreCheckEvents')}
+                </Typography>
+              </Box>
+              <Box sx={{ pl: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_restore_check_success}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          notify_on_restore_check_success: e.target.checked,
+                        })
+                      }
+                    />
+                  }
+                  label={t('notifications.form.success')}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.notify_on_restore_check_failure}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          notify_on_restore_check_failure: e.target.checked,
+                        })
                       }
                     />
                   }

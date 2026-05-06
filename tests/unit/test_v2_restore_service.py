@@ -15,6 +15,7 @@ def test_build_extract_command_uses_borg2_archive_identifier():
             paths=["etc/hosts"],
             remote_path="/usr/local/bin/borg2",
             bypass_lock=True,
+            strip_components=1,
         )
 
     assert cmd == [
@@ -23,10 +24,12 @@ def test_build_extract_command_uses_borg2_archive_identifier():
         "/repos/v2",
         "extract",
         "--log-json",
-        "manual-1",
         "--remote-path",
         "/usr/local/bin/borg2",
         "--bypass-lock",
+        "--strip-components",
+        "1",
+        "manual-1",
         "etc/hosts",
     ]
 

@@ -16,6 +16,7 @@ from app.database.models import (
     CompactJob,
     BackupJob,
     PruneJob,
+    RestoreCheckJob,
     RestoreJob,
     Repository,
 )
@@ -196,6 +197,11 @@ def cleanup_orphaned_jobs(db: Session):
     # Find all running check jobs
     running_check_jobs = db.query(CheckJob).filter(CheckJob.status == "running").all()
 
+    # Find all running restore check jobs
+    running_restore_check_jobs = (
+        db.query(RestoreCheckJob).filter(RestoreCheckJob.status == "running").all()
+    )
+
     # Find all running prune jobs
     running_prune_jobs = db.query(PruneJob).filter(PruneJob.status == "running").all()
 
@@ -208,6 +214,7 @@ def cleanup_orphaned_jobs(db: Session):
         len(running_backup_jobs)
         + len(running_restore_jobs)
         + len(running_check_jobs)
+        + len(running_restore_check_jobs)
         + len(running_prune_jobs)
         + len(running_compact_jobs)
         + stale_backup_jobs
@@ -217,6 +224,7 @@ def cleanup_orphaned_jobs(db: Session):
         backup_jobs=len(running_backup_jobs),
         restore_jobs=len(running_restore_jobs),
         check_jobs=len(running_check_jobs),
+        restore_check_jobs=len(running_restore_check_jobs),
         prune_jobs=len(running_prune_jobs),
         compact_jobs=len(running_compact_jobs),
         stale_backup_maintenance_jobs=stale_backup_jobs,
@@ -309,6 +317,27 @@ def cleanup_orphaned_jobs(db: Session):
             # Process is still alive! This is unexpected
             logger.warning(
                 "Check job marked as running and process is still alive",
+                job_id=job.id,
+                pid=job.process_pid,
+            )
+
+    # Process restore check jobs
+    for job in running_restore_check_jobs:
+        if not is_process_alive(job.process_pid, job.process_start_time):
+            job.status = "failed"
+            job.error_message = json.dumps(
+                {"key": "backend.errors.service.containerRestartedDuringOperation"}
+            )
+            job.completed_at = datetime.utcnow()
+            logger.info(
+                "Orphaned restore check job detected",
+                job_id=job.id,
+                repository_id=job.repository_id,
+                pid=job.process_pid,
+            )
+        else:
+            logger.warning(
+                "Restore check job marked as running and process is still alive",
                 job_id=job.id,
                 pid=job.process_pid,
             )

@@ -126,6 +126,8 @@ function getTypeLabel(type: string, t: (key: string) => string): string {
       return t('logViewer.typeRestore')
     case 'check':
       return t('logViewer.typeCheck')
+    case 'restore_check':
+      return t('scheduledRestoreChecks.badge.restoreCheck')
     case 'compact':
       return t('logViewer.typeCompact')
     case 'prune':

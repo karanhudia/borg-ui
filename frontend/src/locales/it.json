@@ -50,6 +50,7 @@
     "type": "Tipo",
     "repository": "Repository",
     "schedule": "Pianificazione",
+    "timezone": "Fuso orario",
     "created": "Creato",
     "lastLogin": "Ultimo Accesso",
     "undoneWarning": "Questa azione non può essere annullata.",
@@ -76,6 +77,10 @@
     "totpLabel": "Codice di autenticazione",
     "totpHint": "Usa il codice attuale della tua app o un codice di recupero.",
     "verifyTotp": "Verifica codice",
+    "ssoSubmit": "Continua con {{provider}}",
+    "ssoDefaultProvider": "single sign-on",
+    "ssoOrLocalHint": "Oppure continua con un account locale di Borg UI.",
+    "localAuthDisabledHint": "Le password e le passkey locali di Borg UI sono disattivate per questa installazione. Continua con il tuo provider di identità.",
     "passkeySubmit": "Accedi con passkey",
     "passkeyCancelled": "L'accesso con passkey è stato annullato oppure non era disponibile alcuna passkey compatibile",
     "failed": "Accesso fallito",
@@ -107,6 +112,7 @@
       "backup": "Backup manuale",
       "archives": "Archivi",
       "restore": "Ripristino",
+      "integrity": "Integrità",
       "schedule": "Pianificazione"
     },
     "settings": {
@@ -133,7 +139,7 @@
     },
     "menu": {
       "accountAndSecurityDesc": "Profilo, password, 2FA, passkey",
-      "appearanceDesc": "Tema, lingua",
+      "appearanceDesc": "Tema",
       "notificationsDesc": "Avvisi e preferenze"
     },
     "versionInfo": "Info Versione",
@@ -146,6 +152,7 @@
   "status": {
     "completed": "Completato",
     "completedWithWarnings": "Completato con Avvisi",
+    "needsBackup": "Backup richiesto",
     "failed": "Fallito",
     "running": "In esecuzione",
     "pending": "In attesa",
@@ -183,6 +190,7 @@
         "backup": "BACKUP",
         "check": "CHECK",
         "compact": "COMPACT",
+        "restore": "RESTORE",
         "freshness": "RECENTE",
         "archives": "ARCHIVI"
       },
@@ -233,6 +241,7 @@
         "backup": "backup",
         "check": "check",
         "compact": "compact",
+        "restore_check": "restore check",
         "restore": "restore",
         "prune": "prune"
       }
@@ -396,9 +405,11 @@
     "subtitle": "Gestisci backup automatizzati e controlli del repository",
     "createBackup": "Crea Pianificazione Backup",
     "addCheck": "Aggiungi Pianificazione Controllo",
+    "addRestoreCheck": "Aggiungi controllo di ripristino",
     "tabs": {
       "backupJobs": "Job di Backup",
-      "repositoryChecks": "Controlli Repository"
+      "repositoryChecks": "Controlli Repository",
+      "restoreChecks": "Controlli di ripristino"
     },
     "noRepositories": "Devi creare almeno un repository prima di pianificare i backup.",
     "maintenance": {
@@ -570,6 +581,7 @@
       "types": {
         "backup": "Backup",
         "restore": "Ripristino",
+        "restoreCheck": "Controllo di ripristino",
         "check": "Controllo",
         "compact": "Compattazione",
         "prune": "Pulizia",
@@ -577,6 +589,7 @@
       },
       "statuses": {
         "completed": "Completato",
+        "needsBackup": "Backup richiesto",
         "failed": "Fallito",
         "running": "In Esecuzione",
         "pending": "In Attesa"
@@ -624,6 +637,7 @@
       "stats": {
         "total": "Total",
         "active": "Active",
+        "pendingSso": "SSO in attesa",
         "admins": "Admins",
         "operators": "Operators",
         "viewers": "Viewers"
@@ -634,10 +648,23 @@
         "status": "Status"
       },
       "actions": {
+        "approveSsoUser": "Approva utente SSO",
         "edit": "Modifica Utente",
         "resetPassword": "Reimposta Password",
         "delete": "Elimina Utente",
         "manageAccess": "Manage Access"
+      },
+      "badges": {
+        "sso": "SSO",
+        "oidc": "OIDC"
+      },
+      "labels": {
+        "subject": "Soggetto: {{subject}}"
+      },
+      "pendingReview": {
+        "title": "{{count}} account SSO è in attesa di approvazione",
+        "description": "Controlla gli utenti OIDC in attesa prima che possano accedere completamente e usare i repository.",
+        "action": "Controlla utenti in attesa"
       },
       "repositoryAccess": {
         "title": "Repository Access",
@@ -666,7 +693,8 @@
       },
       "status": {
         "active": "Attivo",
-        "inactive": "Inattivo"
+        "inactive": "Inattivo",
+        "pendingSso": "SSO in attesa"
       },
       "createDialog": {
         "title": "Crea Utente"
@@ -679,7 +707,18 @@
         "email": "Email",
         "password": "Password",
         "fullName": "Full name",
-        "role": "Role"
+        "role": "Role",
+        "authSource": "Auth source",
+        "oidcSubject": "OIDC subject"
+      },
+      "authSources": {
+        "local": "Local",
+        "oidc": "OIDC"
+      },
+      "ssoIdentity": {
+        "selfLinkHint": "Prefer asking the user to link their own local account from Account & Security. Manual edits are for recovery when the backend supports these fields.",
+        "subjectHelper": "Paste the exact stable subject claim from the identity provider.",
+        "clearHelper": "Local auth clears the stored OIDC subject on save."
       },
       "buttons": {
         "cancel": "Annulla",
@@ -876,7 +915,15 @@
         "passkeyDeletedToast": "Passkey eliminata",
         "passkeyDeleteFailed": "Impossibile eliminare la passkey",
         "passkeyLastUsed": "Ultimo utilizzo {{date}}",
-        "passkeyNeverUsed": "Mai usata"
+        "passkeyNeverUsed": "Mai usata",
+        "ssoLinkTitle": "Link single sign-on",
+        "ssoLinkDescription": "Start a provider redirect to attach this local account to your SSO identity.",
+        "ssoLinkButton": "Link SSO",
+        "ssoLinkedTitle": "Single sign-on linked",
+        "ssoLinkedDescription": "This account can sign in through the configured identity provider.",
+        "ssoUnlinkButton": "Unlink SSO",
+        "ssoUnlinkedToast": "Single sign-on unlinked",
+        "ssoUnlinkFailed": "Failed to unlink single sign-on"
       },
       "access": {
         "title": "Access",
@@ -1333,6 +1380,7 @@
     "types": {
       "backup": "Backup",
       "restore": "Ripristino",
+      "restoreCheck": "Controllo di ripristino",
       "check": "Controllo Repository",
       "compact": "Compattazione",
       "prune": "Pulizia",
@@ -1485,6 +1533,98 @@
     "proxyAuthNotConfigured": "Non configurato",
     "proxyAuthWarningsTitle": "Avvisi di configurazione",
     "proxyAuthNoWarnings": "Nessun avviso rilevato nella configurazione dell'autenticazione proxy.",
+    "oidcTitle": "Single sign-on",
+    "oidcDescription": "Configura Borg UI come client OpenID Connect con provisioning utenti e disattivazione opzionale dell'accesso locale.",
+    "oidcEnabledLabel": "Abilita OIDC integrato",
+    "oidcDisableLocalAuthLabel": "Disattiva accesso locale con password e passkey",
+    "oidcProviderNameLabel": "Nome visualizzato del provider",
+    "oidcProviderNameHelper": "Mostrato sul pulsante di accesso.",
+    "oidcTokenAuthMethodLabel": "Token auth method",
+    "oidcTokenAuthMethodHelper": "Choose how Borg UI authenticates to the provider token endpoint.",
+    "oidcTokenAuthMethodPost": "client_secret_post",
+    "oidcTokenAuthMethodBasic": "client_secret_basic",
+    "oidcDiscoveryUrlLabel": "URL di discovery",
+    "oidcDiscoveryUrlHelper": "Esempio: https://id.example.com/application/o/borg-ui/.well-known/openid-configuration",
+    "oidcClientIdLabel": "Client ID",
+    "oidcClientSecretLabel": "Client secret",
+    "oidcClientSecretConfigured": "È già salvato un client secret. Lascia vuoto per mantenerlo.",
+    "oidcClientSecretRequiredHelper": "Obbligatorio quando OIDC è attivo.",
+    "oidcClearClientSecretLabel": "Cancella il client secret salvato al prossimo salvataggio",
+    "oidcEventsTitle": "Eventi di autenticazione recenti",
+    "oidcEventsDescription": "Mostra gli ultimi eventi di accesso locale, OIDC, TOTP, passkey e logout dal punto di vista dell'amministratore.",
+    "oidcEventsEmpty": "Non sono ancora stati registrati eventi di autenticazione.",
+    "oidcEventsFilteredEmpty": "Nessun evento di autenticazione corrisponde al filtro attuale.",
+    "oidcEventsRefresh": "Aggiorna eventi di autenticazione",
+    "oidcScopesLabel": "Scopes",
+    "oidcRedirectUriOverrideLabel": "Override redirect URI",
+    "oidcRedirectUriOverrideHelper": "URL pubblico opzionale di callback per configurazioni con reverse proxy o origini separate.",
+    "oidcEndSessionEndpointOverrideLabel": "Override endpoint di logout",
+    "oidcEndSessionEndpointOverrideHelper": "Endpoint di logout opzionale se i metadati discovery sono incompleti.",
+    "oidcClaimUsernameLabel": "Claim nome utente",
+    "oidcClaimEmailLabel": "Claim email",
+    "oidcClaimFullNameLabel": "Claim nome completo",
+    "oidcGroupClaimLabel": "Claim gruppi",
+    "oidcGroupClaimHelper": "Claim facoltativo che contiene i gruppi dell'IdP per i controlli della lista consentita per gli amministratori.",
+    "oidcRoleClaimLabel": "Claim ruolo globale",
+    "oidcAdminGroupsLabel": "Gruppi consentiti per admin",
+    "oidcAdminGroupsHelper": "Gruppi separati da virgole a cui è consentito ricevere il claim del ruolo admin.",
+    "oidcAllRepositoriesRoleClaimLabel": "Claim ruolo per tutti i repository",
+    "oidcNewUserModeLabel": "Gestione nuovi utenti",
+    "oidcTemplateUsernameLabel": "Nome utente modello",
+    "oidcDefaultRoleLabel": "Ruolo globale predefinito",
+    "oidcDefaultAllRepositoriesRoleLabel": "Ruolo predefinito per tutti i repository",
+    "oidcModeDeny": "Nega",
+    "oidcModeViewer": "Crea come viewer",
+    "oidcModePending": "Crea in attesa di approvazione",
+    "oidcModeTemplate": "Copia utente modello",
+    "oidcRequiredFieldsError": "OIDC richiede un URL di discovery e un client ID.",
+    "oidcClientSecretRequired": "OIDC richiede un client secret prima di poter essere attivato.",
+    "oidcTemplateUserRequired": "La modalità template richiede un nome utente modello.",
+    "oidcDisableLocalAuthWarning": "Before disabling local login, confirm at least one active admin can sign in with OIDC.",
+    "oidcActiveAdminRequired": "Local auth cannot be disabled until an active OIDC admin exists.",
+    "authEventSuccess": "Riuscito",
+    "authEventFailed": "Fallito",
+    "authEventPending": "In attesa di approvazione",
+    "authEventAnonymous": "Identità sconosciuta",
+    "authEventActor": "Admin #{{id}}",
+    "authEventFilters": {
+      "all": "Tutti gli eventi",
+      "failed": "Falliti",
+      "oidc": "OIDC",
+      "pending": "Approvazioni in attesa"
+    },
+    "authEventSummary": {
+      "total": "Totale: {{count}}",
+      "success": "Riusciti: {{count}}",
+      "failed": "Falliti: {{count}}",
+      "pending": "In attesa: {{count}}"
+    },
+    "authEventSources": {
+      "local": "Locale",
+      "oidc": "OIDC",
+      "proxy": "Proxy",
+      "passkey": "Passkey",
+      "totp": "TOTP"
+    },
+    "authEventTypes": {
+      "local_login_failed": "Accesso locale non riuscito",
+      "local_login_succeeded": "Accesso locale riuscito",
+      "oidc_account_linked": "Account OIDC collegato",
+      "oidc_account_unlinked": "Account OIDC scollegato",
+      "oidc_user_pending": "Utente OIDC in attesa di approvazione",
+      "oidc_user_provisioned": "Utente OIDC creato",
+      "oidc_user_denied": "Utente OIDC negato",
+      "oidc_callback_success": "Callback OIDC riuscito",
+      "oidc_callback_failed": "Callback OIDC non riuscito",
+      "oidc_exchange_failed": "Scambio sessione OIDC non riuscito",
+      "oidc_login_succeeded": "Accesso OIDC riuscito",
+      "totp_login_succeeded": "Accesso TOTP riuscito",
+      "passkey_login_succeeded": "Accesso con passkey riuscito",
+      "logout": "Utente disconnesso"
+    },
+    "roleViewer": "Viewer",
+    "roleOperator": "Operator",
+    "roleAdmin": "Admin",
     "maxFilesToLoadLabel": "Max File da Caricare",
     "maxFilesRangeError": "Deve essere compreso tra {{min}} e {{max}}",
     "maxFilesHelperText": "File massimi durante la navigazione. Corrente: {{current}}M file",
@@ -1614,6 +1754,7 @@
     "category": {
       "backupEvents": "Eventi Backup",
       "restoreEvents": "Eventi Ripristino",
+      "restoreCheckEvents": "Eventi controllo ripristino",
       "checkJobs": "Job di Controllo",
       "systemEvents": "Eventi di Sistema"
     },
@@ -1631,6 +1772,7 @@
       "categories": {
         "backup": "Backup",
         "restore": "Restore",
+        "restoreCheck": "Restore Check",
         "check": "Check",
         "schedule": "Schedule"
       },
@@ -1991,6 +2133,8 @@
   },
   "scheduledChecks": {
     "title": "Controlli Pianificati",
+    "sectionTitle": "Controlli di integrità",
+    "sectionDescription": "Esegui Borg check secondo pianificazione per rilevare in anticipo la corruzione del repository.",
     "empty": "Nessun controllo pianificato",
     "nextRun": "Prossima Esecuzione",
     "lastRun": "Ultima Esecuzione",
@@ -2004,6 +2148,7 @@
     "editCheckSchedule": "Modifica Pianificazione Controllo",
     "addCheckSchedule": "Aggiungi Pianificazione Controllo",
     "checkScheduleLabel": "Pianificazione Controllo",
+    "timezoneLabel": "Fuso orario",
     "maxDuration": "Durata Massima (secondi)",
     "maxDurationHint": "Limite di tempo per l'operazione di controllo (3600 = 1 ora)",
     "maxDurationHintBorg2": "Con Borg 2, un limite di tempo esegue un controllo parziale del solo repository (3600 = 1 ora). Usa 0 per includere i controlli degli archivi.",
@@ -2039,6 +2184,114 @@
     },
     "checkScheduleHelperText": "Quando dovrebbe essere eseguito questo controllo del repository?",
     "checkScheduleBuilderTitle": "Costruttore Pianificazione Controllo"
+  },
+  "scheduledRestoreChecks": {
+    "sectionTitle": "Controlli di ripristino",
+    "sectionDescription": "Ripristina periodicamente l'archivio più recente in una directory temporanea per verificare che i dati siano davvero recuperabili.",
+    "repository": "Repository",
+    "addRestoreCheckSchedule": "Aggiungi controllo di ripristino",
+    "editRestoreCheckSchedule": "Modifica controllo di ripristino",
+    "scheduleLabel": "Pianificazione controllo di ripristino",
+    "timezoneLabel": "Fuso orario",
+    "scheduleHelperText": "Quando dovrebbe essere eseguita questa verifica di ripristino?",
+    "scheduleBuilderTitle": "Costruttore Pianificazione Ripristino",
+    "modeLabel": "Modalità di verifica",
+    "modes": {
+      "canary": "Payload canary gestito",
+      "probePaths": "Percorsi di prova selezionati",
+      "fullArchive": "Verifica archivio completo"
+    },
+    "probePaths": "Percorsi di prova",
+    "probePathsHint": "Inserisci un percorso archivio per riga, oppure esplora l'archivio più recente per importare file e cartelle rappresentativi.",
+    "archivePicker": {
+      "open": "Esplora archivio più recente",
+      "title": "Seleziona percorsi di prova",
+      "subtitle": "Esplora l'archivio più recente del repository selezionato.",
+      "subtitleWithArchive": "Esplorazione archivio più recente: {{archive}}",
+      "browserTitle": "Scegli percorsi di prova",
+      "browserSubtitle": "Seleziona file o cartelle dall'archivio più recente da verificare durante ogni controllo di ripristino.",
+      "browserHelpText": "Fai clic sui file per selezionarli, o sulle cartelle per navigare. Usa la casella accanto alle cartelle per selezionare intere directory.",
+      "selectedCount_one": "{{count}} percorso selezionato",
+      "selectedCount_other": "{{count}} percorsi selezionati",
+      "import": "Importa percorsi",
+      "loadFailed": "Impossibile caricare l'archivio più recente.",
+      "noArchives": "Nessun archivio ancora disponibile per questo repository."
+    },
+    "needRepository": "Devi creare almeno un repository prima di pianificare controlli di ripristino.",
+    "noScheduledChecks": "Nessun controllo di ripristino pianificato",
+    "noScheduledChecksDesc": "Configura la verifica automatica del ripristino così i problemi emergono prima di un ripristino reale.",
+    "confirmDisable": "Disabilitare il controllo di ripristino per {{repositoryName}}?",
+    "update": "Aggiorna",
+    "create": "Crea",
+    "stats": {
+      "notSet": "Non impostato",
+      "lastVerifiedRestore": "Ultimo ripristino verificato",
+      "nextCheck": "Prossimo controllo",
+      "probePaths": "Percorsi di prova",
+      "pathCountValue": "{{count}} percorsi",
+      "fullArchive": "Archivio completo",
+      "canary": "Canary gestito"
+    },
+    "actions": {
+      "editSchedule": "Modifica pianificazione",
+      "removeSchedule": "Rimuovi pianificazione",
+      "runRestoreCheck": "Esegui controllo di ripristino"
+    },
+    "badge": {
+      "restoreCheck": "Controllo di ripristino"
+    },
+    "validation": {
+      "selectRepository": "Seleziona un repository",
+      "enterProbePath": "Inserisci almeno un percorso di prova"
+    },
+    "toasts": {
+      "scheduleUpdated": "Pianificazione ripristino aggiornata",
+      "updateFailed": "Impossibile aggiornare la pianificazione del ripristino",
+      "restoreCheckStarted": "Controllo di ripristino avviato",
+      "restoreCheckFailed": "Impossibile avviare il controllo di ripristino"
+    },
+    "canaryModeHint": "La modalità canary aggiunge un piccolo file canary di Borg UI ai backup futuri finché è attiva, poi lo verifica dall'archivio più recente. Funziona dopo il prossimo backup.",
+    "canaryUnavailableObserveOnly": "La modalità canary non è disponibile per i repository solo osservazione perché Borg UI non crea i loro backup. Usa percorsi di prova selezionati o una verifica dell'intero archivio.",
+    "noBackupYet": "Nessun backup",
+    "probeModeHint": "La modalità percorsi di prova ripristina file reali che scegli tu. Usala per verifiche più approfondite su percorsi critici senza estrarre l'intero archivio.",
+    "fullArchiveWarning": "Le verifiche dell'intero archivio possono essere costose su repository grandi. Usale raramente e solo se hai spazio temporaneo e una finestra di manutenzione adeguata."
+  },
+  "integrity": {
+    "title": "Integrità",
+    "subtitle": "Monitora l'integrità del repository e la ripristinabilità senza mescolarle alla pianificazione dei backup.",
+    "tabs": {
+      "repositoryChecks": "Controlli repository",
+      "restoreChecks": "Controlli di ripristino"
+    },
+    "noRepositories": "Crea prima un repository per configurare i controlli di integrità.",
+    "stats": {
+      "restoreSchedules": "Pianificazioni di ripristino",
+      "canaryProtected": "Protetti da canary",
+      "probeProtected": "Pianificazioni con percorsi di prova",
+      "fullDrills": "Verifiche archivio completo"
+    },
+    "history": {
+      "title": "Controlli di ripristino recenti",
+      "description": "Rivedi le verifiche di ripristino recenti e apri i log quando qualcosa fallisce.",
+      "emptyTitle": "Nessun controllo di ripristino è stato ancora eseguito",
+      "emptyDescription": "Esegui un controllo di ripristino o attendi il prossimo ciclo di integrità pianificato.",
+      "columns": {
+        "repository": "Repository",
+        "mode": "Modalità",
+        "archive": "Archivio",
+        "started": "Avviato"
+      },
+      "modes": {
+        "canary": "Canary",
+        "probePaths": "Percorsi di prova",
+        "fullArchive": "Archivio completo"
+      },
+      "actions": {
+        "viewLogs": "Visualizza log"
+      },
+      "logTitle": "Log controllo di ripristino - {{job}}",
+      "noLogs": "Nessun log disponibile per questo controllo di ripristino."
+    }
   },
   "repositorySelectorCard": {
     "title": "Seleziona Repository",
@@ -2143,7 +2396,18 @@
       "customPathHelperRemote": "Scegli una directory scrivibile sulla macchina remota",
       "browseFilesystem": "Sfoglia filesystem",
       "browseRemoteFilesystem": "Sfoglia filesystem remoto",
-      "filesWillBeRestoredTo": "I file verranno ripristinati in:"
+      "filesWillBeRestoredTo": "I file verranno ripristinati in:",
+      "pathLayout": "Layout percorso",
+      "preserveArchivePath": "Mantieni percorso archivio",
+      "preserveArchivePathDesc": "Ricrea il percorso completo selezionato dell'archivio sotto la destinazione personalizzata.",
+      "restoreContentsHere": "Ripristina qui i contenuti selezionati",
+      "restoreContentsHereDesc": "Inserisci il file selezionato, o il contenuto della cartella selezionata, direttamente nella destinazione personalizzata.",
+      "restorePathPreview": "Anteprima percorso di ripristino",
+      "archivePath": "Archivio",
+      "restorePath": "Destinazione",
+      "contentsOnlyMarker": "(contenuto)",
+      "andMoreItems_one": "... e {{count}} altro elemento",
+      "andMoreItems_other": "... e {{count}} altri elementi"
     },
     "restoreFiles": {
       "title": "Seleziona file da ripristinare",
@@ -2187,6 +2451,9 @@
       "originalLocation": "Posizione Originale",
       "customLocation": "Posizione Personalizzata",
       "customPath": "Percorso Personalizzato",
+      "restoreLayout": "Layout Percorso",
+      "preserveArchivePath": "Mantieni percorso archivio",
+      "restoreContentsHere": "Ripristina qui i contenuti selezionati",
       "notSet": "(non impostato)",
       "restorePreview": "Anteprima Ripristino",
       "previewNote": "Anteprima di dove verranno ripristinati i tuoi file:",
@@ -2286,6 +2553,7 @@
       "config": {
         "scheduleLabel": "Pianificazione (Espressione Cron)",
         "scheduleHelper": "Clicca l'icona dell'orologio per usare il costruttore visivo.",
+        "timezoneLabel": "Fuso orario",
         "nextRunTimes": "Prossimi 3 Orari di Esecuzione:"
       },
       "review": {
@@ -2295,6 +2563,7 @@
         "name": "Nome",
         "repositories": "Repository ({{count}})",
         "schedule": "Pianificazione",
+        "timezone": "Fuso orario",
         "archiveNameTemplate": "Template Nome Archivio",
         "scriptsConfiguration": "Configurazione Script",
         "preBackupScript": "Script Pre-Backup",
@@ -2374,7 +2643,11 @@
     "emptyArchiveDesc": "Nessun file è stato salvato in questo archivio. Questo può accadere se la directory sorgente era vuota o inaccessibile durante il backup.",
     "noInfo": "Nessuna informazione sull'archivio disponibile",
     "root": "Root",
-    "downloadFile": "Scarica file"
+    "downloadFile": "Scarica file",
+    "managedCanaryLabel": "Canary Borg UI",
+    "managedCanaryDescription": "File canary gestiti per i controlli di ripristino. Borg UI li aggiunge ai backup mentre la modalità canary è attiva.",
+    "managedCanaryBanner": "Questa cartella è gestita da Borg UI per i controlli di ripristino canary. Puoi lasciarla invariata.",
+    "managedCanaryProbeDisabled": "I percorsi canary vengono verificati automaticamente dalla modalità canary."
   },
   "codeEditor": {
     "loading": "Caricamento editor..."
@@ -2834,14 +3107,32 @@
         "invalidAuthToken": "Token di autenticazione non valido",
         "invalidOrExpiredToken": "Token non valido o scaduto",
         "proxyHeaderRequired": "L'header di autenticazione del reverse proxy \"{{header}}\" è obbligatorio",
+        "localLoginDisabled": "L'accesso integrato con password e passkey è disattivato perché il single sign-on è obbligatorio",
         "invalidTotpCode": "Codice di autenticazione non valido",
-        "localPasswordRequired": "Questo account deve usare l'autenticazione integrata con password per gestire TOTP",
+        "tooManyAttempts": "Troppi tentativi di accesso. Riprova tra {{retryAfterSeconds}} secondi.",
+        "tooManyRequests": "Troppi tentativi di accesso. Riprova tra {{retryAfterSeconds}} secondi.",
+        "localPasswordRequired": "Questo account deve avere una password locale prima di continuare questa azione",
         "totpNotEnabled": "L'autenticazione a due fattori non è attiva per questo account",
         "invalidPasskey": "Risposta passkey non valida",
         "passkeyUserVerificationRequired": "Su questo dispositivo è richiesta la verifica della passkey. Sbloccalo con Touch ID, Face ID o il codice del dispositivo e riprova.",
         "passkeysUnavailable": "Le passkey non sono disponibili perché la dipendenza WebAuthn non è installata",
         "passkeyAlreadyRegistered": "Questa passkey è già registrata",
-        "passkeyNotFound": "Passkey non trovata"
+        "passkeyNotFound": "Passkey non trovata",
+        "oidcNotConfigured": "Il single sign-on non è configurato",
+        "oidcAuthenticationCancelled": "L'accesso single sign-on è stato annullato o rifiutato dal provider di identità",
+        "oidcAuthenticationFailed": "L'accesso single sign-on non è riuscito",
+        "oidcIdTokenInvalid": "Il provider di identità ha restituito un token di accesso non valido",
+        "oidcUsernameClaimMissing": "Il single sign-on non ha fornito un claim di nome utente utilizzabile",
+        "oidcSubjectClaimMissing": "Il single sign-on non ha fornito un claim subject utilizzabile",
+        "oidcUserAccessDenied": "Il tuo account single sign-on non è autorizzato ad accedere a Borg UI",
+        "oidcAccountLinkRequired": "Un account locale di Borg UI usa già questo nome utente. Collega esplicitamente l'account prima di usare il single sign-on.",
+        "oidcAlreadyLinked": "Questo account è già collegato al single sign-on",
+        "oidcCannotUnlinkWhenLocalAuthDisabled": "Il single sign-on non può essere scollegato mentre l'accesso locale è disattivato",
+        "oidcNotLinked": "Questo account non è collegato al single sign-on",
+        "oidcIdentityConflict": "Questa identità single sign-on è in conflitto con un account Borg UI esistente.",
+        "oidcEmailAlreadyInUse": "Questa email single sign-on è già utilizzata da un altro account Borg UI.",
+        "oidcPendingApproval": "Il tuo account single sign-on è in attesa dell'approvazione di un amministratore",
+        "oidcTemplateUserNotFound": "L'utente modello configurato per il single sign-on non è stato trovato"
       },
       "repo": {
         "repositoryNotFound": "Repository non trovato",
@@ -2864,6 +3155,7 @@
         "cannotDeleteRepoWithArchives": "Impossibile eliminare il repository con archivi esistenti. Elimina prima tutti gli archivi.",
         "checkAlreadyRunning": "Un'operazione di controllo è già in esecuzione per questo repository",
         "compactAlreadyRunning": "Un'operazione di compattazione è già in esecuzione per questo repository",
+        "restoreCheckCanaryUnsupportedObserve": "I controlli di ripristino canary non sono disponibili per i repository solo osservazione. Usa percorsi di prova selezionati o una verifica dell'intero archivio.",
         "breakLockTimeout": "Timeout durante il tentativo di rompere il blocco",
         "checkJobNotFound": "Job di controllo non trovato",
         "compactJobNotFound": "Job di compattazione non trovato",
@@ -3020,7 +3312,16 @@
         "failedRunLogCleanup": "Impossibile eseguire la pulizia dei log: {{error}}",
         "failedGetCacheStats": "Impossibile ottenere le statistiche della cache: {{error}}",
         "failedClearCache": "Impossibile pulire la cache: {{error}}",
-        "failedUpdateCacheSettings": "Impossibile aggiornare le impostazioni della cache: {{error}}"
+        "failedUpdateCacheSettings": "Impossibile aggiornare le impostazioni della cache: {{error}}",
+        "invalidOidcNewUserMode": "oidc_new_user_mode non valido. Deve essere uno tra: {{modes}}",
+        "invalidOidcDefaultRole": "Ruolo globale predefinito OIDC non valido",
+        "invalidOidcDefaultRepositoryRole": "Ruolo repository predefinito OIDC non valido",
+        "invalidOidcTokenAuthMethod": "Metodo di autenticazione token OIDC non valido. Deve essere uno tra: {{methods}}",
+        "invalidAuthSource": "Origine di autenticazione non valida. Deve essere una tra: {{sources}}",
+        "oidcTemplateUserRequired": "È richiesto un nome utente modello quando la modalità nuovi utenti OIDC è impostata su template",
+        "oidcLocalAuthRequiresOidc": "OIDC deve essere attivato prima di poter disattivare l'autenticazione locale",
+        "oidcLocalAuthRequiresOidcAdmin": "Almeno un amministratore attivo deve essere collegato a OIDC prima di poter disattivare l'autenticazione locale",
+        "oidcConfigurationIncomplete": "OIDC è attivo, ma mancano l'URL di discovery, il client ID o il client secret"
       },
       "activity": {
         "adminOnlyDelete": "Solo gli amministratori possono eliminare le voci di job",
@@ -3150,7 +3451,8 @@
       "auth": {
         "loggedOut": "Disconnessione riuscita",
         "userDeleted": "Utente eliminato con successo",
-        "passwordChanged": "Password cambiata con successo"
+        "passwordChanged": "Password cambiata con successo",
+        "oidcUnlinked": "Single sign-on scollegato con successo"
       },
       "repo": {
         "repositoryImported": "Repository importato con successo",

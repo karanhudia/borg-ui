@@ -2,7 +2,7 @@
  * Type definitions for jobs and repositories used across the application
  *
  * Note: Job interface is intentionally flexible to accommodate various job types
- * (backup, restore, check, compact, prune, package) across different pages.
+ * (backup, restore, restore_check, check, compact, prune, package) across different pages.
  * Most fields are optional as different contexts provide different subsets of data.
  */
 

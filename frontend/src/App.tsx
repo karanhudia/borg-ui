@@ -166,6 +166,7 @@ function App() {
           }
         />
         <Route path="/restore" element={<Navigate to="/archives" replace />} />
+        <Route path="/integrity" element={<Navigate to="/schedule/checks" replace />} />
         <Route
           path="/schedule/*"
           element={

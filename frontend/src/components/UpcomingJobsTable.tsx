@@ -15,6 +15,7 @@ interface UpcomingJob {
   repository_ids?: number[]
   next_run: string
   cron_expression: string
+  timezone?: string | null
 }
 
 interface UpcomingJobsTableProps {
@@ -79,7 +80,12 @@ const UpcomingJobsTable: React.FC<UpcomingJobsTableProps> = ({
       {/* Job rows */}
       <Stack spacing={1}>
         {upcomingJobs.slice(0, 5).map((job) => (
-          <Tooltip key={job.id} title={formatDate(job.next_run)} placement="top" arrow>
+          <Tooltip
+            key={job.id}
+            title={`${formatDate(job.next_run)} - ${job.cron_expression} (${job.timezone || 'UTC'})`}
+            placement="top"
+            arrow
+          >
             <Box
               sx={{
                 display: 'flex',

@@ -3,7 +3,7 @@ Comprehensive unit tests for restore API endpoints
 """
 
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import ANY, patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.database.models import Repository, RestoreJob
 from tests.unit.helpers import assert_auth_required
@@ -352,6 +352,66 @@ class TestRestoreStart:
         job = test_db.query(RestoreJob).order_by(RestoreJob.id.desc()).first()
         assert job is not None
         assert job.repository == repo.path
+        scheduled = mock_create_task.call_args.args[0]
+        scheduled.close()
+
+    def test_start_restore_passes_restore_layout_and_path_metadata(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with (
+            patch(
+                "app.api.restore.restore_service.execute_restore",
+                new_callable=AsyncMock,
+            ) as mock_execute_restore,
+            patch(
+                "app.api.restore.asyncio.create_task", return_value=object()
+            ) as mock_create_task,
+        ):
+            response = test_client.post(
+                "/api/restore/start",
+                json={
+                    "repository_id": repo.id,
+                    "repository": repo.path,
+                    "archive": "test-archive",
+                    "paths": ["home/username/folder1/folder2"],
+                    "destination": "/recovery/folder1/folder2",
+                    "restore_layout": "contents_only",
+                    "path_metadata": [
+                        {
+                            "path": "home/username/folder1/folder2",
+                            "type": "directory",
+                        }
+                    ],
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        mock_execute_restore.assert_called_once_with(
+            ANY,
+            repo.path,
+            "test-archive",
+            "/recovery/folder1/folder2",
+            ["home/username/folder1/folder2"],
+            repository_type="local",
+            destination_type="local",
+            destination_connection_id=None,
+            ssh_connection_id=None,
+            restore_layout="contents_only",
+            path_metadata=[
+                {"path": "home/username/folder1/folder2", "type": "directory"}
+            ],
+        )
         scheduled = mock_create_task.call_args.args[0]
         scheduled.close()
 

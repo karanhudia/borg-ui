@@ -31,6 +31,7 @@ from app.utils.script_params import (
     mask_password_values,
     filter_system_variables_from_params,
 )
+from app.utils.datetime_utils import serialize_datetime
 import structlog
 import json
 
@@ -71,6 +72,10 @@ class ScriptResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     parameters: Optional[List[dict]] = None  # Parameter definitions
+
+    class Config:
+        from_attributes = True
+        json_encoders = {datetime: lambda v: serialize_datetime(v)}
 
 
 class ScriptDetailResponse(ScriptResponse):
@@ -281,7 +286,7 @@ async def get_script(
             "id": ex.id,
             "repository_id": ex.repository_id,
             "status": ex.status,
-            "started_at": ex.started_at.isoformat() if ex.started_at else None,
+            "started_at": serialize_datetime(ex.started_at),
             "exit_code": ex.exit_code,
             "execution_time": ex.execution_time,
         }

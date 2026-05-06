@@ -118,6 +118,36 @@ class TestScheduleCreate:
 
         assert response.status_code == 400
 
+    def test_create_schedule_stores_timezone(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = Repository(
+            name="Test Repo",
+            path="/test/repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.post(
+            "/api/schedule/",
+            json={
+                "repository_id": repo.id,
+                "cron_expression": "0 2 * * *",
+                "timezone": "Asia/Kolkata",
+                "enabled": True,
+                "name": "India Schedule",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["job"]["cron_expression"] == "0 2 * * *"
+        assert data["job"]["timezone"] == "Asia/Kolkata"
+
     def test_create_schedule_unauthorized(self, test_client: TestClient):
         """Test creating schedule without authentication returns 403"""
         response = test_client.post(

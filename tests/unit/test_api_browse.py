@@ -70,6 +70,39 @@ class TestBrowseEndpoints:
         assert response.status_code == 200
         assert response.json()["items"][0]["name"] == "docs"
 
+    def test_browse_archive_marks_cached_canary_items(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repository(test_db)
+        cached_items = [
+            {
+                "name": ".borg-ui",
+                "path": ".borg-ui",
+                "type": "directory",
+                "size": 923,
+            },
+            {
+                "name": "docs",
+                "path": "docs",
+                "type": "directory",
+                "size": 12,
+            },
+        ]
+
+        with patch.object(
+            browse_api.archive_cache, "get", new=AsyncMock(return_value=cached_items)
+        ):
+            response = test_client.get(
+                f"/api/browse/{repo.id}/test-archive",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert [item["name"] for item in items] == [".borg-ui", "docs"]
+        assert items[0]["managed"] is True
+        assert items[0]["managed_type"] == "restore_canary"
+
     def test_browse_archive_subdirectory(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -336,7 +369,7 @@ class TestBrowseArchiveBehavior:
         assert first_call[1] == "parsed-archive"
         assert len(first_call[2]) == 3
         assert second_call[0] == repo.id
-        assert second_call[1] == "parsed-archive::browse-root"
+        assert second_call[1] == "parsed-archive::browse-managed-root"
         assert [item["name"] for item in second_call[2]] == ["docs", "notes.txt"]
 
     @pytest.mark.asyncio

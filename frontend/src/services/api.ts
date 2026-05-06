@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast'
 import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
 import { attachAccessTokenHeader } from './authHeaders'
+import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
 
 export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
@@ -80,6 +81,7 @@ export interface RepositoryData {
   has_schedule?: boolean
   schedule_enabled?: boolean
   schedule_name?: string | null
+  schedule_timezone?: string | null
   next_run?: string | null
   // Allow other properties for flexibility
   [key: string]: unknown
@@ -128,6 +130,10 @@ export interface AuthUserResponse {
   is_active: boolean
   role: string
   all_repositories_role?: string | null
+  auth_source?: string | null
+  oidc_subject?: string | null
+  oidc_link_supported?: boolean
+  oidc_unlink_supported?: boolean
   must_change_password?: boolean
   totp_enabled?: boolean
   passkey_count?: number
@@ -147,6 +153,11 @@ export interface AuthLoginResponse {
 
 export interface PasswordSetupCompleteResponse {
   must_change_password: boolean
+}
+
+export interface LogoutResponse {
+  message: string
+  logout_url?: string | null
 }
 
 export interface TotpStatusResponse {
@@ -187,6 +198,12 @@ export interface AuthConfigResponse {
   proxy_auth_enabled: boolean
   insecure_no_auth_enabled: boolean
   authentication_required: boolean
+  oidc_enabled?: boolean
+  oidc_provider_name?: string | null
+  oidc_disable_local_auth?: boolean
+  oidc_link_supported?: boolean
+  oidc_unlink_supported?: boolean
+  oidc_account_linking_supported?: boolean
   proxy_auth_header?: string | null
   proxy_auth_role_header?: string | null
   proxy_auth_all_repositories_role_header?: string | null
@@ -203,6 +220,24 @@ type ApiData = Record<string, unknown>
 
 export const authAPI = {
   getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
+  getOidcLoginUrl: (returnTo?: string) => {
+    const params = new URLSearchParams()
+    if (returnTo) {
+      params.set('return_to', returnTo)
+    }
+    const suffix = params.toString()
+    return `${API_BASE_URL}/auth/oidc/login${suffix ? `?${suffix}` : ''}`
+  },
+  getOidcLinkUrl: (returnTo?: string) => {
+    const params = new URLSearchParams()
+    if (returnTo) {
+      params.set('return_to', returnTo)
+    }
+    const suffix = params.toString()
+    return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
+  },
+  exchangeOidcToken: () => api.post<AuthLoginResponse>('/auth/oidc/exchange'),
+  unlinkOidc: () => api.post('/auth/oidc/unlink'),
 
   login: (username: string, password: string) =>
     api.post<AuthLoginResponse>(
@@ -219,7 +254,7 @@ export const authAPI = {
       code,
     }),
 
-  logout: () => api.post('/auth/logout'),
+  logout: () => api.post<LogoutResponse>('/auth/logout'),
 
   refresh: () => api.post('/auth/refresh'),
 
@@ -322,7 +357,9 @@ export const restoreAPI = {
     destination: string,
     repository_id: number,
     destination_type: string = 'local',
-    destination_connection_id: number | null = null
+    destination_connection_id: number | null = null,
+    restore_layout: RestoreLayout = 'preserve_path',
+    path_metadata: RestorePathMetadata[] = []
   ) =>
     api.post('/restore/start', {
       repository,
@@ -332,6 +369,8 @@ export const restoreAPI = {
       repository_id,
       destination_type,
       destination_connection_id,
+      restore_layout,
+      path_metadata,
     }),
   getRestoreJobs: () => api.get('/restore/jobs'),
   getRestoreStatus: (jobId: number) => api.get(`/restore/status/${jobId}`),
@@ -428,6 +467,18 @@ export interface PermissionScopeResponse {
   all_repositories_role: string | null
 }
 
+export interface AuthEventRecord {
+  id: number
+  event_type: string
+  auth_source: string
+  username: string | null
+  email: string | null
+  success: boolean
+  detail: string | null
+  actor_user_id: number | null
+  created_at: string
+}
+
 export const permissionsAPI = {
   getMyPermissions: () => api.get<PermissionResponse[]>('/settings/permissions/me'),
   getMyPermissionScope: () => api.get<PermissionScopeResponse>('/settings/permissions/me/scope'),
@@ -445,6 +496,13 @@ export const permissionsAPI = {
     }),
   remove: (userId: number, repoId: number) =>
     api.delete(`/settings/users/${userId}/permissions/${repoId}`),
+}
+
+export const authAPIAdmin = {
+  listEvents: (limit: number = 50) =>
+    api.get<AuthEventRecord[]>('/auth/events', {
+      params: { limit },
+    }),
 }
 
 // Repositories API
@@ -467,6 +525,13 @@ export const repositoriesAPI = {
   deleteRepository: (id: number) => api.delete(`/repositories/${id}`),
   checkRepository: (id: number, maxDuration: number = 3600) =>
     api.post(`/repositories/${id}/check`, { max_duration: maxDuration }),
+  restoreCheckRepository: (
+    id: number,
+    data?: {
+      paths?: string[]
+      full_archive?: boolean
+    }
+  ) => api.post(`/repositories/${id}/restore-check`, data || {}),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
   pruneRepository: (id: number, data: ApiData) => api.post(`/repositories/${id}/prune`, data),
   breakLock: (id: number) => api.post(`/repositories/${id}/break-lock`),
@@ -479,6 +544,9 @@ export const repositoriesAPI = {
     api.get(`/repositories/${id}/check-jobs`, {
       params: { limit, scheduled_only: scheduledOnly },
     }),
+  getRestoreCheckJobStatus: (jobId: number) => api.get(`/repositories/restore-check-jobs/${jobId}`),
+  getRepositoryRestoreCheckJobs: (id: number, limit?: number) =>
+    api.get(`/repositories/${id}/restore-check-jobs`, { params: { limit } }),
   getCompactJobStatus: (jobId: number) => api.get(`/repositories/compact-jobs/${jobId}`),
   getRepositoryCompactJobs: (id: number, limit?: number) =>
     api.get(`/repositories/${id}/compact-jobs`, { params: { limit } }),
@@ -489,6 +557,9 @@ export const repositoriesAPI = {
   getCheckSchedule: (id: number) => api.get(`/repositories/${id}/check-schedule`),
   updateCheckSchedule: (id: number, data: ApiData) =>
     api.put(`/repositories/${id}/check-schedule`, data),
+  getRestoreCheckSchedule: (id: number) => api.get(`/repositories/${id}/restore-check-schedule`),
+  updateRestoreCheckSchedule: (id: number, data: ApiData) =>
+    api.put(`/repositories/${id}/restore-check-schedule`, data),
   list: () => api.get('/repositories/'),
   startCheck: (id: number, data: ApiData) => api.post(`/repositories/${id}/check`, data),
 }

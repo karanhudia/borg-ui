@@ -33,6 +33,8 @@ interface NotificationSetting {
   notify_on_restore_failure: boolean
   notify_on_check_success: boolean
   notify_on_check_failure: boolean
+  notify_on_restore_check_success: boolean
+  notify_on_restore_check_failure: boolean
   notify_on_schedule_failure: boolean
   monitor_all_repositories: boolean
   repositories: { id: number; name: string }[]
@@ -93,6 +95,8 @@ export default function NotificationCard({
     notification.notify_on_restore_failure,
     notification.notify_on_check_success,
     notification.notify_on_check_failure,
+    notification.notify_on_restore_check_success,
+    notification.notify_on_restore_check_failure,
     notification.notify_on_schedule_failure,
   ].filter(Boolean).length
 
@@ -184,6 +188,20 @@ export default function NotificationCard({
         [
           notification.notify_on_check_success && t('notifications.card.events.success'),
           notification.notify_on_check_failure && t('notifications.card.events.failure'),
+        ]
+          .filter(Boolean)
+          .join(' · ') || t('notifications.card.events.off'),
+    },
+    {
+      icon: <TestTube size={10} />,
+      label: t('notifications.card.categories.restoreCheck'),
+      active:
+        notification.notify_on_restore_check_success ||
+        notification.notify_on_restore_check_failure,
+      tooltip:
+        [
+          notification.notify_on_restore_check_success && t('notifications.card.events.success'),
+          notification.notify_on_restore_check_failure && t('notifications.card.events.failure'),
         ]
           .filter(Boolean)
           .join(' · ') || t('notifications.card.events.off'),

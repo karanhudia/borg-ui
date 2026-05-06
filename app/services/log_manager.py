@@ -6,7 +6,7 @@ Supports all job types: backup, restore, check, compact, prune, package
 """
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Set, Optional
 import structlog
@@ -110,10 +110,10 @@ class LogManager:
                 "total_size_bytes": total_size,
                 "total_size_mb": round(total_size / (1024 * 1024), 2),
                 "file_count": file_count,
-                "oldest_log_date": datetime.fromtimestamp(oldest_mtime)
+                "oldest_log_date": datetime.fromtimestamp(oldest_mtime, tz=timezone.utc)
                 if oldest_mtime
                 else None,
-                "newest_log_date": datetime.fromtimestamp(newest_mtime)
+                "newest_log_date": datetime.fromtimestamp(newest_mtime, tz=timezone.utc)
                 if newest_mtime
                 else None,
                 "files_by_type": files_by_type,

@@ -133,6 +133,7 @@ class BorgRouter:
         paths: List[str],
         remote_path: str = None,
         bypass_lock: bool = False,
+        strip_components: Optional[int] = None,
     ) -> List[str]:
         if self.is_v2:
             from app.services.v2.restore_service import restore_v2_service
@@ -143,6 +144,7 @@ class BorgRouter:
                 paths=paths,
                 remote_path=remote_path,
                 bypass_lock=bypass_lock,
+                strip_components=strip_components,
             )
 
         cmd = ["borg", "extract", "--progress", "--log-json"]
@@ -150,6 +152,8 @@ class BorgRouter:
             cmd.extend(["--remote-path", remote_path])
         if bypass_lock:
             cmd.append("--bypass-lock")
+        if strip_components:
+            cmd.extend(["--strip-components", str(strip_components)])
         cmd.append(f"{repository_path}::{archive_name}")
         if paths:
             cmd.extend(paths)
@@ -437,8 +441,23 @@ class BorgRouter:
         v2: calls borg2 list and parses the JSON archives array.
         v1: calls borg list and returns the archives list.
         """
+        import json
+
+        def _parse_archives_payload(payload) -> list:
+            if isinstance(payload, list):
+                return payload
+            if isinstance(payload, dict):
+                archives = payload.get("archives")
+                return archives if isinstance(archives, list) else []
+            if isinstance(payload, str):
+                try:
+                    parsed = json.loads(payload)
+                except Exception:
+                    return []
+                return _parse_archives_payload(parsed)
+            return []
+
         if self.is_v2:
-            import json
             from app.core.borg2 import borg2
 
             result = await borg2.list_archives(
@@ -450,11 +469,7 @@ class BorgRouter:
             )
             if not result["success"]:
                 return []
-            try:
-                data = json.loads(result.get("stdout", "{}"))
-                return data.get("archives", [])
-            except Exception:
-                return []
+            return _parse_archives_payload(result.get("stdout", "{}"))
         else:
             from app.core.borg import borg
 
@@ -467,7 +482,7 @@ class BorgRouter:
             )
             if not result["success"]:
                 return []
-            return result.get("stdout") or []
+            return _parse_archives_payload(result.get("stdout", ""))
 
     async def verify_repository(
         self, ssh_key_id: int = None, timeout: int = 60

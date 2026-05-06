@@ -120,7 +120,15 @@ class TestRestoreServiceRouting:
         ) as mock_exec:
             await service.execute_restore(1, "/repo", "arch", "/dest")
 
-        mock_exec.assert_awaited_once_with(1, "/repo", "arch", "/dest", None)
+        mock_exec.assert_awaited_once_with(
+            1,
+            "/repo",
+            "arch",
+            "/dest",
+            None,
+            restore_layout="preserve_path",
+            path_metadata=None,
+        )
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -159,7 +167,16 @@ class TestRestoreServiceRouting:
                 destination_connection_id=9,
             )
 
-        mock_exec.assert_awaited_once_with(1, "/repo", "arch", "/dest", None, 9)
+        mock_exec.assert_awaited_once_with(
+            1,
+            "/repo",
+            "arch",
+            "/dest",
+            None,
+            9,
+            restore_layout="preserve_path",
+            path_metadata=None,
+        )
 
     @pytest.mark.unit
     @pytest.mark.asyncio
@@ -342,6 +359,53 @@ class TestRestoreServiceExecution:
         assert "extract" in cmd
         assert "archive-1" in cmd
         notification_mock.send_restore_success.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_local_restore_contents_only_adds_strip_components(
+        self, testing_session_local, restore_job, restore_repository
+    ):
+        service = RestoreService()
+        process = FakeRestoreProcess(
+            returncode=0,
+            stderr_chunks=[
+                b'{"type":"progress_percent","current":1,"total":1,"finished":true}\n'
+            ],
+            stdout_lines=[b"restored\n"],
+        )
+
+        notification_mock = SimpleNamespace(
+            send_restore_success=AsyncMock(return_value=None),
+            send_restore_failure=AsyncMock(return_value=None),
+        )
+
+        with (
+            patch("app.services.restore_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.restore_service.asyncio.create_subprocess_exec",
+                return_value=process,
+            ) as mock_exec,
+            patch(
+                "app.services.restore_service.notification_service",
+                notification_mock,
+            ),
+        ):
+            await service._execute_local_to_local(
+                restore_job.id,
+                restore_job.repository,
+                restore_job.archive,
+                restore_job.destination,
+                ["home/username/folder1/folder2"],
+                restore_layout="contents_only",
+                path_metadata=[
+                    {"path": "home/username/folder1/folder2", "type": "directory"}
+                ],
+            )
+
+        cmd = list(mock_exec.call_args.args)
+        assert "--strip-components" in cmd
+        strip_index = cmd.index("--strip-components")
+        assert cmd[strip_index + 1] == "4"
 
     @pytest.mark.unit
     @pytest.mark.asyncio

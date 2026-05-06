@@ -87,17 +87,17 @@ describe('Activity page', () => {
     )
 
     fireEvent.mouseDown(screen.getAllByRole('combobox')[0])
-    await user.click(await screen.findByRole('option', { name: /restore/i }))
+    await user.click(await screen.findByRole('option', { name: /^Restore Check$/i }))
 
     await waitFor(() => {
       expect(activityAPI.list).toHaveBeenLastCalledWith({
         limit: 200,
-        job_type: 'restore',
+        job_type: 'restore_check',
       })
     })
     expect(track).toHaveBeenCalledWith('Navigation', 'Filter', {
       filter_kind: 'type',
-      filter_value: 'restore',
+      filter_value: 'restore_check',
     })
 
     fireEvent.mouseDown(screen.getAllByRole('combobox')[1])
@@ -106,7 +106,7 @@ describe('Activity page', () => {
     await waitFor(() => {
       expect(activityAPI.list).toHaveBeenLastCalledWith({
         limit: 200,
-        job_type: 'restore',
+        job_type: 'restore_check',
         status: 'failed',
       })
     })

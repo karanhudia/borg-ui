@@ -9,12 +9,15 @@ from app.database.database import get_db
 from app.database.models import User, Repository, SystemSettings
 from app.core.authorization import authorize_request
 from app.core.security import (
+    encrypt_secret,
     get_current_user,
     get_password_hash,
     verify_password,
 )
 from app.core.features import get_current_plan, USER_LIMITS
 from app.core.permissions import (
+    GLOBAL_ROLE_RANK,
+    REPOSITORY_ROLE_RANK,
     default_repository_role_for_global_role,
     normalize_repository_role_for_global_role,
 )
@@ -38,6 +41,19 @@ DEFAULT_TIMEOUTS = {
     "backup_timeout": 3600,
     "source_size_timeout": 3600,
 }
+
+
+def _active_oidc_admin_count(db: Session) -> int:
+    return (
+        db.query(User)
+        .filter(
+            User.is_active.is_(True),
+            User.role == "admin",
+            User.oidc_subject.isnot(None),
+            User.oidc_subject != "",
+        )
+        .count()
+    )
 
 
 def get_effective_timeout(db_value, env_value, default_value):
@@ -84,6 +100,8 @@ class UserUpdate(BaseModel):
     email: Optional[str] = None
     is_active: Optional[bool] = None
     role: Optional[str] = None
+    auth_source: Optional[str] = None
+    oidc_subject: Optional[str] = None
 
 
 class PasswordChange(BaseModel):
@@ -160,6 +178,30 @@ class SystemSettingsUpdate(BaseModel):
     deployment_type: Optional[str] = None
     enterprise_name: Optional[str] = None
 
+    # Built-in OIDC / SSO settings
+    oidc_enabled: Optional[bool] = None
+    oidc_disable_local_auth: Optional[bool] = None
+    oidc_provider_name: Optional[str] = None
+    oidc_discovery_url: Optional[str] = None
+    oidc_client_id: Optional[str] = None
+    oidc_client_secret: Optional[str] = None
+    clear_oidc_client_secret: Optional[bool] = None
+    oidc_token_auth_method: Optional[str] = None
+    oidc_scopes: Optional[str] = None
+    oidc_redirect_uri_override: Optional[str] = None
+    oidc_end_session_endpoint_override: Optional[str] = None
+    oidc_claim_username: Optional[str] = None
+    oidc_claim_email: Optional[str] = None
+    oidc_claim_full_name: Optional[str] = None
+    oidc_group_claim: Optional[str] = None
+    oidc_role_claim: Optional[str] = None
+    oidc_admin_groups: Optional[str] = None
+    oidc_all_repositories_role_claim: Optional[str] = None
+    oidc_new_user_mode: Optional[str] = None
+    oidc_new_user_template_username: Optional[str] = None
+    oidc_default_role: Optional[str] = None
+    oidc_default_all_repositories_role: Optional[str] = None
+
 
 @router.get("/system")
 async def get_system_settings(
@@ -206,12 +248,8 @@ async def get_system_settings(
             log_storage_info = {
                 "total_size_mb": log_storage["total_size_mb"],
                 "file_count": log_storage["file_count"],
-                "oldest_log_date": log_storage["oldest_log_date"].isoformat()
-                if log_storage["oldest_log_date"]
-                else None,
-                "newest_log_date": log_storage["newest_log_date"].isoformat()
-                if log_storage["newest_log_date"]
-                else None,
+                "oldest_log_date": serialize_datetime(log_storage["oldest_log_date"]),
+                "newest_log_date": serialize_datetime(log_storage["newest_log_date"]),
                 "usage_percent": usage_percent,
                 "files_by_type": log_storage["files_by_type"],
             }
@@ -327,6 +365,31 @@ async def get_system_settings(
                 if settings.metrics_require_auth is not None
                 else False,
                 "metrics_token_set": bool(settings.metrics_token),
+                "oidc_enabled": settings.oidc_enabled,
+                "oidc_disable_local_auth": settings.oidc_disable_local_auth,
+                "oidc_provider_name": settings.oidc_provider_name or "Single sign-on",
+                "oidc_discovery_url": settings.oidc_discovery_url,
+                "oidc_client_id": settings.oidc_client_id,
+                "oidc_client_secret_set": bool(settings.oidc_client_secret_encrypted),
+                "oidc_token_auth_method": settings.oidc_token_auth_method
+                or "client_secret_post",
+                "oidc_scopes": settings.oidc_scopes or "openid profile email",
+                "oidc_redirect_uri_override": settings.oidc_redirect_uri_override,
+                "oidc_end_session_endpoint_override": settings.oidc_end_session_endpoint_override,
+                "oidc_claim_username": settings.oidc_claim_username
+                or "preferred_username",
+                "oidc_claim_email": settings.oidc_claim_email or "email",
+                "oidc_claim_full_name": settings.oidc_claim_full_name or "name",
+                "oidc_group_claim": settings.oidc_group_claim,
+                "oidc_role_claim": settings.oidc_role_claim,
+                "oidc_admin_groups": settings.oidc_admin_groups,
+                "oidc_all_repositories_role_claim": settings.oidc_all_repositories_role_claim,
+                "oidc_new_user_mode": settings.oidc_new_user_mode or "viewer",
+                "oidc_new_user_template_username": settings.oidc_new_user_template_username,
+                "oidc_default_role": settings.oidc_default_role or "viewer",
+                "oidc_default_all_repositories_role": settings.oidc_default_all_repositories_role
+                or "viewer",
+                "oidc_active_admin_count": _active_oidc_admin_count(db),
             },
             "log_storage": log_storage_info,
         }
@@ -566,6 +629,166 @@ async def update_system_settings(
         if settings_update.enterprise_name is not None:
             settings.enterprise_name = settings_update.enterprise_name.strip() or None
 
+        valid_oidc_new_user_modes = {"deny", "viewer", "pending", "template"}
+        if (
+            settings_update.oidc_new_user_mode is not None
+            and settings_update.oidc_new_user_mode not in valid_oidc_new_user_modes
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.settings.invalidOidcNewUserMode",
+                    "params": {"modes": ", ".join(sorted(valid_oidc_new_user_modes))},
+                },
+            )
+
+        if (
+            settings_update.oidc_default_role is not None
+            and settings_update.oidc_default_role not in GLOBAL_ROLE_RANK
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.settings.invalidOidcDefaultRole"},
+            )
+
+        if (
+            settings_update.oidc_default_all_repositories_role is not None
+            and settings_update.oidc_default_all_repositories_role
+            not in REPOSITORY_ROLE_RANK
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.settings.invalidOidcDefaultRepositoryRole"
+                },
+            )
+
+        valid_oidc_token_auth_methods = {"client_secret_post", "client_secret_basic"}
+        if (
+            settings_update.oidc_token_auth_method is not None
+            and settings_update.oidc_token_auth_method
+            not in valid_oidc_token_auth_methods
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.settings.invalidOidcTokenAuthMethod",
+                    "params": {
+                        "methods": ", ".join(sorted(valid_oidc_token_auth_methods))
+                    },
+                },
+            )
+
+        if settings_update.oidc_enabled is not None:
+            settings.oidc_enabled = settings_update.oidc_enabled
+        if settings_update.oidc_disable_local_auth is not None:
+            settings.oidc_disable_local_auth = settings_update.oidc_disable_local_auth
+        if settings_update.oidc_provider_name is not None:
+            settings.oidc_provider_name = (
+                settings_update.oidc_provider_name.strip() or "Single sign-on"
+            )
+        if settings_update.oidc_discovery_url is not None:
+            settings.oidc_discovery_url = (
+                settings_update.oidc_discovery_url.strip() or None
+            )
+        if settings_update.oidc_client_id is not None:
+            settings.oidc_client_id = settings_update.oidc_client_id.strip() or None
+        if settings_update.clear_oidc_client_secret:
+            settings.oidc_client_secret_encrypted = None
+        elif settings_update.oidc_client_secret is not None:
+            if settings_update.oidc_client_secret == "":
+                settings.oidc_client_secret_encrypted = None
+            else:
+                settings.oidc_client_secret_encrypted = encrypt_secret(
+                    settings_update.oidc_client_secret
+                )
+        if settings_update.oidc_token_auth_method is not None:
+            settings.oidc_token_auth_method = settings_update.oidc_token_auth_method
+        if settings_update.oidc_scopes is not None:
+            settings.oidc_scopes = (
+                settings_update.oidc_scopes.strip() or "openid profile email"
+            )
+        if settings_update.oidc_redirect_uri_override is not None:
+            settings.oidc_redirect_uri_override = (
+                settings_update.oidc_redirect_uri_override.strip() or None
+            )
+        if settings_update.oidc_end_session_endpoint_override is not None:
+            settings.oidc_end_session_endpoint_override = (
+                settings_update.oidc_end_session_endpoint_override.strip() or None
+            )
+        if settings_update.oidc_claim_username is not None:
+            settings.oidc_claim_username = (
+                settings_update.oidc_claim_username.strip() or "preferred_username"
+            )
+        if settings_update.oidc_claim_email is not None:
+            settings.oidc_claim_email = (
+                settings_update.oidc_claim_email.strip() or "email"
+            )
+        if settings_update.oidc_claim_full_name is not None:
+            settings.oidc_claim_full_name = (
+                settings_update.oidc_claim_full_name.strip() or "name"
+            )
+        if settings_update.oidc_group_claim is not None:
+            settings.oidc_group_claim = settings_update.oidc_group_claim.strip() or None
+        if settings_update.oidc_role_claim is not None:
+            settings.oidc_role_claim = settings_update.oidc_role_claim.strip() or None
+        if settings_update.oidc_admin_groups is not None:
+            settings.oidc_admin_groups = (
+                settings_update.oidc_admin_groups.strip() or None
+            )
+        if settings_update.oidc_all_repositories_role_claim is not None:
+            settings.oidc_all_repositories_role_claim = (
+                settings_update.oidc_all_repositories_role_claim.strip() or None
+            )
+        if settings_update.oidc_new_user_mode is not None:
+            settings.oidc_new_user_mode = settings_update.oidc_new_user_mode
+        if settings_update.oidc_new_user_template_username is not None:
+            settings.oidc_new_user_template_username = (
+                settings_update.oidc_new_user_template_username.strip() or None
+            )
+        if settings_update.oidc_default_role is not None:
+            settings.oidc_default_role = settings_update.oidc_default_role
+        if settings_update.oidc_default_all_repositories_role is not None:
+            settings.oidc_default_all_repositories_role = (
+                normalize_repository_role_for_global_role(
+                    settings.oidc_default_role or "viewer",
+                    settings_update.oidc_default_all_repositories_role,
+                )
+            )
+
+        if (
+            settings.oidc_new_user_mode == "template"
+            and not settings.oidc_new_user_template_username
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.settings.oidcTemplateUserRequired"},
+            )
+
+        if settings.oidc_disable_local_auth and not settings.oidc_enabled:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.settings.oidcLocalAuthRequiresOidc"},
+            )
+
+        if settings.oidc_disable_local_auth and _active_oidc_admin_count(db) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.settings.oidcLocalAuthRequiresOidcAdmin"
+                },
+            )
+
+        if settings.oidc_enabled and (
+            not settings.oidc_discovery_url
+            or not settings.oidc_client_id
+            or not settings.oidc_client_secret_encrypted
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.settings.oidcConfigurationIncomplete"},
+            )
+
         settings.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(settings)
@@ -726,8 +949,10 @@ async def get_users(db: Session = Depends(get_db)):
                     "is_active": user.is_active,
                     "role": user.role,
                     "all_repositories_role": user.all_repositories_role,
-                    "created_at": user.created_at,
-                    "last_login": user.last_login,
+                    "auth_source": getattr(user, "auth_source", "local"),
+                    "oidc_subject": getattr(user, "oidc_subject", None),
+                    "created_at": serialize_datetime(user.created_at),
+                    "last_login": serialize_datetime(user.last_login),
                 }
                 for user in users
             ],
@@ -842,6 +1067,9 @@ async def update_user(
 ):
     """Update user (admin only)"""
     try:
+        fields_set = getattr(user_data, "model_fields_set", None)
+        if fields_set is None:
+            fields_set = getattr(user_data, "__fields_set__", set())
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             raise HTTPException(
@@ -889,6 +1117,40 @@ async def update_user(
                 user.role,
                 user.all_repositories_role,
             )
+
+        if user_data.auth_source is not None:
+            if user_data.auth_source not in {"local", "oidc"}:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.settings.invalidAuthSource",
+                        "params": {"sources": "local, oidc"},
+                    },
+                )
+            user.auth_source = user_data.auth_source
+
+        if "oidc_subject" in fields_set:
+            oidc_subject = (
+                user_data.oidc_subject.strip() if user_data.oidc_subject else None
+            )
+            oidc_subject = oidc_subject or None
+            if oidc_subject:
+                existing_subject_user = (
+                    db.query(User)
+                    .filter(User.oidc_subject == oidc_subject, User.id != user_id)
+                    .first()
+                )
+                if existing_subject_user is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={"key": "backend.errors.auth.oidcIdentityConflict"},
+                    )
+                user.auth_source = "oidc"
+            else:
+                user.oidc_last_id_token_encrypted = None
+                if user.auth_source == "oidc":
+                    user.auth_source = "local"
+            user.oidc_subject = oidc_subject
 
         user.updated_at = datetime.utcnow()
         db.commit()
@@ -1059,8 +1321,8 @@ async def get_profile(
             "is_admin": current_user.is_admin,
             "role": current_user.role,
             "must_change_password": current_user.must_change_password,
-            "created_at": current_user.created_at,
-            "last_login": current_user.last_login,
+            "created_at": serialize_datetime(current_user.created_at),
+            "last_login": serialize_datetime(current_user.last_login),
             "deployment_type": deployment_type,
             "enterprise_name": enterprise_name,
         },
@@ -1283,12 +1545,8 @@ async def get_log_storage_stats(
                 "total_size_bytes": log_storage["total_size_bytes"],
                 "total_size_mb": log_storage["total_size_mb"],
                 "file_count": log_storage["file_count"],
-                "oldest_log_date": log_storage["oldest_log_date"].isoformat()
-                if log_storage["oldest_log_date"]
-                else None,
-                "newest_log_date": log_storage["newest_log_date"].isoformat()
-                if log_storage["newest_log_date"]
-                else None,
+                "oldest_log_date": serialize_datetime(log_storage["oldest_log_date"]),
+                "newest_log_date": serialize_datetime(log_storage["newest_log_date"]),
                 "files_by_type": log_storage["files_by_type"],
                 "usage_percent": usage_percent,
                 "limit_mb": settings.log_max_total_size_mb,

@@ -39,6 +39,13 @@ def test_repository_model_defaults():
     assert repo.compression is None or repo.compression in ["lz4", "zstd", "none"]
     assert repo.source_directories == [] or repo.source_directories is None
     assert repo.exclude_patterns == [] or repo.exclude_patterns is None
+    assert repo.restore_check_cron_expression is None
+    assert repo.restore_check_timezone is None or repo.restore_check_timezone == "UTC"
+    assert repo.restore_check_paths is None
+    assert (
+        repo.restore_check_canary_enabled is None
+        or repo.restore_check_canary_enabled is False
+    )
 
 
 @pytest.mark.unit
