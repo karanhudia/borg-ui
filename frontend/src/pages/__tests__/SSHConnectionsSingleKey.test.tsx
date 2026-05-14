@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from '../../i18n'
 import { renderWithProviders, screen, userEvent, waitFor } from '../../test/test-utils'
 import SSHConnectionsSingleKey from '../SSHConnectionsSingleKey'
 
@@ -126,7 +127,8 @@ vi.mock('../../services/api', () => ({
 }))
 
 describe('SSHConnectionsSingleKey', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('en')
     vi.clearAllMocks()
     mockState.canManageSsh = true
     mockState.systemKeyResponse = {
@@ -263,6 +265,23 @@ describe('SSHConnectionsSingleKey', () => {
         port: 44,
       })
     })
+  })
+
+  it('localizes the remote connections empty state', async () => {
+    await i18n.changeLanguage('de')
+    mockState.systemKeyResponse = { data: { exists: false } }
+    mockState.connectionsResponse = { data: { connections: [] } }
+
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    expect(await screen.findByText('Remote-Maschinen')).toBeInTheDocument()
+    expect(screen.getByText('Remote-Verbindungen')).toBeInTheDocument()
+    expect(screen.getByText('Noch keine Remote-Maschinen')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Erzeuge oder importiere zuerst einen SSH-Schlüssel und stelle ihn dann auf Remote-Servern bereit.'
+      )
+    ).toBeInTheDocument()
   })
 
   it('updates an existing connection and automatically retests it', async () => {

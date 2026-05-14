@@ -1281,6 +1281,16 @@
       "type": "Tipo de clave",
       "fingerprint": "Huella digital",
       "publicKey": "Clave pública",
+      "tooltips": {
+        "hideFingerprint": "Ocultar huella digital",
+        "revealFingerprint": "Mostrar huella digital",
+        "hideKey": "Ocultar clave",
+        "revealKey": "Mostrar clave",
+        "copyToClipboard": "Copiar al portapapeles",
+        "deploy": "Desplegar automáticamente la clave SSH usando autenticación por contraseña",
+        "addManual": "Agregar una conexión para una clave SSH desplegada manualmente",
+        "delete": "Eliminar clave SSH del sistema (las conexiones se conservarán)"
+      },
       "actions": {
         "deploy": "Desplegar en servidor",
         "addManual": "Agregar conexión manual",
@@ -1290,6 +1300,7 @@
     },
     "generateDialog": {
       "title": "Generar clave SSH del sistema",
+      "info": "Esto generará un nuevo par de claves SSH para tu sistema. Solo puedes tener una clave del sistema a la vez.",
       "keyType": "Tipo de clave",
       "ed25519": "ED25519 (Recomendado)",
       "rsa": "RSA",
@@ -1299,24 +1310,38 @@
     },
     "importDialog": {
       "title": "Importar clave SSH existente",
+      "info": "Importa una clave SSH existente desde tu sistema de archivos (por ejemplo, un volumen montado). La clave se leerá desde las rutas especificadas y se almacenará en la base de datos.",
       "keyName": "Nombre de la clave",
+      "keyNamePlaceholder": "Clave SSH del sistema",
       "privateKeyPath": "Ruta de la clave privada",
+      "privateKeyPathPlaceholder": "/home/borg/.ssh/id_ed25519 o /root/.ssh/id_rsa",
+      "privateKeyPathHelper": "Ruta absoluta al archivo de clave privada",
       "publicKeyPath": "Ruta de la clave pública (Opcional)",
+      "publicKeyPathPlaceholder": "Déjalo vacío para detectar automáticamente (agrega .pub a la ruta de la clave privada)",
+      "publicKeyPathHelper": "Si no se proporciona, se intentará {private_key_path}.pub",
       "description": "Descripción",
+      "descriptionPlaceholder": "Clave SSH del sistema importada",
       "importing": "Importando...",
       "import": "Importar clave"
     },
     "deployDialog": {
       "title": "Desplegar clave SSH en servidor",
       "host": "Host",
+      "hostPlaceholder": "192.168.1.100 o example.com",
       "username": "Usuario",
       "port": "Puerto",
       "password": "Contraseña",
+      "passwordPlaceholder": "Contraseña del servidor (para el despliegue inicial)",
+      "passwordHelp": "La contraseña se usa para desplegar tu clave pública en el archivo authorized_keys del servidor. Después del despliegue, te conectarás usando la clave SSH.",
       "sftpMode": "Usar modo SFTP para el despliegue de claves",
+      "sftpModeHint": "Requerido por Hetzner Storage Box. Desactívalo para Synology NAS o servidores SSH antiguos.",
       "useSudo": "Usar sudo para copias de seguridad",
       "useSudoHint": "Antepone sudo a borg en el host remoto. Requiere sudo sin contraseña para el usuario SSH. Solo aplica al modo de copia de seguridad SSH remoto.",
       "defaultPath": "Ruta predeterminada (Opcional)",
+      "defaultPathHelper": "Directorio inicial para explorar archivos por SSH (p. ej., /home para Hetzner Storage Box)",
       "mountPoint": "Punto de montaje (Opcional)",
+      "mountPointPlaceholder": "hetzner o homeserver",
+      "mountPointHelper": "Nombre descriptivo para esta máquina remota (p. ej., hetzner, backup-server)",
       "deploying": "Desplegando...",
       "deploy": "Desplegar clave"
     },
@@ -1328,22 +1353,51 @@
         "step2": "Conéctate por SSH a tu servidor",
         "step3": "Agrégala a ~/.ssh/authorized_keys"
       },
+      "successInfo": "Esto probará la conexión y la agregará a tu lista de conexiones si funciona correctamente.",
+      "testing": "Probando...",
       "submit": "Probar y agregar conexión"
     },
     "editConnectionDialog": {
       "title": "Editar conexión SSH",
+      "updateInfo": "Actualiza los detalles de la conexión. Puede que quieras probar la conexión después de actualizarla.",
+      "updating": "Actualizando...",
       "submit": "Actualizar conexión"
     },
     "deleteConnectionDialog": {
       "title": "Eliminar conexión SSH",
+      "confirm": "¿Estás seguro de que deseas eliminar esta conexión?",
       "delete": "Eliminar",
       "deleting": "Eliminando..."
     },
     "deleteKeyDialog": {
       "title": "Eliminar clave SSH del sistema",
       "confirm": "¿Estás seguro de que deseas eliminar esta clave SSH?",
+      "keyName": "Nombre de la clave",
+      "keyType": "Tipo de clave",
+      "activeConnections": "Conexiones activas",
+      "actionIntro": "Esta acción hará lo siguiente:",
       "warning1": "Eliminar la clave SSH de la base de datos y el sistema de archivos",
-      "warning2": "Los registros de conexión se conservarán."
+      "markConnectionsFailed_one": "Marcar {{count}} conexión como fallida",
+      "markConnectionsFailed_other": "Marcar {{count}} conexiones como fallidas",
+      "clearRepositories": "Quitar la clave SSH de cualquier repositorio que la use",
+      "warning2": "Los registros de conexión se conservarán.",
+      "delete": "Eliminar clave SSH",
+      "deleting": "Eliminando..."
+    },
+    "redeployDialog": {
+      "title": "Desplegar clave SSH en la conexión",
+      "info": "Esto desplegará tu clave SSH actual del sistema en esta conexión. Deberás proporcionar la contraseña para autenticarte.",
+      "passwordPlaceholder": "Introduce la contraseña SSH",
+      "passwordHelper": "La contraseña se usa para desplegar la clave pública en authorized_keys"
+    },
+    "remoteConnections": {
+      "title": "Conexiones remotas",
+      "configured_one": "{{count}} máquina configurada",
+      "configured_other": "{{count}} máquinas configuradas",
+      "refresh": "Actualizar conexiones",
+      "emptyTitle": "Aún no hay máquinas remotas",
+      "emptyWithKey": "Despliega tu clave SSH en un servidor remoto para comenzar.",
+      "emptyWithoutKey": "Genera o importa primero una clave SSH y luego despliégala en servidores remotos."
     },
     "toasts": {
       "keyGenerated": "¡Clave SSH del sistema generada correctamente!",
@@ -2382,6 +2436,7 @@
     "status": {
       "connected": "Conectado",
       "failed": "Fallido",
+      "testing": "Probando",
       "unknown": "Desconocido"
     },
     "storage": "Almacenamiento",
@@ -3338,6 +3393,7 @@
     "used": "usado",
     "free": "libre",
     "percentUsed": "% usado",
+    "total": "{{value}} total",
     "noStorageInfo": "Sin información de almacenamiento",
     "refreshStorage": "Actualizar almacenamiento",
     "defaultPath": "Ruta predeterminada",

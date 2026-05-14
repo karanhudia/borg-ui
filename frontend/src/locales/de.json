@@ -1281,6 +1281,16 @@
       "type": "Schlüsseltyp",
       "fingerprint": "Fingerabdruck",
       "publicKey": "Öffentlicher Schlüssel",
+      "tooltips": {
+        "hideFingerprint": "Fingerabdruck ausblenden",
+        "revealFingerprint": "Fingerabdruck anzeigen",
+        "hideKey": "Schlüssel ausblenden",
+        "revealKey": "Schlüssel anzeigen",
+        "copyToClipboard": "In Zwischenablage kopieren",
+        "deploy": "SSH-Schlüssel automatisch mit Passwortauthentifizierung bereitstellen",
+        "addManual": "Verbindung für einen manuell bereitgestellten SSH-Schlüssel hinzufügen",
+        "delete": "System-SSH-Schlüssel löschen (Verbindungen bleiben erhalten)"
+      },
       "actions": {
         "deploy": "Auf Server bereitstellen",
         "addManual": "Manuelle Verbindung hinzufügen",
@@ -1290,6 +1300,7 @@
     },
     "generateDialog": {
       "title": "System-SSH-Schlüssel generieren",
+      "info": "Dies erzeugt ein neues SSH-Schlüsselpaar für dein System. Es kann immer nur einen Systemschlüssel geben.",
       "keyType": "Schlüsseltyp",
       "ed25519": "ED25519 (Empfohlen)",
       "rsa": "RSA",
@@ -1299,24 +1310,38 @@
     },
     "importDialog": {
       "title": "Vorhandenen SSH-Schlüssel importieren",
+      "info": "Importiere einen vorhandenen SSH-Schlüssel aus deinem Dateisystem (z. B. aus einem eingebundenen Volume). Der Schlüssel wird aus den angegebenen Pfaden gelesen und in der Datenbank gespeichert.",
       "keyName": "Schlüsselname",
+      "keyNamePlaceholder": "System-SSH-Schlüssel",
       "privateKeyPath": "Pfad zum privaten Schlüssel",
+      "privateKeyPathPlaceholder": "/home/borg/.ssh/id_ed25519 oder /root/.ssh/id_rsa",
+      "privateKeyPathHelper": "Absoluter Pfad zur privaten Schlüsseldatei",
       "publicKeyPath": "Pfad zum öffentlichen Schlüssel (Optional)",
+      "publicKeyPathPlaceholder": "Leer lassen, um automatisch zu erkennen (fügt .pub zum Pfad des privaten Schlüssels hinzu)",
+      "publicKeyPathHelper": "Wenn nicht angegeben, wird {private_key_path}.pub versucht",
       "description": "Beschreibung",
+      "descriptionPlaceholder": "Importierter System-SSH-Schlüssel",
       "importing": "Importiert...",
       "import": "Schlüssel importieren"
     },
     "deployDialog": {
       "title": "SSH-Schlüssel auf Server bereitstellen",
       "host": "Host",
+      "hostPlaceholder": "192.168.1.100 oder example.com",
       "username": "Benutzername",
       "port": "Port",
       "password": "Passwort",
+      "passwordPlaceholder": "Serverpasswort (für die erste Bereitstellung)",
+      "passwordHelp": "Das Passwort wird verwendet, um deinen öffentlichen Schlüssel in die authorized_keys-Datei des Servers zu übertragen. Nach der Bereitstellung verbindest du dich mit dem SSH-Schlüssel.",
       "sftpMode": "SFTP-Modus für die Schlüsselbereitstellung verwenden",
+      "sftpModeHint": "Für Hetzner Storage Box erforderlich. Für Synology NAS oder ältere SSH-Server deaktivieren.",
       "useSudo": "Sudo für Backups verwenden",
       "useSudoHint": "Stellt borg auf dem entfernten Host sudo voran. Erfordert passwortloses sudo für den SSH-Benutzer. Gilt nur für den Remote-SSH-Backup-Modus.",
       "defaultPath": "Standardpfad (Optional)",
+      "defaultPathHelper": "Startverzeichnis für das Durchsuchen von SSH-Dateien (z. B. /home für Hetzner Storage Box)",
       "mountPoint": "Einhängepunkt (Optional)",
+      "mountPointPlaceholder": "hetzner oder homeserver",
+      "mountPointHelper": "Freundlicher Name für diese Remote-Maschine (z. B. hetzner, backup-server)",
       "deploying": "Stellt bereit...",
       "deploy": "Schlüssel bereitstellen"
     },
@@ -1328,22 +1353,51 @@
         "step2": "Per SSH auf deinen Server verbinden",
         "step3": "Zu ~/.ssh/authorized_keys hinzufügen"
       },
+      "successInfo": "Dies testet die Verbindung und fügt sie bei Erfolg zu deiner Verbindungsliste hinzu.",
+      "testing": "Testet...",
       "submit": "Verbindung testen und hinzufügen"
     },
     "editConnectionDialog": {
       "title": "SSH-Verbindung bearbeiten",
+      "updateInfo": "Aktualisiere die Verbindungsdetails. Du solltest die Verbindung nach der Aktualisierung möglicherweise testen.",
+      "updating": "Aktualisiert...",
       "submit": "Verbindung aktualisieren"
     },
     "deleteConnectionDialog": {
       "title": "SSH-Verbindung löschen",
+      "confirm": "Bist du sicher, dass du diese Verbindung löschen möchtest?",
       "delete": "Löschen",
       "deleting": "Löscht..."
     },
     "deleteKeyDialog": {
       "title": "System-SSH-Schlüssel löschen",
       "confirm": "Bist du sicher, dass du diesen SSH-Schlüssel löschen möchtest?",
+      "keyName": "Schlüsselname",
+      "keyType": "Schlüsseltyp",
+      "activeConnections": "Aktive Verbindungen",
+      "actionIntro": "Diese Aktion wird:",
       "warning1": "SSH-Schlüssel aus Datenbank und Dateisystem entfernen",
-      "warning2": "Verbindungsaufzeichnungen bleiben erhalten."
+      "markConnectionsFailed_one": "{{count}} Verbindung als fehlgeschlagen markieren",
+      "markConnectionsFailed_other": "{{count}} Verbindungen als fehlgeschlagen markieren",
+      "clearRepositories": "SSH-Schlüssel aus allen Repositories entfernen, die ihn verwenden",
+      "warning2": "Verbindungsaufzeichnungen bleiben erhalten.",
+      "delete": "SSH-Schlüssel löschen",
+      "deleting": "Löscht..."
+    },
+    "redeployDialog": {
+      "title": "SSH-Schlüssel auf Verbindung bereitstellen",
+      "info": "Dies stellt deinen aktuellen System-SSH-Schlüssel auf dieser Verbindung bereit. Du musst das Passwort zur Authentifizierung angeben.",
+      "passwordPlaceholder": "SSH-Passwort eingeben",
+      "passwordHelper": "Das Passwort wird verwendet, um den öffentlichen Schlüssel in authorized_keys bereitzustellen"
+    },
+    "remoteConnections": {
+      "title": "Remote-Verbindungen",
+      "configured_one": "{{count}} Maschine konfiguriert",
+      "configured_other": "{{count}} Maschinen konfiguriert",
+      "refresh": "Verbindungen aktualisieren",
+      "emptyTitle": "Noch keine Remote-Maschinen",
+      "emptyWithKey": "Stelle deinen SSH-Schlüssel auf einem Remote-Server bereit, um loszulegen.",
+      "emptyWithoutKey": "Erzeuge oder importiere zuerst einen SSH-Schlüssel und stelle ihn dann auf Remote-Servern bereit."
     },
     "toasts": {
       "keyGenerated": "System-SSH-Schlüssel erfolgreich generiert!",
@@ -2382,6 +2436,7 @@
     "status": {
       "connected": "Verbunden",
       "failed": "Fehlgeschlagen",
+      "testing": "Testet",
       "unknown": "Unbekannt"
     },
     "storage": "Speicher",
@@ -3338,6 +3393,7 @@
     "used": "verwendet",
     "free": "frei",
     "percentUsed": "% verwendet",
+    "total": "{{value}} gesamt",
     "noStorageInfo": "Keine Speicherinformationen",
     "refreshStorage": "Speicher aktualisieren",
     "defaultPath": "Standardpfad",

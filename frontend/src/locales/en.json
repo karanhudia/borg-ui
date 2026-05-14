@@ -1281,6 +1281,16 @@
       "type": "Key Type",
       "fingerprint": "Fingerprint",
       "publicKey": "Public Key",
+      "tooltips": {
+        "hideFingerprint": "Hide fingerprint",
+        "revealFingerprint": "Reveal fingerprint",
+        "hideKey": "Hide key",
+        "revealKey": "Reveal key",
+        "copyToClipboard": "Copy to clipboard",
+        "deploy": "Automatically deploy SSH key using password authentication",
+        "addManual": "Add a connection for a manually deployed SSH key",
+        "delete": "Delete system SSH key (connections will be preserved)"
+      },
       "actions": {
         "deploy": "Deploy to Server",
         "addManual": "Add Manual Connection",
@@ -1290,6 +1300,7 @@
     },
     "generateDialog": {
       "title": "Generate System SSH Key",
+      "info": "This will generate a new SSH key pair for your system. You can only have one system key at a time.",
       "keyType": "Key Type",
       "ed25519": "ED25519 (Recommended)",
       "rsa": "RSA",
@@ -1299,24 +1310,38 @@
     },
     "importDialog": {
       "title": "Import Existing SSH Key",
+      "info": "Import an existing SSH key from your filesystem (e.g., mounted volume). The key will be read from the specified paths and stored in the database.",
       "keyName": "Key Name",
+      "keyNamePlaceholder": "System SSH Key",
       "privateKeyPath": "Private Key Path",
+      "privateKeyPathPlaceholder": "/home/borg/.ssh/id_ed25519 or /root/.ssh/id_rsa",
+      "privateKeyPathHelper": "Absolute path to the private key file",
       "publicKeyPath": "Public Key Path (Optional)",
+      "publicKeyPathPlaceholder": "Leave empty to auto-detect (adds .pub to private key path)",
+      "publicKeyPathHelper": "If not provided, will try {private_key_path}.pub",
       "description": "Description",
+      "descriptionPlaceholder": "Imported system SSH key",
       "importing": "Importing...",
       "import": "Import Key"
     },
     "deployDialog": {
       "title": "Deploy SSH Key to Server",
       "host": "Host",
+      "hostPlaceholder": "192.168.1.100 or example.com",
       "username": "Username",
       "port": "Port",
       "password": "Password",
+      "passwordPlaceholder": "Server password (for initial deployment)",
+      "passwordHelp": "The password is used to deploy your public key to the server's authorized_keys file. After deployment, you'll connect using the SSH key.",
       "sftpMode": "Use SFTP mode for key deployment",
+      "sftpModeHint": "Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.",
       "useSudo": "Use sudo for backups",
       "useSudoHint": "Prefix borg with sudo on the remote host. Requires passwordless sudo for the SSH user. Only applies to remote SSH backup mode.",
       "defaultPath": "Default Path (Optional)",
+      "defaultPathHelper": "Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)",
       "mountPoint": "Mount Point (Optional)",
+      "mountPointPlaceholder": "hetzner or homeserver",
+      "mountPointHelper": "Friendly name for this remote machine (e.g., hetzner, backup-server)",
       "deploying": "Deploying...",
       "deploy": "Deploy Key"
     },
@@ -1328,22 +1353,51 @@
         "step2": "SSH into your server",
         "step3": "Add it to ~/.ssh/authorized_keys"
       },
+      "successInfo": "This will test the connection and add it to your connections list if successful.",
+      "testing": "Testing...",
       "submit": "Test & Add Connection"
     },
     "editConnectionDialog": {
       "title": "Edit SSH Connection",
+      "updateInfo": "Update the connection details. You may want to test the connection after updating.",
+      "updating": "Updating...",
       "submit": "Update Connection"
     },
     "deleteConnectionDialog": {
       "title": "Delete SSH Connection",
+      "confirm": "Are you sure you want to delete this connection?",
       "delete": "Delete",
       "deleting": "Deleting..."
     },
     "deleteKeyDialog": {
       "title": "Delete System SSH Key",
       "confirm": "Are you sure you want to delete this SSH key?",
+      "keyName": "Key Name",
+      "keyType": "Key Type",
+      "activeConnections": "Active Connections",
+      "actionIntro": "This action will:",
       "warning1": "Remove the SSH key from database and filesystem",
-      "warning2": "Connection records will be preserved."
+      "markConnectionsFailed_one": "Mark {{count}} connection as failed",
+      "markConnectionsFailed_other": "Mark {{count}} connections as failed",
+      "clearRepositories": "Clear SSH key from any repositories using it",
+      "warning2": "Connection records will be preserved.",
+      "delete": "Delete SSH Key",
+      "deleting": "Deleting..."
+    },
+    "redeployDialog": {
+      "title": "Deploy SSH Key to Connection",
+      "info": "This will deploy your current system SSH key to this connection. You'll need to provide the password to authenticate.",
+      "passwordPlaceholder": "Enter SSH password",
+      "passwordHelper": "Password is used to deploy the public key to authorized_keys"
+    },
+    "remoteConnections": {
+      "title": "Remote Connections",
+      "configured_one": "{{count}} machine configured",
+      "configured_other": "{{count}} machines configured",
+      "refresh": "Refresh connections",
+      "emptyTitle": "No remote machines yet",
+      "emptyWithKey": "Deploy your SSH key to a remote server to get started.",
+      "emptyWithoutKey": "Generate or import an SSH key first, then deploy it to remote servers."
     },
     "toasts": {
       "keyGenerated": "System SSH key generated successfully!",
@@ -2382,6 +2436,7 @@
     "status": {
       "connected": "Connected",
       "failed": "Failed",
+      "testing": "Testing",
       "unknown": "Unknown"
     },
     "storage": "Storage",
@@ -3338,6 +3393,7 @@
     "used": "used",
     "free": "free",
     "percentUsed": "% used",
+    "total": "{{value}} total",
     "noStorageInfo": "No storage info",
     "refreshStorage": "Refresh storage",
     "defaultPath": "Default Path",

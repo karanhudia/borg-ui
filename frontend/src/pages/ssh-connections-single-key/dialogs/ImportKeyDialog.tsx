@@ -36,17 +36,14 @@ export function ImportKeyDialog({
       <DialogTitle>{t('sshConnections.importDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <Alert severity="info">
-            Import an existing SSH key from your filesystem (e.g., mounted volume). The key will be
-            read from the specified paths and stored in the database.
-          </Alert>
+          <Alert severity="info">{t('sshConnections.importDialog.info')}</Alert>
 
           <TextField
             label={t('sshConnections.importDialog.keyName')}
             fullWidth
             value={importForm.name}
             onChange={(e) => setImportForm({ ...importForm, name: e.target.value })}
-            placeholder="System SSH Key"
+            placeholder={t('sshConnections.importDialog.keyNamePlaceholder')}
             InputLabelProps={{ shrink: true }}
           />
           <TextField
@@ -55,8 +52,8 @@ export function ImportKeyDialog({
             required
             value={importForm.private_key_path}
             onChange={(e) => setImportForm({ ...importForm, private_key_path: e.target.value })}
-            placeholder="/home/borg/.ssh/id_ed25519 or /root/.ssh/id_rsa"
-            helperText="Absolute path to the private key file"
+            placeholder={t('sshConnections.importDialog.privateKeyPathPlaceholder')}
+            helperText={t('sshConnections.importDialog.privateKeyPathHelper')}
             InputLabelProps={{ shrink: true }}
           />
           <TextField
@@ -64,8 +61,8 @@ export function ImportKeyDialog({
             fullWidth
             value={importForm.public_key_path}
             onChange={(e) => setImportForm({ ...importForm, public_key_path: e.target.value })}
-            placeholder="Leave empty to auto-detect (adds .pub to private key path)"
-            helperText="If not provided, will try {private_key_path}.pub"
+            placeholder={t('sshConnections.importDialog.publicKeyPathPlaceholder')}
+            helperText={t('sshConnections.importDialog.publicKeyPathHelper')}
             InputLabelProps={{ shrink: true }}
           />
           <TextField
@@ -73,7 +70,7 @@ export function ImportKeyDialog({
             fullWidth
             value={importForm.description}
             onChange={(e) => setImportForm({ ...importForm, description: e.target.value })}
-            placeholder="Imported system SSH key"
+            placeholder={t('sshConnections.importDialog.descriptionPlaceholder')}
             InputLabelProps={{ shrink: true }}
             multiline
             rows={2}
@@ -81,7 +78,7 @@ export function ImportKeyDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => setOpen(false)}>Cancel</Button>
+        <Button onClick={() => setOpen(false)}>{t('common.buttons.cancel')}</Button>
         <Button
           variant="contained"
           onClick={onImport}

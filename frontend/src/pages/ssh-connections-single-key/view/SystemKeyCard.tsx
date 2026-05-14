@@ -85,7 +85,12 @@ export function SystemKeyCard({
             {t('sshConnections.systemKey.title')}
           </Typography>
           {keyExists && (
-            <Chip label="Active" color="success" size="small" icon={<CheckCircle size={14} />} />
+            <Chip
+              label={t('common.active')}
+              color="success"
+              size="small"
+              icon={<CheckCircle size={14} />}
+            />
           )}
         </Stack>
 
@@ -119,7 +124,7 @@ export function SystemKeyCard({
                   {t('sshConnections.systemKey.type')}
                 </Typography>
                 <Typography variant="body2" fontWeight={500}>
-                  {systemKey?.key_type?.toUpperCase() || 'Unknown'}
+                  {systemKey?.key_type?.toUpperCase() || t('common.unknown')}
                 </Typography>
               </Box>
 
@@ -129,9 +134,20 @@ export function SystemKeyCard({
                     <Typography variant="caption" color="text.secondary">
                       {t('sshConnections.systemKey.fingerprint')}
                     </Typography>
-                    <Tooltip title={fingerprintVisible ? 'Hide fingerprint' : 'Reveal fingerprint'}>
+                    <Tooltip
+                      title={
+                        fingerprintVisible
+                          ? t('sshConnections.systemKey.tooltips.hideFingerprint')
+                          : t('sshConnections.systemKey.tooltips.revealFingerprint')
+                      }
+                    >
                       <IconButton
                         size="small"
+                        aria-label={
+                          fingerprintVisible
+                            ? t('sshConnections.systemKey.tooltips.hideFingerprint')
+                            : t('sshConnections.systemKey.tooltips.revealFingerprint')
+                        }
                         onClick={() => setFingerprintVisible((v) => !v)}
                         sx={{ p: 0.25 }}
                       >
@@ -161,9 +177,20 @@ export function SystemKeyCard({
                   <Typography variant="caption" color="text.secondary">
                     {t('sshConnections.systemKey.publicKey')}
                   </Typography>
-                  <Tooltip title={keyVisible ? 'Hide key' : 'Reveal key'}>
+                  <Tooltip
+                    title={
+                      keyVisible
+                        ? t('sshConnections.systemKey.tooltips.hideKey')
+                        : t('sshConnections.systemKey.tooltips.revealKey')
+                    }
+                  >
                     <IconButton
                       size="small"
+                      aria-label={
+                        keyVisible
+                          ? t('sshConnections.systemKey.tooltips.hideKey')
+                          : t('sshConnections.systemKey.tooltips.revealKey')
+                      }
                       onClick={() => setKeyVisible((v) => !v)}
                       sx={{ p: 0.25 }}
                     >
@@ -195,11 +222,15 @@ export function SystemKeyCard({
                       transition: 'filter 0.2s ease',
                     }}
                   >
-                    {systemKey?.public_key || 'N/A'}
+                    {systemKey?.public_key || t('common.na')}
                   </Typography>
                   <Box sx={{ position: 'absolute', top: 6, right: 6 }}>
-                    <Tooltip title="Copy to clipboard">
-                      <IconButton size="small" onClick={onCopyPublicKey}>
+                    <Tooltip title={t('sshConnections.systemKey.tooltips.copyToClipboard')}>
+                      <IconButton
+                        size="small"
+                        aria-label={t('sshConnections.systemKey.tooltips.copyToClipboard')}
+                        onClick={onCopyPublicKey}
+                      >
                         <Copy size={15} />
                       </IconButton>
                     </Tooltip>
@@ -208,7 +239,7 @@ export function SystemKeyCard({
               </Box>
 
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
-                <Tooltip title="Automatically deploy SSH key using password authentication">
+                <Tooltip title={t('sshConnections.systemKey.tooltips.deploy')}>
                   <Button
                     variant="contained"
                     startIcon={<Plus size={18} />}
@@ -219,7 +250,7 @@ export function SystemKeyCard({
                     {t('sshConnections.systemKey.actions.deploy')}
                   </Button>
                 </Tooltip>
-                <Tooltip title="Add a connection for a manually deployed SSH key">
+                <Tooltip title={t('sshConnections.systemKey.tooltips.addManual')}>
                   <Button
                     variant="outlined"
                     startIcon={<Wifi size={18} />}
@@ -229,7 +260,7 @@ export function SystemKeyCard({
                     {t('sshConnections.systemKey.actions.addManual')}
                   </Button>
                 </Tooltip>
-                <Tooltip title="Delete system SSH key (connections will be preserved)">
+                <Tooltip title={t('sshConnections.systemKey.tooltips.delete')}>
                   <Button
                     variant="outlined"
                     color="error"

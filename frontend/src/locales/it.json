@@ -1281,6 +1281,16 @@
       "type": "Tipo Chiave",
       "fingerprint": "Impronta Digitale",
       "publicKey": "Chiave Pubblica",
+      "tooltips": {
+        "hideFingerprint": "Nascondi impronta digitale",
+        "revealFingerprint": "Mostra impronta digitale",
+        "hideKey": "Nascondi chiave",
+        "revealKey": "Mostra chiave",
+        "copyToClipboard": "Copia negli appunti",
+        "deploy": "Distribuisci automaticamente la chiave SSH usando l'autenticazione con password",
+        "addManual": "Aggiungi una connessione per una chiave SSH distribuita manualmente",
+        "delete": "Elimina chiave SSH di sistema (le connessioni verranno conservate)"
+      },
       "actions": {
         "deploy": "Distribuisci su Server",
         "addManual": "Aggiungi Connessione Manuale",
@@ -1290,6 +1300,7 @@
     },
     "generateDialog": {
       "title": "Genera Chiave SSH di Sistema",
+      "info": "Questo genererà una nuova coppia di chiavi SSH per il tuo sistema. Puoi avere una sola chiave di sistema alla volta.",
       "keyType": "Tipo Chiave",
       "ed25519": "ED25519 (Consigliato)",
       "rsa": "RSA",
@@ -1299,24 +1310,38 @@
     },
     "importDialog": {
       "title": "Importa Chiave SSH Esistente",
+      "info": "Importa una chiave SSH esistente dal filesystem (ad esempio da un volume montato). La chiave verrà letta dai percorsi specificati e salvata nel database.",
       "keyName": "Nome Chiave",
+      "keyNamePlaceholder": "Chiave SSH di sistema",
       "privateKeyPath": "Percorso Chiave Privata",
+      "privateKeyPathPlaceholder": "/home/borg/.ssh/id_ed25519 o /root/.ssh/id_rsa",
+      "privateKeyPathHelper": "Percorso assoluto del file della chiave privata",
       "publicKeyPath": "Percorso Chiave Pubblica (Opzionale)",
+      "publicKeyPathPlaceholder": "Lascia vuoto per rilevare automaticamente (aggiunge .pub al percorso della chiave privata)",
+      "publicKeyPathHelper": "Se non fornito, verrà provato {private_key_path}.pub",
       "description": "Descrizione",
+      "descriptionPlaceholder": "Chiave SSH di sistema importata",
       "importing": "Importazione in corso...",
       "import": "Importa Chiave"
     },
     "deployDialog": {
       "title": "Distribuisci Chiave SSH su Server",
       "host": "Host",
+      "hostPlaceholder": "192.168.1.100 o example.com",
       "username": "Nome utente",
       "port": "Porta",
       "password": "Password",
+      "passwordPlaceholder": "Password del server (per la distribuzione iniziale)",
+      "passwordHelp": "La password viene usata per distribuire la chiave pubblica nel file authorized_keys del server. Dopo la distribuzione ti connetterai usando la chiave SSH.",
       "sftpMode": "Usa modalità SFTP per la distribuzione della chiave",
+      "sftpModeHint": "Richiesta da Hetzner Storage Box. Disattivala per Synology NAS o server SSH meno recenti.",
       "useSudo": "Usa sudo per i backup",
       "useSudoHint": "Antepone sudo a borg sull'host remoto. Richiede sudo senza password per l'utente SSH. Si applica solo alla modalità di backup SSH remoto.",
       "defaultPath": "Percorso Predefinito (Opzionale)",
+      "defaultPathHelper": "Directory iniziale per esplorare file via SSH (ad es. /home per Hetzner Storage Box)",
       "mountPoint": "Punto di Mount (Opzionale)",
+      "mountPointPlaceholder": "hetzner o homeserver",
+      "mountPointHelper": "Nome descrittivo per questa macchina remota (ad es. hetzner, backup-server)",
       "deploying": "Distribuzione in corso...",
       "deploy": "Distribuisci Chiave"
     },
@@ -1328,22 +1353,51 @@
         "step2": "Connettiti via SSH al tuo server",
         "step3": "Aggiungila a ~/.ssh/authorized_keys"
       },
+      "successInfo": "Questo testerà la connessione e la aggiungerà all'elenco delle connessioni se avrà successo.",
+      "testing": "Test in corso...",
       "submit": "Test e Aggiungi Connessione"
     },
     "editConnectionDialog": {
       "title": "Modifica Connessione SSH",
+      "updateInfo": "Aggiorna i dettagli della connessione. Potresti voler testare la connessione dopo l'aggiornamento.",
+      "updating": "Aggiornamento in corso...",
       "submit": "Aggiorna Connessione"
     },
     "deleteConnectionDialog": {
       "title": "Elimina Connessione SSH",
+      "confirm": "Sei sicuro di voler eliminare questa connessione?",
       "delete": "Elimina",
       "deleting": "Eliminazione in corso..."
     },
     "deleteKeyDialog": {
       "title": "Elimina Chiave SSH di Sistema",
       "confirm": "Sei sicuro di voler eliminare questa chiave SSH?",
+      "keyName": "Nome chiave",
+      "keyType": "Tipo chiave",
+      "activeConnections": "Connessioni attive",
+      "actionIntro": "Questa azione:",
       "warning1": "Rimuovi la chiave SSH dal database e dal filesystem",
-      "warning2": "I record di connessione verranno conservati."
+      "markConnectionsFailed_one": "Segnerà {{count}} connessione come fallita",
+      "markConnectionsFailed_other": "Segnerà {{count}} connessioni come fallite",
+      "clearRepositories": "Rimuoverà la chiave SSH da qualsiasi repository che la usa",
+      "warning2": "I record di connessione verranno conservati.",
+      "delete": "Elimina chiave SSH",
+      "deleting": "Eliminazione in corso..."
+    },
+    "redeployDialog": {
+      "title": "Distribuisci chiave SSH alla connessione",
+      "info": "Questo distribuirà la chiave SSH di sistema corrente a questa connessione. Dovrai fornire la password per autenticarti.",
+      "passwordPlaceholder": "Inserisci la password SSH",
+      "passwordHelper": "La password viene usata per distribuire la chiave pubblica in authorized_keys"
+    },
+    "remoteConnections": {
+      "title": "Connessioni remote",
+      "configured_one": "{{count}} macchina configurata",
+      "configured_other": "{{count}} macchine configurate",
+      "refresh": "Aggiorna connessioni",
+      "emptyTitle": "Ancora nessuna macchina remota",
+      "emptyWithKey": "Distribuisci la tua chiave SSH su un server remoto per iniziare.",
+      "emptyWithoutKey": "Genera o importa prima una chiave SSH, poi distribuiscila sui server remoti."
     },
     "toasts": {
       "keyGenerated": "Chiave SSH di sistema generata con successo!",
@@ -2382,6 +2436,7 @@
     "status": {
       "connected": "Connesso",
       "failed": "Fallito",
+      "testing": "Test in corso",
       "unknown": "Sconosciuto"
     },
     "storage": "Archiviazione",
@@ -3338,6 +3393,7 @@
     "used": "usato",
     "free": "libero",
     "percentUsed": "% usato",
+    "total": "{{value}} totale",
     "noStorageInfo": "Nessuna info archiviazione",
     "refreshStorage": "Aggiorna archiviazione",
     "defaultPath": "Percorso Predefinito",

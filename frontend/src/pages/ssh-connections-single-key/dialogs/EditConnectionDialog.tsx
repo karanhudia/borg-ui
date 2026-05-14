@@ -52,7 +52,7 @@ export function EditConnectionDialog({
             fullWidth
             value={editConnectionForm.host}
             onChange={(e) => setEditConnectionForm({ ...editConnectionForm, host: e.target.value })}
-            placeholder="192.168.1.100 or example.com"
+            placeholder={t('sshConnections.deployDialog.hostPlaceholder')}
             InputLabelProps={{ shrink: true }}
           />
           <TextField
@@ -88,7 +88,7 @@ export function EditConnectionDialog({
               <Box>
                 <Typography variant="body2">{t('sshConnections.deployDialog.sftpMode')}</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.
+                  {t('sshConnections.deployDialog.sftpModeHint')}
                 </Typography>
               </Box>
             }
@@ -119,7 +119,7 @@ export function EditConnectionDialog({
               setEditConnectionForm({ ...editConnectionForm, default_path: e.target.value })
             }
             placeholder="/home"
-            helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
+            helperText={t('sshConnections.deployDialog.defaultPathHelper')}
             InputLabelProps={{ shrink: true }}
           />
           <TextField
@@ -129,23 +129,25 @@ export function EditConnectionDialog({
             onChange={(e) =>
               setEditConnectionForm({ ...editConnectionForm, mount_point: e.target.value })
             }
-            placeholder="hetzner or homeserver"
-            helperText="Friendly name for this remote machine (e.g., hetzner, backup-server)"
+            placeholder={t('sshConnections.deployDialog.mountPointPlaceholder')}
+            helperText={t('sshConnections.deployDialog.mountPointHelper')}
             InputLabelProps={{ shrink: true }}
           />
           <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
-            Update the connection details. You may want to test the connection after updating.
+            {t('sshConnections.editConnectionDialog.updateInfo')}
           </Alert>
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={close}>Cancel</Button>
+        <Button onClick={close}>{t('common.buttons.cancel')}</Button>
         <Button
           variant="contained"
           onClick={onUpdate}
           disabled={pending || !editConnectionForm.host || !editConnectionForm.username}
         >
-          {pending ? 'Updating...' : t('sshConnections.editConnectionDialog.submit')}
+          {pending
+            ? t('sshConnections.editConnectionDialog.updating')
+            : t('sshConnections.editConnectionDialog.submit')}
         </Button>
       </DialogActions>
     </Dialog>

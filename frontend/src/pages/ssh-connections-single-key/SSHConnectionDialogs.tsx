@@ -178,6 +178,7 @@ export function SSHConnectionDialogs({
         onConfirmDelete={confirmDeleteConnection}
       />
       <RedeployKeyDialog
+        t={t}
         open={redeployKeyDialogOpen}
         setOpen={setRedeployKeyDialogOpen}
         selectedConnection={selectedConnection}

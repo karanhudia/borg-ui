@@ -47,7 +47,7 @@ export function DeployKeyDialog({
             fullWidth
             value={connectionForm.host}
             onChange={(e) => setConnectionForm({ ...connectionForm, host: e.target.value })}
-            placeholder="192.168.1.100 or example.com"
+            placeholder={t('sshConnections.deployDialog.hostPlaceholder')}
             InputLabelProps={{ shrink: true }}
           />
           <TextField
@@ -74,15 +74,12 @@ export function DeployKeyDialog({
             fullWidth
             value={connectionForm.password}
             onChange={(e) => setConnectionForm({ ...connectionForm, password: e.target.value })}
-            placeholder="Server password (for initial deployment)"
+            placeholder={t('sshConnections.deployDialog.passwordPlaceholder')}
             InputLabelProps={{ shrink: true }}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <Tooltip
-                    title="The password is used to deploy your public key to the server's authorized_keys file. After deployment, you'll connect using the SSH key."
-                    arrow
-                  >
+                  <Tooltip title={t('sshConnections.deployDialog.passwordHelp')} arrow>
                     <Box
                       component="span"
                       sx={{
@@ -112,7 +109,7 @@ export function DeployKeyDialog({
               <Box>
                 <Typography variant="body2">{t('sshConnections.deployDialog.sftpMode')}</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Required by Hetzner Storage Box. Disable for Synology NAS or older SSH servers.
+                  {t('sshConnections.deployDialog.sftpModeHint')}
                 </Typography>
               </Box>
             }
@@ -123,7 +120,7 @@ export function DeployKeyDialog({
             value={connectionForm.default_path}
             onChange={(e) => setConnectionForm({ ...connectionForm, default_path: e.target.value })}
             placeholder="/home"
-            helperText="Starting directory for SSH file browsing (e.g., /home for Hetzner Storage Box)"
+            helperText={t('sshConnections.deployDialog.defaultPathHelper')}
             InputLabelProps={{ shrink: true }}
           />
           <TextField
@@ -131,14 +128,14 @@ export function DeployKeyDialog({
             fullWidth
             value={connectionForm.mount_point}
             onChange={(e) => setConnectionForm({ ...connectionForm, mount_point: e.target.value })}
-            placeholder="hetzner or homeserver"
-            helperText="Friendly name for this remote machine (e.g., hetzner, backup-server)"
+            placeholder={t('sshConnections.deployDialog.mountPointPlaceholder')}
+            helperText={t('sshConnections.deployDialog.mountPointHelper')}
             InputLabelProps={{ shrink: true }}
           />
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => setOpen(false)}>Cancel</Button>
+        <Button onClick={() => setOpen(false)}>{t('common.buttons.cancel')}</Button>
         <Button
           variant="contained"
           onClick={onDeploy}

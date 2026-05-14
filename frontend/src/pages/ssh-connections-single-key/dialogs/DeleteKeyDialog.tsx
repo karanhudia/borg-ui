@@ -54,20 +54,23 @@ export function DeleteKeyDialog({
             >
               <Stack spacing={1}>
                 <Typography variant="body2">
-                  <strong>Key Name:</strong> {systemKey.name}
+                  <strong>{t('sshConnections.deleteKeyDialog.keyName')}:</strong> {systemKey.name}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Key Type:</strong> {systemKey.key_type?.toUpperCase()}
+                  <strong>{t('sshConnections.deleteKeyDialog.keyType')}:</strong>{' '}
+                  {systemKey.key_type?.toUpperCase()}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Active Connections:</strong> {connections.length}
+                  <strong>{t('sshConnections.deleteKeyDialog.activeConnections')}:</strong>{' '}
+                  {connections.length}
                 </Typography>
                 {systemKey.fingerprint && (
                   <Typography
                     variant="body2"
                     sx={{ fontFamily: 'monospace', fontSize: '0.75rem', wordBreak: 'break-all' }}
                   >
-                    <strong>Fingerprint:</strong> {systemKey.fingerprint}
+                    <strong>{t('sshConnections.systemKey.fingerprint')}:</strong>{' '}
+                    {systemKey.fingerprint}
                   </Typography>
                 )}
               </Stack>
@@ -75,17 +78,19 @@ export function DeleteKeyDialog({
           )}
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            This action will:
+            {t('sshConnections.deleteKeyDialog.actionIntro')}
           </Typography>
           <Box component="ul" sx={{ m: 0, pl: 3 }}>
             <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
               {t('sshConnections.deleteKeyDialog.warning1')}
             </Typography>
             <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
-              Mark {connections.length} connection(s) as failed
+              {t('sshConnections.deleteKeyDialog.markConnectionsFailed', {
+                count: connections.length,
+              })}
             </Typography>
             <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
-              Clear SSH key from any repositories using it
+              {t('sshConnections.deleteKeyDialog.clearRepositories')}
             </Typography>
           </Box>
 
@@ -95,9 +100,11 @@ export function DeleteKeyDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => setOpen(false)}>Cancel</Button>
+        <Button onClick={() => setOpen(false)}>{t('common.buttons.cancel')}</Button>
         <Button variant="contained" color="error" onClick={onDelete} disabled={pending}>
-          {pending ? 'Deleting...' : 'Delete SSH Key'}
+          {pending
+            ? t('sshConnections.deleteKeyDialog.deleting')
+            : t('sshConnections.deleteKeyDialog.delete')}
         </Button>
       </DialogActions>
     </Dialog>

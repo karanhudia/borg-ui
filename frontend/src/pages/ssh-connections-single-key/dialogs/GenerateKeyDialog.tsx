@@ -38,10 +38,7 @@ export function GenerateKeyDialog({
       <DialogTitle>{t('sshConnections.generateDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <Alert severity="info">
-            This will generate a new SSH key pair for your system. You can only have one system key
-            at a time.
-          </Alert>
+          <Alert severity="info">{t('sshConnections.generateDialog.info')}</Alert>
 
           <FormControl fullWidth>
             <InputLabel>{t('sshConnections.generateDialog.keyType')}</InputLabel>
@@ -58,7 +55,7 @@ export function GenerateKeyDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => setOpen(false)}>Cancel</Button>
+        <Button onClick={() => setOpen(false)}>{t('common.buttons.cancel')}</Button>
         <Button variant="contained" onClick={onGenerate} disabled={pending}>
           {pending
             ? t('sshConnections.generateDialog.generating')

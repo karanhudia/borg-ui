@@ -57,7 +57,7 @@ export function TestConnectionDialog({
             fullWidth
             value={testConnectionForm.host}
             onChange={(e) => setTestConnectionForm({ ...testConnectionForm, host: e.target.value })}
-            placeholder="192.168.1.100 or example.com"
+            placeholder={t('sshConnections.deployDialog.hostPlaceholder')}
             InputLabelProps={{ shrink: true }}
           />
           <TextField
@@ -82,18 +82,20 @@ export function TestConnectionDialog({
           />
 
           <Alert severity="success" sx={{ fontSize: '0.85rem' }}>
-            This will test the connection and add it to your connections list if successful.
+            {t('sshConnections.manualConnectionDialog.successInfo')}
           </Alert>
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => setOpen(false)}>Cancel</Button>
+        <Button onClick={() => setOpen(false)}>{t('common.buttons.cancel')}</Button>
         <Button
           variant="contained"
           onClick={onTest}
           disabled={pending || !testConnectionForm.host || !testConnectionForm.username}
         >
-          {pending ? 'Testing...' : t('sshConnections.manualConnectionDialog.submit')}
+          {pending
+            ? t('sshConnections.manualConnectionDialog.testing')
+            : t('sshConnections.manualConnectionDialog.submit')}
         </Button>
       </DialogActions>
     </Dialog>

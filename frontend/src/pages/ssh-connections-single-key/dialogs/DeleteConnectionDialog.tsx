@@ -41,24 +41,25 @@ export function DeleteConnectionDialog({
       <DialogTitle>{t('sshConnections.deleteConnectionDialog.title')}</DialogTitle>
       <DialogContent>
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Are you sure you want to delete this connection?
+          {t('sshConnections.deleteConnectionDialog.confirm')}
         </Alert>
         {selectedConnection && (
           <Stack spacing={1}>
             <Typography variant="body2">
-              <strong>Host:</strong> {selectedConnection.host}
+              <strong>{t('sshConnections.deployDialog.host')}:</strong> {selectedConnection.host}
             </Typography>
             <Typography variant="body2">
-              <strong>Username:</strong> {selectedConnection.username}
+              <strong>{t('sshConnections.deployDialog.username')}:</strong>{' '}
+              {selectedConnection.username}
             </Typography>
             <Typography variant="body2">
-              <strong>Port:</strong> {selectedConnection.port}
+              <strong>{t('sshConnections.deployDialog.port')}:</strong> {selectedConnection.port}
             </Typography>
           </Stack>
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={close}>Cancel</Button>
+        <Button onClick={close}>{t('common.buttons.cancel')}</Button>
         <Button variant="contained" color="error" onClick={onConfirmDelete} disabled={pending}>
           {pending
             ? t('sshConnections.deleteConnectionDialog.deleting')

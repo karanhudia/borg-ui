@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
+import type { TFunction } from 'i18next'
 import {
   Alert,
   Box,
@@ -14,6 +15,7 @@ import {
 import type { SSHConnection } from '../types'
 
 interface RedeployKeyDialogProps {
+  t: TFunction
   open: boolean
   setOpen: Dispatch<SetStateAction<boolean>>
   selectedConnection: SSHConnection | null
@@ -25,6 +27,7 @@ interface RedeployKeyDialogProps {
 }
 
 export function RedeployKeyDialog({
+  t,
   open,
   setOpen,
   selectedConnection,
@@ -42,46 +45,46 @@ export function RedeployKeyDialog({
 
   return (
     <Dialog open={open} onClose={close} maxWidth="sm" fullWidth>
-      <DialogTitle>Deploy SSH Key to Connection</DialogTitle>
+      <DialogTitle>{t('sshConnections.redeployDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <Alert severity="info">
-            This will deploy your current system SSH key to this connection. You'll need to provide
-            the password to authenticate.
-          </Alert>
+          <Alert severity="info">{t('sshConnections.redeployDialog.info')}</Alert>
           {selectedConnection && (
             <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
               <Typography variant="body2">
-                <strong>Host:</strong> {selectedConnection.host}
+                <strong>{t('sshConnections.deployDialog.host')}:</strong> {selectedConnection.host}
               </Typography>
               <Typography variant="body2">
-                <strong>Username:</strong> {selectedConnection.username}
+                <strong>{t('sshConnections.deployDialog.username')}:</strong>{' '}
+                {selectedConnection.username}
               </Typography>
               <Typography variant="body2">
-                <strong>Port:</strong> {selectedConnection.port}
+                <strong>{t('sshConnections.deployDialog.port')}:</strong> {selectedConnection.port}
               </Typography>
             </Box>
           )}
           <TextField
-            label="Password"
+            label={t('sshConnections.deployDialog.password')}
             type="password"
             fullWidth
             value={redeployPassword}
             onChange={(e) => setRedeployPassword(e.target.value)}
-            placeholder="Enter SSH password"
-            helperText="Password is used to deploy the public key to authorized_keys"
+            placeholder={t('sshConnections.redeployDialog.passwordPlaceholder')}
+            helperText={t('sshConnections.redeployDialog.passwordHelper')}
             InputLabelProps={{ shrink: true }}
           />
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={close}>Cancel</Button>
+        <Button onClick={close}>{t('common.buttons.cancel')}</Button>
         <Button
           variant="contained"
           onClick={onConfirmRedeploy}
           disabled={pending || !redeployPassword}
         >
-          {pending ? 'Deploying...' : 'Deploy Key'}
+          {pending
+            ? t('sshConnections.deployDialog.deploying')
+            : t('sshConnections.deployDialog.deploy')}
         </Button>
       </DialogActions>
     </Dialog>

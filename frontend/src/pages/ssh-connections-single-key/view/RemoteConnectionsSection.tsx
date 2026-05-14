@@ -40,11 +40,11 @@ export function RemoteConnectionsSection({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box>
             <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
-              Remote Connections
+              {t('sshConnections.remoteConnections.title')}
             </Typography>
             {connections.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
-                {connections.length} machine{connections.length !== 1 ? 's' : ''} configured
+                {t('sshConnections.remoteConnections.configured', { count: connections.length })}
               </Typography>
             )}
           </Box>
@@ -64,8 +64,9 @@ export function RemoteConnectionsSection({
             </Tooltip>
           )}
         </Box>
-        <Tooltip title="Refresh connections" arrow>
+        <Tooltip title={t('sshConnections.remoteConnections.refresh')} arrow>
           <IconButton
+            aria-label={t('sshConnections.remoteConnections.refresh')}
             size="small"
             onClick={() => onRefreshConnections()}
             sx={{
@@ -115,12 +116,12 @@ export function RemoteConnectionsSection({
             <Wifi size={22} />
           </Box>
           <Typography variant="body1" fontWeight={600} sx={{ mb: 0.5 }}>
-            No remote machines yet
+            {t('sshConnections.remoteConnections.emptyTitle')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.82rem' }}>
             {keyExists
-              ? 'Deploy your SSH key to a remote server to get started.'
-              : 'Generate or import an SSH key first, then deploy it to remote servers.'}
+              ? t('sshConnections.remoteConnections.emptyWithKey')
+              : t('sshConnections.remoteConnections.emptyWithoutKey')}
           </Typography>
         </Box>
       ) : (
