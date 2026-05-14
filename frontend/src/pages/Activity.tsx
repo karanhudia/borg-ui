@@ -23,6 +23,9 @@ interface ActivityItem {
   triggered_by?: string // 'manual' or 'schedule'
   schedule_id?: number | null
   schedule_name?: string | null // Schedule name if triggered by schedule
+  backup_plan_id?: number | null
+  backup_plan_run_id?: number | null
+  backup_plan_name?: string | null
   has_logs?: boolean
 }
 
@@ -121,6 +124,9 @@ const Activity: React.FC = () => {
           <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
           <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
           <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
+          <MenuItem value="script_execution">
+            {t('activity.filters.types.scriptExecution')}
+          </MenuItem>
         </Select>
 
         <Select

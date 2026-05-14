@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { DialogTitle, DialogContent, DialogActions, Box, Button, Typography } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import { DialogActions, Box, Button } from '@mui/material'
 import { FileText, Clock, Code, Wrench, CheckCircle } from 'lucide-react'
-import { WizardStepIndicator } from './wizard'
+import { WizardDialog } from './wizard'
 import {
   WizardStepBasicInfo,
   WizardStepScheduleConfig,
@@ -378,23 +377,14 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
   }
 
   return (
-    <ResponsiveDialog
+    <WizardDialog
       open={open}
       onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 3,
-          overflow: 'hidden',
-          backdropFilter: 'blur(10px)',
-          backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05))',
-          boxShadow: (theme) =>
-            theme.palette.mode === 'dark'
-              ? '0 24px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1)'
-              : '0 24px 48px rgba(0,0,0,0.1)',
-        },
-      }}
+      title={mode === 'create' ? t('scheduleWizard.titleCreate') : t('scheduleWizard.titleEdit')}
+      steps={steps}
+      currentStep={activeStep}
+      onStepClick={setActiveStep}
+      stepContentSx={{ p: { xs: 1, sm: 2.5 } }}
       footer={
         <DialogActions sx={{ px: { xs: 1, sm: 3 }, pb: { xs: 1, sm: 2 } }}>
           <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
@@ -426,29 +416,8 @@ const ScheduleWizard: React.FC<ScheduleWizardProps> = ({
         </DialogActions>
       }
     >
-      <DialogTitle sx={{ pt: 3, pb: 1 }}>
-        <Typography variant="h5" component="div" fontWeight={700}>
-          {mode === 'create' ? t('scheduleWizard.titleCreate') : t('scheduleWizard.titleEdit')}
-        </Typography>
-      </DialogTitle>
-      <DialogContent sx={{ pb: 1 }}>
-        <Box sx={{ mt: 1.5 }}>
-          {/* Step Indicator */}
-          <WizardStepIndicator steps={steps} currentStep={activeStep} onStepClick={setActiveStep} />
-
-          {/* Step Content - natural height on mobile, fixed on desktop */}
-          <Box
-            sx={{
-              minHeight: { xs: 'auto', md: 450 },
-              overflow: 'auto',
-              p: { xs: 1, sm: 2.5 },
-            }}
-          >
-            {renderStepContent()}
-          </Box>
-        </Box>
-      </DialogContent>
-    </ResponsiveDialog>
+      {renderStepContent()}
+    </WizardDialog>
   )
 }
 

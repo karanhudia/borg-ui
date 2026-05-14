@@ -19,6 +19,7 @@ interface MultiRepositorySelectorProps {
   allowReorder?: boolean
   error?: boolean
   filterMode?: 'observe' | null // Exclude repositories with this mode
+  getOptionDisabled?: (repo: Repository) => boolean
 }
 
 /**
@@ -41,6 +42,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
   allowReorder = false,
   error = false,
   filterMode = null,
+  getOptionDisabled,
 }) => {
   const { t } = useTranslation()
   // Track whether user has interacted with the field
@@ -94,6 +96,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
           onChange(uniqueIds)
         }}
         getOptionLabel={(option) => option.name}
+        getOptionDisabled={getOptionDisabled}
         isOptionEqualToValue={(option, value) => option.id === value.id}
         renderOption={(props, option) => (
           <Box component="li" {...props} sx={{ py: 0.5 }}>

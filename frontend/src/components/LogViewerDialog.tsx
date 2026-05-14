@@ -134,6 +134,8 @@ function getTypeLabel(type: string, t: (key: string) => string): string {
       return t('logViewer.typePrune')
     case 'package':
       return t('logViewer.typePackage')
+    case 'script_execution':
+      return t('logViewer.typeScript')
     default:
       return type.charAt(0).toUpperCase() + type.slice(1)
   }

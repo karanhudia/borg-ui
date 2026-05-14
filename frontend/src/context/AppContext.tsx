@@ -24,6 +24,7 @@ interface TabEnablement {
   sshKeys: boolean
   connections: boolean
   repositories: boolean
+  backupPlans: boolean
   backups: boolean
   archives: boolean
   restore: boolean
@@ -135,6 +136,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sshKeys: true,
         connections: true,
         repositories: true,
+        backupPlans: true,
         backups: true,
         archives: true,
         restore: true,
@@ -149,6 +151,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       sshKeys: true, // Always accessible
       connections: true, // Always accessible - needed to generate SSH keys
       repositories: true, // Always accessible - local repositories don't need SSH keys
+      backupPlans: true, // Always accessible - page can create/select repositories inline
       backups: appState.hasRepositories, // Only requires repositories (can be local)
       archives: appState.hasRepositories, // Only requires repositories
       restore: appState.hasRepositories, // Enable if repository exists (will show empty state if no archives)

@@ -108,6 +108,7 @@
       "dashboard": "Dashboard",
       "activity": "Aktivität",
       "remoteMachines": "Remote-Maschinen",
+      "backupPlans": "Backup-Pläne",
       "repositories": "Repositories",
       "backup": "Manuelles Backup",
       "archives": "Archive",
@@ -222,6 +223,9 @@
       "passed": "bestanden",
       "failed": "fehlgeschlagen"
     },
+    "upcomingBackups": {
+      "title": "Anstehende Backups"
+    },
     "scheduleBadge": {
       "noSchedule": "Kein automatischer Zeitplan",
       "manual": "manuell",
@@ -256,6 +260,7 @@
       "stats": {
         "lastBackup": "Letztes Backup",
         "schedules": "Zeitpläne",
+        "automations": "Automatisierungen",
         "storage": "Speicher"
       }
     },
@@ -293,6 +298,25 @@
   "backup": {
     "title": "Sicherungsvorgänge",
     "subtitle": "Verwalte und überwache deine Sicherungsaufgaben",
+    "tabs": {
+      "ariaLabel": "Art des Sicherungsvorgangs",
+      "backupPlans": "Backup-Pläne",
+      "legacyBackup": "Legacy-Sicherung"
+    },
+    "planRun": {
+      "title": "Backup-Plan ausführen",
+      "description": "Backup-Pläne enthalten Quellpfade, Sicherungseinstellungen, Repositories und Zeitplan.",
+      "selectLabel": "Backup-Plan",
+      "createAction": "Backup-Plan erstellen",
+      "empty": "Erstelle einen Backup-Plan, bevor du neue Sicherungen von dieser Seite startest.",
+      "run": "Backup-Plan ausführen",
+      "starting": "Startet...",
+      "toasts": {
+        "started": "Backup-Plan gestartet",
+        "startFailed": "Backup-Plan konnte nicht gestartet werden",
+        "selectPlan": "Bitte wähle einen Backup-Plan aus"
+      }
+    },
     "manualBackup": {
       "title": "Manuelle Sicherung",
       "subtitle": "Wähle ein Repository und starte eine Sicherungsaufgabe",
@@ -307,6 +331,10 @@
         "title": "Keine Repositories gefunden",
         "subtitle": "Erstelle ein Repository auf der Repositories-Seite, bevor du eine Sicherung startest"
       }
+    },
+    "legacyManual": {
+      "notice": "Manuelle Repository-Sicherung ist nur für Legacy-Repositories verfügbar, die noch Quellpfade enthalten. Neue Sicherungen sollten über Backup-Pläne gestartet werden.",
+      "empty": "Keine Legacy-Repositories mit Quellpfaden für direkte manuelle Sicherung verfügbar."
     },
     "commandPreview": "Befehlsvorschau",
     "runningJobs": {
@@ -404,6 +432,8 @@
     "title": "Zeitplan",
     "subtitle": "Verwalte automatische Sicherungen und Repository-Überprüfungen",
     "createBackup": "Sicherungszeitplan erstellen",
+    "createBackupPlan": "Backup-Plan erstellen",
+    "createSchedule": "Zeitplan erstellen",
     "addCheck": "Überprüfungszeitplan hinzufügen",
     "addRestoreCheck": "Restore-Prüfung hinzufügen",
     "tabs": {
@@ -412,6 +442,11 @@
       "restoreChecks": "Restore-Prüfungen"
     },
     "noRepositories": "Du musst mindestens ein Repository erstellen, bevor du Sicherungen planst.",
+    "backupPlansPrimaryAction": "Backup-Pläne",
+    "backupPlansPrimaryNotice": "Backup-Pläne sind der primäre Ort für neue Sicherungszeitpläne. Dieser Tab hält bestehende Repository-Zeitpläne für Migration und Legacy-Betrieb verfügbar.",
+    "legacyBackupSchedulesTitle": "Legacy-Sicherungszeitpläne",
+    "legacyBackupSchedulesDescription": "Bestehende Repository-basierte Zeitpläne laufen hier weiter. Neue geplante Sicherungen sollten als Backup-Pläne erstellt werden.",
+    "confirmRunNow": "\"{{name}}\" jetzt ausführen?",
     "maintenance": {
       "pruning": "Archive werden bereinigt...",
       "pruneCompleted": "Bereinigung abgeschlossen",
@@ -495,9 +530,280 @@
       "backupCancelFailed": "Sicherung konnte nicht abgebrochen werden"
     }
   },
+  "backupPlans": {
+    "title": "Backup-Pläne",
+    "subtitle": "Definiere Quellen, Einstellungen, Zeitpläne und die Repositories, in die jede Sicherung schreibt.",
+    "loading": "Backup-Pläne werden geladen...",
+    "runTooltipPro": "Dieser Plan verwendet mehrere Repositories oder parallele Ausführung. Bearbeite ihn oder upgrade auf Pro, um ihn auszuführen.",
+    "empty": {
+      "title": "Noch keine Backup-Pläne",
+      "description": "Erstelle einen Plan, um Quellen, Einstellungen, Zeitplan und Repositories zu verbinden."
+    },
+    "search": "Backup-Pläne suchen...",
+    "sort": {
+      "nameAZ": "Name A → Z",
+      "nameZA": "Name Z → A",
+      "lastRunRecent": "Letzter Lauf (neueste)",
+      "lastRunOldest": "Letzter Lauf (älteste)",
+      "nextRunSoonest": "Nächster Lauf (baldeste)",
+      "createdNewest": "Erstellt (neueste)",
+      "createdOldest": "Erstellt (älteste)"
+    },
+    "group": {
+      "none": "Keine Gruppierung",
+      "status": "Nach Status",
+      "schedule": "Nach Zeitplan",
+      "source": "Nach Quelle"
+    },
+    "groups": {
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "scheduled": "Geplant",
+      "manual": "Nur manuell",
+      "localSource": "Lokale Quelle",
+      "remoteSource": "Remote-Quelle"
+    },
+    "noMatch": {
+      "title": "Keine passenden Backup-Pläne",
+      "message": "Keine Backup-Pläne entsprechen \"{{search}}\".",
+      "fallback": "Keine Backup-Pläne entsprechen den aktuellen Filtern.",
+      "clearSearch": "Suche löschen"
+    },
+    "actions": {
+      "create": "Backup-Plan erstellen",
+      "edit": "Bearbeiten",
+      "runs": "Läufe",
+      "run": "Ausführen",
+      "running": "Läuft",
+      "cancel": "Abbrechen",
+      "delete": "Löschen",
+      "deleteConfirm": "Backup-Plan \"{{name}}\" löschen?"
+    },
+    "status": {
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "clickToEnable": "Zum Aktivieren klicken",
+      "clickToDisable": "Zum Deaktivieren klicken",
+      "created": "Erstellt",
+      "pro": "Pro",
+      "proRequired": "Pro erforderlich",
+      "repositoryCount_one": "{{count}} Repository",
+      "repositoryCount_other": "{{count}} Repositories",
+      "sourcePathCount_one": "{{count}} Quellpfad",
+      "sourcePathCount_other": "{{count}} Quellpfade",
+      "localSource": "Lokale Quelle",
+      "remoteSource": "Remote-Quelle",
+      "manualOnly": "Nur manuell",
+      "nextRunBadge": "Nächster Lauf {{when}}",
+      "scheduledBadge": "Geplant",
+      "nextRunTitle": "Nächster Lauf: {{date}} ({{timezone}})",
+      "scheduleTitle": "{{schedule}} ({{timezone}})",
+      "parallel": "Parallel",
+      "series": "Nacheinander",
+      "nextRun": "Nächster Lauf: {{date}}",
+      "repositoryFallback": "Repository",
+      "moreRepositories": "+{{count}} weitere"
+    },
+    "statuses": {
+      "unknown": "Unbekannt",
+      "pending": "ausstehend",
+      "running": "läuft",
+      "completed": "abgeschlossen",
+      "completed_with_warnings": "mit Warnungen abgeschlossen",
+      "partial": "teilweise abgeschlossen",
+      "failed": "fehlgeschlagen",
+      "cancelled": "abgebrochen",
+      "skipped": "übersprungen"
+    },
+    "toasts": {
+      "created": "Backup-Plan erstellt",
+      "createFailed": "Backup-Plan konnte nicht erstellt werden",
+      "updated": "Backup-Plan aktualisiert",
+      "updateFailed": "Backup-Plan konnte nicht aktualisiert werden",
+      "deleted": "Backup-Plan gelöscht",
+      "deleteFailed": "Backup-Plan konnte nicht gelöscht werden",
+      "toggled": "Backup-Plan-Status aktualisiert",
+      "toggleFailed": "Backup-Plan-Status konnte nicht aktualisiert werden",
+      "started": "Backup-Plan gestartet",
+      "startFailed": "Backup-Plan konnte nicht gestartet werden",
+      "cancelled": "Backup-Plan-Lauf abgebrochen",
+      "cancelFailed": "Backup-Plan-Lauf konnte nicht abgebrochen werden",
+      "repositoryCreated": "Repository erstellt",
+      "repositoryCreateFailed": "Repository konnte nicht erstellt werden",
+      "multiRepositoryRequiresPro": "Mehrere Repositories in einem Backup-Plan erfordern Pro",
+      "selectSourceConnection": "Wähle einen Remote-Client aus, bevor du Quellpfade durchsuchst"
+    },
+    "wizard": {
+      "createTitle": "Backup-Plan erstellen",
+      "editTitle": "Backup-Plan bearbeiten",
+      "createPlan": "Plan erstellen",
+      "updatePlan": "Plan aktualisieren",
+      "steps": {
+        "sources": "Quellen",
+        "repositories": "Repositories",
+        "settings": "Einstellungen",
+        "scripts": "Skripte",
+        "schedule": "Zeitplan",
+        "review": "Überprüfung"
+      },
+      "fields": {
+        "planName": "Planname",
+        "description": "Beschreibung",
+        "repositories": "Repositories",
+        "repositoryName": "Repository-Name",
+        "borgVersion": "Borg-Version",
+        "repositoryPath": "Repository-Pfad",
+        "archiveNameTemplate": "Archivnamen-Vorlage",
+        "compression": "Komprimierung",
+        "extraBorgFlags": "Benutzerdefinierte Flags (Optional)",
+        "uploadSpeedLimit": "Upload-Geschwindigkeitslimit",
+        "runRepositories": "Repositories ausführen",
+        "maxParallelRepositories": "Max. parallele Repositories",
+        "cronExpression": "Cron-Ausdruck",
+        "timezone": "Zeitzone",
+        "checkMaxDuration": "Max. Prüfdauer"
+      },
+      "repositories": {
+        "noStorageTargets": "Erstelle zuerst ein Speicherziel und hänge es dann an diesen Backup-Plan an.",
+        "helperPro": "Wähle ein oder mehrere Repositories. Die Ausführungsreihenfolge wird im Serienmodus verwendet.",
+        "helperCommunity": "Community-Pläne können ein Repository verwenden. Mehrere Repositories erfordern Pro.",
+        "placeholder": "Repositories auswählen...",
+        "addStorageTarget": "Speicherziel hinzufügen",
+        "basicDescription": "Die Basiseinrichtung umfasst die Borg-Grundlagen: Name, Version, Pfad und Verschlüsselung.",
+        "basic": "Basic",
+        "advancedSetup": "Erweiterte Einrichtung",
+        "advancedNotice": "Nutze die erweiterte Einrichtung für SSH-Repositories, Skripte oder Importoptionen.",
+        "pathHelper": "Lokaler Pfad für dieses Speicherziel. Nutze die erweiterte Einrichtung für Remote-Pfade.",
+        "browsePath": "Repository-Pfad durchsuchen",
+        "createAndSelect": "Erstellen und auswählen"
+      },
+      "settings": {
+        "archiveNameHelper": "Unterstützt {plan_name}, {repo_name}, {now}, {date}, {time} und {timestamp}.",
+        "extraBorgFlagsHelper": "Benutzerdefinierte Befehlszeilen-Flags für borg create (z.B. --stats, --progress, --list). Wird auf jeden Repository-Lauf in diesem Plan angewendet.",
+        "uploadSpeedHelper": "MB/s. Leer bedeutet unbegrenzt.",
+        "runRepositoryScripts": "Repository-Skripte ausführen",
+        "runRepositoryScriptsHelper": "Verwendet die konfigurierten Pre/Post-Backup-Skripte jedes Repositorys während der Planausführung.",
+        "seriesLabel": "Nacheinander",
+        "parallelLabel": "Gleichzeitig",
+        "parallelTooltip": "Mehrere Repositories gleichzeitig ausführen.",
+        "parallelRequiresPro": "Parallele Repository-Ausführung erfordert Pro."
+      },
+      "scripts": {
+        "title": "Plan-Skripte",
+        "description": "Skripte einmal für den gesamten Backup-Plan ausführen, vor der ersten Repository-Kopie und nachdem alle Repository-Arbeiten abgeschlossen sind.",
+        "runRepositoryScripts": "Auch Repository-Skripte ausführen",
+        "runRepositoryScriptsHelper": "Verwendet die konfigurierten Pre/Post-Backup-Skripte jedes Repositorys während seiner eigenen Kopie.",
+        "loading": "Skripte werden geladen..."
+      },
+      "schedule": {
+        "title": "Zeitplan",
+        "description": "Lege fest, wann dieser Plan automatisch ausgeführt wird. Deaktivieren, um ihn nur auf Abruf zu starten.",
+        "enabled": "Diesen Plan nach Zeitplan ausführen",
+        "cronHelper": "Beispiel: 0 21 * * * läuft täglich um 21:00.",
+        "runPruneAfter": "Prune nach erfolgreichen Repository-Sicherungen ausführen",
+        "runCompactAfter": "Compact nach Prune ausführen"
+      },
+      "maintenance": {
+        "title": "Wartung",
+        "description": "Repository-Wartung nach erfolgreichen Sicherungen in diesem Plan ausführen.",
+        "runPruneAfter": "Prune nach erfolgreichen Repository-Sicherungen ausführen",
+        "runCompactAfter": "Compact nach der Backup-Wartung ausführen",
+        "runCheckAfter": "Check nach erfolgreichen Repository-Sicherungen ausführen",
+        "checkMaxDurationHelper": "Sekunden. 0 bedeutet unbegrenzt."
+      },
+      "review": {
+        "plan": "Plan",
+        "sourceLocation": "Quellort",
+        "sourceConnection": "Remote-Client",
+        "localSource": "Borg UI Server",
+        "remoteSource": "Remote-Client",
+        "connectionFallback": "Verbindung #{{id}}",
+        "notSet": "Nicht gesetzt",
+        "sources": "Quellen",
+        "repositories": "Repositories",
+        "compression": "Komprimierung",
+        "customFlags": "Benutzerdefinierte Flags",
+        "planPreScript": "Plan-Pre-Skript",
+        "planPostScript": "Plan-Post-Skript",
+        "noScript": "Keines",
+        "repositoryScripts": "Repository-Skripte",
+        "runMode": "Ausführungsmodus",
+        "schedule": "Zeitplan",
+        "prune": "Prune",
+        "retention": "Aufbewahrung",
+        "retentionValue": "H {{hourly}} / T {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / J {{yearly}}",
+        "compact": "Compact",
+        "check": "Check",
+        "checkDuration": "{{seconds}} Sekunden",
+        "pathCount_one": "{{count}} Pfad",
+        "pathCount_other": "{{count}} Pfade",
+        "selectedCount_one": "{{count}} ausgewählt",
+        "selectedCount_other": "{{count}} ausgewählt",
+        "manualOnlyHint": "Läuft nur bei manueller Auslösung."
+      },
+      "fileExplorer": {
+        "sourceTitle": "Quellpfade auswählen",
+        "excludeTitle": "Auszuschließende Pfade auswählen",
+        "repositoryTitle": "Repository-Pfad auswählen"
+      }
+    },
+    "runsDialog": {
+      "title": "{{name}} Läufe",
+      "empty": {
+        "title": "Noch keine Läufe",
+        "description": "Führe diesen Backup-Plan aus, um Repository-Ergebnisse und Protokolle hier zu sehen."
+      },
+      "runNumber": "Lauf #{{id}}",
+      "jobNumber": "Aufgabe #{{id}}",
+      "completedRepositories": "{{completed}}/{{total}} Repositories",
+      "selectRun": "Wähle einen Lauf aus, um seine Repository-Ergebnisse zu prüfen.",
+      "trigger": "Auslöser",
+      "started": "Gestartet",
+      "completed": "Abgeschlossen",
+      "maintenanceStatus": "Wartung: {{status}}",
+      "archiveName": "Archiv: {{name}}",
+      "archivePending": "Archiv ausstehend",
+      "planScripts": "Plan-Skripte",
+      "planScript": "Plan-Skript",
+      "prePlanScript": "Vor-Plan-Skript",
+      "postPlanScript": "Nach-Plan-Skript",
+      "exitCode": "Exit-Code {{code}}",
+      "scriptDuration": "{{seconds}}s",
+      "viewLogs": "Protokolle anzeigen"
+    },
+    "runsPanel": {
+      "title": "Backup-Plan-Läufe",
+      "subtitle": "Verfolge aktive und aktuelle Plan-Ausführungen über Repositories hinweg.",
+      "activeTitle": "Laufende Backup-Plan-Läufe",
+      "activeSubtitle": "Plan-Ausführungen, die gerade laufen.",
+      "recentTitle": "Aktuelle Backup-Plan-Läufe",
+      "recentSubtitle": "Abgeschlossene, fehlgeschlagene oder abgebrochene Plan-Ausführungen.",
+      "active": "Aktive Läufe",
+      "recent": "Aktuelle Läufe",
+      "activeCount_one": "{{count}} aktiv",
+      "activeCount_other": "{{count}} aktiv",
+      "empty": "Noch keine Backup-Plan-Läufe.",
+      "emptyActive": "Keine Backup-Plan-Läufe laufen gerade.",
+      "emptyRecent": "Keine aktuellen Backup-Plan-Läufe.",
+      "planFallback": "Backup-Plan #{{id}}",
+      "unknownPlan": "Backup-Plan",
+      "duration": "Dauer",
+      "columns": {
+        "run": "Lauf",
+        "plan": "Plan / Repository",
+        "status": "Status",
+        "repositories": "Repositories",
+        "started": "Gestartet",
+        "duration": "Dauer"
+      },
+      "repositoryProgress": "{{completed}}/{{total}} Repositories abgeschlossen",
+      "cancelRun": "Lauf abbrechen",
+      "noRepositories": "Noch keine Repository-Läufe aufgezeichnet."
+    }
+  },
   "repositories": {
     "title": "Repository-Verwaltung",
-    "subtitle": "Ein Repository ist der Ort, an dem deine gesicherten Daten gespeichert werden. Die Dateien aus deinen konfigurierten Quellen werden hier gesichert.",
+    "subtitle": "Repositories sind Borg-Speicherziele. Quellen und Zeitpläne werden in Backup-Plänen definiert.",
     "createRepository": "Repository erstellen",
     "importExisting": "Vorhandenes importieren",
     "search": "Repositories suchen...",
@@ -553,6 +859,18 @@
       "prune": "Bereinigen",
       "compact": "Komprimieren"
     },
+    "createPlanDialog": {
+      "title": "Backup-Plan erstellen",
+      "description": "Erstelle einen Backup-Plan aus \"{{name}}\" mit den aktuellen Quellen, Ausschlüssen, Komprimierung, erweiterten Flags und Zeitplaneinstellungen.",
+      "planName": "Planname",
+      "scheduleNotice": "Der Zeitplan \"{{schedule}}\" wird in den neuen Plan kopiert.",
+      "copySchedule": "Zeitplan in den Backup-Plan kopieren",
+      "moveSourceSettings": "Quelleinstellungen in den Backup-Plan verschieben",
+      "disableSchedule": "Bestehenden Repository-Zeitplan nach dem Erstellen des Plans pausieren",
+      "sourceRequired": "Für dieses Repository sind keine Quellpfade konfiguriert.",
+      "confirm": "Backup-Plan erstellen",
+      "creating": "Wird erstellt..."
+    },
     "toasts": {
       "deleted": "Repository erfolgreich gelöscht",
       "deleteFailed": "Repository konnte nicht gelöscht werden",
@@ -565,6 +883,9 @@
       "pruneFailed": "Repository konnte nicht bereinigt werden",
       "updated": "Repository erfolgreich aktualisiert",
       "created": "Repository erfolgreich erstellt",
+      "backupPlanCreated": "Backup-Plan erstellt",
+      "backupPlanCreateFailed": "Backup-Plan konnte nicht erstellt werden",
+      "sharedScheduleKept": "Der ursprüngliche Zeitplan wird mit anderen Repositories geteilt und bleibt aktiviert.",
       "importedWithKeyfile": "Repository importiert und Schlüsseldatei erfolgreich gespeichert",
       "imported": "Repository erfolgreich importiert",
       "wizardFailed": "Repository konnte nicht {{mode}} werden"
@@ -585,7 +906,8 @@
         "check": "Überprüfung",
         "compact": "Komprimierung",
         "prune": "Bereinigung",
-        "package": "Paket"
+        "package": "Paket",
+        "scriptExecution": "Skript"
       },
       "statuses": {
         "completed": "Abgeschlossen",
@@ -1140,8 +1462,17 @@
       "prune": "Bereinigen",
       "compact": "Komprimieren",
       "backupNow": "Jetzt sichern",
+      "legacyBackup": "Legacy-Sicherung",
+      "legacyBackupTooltip": "Führe die alte repositorybasierte Sicherung mit den Legacy-Quellpfaden dieses Repositorys aus",
+      "backupPlanRequired": "Erstelle einen Backup-Plan, um Quellen zu definieren",
       "viewArchives": "Archive anzeigen",
-      "delete": "Löschen"
+      "delete": "Löschen",
+      "createBackupPlan": "Backup-Plan erstellen",
+      "createBackupPlanSourceRequired": "Quellpfade hinzufügen, bevor ein Backup-Plan erstellt wird"
+    },
+    "legacySources": {
+      "title": "Legacy-Quelleinstellungen",
+      "description": "Verschiebe Quellen und Zeitplan dieses Repositorys in einen Backup-Plan."
     },
     "edit": "Bearbeiten",
     "lastCheck": "Letzte Überprüfung",
@@ -1384,9 +1715,11 @@
       "check": "Repository-Überprüfung",
       "compact": "Komprimieren",
       "prune": "Bereinigen",
-      "package": "Paketinstallation"
+      "package": "Paketinstallation",
+      "scriptExecution": "Skript"
     },
     "scheduledById": "Geplant (ID: {{id}})",
+    "backupPlanByName": "Backup-Plan: {{name}}",
     "manual": "Manuell",
     "toasts": {
       "authRequired": "Authentifizierung erforderlich",
@@ -2595,7 +2928,11 @@
   },
   "upcomingJobs": {
     "title": "Bevorstehende Aufgaben (Nächste 24 Stunden)",
-    "repositories": "{{count}} Repositories"
+    "repositories": "{{count}} Repositories",
+    "types": {
+      "plan": "Plan",
+      "schedule": "Zeitplan"
+    }
   },
   "scheduledJobsTableSection": {
     "title": "Alle geplanten Aufgaben",
@@ -2826,6 +3163,7 @@
       "location": "Standort",
       "source": "Quelle",
       "security": "Sicherheit",
+      "advanced": "Erweitert",
       "config": "Konfiguration",
       "review": "Überprüfung"
     },
@@ -3064,7 +3402,8 @@
     "typeCheck": "Überprüfung",
     "typeCompact": "Komprimieren",
     "typePrune": "Bereinigen",
-    "typePackage": "Paket"
+    "typePackage": "Paket",
+    "typeScript": "Skript"
   },
   "mounts": {
     "columns": {

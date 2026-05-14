@@ -108,6 +108,7 @@
       "dashboard": "Panel",
       "activity": "Actividad",
       "remoteMachines": "Máquinas remotas",
+      "backupPlans": "Planes de copia",
       "repositories": "Repositorios",
       "backup": "Respaldo manual",
       "archives": "Archivos",
@@ -222,6 +223,9 @@
       "passed": "correctos",
       "failed": "fallidos"
     },
+    "upcomingBackups": {
+      "title": "Copias próximas"
+    },
     "scheduleBadge": {
       "noSchedule": "Sin programación automática",
       "manual": "manual",
@@ -256,6 +260,7 @@
       "stats": {
         "lastBackup": "Último backup",
         "schedules": "Programaciones",
+        "automations": "Automatizaciones",
         "storage": "Almacenamiento"
       }
     },
@@ -293,6 +298,25 @@
   "backup": {
     "title": "Operaciones de copia de seguridad",
     "subtitle": "Gestiona y monitoriza tus trabajos de copia de seguridad",
+    "tabs": {
+      "ariaLabel": "Tipo de operación de copia de seguridad",
+      "backupPlans": "Planes de copia",
+      "legacyBackup": "Copia heredada"
+    },
+    "planRun": {
+      "title": "Ejecutar un plan de copia",
+      "description": "Los planes de copia contienen las rutas de origen, la configuración, los repositorios y la programación.",
+      "selectLabel": "Plan de copia",
+      "createAction": "Crear plan de copia",
+      "empty": "Crea un plan de copia antes de ejecutar nuevas copias desde esta página.",
+      "run": "Ejecutar plan de copia",
+      "starting": "Iniciando...",
+      "toasts": {
+        "started": "Plan de copia iniciado",
+        "startFailed": "No se pudo iniciar el plan de copia",
+        "selectPlan": "Selecciona un plan de copia"
+      }
+    },
     "manualBackup": {
       "title": "Copia de seguridad manual",
       "subtitle": "Selecciona un repositorio e inicia un trabajo de copia de seguridad",
@@ -307,6 +331,10 @@
         "title": "No se encontraron repositorios",
         "subtitle": "Crea un repositorio en la página de Repositorios antes de iniciar una copia de seguridad"
       }
+    },
+    "legacyManual": {
+      "notice": "La copia manual de repositorio solo está disponible para repositorios heredados que aún tienen rutas de origen. Las nuevas copias deberían ejecutarse mediante planes de copia.",
+      "empty": "No hay repositorios heredados con rutas de origen disponibles para copia manual directa."
     },
     "commandPreview": "Vista previa del comando",
     "runningJobs": {
@@ -404,6 +432,8 @@
     "title": "Programación",
     "subtitle": "Gestiona copias de seguridad automatizadas y comprobaciones de repositorio",
     "createBackup": "Crear programación de copia de seguridad",
+    "createBackupPlan": "Crear plan de copia",
+    "createSchedule": "Crear programación",
     "addCheck": "Agregar comprobación programada",
     "addRestoreCheck": "Agregar comprobación de restauración",
     "tabs": {
@@ -412,6 +442,11 @@
       "restoreChecks": "Comprobaciones de restauración"
     },
     "noRepositories": "Necesitas crear al menos un repositorio antes de programar copias de seguridad.",
+    "backupPlansPrimaryAction": "Planes de copia",
+    "backupPlansPrimaryNotice": "Los planes de copia son el lugar principal para nuevas programaciones de copia. Esta pestaña mantiene disponibles las programaciones de repositorio existentes para migración y operación heredada.",
+    "legacyBackupSchedulesTitle": "Programaciones de copia heredadas",
+    "legacyBackupSchedulesDescription": "Las programaciones existentes basadas en repositorio siguen ejecutándose aquí. Las nuevas copias programadas deberían crearse como planes de copia.",
+    "confirmRunNow": "¿Ejecutar \"{{name}}\" ahora?",
     "maintenance": {
       "pruning": "Podando archivos...",
       "pruneCompleted": "Poda completada",
@@ -495,9 +530,280 @@
       "backupCancelFailed": "Error al cancelar la copia de seguridad"
     }
   },
+  "backupPlans": {
+    "title": "Planes de copia",
+    "subtitle": "Define orígenes, ajustes, programaciones y los repositorios donde escribe cada copia.",
+    "loading": "Cargando planes de copia...",
+    "runTooltipPro": "Este plan usa varios repositorios o ejecución en paralelo. Edítalo o actualiza a Pro para ejecutarlo.",
+    "empty": {
+      "title": "Aún no hay planes de copia",
+      "description": "Crea un plan para conectar orígenes, ajustes, programación y repositorios."
+    },
+    "search": "Buscar planes de copia...",
+    "sort": {
+      "nameAZ": "Nombre A → Z",
+      "nameZA": "Nombre Z → A",
+      "lastRunRecent": "Última ejecución (más reciente)",
+      "lastRunOldest": "Última ejecución (más antigua)",
+      "nextRunSoonest": "Próxima ejecución (más cercana)",
+      "createdNewest": "Creado (más reciente)",
+      "createdOldest": "Creado (más antiguo)"
+    },
+    "group": {
+      "none": "Sin agrupación",
+      "status": "Por estado",
+      "schedule": "Por programación",
+      "source": "Por origen"
+    },
+    "groups": {
+      "enabled": "Activados",
+      "disabled": "Desactivados",
+      "scheduled": "Programados",
+      "manual": "Solo manual",
+      "localSource": "Origen local",
+      "remoteSource": "Origen remoto"
+    },
+    "noMatch": {
+      "title": "No hay planes de copia coincidentes",
+      "message": "Ningún plan de copia coincide con \"{{search}}\".",
+      "fallback": "Ningún plan de copia coincide con los filtros actuales.",
+      "clearSearch": "Borrar búsqueda"
+    },
+    "actions": {
+      "create": "Crear plan de copia",
+      "edit": "Editar",
+      "runs": "Ejecuciones",
+      "run": "Ejecutar",
+      "running": "Ejecutando",
+      "cancel": "Cancelar",
+      "delete": "Eliminar",
+      "deleteConfirm": "¿Eliminar el plan de copia \"{{name}}\"?"
+    },
+    "status": {
+      "enabled": "Activado",
+      "disabled": "Desactivado",
+      "clickToEnable": "Haz clic para activar",
+      "clickToDisable": "Haz clic para desactivar",
+      "created": "Creado",
+      "pro": "Pro",
+      "proRequired": "Pro requerido",
+      "repositoryCount_one": "{{count}} repositorio",
+      "repositoryCount_other": "{{count}} repositorios",
+      "sourcePathCount_one": "{{count}} ruta de origen",
+      "sourcePathCount_other": "{{count}} rutas de origen",
+      "localSource": "Origen local",
+      "remoteSource": "Origen remoto",
+      "manualOnly": "Solo manual",
+      "nextRunBadge": "Próxima {{when}}",
+      "scheduledBadge": "Programado",
+      "nextRunTitle": "Próxima ejecución: {{date}} ({{timezone}})",
+      "scheduleTitle": "{{schedule}} ({{timezone}})",
+      "parallel": "Paralelo",
+      "series": "Serie",
+      "nextRun": "Próxima ejecución: {{date}}",
+      "repositoryFallback": "Repositorio",
+      "moreRepositories": "+{{count}} más"
+    },
+    "statuses": {
+      "unknown": "Desconocido",
+      "pending": "pendiente",
+      "running": "en ejecución",
+      "completed": "completado",
+      "completed_with_warnings": "completado con advertencias",
+      "partial": "parcial",
+      "failed": "fallido",
+      "cancelled": "cancelado",
+      "skipped": "omitido"
+    },
+    "toasts": {
+      "created": "Plan de copia creado",
+      "createFailed": "No se pudo crear el plan de copia",
+      "updated": "Plan de copia actualizado",
+      "updateFailed": "No se pudo actualizar el plan de copia",
+      "deleted": "Plan de copia eliminado",
+      "deleteFailed": "No se pudo eliminar el plan de copia",
+      "toggled": "Estado del plan de copia actualizado",
+      "toggleFailed": "No se pudo actualizar el estado del plan de copia",
+      "started": "Plan de copia iniciado",
+      "startFailed": "No se pudo iniciar el plan de copia",
+      "cancelled": "Ejecución del plan cancelada",
+      "cancelFailed": "No se pudo cancelar la ejecución del plan",
+      "repositoryCreated": "Repositorio creado",
+      "repositoryCreateFailed": "No se pudo crear el repositorio",
+      "multiRepositoryRequiresPro": "Varios repositorios en un plan de copia requieren Pro",
+      "selectSourceConnection": "Selecciona un cliente remoto antes de explorar rutas de origen"
+    },
+    "wizard": {
+      "createTitle": "Crear plan de copia",
+      "editTitle": "Editar plan de copia",
+      "createPlan": "Crear plan",
+      "updatePlan": "Actualizar plan",
+      "steps": {
+        "sources": "Orígenes",
+        "repositories": "Repositorios",
+        "settings": "Ajustes",
+        "scripts": "Scripts",
+        "schedule": "Programación",
+        "review": "Revisión"
+      },
+      "fields": {
+        "planName": "Nombre del plan",
+        "description": "Descripción",
+        "repositories": "Repositorios",
+        "repositoryName": "Nombre del repositorio",
+        "borgVersion": "Versión de Borg",
+        "repositoryPath": "Ruta del repositorio",
+        "archiveNameTemplate": "Plantilla de nombre de archivo",
+        "compression": "Compresión",
+        "extraBorgFlags": "Indicadores personalizados (Opcional)",
+        "uploadSpeedLimit": "Límite de velocidad de subida",
+        "runRepositories": "Ejecutar repositorios",
+        "maxParallelRepositories": "Máx. repositorios en paralelo",
+        "cronExpression": "Expresión cron",
+        "timezone": "Zona horaria",
+        "checkMaxDuration": "Duración máxima de comprobación"
+      },
+      "repositories": {
+        "noStorageTargets": "Crea primero un destino de almacenamiento y luego adjúntalo a este plan de copia.",
+        "helperPro": "Selecciona uno o más repositorios. El orden de ejecución se usa en modo serie.",
+        "helperCommunity": "Los planes Community pueden usar un repositorio. Varios repositorios requieren Pro.",
+        "placeholder": "Selecciona repositorios...",
+        "addStorageTarget": "Agregar destino de almacenamiento",
+        "basicDescription": "La configuración básica cubre lo esencial de Borg: nombre, versión, ruta y cifrado.",
+        "basic": "Básico",
+        "advancedSetup": "Configuración avanzada",
+        "advancedNotice": "Usa la configuración avanzada para repositorios SSH, scripts u opciones de importación.",
+        "pathHelper": "Ruta local para este destino de almacenamiento. Usa la configuración avanzada para rutas remotas.",
+        "browsePath": "Explorar ruta del repositorio",
+        "createAndSelect": "Crear y seleccionar"
+      },
+      "settings": {
+        "archiveNameHelper": "Admite {plan_name}, {repo_name}, {now}, {date}, {time} y {timestamp}.",
+        "extraBorgFlagsHelper": "Indicadores de línea de comandos personalizados para borg create (ej., --stats, --progress, --list). Se aplica a cada ejecución de repositorio en este plan.",
+        "uploadSpeedHelper": "MB/s. Vacío significa sin límite.",
+        "runRepositoryScripts": "Ejecutar scripts del repositorio",
+        "runRepositoryScriptsHelper": "Usa los scripts pre/post copia configurados en cada repositorio durante la ejecución del plan.",
+        "seriesLabel": "Uno tras otro",
+        "parallelLabel": "Al mismo tiempo",
+        "parallelTooltip": "Ejecuta varios repositorios al mismo tiempo.",
+        "parallelRequiresPro": "La ejecución paralela de repositorios requiere Pro."
+      },
+      "scripts": {
+        "title": "Scripts del plan",
+        "description": "Ejecuta scripts una vez para todo el plan de copia, antes de la primera copia de repositorio y después de que termine todo el trabajo de repositorio.",
+        "runRepositoryScripts": "Ejecutar también scripts del repositorio",
+        "runRepositoryScriptsHelper": "Usa los scripts pre/post copia configurados en cada repositorio durante su propia copia.",
+        "loading": "Cargando scripts..."
+      },
+      "schedule": {
+        "title": "Programación",
+        "description": "Elige cuándo se debe ejecutar este plan automáticamente. Desactívalo para ejecutarlo solo bajo demanda.",
+        "enabled": "Ejecutar este plan según programación",
+        "cronHelper": "Ejemplo: 0 21 * * * se ejecuta a diario a las 21:00.",
+        "runPruneAfter": "Ejecutar prune tras copias correctas del repositorio",
+        "runCompactAfter": "Ejecutar compact tras prune"
+      },
+      "maintenance": {
+        "title": "Mantenimiento",
+        "description": "Ejecuta mantenimiento de repositorio después de copias correctas en este plan.",
+        "runPruneAfter": "Ejecutar prune tras copias correctas del repositorio",
+        "runCompactAfter": "Ejecutar compact tras el mantenimiento de copia",
+        "runCheckAfter": "Ejecutar check tras copias correctas del repositorio",
+        "checkMaxDurationHelper": "Segundos. Usa 0 para sin límite."
+      },
+      "review": {
+        "plan": "Plan",
+        "sourceLocation": "Ubicación del origen",
+        "sourceConnection": "Cliente remoto",
+        "localSource": "Servidor Borg UI",
+        "remoteSource": "Cliente remoto",
+        "connectionFallback": "Conexión #{{id}}",
+        "notSet": "Sin definir",
+        "sources": "Orígenes",
+        "repositories": "Repositorios",
+        "compression": "Compresión",
+        "customFlags": "Indicadores personalizados",
+        "planPreScript": "Script previo del plan",
+        "planPostScript": "Script posterior del plan",
+        "noScript": "Ninguno",
+        "repositoryScripts": "Scripts del repositorio",
+        "runMode": "Modo de ejecución",
+        "schedule": "Programación",
+        "prune": "Prune",
+        "retention": "Retención",
+        "retentionValue": "H {{hourly}} / D {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
+        "compact": "Compact",
+        "check": "Check",
+        "checkDuration": "{{seconds}} segundos",
+        "pathCount_one": "{{count}} ruta",
+        "pathCount_other": "{{count}} rutas",
+        "selectedCount_one": "{{count}} seleccionado",
+        "selectedCount_other": "{{count}} seleccionados",
+        "manualOnlyHint": "Solo se ejecuta cuando se dispara manualmente."
+      },
+      "fileExplorer": {
+        "sourceTitle": "Seleccionar rutas de origen",
+        "excludeTitle": "Seleccionar rutas para excluir",
+        "repositoryTitle": "Seleccionar ruta del repositorio"
+      }
+    },
+    "runsDialog": {
+      "title": "Ejecuciones de {{name}}",
+      "empty": {
+        "title": "Aún no hay ejecuciones",
+        "description": "Ejecuta este plan de copia para ver aquí resultados de repositorio y registros."
+      },
+      "runNumber": "Ejecución #{{id}}",
+      "jobNumber": "Trabajo #{{id}}",
+      "completedRepositories": "{{completed}}/{{total}} repositorios",
+      "selectRun": "Selecciona una ejecución para inspeccionar sus resultados de repositorio.",
+      "trigger": "Disparador",
+      "started": "Iniciado",
+      "completed": "Completado",
+      "maintenanceStatus": "Mantenimiento: {{status}}",
+      "archiveName": "Archivo: {{name}}",
+      "archivePending": "Archivo pendiente",
+      "planScripts": "Scripts del plan",
+      "planScript": "Script del plan",
+      "prePlanScript": "Script previo del plan",
+      "postPlanScript": "Script posterior del plan",
+      "exitCode": "Código de salida {{code}}",
+      "scriptDuration": "{{seconds}}s",
+      "viewLogs": "Ver registros"
+    },
+    "runsPanel": {
+      "title": "Ejecuciones de planes de copia",
+      "subtitle": "Sigue las ejecuciones activas y recientes del plan en todos los repositorios.",
+      "activeTitle": "Ejecuciones de planes de copia en curso",
+      "activeSubtitle": "Ejecuciones de planes actualmente en progreso.",
+      "recentTitle": "Ejecuciones recientes de planes de copia",
+      "recentSubtitle": "Ejecuciones de planes completadas, fallidas o canceladas.",
+      "active": "Ejecuciones activas",
+      "recent": "Ejecuciones recientes",
+      "activeCount_one": "{{count}} activa",
+      "activeCount_other": "{{count}} activas",
+      "empty": "Aún no hay ejecuciones de planes de copia.",
+      "emptyActive": "No hay ejecuciones de planes de copia en curso.",
+      "emptyRecent": "No hay ejecuciones recientes de planes de copia.",
+      "planFallback": "Plan de copia #{{id}}",
+      "unknownPlan": "Plan de copia",
+      "duration": "Duración",
+      "columns": {
+        "run": "Ejecución",
+        "plan": "Plan / repositorio",
+        "status": "Estado",
+        "repositories": "Repositorios",
+        "started": "Iniciado",
+        "duration": "Duración"
+      },
+      "repositoryProgress": "{{completed}}/{{total}} repositorios finalizados",
+      "cancelRun": "Cancelar ejecución",
+      "noRepositories": "Aún no se han registrado ejecuciones de repositorio."
+    }
+  },
   "repositories": {
     "title": "Gestión de repositorios",
-    "subtitle": "Un repositorio es donde se almacenarán tus datos de copia de seguridad. Los archivos de tus fuentes configuradas se respaldarán aquí.",
+    "subtitle": "Los repositorios son destinos de almacenamiento Borg. Define fuentes y programaciones en los planes de copia.",
     "createRepository": "Crear repositorio",
     "importExisting": "Importar existente",
     "search": "Buscar repositorios...",
@@ -553,6 +859,18 @@
       "prune": "Podar",
       "compact": "Compactar"
     },
+    "createPlanDialog": {
+      "title": "Crear plan de copia",
+      "description": "Crea un plan de copia desde \"{{name}}\" usando sus fuentes, exclusiones, compresión, opciones avanzadas y programación actuales.",
+      "planName": "Nombre del plan",
+      "scheduleNotice": "La programación \"{{schedule}}\" se copiará al nuevo plan.",
+      "copySchedule": "Copiar la programación al plan de copia",
+      "moveSourceSettings": "Mover la configuración de origen al plan de copia",
+      "disableSchedule": "Pausar la programación existente del repositorio después de crear el plan",
+      "sourceRequired": "Este repositorio no tiene rutas de origen configuradas.",
+      "confirm": "Crear plan de copia",
+      "creating": "Creando..."
+    },
     "toasts": {
       "deleted": "Repositorio eliminado correctamente",
       "deleteFailed": "Error al eliminar el repositorio",
@@ -565,6 +883,9 @@
       "pruneFailed": "Error al podar el repositorio",
       "updated": "Repositorio actualizado correctamente",
       "created": "Repositorio creado correctamente",
+      "backupPlanCreated": "Plan de copia creado",
+      "backupPlanCreateFailed": "No se pudo crear el plan de copia",
+      "sharedScheduleKept": "La programación original se comparte con otros repositorios y se dejó activada.",
       "importedWithKeyfile": "Repositorio importado y archivo de clave guardado correctamente",
       "imported": "Repositorio importado correctamente",
       "wizardFailed": "Error al {{mode}} el repositorio"
@@ -585,7 +906,8 @@
         "check": "Comprobación",
         "compact": "Compactación",
         "prune": "Poda",
-        "package": "Paquete"
+        "package": "Paquete",
+        "scriptExecution": "Script"
       },
       "statuses": {
         "completed": "Completado",
@@ -1140,8 +1462,17 @@
       "prune": "Podar",
       "compact": "Compactar",
       "backupNow": "Copia ahora",
+      "legacyBackup": "Copia heredada",
+      "legacyBackupTooltip": "Ejecuta la copia antigua basada en repositorio usando las rutas de origen heredadas de este repositorio",
+      "backupPlanRequired": "Crea un plan de copia para definir fuentes",
       "viewArchives": "Ver archivos",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "createBackupPlan": "Crear plan de copia",
+      "createBackupPlanSourceRequired": "Añade rutas de origen antes de crear un plan de copia"
+    },
+    "legacySources": {
+      "title": "Configuración de origen heredada",
+      "description": "Mueve los orígenes y la programación de este repositorio a un plan de copia."
     },
     "edit": "Editar",
     "lastCheck": "Última verificación",
@@ -1384,9 +1715,11 @@
       "check": "Verificación del repositorio",
       "compact": "Compactar",
       "prune": "Podar",
-      "package": "Instalación de paquete"
+      "package": "Instalación de paquete",
+      "scriptExecution": "Script"
     },
     "scheduledById": "Programado (ID: {{id}})",
+    "backupPlanByName": "Plan de copia: {{name}}",
     "manual": "Manual",
     "toasts": {
       "authRequired": "Autenticación requerida",
@@ -2595,7 +2928,11 @@
   },
   "upcomingJobs": {
     "title": "Trabajos próximos (Próximas 24 horas)",
-    "repositories": "{{count}} repositorios"
+    "repositories": "{{count}} repositorios",
+    "types": {
+      "plan": "Plan",
+      "schedule": "Programación"
+    }
   },
   "scheduledJobsTableSection": {
     "title": "Todos los trabajos programados",
@@ -2826,6 +3163,7 @@
       "location": "Ubicación",
       "source": "Fuente",
       "security": "Seguridad",
+      "advanced": "Avanzado",
       "config": "Configuración",
       "review": "Revisión"
     },
@@ -3064,7 +3402,8 @@
     "typeCheck": "Verificación",
     "typeCompact": "Compactar",
     "typePrune": "Podar",
-    "typePackage": "Paquete"
+    "typePackage": "Paquete",
+    "typeScript": "Script"
   },
   "mounts": {
     "columns": {

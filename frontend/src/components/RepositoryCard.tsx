@@ -16,6 +16,7 @@ import {
   Clock,
   ScanSearch,
   RefreshCw,
+  ClipboardList,
 } from 'lucide-react'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
@@ -37,6 +38,7 @@ interface RepositoryCardProps {
   onDelete: () => void
   onBackupNow: () => void
   onViewArchives: () => void
+  onCreateBackupPlan?: () => void
   getCompressionLabel: (compression: string) => string
   canManageRepository?: boolean
   canDo: (action: RepoAction) => boolean
@@ -66,6 +68,7 @@ export default function RepositoryCard({
   onDelete,
   onBackupNow,
   onViewArchives,
+  onCreateBackupPlan,
   getCompressionLabel,
   canManageRepository = false,
   canDo,
@@ -80,6 +83,9 @@ export default function RepositoryCard({
   const capabilities = getRepoCapabilities(repository)
   const { hasRunningJobs, checkJob, compactJob, pruneJob } = useMaintenanceJobs(repository.id, true)
   const isMaintenanceRunning = hasRunningJobs
+  const hasManualBackupSources = Boolean(repository.source_directories?.length)
+  const canCreatePlan = Boolean(onCreateBackupPlan) && canDo('backup') && repository.mode === 'full'
+  const canRunLegacyBackup = canDo('backup') && repository.mode === 'full' && hasManualBackupSources
 
   const [elapsedTime, setElapsedTime] = useState('')
 
@@ -496,6 +502,34 @@ export default function RepositoryCard({
           ))}
         </Box>
 
+        {hasManualBackupSources && canCreatePlan && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: { xs: 'stretch', sm: 'center' },
+              justifyContent: 'space-between',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 1,
+              mb: 1.5,
+              px: 1.25,
+              py: 1,
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: alpha(theme.palette.primary.main, isDark ? 0.28 : 0.2),
+              bgcolor: alpha(theme.palette.primary.main, isDark ? 0.1 : 0.06),
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" fontWeight={700} color="primary.main">
+                {t('repositoryCard.legacySources.title')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block">
+                {t('repositoryCard.legacySources.description')}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
         {/* ── Action Bar ── */}
         <Box
           sx={{
@@ -640,49 +674,70 @@ export default function RepositoryCard({
             )}
           </Box>
 
-          {/* Primary action — Backup Now */}
-          {canDo('backup') && repository.mode === 'full' && (
-            <Tooltip
-              title={isMaintenanceRunning ? '' : t('repositoryCard.buttons.backupNow')}
-              arrow
-            >
-              <span>
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<Play size={13} />}
-                  onClick={() => {
-                    trackBackup(EventAction.START, undefined, repository)
-                    onBackupNow()
-                  }}
-                  disabled={isMaintenanceRunning}
-                  sx={{
-                    bgcolor: ACCENT_IDLE,
-                    color: '#fff',
-                    fontSize: '0.78rem',
-                    height: 30,
-                    flexShrink: 0,
-                    px: { xs: 0.85, sm: 1.5 },
-                    minWidth: 'unset',
-                    boxShadow: `0 2px 10px ${alpha(ACCENT_IDLE, 0.38)}`,
-                    '& .MuiButton-startIcon': { mr: { xs: 0, sm: 0.5 }, ml: { xs: 0, sm: '-2px' } },
-                    '&:hover': {
-                      bgcolor: '#047857',
-                      boxShadow: `0 4px 18px ${alpha(ACCENT_IDLE, 0.5)}`,
-                    },
-                    '&.Mui-disabled': {
-                      bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08),
-                      color: 'text.disabled',
-                      boxShadow: 'none',
-                    },
-                  }}
-                >
-                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
-                    {t('repositoryCard.buttons.backupNow')}
-                  </Box>
-                </Button>
-              </span>
-            </Tooltip>
+          {(canCreatePlan || canRunLegacyBackup) && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
+              {canRunLegacyBackup && (
+                <Tooltip title={t('repositoryCard.buttons.legacyBackupTooltip')} arrow>
+                  <span>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="success"
+                      startIcon={<Play size={13} />}
+                      onClick={() => {
+                        trackBackup(EventAction.START, 'legacy_repository', repository)
+                        onBackupNow()
+                      }}
+                      disabled={isMaintenanceRunning}
+                      sx={{
+                        fontSize: '0.76rem',
+                        height: 30,
+                        flexShrink: 0,
+                        px: { xs: 0.85, sm: 1.25 },
+                        minWidth: 'unset',
+                        '& .MuiButton-startIcon': {
+                          mr: { xs: 0, sm: 0.5 },
+                          ml: { xs: 0, sm: '-2px' },
+                        },
+                      }}
+                    >
+                      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                        {t('repositoryCard.buttons.legacyBackup')}
+                      </Box>
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+
+              {canCreatePlan && (
+                <Tooltip title={t('repositoryCard.buttons.createBackupPlan')} arrow>
+                  <span>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<ClipboardList size={13} />}
+                      onClick={onCreateBackupPlan}
+                      disabled={isMaintenanceRunning}
+                      sx={{
+                        fontSize: '0.78rem',
+                        height: 30,
+                        flexShrink: 0,
+                        px: { xs: 0.85, sm: 1.5 },
+                        minWidth: 'unset',
+                        '& .MuiButton-startIcon': {
+                          mr: { xs: 0, sm: 0.5 },
+                          ml: { xs: 0, sm: '-2px' },
+                        },
+                      }}
+                    >
+                      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                        {t('repositoryCard.buttons.createBackupPlan')}
+                      </Box>
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+            </Box>
           )}
         </Box>
 

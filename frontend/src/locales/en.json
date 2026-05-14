@@ -108,6 +108,7 @@
       "dashboard": "Dashboard",
       "activity": "Activity",
       "remoteMachines": "Remote Machines",
+      "backupPlans": "Backup Plans",
       "repositories": "Repositories",
       "backup": "Manual Backup",
       "archives": "Archives",
@@ -222,6 +223,9 @@
       "passed": "passed",
       "failed": "failed"
     },
+    "upcomingBackups": {
+      "title": "Upcoming backups"
+    },
     "scheduleBadge": {
       "noSchedule": "No automated schedule",
       "manual": "manual",
@@ -256,6 +260,7 @@
       "stats": {
         "lastBackup": "Last backup",
         "schedules": "Schedules",
+        "automations": "Automations",
         "storage": "Storage"
       }
     },
@@ -293,6 +298,25 @@
   "backup": {
     "title": "Backup Operations",
     "subtitle": "Manage and monitor your backup jobs",
+    "tabs": {
+      "ariaLabel": "Backup operation type",
+      "backupPlans": "Backup Plans",
+      "legacyBackup": "Legacy Backup"
+    },
+    "planRun": {
+      "title": "Run a Backup Plan",
+      "description": "Backup Plans contain the source paths, backup settings, repositories, and schedule.",
+      "selectLabel": "Backup Plan",
+      "createAction": "Create Backup Plan",
+      "empty": "Create a Backup Plan before running new backups from this page.",
+      "run": "Run Backup Plan",
+      "starting": "Starting...",
+      "toasts": {
+        "started": "Backup plan started",
+        "startFailed": "Failed to start backup plan",
+        "selectPlan": "Please select a backup plan"
+      }
+    },
     "manualBackup": {
       "title": "Manual Backup",
       "subtitle": "Select a repository and start a backup job",
@@ -307,6 +331,10 @@
         "title": "No Repositories Found",
         "subtitle": "Create a repository in the Repositories page before starting a backup"
       }
+    },
+    "legacyManual": {
+      "notice": "Repository manual backup is available only for legacy repositories that still carry source paths. New backups should be run through Backup Plans.",
+      "empty": "No legacy repositories with source paths are available for direct manual backup."
     },
     "commandPreview": "Command Preview",
     "runningJobs": {
@@ -404,6 +432,8 @@
     "title": "Schedule",
     "subtitle": "Manage automated backups and repository checks",
     "createBackup": "Create Backup Schedule",
+    "createBackupPlan": "Create Backup Plan",
+    "createSchedule": "Create Schedule",
     "addCheck": "Add Check Schedule",
     "addRestoreCheck": "Add Restore Check",
     "tabs": {
@@ -412,6 +442,11 @@
       "restoreChecks": "Restore Checks"
     },
     "noRepositories": "You need to create at least one repository before scheduling backups.",
+    "backupPlansPrimaryAction": "Backup Plans",
+    "backupPlansPrimaryNotice": "Backup Plans are the primary place for new backup schedules. This tab keeps existing repository schedules available for migration and legacy operation.",
+    "legacyBackupSchedulesTitle": "Legacy Backup Schedules",
+    "legacyBackupSchedulesDescription": "Existing repository-based schedules continue to run here. New scheduled backups should be created as Backup Plans.",
+    "confirmRunNow": "Run \"{{name}}\" now?",
     "maintenance": {
       "pruning": "Pruning archives...",
       "pruneCompleted": "Prune completed",
@@ -495,9 +530,280 @@
       "backupCancelFailed": "Failed to cancel backup"
     }
   },
+  "backupPlans": {
+    "title": "Backup Plans",
+    "subtitle": "Define sources, settings, schedules, and the repositories each backup writes to.",
+    "loading": "Loading backup plans...",
+    "runTooltipPro": "This plan uses multiple repositories or parallel execution. Edit it or upgrade to Pro to run it.",
+    "empty": {
+      "title": "No backup plans yet",
+      "description": "Create a plan to connect sources, settings, schedule, and repositories."
+    },
+    "search": "Search backup plans...",
+    "sort": {
+      "nameAZ": "Name A → Z",
+      "nameZA": "Name Z → A",
+      "lastRunRecent": "Last run (most recent)",
+      "lastRunOldest": "Last run (oldest)",
+      "nextRunSoonest": "Next run (soonest)",
+      "createdNewest": "Created (newest)",
+      "createdOldest": "Created (oldest)"
+    },
+    "group": {
+      "none": "No grouping",
+      "status": "By status",
+      "schedule": "By schedule",
+      "source": "By source"
+    },
+    "groups": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "scheduled": "Scheduled",
+      "manual": "Manual only",
+      "localSource": "Local source",
+      "remoteSource": "Remote source"
+    },
+    "noMatch": {
+      "title": "No matching backup plans",
+      "message": "No backup plans match \"{{search}}\".",
+      "fallback": "No backup plans match the current filters.",
+      "clearSearch": "Clear search"
+    },
+    "actions": {
+      "create": "Create Backup Plan",
+      "edit": "Edit",
+      "runs": "Runs",
+      "run": "Run",
+      "running": "Running",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "deleteConfirm": "Delete backup plan \"{{name}}\"?"
+    },
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "clickToEnable": "Click to enable",
+      "clickToDisable": "Click to disable",
+      "created": "Created",
+      "pro": "Pro",
+      "proRequired": "Pro required",
+      "repositoryCount_one": "{{count}} repository",
+      "repositoryCount_other": "{{count}} repositories",
+      "sourcePathCount_one": "{{count}} source path",
+      "sourcePathCount_other": "{{count}} source paths",
+      "localSource": "Local source",
+      "remoteSource": "Remote source",
+      "manualOnly": "Manual only",
+      "nextRunBadge": "Next {{when}}",
+      "scheduledBadge": "Scheduled",
+      "nextRunTitle": "Next run: {{date}} ({{timezone}})",
+      "scheduleTitle": "{{schedule}} ({{timezone}})",
+      "parallel": "Parallel",
+      "series": "Series",
+      "nextRun": "Next run: {{date}}",
+      "repositoryFallback": "Repository",
+      "moreRepositories": "+{{count}} more"
+    },
+    "statuses": {
+      "unknown": "Unknown",
+      "pending": "pending",
+      "running": "running",
+      "completed": "completed",
+      "completed_with_warnings": "completed with warnings",
+      "partial": "partial",
+      "failed": "failed",
+      "cancelled": "cancelled",
+      "skipped": "skipped"
+    },
+    "toasts": {
+      "created": "Backup plan created",
+      "createFailed": "Failed to create backup plan",
+      "updated": "Backup plan updated",
+      "updateFailed": "Failed to update backup plan",
+      "deleted": "Backup plan deleted",
+      "deleteFailed": "Failed to delete backup plan",
+      "toggled": "Backup plan status updated",
+      "toggleFailed": "Failed to update backup plan status",
+      "started": "Backup plan started",
+      "startFailed": "Failed to start backup plan",
+      "cancelled": "Backup plan run cancelled",
+      "cancelFailed": "Failed to cancel backup plan run",
+      "repositoryCreated": "Repository created",
+      "repositoryCreateFailed": "Failed to create repository",
+      "multiRepositoryRequiresPro": "Multiple repositories in one backup plan require Pro",
+      "selectSourceConnection": "Select a remote client before browsing source paths"
+    },
+    "wizard": {
+      "createTitle": "Create Backup Plan",
+      "editTitle": "Edit Backup Plan",
+      "createPlan": "Create Plan",
+      "updatePlan": "Update Plan",
+      "steps": {
+        "sources": "Sources",
+        "repositories": "Repositories",
+        "settings": "Settings",
+        "scripts": "Scripts",
+        "schedule": "Schedule",
+        "review": "Review"
+      },
+      "fields": {
+        "planName": "Plan name",
+        "description": "Description",
+        "repositories": "Repositories",
+        "repositoryName": "Repository name",
+        "borgVersion": "Borg version",
+        "repositoryPath": "Repository path",
+        "archiveNameTemplate": "Archive name template",
+        "compression": "Compression",
+        "extraBorgFlags": "Custom Flags (Optional)",
+        "uploadSpeedLimit": "Upload speed limit",
+        "runRepositories": "Run repositories",
+        "maxParallelRepositories": "Max parallel repositories",
+        "cronExpression": "Cron expression",
+        "timezone": "Timezone",
+        "checkMaxDuration": "Max check duration"
+      },
+      "repositories": {
+        "noStorageTargets": "Create a storage target first, then attach it to this backup plan.",
+        "helperPro": "Select one or more repositories. Execution order is used in series mode.",
+        "helperCommunity": "Community plans can use one repository. Multiple repositories require Pro.",
+        "placeholder": "Select repositories...",
+        "addStorageTarget": "Add a storage target",
+        "basicDescription": "Basic setup covers the Borg essentials: name, version, path, and encryption.",
+        "basic": "Basic",
+        "advancedSetup": "Advanced setup",
+        "advancedNotice": "Use advanced setup for SSH repositories, scripts, or import options.",
+        "pathHelper": "Local path for this storage target. Use advanced setup for remote paths.",
+        "browsePath": "Browse repository path",
+        "createAndSelect": "Create and select"
+      },
+      "settings": {
+        "archiveNameHelper": "Supports {plan_name}, {repo_name}, {now}, {date}, {time}, and {timestamp}.",
+        "extraBorgFlagsHelper": "Custom command-line flags for borg create (e.g., --stats, --progress, --list). Applied to every repository run in this plan.",
+        "uploadSpeedHelper": "MB/s. Empty means unlimited.",
+        "runRepositoryScripts": "Run repository scripts",
+        "runRepositoryScriptsHelper": "Use each repository's configured pre/post backup scripts during plan execution.",
+        "seriesLabel": "One after another",
+        "parallelLabel": "At the same time",
+        "parallelTooltip": "Run multiple repositories at the same time.",
+        "parallelRequiresPro": "Parallel repository execution requires Pro."
+      },
+      "scripts": {
+        "title": "Plan scripts",
+        "description": "Run scripts once for the whole backup plan, before the first repository copy and after all repository work finishes.",
+        "runRepositoryScripts": "Also run repository scripts",
+        "runRepositoryScriptsHelper": "Use each repository's configured pre/post backup scripts during its own copy.",
+        "loading": "Loading scripts..."
+      },
+      "schedule": {
+        "title": "Schedule",
+        "description": "Choose when this plan should run automatically. Disable to run only on demand.",
+        "enabled": "Run this plan on a schedule",
+        "cronHelper": "Example: 0 21 * * * runs daily at 21:00.",
+        "runPruneAfter": "Run prune after successful repository backups",
+        "runCompactAfter": "Run compact after prune"
+      },
+      "maintenance": {
+        "title": "Maintenance",
+        "description": "Run repository maintenance after successful backups in this plan.",
+        "runPruneAfter": "Run prune after successful repository backups",
+        "runCompactAfter": "Run compact after backup maintenance",
+        "runCheckAfter": "Run check after successful repository backups",
+        "checkMaxDurationHelper": "Seconds. Use 0 for unlimited."
+      },
+      "review": {
+        "plan": "Plan",
+        "sourceLocation": "Source location",
+        "sourceConnection": "Remote client",
+        "localSource": "Borg UI Server",
+        "remoteSource": "Remote client",
+        "connectionFallback": "Connection #{{id}}",
+        "notSet": "Not set",
+        "sources": "Sources",
+        "repositories": "Repositories",
+        "compression": "Compression",
+        "customFlags": "Custom flags",
+        "planPreScript": "Plan pre-script",
+        "planPostScript": "Plan post-script",
+        "noScript": "None",
+        "repositoryScripts": "Repository scripts",
+        "runMode": "Run mode",
+        "schedule": "Schedule",
+        "prune": "Prune",
+        "retention": "Retention",
+        "retentionValue": "H {{hourly}} / D {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / Y {{yearly}}",
+        "compact": "Compact",
+        "check": "Check",
+        "checkDuration": "{{seconds}} seconds",
+        "pathCount_one": "{{count}} path",
+        "pathCount_other": "{{count}} paths",
+        "selectedCount_one": "{{count}} selected",
+        "selectedCount_other": "{{count}} selected",
+        "manualOnlyHint": "Runs only when triggered manually."
+      },
+      "fileExplorer": {
+        "sourceTitle": "Select source paths",
+        "excludeTitle": "Select paths to exclude",
+        "repositoryTitle": "Select repository path"
+      }
+    },
+    "runsDialog": {
+      "title": "{{name}} Runs",
+      "empty": {
+        "title": "No runs yet",
+        "description": "Run this backup plan to see repository results and logs here."
+      },
+      "runNumber": "Run #{{id}}",
+      "jobNumber": "Job #{{id}}",
+      "completedRepositories": "{{completed}}/{{total}} repositories",
+      "selectRun": "Select a run to inspect its repository results.",
+      "trigger": "Trigger",
+      "started": "Started",
+      "completed": "Completed",
+      "maintenanceStatus": "Maintenance: {{status}}",
+      "archiveName": "Archive: {{name}}",
+      "archivePending": "Archive pending",
+      "planScripts": "Plan scripts",
+      "planScript": "Plan script",
+      "prePlanScript": "Pre-plan script",
+      "postPlanScript": "Post-plan script",
+      "exitCode": "Exit code {{code}}",
+      "scriptDuration": "{{seconds}}s",
+      "viewLogs": "View Logs"
+    },
+    "runsPanel": {
+      "title": "Backup Plan Runs",
+      "subtitle": "Track active and recent plan executions across repositories.",
+      "activeTitle": "Running Backup Plan Runs",
+      "activeSubtitle": "Plan executions currently in progress.",
+      "recentTitle": "Recent Backup Plan Runs",
+      "recentSubtitle": "Completed, failed, or cancelled plan executions.",
+      "active": "Active runs",
+      "recent": "Recent runs",
+      "activeCount_one": "{{count}} active",
+      "activeCount_other": "{{count}} active",
+      "empty": "No backup plan runs yet.",
+      "emptyActive": "No backup plan runs are running.",
+      "emptyRecent": "No recent backup plan runs.",
+      "planFallback": "Backup plan #{{id}}",
+      "unknownPlan": "Backup plan",
+      "duration": "Duration",
+      "columns": {
+        "run": "Run",
+        "plan": "Plan / Repository",
+        "status": "Status",
+        "repositories": "Repositories",
+        "started": "Started",
+        "duration": "Duration"
+      },
+      "repositoryProgress": "{{completed}}/{{total}} repositories finished",
+      "cancelRun": "Cancel Run",
+      "noRepositories": "No repository runs recorded yet."
+    }
+  },
   "repositories": {
     "title": "Repository Management",
-    "subtitle": "A repository is where your backed-up data will be stored. The files from your configured sources will be backed up here.",
+    "subtitle": "Repositories are Borg storage targets. Define sources and schedules in Backup Plans.",
     "createRepository": "Create Repository",
     "importExisting": "Import Existing",
     "search": "Search repositories...",
@@ -553,6 +859,18 @@
       "prune": "Prune",
       "compact": "Compact"
     },
+    "createPlanDialog": {
+      "title": "Create Backup Plan",
+      "description": "Create a Backup Plan from \"{{name}}\" using its current sources, exclusions, compression, advanced flags, and schedule settings.",
+      "planName": "Plan name",
+      "scheduleNotice": "The schedule \"{{schedule}}\" will be copied to the new plan.",
+      "copySchedule": "Copy schedule to the Backup Plan",
+      "moveSourceSettings": "Move source settings to the Backup Plan",
+      "disableSchedule": "Pause the existing repository schedule after creating the plan",
+      "sourceRequired": "This repository does not have source paths configured.",
+      "confirm": "Create Backup Plan",
+      "creating": "Creating..."
+    },
     "toasts": {
       "deleted": "Repository deleted successfully",
       "deleteFailed": "Failed to delete repository",
@@ -565,6 +883,9 @@
       "pruneFailed": "Failed to prune repository",
       "updated": "Repository updated successfully",
       "created": "Repository created successfully",
+      "backupPlanCreated": "Backup Plan created",
+      "backupPlanCreateFailed": "Failed to create Backup Plan",
+      "sharedScheduleKept": "The original schedule is shared with other repositories and was left enabled.",
       "importedWithKeyfile": "Repository imported and keyfile saved successfully",
       "imported": "Repository imported successfully",
       "wizardFailed": "Failed to {{mode}} repository"
@@ -585,7 +906,8 @@
         "check": "Check",
         "compact": "Compact",
         "prune": "Prune",
-        "package": "Package"
+        "package": "Package",
+        "scriptExecution": "Script"
       },
       "statuses": {
         "completed": "Completed",
@@ -1140,8 +1462,17 @@
       "prune": "Prune",
       "compact": "Compact",
       "backupNow": "Backup Now",
+      "legacyBackup": "Legacy Backup",
+      "legacyBackupTooltip": "Run the old repository-based backup using this repository's legacy source paths",
+      "backupPlanRequired": "Create a Backup Plan to define sources",
       "viewArchives": "View Archives",
-      "delete": "Delete"
+      "delete": "Delete",
+      "createBackupPlan": "Create Backup Plan",
+      "createBackupPlanSourceRequired": "Add source paths before creating a Backup Plan"
+    },
+    "legacySources": {
+      "title": "Legacy source settings",
+      "description": "Move this repository's sources and schedule into a Backup Plan."
     },
     "edit": "Edit",
     "lastCheck": "Last Check",
@@ -1384,9 +1715,11 @@
       "check": "Repository Check",
       "compact": "Compact",
       "prune": "Prune",
-      "package": "Package Install"
+      "package": "Package Install",
+      "scriptExecution": "Script"
     },
     "scheduledById": "Scheduled (ID: {{id}})",
+    "backupPlanByName": "Backup Plan: {{name}}",
     "manual": "Manual",
     "toasts": {
       "authRequired": "Authentication required",
@@ -2595,7 +2928,11 @@
   },
   "upcomingJobs": {
     "title": "Upcoming Jobs (Next 24 Hours)",
-    "repositories": "{{count}} repositories"
+    "repositories": "{{count}} repositories",
+    "types": {
+      "plan": "Plan",
+      "schedule": "Schedule"
+    }
   },
   "scheduledJobsTableSection": {
     "title": "All Scheduled Jobs",
@@ -2826,6 +3163,7 @@
       "location": "Location",
       "source": "Source",
       "security": "Security",
+      "advanced": "Advanced",
       "config": "Config",
       "review": "Review"
     },
@@ -3064,7 +3402,8 @@
     "typeCheck": "Check",
     "typeCompact": "Compact",
     "typePrune": "Prune",
-    "typePackage": "Package"
+    "typePackage": "Package",
+    "typeScript": "Script"
   },
   "mounts": {
     "columns": {

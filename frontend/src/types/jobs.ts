@@ -23,6 +23,9 @@ export interface Job {
   has_logs?: boolean
   triggered_by?: string
   schedule_id?: number | null
+  backup_plan_id?: number | null
+  backup_plan_run_id?: number | null
+  backup_plan_name?: string | null
   log_file_path?: string | null
   total_files?: number
   processed_files?: number

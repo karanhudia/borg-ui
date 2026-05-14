@@ -27,6 +27,7 @@ import {
   HardDrive,
   Sliders,
   Wifi,
+  ListChecks,
 } from 'lucide-react'
 import api, { settingsAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -47,7 +48,14 @@ interface NavigationItem {
   href?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: React.ComponentType<any>
-  key: 'dashboard' | 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
+  key:
+    | 'dashboard'
+    | 'connections'
+    | 'repositories'
+    | 'backupPlans'
+    | 'backups'
+    | 'archives'
+    | 'schedule'
   subItems?: Array<{
     name: string
     href?: string
@@ -85,6 +93,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Dashboard: t('navigation.items.dashboard'),
       Activity: t('navigation.items.activity'),
       'Remote Machines': t('navigation.items.remoteMachines'),
+      'Backup Plans': t('navigation.items.backupPlans'),
       Repositories: t('navigation.items.repositories'),
       Backup: t('navigation.items.backup'),
       Archives: t('navigation.items.archives'),
@@ -134,7 +143,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       href: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       icon: React.ComponentType<any>
-      key: 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
+      key: 'connections' | 'repositories' | 'backupPlans' | 'backups' | 'archives' | 'schedule'
     }> = [
       ...(canManageSsh
         ? [
@@ -146,6 +155,12 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             },
           ]
         : []),
+      {
+        name: 'Backup Plans',
+        href: '/backup-plans',
+        icon: ListChecks,
+        key: 'backupPlans' as const,
+      },
       { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
       { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
       { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },

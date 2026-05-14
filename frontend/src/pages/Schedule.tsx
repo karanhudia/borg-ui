@@ -2,9 +2,15 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Box, Typography, Button, Alert, Tabs, Tab } from '@mui/material'
+import { Box, Typography, Button, Alert, Tabs, Tab, Stack } from '@mui/material'
 import { Plus } from 'lucide-react'
-import { scheduleAPI, repositoriesAPI, backupAPI, scriptsAPI } from '../services/api'
+import {
+  scheduleAPI,
+  repositoriesAPI,
+  backupAPI,
+  scriptsAPI,
+  backupPlansAPI,
+} from '../services/api'
 import { toast } from 'react-hot-toast'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
@@ -22,7 +28,10 @@ import UpcomingJobsTable from '../components/UpcomingJobsTable'
 import BackupHistorySection from '../components/BackupHistorySection'
 import RunningBackupsSection from '../components/RunningBackupsSection'
 import ScheduledJobsTable from '../components/ScheduledJobsTable'
-import { Repository } from '../types'
+import ActiveBackupPlanRunCard from '../components/ActiveBackupPlanRunCard'
+import LogViewerDialog from '../components/LogViewerDialog'
+import { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
+import { type BackupPlan, type BackupPlanRun, Repository } from '../types'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
 
@@ -184,6 +193,53 @@ const Schedule: React.FC = () => {
     refetchInterval: 60000, // Refresh every minute
   })
 
+  // Get backup plans (for displaying active plan runs)
+  const { data: backupPlansData } = useQuery({
+    queryKey: ['backup-plans'],
+    queryFn: () => backupPlansAPI.list(),
+  })
+  const { data: backupPlanRunsData } = useQuery({
+    queryKey: ['backup-plan-runs'],
+    queryFn: () => backupPlansAPI.listRuns(),
+    refetchInterval: 2000,
+  })
+  const backupPlans = React.useMemo<BackupPlan[]>(
+    () => backupPlansData?.data?.backup_plans ?? [],
+    [backupPlansData?.data?.backup_plans]
+  )
+  const backupPlanRuns = React.useMemo<BackupPlanRun[]>(
+    () => backupPlanRunsData?.data?.runs ?? [],
+    [backupPlanRunsData?.data?.runs]
+  )
+  const activePlanRunsWithPlans = React.useMemo(() => {
+    return backupPlanRuns
+      .filter((run) => run.status === 'pending' || run.status === 'running')
+      .map((run) => {
+        const plan = backupPlans.find((p) => p.id === run.backup_plan_id)
+        return plan ? { run, plan } : null
+      })
+      .filter((pair): pair is { run: BackupPlanRun; plan: BackupPlan } => pair !== null)
+  }, [backupPlanRuns, backupPlans])
+
+  const [logJob, setLogJob] = useState<BackupPlanRunLogJob | null>(null)
+  const [cancellingPlanRunId, setCancellingPlanRunId] = useState<number | null>(null)
+  const cancelPlanRunMutation = useMutation({
+    mutationFn: (runId: number) => backupPlansAPI.cancelRun(runId),
+    onMutate: (runId) => setCancellingPlanRunId(runId),
+    onSettled: () => setCancellingPlanRunId(null),
+    onSuccess: () => {
+      toast.success(t('backupPlans.toasts.cancelled'))
+      queryClient.invalidateQueries({ queryKey: ['backup-plan-runs'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('backupPlans.toasts.cancelFailed')
+      )
+    },
+  })
+
   // Create job mutation
   const createJobMutation = useMutation({
     mutationFn: scheduleAPI.createScheduledJob,
@@ -328,7 +384,7 @@ const Schedule: React.FC = () => {
   }
 
   const handleRunJobNow = (job: ScheduledJob) => {
-    if (window.confirm(`Run "${job.name}" now?`)) {
+    if (window.confirm(t('schedule.confirmRunNow', { name: job.name }))) {
       runJobNowMutation.mutate(job)
     }
   }
@@ -457,7 +513,7 @@ const Schedule: React.FC = () => {
                 alignSelf: { xs: 'stretch', sm: 'auto' },
               }}
             >
-              {t('schedule.createBackup')}
+              {t('schedule.createSchedule')}
             </Button>
           ) : currentTab === 1 ? (
             <Button
@@ -512,6 +568,35 @@ const Schedule: React.FC = () => {
 
       {currentTab === 0 && (
         <Box>
+          <Alert
+            severity="info"
+            action={
+              <Button color="inherit" size="small" onClick={() => navigate('/backup-plans')}>
+                {t('schedule.backupPlansPrimaryAction')}
+              </Button>
+            }
+            sx={{ mb: 3 }}
+          >
+            {t('schedule.backupPlansPrimaryNotice')}
+          </Alert>
+
+          {activePlanRunsWithPlans.length > 0 && (
+            <Box sx={{ mb: 3 }}>
+              <Stack spacing={2}>
+                {activePlanRunsWithPlans.map(({ run, plan }) => (
+                  <ActiveBackupPlanRunCard
+                    key={run.id}
+                    run={run}
+                    plan={plan}
+                    cancelling={cancellingPlanRunId === run.id}
+                    onCancel={(runId) => cancelPlanRunMutation.mutate(runId)}
+                    onViewLogs={(job) => setLogJob(job)}
+                  />
+                ))}
+              </Stack>
+            </Box>
+          )}
+
           <RunningBackupsSection
             runningBackupJobs={runningBackupJobs}
             onCancelBackup={(jobId) => cancelBackupMutation.mutate(String(jobId))}
@@ -523,12 +608,15 @@ const Schedule: React.FC = () => {
             repositories={repositories}
             isLoading={isLoading}
             getRepositoryName={getRepositoryName}
+            onPlanClick={(planId) => navigate(`/backup-plans#backup-plan-${planId}`)}
           />
 
           <ScheduledJobsTable
             jobs={jobs}
             repositories={repositories}
             isLoading={isLoading}
+            title={t('schedule.legacyBackupSchedulesTitle')}
+            description={t('schedule.legacyBackupSchedulesDescription')}
             canManageJob={canManageJob}
             onEdit={openEditWizard}
             onDelete={setDeleteConfirmJob}
@@ -587,6 +675,8 @@ const Schedule: React.FC = () => {
         scripts={scriptsData?.data || []}
         onSubmit={handleWizardSubmit}
       />
+
+      <LogViewerDialog job={logJob} open={Boolean(logJob)} onClose={() => setLogJob(null)} />
     </Box>
   )
 }
