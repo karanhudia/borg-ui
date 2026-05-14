@@ -49,6 +49,7 @@ def build_archive_name(
     if template:
         archive_name = template
         archive_name = archive_name.replace("{job_name}", safe_job)
+        archive_name = archive_name.replace("{plan_name}", safe_job)
         if safe_repo is not None:
             archive_name = archive_name.replace("{repo_name}", safe_repo)
         archive_name = archive_name.replace("{now}", timestamp)

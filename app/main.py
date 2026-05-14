@@ -13,6 +13,7 @@ from app.api import (
     auth,
     dashboard,
     backup,
+    backup_plans,
     archives,
     restore,
     schedule,
@@ -190,6 +191,9 @@ app.include_router(
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
+app.include_router(
+    backup_plans.router, prefix="/api/backup-plans", tags=["Backup Plans"]
+)
 app.include_router(archives.router, prefix="/api/archives", tags=["Archives"])
 app.include_router(browse.router, prefix="/api/browse", tags=["Browse"])
 app.include_router(restore.router, prefix="/api/restore", tags=["Restore"])

@@ -939,16 +939,18 @@ async def create_repository(
             v2_payload = RepositoryV2Create(**repo_data.model_dump(exclude_none=True))
             return await create_repository_v2(v2_payload, current_user, db)
 
-        # Validate source directories are provided (only for full mode repositories)
-        if repo_data.mode == "full":
-            if (
-                not repo_data.source_directories
-                or len(repo_data.source_directories) == 0
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
-                )
+        valid_encryption_modes = {
+            "repokey",
+            "keyfile",
+            "repokey-blake2",
+            "keyfile-blake2",
+            "none",
+        }
+        if repo_data.encryption not in valid_encryption_modes:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+            )
 
         # Validate passphrase for encrypted repositories
         if repo_data.encryption in [
@@ -1265,17 +1267,6 @@ async def import_repository(
 
             v2_payload = RepositoryV2Import(**repo_data.model_dump(exclude_none=True))
             return await import_repository_v2(v2_payload, current_user, db)
-
-        # Validate source directories are provided (only for full mode repositories)
-        if repo_data.mode == "full":
-            if (
-                not repo_data.source_directories
-                or len(repo_data.source_directories) == 0
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
-                )
 
         # Validate connection_id and path
         repo_path = repo_data.path.strip()
@@ -1955,10 +1946,18 @@ async def update_repository(
             repository.compression = repo_data.compression
 
         if repo_data.source_directories is not None:
-            repository.source_directories = json.dumps(repo_data.source_directories)
+            repository.source_directories = (
+                json.dumps(repo_data.source_directories)
+                if repo_data.source_directories
+                else None
+            )
 
         if repo_data.exclude_patterns is not None:
-            repository.exclude_patterns = json.dumps(repo_data.exclude_patterns)
+            repository.exclude_patterns = (
+                json.dumps(repo_data.exclude_patterns)
+                if repo_data.exclude_patterns
+                else None
+            )
 
         if repo_data.remote_path is not None:
             repository.remote_path = repo_data.remote_path
@@ -1995,17 +1994,6 @@ async def update_repository(
             repository.skip_on_hook_failure = repo_data.skip_on_hook_failure
 
         if repo_data.mode is not None:
-            # Validate source directories when switching to full mode
-            if repo_data.mode == "full" and (
-                not repository.source_directories
-                or repository.source_directories == "[]"
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "key": "backend.errors.repo.cannotSwitchToFullModeNoSourceDirs"
-                    },
-                )
             repository.mode = repo_data.mode
             # If switching to observe mode, log it
             if repo_data.mode == "observe":

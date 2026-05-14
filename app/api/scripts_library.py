@@ -21,6 +21,7 @@ from app.database.models import (
     ScriptExecution,
     Repository,
     ScheduledJob,
+    BackupPlan,
     User,
 )
 from app.core.security import get_current_user, encrypt_secret
@@ -650,6 +651,30 @@ async def delete_script(
             "Cleared script reference from schedules",
             script_id=script_id,
             count=len(schedules_using_script),
+        )
+
+    # Clear backup plan script references (BackupPlan pre/post script FKs have no DB cascade)
+    backup_plans_using_script = (
+        db.query(BackupPlan)
+        .filter(
+            (BackupPlan.pre_backup_script_id == script_id)
+            | (BackupPlan.post_backup_script_id == script_id)
+        )
+        .all()
+    )
+    for backup_plan in backup_plans_using_script:
+        if backup_plan.pre_backup_script_id == script_id:
+            backup_plan.pre_backup_script_id = None
+            backup_plan.pre_backup_script_parameters = None
+        if backup_plan.post_backup_script_id == script_id:
+            backup_plan.post_backup_script_id = None
+            backup_plan.post_backup_script_parameters = None
+    if backup_plans_using_script:
+        db.flush()
+        logger.info(
+            "Cleared script reference from backup plans",
+            script_id=script_id,
+            count=len(backup_plans_using_script),
         )
 
     # Delete script file

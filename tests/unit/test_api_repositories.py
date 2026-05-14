@@ -448,20 +448,60 @@ class TestRepositoriesCreate:
         self, test_client: TestClient, admin_headers
     ):
         """Test creating repository with exclude patterns"""
-        response = test_client.post(
-            "/api/repositories/",
-            json={
-                "name": "Exclude Patterns Repo",
-                "path": "/tmp/exclude-repo",
-                "encryption": "none",
-                "compression": "lz4",
-                "repository_type": "local",
-                "exclude_patterns": ["*.tmp", "*.cache", "node_modules/"],
-            },
-            headers=admin_headers,
-        )
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Exclude Patterns Repo",
+                    "path": "/tmp/exclude-repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "exclude_patterns": ["*.tmp", "*.cache", "node_modules/"],
+                },
+                headers=admin_headers,
+            )
 
-        assert response.status_code == 400
+        assert response.status_code == 200
+
+    def test_create_repository_without_source_fields_stays_storage_only(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Test basic repository creation does not persist legacy backup source fields"""
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Storage Only Repo",
+                    "path": "/tmp/storage-only-repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Storage Only Repo")
+            .one()
+        )
+        assert repo.source_directories is None
+        assert repo.exclude_patterns is None
+        assert repo.source_ssh_connection_id is None
 
     def test_create_repository_validation_error(
         self, test_client: TestClient, admin_headers
@@ -703,6 +743,40 @@ class TestRepositoriesUpdate:
         test_db.refresh(repo)
         assert repo.source_ssh_connection_id is None
         assert json.loads(repo.source_directories) == ["/local/data"]
+
+    def test_update_repository_empty_source_lists_clear_legacy_source_settings(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Test empty source and exclude lists remove legacy source settings"""
+        repo = Repository(
+            name="Legacy Source Repo",
+            path="/tmp/legacy-source-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            source_ssh_connection_id=1,
+            source_directories=json.dumps(["/remote/data"]),
+            exclude_patterns=json.dumps(["*.tmp"]),
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}",
+            json={
+                "source_connection_id": None,
+                "source_directories": [],
+                "exclude_patterns": [],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(repo)
+        assert repo.source_ssh_connection_id is None
+        assert repo.source_directories is None
+        assert repo.exclude_patterns is None
 
     def test_update_repository_type_local_to_ssh(
         self, test_client: TestClient, admin_headers, test_db

@@ -4,7 +4,10 @@ Unit tests for SSH key deployment functionality
 
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from app.api.ssh_keys import deploy_ssh_key_with_copy_id
+from app.api.ssh_keys import (
+    deploy_ssh_key_with_copy_id,
+    test_ssh_key_connection as run_ssh_key_connection_test,
+)
 from app.database.models import SSHKey
 from cryptography.fernet import Fernet
 import base64
@@ -287,3 +290,55 @@ class TestSSHKeyDeployment:
         assert captured_cmd[4] == "-s", (
             "Position 4 should be -s flag when defaulting to True"
         )
+
+
+@pytest.mark.unit
+class TestSSHKeyConnectionTest:
+    """Test SSH key-based connection checks."""
+
+    @pytest.mark.asyncio
+    async def test_connection_test_forces_single_noninteractive_public_key(self):
+        """Connection tests should not fall back to other identities or password prompts."""
+        mock_key = MagicMock(spec=SSHKey)
+        mock_key.id = 1
+        mock_key.public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test"
+
+        from app.config import settings
+
+        encryption_key = settings.secret_key.encode()[:32]
+        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        mock_key.private_key = cipher.encrypt(fake_private_key.encode()).decode()
+
+        captured_cmd = []
+        permission_denied = b"Permission denied (publickey,password).\n"
+
+        async def mock_subprocess(*cmd, **kwargs):
+            captured_cmd.clear()
+            captured_cmd.extend(cmd)
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(return_value=(b"", permission_denied))
+            mock_process.returncode = 255
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            with patch("app.api.ssh_keys.asyncio.wait_for") as mock_wait:
+                mock_wait.return_value = (b"", permission_denied)
+
+                result = await run_ssh_key_connection_test(
+                    mock_key,
+                    "synology.local",
+                    "backup",
+                    22,
+                )
+
+        assert result["success"] is False
+        assert "SSH key not authorized" in result["error"]
+        assert "BatchMode=yes" in captured_cmd
+        assert "IdentitiesOnly=yes" in captured_cmd
+        assert "PreferredAuthentications=publickey" in captured_cmd
+        assert "PasswordAuthentication=no" in captured_cmd
+        assert "NumberOfPasswordPrompts=0" in captured_cmd

@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from app.database.models import (
     BackupJob,
+    BackupPlan,
+    BackupPlanRepository,
     Repository,
     ScheduledJob,
     ScheduledJobRepository,
@@ -92,7 +94,57 @@ class TestScheduleRouteContracts:
         assert body["upcoming_jobs"] == sorted(
             body["upcoming_jobs"], key=lambda item: item["next_run"]
         )
-        assert any(job["id"] == soon.id for job in body["upcoming_jobs"])
+        assert any(
+            job["id"] == soon.id and job["type"] == "schedule"
+            for job in body["upcoming_jobs"]
+        )
+
+    def test_upcoming_jobs_includes_scheduled_backup_plans(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Plan Repo", "/repos/plan")
+        plan = BackupPlan(
+            name="Nightly Plan",
+            enabled=True,
+            source_type="local",
+            source_directories='["/srv/project"]',
+            exclude_patterns="[]",
+            archive_name_template="{plan_name}-{repo_name}-{now}",
+            compression="lz4",
+            repository_run_mode="series",
+            max_parallel_repositories=1,
+            failure_behavior="continue",
+            schedule_enabled=True,
+            cron_expression="0 2 * * *",
+            timezone="UTC",
+            next_run=datetime.utcnow() + timedelta(minutes=30),
+        )
+        test_db.add(plan)
+        test_db.flush()
+        test_db.add(
+            BackupPlanRepository(
+                backup_plan_id=plan.id,
+                repository_id=repo.id,
+                enabled=True,
+                execution_order=1,
+            )
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/schedule/upcoming-jobs?hours=1", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        plan_job = next(
+            job
+            for job in body["upcoming_jobs"]
+            if job["id"] == plan.id and job["type"] == "backup_plan"
+        )
+        assert plan_job["name"] == "Nightly Plan"
+        assert plan_job["repository_ids"] == [repo.id]
+        assert plan_job["cron_expression"] == "0 2 * * *"
 
     def test_update_schedule_rejects_duplicate_name(
         self, test_client: TestClient, admin_headers, test_db

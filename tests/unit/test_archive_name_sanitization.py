@@ -72,6 +72,16 @@ class TestBuildArchiveName:
         )
         assert result == "my-job-repo-2025-01-01T12:00:00"
 
+    def test_template_with_plan_name_alias(self):
+        """Backup plan templates can use {plan_name} as a job-name alias."""
+        result = build_archive_name(
+            job_name="nightly plan",
+            repo_name="repo",
+            template="{plan_name}-{repo_name}-{now}",
+            timestamp="2025-01-01T12:00:00",
+        )
+        assert result == "nightly-plan-repo-2025-01-01T12:00:00"
+
     def test_template_without_repo_placeholder(self):
         """Template without {repo_name} placeholder — no substitution attempted"""
         result = build_archive_name(

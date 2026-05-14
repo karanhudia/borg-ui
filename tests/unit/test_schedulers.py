@@ -399,11 +399,16 @@ async def test_shared_scheduler_loop_runs_due_checks_each_cycle(db_session):
         patch(
             "app.api.schedule.run_due_scheduled_checks", new=AsyncMock()
         ) as mock_checks,
+        patch(
+            "app.services.backup_plan_execution_service.backup_plan_execution_service.dispatch_due_runs",
+            return_value=0,
+        ) as mock_plan_dispatch,
     ):
         with pytest.raises(RuntimeError, match="stop loop"):
             await check_scheduled_jobs()
 
     assert mock_checks.await_count == 1
+    assert mock_plan_dispatch.call_count == 1
 
 
 @pytest.mark.unit

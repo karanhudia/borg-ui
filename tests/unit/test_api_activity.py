@@ -485,6 +485,47 @@ class TestActivityLogContracts:
         assert payload["has_more"] is True
         assert payload["lines"][0]["content"] == "db line 2"
 
+    def test_get_script_execution_logs_uses_stdout_and_stderr(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Script, ScriptExecution
+
+        script = Script(
+            name="Plan Prepare",
+            file_path="library/plan-prepare.sh",
+            category="custom",
+            timeout=300,
+        )
+        test_db.add(script)
+        test_db.flush()
+        execution = ScriptExecution(
+            script_id=script.id,
+            hook_type="pre-backup",
+            status="failed",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            exit_code=2,
+            stdout="stdout line",
+            stderr="stderr line",
+            error_message="script failed",
+            triggered_by="backup_plan",
+        )
+        test_db.add(execution)
+        test_db.commit()
+        test_db.refresh(execution)
+
+        response = test_client.get(
+            f"/api/activity/script_execution/{execution.id}/logs",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        contents = [line["content"] for line in response.json()["lines"]]
+        assert "SCRIPT: Plan Prepare" in contents
+        assert "stdout line" in contents
+        assert "stderr line" in contents
+        assert "script failed" in contents
+
     def test_get_restore_check_job_logs_uses_activity_log_contract(
         self, test_client, admin_headers, test_db
     ):
