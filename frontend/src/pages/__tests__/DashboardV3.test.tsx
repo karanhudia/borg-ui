@@ -57,6 +57,10 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
       ssh_repositories: 1,
       active_schedules: 1,
       total_schedules: 2,
+      active_backup_plans: 1,
+      total_backup_plans: 2,
+      active_automations: 2,
+      total_automations: 4,
       success_rate_30d: 83.3,
       successful_jobs_30d: 5,
       failed_jobs_30d: 1,
@@ -90,6 +94,10 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         has_schedule: true,
         schedule_enabled: true,
         schedule_name: 'Daily',
+        backup_plan_count: 1,
+        backup_plan_scheduled_count: 1,
+        backup_plan_names: ['Nightly Documents'],
+        backup_plan_next_run: '2026-03-31T09:00:00+00:00',
         restore_check_configured: true,
         latest_restore_check_status: 'completed',
         latest_restore_check_error: null,
@@ -117,6 +125,10 @@ function makeOverview(overrides: Record<string, unknown> = {}) {
         has_schedule: false,
         schedule_enabled: false,
         schedule_name: null,
+        backup_plan_count: 0,
+        backup_plan_scheduled_count: 0,
+        backup_plan_names: [],
+        backup_plan_next_run: null,
         restore_check_configured: false,
         latest_restore_check_status: null,
         latest_restore_check_error: null,
@@ -250,10 +262,10 @@ describe('DashboardV3', () => {
       await waitFor(() => expect(screen.getAllByText('10.5 GB').length).toBeGreaterThan(0))
     })
 
-    it('renders schedule ratio', async () => {
+    it('renders automation ratio including backup plans and legacy schedules', async () => {
       mockFetchSuccess(makeOverview())
       renderDashboard()
-      await waitFor(() => expect(screen.getByText('1/2')).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByText('2/4')).toBeInTheDocument())
     })
 
     it('shows "Never" when no repository has a past backup', async () => {
@@ -327,7 +339,17 @@ describe('DashboardV3', () => {
     it('shows "paused" badge for repos with a disabled schedule', async () => {
       const data = makeOverview({
         repository_health: makeOverview().repository_health.map((r, i) =>
-          i === 0 ? { ...r, has_schedule: true, schedule_enabled: false } : r
+          i === 0
+            ? {
+                ...r,
+                has_schedule: true,
+                schedule_enabled: false,
+                backup_plan_count: 0,
+                backup_plan_scheduled_count: 0,
+                backup_plan_names: [],
+                backup_plan_next_run: null,
+              }
+            : r
         ),
       })
       mockFetchSuccess(data)
@@ -395,6 +417,13 @@ describe('DashboardV3', () => {
       renderDashboard()
 
       await waitFor(() => expect(screen.getByText('Needs backup')).toBeInTheDocument())
+    })
+
+    it('shows backup plan coverage on repository cards', async () => {
+      mockFetchSuccess(makeOverview())
+      renderDashboard()
+      await waitFor(() => expect(screen.getByText('Nightly Documents')).toBeInTheDocument())
+      expect(screen.getByText('1 plan')).toBeInTheDocument()
     })
 
     it('adds full timestamp tooltips to relative health times', async () => {
@@ -485,6 +514,33 @@ describe('DashboardV3', () => {
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
       expect(screen.queryByText('Recent failures')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('upcoming automation panel', () => {
+    it('renders scheduled backup plans from upcoming tasks', async () => {
+      mockFetchSuccess(
+        makeOverview({
+          upcoming_tasks: [
+            {
+              id: 7,
+              type: 'backup_plan',
+              name: 'Nightly Documents',
+              repositories: ['my-server', 'backup-nas'],
+              cron: '0 3 * * *',
+              timezone: 'UTC',
+              next_run: '2026-03-31T03:00:00+00:00',
+            },
+          ],
+        })
+      )
+
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Upcoming backups')).toBeInTheDocument())
+      expect(screen.getByText('Backup Plan')).toBeInTheDocument()
+      expect(screen.getAllByText('Nightly Documents').length).toBeGreaterThan(0)
+      expect(screen.getByText('2 repositories')).toBeInTheDocument()
     })
   })
 
