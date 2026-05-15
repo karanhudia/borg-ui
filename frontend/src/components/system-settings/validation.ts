@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next'
 import type { SystemSettings } from '../../services/api'
 import {
   MAX_FILES,
+  MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS,
   MAX_MEMORY,
   MAX_SCHEDULE_CONCURRENCY,
   MAX_STATS_REFRESH,
@@ -24,6 +25,16 @@ interface SystemSettingsValidationParams {
   statsRefreshInterval: number
   maxConcurrentScheduledBackups: number
   maxConcurrentScheduledChecks: number
+  dashboardBackupWarningDays: number
+  dashboardBackupCriticalDays: number
+  dashboardCheckWarningDays: number
+  dashboardCheckCriticalDays: number
+  dashboardCompactWarningDays: number
+  dashboardCompactCriticalDays: number
+  dashboardRestoreCheckWarningDays: number
+  dashboardRestoreCheckCriticalDays: number
+  dashboardObserveFreshnessWarningDays: number
+  dashboardObserveFreshnessCriticalDays: number
   oidcEnabled: boolean
   oidcDiscoveryUrl: string
   oidcClientId: string
@@ -49,6 +60,16 @@ export const getSystemSettingsValidationError = ({
   statsRefreshInterval,
   maxConcurrentScheduledBackups,
   maxConcurrentScheduledChecks,
+  dashboardBackupWarningDays,
+  dashboardBackupCriticalDays,
+  dashboardCheckWarningDays,
+  dashboardCheckCriticalDays,
+  dashboardCompactWarningDays,
+  dashboardCompactCriticalDays,
+  dashboardRestoreCheckWarningDays,
+  dashboardRestoreCheckCriticalDays,
+  dashboardObserveFreshnessWarningDays,
+  dashboardObserveFreshnessCriticalDays,
   oidcEnabled,
   oidcDiscoveryUrl,
   oidcClientId,
@@ -88,6 +109,25 @@ export const getSystemSettingsValidationError = ({
     maxConcurrentScheduledChecks > MAX_SCHEDULE_CONCURRENCY
   ) {
     return `Scheduler concurrency limits must be between 0 and ${MAX_SCHEDULE_CONCURRENCY}`
+  }
+
+  const dashboardThresholdPairs = [
+    [dashboardBackupWarningDays, dashboardBackupCriticalDays],
+    [dashboardCheckWarningDays, dashboardCheckCriticalDays],
+    [dashboardCompactWarningDays, dashboardCompactCriticalDays],
+    [dashboardRestoreCheckWarningDays, dashboardRestoreCheckCriticalDays],
+    [dashboardObserveFreshnessWarningDays, dashboardObserveFreshnessCriticalDays],
+  ]
+  const dashboardThresholds = dashboardThresholdPairs.flat()
+  if (
+    dashboardThresholds.some(
+      (threshold) => threshold < 1 || threshold > MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS
+    )
+  ) {
+    return `Dashboard health thresholds must be between 1 and ${MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS} days`
+  }
+  if (dashboardThresholdPairs.some(([warningDays, criticalDays]) => warningDays > criticalDays)) {
+    return 'Dashboard warning thresholds must be less than or equal to critical thresholds'
   }
 
   const hasExistingOidcSecret = Boolean(systemSettings?.oidc_client_secret_set)

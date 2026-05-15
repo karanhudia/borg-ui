@@ -116,6 +116,9 @@
       "integrity": "Integrität",
       "schedule": "Zeitplan"
     },
+    "badges": {
+      "new": "Neu"
+    },
     "settings": {
       "personal": "Persönlich",
       "system": "System",
@@ -576,6 +579,7 @@
       "run": "Ausführen",
       "running": "Läuft",
       "cancel": "Abbrechen",
+      "viewRepositories": "Repositories anzeigen",
       "delete": "Löschen",
       "deleteConfirm": "Backup-Plan \"{{name}}\" löschen?"
     },
@@ -842,6 +846,11 @@
       "hostname": "Standort (Hostname)",
       "type": "Repository-Typ",
       "mode": "Sicherungsmodus"
+    },
+    "filter": {
+      "backupPlan": "Backup-Plan",
+      "allBackupPlans": "Alle Backup-Pläne",
+      "backupPlanFallback": "Backup-Plan #{{id}}"
     },
     "loading": "Lädt Repositories...",
     "empty": {
@@ -1905,6 +1914,20 @@
     "statsRefreshDisabled": "Automatische Statistikaktualisierung ist deaktiviert",
     "statsRefreshRangeError": "Muss zwischen 0 und {{max}} Minuten liegen",
     "statsRefreshIntervalHelper": "Repository-Statistiken (Archivanzahl, Größe, letzte Sicherung) werden alle {{interval}} Minuten aktualisiert",
+    "dashboardHealthThresholdsTitle": "Dashboard-Zustandsgrenzwerte",
+    "dashboardHealthThresholdsDescription": "Lege fest, wie viele Tage alt Dashboard-Zustandssignale sein dürfen, bevor sie Warnungen oder kritische Alarme werden.",
+    "dashboardBackupWarningDaysLabel": "Backup-Warnalter (Tage)",
+    "dashboardBackupCriticalDaysLabel": "Backup-kritisches Alter (Tage)",
+    "dashboardObserveFreshnessWarningDaysLabel": "Beobachtungs-Warnalter (Tage)",
+    "dashboardObserveFreshnessCriticalDaysLabel": "Beobachtungs-kritisches Alter (Tage)",
+    "dashboardCheckWarningDaysLabel": "Prüfungs-Warnalter (Tage)",
+    "dashboardCheckCriticalDaysLabel": "Prüfungs-kritisches Alter (Tage)",
+    "dashboardCompactWarningDaysLabel": "Kompaktierungs-Warnalter (Tage)",
+    "dashboardCompactCriticalDaysLabel": "Kompaktierungs-kritisches Alter (Tage)",
+    "dashboardRestoreCheckWarningDaysLabel": "Wiederherstellungsprüfung-Warnalter (Tage)",
+    "dashboardRestoreCheckCriticalDaysLabel": "Wiederherstellungsprüfung-kritisches Alter (Tage)",
+    "dashboardHealthThresholdRangeHelper": "1-{{max}} Tage. Warnung muss kleiner oder gleich kritisch sein.",
+    "dashboardHealthThresholdError": "Gib eine gültige Tagesanzahl ein. Warnung muss kleiner oder gleich kritisch sein.",
     "lastRefreshed": "Zuletzt aktualisiert:",
     "manualRefreshAlert": "Auf 0 setzen zum Deaktivieren der automatischen Aktualisierung. Der Zeitplaner aktualisiert Statistiken für alle Repositories, einschließlich Nur-Beobachtungs-Repositories.",
     "metricsAccessTitle": "Metrikzugriff",
@@ -3712,6 +3735,8 @@
         "invalidDeploymentType": "deployment_type muss 'individual' oder 'enterprise' sein",
         "invalidLogSavePolicy": "Ungültige log_save_policy. Muss eine der folgenden sein: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb muss mindestens 10 MB betragen",
+        "invalidDashboardHealthThreshold": "{{field}} muss zwischen 1 und {{max}} Tagen liegen",
+        "invalidDashboardHealthThresholdOrder": "Dashboard-Warnschwellen müssen kleiner oder gleich den kritischen Schwellen sein",
         "userNotFound": "Benutzer nicht gefunden",
         "usernameAlreadyExists": "Benutzername bereits vorhanden",
         "failedRetrieveSystemSettings": "Fehler beim Abrufen der Systemeinstellungen: {{error}}",

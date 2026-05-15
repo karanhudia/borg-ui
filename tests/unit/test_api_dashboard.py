@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 
 from app.api.dashboard import (
+    DashboardHealthThresholds,
     ScheduledJobInfo,
     SystemMetrics,
     build_full_repository_health,
@@ -24,6 +25,7 @@ from app.database.models import (
     RestoreCheckJob,
     ScheduledJob,
     SSHConnection,
+    SystemSettings,
 )
 
 
@@ -332,6 +334,32 @@ class TestDashboardHelpers:
         assert health["dimension_health"]["restore"] == "unknown"
         assert health["restore_check_configured"] is False
         assert not any("Restore check" in warning for warning in health["warnings"])
+
+    def test_full_repository_health_uses_configurable_backup_thresholds(self):
+        now = datetime.utcnow()
+        repo = Repository(
+            name="Monthly Repo",
+            path="/srv/backups/monthly",
+            last_backup=now - timedelta(days=20),
+            last_check=now - timedelta(hours=1),
+            last_compact=now - timedelta(hours=1),
+            last_restore_check=None,
+            restore_check_cron_expression=None,
+        )
+
+        health = build_full_repository_health(
+            repo,
+            now,
+            thresholds=DashboardHealthThresholds(
+                backup_warning_days=14,
+                backup_critical_days=31,
+            ),
+        )
+
+        assert health["health_status"] == "warning"
+        assert health["dimension_health"]["backup"] == "warning"
+        assert "Last backup 20 days ago" in health["warnings"]
+        assert not any("No backup in" in warning for warning in health["warnings"])
 
     def test_full_repository_health_warns_when_restore_check_configured_never_ran(
         self,
@@ -791,3 +819,52 @@ class TestDashboardScheduleAndOverview:
         )
         assert data["system_metrics"]["cpu_usage"] == 12.5
         assert data["last_updated"].endswith("+00:00")
+
+    def test_dashboard_overview_uses_configured_backup_health_thresholds(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+    ):
+        now = datetime.now(timezone.utc)
+        test_db.add(
+            SystemSettings(
+                dashboard_backup_warning_days=14,
+                dashboard_backup_critical_days=31,
+            )
+        )
+        test_db.add(
+            Repository(
+                name="Monthly Repo",
+                path="/srv/backups/monthly",
+                repository_type="local",
+                mode="full",
+                archive_count=1,
+                total_size="1 GB",
+                last_backup=now - timedelta(days=20),
+                last_check=now - timedelta(hours=1),
+                last_compact=now - timedelta(hours=1),
+            )
+        )
+        test_db.commit()
+
+        metrics = SystemMetrics(
+            cpu_usage=12.5,
+            cpu_count=8,
+            memory_usage=43.0,
+            memory_total=1024,
+            memory_available=512,
+            disk_usage=55.0,
+            disk_total=2048,
+            disk_free=1024,
+            uptime=123456,
+        )
+
+        with patch("app.api.dashboard.get_system_metrics", return_value=metrics):
+            response = test_client.get("/api/dashboard/overview", headers=admin_headers)
+
+        assert response.status_code == 200
+        repo_health = response.json()["repository_health"][0]
+        assert repo_health["health_status"] == "warning"
+        assert repo_health["dimension_health"]["backup"] == "warning"
+        assert repo_health["warnings"] == ["Last backup 20 days ago"]

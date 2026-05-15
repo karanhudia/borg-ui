@@ -97,6 +97,16 @@ export interface SystemSettings {
   max_concurrent_scheduled_backups?: number
   max_concurrent_scheduled_checks?: number
   stats_refresh_interval_minutes?: number
+  dashboard_backup_warning_days?: number
+  dashboard_backup_critical_days?: number
+  dashboard_check_warning_days?: number
+  dashboard_check_critical_days?: number
+  dashboard_compact_warning_days?: number
+  dashboard_compact_critical_days?: number
+  dashboard_restore_check_warning_days?: number
+  dashboard_restore_check_critical_days?: number
+  dashboard_observe_freshness_warning_days?: number
+  dashboard_observe_freshness_critical_days?: number
   bypass_lock_on_info?: boolean
   bypass_lock_on_list?: boolean
   metrics_enabled?: boolean

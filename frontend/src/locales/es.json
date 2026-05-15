@@ -116,6 +116,9 @@
       "integrity": "Integridad",
       "schedule": "Programación"
     },
+    "badges": {
+      "new": "Nuevo"
+    },
     "settings": {
       "personal": "Personal",
       "system": "Sistema",
@@ -576,6 +579,7 @@
       "run": "Ejecutar",
       "running": "Ejecutando",
       "cancel": "Cancelar",
+      "viewRepositories": "Ver repositorios",
       "delete": "Eliminar",
       "deleteConfirm": "¿Eliminar el plan de copia \"{{name}}\"?"
     },
@@ -842,6 +846,11 @@
       "hostname": "Ubicación (Nombre de host)",
       "type": "Tipo de repositorio",
       "mode": "Modo de copia de seguridad"
+    },
+    "filter": {
+      "backupPlan": "Plan de copia",
+      "allBackupPlans": "Todos los planes de copia",
+      "backupPlanFallback": "Plan de copia #{{id}}"
     },
     "loading": "Cargando repositorios...",
     "empty": {
@@ -1905,6 +1914,20 @@
     "statsRefreshDisabled": "La actualización automática de estadísticas está deshabilitada",
     "statsRefreshRangeError": "Debe estar entre 0 y {{max}} minutos",
     "statsRefreshIntervalHelper": "Las estadísticas del repositorio (número de archivos, tamaño, última copia) se actualizarán cada {{interval}} minutos",
+    "dashboardHealthThresholdsTitle": "Umbrales de salud del panel",
+    "dashboardHealthThresholdsDescription": "Define cuántos días pueden envejecer las señales de salud del panel antes de convertirse en advertencias o alertas críticas.",
+    "dashboardBackupWarningDaysLabel": "Edad de advertencia de copia (días)",
+    "dashboardBackupCriticalDaysLabel": "Edad crítica de copia (días)",
+    "dashboardObserveFreshnessWarningDaysLabel": "Edad de advertencia de observación (días)",
+    "dashboardObserveFreshnessCriticalDaysLabel": "Edad crítica de observación (días)",
+    "dashboardCheckWarningDaysLabel": "Edad de advertencia de comprobación (días)",
+    "dashboardCheckCriticalDaysLabel": "Edad crítica de comprobación (días)",
+    "dashboardCompactWarningDaysLabel": "Edad de advertencia de compactación (días)",
+    "dashboardCompactCriticalDaysLabel": "Edad crítica de compactación (días)",
+    "dashboardRestoreCheckWarningDaysLabel": "Edad de advertencia de prueba de restauración (días)",
+    "dashboardRestoreCheckCriticalDaysLabel": "Edad crítica de prueba de restauración (días)",
+    "dashboardHealthThresholdRangeHelper": "1-{{max}} días. Advertencia debe ser menor o igual que crítico.",
+    "dashboardHealthThresholdError": "Introduce un número de días válido. Advertencia debe ser menor o igual que crítico.",
     "lastRefreshed": "Última actualización:",
     "manualRefreshAlert": "Establecer a 0 para deshabilitar la actualización automática. El planificador actualiza las estadísticas de todos los repositorios, incluidos los de solo observación donde las copias ocurren externamente.",
     "metricsAccessTitle": "Acceso a métricas",
@@ -3712,6 +3735,8 @@
         "invalidDeploymentType": "deployment_type debe ser 'individual' o 'enterprise'",
         "invalidLogSavePolicy": "Política log_save_policy no válida. Debe ser una de: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb debe ser al menos 10 MB",
+        "invalidDashboardHealthThreshold": "{{field}} debe estar entre 1 y {{max}} días",
+        "invalidDashboardHealthThresholdOrder": "Los umbrales de advertencia del panel deben ser menores o iguales que los umbrales críticos",
         "userNotFound": "Usuario no encontrado",
         "usernameAlreadyExists": "El nombre de usuario ya existe",
         "failedRetrieveSystemSettings": "Error al obtener la configuración del sistema: {{error}}",

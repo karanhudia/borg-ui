@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { authAPI, authAPIAdmin, settingsAPI } from '../services/api'
+import type { SystemSettings } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import ArchiveBrowsingLimitsSection from './system-settings/ArchiveBrowsingLimitsSection'
@@ -24,6 +25,11 @@ import { formatAuthEventType, formatAuthSource } from './system-settings/authFor
 import type { AuthEventFilter, CacheStats } from './system-settings/types'
 import { getSystemSettingsValidationError } from './system-settings/validation'
 
+type SystemSettingsQueryData = {
+  settings?: Record<string, unknown>
+  [key: string]: unknown
+}
+
 const SystemSettingsTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -40,6 +46,18 @@ const SystemSettingsTab: React.FC = () => {
   const [maxConcurrentScheduledBackups, setMaxConcurrentScheduledBackups] = useState(2)
   const [maxConcurrentScheduledChecks, setMaxConcurrentScheduledChecks] = useState(4)
   const [statsRefreshInterval, setStatsRefreshInterval] = useState(60)
+  const [dashboardBackupWarningDays, setDashboardBackupWarningDays] = useState(3)
+  const [dashboardBackupCriticalDays, setDashboardBackupCriticalDays] = useState(7)
+  const [dashboardCheckWarningDays, setDashboardCheckWarningDays] = useState(7)
+  const [dashboardCheckCriticalDays, setDashboardCheckCriticalDays] = useState(30)
+  const [dashboardCompactWarningDays, setDashboardCompactWarningDays] = useState(30)
+  const [dashboardCompactCriticalDays, setDashboardCompactCriticalDays] = useState(60)
+  const [dashboardRestoreCheckWarningDays, setDashboardRestoreCheckWarningDays] = useState(14)
+  const [dashboardRestoreCheckCriticalDays, setDashboardRestoreCheckCriticalDays] = useState(30)
+  const [dashboardObserveFreshnessWarningDays, setDashboardObserveFreshnessWarningDays] =
+    useState(2)
+  const [dashboardObserveFreshnessCriticalDays, setDashboardObserveFreshnessCriticalDays] =
+    useState(7)
   const [isRefreshingStats, setIsRefreshingStats] = useState(false)
   const [metricsEnabled, setMetricsEnabled] = useState(false)
   const [metricsRequireAuth, setMetricsRequireAuth] = useState(false)
@@ -136,6 +154,22 @@ const SystemSettingsTab: React.FC = () => {
       setMaxConcurrentScheduledBackups(systemSettings.max_concurrent_scheduled_backups ?? 2)
       setMaxConcurrentScheduledChecks(systemSettings.max_concurrent_scheduled_checks ?? 4)
       setStatsRefreshInterval(systemSettings.stats_refresh_interval_minutes ?? 60)
+      setDashboardBackupWarningDays(systemSettings.dashboard_backup_warning_days ?? 3)
+      setDashboardBackupCriticalDays(systemSettings.dashboard_backup_critical_days ?? 7)
+      setDashboardCheckWarningDays(systemSettings.dashboard_check_warning_days ?? 7)
+      setDashboardCheckCriticalDays(systemSettings.dashboard_check_critical_days ?? 30)
+      setDashboardCompactWarningDays(systemSettings.dashboard_compact_warning_days ?? 30)
+      setDashboardCompactCriticalDays(systemSettings.dashboard_compact_critical_days ?? 60)
+      setDashboardRestoreCheckWarningDays(systemSettings.dashboard_restore_check_warning_days ?? 14)
+      setDashboardRestoreCheckCriticalDays(
+        systemSettings.dashboard_restore_check_critical_days ?? 30
+      )
+      setDashboardObserveFreshnessWarningDays(
+        systemSettings.dashboard_observe_freshness_warning_days ?? 2
+      )
+      setDashboardObserveFreshnessCriticalDays(
+        systemSettings.dashboard_observe_freshness_critical_days ?? 7
+      )
       setMetricsEnabled(systemSettings.metrics_enabled ?? false)
       setMetricsRequireAuth(systemSettings.metrics_require_auth ?? false)
       setRotateMetricsToken(false)
@@ -183,6 +217,21 @@ const SystemSettingsTab: React.FC = () => {
         maxConcurrentScheduledChecks !== (systemSettings.max_concurrent_scheduled_checks ?? 4)
       const statsRefreshDirty =
         statsRefreshInterval !== (systemSettings.stats_refresh_interval_minutes ?? 60)
+      const dashboardThresholdDirty =
+        dashboardBackupWarningDays !== (systemSettings.dashboard_backup_warning_days ?? 3) ||
+        dashboardBackupCriticalDays !== (systemSettings.dashboard_backup_critical_days ?? 7) ||
+        dashboardCheckWarningDays !== (systemSettings.dashboard_check_warning_days ?? 7) ||
+        dashboardCheckCriticalDays !== (systemSettings.dashboard_check_critical_days ?? 30) ||
+        dashboardCompactWarningDays !== (systemSettings.dashboard_compact_warning_days ?? 30) ||
+        dashboardCompactCriticalDays !== (systemSettings.dashboard_compact_critical_days ?? 60) ||
+        dashboardRestoreCheckWarningDays !==
+          (systemSettings.dashboard_restore_check_warning_days ?? 14) ||
+        dashboardRestoreCheckCriticalDays !==
+          (systemSettings.dashboard_restore_check_critical_days ?? 30) ||
+        dashboardObserveFreshnessWarningDays !==
+          (systemSettings.dashboard_observe_freshness_warning_days ?? 2) ||
+        dashboardObserveFreshnessCriticalDays !==
+          (systemSettings.dashboard_observe_freshness_critical_days ?? 7)
       const metricsDirty =
         metricsEnabled !== (systemSettings.metrics_enabled ?? false) ||
         metricsRequireAuth !== (systemSettings.metrics_require_auth ?? false) ||
@@ -214,8 +263,17 @@ const SystemSettingsTab: React.FC = () => {
           (systemSettings.oidc_default_all_repositories_role ?? 'viewer')
 
       setBrowseChanged(browseDirty)
-      setSystemChanged(timeoutDirty || statsRefreshDirty || metricsDirty || oidcDirty)
-      setHasChanges(browseDirty || timeoutDirty || statsRefreshDirty || metricsDirty || oidcDirty)
+      setSystemChanged(
+        timeoutDirty || statsRefreshDirty || dashboardThresholdDirty || metricsDirty || oidcDirty
+      )
+      setHasChanges(
+        browseDirty ||
+          timeoutDirty ||
+          statsRefreshDirty ||
+          dashboardThresholdDirty ||
+          metricsDirty ||
+          oidcDirty
+      )
     }
   }, [
     browseMaxItems,
@@ -229,6 +287,16 @@ const SystemSettingsTab: React.FC = () => {
     maxConcurrentScheduledBackups,
     maxConcurrentScheduledChecks,
     statsRefreshInterval,
+    dashboardBackupWarningDays,
+    dashboardBackupCriticalDays,
+    dashboardCheckWarningDays,
+    dashboardCheckCriticalDays,
+    dashboardCompactWarningDays,
+    dashboardCompactCriticalDays,
+    dashboardRestoreCheckWarningDays,
+    dashboardRestoreCheckCriticalDays,
+    dashboardObserveFreshnessWarningDays,
+    dashboardObserveFreshnessCriticalDays,
     metricsEnabled,
     metricsRequireAuth,
     rotateMetricsToken,
@@ -273,6 +341,16 @@ const SystemSettingsTab: React.FC = () => {
     statsRefreshInterval,
     maxConcurrentScheduledBackups,
     maxConcurrentScheduledChecks,
+    dashboardBackupWarningDays,
+    dashboardBackupCriticalDays,
+    dashboardCheckWarningDays,
+    dashboardCheckCriticalDays,
+    dashboardCompactWarningDays,
+    dashboardCompactCriticalDays,
+    dashboardRestoreCheckWarningDays,
+    dashboardRestoreCheckCriticalDays,
+    dashboardObserveFreshnessWarningDays,
+    dashboardObserveFreshnessCriticalDays,
     oidcEnabled,
     oidcDiscoveryUrl,
     oidcClientId,
@@ -285,6 +363,61 @@ const SystemSettingsTab: React.FC = () => {
     systemSettings,
     t,
   })
+
+  const buildSystemSettingsUpdatePayload = (): SystemSettings => ({
+    mount_timeout: mountTimeout,
+    info_timeout: infoTimeout,
+    list_timeout: listTimeout,
+    init_timeout: initTimeout,
+    backup_timeout: backupTimeout,
+    source_size_timeout: sourceSizeTimeout,
+    max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
+    max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
+    stats_refresh_interval_minutes: statsRefreshInterval,
+    dashboard_backup_warning_days: dashboardBackupWarningDays,
+    dashboard_backup_critical_days: dashboardBackupCriticalDays,
+    dashboard_check_warning_days: dashboardCheckWarningDays,
+    dashboard_check_critical_days: dashboardCheckCriticalDays,
+    dashboard_compact_warning_days: dashboardCompactWarningDays,
+    dashboard_compact_critical_days: dashboardCompactCriticalDays,
+    dashboard_restore_check_warning_days: dashboardRestoreCheckWarningDays,
+    dashboard_restore_check_critical_days: dashboardRestoreCheckCriticalDays,
+    dashboard_observe_freshness_warning_days: dashboardObserveFreshnessWarningDays,
+    dashboard_observe_freshness_critical_days: dashboardObserveFreshnessCriticalDays,
+    metrics_enabled: metricsEnabled,
+    metrics_require_auth: metricsRequireAuth,
+    rotate_metrics_token: rotateMetricsToken,
+    oidc_enabled: oidcEnabled,
+    oidc_disable_local_auth: oidcDisableLocalAuth,
+    oidc_provider_name: oidcProviderName,
+    oidc_token_auth_method: oidcTokenAuthMethod,
+    oidc_discovery_url: oidcDiscoveryUrl,
+    oidc_client_id: oidcClientId,
+    oidc_client_secret: oidcClientSecret || undefined,
+    clear_oidc_client_secret: clearOidcClientSecret,
+    oidc_scopes: oidcScopes,
+    oidc_redirect_uri_override: oidcRedirectUriOverride,
+    oidc_end_session_endpoint_override: oidcEndSessionEndpointOverride,
+    oidc_claim_username: oidcClaimUsername,
+    oidc_claim_email: oidcClaimEmail,
+    oidc_claim_full_name: oidcClaimFullName,
+    oidc_group_claim: oidcGroupClaim,
+    oidc_role_claim: oidcRoleClaim,
+    oidc_admin_groups: oidcAdminGroups,
+    oidc_all_repositories_role_claim: oidcAllRepositoriesRoleClaim,
+    oidc_new_user_mode: oidcNewUserMode,
+    oidc_new_user_template_username: oidcTemplateUsername,
+    oidc_default_role: oidcDefaultRole,
+    oidc_default_all_repositories_role: oidcDefaultAllRepositoriesRole,
+  })
+
+  const buildCacheableSystemSettings = (): Record<string, unknown> => {
+    const settings = { ...buildSystemSettingsUpdatePayload() } as Record<string, unknown>
+    delete settings.oidc_client_secret
+    delete settings.clear_oidc_client_secret
+    delete settings.rotate_metrics_token
+    return settings
+  }
 
   const saveBrowseLimitsMutation = useMutation({
     mutationFn: async () => {
@@ -315,45 +448,30 @@ const SystemSettingsTab: React.FC = () => {
 
   const saveTimeoutsMutation = useMutation({
     mutationFn: async () => {
-      return await settingsAPI.updateSystemSettings({
-        mount_timeout: mountTimeout,
-        info_timeout: infoTimeout,
-        list_timeout: listTimeout,
-        init_timeout: initTimeout,
-        backup_timeout: backupTimeout,
-        source_size_timeout: sourceSizeTimeout,
-        max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
-        max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
-        stats_refresh_interval_minutes: statsRefreshInterval,
-        metrics_enabled: metricsEnabled,
-        metrics_require_auth: metricsRequireAuth,
-        rotate_metrics_token: rotateMetricsToken,
-        oidc_enabled: oidcEnabled,
-        oidc_disable_local_auth: oidcDisableLocalAuth,
-        oidc_provider_name: oidcProviderName,
-        oidc_token_auth_method: oidcTokenAuthMethod,
-        oidc_discovery_url: oidcDiscoveryUrl,
-        oidc_client_id: oidcClientId,
-        oidc_client_secret: oidcClientSecret || undefined,
-        clear_oidc_client_secret: clearOidcClientSecret,
-        oidc_scopes: oidcScopes,
-        oidc_redirect_uri_override: oidcRedirectUriOverride,
-        oidc_end_session_endpoint_override: oidcEndSessionEndpointOverride,
-        oidc_claim_username: oidcClaimUsername,
-        oidc_claim_email: oidcClaimEmail,
-        oidc_claim_full_name: oidcClaimFullName,
-        oidc_group_claim: oidcGroupClaim,
-        oidc_role_claim: oidcRoleClaim,
-        oidc_admin_groups: oidcAdminGroups,
-        oidc_all_repositories_role_claim: oidcAllRepositoriesRoleClaim,
-        oidc_new_user_mode: oidcNewUserMode,
-        oidc_new_user_template_username: oidcTemplateUsername,
-        oidc_default_role: oidcDefaultRole,
-        oidc_default_all_repositories_role: oidcDefaultAllRepositoriesRole,
-      })
+      return await settingsAPI.updateSystemSettings(buildSystemSettingsUpdatePayload())
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+    onSuccess: async (response) => {
+      const updatedSettings = response?.data?.settings
+      if (updatedSettings && typeof updatedSettings === 'object') {
+        queryClient.setQueryData<SystemSettingsQueryData>(['systemSettings'], (current) => ({
+          ...(current ?? {}),
+          settings: {
+            ...(current?.settings ?? {}),
+            ...buildCacheableSystemSettings(),
+            ...(updatedSettings as Record<string, unknown>),
+          },
+        }))
+      }
+
+      try {
+        const settingsResponse = await settingsAPI.getSystemSettings()
+        queryClient.setQueryData<SystemSettingsQueryData>(
+          ['systemSettings'],
+          settingsResponse.data as SystemSettingsQueryData
+        )
+      } catch {
+        return queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+      }
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -418,6 +536,16 @@ const SystemSettingsTab: React.FC = () => {
         max_concurrent_scheduled_backups: maxConcurrentScheduledBackups,
         max_concurrent_scheduled_checks: maxConcurrentScheduledChecks,
         stats_refresh_interval_minutes: statsRefreshInterval,
+        dashboard_backup_warning_days: dashboardBackupWarningDays,
+        dashboard_backup_critical_days: dashboardBackupCriticalDays,
+        dashboard_check_warning_days: dashboardCheckWarningDays,
+        dashboard_check_critical_days: dashboardCheckCriticalDays,
+        dashboard_compact_warning_days: dashboardCompactWarningDays,
+        dashboard_compact_critical_days: dashboardCompactCriticalDays,
+        dashboard_restore_check_warning_days: dashboardRestoreCheckWarningDays,
+        dashboard_restore_check_critical_days: dashboardRestoreCheckCriticalDays,
+        dashboard_observe_freshness_warning_days: dashboardObserveFreshnessWarningDays,
+        dashboard_observe_freshness_critical_days: dashboardObserveFreshnessCriticalDays,
         metrics_enabled: metricsEnabled,
         metrics_require_auth: metricsRequireAuth,
         rotate_metrics_token: rotateMetricsToken,
@@ -587,11 +715,31 @@ const SystemSettingsTab: React.FC = () => {
               statsRefreshInterval={statsRefreshInterval}
               maxConcurrentScheduledBackups={maxConcurrentScheduledBackups}
               maxConcurrentScheduledChecks={maxConcurrentScheduledChecks}
+              dashboardBackupWarningDays={dashboardBackupWarningDays}
+              dashboardBackupCriticalDays={dashboardBackupCriticalDays}
+              dashboardCheckWarningDays={dashboardCheckWarningDays}
+              dashboardCheckCriticalDays={dashboardCheckCriticalDays}
+              dashboardCompactWarningDays={dashboardCompactWarningDays}
+              dashboardCompactCriticalDays={dashboardCompactCriticalDays}
+              dashboardRestoreCheckWarningDays={dashboardRestoreCheckWarningDays}
+              dashboardRestoreCheckCriticalDays={dashboardRestoreCheckCriticalDays}
+              dashboardObserveFreshnessWarningDays={dashboardObserveFreshnessWarningDays}
+              dashboardObserveFreshnessCriticalDays={dashboardObserveFreshnessCriticalDays}
               isRefreshingStats={isRefreshingStats}
               lastStatsRefresh={systemSettings?.last_stats_refresh}
               setStatsRefreshInterval={setStatsRefreshInterval}
               setMaxConcurrentScheduledBackups={setMaxConcurrentScheduledBackups}
               setMaxConcurrentScheduledChecks={setMaxConcurrentScheduledChecks}
+              setDashboardBackupWarningDays={setDashboardBackupWarningDays}
+              setDashboardBackupCriticalDays={setDashboardBackupCriticalDays}
+              setDashboardCheckWarningDays={setDashboardCheckWarningDays}
+              setDashboardCheckCriticalDays={setDashboardCheckCriticalDays}
+              setDashboardCompactWarningDays={setDashboardCompactWarningDays}
+              setDashboardCompactCriticalDays={setDashboardCompactCriticalDays}
+              setDashboardRestoreCheckWarningDays={setDashboardRestoreCheckWarningDays}
+              setDashboardRestoreCheckCriticalDays={setDashboardRestoreCheckCriticalDays}
+              setDashboardObserveFreshnessWarningDays={setDashboardObserveFreshnessWarningDays}
+              setDashboardObserveFreshnessCriticalDays={setDashboardObserveFreshnessCriticalDays}
               onRefreshStats={handleRefreshStats}
             />
           )}

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import psutil
 import structlog
+from dataclasses import dataclass, fields
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
@@ -18,6 +19,7 @@ from app.database.models import (
     CompactJob,
     RestoreCheckJob,
     SSHConnection,
+    SystemSettings,
 )
 from app.core.security import get_current_user
 from app.utils.datetime_utils import serialize_datetime
@@ -32,6 +34,35 @@ router = APIRouter()
 
 RESTORE_CHECK_WARNING_DAYS = 14
 RESTORE_CHECK_CRITICAL_DAYS = 30
+
+
+@dataclass(frozen=True)
+class DashboardHealthThresholds:
+    backup_warning_days: int = 3
+    backup_critical_days: int = 7
+    check_warning_days: int = 7
+    check_critical_days: int = 30
+    compact_warning_days: int = 30
+    compact_critical_days: int = 60
+    restore_check_warning_days: int = RESTORE_CHECK_WARNING_DAYS
+    restore_check_critical_days: int = RESTORE_CHECK_CRITICAL_DAYS
+    observe_freshness_warning_days: int = 2
+    observe_freshness_critical_days: int = 7
+
+    @classmethod
+    def from_settings(
+        cls, settings: Optional[SystemSettings]
+    ) -> "DashboardHealthThresholds":
+        if not settings:
+            return cls()
+
+        values = {}
+        for field in fields(cls):
+            settings_name = f"dashboard_{field.name}"
+            value = getattr(settings, settings_name, None)
+            values[field.name] = field.default if value is None else value
+
+        return cls(**values)
 
 
 # Helper function to format datetime with timezone
@@ -113,12 +144,22 @@ def promote_repository_health(
     return health_status, health_color
 
 
+def classify_day_age(days: int, warning_days: int, critical_days: int) -> str:
+    if days > critical_days:
+        return "critical"
+    if days > warning_days:
+        return "warning"
+    return "healthy"
+
+
 def build_restore_check_health(
     repo: Repository,
     now: datetime,
     latest_restore_check: Optional[RestoreCheckJob] = None,
+    thresholds: Optional[DashboardHealthThresholds] = None,
 ) -> Dict[str, Any]:
     """Build restore-verification health without penalizing unconfigured repos."""
+    thresholds = thresholds or DashboardHealthThresholds()
     configured = bool(repo.restore_check_cron_expression)
     latest_status = latest_restore_check.status if latest_restore_check else None
     latest_error = latest_restore_check.error_message if latest_restore_check else None
@@ -179,7 +220,12 @@ def build_restore_check_health(
 
     if last_success:
         days_since_restore_check = (now - last_success).days
-        if days_since_restore_check > RESTORE_CHECK_CRITICAL_DAYS:
+        restore_dim = classify_day_age(
+            days_since_restore_check,
+            thresholds.restore_check_warning_days,
+            thresholds.restore_check_critical_days,
+        )
+        if restore_dim == "critical":
             return {
                 "dimension": "critical",
                 "severity": "critical",
@@ -188,7 +234,7 @@ def build_restore_check_health(
                 "latest_status": latest_status,
                 "latest_error": latest_error,
             }
-        if days_since_restore_check > RESTORE_CHECK_WARNING_DAYS:
+        if restore_dim == "warning":
             return {
                 "dimension": "warning",
                 "severity": "warning",
@@ -230,26 +276,29 @@ def build_full_repository_health(
     repo: Repository,
     now: datetime,
     latest_restore_check: Optional[RestoreCheckJob] = None,
+    thresholds: Optional[DashboardHealthThresholds] = None,
 ) -> Dict[str, Any]:
     """Build health signals for repositories managed directly by Borg UI."""
+    thresholds = thresholds or DashboardHealthThresholds()
     health_status = "healthy"
     health_color = "success"
     warnings = []
 
     if repo.last_backup:
         days_since_backup = (now - repo.last_backup).days
-        if days_since_backup > 7:
+        backup_dim = classify_day_age(
+            days_since_backup,
+            thresholds.backup_warning_days,
+            thresholds.backup_critical_days,
+        )
+        if backup_dim == "critical":
             health_status = "critical"
             health_color = "error"
             warnings.append(f"No backup in {days_since_backup} days")
-            backup_dim = "critical"
-        elif days_since_backup > 3:
+        elif backup_dim == "warning":
             health_status = "warning"
             health_color = "warning"
             warnings.append(f"Last backup {days_since_backup} days ago")
-            backup_dim = "warning"
-        else:
-            backup_dim = "healthy"
     else:
         health_status = "critical"
         health_color = "error"
@@ -258,29 +307,27 @@ def build_full_repository_health(
 
     if repo.last_check:
         days_since_check = (now - repo.last_check).days
-        check_dim = (
-            "critical"
-            if days_since_check > 30
-            else "warning"
-            if days_since_check > 7
-            else "healthy"
+        check_dim = classify_day_age(
+            days_since_check,
+            thresholds.check_warning_days,
+            thresholds.check_critical_days,
         )
     else:
         check_dim = "critical"
 
     if repo.last_compact:
         days_since_compact = (now - repo.last_compact).days
-        compact_dim = (
-            "critical"
-            if days_since_compact > 60
-            else "warning"
-            if days_since_compact > 30
-            else "healthy"
+        compact_dim = classify_day_age(
+            days_since_compact,
+            thresholds.compact_warning_days,
+            thresholds.compact_critical_days,
         )
     else:
         compact_dim = "critical"
 
-    restore_check_health = build_restore_check_health(repo, now, latest_restore_check)
+    restore_check_health = build_restore_check_health(
+        repo, now, latest_restore_check, thresholds
+    )
     if restore_check_health["severity"]:
         health_status, health_color = promote_repository_health(
             health_status, health_color, restore_check_health["severity"]
@@ -308,8 +355,10 @@ def build_observe_repository_health(
     repo: Repository,
     now: datetime,
     latest_restore_check: Optional[RestoreCheckJob] = None,
+    thresholds: Optional[DashboardHealthThresholds] = None,
 ) -> Dict[str, Any]:
     """Build monitoring-oriented health signals for observe-only repositories."""
+    thresholds = thresholds or DashboardHealthThresholds()
     freshness_dim = "healthy"
     check_dim = "unknown"
     archives_dim = "healthy"
@@ -327,19 +376,21 @@ def build_observe_repository_health(
 
     if repo.last_backup:
         days_since_archive = (now - repo.last_backup).days
-        if days_since_archive > 7:
+        freshness_dim = classify_day_age(
+            days_since_archive,
+            thresholds.observe_freshness_warning_days,
+            thresholds.observe_freshness_critical_days,
+        )
+        if freshness_dim == "critical":
             freshness_dim = "critical"
             health_status = "critical"
             health_color = "error"
             warnings.append(f"No new archives in {days_since_archive} days")
-        elif days_since_archive > 2:
-            freshness_dim = "warning"
+        elif freshness_dim == "warning":
             if health_status != "critical":
                 health_status = "warning"
                 health_color = "warning"
             warnings.append(f"Latest archive {days_since_archive} days old")
-        else:
-            freshness_dim = "healthy"
     else:
         freshness_dim = "critical"
         health_status = "critical"
@@ -348,18 +399,18 @@ def build_observe_repository_health(
 
     if repo.last_check:
         days_since_check = (now - repo.last_check).days
-        check_dim = (
-            "critical"
-            if days_since_check > 30
-            else "warning"
-            if days_since_check > 7
-            else "healthy"
+        check_dim = classify_day_age(
+            days_since_check,
+            thresholds.check_warning_days,
+            thresholds.check_critical_days,
         )
         if check_dim in ("critical", "warning") and health_status != "critical":
             health_status = "warning"
             health_color = "warning"
 
-    restore_check_health = build_restore_check_health(repo, now, latest_restore_check)
+    restore_check_health = build_restore_check_health(
+        repo, now, latest_restore_check, thresholds
+    )
     if restore_check_health["severity"]:
         health_status, health_color = promote_repository_health(
             health_status, health_color, restore_check_health["severity"]
@@ -590,6 +641,8 @@ async def get_dashboard_overview(
     """Get comprehensive dashboard overview with repository health, trends, and maintenance alerts"""
     try:
         now = datetime.utcnow()
+        settings = db.query(SystemSettings).first()
+        health_thresholds = DashboardHealthThresholds.from_settings(settings)
 
         # Get all repositories
         repositories = db.query(Repository).all()
@@ -642,7 +695,9 @@ async def get_dashboard_overview(
             # Parse size for this repo
             size_bytes = parse_size_to_bytes(repo.total_size)
             latest_restore_check = latest_restore_checks.get(repo.id)
-            health = build_full_repository_health(repo, now, latest_restore_check)
+            health = build_full_repository_health(
+                repo, now, latest_restore_check, health_thresholds
+            )
 
             # Get associated schedule — prefer enabled over disabled when multiple match
             repo_schedule = None
@@ -725,7 +780,9 @@ async def get_dashboard_overview(
         for repo in observe_only_repos:
             size_bytes = parse_size_to_bytes(repo.total_size)
             latest_restore_check = latest_restore_checks.get(repo.id)
-            health = build_observe_repository_health(repo, now, latest_restore_check)
+            health = build_observe_repository_health(
+                repo, now, latest_restore_check, health_thresholds
+            )
 
             repo_health.append(
                 {
@@ -850,11 +907,14 @@ async def get_dashboard_overview(
         for repo in full_mode_repos:
             if repo.last_check:
                 days_since_check = (now - repo.last_check).days
-                if days_since_check > 30:
+                if days_since_check > health_thresholds.check_critical_days:
                     maintenance_alerts.append(
                         {
                             "type": "check_overdue",
-                            "severity": "warning" if days_since_check < 60 else "error",
+                            "severity": "warning"
+                            if days_since_check
+                            < health_thresholds.check_critical_days * 2
+                            else "error",
                             "repository": repo.name,
                             "repository_id": repo.id,
                             "message": f"Check overdue by {days_since_check} days",
@@ -875,7 +935,7 @@ async def get_dashboard_overview(
 
             if repo.last_compact:
                 days_since_compact = (now - repo.last_compact).days
-                if days_since_compact > 60:
+                if days_since_compact > health_thresholds.compact_critical_days:
                     maintenance_alerts.append(
                         {
                             "type": "compact_recommended",

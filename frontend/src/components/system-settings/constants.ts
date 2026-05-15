@@ -6,6 +6,7 @@ export const MIN_TIMEOUT = 10
 export const MAX_TIMEOUT = 86400
 export const MAX_STATS_REFRESH = 1440
 export const MAX_SCHEDULE_CONCURRENCY = 64
+export const MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS = 3650
 
 export const formatTimeout = (seconds: number): string => {
   if (seconds >= 3600) {

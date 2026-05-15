@@ -116,6 +116,9 @@
       "integrity": "Integrità",
       "schedule": "Pianificazione"
     },
+    "badges": {
+      "new": "Nuovo"
+    },
     "settings": {
       "personal": "Personali",
       "system": "Sistema",
@@ -576,6 +579,7 @@
       "run": "Esegui",
       "running": "In esecuzione",
       "cancel": "Annulla",
+      "viewRepositories": "Visualizza repository",
       "delete": "Elimina",
       "deleteConfirm": "Eliminare il piano di backup \"{{name}}\"?"
     },
@@ -842,6 +846,11 @@
       "hostname": "Posizione (Hostname)",
       "type": "Tipo Repository",
       "mode": "Modalità Backup"
+    },
+    "filter": {
+      "backupPlan": "Piano di backup",
+      "allBackupPlans": "Tutti i piani di backup",
+      "backupPlanFallback": "Piano di backup #{{id}}"
     },
     "loading": "Caricamento repository...",
     "empty": {
@@ -1905,6 +1914,20 @@
     "statsRefreshDisabled": "Aggiornamento automatico statistiche disabilitato",
     "statsRefreshRangeError": "Deve essere compreso tra 0 e {{max}} minuti",
     "statsRefreshIntervalHelper": "Le statistiche del repository (conteggio archivi, dimensione, ultimo backup) verranno aggiornate ogni {{interval}} minuti",
+    "dashboardHealthThresholdsTitle": "Soglie salute dashboard",
+    "dashboardHealthThresholdsDescription": "Imposta quanti giorni possono avere i segnali di salute della dashboard prima di diventare avvisi o alert critici.",
+    "dashboardBackupWarningDaysLabel": "Età avviso backup (giorni)",
+    "dashboardBackupCriticalDaysLabel": "Età critica backup (giorni)",
+    "dashboardObserveFreshnessWarningDaysLabel": "Età avviso osservazione (giorni)",
+    "dashboardObserveFreshnessCriticalDaysLabel": "Età critica osservazione (giorni)",
+    "dashboardCheckWarningDaysLabel": "Età avviso controllo (giorni)",
+    "dashboardCheckCriticalDaysLabel": "Età critica controllo (giorni)",
+    "dashboardCompactWarningDaysLabel": "Età avviso compattazione (giorni)",
+    "dashboardCompactCriticalDaysLabel": "Età critica compattazione (giorni)",
+    "dashboardRestoreCheckWarningDaysLabel": "Età avviso controllo ripristino (giorni)",
+    "dashboardRestoreCheckCriticalDaysLabel": "Età critica controllo ripristino (giorni)",
+    "dashboardHealthThresholdRangeHelper": "1-{{max}} giorni. Avviso deve essere minore o uguale a critico.",
+    "dashboardHealthThresholdError": "Inserisci un numero di giorni valido. Avviso deve essere minore o uguale a critico.",
     "lastRefreshed": "Ultimo aggiornamento:",
     "manualRefreshAlert": "Imposta a 0 per disabilitare l'aggiornamento automatico. Il pianificatore aggiorna le statistiche per tutti i repository, inclusi quelli di sola osservazione dove i backup avvengono esternamente.",
     "metricsAccessTitle": "Accesso alle metriche",
@@ -3712,6 +3735,8 @@
         "invalidDeploymentType": "deployment_type deve essere 'individual' o 'enterprise'",
         "invalidLogSavePolicy": "log_save_policy non valido. Deve essere uno di: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb deve essere almeno 10 MB",
+        "invalidDashboardHealthThreshold": "{{field}} deve essere compreso tra 1 e {{max}} giorni",
+        "invalidDashboardHealthThresholdOrder": "Le soglie di avviso della dashboard devono essere minori o uguali alle soglie critiche",
         "userNotFound": "Utente non trovato",
         "usernameAlreadyExists": "Nome utente già esistente",
         "failedRetrieveSystemSettings": "Impossibile recuperare le impostazioni di sistema: {{error}}",

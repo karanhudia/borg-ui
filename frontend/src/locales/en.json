@@ -116,6 +116,9 @@
       "integrity": "Integrity",
       "schedule": "Schedule"
     },
+    "badges": {
+      "new": "New"
+    },
     "settings": {
       "personal": "Personal",
       "system": "System",
@@ -576,6 +579,7 @@
       "run": "Run",
       "running": "Running",
       "cancel": "Cancel",
+      "viewRepositories": "View repositories",
       "delete": "Delete",
       "deleteConfirm": "Delete backup plan \"{{name}}\"?"
     },
@@ -842,6 +846,11 @@
       "hostname": "Location (Hostname)",
       "type": "Repository Type",
       "mode": "Backup Mode"
+    },
+    "filter": {
+      "backupPlan": "Backup Plan",
+      "allBackupPlans": "All backup plans",
+      "backupPlanFallback": "Backup Plan #{{id}}"
     },
     "loading": "Loading repositories...",
     "empty": {
@@ -1905,6 +1914,20 @@
     "statsRefreshDisabled": "Automatic stats refresh is disabled",
     "statsRefreshRangeError": "Must be between 0 and {{max}} minutes",
     "statsRefreshIntervalHelper": "Repository stats (archive count, size, last backup) will be refreshed every {{interval}} minutes",
+    "dashboardHealthThresholdsTitle": "Dashboard Health Thresholds",
+    "dashboardHealthThresholdsDescription": "Set how many days old dashboard health signals can be before they become warnings or critical alerts.",
+    "dashboardBackupWarningDaysLabel": "Backup Warning Age (days)",
+    "dashboardBackupCriticalDaysLabel": "Backup Critical Age (days)",
+    "dashboardObserveFreshnessWarningDaysLabel": "Observe Warning Age (days)",
+    "dashboardObserveFreshnessCriticalDaysLabel": "Observe Critical Age (days)",
+    "dashboardCheckWarningDaysLabel": "Check Warning Age (days)",
+    "dashboardCheckCriticalDaysLabel": "Check Critical Age (days)",
+    "dashboardCompactWarningDaysLabel": "Compact Warning Age (days)",
+    "dashboardCompactCriticalDaysLabel": "Compact Critical Age (days)",
+    "dashboardRestoreCheckWarningDaysLabel": "Restore Check Warning Age (days)",
+    "dashboardRestoreCheckCriticalDaysLabel": "Restore Check Critical Age (days)",
+    "dashboardHealthThresholdRangeHelper": "1-{{max}} days. Warning must be less than or equal to critical.",
+    "dashboardHealthThresholdError": "Enter a valid day count. Warning must be less than or equal to critical.",
     "lastRefreshed": "Last refreshed:",
     "manualRefreshAlert": "Set to 0 to disable automatic refresh. The scheduler refreshes stats for all repositories, including observe-only ones where backups happen externally.",
     "metricsAccessTitle": "Metrics Access",
@@ -3712,6 +3735,8 @@
         "invalidDeploymentType": "deployment_type must be 'individual' or 'enterprise'",
         "invalidLogSavePolicy": "Invalid log_save_policy. Must be one of: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb must be at least 10 MB",
+        "invalidDashboardHealthThreshold": "{{field}} must be between 1 and {{max}} days",
+        "invalidDashboardHealthThresholdOrder": "Dashboard warning thresholds must be less than or equal to critical thresholds",
         "userNotFound": "User not found",
         "usernameAlreadyExists": "Username already exists",
         "failedRetrieveSystemSettings": "Failed to retrieve system settings: {{error}}",

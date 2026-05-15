@@ -42,6 +42,29 @@ DEFAULT_TIMEOUTS = {
     "backup_timeout": 3600,
     "source_size_timeout": 3600,
 }
+DEFAULT_DASHBOARD_HEALTH_THRESHOLDS = {
+    "dashboard_backup_warning_days": 3,
+    "dashboard_backup_critical_days": 7,
+    "dashboard_check_warning_days": 7,
+    "dashboard_check_critical_days": 30,
+    "dashboard_compact_warning_days": 30,
+    "dashboard_compact_critical_days": 60,
+    "dashboard_restore_check_warning_days": 14,
+    "dashboard_restore_check_critical_days": 30,
+    "dashboard_observe_freshness_warning_days": 2,
+    "dashboard_observe_freshness_critical_days": 7,
+}
+MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS = 3650
+DASHBOARD_HEALTH_THRESHOLD_PAIRS = (
+    ("dashboard_backup_warning_days", "dashboard_backup_critical_days"),
+    ("dashboard_check_warning_days", "dashboard_check_critical_days"),
+    ("dashboard_compact_warning_days", "dashboard_compact_critical_days"),
+    ("dashboard_restore_check_warning_days", "dashboard_restore_check_critical_days"),
+    (
+        "dashboard_observe_freshness_warning_days",
+        "dashboard_observe_freshness_critical_days",
+    ),
+)
 
 
 def _active_oidc_admin_count(db: Session) -> int:
@@ -81,6 +104,15 @@ def get_effective_timeout(db_value, env_value, default_value):
     else:
         # Use default
         return (default_value, None)
+
+
+def get_effective_dashboard_health_threshold(
+    settings: SystemSettings, field_name: str
+) -> int:
+    value = getattr(settings, field_name, None)
+    if value is not None:
+        return value
+    return DEFAULT_DASHBOARD_HEALTH_THRESHOLDS[field_name]
 
 
 # Pydantic models for request/response
@@ -153,6 +185,16 @@ class SystemSettingsUpdate(BaseModel):
     stats_refresh_interval_minutes: Optional[int] = (
         None  # How often to refresh repository stats (0 = disabled)
     )
+    dashboard_backup_warning_days: Optional[int] = None
+    dashboard_backup_critical_days: Optional[int] = None
+    dashboard_check_warning_days: Optional[int] = None
+    dashboard_check_critical_days: Optional[int] = None
+    dashboard_compact_warning_days: Optional[int] = None
+    dashboard_compact_critical_days: Optional[int] = None
+    dashboard_restore_check_warning_days: Optional[int] = None
+    dashboard_restore_check_critical_days: Optional[int] = None
+    dashboard_observe_freshness_warning_days: Optional[int] = None
+    dashboard_observe_freshness_critical_days: Optional[int] = None
 
     # MQTT settings
     mqtt_enabled: Optional[bool] = None
@@ -226,6 +268,7 @@ async def get_system_settings(
                 cleanup_retention_days=90,
                 use_new_wizard=False,  # Beta features disabled by default
                 show_restore_tab=False,  # Legacy Restore tab hidden by default
+                **DEFAULT_DASHBOARD_HEALTH_THRESHOLDS,
             )
             db.add(settings)
             db.commit()
@@ -341,6 +384,12 @@ async def get_system_settings(
                 if settings.stats_refresh_interval_minutes is not None
                 else 60,
                 "last_stats_refresh": serialize_datetime(settings.last_stats_refresh),
+                **{
+                    field_name: get_effective_dashboard_health_threshold(
+                        settings, field_name
+                    )
+                    for field_name in DEFAULT_DASHBOARD_HEALTH_THRESHOLDS
+                },
                 "borg_version": borg.get_version(),
                 "app_version": get_runtime_app_version(),
                 # MQTT settings
@@ -464,10 +513,53 @@ async def update_system_settings(
                     },
                 )
 
+        dashboard_threshold_updates = {
+            field_name: getattr(settings_update, field_name)
+            for field_name in DEFAULT_DASHBOARD_HEALTH_THRESHOLDS
+        }
+        for field_name, value in dashboard_threshold_updates.items():
+            if value is not None and (
+                value < 1 or value > MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.settings.invalidDashboardHealthThreshold",
+                        "params": {
+                            "field": field_name,
+                            "max": MAX_DASHBOARD_HEALTH_THRESHOLD_DAYS,
+                        },
+                    },
+                )
+
         settings = db.query(SystemSettings).first()
         if not settings:
             settings = SystemSettings()
             db.add(settings)
+
+        def resolve_dashboard_threshold(field_name: str) -> int:
+            updated_value = dashboard_threshold_updates[field_name]
+            if updated_value is not None:
+                return updated_value
+            current_value = getattr(settings, field_name, None)
+            if current_value is not None:
+                return current_value
+            return DEFAULT_DASHBOARD_HEALTH_THRESHOLDS[field_name]
+
+        for warning_field, critical_field in DASHBOARD_HEALTH_THRESHOLD_PAIRS:
+            if resolve_dashboard_threshold(warning_field) > resolve_dashboard_threshold(
+                critical_field
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.settings.invalidDashboardHealthThresholdOrder",
+                        "params": {
+                            "warning_field": warning_field,
+                            "critical_field": critical_field,
+                        },
+                    },
+                )
 
         # Update settings
         # Operation timeouts - save NULL if value equals default OR env value (so env/default can be used)
@@ -563,6 +655,9 @@ async def update_system_settings(
             settings.stats_refresh_interval_minutes = (
                 settings_update.stats_refresh_interval_minutes
             )
+        for field_name, value in dashboard_threshold_updates.items():
+            if value is not None:
+                setattr(settings, field_name, value)
 
         # MQTT settings
         if settings_update.mqtt_beta_enabled is not None:
@@ -817,6 +912,12 @@ async def update_system_settings(
         response = {
             "success": True,
             "message": "backend.success.settings.systemSettingsUpdated",
+            "settings": {
+                field_name: get_effective_dashboard_health_threshold(
+                    settings, field_name
+                )
+                for field_name in DEFAULT_DASHBOARD_HEALTH_THRESHOLDS
+            },
         }
         if generated_metrics_token:
             response["generated_metrics_token"] = generated_metrics_token

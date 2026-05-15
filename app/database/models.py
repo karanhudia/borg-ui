@@ -934,6 +934,20 @@ class SystemSettings(Base):
     last_stats_refresh = Column(
         DateTime, nullable=True
     )  # Last time stats were refreshed
+    dashboard_backup_warning_days = Column(Integer, default=3, nullable=False)
+    dashboard_backup_critical_days = Column(Integer, default=7, nullable=False)
+    dashboard_check_warning_days = Column(Integer, default=7, nullable=False)
+    dashboard_check_critical_days = Column(Integer, default=30, nullable=False)
+    dashboard_compact_warning_days = Column(Integer, default=30, nullable=False)
+    dashboard_compact_critical_days = Column(Integer, default=60, nullable=False)
+    dashboard_restore_check_warning_days = Column(Integer, default=14, nullable=False)
+    dashboard_restore_check_critical_days = Column(Integer, default=30, nullable=False)
+    dashboard_observe_freshness_warning_days = Column(
+        Integer, default=2, nullable=False
+    )
+    dashboard_observe_freshness_critical_days = Column(
+        Integer, default=7, nullable=False
+    )
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)

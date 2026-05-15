@@ -92,6 +92,16 @@ class TestSystemSettings:
         assert payload["metrics_require_auth"] is False
         assert payload["metrics_token_set"] is False
         assert payload["borg2_fast_browse_beta_enabled"] is False
+        assert payload["dashboard_backup_warning_days"] == 3
+        assert payload["dashboard_backup_critical_days"] == 7
+        assert payload["dashboard_check_warning_days"] == 7
+        assert payload["dashboard_check_critical_days"] == 30
+        assert payload["dashboard_compact_warning_days"] == 30
+        assert payload["dashboard_compact_critical_days"] == 60
+        assert payload["dashboard_restore_check_warning_days"] == 14
+        assert payload["dashboard_restore_check_critical_days"] == 30
+        assert payload["dashboard_observe_freshness_warning_days"] == 2
+        assert payload["dashboard_observe_freshness_critical_days"] == 7
 
     def test_update_system_settings_persists_borg2_fast_browse_beta_enabled(
         self, test_client: TestClient, admin_headers, test_db
@@ -134,6 +144,75 @@ class TestSystemSettings:
         test_db.refresh(settings)
         assert settings.max_concurrent_scheduled_backups == 3
         assert settings.max_concurrent_scheduled_checks == 5
+
+    def test_update_system_settings_persists_dashboard_health_thresholds(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "dashboard_backup_warning_days": 14,
+                "dashboard_backup_critical_days": 31,
+                "dashboard_check_warning_days": 14,
+                "dashboard_check_critical_days": 45,
+                "dashboard_compact_warning_days": 45,
+                "dashboard_compact_critical_days": 90,
+                "dashboard_restore_check_warning_days": 21,
+                "dashboard_restore_check_critical_days": 45,
+                "dashboard_observe_freshness_warning_days": 14,
+                "dashboard_observe_freshness_critical_days": 31,
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["settings"]["dashboard_backup_warning_days"] == 14
+        assert body["settings"]["dashboard_backup_critical_days"] == 31
+        get_response = test_client.get("/api/settings/system", headers=admin_headers)
+        assert get_response.status_code == 200
+        get_payload = get_response.json()["settings"]
+        assert get_payload["dashboard_backup_warning_days"] == 14
+        assert get_payload["dashboard_backup_critical_days"] == 31
+        test_db.refresh(settings)
+        assert settings.dashboard_backup_warning_days == 14
+        assert settings.dashboard_backup_critical_days == 31
+        assert settings.dashboard_check_warning_days == 14
+        assert settings.dashboard_check_critical_days == 45
+        assert settings.dashboard_compact_warning_days == 45
+        assert settings.dashboard_compact_critical_days == 90
+        assert settings.dashboard_restore_check_warning_days == 21
+        assert settings.dashboard_restore_check_critical_days == 45
+        assert settings.dashboard_observe_freshness_warning_days == 14
+        assert settings.dashboard_observe_freshness_critical_days == 31
+
+    def test_update_system_settings_rejects_dashboard_critical_below_warning(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "dashboard_backup_warning_days": 30,
+                "dashboard_backup_critical_days": 14,
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidDashboardHealthThresholdOrder"
+        )
 
     def test_update_system_settings_persists_metrics_configuration(
         self, test_client: TestClient, admin_headers, test_db
