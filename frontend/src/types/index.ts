@@ -205,4 +205,5 @@ export interface BackupPlanData {
   prune_keep_quarterly: number
   prune_keep_yearly: number
   repositories: BackupPlanRepositoryLink[]
+  clear_legacy_source_repository_ids?: number[]
 }

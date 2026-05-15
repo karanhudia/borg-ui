@@ -682,6 +682,101 @@ class TestBackupPlanRoutes:
         assert decision.feature == "backup_plan_multi_repository"
         assert decision.reason == "parallel"
 
+    def test_create_plan_can_clear_legacy_source_settings_for_selected_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        connection = _create_ssh_connection(test_db)
+        repo = _create_repo(
+            test_db,
+            "Primary",
+            "/repos/primary",
+            source_directories=json.dumps(["/legacy/source"]),
+            exclude_patterns=json.dumps(["legacy.tmp"]),
+            source_ssh_connection_id=connection.id,
+        )
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                clear_legacy_source_repository_ids=[repo.id],
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["source_directories"] == ["/srv/project"]
+
+        test_db.refresh(repo)
+        assert repo.source_directories is None
+        assert repo.exclude_patterns is None
+        assert repo.source_ssh_connection_id is None
+
+    def test_update_plan_can_clear_legacy_source_settings_for_added_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _set_plan(test_db, "pro")
+        repo_a = _create_repo(test_db, "Primary", "/repos/primary")
+        repo_b = _create_repo(
+            test_db,
+            "Secondary",
+            "/repos/secondary",
+            source_directories=json.dumps(["/legacy/secondary"]),
+            exclude_patterns=json.dumps(["secondary.tmp"]),
+        )
+        create_response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload([repo_a.id]),
+            headers=admin_headers,
+        )
+        assert create_response.status_code == 201
+        plan_id = create_response.json()["id"]
+
+        response = test_client.put(
+            f"/api/backup-plans/{plan_id}",
+            json=_payload(
+                [repo_a.id, repo_b.id],
+                clear_legacy_source_repository_ids=[repo_b.id],
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(repo_b)
+        assert repo_b.source_directories is None
+        assert repo_b.exclude_patterns is None
+
+    def test_plan_save_rejects_clearing_unselected_repository_source_settings(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        selected_repo = _create_repo(test_db, "Primary", "/repos/primary")
+        unselected_repo = _create_repo(
+            test_db,
+            "Secondary",
+            "/repos/secondary",
+            source_directories=json.dumps(["/legacy/secondary"]),
+            exclude_patterns=json.dumps(["secondary.tmp"]),
+        )
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [selected_repo.id],
+                clear_legacy_source_repository_ids=[unselected_repo.id],
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.backupPlans.clearLegacyRepositoryNotSelected"
+        )
+        test_db.refresh(unselected_repo)
+        assert unselected_repo.source_directories == json.dumps(["/legacy/secondary"])
+        assert unselected_repo.exclude_patterns == json.dumps(["secondary.tmp"])
+
     def test_pro_plan_can_target_multiple_repositories(
         self, test_client: TestClient, admin_headers, test_db
     ):

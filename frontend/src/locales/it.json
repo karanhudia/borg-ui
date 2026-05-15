@@ -675,7 +675,9 @@
         "advancedNotice": "Usa la configurazione avanzata per repository SSH, script o opzioni di importazione.",
         "pathHelper": "Percorso locale per questa destinazione di archiviazione. Usa la configurazione avanzata per percorsi remoti.",
         "browsePath": "Sfoglia percorso repository",
-        "createAndSelect": "Crea e seleziona"
+        "createAndSelect": "Crea e seleziona",
+        "clearLegacyConfirm_one": "{{names}} ha ancora impostazioni sorgente di backup legacy.\n\nCancellare queste impostazioni ora che questo piano gestisce dati sorgente ed esclusioni? Scegli Annulla per mantenerle e salvare senza cancellarle.",
+        "clearLegacyConfirm_other": "{{names}} hanno ancora impostazioni sorgente di backup legacy.\n\nCancellare queste impostazioni ora che questo piano gestisce dati sorgente ed esclusioni? Scegli Annulla per mantenerle e salvare senza cancellarle."
       },
       "settings": {
         "archiveNameHelper": "Supporta {plan_name}, {repo_name}, {now}, {date}, {time} e {timestamp}.",
@@ -3599,6 +3601,9 @@
         "failedGetBackupStatus": "Impossibile ottenere lo stato del backup",
         "failedCancelBackup": "Impossibile annullare il backup",
         "cannotDownloadLogsForRunningBackup": "Impossibile scaricare i log per un backup in esecuzione"
+      },
+      "backupPlans": {
+        "clearLegacyRepositoryNotSelected": "Impossibile cancellare le impostazioni sorgente legacy per un repository non selezionato in questo piano di backup."
       },
       "restore": {
         "cancelledByUser": "Ripristino annullato dall'utente",

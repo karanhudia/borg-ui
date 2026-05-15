@@ -6,6 +6,7 @@ import {
   applyRepositorySelectionLimit,
   isRepositorySelectionOverLimit,
 } from '../../utils/backupPlanRepositorySelection'
+import { getLegacySourceRepositoryTargets } from '../backup-plans/legacySourceSettings'
 
 describe('BackupPlans API', () => {
   it('posts to the toggle endpoint for a backup plan', async () => {
@@ -53,6 +54,33 @@ describe('BackupPlans repository selection gating', () => {
 
   it('does not treat multi-repository access selections as over limit', () => {
     expect(isRepositorySelectionOverLimit([10, 20], true)).toBe(false)
+  })
+})
+
+describe('BackupPlans legacy source settings', () => {
+  it('finds selected repositories that still have legacy source directories', () => {
+    const legacyRepo = {
+      id: 10,
+      name: 'Legacy',
+      path: '/repos/legacy',
+      source_directories: ['/old/source'],
+    }
+    const cleanRepo = {
+      id: 20,
+      name: 'Clean',
+      path: '/repos/clean',
+      source_directories: [],
+    }
+    const unselectedLegacyRepo = {
+      id: 30,
+      name: 'Unselected',
+      path: '/repos/unselected',
+      source_directories: ['/old/unselected'],
+    }
+
+    expect(
+      getLegacySourceRepositoryTargets([legacyRepo, cleanRepo, unselectedLegacyRepo], [10, 20])
+    ).toEqual([legacyRepo])
   })
 })
 
@@ -205,6 +233,49 @@ describe('BackupPlans payload', () => {
 
     expect(payload.source_type).toBe('remote')
     expect(payload.source_ssh_connection_id).toBe(42)
+  })
+
+  it('includes repository ids whose legacy source settings should be cleared', () => {
+    const payload = buildBackupPlanPayload(
+      {
+        name: 'Migrated Plan',
+        description: '',
+        enabled: true,
+        sourceType: 'local',
+        sourceSshConnectionId: '',
+        sourceDirectories: ['/data'],
+        excludePatterns: [],
+        repositoryIds: [10, 20],
+        compression: 'lz4',
+        archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+        customFlags: '',
+        uploadRatelimitMb: '',
+        repositoryRunMode: 'series',
+        maxParallelRepositories: 1,
+        failureBehavior: 'continue',
+        scheduleEnabled: false,
+        cronExpression: '0 21 * * *',
+        timezone: 'UTC',
+        preBackupScriptId: null,
+        postBackupScriptId: null,
+        preBackupScriptParameters: {},
+        postBackupScriptParameters: {},
+        runRepositoryScripts: true,
+        runPruneAfter: false,
+        runCompactAfter: false,
+        runCheckAfter: false,
+        checkMaxDuration: 3600,
+        pruneKeepHourly: 0,
+        pruneKeepDaily: 7,
+        pruneKeepWeekly: 4,
+        pruneKeepMonthly: 6,
+        pruneKeepQuarterly: 0,
+        pruneKeepYearly: 1,
+      },
+      [20]
+    )
+
+    expect(payload.clear_legacy_source_repository_ids).toEqual([20])
   })
 
   it('includes plan-level scripts and parameters in the payload', () => {

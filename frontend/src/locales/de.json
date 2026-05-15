@@ -675,7 +675,9 @@
         "advancedNotice": "Nutze die erweiterte Einrichtung für SSH-Repositories, Skripte oder Importoptionen.",
         "pathHelper": "Lokaler Pfad für dieses Speicherziel. Nutze die erweiterte Einrichtung für Remote-Pfade.",
         "browsePath": "Repository-Pfad durchsuchen",
-        "createAndSelect": "Erstellen und auswählen"
+        "createAndSelect": "Erstellen und auswählen",
+        "clearLegacyConfirm_one": "{{names}} hat noch Legacy-Backup-Quelleinstellungen.\n\nDiese Einstellungen jetzt löschen, da dieser Backup-Plan Quelldaten und Ausschlüsse verwaltet? Wähle Abbrechen, um sie zu behalten und ohne Löschen zu speichern.",
+        "clearLegacyConfirm_other": "{{names}} haben noch Legacy-Backup-Quelleinstellungen.\n\nDiese Einstellungen jetzt löschen, da dieser Backup-Plan Quelldaten und Ausschlüsse verwaltet? Wähle Abbrechen, um sie zu behalten und ohne Löschen zu speichern."
       },
       "settings": {
         "archiveNameHelper": "Unterstützt {plan_name}, {repo_name}, {now}, {date}, {time} und {timestamp}.",
@@ -3599,6 +3601,9 @@
         "failedGetBackupStatus": "Fehler beim Abrufen des Sicherungsstatus",
         "failedCancelBackup": "Fehler beim Abbrechen der Sicherung",
         "cannotDownloadLogsForRunningBackup": "Protokolle einer laufenden Sicherung können nicht heruntergeladen werden"
+      },
+      "backupPlans": {
+        "clearLegacyRepositoryNotSelected": "Legacy-Quelleinstellungen können nicht für ein Repository gelöscht werden, das in diesem Backup-Plan nicht ausgewählt ist."
       },
       "restore": {
         "cancelledByUser": "Wiederherstellung vom Benutzer abgebrochen",

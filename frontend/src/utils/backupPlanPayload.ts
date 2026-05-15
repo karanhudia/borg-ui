@@ -42,7 +42,10 @@ function mbToKib(value: string): number | null {
   return Math.round(parsed * 1024)
 }
 
-export function buildBackupPlanPayload(state: BackupPlanPayloadState): BackupPlanData {
+export function buildBackupPlanPayload(
+  state: BackupPlanPayloadState,
+  clearLegacySourceRepositoryIds: number[] = []
+): BackupPlanData {
   return {
     name: state.name.trim(),
     description: state.description.trim() || null,
@@ -90,5 +93,6 @@ export function buildBackupPlanPayload(state: BackupPlanPayloadState): BackupPla
       upload_ratelimit_kib_override: null,
       failure_behavior_override: null,
     })),
+    clear_legacy_source_repository_ids: clearLegacySourceRepositoryIds,
   }
 }

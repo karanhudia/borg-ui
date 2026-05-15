@@ -675,7 +675,9 @@
         "advancedNotice": "Usa la configuración avanzada para repositorios SSH, scripts u opciones de importación.",
         "pathHelper": "Ruta local para este destino de almacenamiento. Usa la configuración avanzada para rutas remotas.",
         "browsePath": "Explorar ruta del repositorio",
-        "createAndSelect": "Crear y seleccionar"
+        "createAndSelect": "Crear y seleccionar",
+        "clearLegacyConfirm_one": "{{names}} aún tiene ajustes de origen de copia heredados.\n\n¿Quieres borrar esos ajustes ahora que este plan gestiona los datos de origen y las exclusiones? Elige Cancelar para conservarlos y guardar sin borrarlos.",
+        "clearLegacyConfirm_other": "{{names}} aún tienen ajustes de origen de copia heredados.\n\n¿Quieres borrar esos ajustes ahora que este plan gestiona los datos de origen y las exclusiones? Elige Cancelar para conservarlos y guardar sin borrarlos."
       },
       "settings": {
         "archiveNameHelper": "Admite {plan_name}, {repo_name}, {now}, {date}, {time} y {timestamp}.",
@@ -3599,6 +3601,9 @@
         "failedGetBackupStatus": "Error al obtener el estado de la copia de seguridad",
         "failedCancelBackup": "Error al cancelar la copia de seguridad",
         "cannotDownloadLogsForRunningBackup": "No se pueden descargar los registros de una copia de seguridad en ejecución"
+      },
+      "backupPlans": {
+        "clearLegacyRepositoryNotSelected": "No se pueden borrar los ajustes de origen heredados de un repositorio que no está seleccionado en este plan de copia."
       },
       "restore": {
         "cancelledByUser": "Restauración cancelada por el usuario",

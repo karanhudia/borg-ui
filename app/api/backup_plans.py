@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import check_repo_access, get_current_user, require_any_role
@@ -87,6 +87,7 @@ class BackupPlanPayload(BaseModel):
     prune_keep_quarterly: int = 0
     prune_keep_yearly: int = 1
     repositories: list[BackupPlanRepositoryPayload]
+    clear_legacy_source_repository_ids: list[int] = Field(default_factory=list)
 
 
 class BackupPlanFromRepositoryPayload(BaseModel):
@@ -651,6 +652,15 @@ def _validate_payload(
         check_repo_access(db, user, repo, "operator")
         repos.append(repo)
 
+    clear_ids = set(payload.clear_legacy_source_repository_ids)
+    if clear_ids - seen_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "key": "backend.errors.backupPlans.clearLegacyRepositoryNotSelected"
+            },
+        )
+
     require_backup_plan_feature_access(
         db,
         enabled_repository_count=sum(
@@ -659,6 +669,22 @@ def _validate_payload(
         repository_run_mode=payload.repository_run_mode,
     )
     return repos
+
+
+def _clear_legacy_source_settings(
+    payload: BackupPlanPayload, repositories: list[Repository]
+) -> None:
+    clear_ids = set(payload.clear_legacy_source_repository_ids)
+    if not clear_ids:
+        return
+
+    for repository in repositories:
+        if repository.id not in clear_ids:
+            continue
+        repository.source_directories = None
+        repository.exclude_patterns = None
+        repository.source_ssh_connection_id = None
+        repository.updated_at = datetime.utcnow()
 
 
 def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
@@ -941,7 +967,7 @@ async def create_backup_plan(
     db: Session = Depends(get_db),
 ):
     try:
-        _validate_payload(db, current_user, payload)
+        repositories = _validate_payload(db, current_user, payload)
     except InvalidScheduleTimezone as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -963,6 +989,7 @@ async def create_backup_plan(
     db.commit()
     db.refresh(plan)
     _replace_repository_links(db, plan, payload)
+    _clear_legacy_source_settings(payload, repositories)
     db.commit()
 
     plan = _load_plan_or_404(db, plan.id)
@@ -1116,7 +1143,7 @@ async def update_backup_plan(
     plan = _load_plan_or_404(db, plan_id)
     _require_plan_operator_access(db, current_user, plan)
     try:
-        _validate_payload(db, current_user, payload)
+        repositories = _validate_payload(db, current_user, payload)
     except InvalidScheduleTimezone as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1136,6 +1163,7 @@ async def update_backup_plan(
 
     _apply_payload(plan, payload)
     _replace_repository_links(db, plan, payload)
+    _clear_legacy_source_settings(payload, repositories)
     db.commit()
     plan = _load_plan_or_404(db, plan_id)
     logger.info(

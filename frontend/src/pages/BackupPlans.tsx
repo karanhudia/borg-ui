@@ -31,6 +31,7 @@ import {
 import type { BackupPlan, BackupPlanData, BackupPlanRun, Repository } from '../types'
 import { BackupPlanWizardStep } from './backup-plans/BackupPlanWizardStep'
 import { BackupPlansContent } from './backup-plans/BackupPlansContent'
+import { getLegacySourceRepositoryTargets } from './backup-plans/legacySourceSettings'
 import { BackupPlanHistoryDialog } from './backup-plans/PlanRunComponents'
 import { formatRunStatus, isActiveRun } from './backup-plans/runStatus'
 import {
@@ -315,6 +316,7 @@ export default function BackupPlans() {
     onSuccess: () => {
       toast.success(t('backupPlans.toasts.created'))
       queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
       setWizardOpen(false)
     },
     onError: (error: unknown) => {
@@ -328,6 +330,7 @@ export default function BackupPlans() {
     onSuccess: () => {
       toast.success(t('backupPlans.toasts.updated'))
       queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
       setWizardOpen(false)
     },
     onError: (error: unknown) => {
@@ -556,7 +559,24 @@ export default function BackupPlans() {
       return
     }
 
-    const payload = buildBackupPlanPayload(wizardState)
+    const legacySourceRepositories = getLegacySourceRepositoryTargets(
+      fullRepositories,
+      wizardState.repositoryIds
+    )
+    const clearLegacySourceRepositoryIds =
+      legacySourceRepositories.length > 0 &&
+      window.confirm(
+        t('backupPlans.wizard.repositories.clearLegacyConfirm', {
+          count: legacySourceRepositories.length,
+          names: legacySourceRepositories
+            .map((repository) => repository.name || repository.path)
+            .join(', '),
+        })
+      )
+        ? legacySourceRepositories.map((repository) => repository.id)
+        : []
+
+    const payload = buildBackupPlanPayload(wizardState, clearLegacySourceRepositoryIds)
     if (editingPlan) {
       updateMutation.mutate({ id: editingPlan.id, data: payload })
     } else {

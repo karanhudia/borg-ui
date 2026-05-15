@@ -675,7 +675,9 @@
         "advancedNotice": "Use advanced setup for SSH repositories, scripts, or import options.",
         "pathHelper": "Local path for this storage target. Use advanced setup for remote paths.",
         "browsePath": "Browse repository path",
-        "createAndSelect": "Create and select"
+        "createAndSelect": "Create and select",
+        "clearLegacyConfirm_one": "{{names}} still has legacy backup source settings.\n\nClear those settings now that this backup plan manages source data and excludes? Choose Cancel to keep them and save without clearing.",
+        "clearLegacyConfirm_other": "{{names}} still have legacy backup source settings.\n\nClear those settings now that this backup plan manages source data and excludes? Choose Cancel to keep them and save without clearing."
       },
       "settings": {
         "archiveNameHelper": "Supports {plan_name}, {repo_name}, {now}, {date}, {time}, and {timestamp}.",
@@ -3599,6 +3601,9 @@
         "failedGetBackupStatus": "Failed to get backup status",
         "failedCancelBackup": "Failed to cancel backup",
         "cannotDownloadLogsForRunningBackup": "Cannot download logs for running backup"
+      },
+      "backupPlans": {
+        "clearLegacyRepositoryNotSelected": "Cannot clear legacy source settings for a repository that is not selected in this backup plan."
       },
       "restore": {
         "cancelledByUser": "Restore cancelled by user",
