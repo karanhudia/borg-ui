@@ -52,9 +52,10 @@ function getRepositoryLabel(runRepository: BackupPlanRunRepository): string {
 }
 
 function aggregateStats(run: BackupPlanRun) {
-  let nfiles = 0
-  let originalSize = 0
-  let compressedSize = 0
+  // Per-source stats (files, original, compressed) reflect the actively running
+  // repo only — summing them would double-count when a plan writes the same
+  // source to multiple targets. Speed/ETA stay aggregated because they describe
+  // the plan-wide rhythm (parallel throughput; longest remaining run).
   let totalSpeed = 0
   let speedSamples = 0
   let maxEta = 0
@@ -63,9 +64,6 @@ function aggregateStats(run: BackupPlanRun) {
   for (const repoRun of run.repositories) {
     const details = repoRun.backup_job?.progress_details
     if (!details) continue
-    if (typeof details.nfiles === 'number') nfiles += details.nfiles
-    if (typeof details.original_size === 'number') originalSize += details.original_size
-    if (typeof details.compressed_size === 'number') compressedSize += details.compressed_size
     if (repoRun.backup_job?.status === 'running' && typeof details.backup_speed === 'number') {
       totalSpeed += details.backup_speed
       speedSamples += 1
@@ -78,6 +76,19 @@ function aggregateStats(run: BackupPlanRun) {
       maxEta = Math.max(maxEta, details.estimated_time_remaining)
     }
   }
+
+  // Prefer the currently-running repo; fall back to the latest repo that has
+  // emitted progress (so finished plans still show the last known size).
+  const activeRepo =
+    run.repositories.find(
+      (r) => r.backup_job?.status === 'running' && r.backup_job?.progress_details
+    ) ?? [...run.repositories].reverse().find((r) => r.backup_job?.progress_details)
+  const activeDetails = activeRepo?.backup_job?.progress_details
+  const nfiles = typeof activeDetails?.nfiles === 'number' ? activeDetails.nfiles : 0
+  const originalSize =
+    typeof activeDetails?.original_size === 'number' ? activeDetails.original_size : 0
+  const compressedSize =
+    typeof activeDetails?.compressed_size === 'number' ? activeDetails.compressed_size : 0
 
   return {
     nfiles,
@@ -112,9 +123,19 @@ function getCurrentFile(run: BackupPlanRun): string | null {
   )
 }
 
-function getFirstViewableJob(run: BackupPlanRun): BackupJob | null {
-  const repoWithLogs = run.repositories.find((repoRun) => canViewLogs(repoRun.backup_job))
-  return repoWithLogs?.backup_job ?? null
+function getPreferredViewableJob(run: BackupPlanRun): BackupJob | null {
+  const runningJob = run.repositories.find(
+    (repoRun) => repoRun.backup_job?.status === 'running' && canViewLogs(repoRun.backup_job)
+  )
+  if (runningJob?.backup_job) return runningJob.backup_job
+
+  const activeRepositoryJob = run.repositories.find(
+    (repoRun) => isActive(repoRun.status) && canViewLogs(repoRun.backup_job)
+  )
+  if (activeRepositoryJob?.backup_job) return activeRepositoryJob.backup_job
+
+  const firstViewableJob = run.repositories.find((repoRun) => canViewLogs(repoRun.backup_job))
+  return firstViewableJob?.backup_job ?? null
 }
 
 const STAT_ICONS = [
@@ -147,7 +168,7 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
   const stats = aggregateStats(run)
   const progress = aggregateProgress(run)
   const currentFile = getCurrentFile(run)
-  const firstLogJob = getFirstViewableJob(run)
+  const firstLogJob = getPreferredViewableJob(run)
 
   const stageLabel =
     progress.pct === 0
