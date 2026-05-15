@@ -1443,6 +1443,40 @@ class TestBackupPlanRoutes:
         assert run.status == "completed"
 
     @pytest.mark.asyncio
+    async def test_execute_plan_run_uses_stable_archive_name_for_borg2_repo(
+        self, test_db
+    ):
+        repo = _create_repo(
+            test_db,
+            "Primary Repo",
+            "/repos/primary-borg2",
+            borg_version=2,
+        )
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            name="Monthly Plan",
+            archive_name_template="{plan_name}-{repo_name}-{now}",
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            assert repository == repo.path
+            assert kwargs["archive_name"] == "Monthly-Plan-Primary-Repo"
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with patch(
+            "app.services.backup_plan_execution_service.backup_service.execute_backup",
+            side_effect=fake_execute_backup,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.refresh(run)
+        assert run.status == "completed"
+
+    @pytest.mark.asyncio
     async def test_execute_plan_run_uses_remote_plan_source_settings(self, test_db):
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         source_connection = _create_ssh_connection(test_db)

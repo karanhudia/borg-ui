@@ -1379,9 +1379,29 @@ class BackupService:
             # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH [PATH ...]
             # Use local time for archive names so they're meaningful to users
             if not archive_name:
-                archive_name = (
-                    f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
-                )
+                repo_for_archive_name = None
+                try:
+                    repo_for_archive_name = (
+                        db.query(Repository)
+                        .filter(Repository.path == repository)
+                        .first()
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Could not look up repository for archive naming",
+                        repository=repository,
+                        error=str(e),
+                    )
+
+                if (
+                    repo_for_archive_name
+                    and getattr(repo_for_archive_name, "borg_version", 1) == 2
+                ):
+                    archive_name = "manual-backup"
+                else:
+                    archive_name = (
+                        f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+                    )
 
             # Store archive name on the job for later reference
             try:

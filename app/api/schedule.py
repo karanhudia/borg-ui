@@ -1615,6 +1615,7 @@ async def run_scheduled_job_now(
                 date=_now.strftime("%Y-%m-%d"),
                 time_str=_now.strftime("%H:%M:%S"),
                 unix_timestamp=str(int(_now.timestamp())),
+                stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
             # Execute backup with optional prune/compact asynchronously (non-blocking)
@@ -1984,6 +1985,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 date=timestamp_date,
                 time_str=timestamp_time,
                 unix_timestamp=timestamp_unix,
+                stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
             # Run repository-level pre-scripts if enabled
@@ -2628,6 +2630,7 @@ def _dispatch_due_scheduled_job(
             date=_now.strftime("%Y-%m-%d"),
             time_str=_now.strftime("%H:%M:%S"),
             unix_timestamp=str(int(_now.timestamp())),
+            stable_series=getattr(repo, "borg_version", 1) == 2,
         )
 
         run_key = f"backup:{backup_job.id}"

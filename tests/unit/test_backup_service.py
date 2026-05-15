@@ -1109,6 +1109,7 @@ class TestBackupService:
         assert str(repo_path) in create_cmd
         assert "create" in create_cmd
         assert f"{repo.path}::" not in " ".join(create_cmd)
+        assert create_cmd[-2] == "manual-backup"
         assert "/data/source.txt" in create_cmd
         notifications.send_backup_success.assert_awaited_once()
 

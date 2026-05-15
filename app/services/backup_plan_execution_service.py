@@ -791,6 +791,7 @@ class BackupPlanExecutionService:
                 date=context.date,
                 time_str=context.time_str,
                 unix_timestamp=context.unix_timestamp,
+                stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
             await backup_service.execute_backup(

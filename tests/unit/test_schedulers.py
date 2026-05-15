@@ -448,6 +448,53 @@ async def test_shared_scheduler_dispatch_limits_scheduled_backups(db_session):
 
 
 @pytest.mark.unit
+def test_dispatch_due_scheduled_borg2_job_uses_stable_archive_name(db_session):
+    repo = Repository(
+        name="Primary Repo",
+        path="/tmp/borg2-repo",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        borg_version=2,
+    )
+    db_session.add(repo)
+    db_session.flush()
+    job = ScheduledJob(
+        name="Monthly Backup",
+        cron_expression="0 2 * * *",
+        enabled=True,
+        repository_id=repo.id,
+        archive_name_template="{job_name}-{repo_name}-{now}",
+        next_run=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    def discard_background_task(coro):
+        coro.close()
+        return MagicMock()
+
+    with (
+        patch(
+            "app.api.schedule.execute_scheduled_backup_with_maintenance",
+            new_callable=AsyncMock,
+        ) as mock_execute,
+        patch(
+            "app.api.schedule.asyncio.create_task", side_effect=discard_background_task
+        ),
+        patch("app.api.schedule._track_scheduled_backup_task"),
+    ):
+        run_key = schedule_api._dispatch_due_scheduled_job(
+            db_session, job, datetime.now(timezone.utc)
+        )
+
+    assert run_key is not None
+    assert (
+        mock_execute.call_args.kwargs["archive_name"] == "Monthly-Backup-Primary-Repo"
+    )
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_shared_scheduler_dispatch_limits_scheduled_checks(db_session):
     db_session.add(SystemSettings(max_concurrent_scheduled_checks=2))
