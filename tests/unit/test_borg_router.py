@@ -477,6 +477,7 @@ def test_build_backup_create_command_uses_v2_shape():
         compression="zstd",
         exclude_patterns=["*.tmp"],
         custom_flags=["--one-file-system"],
+        upload_ratelimit_kib=None,
     )
 
 
