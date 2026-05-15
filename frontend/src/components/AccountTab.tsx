@@ -78,6 +78,7 @@ const AccountTab: React.FC = () => {
   const [totpDisableCode, setTotpDisableCode] = useState('')
   const [showPasskeyDialog, setShowPasskeyDialog] = useState(false)
   const [passkeyPassword, setPasskeyPassword] = useState('')
+  const [isStartingOidcLink, setIsStartingOidcLink] = useState(false)
   const { data: authConfig } = useQuery({
     queryKey: ['authConfig'],
     queryFn: async () => {
@@ -318,9 +319,16 @@ const AccountTab: React.FC = () => {
   const showOidcAccountLinking =
     Boolean(authConfig?.oidc_enabled) &&
     (oidcLinkSupported || (isOidcLinked && oidcUnlinkSupported))
-  const handleStartOidcLink = () => {
-    const returnTo = `${window.location.pathname}${window.location.search}`
-    window.location.assign(authAPI.getOidcLinkUrl(returnTo))
+  const handleStartOidcLink = async () => {
+    setIsStartingOidcLink(true)
+    try {
+      const response = await authAPI.beginOidcLink(window.location.href)
+      window.location.assign(response.data.authorization_url)
+    } catch (error: unknown) {
+      toast.error(translateBackendKey(getApiErrorDetail(error)) || t('login.failed'))
+    } finally {
+      setIsStartingOidcLink(false)
+    }
   }
 
   useEffect(() => {
@@ -451,7 +459,13 @@ const AccountTab: React.FC = () => {
                           {t('settings.account.security.ssoUnlinkButton')}
                         </Button>
                       ) : !isOidcLinked && oidcLinkSupported ? (
-                        <Button color="inherit" size="small" onClick={handleStartOidcLink}>
+                        <Button
+                          color="inherit"
+                          size="small"
+                          disabled={isStartingOidcLink}
+                          onClick={handleStartOidcLink}
+                          startIcon={isStartingOidcLink ? <CircularProgress size={14} /> : null}
+                        >
                           {t('settings.account.security.ssoLinkButton')}
                         </Button>
                       ) : undefined

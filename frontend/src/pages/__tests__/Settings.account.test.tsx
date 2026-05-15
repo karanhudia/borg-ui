@@ -74,6 +74,8 @@ vi.mock('../../services/api', () => ({
     getAuthConfig: vi.fn(),
     getTotpStatus: vi.fn(),
     listPasskeys: vi.fn(),
+    beginOidcLink: vi.fn(),
+    getOidcLinkUrl: vi.fn(),
     unlinkOidc: vi.fn(),
   },
 }))
@@ -143,6 +145,12 @@ describe('Settings account tab', () => {
       data: { enabled: false, recovery_codes_remaining: 0 },
     } as never)
     vi.mocked(apiModule.authAPI.listPasskeys).mockResolvedValue({ data: [] } as never)
+    vi.mocked(apiModule.authAPI.beginOidcLink).mockResolvedValue({
+      data: { authorization_url: 'https://id.example.com/auth?state=linked-state' },
+    } as never)
+    vi.mocked(apiModule.authAPI.getOidcLinkUrl).mockReturnValue(
+      '/api/auth/oidc/link?return_to=%2Fsettings%2Faccount'
+    )
     vi.mocked(apiModule.authAPI.unlinkOidc).mockResolvedValue({ data: {} } as never)
   })
 
@@ -331,5 +339,55 @@ describe('Settings account tab', () => {
       expect(apiModule.authAPI.unlinkOidc).toHaveBeenCalled()
     })
     expect(refreshUser).toHaveBeenCalled()
+  })
+
+  it('starts SSO linking through an authenticated API request before redirecting', async () => {
+    const user = userEvent.setup()
+    const assignMock = vi.fn()
+    vi.spyOn(window.location, 'assign').mockImplementation(assignMock)
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 1,
+        username: 'admin',
+        full_name: 'Admin User',
+        email: 'admin@example.com',
+        role: 'admin',
+        auth_source: 'local',
+        created_at: '2024-01-01T00:00:00Z',
+        global_permissions: ['settings.system.manage', 'repositories.manage_all'],
+      },
+      hasGlobalPermission: (permission: string) =>
+        ['settings.system.manage', 'repositories.manage_all'].includes(permission),
+      markRecentPasswordConfirmation: vi.fn(),
+      refreshUser: vi.fn(),
+      proxyAuthEnabled: false,
+    })
+    vi.mocked(apiModule.authAPI.getAuthConfig).mockResolvedValue({
+      data: {
+        proxy_auth_enabled: false,
+        insecure_no_auth_enabled: false,
+        authentication_required: true,
+        oidc_enabled: true,
+        oidc_link_supported: true,
+      },
+    } as never)
+
+    renderWithProviders(
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>,
+      { initialRoute: '/settings/account' }
+    )
+
+    await user.click(await screen.findByRole('tab', { name: /security/i }))
+    await user.click(await screen.findByRole('button', { name: /link sso/i }))
+
+    await waitFor(() => {
+      expect(apiModule.authAPI.beginOidcLink).toHaveBeenCalledWith(
+        expect.stringMatching(/\/settings\/account$/)
+      )
+    })
+    expect(assignMock).toHaveBeenCalledWith('https://id.example.com/auth?state=linked-state')
+    expect(apiModule.authAPI.getOidcLinkUrl).not.toHaveBeenCalled()
   })
 })

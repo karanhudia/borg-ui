@@ -140,6 +140,14 @@ class AuthEventResponse(BaseModel):
     created_at: datetime
 
 
+class OidcLinkStartRequest(BaseModel):
+    return_to: Optional[str] = None
+
+
+class OidcLinkStartResponse(BaseModel):
+    authorization_url: str
+
+
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -1068,14 +1076,14 @@ def _provision_oidc_user(
     return user
 
 
-async def _begin_oidc_flow(
+async def _create_oidc_authorization_url(
     request: Request,
     db: Session,
     *,
     return_to: Optional[str],
     flow: str,
     user_id: Optional[int] = None,
-) -> RedirectResponse:
+) -> str:
     settings_row = get_system_oidc_settings(db)
     if settings_row is None or not settings_row.oidc_client_secret_encrypted:
         raise HTTPException(
@@ -1102,13 +1110,31 @@ async def _begin_oidc_flow(
         user_id=user_id,
     )
     state = create_oidc_state_token(state_id=state_id, nonce=nonce)
+    return build_authorization_url(
+        provider,
+        state=state,
+        nonce=nonce,
+        code_challenge=generate_pkce_code_challenge(code_verifier),
+    )
+
+
+async def _begin_oidc_flow(
+    request: Request,
+    db: Session,
+    *,
+    return_to: Optional[str],
+    flow: str,
+    user_id: Optional[int] = None,
+) -> RedirectResponse:
+    authorization_url = await _create_oidc_authorization_url(
+        request,
+        db,
+        return_to=return_to,
+        flow=flow,
+        user_id=user_id,
+    )
     return RedirectResponse(
-        build_authorization_url(
-            provider,
-            state=state,
-            nonce=nonce,
-            code_challenge=generate_pkce_code_challenge(code_verifier),
-        ),
+        authorization_url,
         status_code=status.HTTP_302_FOUND,
     )
 
@@ -1146,6 +1172,28 @@ async def begin_oidc_account_link(
         flow="link",
         user_id=current_user.id,
     )
+
+
+@router.post("/oidc/link", response_model=OidcLinkStartResponse)
+async def begin_oidc_account_link_api(
+    payload: OidcLinkStartRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.oidc_subject:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.auth.oidcAlreadyLinked"},
+        )
+    authorization_url = await _create_oidc_authorization_url(
+        request,
+        db,
+        return_to=payload.return_to,
+        flow="link",
+        user_id=current_user.id,
+    )
+    return {"authorization_url": authorization_url}
 
 
 @router.get("/oidc/callback")

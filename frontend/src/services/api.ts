@@ -216,6 +216,10 @@ export interface AuthConfigResponse {
   }
 }
 
+export interface OidcLinkStartResponse {
+  authorization_url: string
+}
+
 // Generic type for object data
 type ApiData = Record<string, unknown>
 
@@ -237,6 +241,8 @@ export const authAPI = {
     const suffix = params.toString()
     return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
   },
+  beginOidcLink: (returnTo?: string) =>
+    api.post<OidcLinkStartResponse>('/auth/oidc/link', { return_to: returnTo }),
   exchangeOidcToken: () => api.post<AuthLoginResponse>('/auth/oidc/exchange'),
   unlinkOidc: () => api.post('/auth/oidc/unlink'),
 
