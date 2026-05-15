@@ -3,10 +3,11 @@ Comprehensive unit tests for settings API endpoints.
 Each test verifies ONE specific expected outcome.
 """
 
+from datetime import datetime, timedelta, timezone
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-from app.database.models import User, SystemSettings
+from app.database.models import AuthEvent, OidcLoginState, User, SystemSettings
 from app.core.features import Plan
 
 
@@ -718,6 +719,61 @@ class TestUserManagement:
         )
 
         assert response.status_code == 200
+
+    def test_delete_user_with_auth_history_and_oidc_state(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Deleting a user should not fail when auth audit rows reference it."""
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+            )
+        )
+        user = User(
+            username="oidc-delete-local",
+            email="oidc-delete-local@example.com",
+            role="viewer",
+            password_hash="fakehash",
+            auth_source="local",
+        )
+        test_db.add(user)
+        test_db.commit()
+        test_db.refresh(user)
+
+        auth_event = AuthEvent(
+            event_type="local_login_succeeded",
+            auth_source="local",
+            username=user.username,
+            email=user.email,
+            success=True,
+            actor_user_id=user.id,
+        )
+        login_state = OidcLoginState(
+            state_id="delete-user-link-state",
+            nonce="nonce",
+            code_verifier="verifier",
+            return_to="http://testserver/settings/account",
+            flow="link",
+            user_id=user.id,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        )
+        test_db.add_all([auth_event, login_state])
+        test_db.commit()
+        test_db.refresh(auth_event)
+        test_db.refresh(login_state)
+
+        response = test_client.delete(
+            f"/api/settings/users/{user.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert test_db.query(User).filter(User.id == user.id).first() is None
+        test_db.refresh(auth_event)
+        test_db.refresh(login_state)
+        assert auth_event.actor_user_id is None
+        assert login_state.user_id is None
 
     def test_delete_user_nonexistent(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent user returns 404"""

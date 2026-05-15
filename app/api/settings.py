@@ -14,6 +14,7 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
+from app.core.user_deletion import detach_user_delete_references
 from app.core.features import get_current_plan, USER_LIMITS
 from app.core.permissions import (
     GLOBAL_ROLE_RANK,
@@ -1201,6 +1202,7 @@ async def delete_user(
                 detail={"key": "backend.errors.settings.cannotDeleteOwnAccount"},
             )
 
+        detach_user_delete_references(db, user.id)
         db.delete(user)
         db.commit()
 

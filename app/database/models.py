@@ -1034,7 +1034,9 @@ class OidcLoginState(Base):
     code_verifier = Column(Text, nullable=False)
     return_to = Column(Text, nullable=False)
     flow = Column(String, default="login", nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     used_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
@@ -1050,7 +1052,9 @@ class AuthEvent(Base):
     email = Column(String, nullable=True)
     success = Column(Boolean, default=True, nullable=False, index=True)
     detail = Column(Text, nullable=True)
-    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    actor_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
 
 

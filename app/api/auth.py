@@ -66,6 +66,7 @@ from app.core.security import (
     verify_password,
     verify_totp_setup_token,
 )
+from app.core.user_deletion import detach_user_delete_references
 from app.core.passkeys import (
     create_passkey_ceremony_token,
     parse_options_json,
@@ -2251,6 +2252,7 @@ async def delete_user(
             detail={"key": "backend.errors.auth.userNotFound"},
         )
 
+    detach_user_delete_references(db, user.id)
     db.delete(user)
     db.commit()
 
