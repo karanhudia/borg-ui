@@ -10,7 +10,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material'
-import { CalendarClock, Database, Folder, History, Pencil, Play, Trash2 } from 'lucide-react'
+import { CalendarClock, Database, Folder, History, Play, SquarePen, Trash2 } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import BackupPlanScheduleBadge from '../../../components/BackupPlanScheduleBadge'
@@ -240,54 +240,6 @@ export function BackupPlanIdleCard({
                 flexShrink: 0,
               }}
             >
-              <Tooltip
-                title={
-                  plan.enabled
-                    ? t('backupPlans.status.clickToDisable')
-                    : t('backupPlans.status.clickToEnable')
-                }
-                arrow
-              >
-                <Box
-                  component="label"
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.25,
-                    cursor: planIsToggling ? 'default' : 'pointer',
-                    userSelect: 'none',
-                  }}
-                >
-                  <Switch
-                    checked={plan.enabled}
-                    size="small"
-                    color="success"
-                    disabled={planIsToggling}
-                    onChange={onToggle}
-                    inputProps={{
-                      'aria-label': `${
-                        plan.enabled
-                          ? t('backupPlans.status.clickToDisable')
-                          : t('backupPlans.status.clickToEnable')
-                      }: ${plan.name}`,
-                    }}
-                  />
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontWeight: 600,
-                      fontSize: '0.7rem',
-                      color: plan.enabled ? 'success.main' : 'text.disabled',
-                      lineHeight: 1,
-                      mr: 0.5,
-                    }}
-                  >
-                    {plan.enabled
-                      ? t('backupPlans.status.enabled')
-                      : t('backupPlans.status.disabled')}
-                  </Typography>
-                </Box>
-              </Tooltip>
               <BackupPlanScheduleBadge
                 scheduleEnabled={plan.schedule_enabled}
                 nextRun={plan.next_run}
@@ -311,7 +263,7 @@ export function BackupPlanIdleCard({
                     },
                   }}
                 >
-                  <Pencil size={14} />
+                  <SquarePen size={14} />
                 </IconButton>
               </Tooltip>
             </Box>
@@ -451,6 +403,65 @@ export function BackupPlanIdleCard({
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flex: 1 }}>
+            <Tooltip
+              title={
+                plan.enabled
+                  ? t('backupPlans.status.clickToDisable')
+                  : t('backupPlans.status.clickToEnable')
+              }
+              arrow
+            >
+              <Box
+                component="label"
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.25,
+                  cursor: planIsToggling ? 'default' : 'pointer',
+                  userSelect: 'none',
+                  pr: 0.75,
+                }}
+              >
+                <Switch
+                  checked={plan.enabled}
+                  size="small"
+                  color="success"
+                  disabled={planIsToggling}
+                  onChange={onToggle}
+                  inputProps={{
+                    'aria-label': `${
+                      plan.enabled
+                        ? t('backupPlans.status.clickToDisable')
+                        : t('backupPlans.status.clickToEnable')
+                    }: ${plan.name}`,
+                  }}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: '0.7rem',
+                    color: plan.enabled ? 'success.main' : 'text.disabled',
+                    lineHeight: 1,
+                  }}
+                >
+                  {plan.enabled
+                    ? t('backupPlans.status.enabled')
+                    : t('backupPlans.status.disabled')}
+                </Typography>
+              </Box>
+            </Tooltip>
+
+            <Box
+              sx={{
+                width: '1px',
+                height: 18,
+                bgcolor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.1),
+                mx: 0.25,
+                flexShrink: 0,
+              }}
+            />
+
             <Tooltip title={t('backupPlans.actions.history', { defaultValue: 'History' })} arrow>
               <span>
                 <IconButton

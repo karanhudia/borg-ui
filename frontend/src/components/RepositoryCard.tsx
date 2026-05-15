@@ -10,7 +10,7 @@ import {
   FolderOpen,
   Play,
   Trash2,
-  Pencil,
+  SquarePen,
   Archive,
   HardDrive,
   Clock,
@@ -370,7 +370,7 @@ export default function RepositoryCard({
                       },
                     }}
                   >
-                    <Pencil size={14} />
+                    <SquarePen size={14} />
                   </IconButton>
                 </Tooltip>
               )}
