@@ -37,6 +37,7 @@ interface BackupPlanIdleCardProps {
   onEdit: () => void
   onDelete: () => void
   onViewHistory: () => void
+  onViewRepositories: () => void
   planIsToggling: boolean
   t: TFunction
   formatStatusLabel: (status?: string) => string
@@ -58,6 +59,7 @@ export function BackupPlanIdleCard({
   onEdit,
   onDelete,
   onViewHistory,
+  onViewRepositories,
   planIsToggling,
   t,
   formatStatusLabel,
@@ -474,6 +476,24 @@ export function BackupPlanIdleCard({
                   <History size={16} />
                 </IconButton>
               </span>
+            </Tooltip>
+
+            <Tooltip
+              title={t('backupPlans.actions.viewRepositories', {
+                defaultValue: 'View repositories',
+              })}
+              arrow
+            >
+              <IconButton
+                size="small"
+                onClick={onViewRepositories}
+                aria-label={t('backupPlans.actions.viewRepositories', {
+                  defaultValue: 'View repositories',
+                })}
+                sx={coloredIconBtnSx('primary')}
+              >
+                <Database size={16} />
+              </IconButton>
             </Tooltip>
 
             <Box

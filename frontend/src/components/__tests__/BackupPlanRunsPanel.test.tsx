@@ -137,4 +137,66 @@ describe('BackupPlanRunsPanel', () => {
     await user.click(within(activeSection).getByRole('button', { name: /cancel run/i }))
     expect(onCancel).toHaveBeenCalledWith(13)
   })
+
+  it('opens logs for the currently running repository in an active plan run', async () => {
+    const user = userEvent.setup()
+    const onViewLogs = vi.fn()
+    const activeRun = {
+      id: 14,
+      backup_plan_id: 3,
+      trigger: 'manual',
+      status: 'running',
+      started_at: '2026-05-11T10:00:00Z',
+      repositories: [
+        {
+          id: 92,
+          repository_id: 8,
+          status: 'completed',
+          repository: {
+            id: 8,
+            name: 'Finished Repo',
+            path: '/repos/finished',
+          },
+          backup_job: {
+            id: 51,
+            repository: '/repos/finished',
+            repository_id: 8,
+            status: 'completed',
+            has_logs: true,
+          },
+        },
+        {
+          id: 93,
+          repository_id: 9,
+          status: 'running',
+          repository: {
+            id: 9,
+            name: 'Running Repo',
+            path: '/repos/running',
+          },
+          backup_job: {
+            id: 52,
+            repository: '/repos/running',
+            repository_id: 9,
+            status: 'running',
+            has_logs: true,
+          },
+        },
+      ],
+    } satisfies BackupPlanRun
+
+    render(
+      <BackupPlanRunsPanel
+        runs={[activeRun]}
+        plans={[plan]}
+        onCancel={vi.fn()}
+        onViewLogs={onViewLogs}
+      />
+    )
+
+    const activeSection = screen.getByRole('region', { name: /running backup plan runs/i })
+    await user.click(within(activeSection).getByRole('button', { name: /view logs/i }))
+
+    expect(onViewLogs).toHaveBeenCalledWith(expect.objectContaining({ id: 52 }))
+  })
 })

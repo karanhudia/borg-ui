@@ -19,6 +19,7 @@ import EmptyStateCard from '../../components/EmptyStateCard'
 import ActiveBackupPlanRunCard from '../../components/ActiveBackupPlanRunCard'
 import { type BackupPlanRunLogJob } from '../../components/BackupPlanRunsPanel'
 import type { BackupPlan, BackupPlanRun } from '../../types'
+import { BackupPlanCardSkeleton } from './BackupPlanCardSkeleton'
 import { BackupPlanIdleCard } from './PlanRunComponents'
 import { isActiveRun } from './runStatus'
 
@@ -54,6 +55,7 @@ interface BackupPlansContentProps {
   onEditPlan: (plan: BackupPlan) => void
   onDeletePlan: (planId: number) => void
   onViewHistory: (planId: number) => void
+  onViewRepositories: (planId: number) => void
   formatStatusLabel: (status?: string) => string
   t: TFunction
 }
@@ -86,6 +88,7 @@ export function BackupPlansContent({
   onEditPlan,
   onDeletePlan,
   onViewHistory,
+  onViewRepositories,
   formatStatusLabel,
   t,
 }: BackupPlansContentProps) {
@@ -125,7 +128,7 @@ export function BackupPlansContent({
       </Box>
 
       {/* Search / Sort / Group bar */}
-      {!loadingPlans && backupPlans.length > 0 && (
+      {(loadingPlans || backupPlans.length > 0) && (
         <Box
           sx={{
             mb: 3,
@@ -241,7 +244,11 @@ export function BackupPlansContent({
       )}
 
       {loadingPlans ? (
-        <Typography color="text.secondary">{t('backupPlans.loading')}</Typography>
+        <Stack spacing={2} aria-label={t('backupPlans.loading')}>
+          {[0, 1, 2].map((index) => (
+            <BackupPlanCardSkeleton key={index} index={index} />
+          ))}
+        </Stack>
       ) : backupPlans.length === 0 ? (
         <EmptyStateCard
           icon={<ListChecks size={36} />}
@@ -322,11 +329,40 @@ export function BackupPlansContent({
                       ? t('backupPlans.status.remoteSource')
                       : t('backupPlans.status.localSource')
 
-                  // When a plan has an active run, show the rich progress card inline —
-                  // same visual language as RunningBackupsSection in /backup.
-                  if (planIsRunning && latestRun) {
-                    return (
-                      <Box key={plan.id} id={`backup-plan-${plan.id}`}>
+                  return (
+                    <Stack key={plan.id} spacing={1.25}>
+                      <BackupPlanIdleCard
+                        plan={plan}
+                        latestRun={latestRun}
+                        isHighlighted={isHighlighted}
+                        planUsesProFeatures={planUsesProFeatures}
+                        planBlockedByLicense={planBlockedByLicense}
+                        planIsStarting={planIsStarting}
+                        runDisabled={runDisabled}
+                        runTooltip={runTooltip}
+                        sourceTypeLabel={sourceTypeLabel}
+                        hasRunHistory={backupPlanRuns.some(
+                          (r) => r.backup_plan_id === plan.id && !isActiveRun(r.status)
+                        )}
+                        onRun={() => onRunPlan(plan.id)}
+                        onToggle={() => onTogglePlan(plan.id)}
+                        onEdit={() => onEditPlan(plan)}
+                        onDelete={() => {
+                          if (
+                            window.confirm(
+                              t('backupPlans.actions.deleteConfirm', { name: plan.name })
+                            )
+                          ) {
+                            onDeletePlan(plan.id)
+                          }
+                        }}
+                        onViewHistory={() => onViewHistory(plan.id)}
+                        onViewRepositories={() => onViewRepositories(plan.id)}
+                        planIsToggling={togglePending && toggleVariables === plan.id}
+                        t={t}
+                        formatStatusLabel={formatStatusLabel}
+                      />
+                      {planIsRunning && latestRun && (
                         <ActiveBackupPlanRunCard
                           run={latestRun}
                           plan={plan}
@@ -334,42 +370,8 @@ export function BackupPlansContent({
                           onCancel={(runId) => onCancelRun(runId)}
                           onViewLogs={(job) => onViewLogs(job)}
                         />
-                      </Box>
-                    )
-                  }
-
-                  return (
-                    <BackupPlanIdleCard
-                      key={plan.id}
-                      plan={plan}
-                      latestRun={latestRun}
-                      isHighlighted={isHighlighted}
-                      planUsesProFeatures={planUsesProFeatures}
-                      planBlockedByLicense={planBlockedByLicense}
-                      planIsStarting={planIsStarting}
-                      runDisabled={runDisabled}
-                      runTooltip={runTooltip}
-                      sourceTypeLabel={sourceTypeLabel}
-                      hasRunHistory={backupPlanRuns.some(
-                        (r) => r.backup_plan_id === plan.id && !isActiveRun(r.status)
                       )}
-                      onRun={() => onRunPlan(plan.id)}
-                      onToggle={() => onTogglePlan(plan.id)}
-                      onEdit={() => onEditPlan(plan)}
-                      onDelete={() => {
-                        if (
-                          window.confirm(
-                            t('backupPlans.actions.deleteConfirm', { name: plan.name })
-                          )
-                        ) {
-                          onDeletePlan(plan.id)
-                        }
-                      }}
-                      onViewHistory={() => onViewHistory(plan.id)}
-                      planIsToggling={togglePending && toggleVariables === plan.id}
-                      t={t}
-                      formatStatusLabel={formatStatusLabel}
-                    />
+                    </Stack>
                   )
                 })}
               </Stack>

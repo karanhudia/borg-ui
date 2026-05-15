@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { Box } from '@mui/material'
@@ -30,8 +30,15 @@ import {
   processRepositories,
 } from './repositories-page/helpers'
 import type { PruneForm, Repository } from './repositories-page/types'
+import type { BackupPlan } from '../types'
 
 const EMPTY_REPOSITORIES: Repository[] = []
+
+function parseBackupPlanFilterId(value: string | null): number | null {
+  if (!value) return null
+  const id = Number(value)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
 
 export default function Repositories() {
   const { t } = useTranslation()
@@ -41,6 +48,7 @@ export default function Repositories() {
   const queryClient = useQueryClient()
   const appState = useAppState()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { trackMaintenance, trackRepository, EventAction } = useAnalytics()
   const maintenanceTrackingRef = useRef<Map<number, { operation: 'Check' | 'Compact' | 'Prune' }>>(
     new Map()
@@ -81,6 +89,10 @@ export default function Repositories() {
     return localStorage.getItem('repos_group') || 'none'
   })
   const deferredSearchQuery = React.useDeferredValue(searchQuery)
+  const selectedBackupPlanId = React.useMemo(
+    () => parseBackupPlanFilterId(searchParams.get('backupPlanId')),
+    [searchParams]
+  )
 
   // Queries
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,6 +100,30 @@ export default function Repositories() {
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
+
+  const { data: backupPlansData, isLoading: loadingBackupPlanFilter } = useQuery({
+    queryKey: ['backup-plans'],
+    queryFn: () => backupPlansAPI.list(),
+  })
+
+  const backupPlans: BackupPlan[] = React.useMemo(
+    () => backupPlansData?.data?.backup_plans || [],
+    [backupPlansData]
+  )
+
+  const { data: selectedBackupPlanData, isLoading: loadingSelectedBackupPlan } = useQuery({
+    queryKey: ['backup-plan', selectedBackupPlanId],
+    queryFn: () => backupPlansAPI.get(selectedBackupPlanId!),
+    enabled: selectedBackupPlanId !== null,
+  })
+
+  const selectedBackupPlanRepositoryIds = React.useMemo(() => {
+    if (selectedBackupPlanId === null) return undefined
+    const repositories = (selectedBackupPlanData?.data as BackupPlan | undefined)?.repositories
+    if (!repositories) return undefined
+
+    return new Set(repositories.filter((link) => link.enabled).map((link) => link.repository_id))
+  }, [selectedBackupPlanData, selectedBackupPlanId])
 
   // Get repository info using borg info command
   const {
@@ -478,11 +514,34 @@ export default function Repositories() {
   }, [groupBy])
 
   const repositories: Repository[] = repositoriesData?.data?.repositories || EMPTY_REPOSITORIES
+  const repositoriesLoading =
+    isLoading || (selectedBackupPlanId !== null && loadingSelectedBackupPlan)
 
   // Filter, sort, and group repositories
   const processedRepositories = React.useMemo(
-    () => processRepositories({ repositories, searchQuery, sortBy, groupBy, t }),
-    [repositories, searchQuery, sortBy, groupBy, t]
+    () =>
+      processRepositories({
+        repositories,
+        searchQuery,
+        sortBy,
+        groupBy,
+        backupPlanRepositoryIds: selectedBackupPlanRepositoryIds,
+        t,
+      }),
+    [repositories, searchQuery, sortBy, groupBy, selectedBackupPlanRepositoryIds, t]
+  )
+
+  const handleBackupPlanFilterChange = React.useCallback(
+    (planId: number | null) => {
+      const nextParams = new URLSearchParams(searchParams)
+      if (planId === null) {
+        nextParams.delete('backupPlanId')
+      } else {
+        nextParams.set('backupPlanId', String(planId))
+      }
+      setSearchParams(nextParams, { replace: true })
+    },
+    [searchParams, setSearchParams]
   )
 
   React.useEffect(() => {
@@ -508,14 +567,18 @@ export default function Repositories() {
       />
 
       <RepositoriesToolbar
-        isVisible={isLoading || repositories.length > 0}
+        isVisible={repositoriesLoading || repositories.length > 0}
         searchQuery={searchQuery}
         sortBy={sortBy}
         groupBy={groupBy}
         processedRepositories={processedRepositories}
+        backupPlans={backupPlans.map((plan) => ({ id: plan.id, name: plan.name }))}
+        backupPlanFilterLoading={loadingBackupPlanFilter}
+        selectedBackupPlanId={selectedBackupPlanId}
         onSearchChange={setSearchQuery}
         onSortChange={setSortBy}
         onGroupChange={setGroupBy}
+        onBackupPlanFilterChange={handleBackupPlanFilterChange}
         onFilterTracked={(metadata) => {
           trackRepository(EventAction.FILTER, undefined, {
             section: 'repositories',
@@ -525,7 +588,7 @@ export default function Repositories() {
       />
 
       <RepositoryGroups
-        isLoading={isLoading}
+        isLoading={repositoriesLoading}
         repositories={repositories}
         processedRepositories={processedRepositories}
         repositoriesWithJobs={repositoriesWithJobs}

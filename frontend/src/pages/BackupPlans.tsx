@@ -657,6 +657,7 @@ export default function BackupPlans() {
         onEditPlan={openEditWizard}
         onDeletePlan={(planId) => deleteMutation.mutate(planId)}
         onViewHistory={(planId) => setHistoryPlanId(planId)}
+        onViewRepositories={(planId) => navigate(`/repositories?backupPlanId=${planId}`)}
         formatStatusLabel={formatStatusLabel}
         t={t}
       />

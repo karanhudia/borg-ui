@@ -19,15 +19,21 @@ export function processRepositories({
   searchQuery,
   sortBy,
   groupBy,
+  backupPlanRepositoryIds,
   t,
 }: {
   repositories: Repository[]
   searchQuery: string
   sortBy: string
   groupBy: string
+  backupPlanRepositoryIds?: Set<number>
   t: TFunction
 }): ProcessedRepositories {
   let filtered = repositories
+
+  if (backupPlanRepositoryIds) {
+    filtered = filtered.filter((repo) => backupPlanRepositoryIds.has(repo.id))
+  }
 
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase()
