@@ -39,6 +39,11 @@ export interface Archive {
   name: string
   start: string
   time: string
+  triggered_by?: 'manual' | 'schedule' | 'scheduled' | string | null
+  backup_job_id?: number | null
+  backup_plan_id?: number | null
+  backup_plan_run_id?: number | null
+  scheduled_job_id?: number | null
 }
 
 export interface BackupJob {

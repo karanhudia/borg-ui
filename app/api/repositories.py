@@ -50,6 +50,7 @@ from app.utils.schedule_time import (
     calculate_next_cron_run,
     normalize_schedule_timezone,
 )
+from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.ssh_paths import apply_ssh_command_prefix
 from app.utils.borg_env import (
     get_standard_ssh_opts as shared_get_standard_ssh_opts,
@@ -2683,6 +2684,7 @@ async def list_repository_archives(
         try:
             archives_data = json.loads(stdout.decode())
             archives = archives_data.get("archives", [])
+            archives = enrich_archives_with_backup_metadata(archives, repository, db)
 
             logger.info(
                 "Archives listed successfully", repo_id=repo_id, count=len(archives)
