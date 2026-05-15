@@ -6,7 +6,7 @@ import {
   applyRepositorySelectionLimit,
   isRepositorySelectionOverLimit,
 } from '../../utils/backupPlanRepositorySelection'
-import { getLegacySourceRepositoryTargets } from '../backup-plans/legacySourceSettings'
+import { getLegacySourceRepositoryReviews } from '../backup-plans/legacySourceSettings'
 
 describe('BackupPlans API', () => {
   it('posts to the toggle endpoint for a backup plan', async () => {
@@ -58,29 +58,61 @@ describe('BackupPlans repository selection gating', () => {
 })
 
 describe('BackupPlans legacy source settings', () => {
-  it('finds selected repositories that still have legacy source directories', () => {
-    const legacyRepo = {
+  it('compares selected legacy repository source paths with the backup plan', () => {
+    const matchingRepo = {
       id: 10,
-      name: 'Legacy',
-      path: '/repos/legacy',
-      source_directories: ['/old/source'],
+      name: 'Matching',
+      path: '/repos/matching',
+      source_directories: ['/data/app', '/data/db'],
     }
-    const cleanRepo = {
+    const subsetRepo = {
       id: 20,
-      name: 'Clean',
-      path: '/repos/clean',
-      source_directories: [],
+      name: 'Subset',
+      path: '/repos/subset',
+      source_directories: ['/data/app'],
     }
-    const unselectedLegacyRepo = {
+    const extraRepo = {
       id: 30,
+      name: 'Extra',
+      path: '/repos/extra',
+      source_directories: ['/data/app', '/data/old'],
+    }
+    const unselectedRepo = {
+      id: 40,
       name: 'Unselected',
       path: '/repos/unselected',
-      source_directories: ['/old/unselected'],
+      source_directories: ['/data/old'],
     }
 
-    expect(
-      getLegacySourceRepositoryTargets([legacyRepo, cleanRepo, unselectedLegacyRepo], [10, 20])
-    ).toEqual([legacyRepo])
+    const reviews = getLegacySourceRepositoryReviews(
+      [matchingRepo, subsetRepo, extraRepo, unselectedRepo],
+      [10, 20, 30],
+      ['/data/app', '/data/db']
+    )
+
+    expect(reviews).toEqual([
+      expect.objectContaining({
+        repository: matchingRepo,
+        comparison: 'matches',
+        legacyOnlySourceDirectories: [],
+        planOnlySourceDirectories: [],
+        defaultClear: true,
+      }),
+      expect.objectContaining({
+        repository: subsetRepo,
+        comparison: 'plan_includes_legacy',
+        legacyOnlySourceDirectories: [],
+        planOnlySourceDirectories: ['/data/db'],
+        defaultClear: true,
+      }),
+      expect.objectContaining({
+        repository: extraRepo,
+        comparison: 'legacy_has_extra',
+        legacyOnlySourceDirectories: ['/data/old'],
+        planOnlySourceDirectories: ['/data/db'],
+        defaultClear: false,
+      }),
+    ])
   })
 })
 

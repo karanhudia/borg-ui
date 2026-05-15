@@ -676,8 +676,26 @@
         "pathHelper": "Lokaler Pfad für dieses Speicherziel. Nutze die erweiterte Einrichtung für Remote-Pfade.",
         "browsePath": "Repository-Pfad durchsuchen",
         "createAndSelect": "Erstellen und auswählen",
-        "clearLegacyConfirm_one": "{{names}} hat noch Legacy-Backup-Quelleinstellungen.\n\nDiese Einstellungen jetzt löschen, da dieser Backup-Plan Quelldaten und Ausschlüsse verwaltet? Wähle Abbrechen, um sie zu behalten und ohne Löschen zu speichern.",
-        "clearLegacyConfirm_other": "{{names}} haben noch Legacy-Backup-Quelleinstellungen.\n\nDiese Einstellungen jetzt löschen, da dieser Backup-Plan Quelldaten und Ausschlüsse verwaltet? Wähle Abbrechen, um sie zu behalten und ohne Löschen zu speichern."
+        "legacyReview": {
+          "title": "Legacy-Quellpfade erkannt",
+          "description": "Einige Repositories haben Quellpfade, die der Plan nicht enthält. Wähle vor dem Speichern aus, welche gelöscht werden sollen.",
+          "matchesHelper": "Die Legacy-Quellpfade dieses Repositorys entsprechen dem Backup-Plan. Das Löschen entfernt daher keine Abdeckung.",
+          "legacyOnlyPaths": "Nur im Repository",
+          "planOnlyPaths": "Nur im Backup-Plan",
+          "willBeCleared": "Wird gelöscht",
+          "planWillBackUp": "Plan sichert stattdessen diese",
+          "extraPathsCount_one": "{{count}} zusätzlicher Pfad",
+          "extraPathsCount_other": "{{count}} zusätzliche Pfade",
+          "selectAll": "Alle auswählen",
+          "deselectAll": "Auswahl aufheben",
+          "saveWithoutClearing": "Legacy-Pfade behalten",
+          "saveAndClearSelected": "Löschen & speichern",
+          "comparison": {
+            "matches": "Entspricht dem Plan",
+            "plan_includes_legacy": "Plan enthält mehr",
+            "legacy_has_extra": "Repository hat zusätzliche Pfade"
+          }
+        }
       },
       "settings": {
         "archiveNameHelper": "Unterstützt {plan_name}, {repo_name}, {now}, {date}, {time} und {timestamp}.",

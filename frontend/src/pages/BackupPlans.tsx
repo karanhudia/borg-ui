@@ -31,7 +31,11 @@ import {
 import type { BackupPlan, BackupPlanData, BackupPlanRun, Repository } from '../types'
 import { BackupPlanWizardStep } from './backup-plans/BackupPlanWizardStep'
 import { BackupPlansContent } from './backup-plans/BackupPlansContent'
-import { getLegacySourceRepositoryTargets } from './backup-plans/legacySourceSettings'
+import { LegacySourceSettingsReviewDialog } from './backup-plans/LegacySourceSettingsReviewDialog'
+import {
+  getLegacySourceRepositoryReviews,
+  type LegacySourceRepositoryReview,
+} from './backup-plans/legacySourceSettings'
 import { BackupPlanHistoryDialog } from './backup-plans/PlanRunComponents'
 import { formatRunStatus, isActiveRun } from './backup-plans/runStatus'
 import {
@@ -101,6 +105,8 @@ export default function BackupPlans() {
   const [cancellingRunId, setCancellingRunId] = useState<number | null>(null)
   const [logJob, setLogJob] = useState<BackupPlanRunLogJob | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [legacySourceReviewOpen, setLegacySourceReviewOpen] = useState(false)
+  const [legacySourceReviews, setLegacySourceReviews] = useState<LegacySourceRepositoryReview[]>([])
   const [sortBy, setSortBy] = useState<string>(
     () => localStorage.getItem('backup_plans_sort') || 'name-asc'
   )
@@ -436,6 +442,7 @@ export default function BackupPlans() {
     setShowSourceExplorer(false)
     setShowExcludeExplorer(false)
     setShowBasicRepositoryPathExplorer(false)
+    setLegacySourceReviewOpen(false)
     setActiveStep(0)
     setWizardOpen(true)
   }
@@ -447,6 +454,7 @@ export default function BackupPlans() {
     setWizardState(planToState(detailedPlan))
     setBasicRepositoryState(createInitialBasicRepositoryState())
     setBasicRepositoryOpen(false)
+    setLegacySourceReviewOpen(false)
     setActiveStep(0)
     setWizardOpen(true)
   }
@@ -553,35 +561,33 @@ export default function BackupPlans() {
     return true
   }
 
-  const submitPlan = () => {
-    if (isRepositorySelectionOverLimit(wizardState.repositoryIds, canUseMultiRepository)) {
-      toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
-      return
-    }
-
-    const legacySourceRepositories = getLegacySourceRepositoryTargets(
-      fullRepositories,
-      wizardState.repositoryIds
-    )
-    const clearLegacySourceRepositoryIds =
-      legacySourceRepositories.length > 0 &&
-      window.confirm(
-        t('backupPlans.wizard.repositories.clearLegacyConfirm', {
-          count: legacySourceRepositories.length,
-          names: legacySourceRepositories
-            .map((repository) => repository.name || repository.path)
-            .join(', '),
-        })
-      )
-        ? legacySourceRepositories.map((repository) => repository.id)
-        : []
-
+  const savePlan = (clearLegacySourceRepositoryIds: number[]) => {
     const payload = buildBackupPlanPayload(wizardState, clearLegacySourceRepositoryIds)
     if (editingPlan) {
       updateMutation.mutate({ id: editingPlan.id, data: payload })
     } else {
       createMutation.mutate(payload)
     }
+  }
+
+  const submitPlan = () => {
+    if (isRepositorySelectionOverLimit(wizardState.repositoryIds, canUseMultiRepository)) {
+      toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
+      return
+    }
+
+    const legacyReviews = getLegacySourceRepositoryReviews(
+      fullRepositories,
+      wizardState.repositoryIds,
+      wizardState.sourceDirectories
+    )
+    if (legacyReviews.length > 0) {
+      setLegacySourceReviews(legacyReviews)
+      setLegacySourceReviewOpen(true)
+      return
+    }
+
+    savePlan([])
   }
 
   const renderWizardStep = () => (
@@ -657,7 +663,10 @@ export default function BackupPlans() {
 
       <WizardDialog
         open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
+        onClose={() => {
+          setLegacySourceReviewOpen(false)
+          setWizardOpen(false)
+        }}
         title={
           editingPlan ? t('backupPlans.wizard.editTitle') : t('backupPlans.wizard.createTitle')
         }
@@ -696,6 +705,22 @@ export default function BackupPlans() {
       >
         {renderWizardStep()}
       </WizardDialog>
+
+      <LegacySourceSettingsReviewDialog
+        open={legacySourceReviewOpen}
+        reviews={legacySourceReviews}
+        saving={isSubmitting}
+        onCancel={() => setLegacySourceReviewOpen(false)}
+        onSaveWithoutClearing={() => {
+          setLegacySourceReviewOpen(false)
+          savePlan([])
+        }}
+        onSaveAndClear={(repositoryIds) => {
+          setLegacySourceReviewOpen(false)
+          savePlan(repositoryIds)
+        }}
+        t={t}
+      />
 
       <RepositoryWizard
         open={repositoryWizardOpen}

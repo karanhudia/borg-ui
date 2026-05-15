@@ -676,8 +676,26 @@
         "pathHelper": "Percorso locale per questa destinazione di archiviazione. Usa la configurazione avanzata per percorsi remoti.",
         "browsePath": "Sfoglia percorso repository",
         "createAndSelect": "Crea e seleziona",
-        "clearLegacyConfirm_one": "{{names}} ha ancora impostazioni sorgente di backup legacy.\n\nCancellare queste impostazioni ora che questo piano gestisce dati sorgente ed esclusioni? Scegli Annulla per mantenerle e salvare senza cancellarle.",
-        "clearLegacyConfirm_other": "{{names}} hanno ancora impostazioni sorgente di backup legacy.\n\nCancellare queste impostazioni ora che questo piano gestisce dati sorgente ed esclusioni? Scegli Annulla per mantenerle e salvare senza cancellarle."
+        "legacyReview": {
+          "title": "Percorsi sorgente legacy rilevati",
+          "description": "Alcuni repository hanno percorsi sorgente che il piano non include. Scegli quali cancellare prima di salvare.",
+          "matchesHelper": "I percorsi sorgente legacy di questo repository corrispondono al piano di backup, quindi cancellarli non rimuoverà copertura.",
+          "legacyOnlyPaths": "Solo nel repository",
+          "planOnlyPaths": "Solo nel piano di backup",
+          "willBeCleared": "Verranno cancellati",
+          "planWillBackUp": "Il piano includerà invece questi",
+          "extraPathsCount_one": "{{count}} percorso extra",
+          "extraPathsCount_other": "{{count}} percorsi extra",
+          "selectAll": "Seleziona tutto",
+          "deselectAll": "Deseleziona tutto",
+          "saveWithoutClearing": "Mantieni percorsi legacy",
+          "saveAndClearSelected": "Cancella e salva",
+          "comparison": {
+            "matches": "Corrisponde al piano",
+            "plan_includes_legacy": "Il piano include altro",
+            "legacy_has_extra": "Il repository ha percorsi extra"
+          }
+        }
       },
       "settings": {
         "archiveNameHelper": "Supporta {plan_name}, {repo_name}, {now}, {date}, {time} e {timestamp}.",

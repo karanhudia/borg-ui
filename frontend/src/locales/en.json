@@ -676,8 +676,26 @@
         "pathHelper": "Local path for this storage target. Use advanced setup for remote paths.",
         "browsePath": "Browse repository path",
         "createAndSelect": "Create and select",
-        "clearLegacyConfirm_one": "{{names}} still has legacy backup source settings.\n\nClear those settings now that this backup plan manages source data and excludes? Choose Cancel to keep them and save without clearing.",
-        "clearLegacyConfirm_other": "{{names}} still have legacy backup source settings.\n\nClear those settings now that this backup plan manages source data and excludes? Choose Cancel to keep them and save without clearing."
+        "legacyReview": {
+          "title": "Legacy source paths detected",
+          "description": "Some repositories have per-repository source paths the plan doesn't include. Choose which to clear before saving.",
+          "matchesHelper": "This repository's legacy source paths match the backup plan, so clearing them will not remove coverage.",
+          "legacyOnlyPaths": "Only on repository",
+          "planOnlyPaths": "Only on backup plan",
+          "willBeCleared": "Will be cleared",
+          "planWillBackUp": "Plan will back up these instead",
+          "extraPathsCount_one": "{{count}} extra path",
+          "extraPathsCount_other": "{{count}} extra paths",
+          "selectAll": "Select all",
+          "deselectAll": "Deselect all",
+          "saveWithoutClearing": "Keep legacy paths",
+          "saveAndClearSelected": "Clear & save",
+          "comparison": {
+            "matches": "Matches plan",
+            "plan_includes_legacy": "Plan includes more",
+            "legacy_has_extra": "Repository has extra paths"
+          }
+        }
       },
       "settings": {
         "archiveNameHelper": "Supports {plan_name}, {repo_name}, {now}, {date}, {time}, and {timestamp}.",

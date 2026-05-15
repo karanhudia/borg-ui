@@ -676,8 +676,26 @@
         "pathHelper": "Ruta local para este destino de almacenamiento. Usa la configuración avanzada para rutas remotas.",
         "browsePath": "Explorar ruta del repositorio",
         "createAndSelect": "Crear y seleccionar",
-        "clearLegacyConfirm_one": "{{names}} aún tiene ajustes de origen de copia heredados.\n\n¿Quieres borrar esos ajustes ahora que este plan gestiona los datos de origen y las exclusiones? Elige Cancelar para conservarlos y guardar sin borrarlos.",
-        "clearLegacyConfirm_other": "{{names}} aún tienen ajustes de origen de copia heredados.\n\n¿Quieres borrar esos ajustes ahora que este plan gestiona los datos de origen y las exclusiones? Elige Cancelar para conservarlos y guardar sin borrarlos."
+        "legacyReview": {
+          "title": "Rutas de origen heredadas detectadas",
+          "description": "Algunos repositorios tienen rutas de origen que el plan no incluye. Elige cuáles borrar antes de guardar.",
+          "matchesHelper": "Las rutas de origen heredadas de este repositorio coinciden con el plan de copia, así que borrarlas no quitará cobertura.",
+          "legacyOnlyPaths": "Solo en el repositorio",
+          "planOnlyPaths": "Solo en el plan de copia",
+          "willBeCleared": "Se borrará",
+          "planWillBackUp": "El plan respaldará estas en su lugar",
+          "extraPathsCount_one": "{{count}} ruta extra",
+          "extraPathsCount_other": "{{count}} rutas extra",
+          "selectAll": "Seleccionar todo",
+          "deselectAll": "Deseleccionar todo",
+          "saveWithoutClearing": "Conservar rutas heredadas",
+          "saveAndClearSelected": "Borrar y guardar",
+          "comparison": {
+            "matches": "Coincide con el plan",
+            "plan_includes_legacy": "El plan incluye más",
+            "legacy_has_extra": "El repositorio tiene rutas extra"
+          }
+        }
       },
       "settings": {
         "archiveNameHelper": "Admite {plan_name}, {repo_name}, {now}, {date}, {time} y {timestamp}.",
