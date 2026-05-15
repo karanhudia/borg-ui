@@ -29,7 +29,7 @@ import {
   Wifi,
   ListChecks,
 } from 'lucide-react'
-import api, { settingsAPI } from '../services/api'
+import api, { settingsAPI, backupPlansAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import NavItem from './NavItem'
 import NavGroup from './NavGroup'
@@ -136,6 +136,16 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   })
 
   const showMqttNav = systemData?.settings?.mqtt_beta_enabled ?? false
+
+  // Show a "NEW" badge on the Backup Plans nav item until the user has created
+  // at least one plan. The cache is invalidated on plan creation/deletion, so
+  // the badge disappears the moment they make one.
+  const { data: backupPlansData } = useQuery({
+    queryKey: ['backup-plans'],
+    queryFn: () => backupPlansAPI.list(),
+  })
+  const showBackupPlansNewBadge =
+    backupPlansData !== undefined && (backupPlansData?.data?.backup_plans?.length ?? 0) === 0
 
   const navigationSections = React.useMemo(() => {
     const backupItems: Array<{
@@ -448,6 +458,27 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                     isEnabled={isEnabled}
                     disabledReason={disabledReason ?? undefined}
                     navLabel={navLabel}
+                    badge={
+                      item.key === 'backupPlans' && showBackupPlansNewBadge ? (
+                        <Box
+                          component="span"
+                          sx={{
+                            fontSize: '0.6rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.06em',
+                            px: 0.65,
+                            py: 0.15,
+                            borderRadius: 0.75,
+                            color: '#fff',
+                            bgcolor: '#2563eb',
+                            lineHeight: 1.3,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {t('navigation.badges.new', { defaultValue: 'New' })}
+                        </Box>
+                      ) : undefined
+                    }
                   />
                 )
               })}
