@@ -14,6 +14,9 @@ These instructions apply to the entire repository.
 ## UI Workflow
 
 - All UI-related decisions, design changes, reviews, and implementations must use the `ui-ux-pro-max` skill before proceeding.
+- New or changed UI features must add or update a Storybook story that demonstrates the changed state.
+- After adding or changing a UI story, run `cd frontend && npm run snapshots` and commit the resulting screenshot files under `frontend/storybook-snapshots/`.
+- UI components should stay small and composed from smaller components. When a UI component is added or changed, add or update the component story and snapshot that cover it.
 
 ## UI Preferences
 
