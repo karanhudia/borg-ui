@@ -30,10 +30,12 @@ import RunningBackupsSection from '../components/RunningBackupsSection'
 import ScheduledJobsTable from '../components/ScheduledJobsTable'
 import ActiveBackupPlanRunCard from '../components/ActiveBackupPlanRunCard'
 import LogViewerDialog from '../components/LogViewerDialog'
+import ScheduleByPlanTab from '../components/ScheduleByPlanTab'
 import { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
 import { type BackupPlan, type BackupPlanRun, Repository } from '../types'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
+import { buildScheduleDeepLink, parseScheduleDeepLink } from '../utils/scheduleDeepLink'
 
 interface ScheduledJob {
   id: number
@@ -88,7 +90,16 @@ interface BackupJob {
   }
 }
 
-const SCHEDULE_TAB_PATHS = ['/schedule/backups', '/schedule/checks', '/schedule/restore-checks']
+const SCHEDULE_TAB_PATHS = [
+  '/schedule/by-plan',
+  '/schedule/checks',
+  '/schedule/restore-checks',
+  '/schedule/backups',
+]
+const TAB_BY_PLAN = 0
+const TAB_REPO_CHECKS = 1
+const TAB_RESTORE_CHECKS = 2
+const TAB_BACKUP_JOBS = 3
 
 const Schedule: React.FC = () => {
   const { t } = useTranslation()
@@ -101,10 +112,11 @@ const Schedule: React.FC = () => {
   const canManageRepositoriesGlobally = hasGlobalPermission('repositories.manage_all')
 
   const getCurrentTab = React.useCallback(() => {
-    if (location.pathname === '/schedule/checks') return 1
-    if (location.pathname === '/schedule/restore-checks') return 2
-    if (location.pathname === '/schedule/backups') return 0
-    return 0
+    if (location.pathname === '/schedule/by-plan') return TAB_BY_PLAN
+    if (location.pathname === '/schedule/backups') return TAB_BACKUP_JOBS
+    if (location.pathname === '/schedule/checks') return TAB_REPO_CHECKS
+    if (location.pathname === '/schedule/restore-checks') return TAB_RESTORE_CHECKS
+    return TAB_BY_PLAN
   }, [location.pathname])
 
   const [currentTab, setCurrentTab] = useState(getCurrentTab())
@@ -131,13 +143,34 @@ const Schedule: React.FC = () => {
 
   useEffect(() => {
     if (location.pathname === '/schedule') {
-      navigate('/schedule/backups', { replace: true })
+      navigate('/schedule/by-plan', { replace: true })
     } else if (!SCHEDULE_TAB_PATHS.includes(location.pathname)) {
-      navigate('/schedule/backups', { replace: true })
+      navigate('/schedule/by-plan', { replace: true })
     } else {
       setCurrentTab(getCurrentTab())
     }
   }, [getCurrentTab, location.pathname, navigate])
+
+  // Consume deep-link hashes (#repo-checks/<id> or #restore-checks/<id>) once
+  // the corresponding section is mounted. Clears the hash afterwards so a
+  // refresh doesn't replay the dialog open.
+  useEffect(() => {
+    const link = parseScheduleDeepLink(location.hash)
+    if (!link) return
+    const onCheckTab = link.target === 'repo-checks' && location.pathname === '/schedule/checks'
+    const onRestoreTab =
+      link.target === 'restore-checks' && location.pathname === '/schedule/restore-checks'
+    if (!onCheckTab && !onRestoreTab) return
+    const timer = setTimeout(() => {
+      if (onCheckTab) {
+        scheduledChecksSectionRef.current?.openEditForRepo(link.repositoryId)
+      } else if (onRestoreTab) {
+        scheduledRestoreChecksSectionRef.current?.openEditForRepo(link.repositoryId)
+      }
+      navigate(location.pathname, { replace: true })
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [location.hash, location.pathname, navigate])
 
   // Save filter state to localStorage whenever it changes
   useEffect(() => {
@@ -173,11 +206,12 @@ const Schedule: React.FC = () => {
     canDo(repo.id, 'maintenance')
   )
 
-  // Get backup jobs history (scheduled only)
+  // Backup job history — fetch all jobs (not just scheduled) so orphaned/manual
+  // history remains visible after a legacy schedule is deleted.
   const { data: backupJobsData, isLoading: loadingBackupJobs } = useQuery({
-    queryKey: ['backup-jobs-scheduled'],
-    queryFn: backupAPI.getScheduledJobs,
-    refetchInterval: 3000, // Refresh every 3 seconds
+    queryKey: ['backup-jobs-all'],
+    queryFn: backupAPI.getAllJobs,
+    refetchInterval: 3000,
   })
 
   // Get scripts library
@@ -322,7 +356,7 @@ const Schedule: React.FC = () => {
       toast.success(t('schedule.toasts.jobStarted'))
       queryClient.invalidateQueries({ queryKey: ['scheduled-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['backup-status'] })
-      queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-jobs-all'] })
       track(EventCategory.BACKUP, EventAction.START, {
         entity: 'schedule',
         trigger: 'manual',
@@ -363,7 +397,7 @@ const Schedule: React.FC = () => {
     mutationFn: (jobId: string) => backupAPI.cancelJob(jobId),
     onSuccess: () => {
       toast.success(t('schedule.toasts.backupCancelled'))
-      queryClient.invalidateQueries({ queryKey: ['backup-jobs-scheduled'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-jobs-all'] })
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (error: any) => {
@@ -500,50 +534,66 @@ const Schedule: React.FC = () => {
         </Box>
 
         {/* Action Button — hidden for viewers */}
-        {canCreateSchedule &&
-          (currentTab === 0 ? (
+        {canCreateSchedule && currentTab === TAB_BY_PLAN && (
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
             <Button
-              variant="contained"
+              variant="outlined"
               startIcon={<Plus size={18} />}
               onClick={openCreateWizard}
               disabled={!canCreateSchedule}
               fullWidth
-              sx={{
-                width: { xs: '100%', sm: 'auto' },
-                alignSelf: { xs: 'stretch', sm: 'auto' },
-              }}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
-              {t('schedule.createSchedule')}
+              {t('schedule.createLegacySchedule', {
+                defaultValue: 'Create legacy schedule',
+              })}
             </Button>
-          ) : currentTab === 1 ? (
             <Button
               variant="contained"
               startIcon={<Plus size={18} />}
-              onClick={() => scheduledChecksSectionRef.current?.openAddDialog()}
+              onClick={() => navigate('/backup-plans')}
               disabled={!canCreateSchedule}
               fullWidth
-              sx={{
-                width: { xs: '100%', sm: 'auto' },
-                alignSelf: { xs: 'stretch', sm: 'auto' },
-              }}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
-              {t('schedule.addCheck')}
+              {t('schedule.createBackupPlan')}
             </Button>
-          ) : (
-            <Button
-              variant="contained"
-              startIcon={<Plus size={18} />}
-              onClick={() => scheduledRestoreChecksSectionRef.current?.openAddDialog()}
-              disabled={!canCreateSchedule}
-              fullWidth
-              sx={{
-                width: { xs: '100%', sm: 'auto' },
-                alignSelf: { xs: 'stretch', sm: 'auto' },
-              }}
-            >
-              {t('schedule.addRestoreCheck')}
-            </Button>
-          ))}
+          </Stack>
+        )}
+        {canCreateSchedule && currentTab === TAB_REPO_CHECKS && (
+          <Button
+            variant="contained"
+            startIcon={<Plus size={18} />}
+            onClick={() => scheduledChecksSectionRef.current?.openAddDialog()}
+            disabled={!canCreateSchedule}
+            fullWidth
+            sx={{
+              width: { xs: '100%', sm: 'auto' },
+              alignSelf: { xs: 'stretch', sm: 'auto' },
+            }}
+          >
+            {t('schedule.addCheck')}
+          </Button>
+        )}
+        {canCreateSchedule && currentTab === TAB_RESTORE_CHECKS && (
+          <Button
+            variant="contained"
+            startIcon={<Plus size={18} />}
+            onClick={() => scheduledRestoreChecksSectionRef.current?.openAddDialog()}
+            disabled={!canCreateSchedule}
+            fullWidth
+            sx={{
+              width: { xs: '100%', sm: 'auto' },
+              alignSelf: { xs: 'stretch', sm: 'auto' },
+            }}
+          >
+            {t('schedule.addRestoreCheck')}
+          </Button>
+        )}
       </Box>
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
@@ -553,10 +603,13 @@ const Schedule: React.FC = () => {
             setCurrentTab(newValue)
             navigate(SCHEDULE_TAB_PATHS[newValue] || SCHEDULE_TAB_PATHS[0])
           }}
+          variant="scrollable"
+          scrollButtons="auto"
         >
-          <Tab label={t('schedule.tabs.backupJobs')} />
+          <Tab label={t('schedule.tabs.byPlan', { defaultValue: 'By Plan' })} />
           <Tab label={t('schedule.tabs.repositoryChecks')} />
           <Tab label={t('schedule.tabs.restoreChecks')} />
+          <Tab label={t('schedule.tabs.backupJobs')} />
         </Tabs>
       </Box>
 
@@ -566,20 +619,44 @@ const Schedule: React.FC = () => {
         </Alert>
       )}
 
-      {currentTab === 0 && (
-        <Box>
-          <Alert
-            severity="info"
-            action={
-              <Button color="inherit" size="small" onClick={() => navigate('/backup-plans')}>
-                {t('schedule.backupPlansPrimaryAction')}
-              </Button>
-            }
-            sx={{ mb: 3 }}
-          >
-            {t('schedule.backupPlansPrimaryNotice')}
-          </Alert>
+      {currentTab === TAB_BY_PLAN && (
+        <ScheduleByPlanTab
+          plans={backupPlans}
+          repositories={repositories}
+          isLoading={loadingRepositories}
+          onEditPlan={(planId) => navigate(`/backup-plans#backup-plan-${planId}`)}
+          onEditRepoCheck={(repoId) => {
+            navigate(`/schedule/checks${buildScheduleDeepLink('repo-checks', repoId)}`)
+          }}
+          onEditRepoRestore={(repoId) => {
+            navigate(`/schedule/restore-checks${buildScheduleDeepLink('restore-checks', repoId)}`)
+          }}
+          canManageRepo={(repoId) => canDo(repoId, 'maintenance')}
+          canManagePlan={() => canManageRepositoriesGlobally}
+          legacySection={
+            (isLoading || jobs.length > 0) && (
+              <ScheduledJobsTable
+                jobs={jobs}
+                repositories={repositories}
+                isLoading={isLoading}
+                title={t('schedule.legacyBackupSchedulesTitle')}
+                description={t('schedule.legacyBackupSchedulesDescription')}
+                canManageJob={canManageJob}
+                onEdit={openEditWizard}
+                onDelete={setDeleteConfirmJob}
+                onDuplicate={handleDuplicateJob}
+                onRunNow={handleRunJobNow}
+                onToggle={handleToggleJob}
+                isRunNowPending={runJobNowMutation.isPending}
+                isDuplicatePending={duplicateJobMutation.isPending}
+              />
+            )
+          }
+        />
+      )}
 
+      {currentTab === TAB_BACKUP_JOBS && (
+        <Box>
           {activePlanRunsWithPlans.length > 0 && (
             <Box sx={{ mb: 3 }}>
               <Stack spacing={2}>
@@ -611,22 +688,6 @@ const Schedule: React.FC = () => {
             onPlanClick={(planId) => navigate(`/backup-plans#backup-plan-${planId}`)}
           />
 
-          <ScheduledJobsTable
-            jobs={jobs}
-            repositories={repositories}
-            isLoading={isLoading}
-            title={t('schedule.legacyBackupSchedulesTitle')}
-            description={t('schedule.legacyBackupSchedulesDescription')}
-            canManageJob={canManageJob}
-            onEdit={openEditWizard}
-            onDelete={setDeleteConfirmJob}
-            onDuplicate={handleDuplicateJob}
-            onRunNow={handleRunJobNow}
-            onToggle={handleToggleJob}
-            isRunNowPending={runJobNowMutation.isPending}
-            isDuplicatePending={duplicateJobMutation.isPending}
-          />
-
           <BackupHistorySection
             backupJobs={allBackupJobs}
             scheduledJobs={jobs}
@@ -644,13 +705,13 @@ const Schedule: React.FC = () => {
         </Box>
       )}
 
-      {currentTab === 1 && (
+      {currentTab === TAB_REPO_CHECKS && (
         <Box>
           <ScheduledChecksSection ref={scheduledChecksSectionRef} />
         </Box>
       )}
 
-      {currentTab === 2 && (
+      {currentTab === TAB_RESTORE_CHECKS && (
         <Box>
           <ScheduledRestoreChecksSection ref={scheduledRestoreChecksSectionRef} />
         </Box>

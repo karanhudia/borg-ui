@@ -211,7 +211,10 @@ class Repository(Base):
     # Scheduled checks
     check_cron_expression = Column(
         String, nullable=True
-    )  # NULL = disabled, cron expression for schedule
+    )  # NULL = no schedule configured; cron expression when configured
+    check_schedule_enabled = Column(
+        Boolean, default=True, nullable=False
+    )  # User-facing on/off toggle; cron is preserved when toggled off
     check_timezone = Column(
         String, default="UTC", nullable=False
     )  # IANA timezone used to interpret check_cron_expression
@@ -230,7 +233,10 @@ class Repository(Base):
     )  # Per-repository override
     restore_check_cron_expression = Column(
         String, nullable=True
-    )  # NULL = disabled, cron expression for restore verification
+    )  # NULL = no schedule configured; cron expression when configured
+    restore_check_schedule_enabled = Column(
+        Boolean, default=True, nullable=False
+    )  # User-facing on/off toggle; cron is preserved when toggled off
     restore_check_timezone = Column(
         String, default="UTC", nullable=False
     )  # IANA timezone used to interpret restore_check_cron_expression

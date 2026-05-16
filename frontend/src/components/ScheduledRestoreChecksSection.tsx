@@ -41,6 +41,7 @@ import ResponsiveDialog from './ResponsiveDialog'
 import RepoSelect from './RepoSelect'
 import CronBuilderDialog from './CronBuilderDialog'
 import ScheduleRestoreCheckCard from './ScheduleRestoreCheckCard'
+import EntityCardSkeleton from './EntityCardSkeleton'
 import StatusBadge from './StatusBadge'
 import ArchivePathSelector, { type ArchivePathSelectionData } from './ArchivePathSelector'
 import LogViewerDialog from './LogViewerDialog'
@@ -65,6 +66,7 @@ interface ScheduledRestoreCheck {
   notify_on_restore_check_success: boolean
   notify_on_restore_check_failure: boolean
   enabled: boolean
+  restore_check_schedule_enabled?: boolean
 }
 
 interface RestoreCheckJobRow {
@@ -90,6 +92,7 @@ type RestoreCheckMode = 'canary' | 'probe_paths' | 'full_archive'
 
 export interface ScheduledRestoreChecksSectionRef {
   openAddDialog: () => void
+  openEditForRepo: (repoId: number) => Promise<void>
 }
 
 const DEFAULT_CRON = '0 4 * * 0'
@@ -170,7 +173,12 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
       for (const repo of repositories) {
         try {
           const response = await repositoriesAPI.getRestoreCheckSchedule(repo.id)
-          if (response.data.enabled) {
+          // Include disabled-but-configured schedules so the toggle remains
+          // reachable; deletion is the only way to fully remove a row.
+          if (
+            response.data.restore_check_cron_expression &&
+            response.data.restore_check_cron_expression !== ''
+          ) {
             checks.push(response.data)
           }
         } catch {
@@ -468,8 +476,53 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
     setShowArchivePathPicker(false)
   }
 
+  // Open the edit/add dialog for a specific repository (used by deep-links
+  // from the By Plan tab). Prefills from the repo's existing restore-check
+  // schedule when one exists; otherwise pre-selects the repo so the user only
+  // needs to fill the remaining fields.
+  const openEditForRepo = async (repoId: number) => {
+    const repository = repositories.find((repo) => repo.id === repoId)
+    try {
+      const response = await repositoriesAPI.getRestoreCheckSchedule(repoId)
+      const data = response.data
+      const hasSchedule =
+        data && data.restore_check_cron_expression && data.restore_check_cron_expression !== ''
+      setSelectedRepositoryId(repoId)
+      if (hasSchedule) {
+        const restoreCheckMode = (data.restore_check_mode || 'canary') as RestoreCheckMode
+        setFormData({
+          cron_expression: data.restore_check_cron_expression || DEFAULT_CRON,
+          timezone: data.restore_check_timezone || data.timezone || getBrowserTimeZone(),
+          restore_check_paths: (data.restore_check_paths || []).join('\n'),
+          mode:
+            repository?.mode === 'observe' && restoreCheckMode === 'canary'
+              ? 'probe_paths'
+              : restoreCheckMode,
+        })
+      } else {
+        setFormData({
+          cron_expression: DEFAULT_CRON,
+          timezone: getBrowserTimeZone(),
+          restore_check_paths: '',
+          mode: repository?.mode === 'observe' ? 'probe_paths' : 'canary',
+        })
+      }
+      setShowDialog(true)
+    } catch {
+      setSelectedRepositoryId(repoId)
+      setFormData({
+        cron_expression: DEFAULT_CRON,
+        timezone: getBrowserTimeZone(),
+        restore_check_paths: '',
+        mode: repository?.mode === 'observe' ? 'probe_paths' : 'canary',
+      })
+      setShowDialog(true)
+    }
+  }
+
   useImperativeHandle(ref, () => ({
     openAddDialog,
+    openEditForRepo,
   }))
 
   const handleSubmit = () => {
@@ -509,6 +562,14 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
         data: { cron_expression: '' },
       })
     }
+  }
+
+  const handleToggle = (check: ScheduledRestoreCheck) => {
+    const current = check.restore_check_schedule_enabled ?? check.enabled
+    updateMutation.mutate({
+      repoId: check.repository_id,
+      data: { schedule_enabled: !current },
+    })
   }
 
   return (
@@ -563,8 +624,17 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
             ))}
           </Box>
 
-          {isLoading || loadingRepositories ? null : !scheduledChecks ||
-            scheduledChecks.length === 0 ? (
+          {isLoading || loadingRepositories ? (
+            <Stack spacing={2}>
+              {[0, 1, 2].map((i) => (
+                <EntityCardSkeleton
+                  key={i}
+                  titleWidth={[180, 150, 200][i]}
+                  opacity={Math.max(0.4, 1 - i * 0.2)}
+                />
+              ))}
+            </Stack>
+          ) : !scheduledChecks || scheduledChecks.length === 0 ? (
             <Box
               sx={{
                 py: 5,
@@ -592,6 +662,7 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
                   onEdit={() => openEditDialog(check)}
                   onDelete={() => handleDelete(check)}
                   onRunNow={() => runRestoreCheckMutation.mutate(check.repository_id)}
+                  onToggle={() => handleToggle(check)}
                 />
               ))}
             </Stack>

@@ -445,8 +445,6 @@
       "restoreChecks": "Comprobaciones de restauración"
     },
     "noRepositories": "Necesitas crear al menos un repositorio antes de programar copias de seguridad.",
-    "backupPlansPrimaryAction": "Planes de copia",
-    "backupPlansPrimaryNotice": "Los planes de copia son el lugar principal para nuevas programaciones de copia. Esta pestaña mantiene disponibles las programaciones de repositorio existentes para migración y operación heredada.",
     "legacyBackupSchedulesTitle": "Programaciones de copia heredadas",
     "legacyBackupSchedulesDescription": "Las programaciones existentes basadas en repositorio siguen ejecutándose aquí. Las nuevas copias programadas deberían crearse como planes de copia.",
     "confirmRunNow": "¿Ejecutar \"{{name}}\" ahora?",

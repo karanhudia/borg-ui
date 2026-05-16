@@ -160,7 +160,11 @@ def build_restore_check_health(
 ) -> Dict[str, Any]:
     """Build restore-verification health without penalizing unconfigured repos."""
     thresholds = thresholds or DashboardHealthThresholds()
-    configured = bool(repo.restore_check_cron_expression)
+    # "Configured" requires both a cron expression AND the user-facing toggle
+    # being on. Pausing via the toggle should not penalize dashboard health.
+    configured = bool(repo.restore_check_cron_expression) and bool(
+        getattr(repo, "restore_check_schedule_enabled", True)
+    )
     latest_status = latest_restore_check.status if latest_restore_check else None
     latest_error = latest_restore_check.error_message if latest_restore_check else None
     last_success = repo.last_restore_check

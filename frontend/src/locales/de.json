@@ -445,8 +445,6 @@
       "restoreChecks": "Restore-Prüfungen"
     },
     "noRepositories": "Du musst mindestens ein Repository erstellen, bevor du Sicherungen planst.",
-    "backupPlansPrimaryAction": "Backup-Pläne",
-    "backupPlansPrimaryNotice": "Backup-Pläne sind der primäre Ort für neue Sicherungszeitpläne. Dieser Tab hält bestehende Repository-Zeitpläne für Migration und Legacy-Betrieb verfügbar.",
     "legacyBackupSchedulesTitle": "Legacy-Sicherungszeitpläne",
     "legacyBackupSchedulesDescription": "Bestehende Repository-basierte Zeitpläne laufen hier weiter. Neue geplante Sicherungen sollten als Backup-Pläne erstellt werden.",
     "confirmRunNow": "\"{{name}}\" jetzt ausführen?",

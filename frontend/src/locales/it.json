@@ -445,8 +445,6 @@
       "restoreChecks": "Controlli di ripristino"
     },
     "noRepositories": "Devi creare almeno un repository prima di pianificare i backup.",
-    "backupPlansPrimaryAction": "Piani di backup",
-    "backupPlansPrimaryNotice": "I piani di backup sono il posto principale per nuove pianificazioni di backup. Questa scheda mantiene disponibili le pianificazioni repository esistenti per migrazione e operazioni legacy.",
     "legacyBackupSchedulesTitle": "Pianificazioni backup legacy",
     "legacyBackupSchedulesDescription": "Le pianificazioni esistenti basate su repository continuano a essere eseguite qui. I nuovi backup pianificati dovrebbero essere creati come piani di backup.",
     "confirmRunNow": "Eseguire \"{{name}}\" ora?",

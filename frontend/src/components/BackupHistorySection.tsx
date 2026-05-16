@@ -47,6 +47,7 @@ interface BackupJob {
   has_logs?: boolean
   maintenance_status?: string | null
   scheduled_job_id?: number | null
+  backup_plan_id?: number | null
   archive_name?: string | null
   progress_details?: {
     original_size: number

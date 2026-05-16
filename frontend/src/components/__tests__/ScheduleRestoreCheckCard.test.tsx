@@ -44,6 +44,7 @@ describe('ScheduleRestoreCheckCard', () => {
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onRunNow={vi.fn()}
+        onToggle={vi.fn()}
       />
     )
 
@@ -82,6 +83,7 @@ describe('ScheduleRestoreCheckCard', () => {
         onEdit={vi.fn()}
         onDelete={vi.fn()}
         onRunNow={vi.fn()}
+        onToggle={vi.fn()}
       />
     )
 
