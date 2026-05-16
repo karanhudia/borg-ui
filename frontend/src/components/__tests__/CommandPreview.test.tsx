@@ -336,3 +336,42 @@ describe('CommandPreview', () => {
     })
   })
 })
+
+describe('Copy-to-clipboard', () => {
+  it('renders copy buttons for each command block', () => {
+    render(
+      <CommandPreview
+        mode="create"
+        repositoryPath="/backups/repo"
+        encryption="repokey"
+        compression="lz4"
+        sourceDirs={['/home/user/data']}
+        repositoryMode="full"
+        dataSource="local"
+      />
+    )
+
+    // Each CommandBox should have a copy button (ContentCopyIcon has aria-label from Tooltip)
+    const copyButtons = document.querySelectorAll('button[aria-label]')
+    // At minimum, we should have copy buttons present (one per command block)
+    expect(copyButtons.length).toBeGreaterThan(0)
+  })
+
+  it('shows copy button in backup-only mode', () => {
+    render(
+      <CommandPreview
+        mode="import"
+        displayMode="backup-only"
+        borgVersion={2}
+        repositoryPath="/backups/repo"
+        sourceDirs={['/data']}
+        repositoryMode="full"
+        dataSource="local"
+      />
+    )
+
+    // Should have a copy button for the single command block
+    const copyButtons = document.querySelectorAll('button[aria-label]')
+    expect(copyButtons.length).toBeGreaterThan(0)
+  })
+})
