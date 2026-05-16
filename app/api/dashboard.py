@@ -162,9 +162,10 @@ def build_restore_check_health(
     thresholds = thresholds or DashboardHealthThresholds()
     # "Configured" requires both a cron expression AND the user-facing toggle
     # being on. Pausing via the toggle should not penalize dashboard health.
-    configured = bool(repo.restore_check_cron_expression) and bool(
-        getattr(repo, "restore_check_schedule_enabled", True)
-    )
+    schedule_enabled = getattr(repo, "restore_check_schedule_enabled", None)
+    if schedule_enabled is None:
+        schedule_enabled = True
+    configured = bool(repo.restore_check_cron_expression) and bool(schedule_enabled)
     latest_status = latest_restore_check.status if latest_restore_check else None
     latest_error = latest_restore_check.error_message if latest_restore_check else None
     last_success = repo.last_restore_check
