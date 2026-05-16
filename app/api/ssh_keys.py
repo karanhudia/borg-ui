@@ -2044,6 +2044,9 @@ async def deploy_ssh_key_with_copy_id(
                 helpful_hint = (
                     "Check if SSH server is running and firewall allows connections"
                 )
+            elif _is_ssh_dns_resolution_error(error_msg):
+                error_summary = f"Host did not resolve: {host}"
+                helpful_hint = "Check the saved host value, DNS records/resolvers, provider sub-account existence, and container/runtime DNS."
             elif "Permission denied" in error_msg:
                 error_summary = (
                     f"Authentication failed for {username}@{host} - incorrect password"
