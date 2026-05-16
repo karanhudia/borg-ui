@@ -2044,14 +2044,9 @@ async def deploy_ssh_key_with_copy_id(
                 helpful_hint = (
                     "Check if SSH server is running and firewall allows connections"
                 )
-            elif (
-                "Could not resolve hostname" in error_msg
-                or "Name or service not known" in error_msg
-                or "Temporary failure in name resolution" in error_msg
-                or "nodename nor servname provided" in error_msg
-            ):
-                error_summary = f"Cannot resolve SSH hostname {host}"
-                helpful_hint = "Verify the host name or DNS configuration"
+            elif _is_ssh_dns_resolution_error(error_msg):
+                error_summary = f"Host did not resolve: {host}"
+                helpful_hint = "Check the saved host value, DNS records/resolvers, provider sub-account existence, and container/runtime DNS."
             elif "Permission denied" in error_msg:
                 error_summary = (
                     f"Authentication failed for {username}@{host} - incorrect password"
@@ -2243,14 +2238,6 @@ async def test_ssh_key_connection(
                         f"Cannot connect to {host}:{port} - SSH service not accessible"
                     )
                     helpful_hint = "Verify SSH server is running and port is correct"
-                elif (
-                    "Could not resolve hostname" in error_msg
-                    or "Name or service not known" in error_msg
-                    or "Temporary failure in name resolution" in error_msg
-                    or "nodename nor servname provided" in error_msg
-                ):
-                    error_summary = f"Cannot resolve SSH hostname {host}"
-                    helpful_hint = "Verify the host name or DNS configuration"
                 elif "Permission denied" in error_msg:
                     if "publickey" in error_msg:
                         error_summary = f"SSH key not authorized on {host}"
