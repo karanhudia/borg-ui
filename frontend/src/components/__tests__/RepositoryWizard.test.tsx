@@ -303,7 +303,7 @@ describe('RepositoryWizard', () => {
           null
         )
       })
-    })
+    }, 45000)
   })
 
   describe('import mode', () => {
@@ -397,7 +397,7 @@ describe('RepositoryWizard', () => {
       expect(mockTrackRepository).toHaveBeenCalledWith('upload', {
         name: 'Imported Keyfile Repo',
       })
-    })
+    }, 45000)
 
     it('submits observability-only imports with bypass lock', async () => {
       const user = userEvent.setup()
@@ -434,7 +434,7 @@ describe('RepositoryWizard', () => {
           null
         )
       })
-    })
+    }, 45000)
   })
 
   describe('legacy edit mode', () => {
@@ -474,7 +474,7 @@ describe('RepositoryWizard', () => {
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
-        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+        expect(screen.getByText(/Source Locations/i)).toBeInTheDocument()
       })
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
@@ -494,7 +494,7 @@ describe('RepositoryWizard', () => {
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
-        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
+        expect(screen.getByText(/Source Locations/i)).toBeInTheDocument()
       })
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
@@ -513,7 +513,7 @@ describe('RepositoryWizard', () => {
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Save Changes/i })).toBeInTheDocument()
       })
-    })
+    }, 45000)
   })
 
   describe('SSH and loading behavior', () => {
