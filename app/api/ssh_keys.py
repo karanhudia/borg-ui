@@ -29,6 +29,25 @@ router = APIRouter(tags=["ssh-keys"], dependencies=[Depends(authorize_request)])
 
 
 # Helper functions
+SSH_DNS_RESOLUTION_ERROR_MARKERS = (
+    "could not resolve hostname",
+    "name or service not known",
+    "nodename nor servname provided",
+    "temporary failure in name resolution",
+    "no address associated with hostname",
+    "name does not resolve",
+    "non-recoverable failure in name resolution",
+    "getaddrinfo",
+)
+
+
+def _is_ssh_dns_resolution_error(error_msg: str) -> bool:
+    normalized_error = error_msg.lower()
+    return any(
+        marker in normalized_error for marker in SSH_DNS_RESOLUTION_ERROR_MARKERS
+    )
+
+
 def format_bytes(bytes_size: int) -> str:
     """Format bytes to human readable string (e.g., '1.23 GB')"""
     for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
@@ -2208,6 +2227,9 @@ async def test_ssh_key_connection(
                         f"SSH connection works but remote shell is restricted"
                     )
                     helpful_hint = "Server uses restricted shell (e.g., Hetzner Storage Box). Connection is valid for borg/rsync/sftp operations."
+                elif _is_ssh_dns_resolution_error(error_msg):
+                    error_summary = f"Host did not resolve: {host}"
+                    helpful_hint = "Check the saved host value, DNS records/resolvers, provider sub-account existence, and container/runtime DNS."
                 elif "Connection refused" in error_msg:
                     error_summary = (
                         f"Cannot connect to {host}:{port} - SSH service not accessible"

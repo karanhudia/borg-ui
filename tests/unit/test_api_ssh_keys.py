@@ -137,6 +137,77 @@ class TestSSHKeysEndpoints:
 
         assert response.status_code == 401
 
+    def test_connection_test_dns_failure_stores_diagnostic_details(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """DNS failures should be returned and stored with the original stderr details."""
+        from app.core.security import encrypt_secret
+
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        ssh_key = SSHKey(
+            name="DNS failure key",
+            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test",
+            private_key=encrypt_secret(fake_private_key),
+            is_active=True,
+        )
+        test_db.add(ssh_key)
+        test_db.commit()
+        test_db.refresh(ssh_key)
+
+        dns_stderr = (
+            b"ssh: Could not resolve hostname missing.example: "
+            b"Name or service not known\r\n"
+        )
+
+        async def mock_subprocess(*cmd, **kwargs):
+            mock_process = AsyncMock()
+            mock_process.communicate = AsyncMock(return_value=(b"", dns_stderr))
+            mock_process.returncode = 255
+            return mock_process
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            response = test_client.post(
+                f"/api/ssh-keys/{ssh_key.id}/test-connection",
+                json={"host": "missing.example", "username": "backup", "port": 22},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        error_message = data["connection"]["error_message"]
+
+        assert data["success"] is False
+        assert data["connection"]["status"] == "failed"
+        assert "Host did not resolve: missing.example" in error_message
+        assert "saved host value" in error_message
+        assert dns_stderr.decode().strip() in error_message
+
+        stored_connection = (
+            test_db.query(SSHConnection)
+            .filter(
+                SSHConnection.ssh_key_id == ssh_key.id,
+                SSHConnection.host == "missing.example",
+                SSHConnection.username == "backup",
+                SSHConnection.port == 22,
+            )
+            .one()
+        )
+        assert stored_connection.error_message == error_message
+
+        list_response = test_client.get(
+            "/api/ssh-keys/connections", headers=admin_headers
+        )
+        assert list_response.status_code == 200
+        listed_connection = next(
+            connection
+            for connection in list_response.json()["connections"]
+            if connection["id"] == stored_connection.id
+        )
+        assert listed_connection["error_message"] == error_message
+
 
 @pytest.mark.unit
 class TestRunDfCommand:
