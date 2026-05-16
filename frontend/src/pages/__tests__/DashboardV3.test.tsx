@@ -515,6 +515,47 @@ describe('DashboardV3', () => {
       await waitFor(() => screen.getAllByText('my-server'))
       expect(screen.queryByText('Recent failures')).not.toBeInTheDocument()
     })
+
+    it('hides failed jobs that have a newer successful event for the same repository and type', async () => {
+      const data = makeOverview({
+        activity_feed: [
+          {
+            id: 11,
+            type: 'backup',
+            status: 'completed',
+            repository: 'backup-nas',
+            timestamp: '2026-03-30T11:00:00+00:00',
+            message: 'Backup completed',
+            error: null,
+          },
+          {
+            id: 10,
+            type: 'backup',
+            status: 'failed',
+            repository: 'backup-nas',
+            timestamp: '2026-03-30T10:00:00+00:00',
+            message: 'Backup failed',
+            error: 'Disk full before cleanup',
+          },
+          {
+            id: 12,
+            type: 'check',
+            status: 'failed',
+            repository: 'backup-nas',
+            timestamp: '2026-03-30T09:00:00+00:00',
+            message: 'Check failed',
+            error: 'Repository check still failing',
+          },
+        ],
+      })
+
+      mockFetchSuccess(data)
+      renderDashboard()
+
+      await waitFor(() => expect(screen.getByText('Recent failures')).toBeInTheDocument())
+      expect(screen.queryByText('Disk full before cleanup')).not.toBeInTheDocument()
+      expect(screen.getByText('Repository check still failing')).toBeInTheDocument()
+    })
   })
 
   describe('upcoming automation panel', () => {

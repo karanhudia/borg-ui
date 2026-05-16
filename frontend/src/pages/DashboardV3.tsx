@@ -32,6 +32,23 @@ import { makeT, STATUS, TokenContext } from './dashboard-v3/tokens'
 import type { DashboardOverview } from './dashboard-v3/types'
 import { gaugeColor, toGB } from './dashboard-v3/utils'
 
+const RESOLVING_ACTIVITY_STATUSES = new Set(['completed', 'completed_with_warnings'])
+
+function getCurrentFailures(activityFeed: DashboardOverview['activity_feed']) {
+  return activityFeed.filter((activity) => {
+    if (activity.status !== 'failed') return false
+
+    const failedAt = new Date(activity.timestamp).getTime()
+    return !activityFeed.some(
+      (candidate) =>
+        candidate.type === activity.type &&
+        candidate.repository === activity.repository &&
+        RESOLVING_ACTIVITY_STATUSES.has(candidate.status) &&
+        new Date(candidate.timestamp).getTime() > failedAt
+    )
+  })
+}
+
 export default function DashboardV3() {
   const navigate = useNavigate()
   const { effectiveMode } = useTheme()
@@ -100,6 +117,7 @@ export default function DashboardV3() {
     .map((r) => (r.last_backup ? new Date(r.last_backup) : null))
     .filter(Boolean)
     .sort((a, b) => b!.getTime() - a!.getTime())[0]
+  const currentFailures = getCurrentFailures(ov.activity_feed)
 
   return (
     <TokenContext.Provider value={T}>
@@ -454,7 +472,7 @@ export default function DashboardV3() {
                 <ActivityTimeline activities={ov.activity_feed} />
               )}
 
-              {ov.activity_feed.some((a) => a.status === 'failed') && (
+              {currentFailures.length > 0 && (
                 <Box sx={{ mt: 2, borderTop: `1px solid ${T.border}`, pt: 1.5 }}>
                   <Typography
                     sx={{
@@ -468,64 +486,53 @@ export default function DashboardV3() {
                     {t('dashboard.recentFailures.title')}
                   </Typography>
                   <Stack spacing={0.6}>
-                    {ov.activity_feed
-                      .filter((a) => a.status === 'failed')
-                      .slice(0, 3)
-                      .map((a) => (
-                        <Box
-                          key={`${a.type}-${a.id}`}
-                          sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
-                        >
-                          <XCircle
-                            size={13}
-                            color={T.red}
-                            style={{ marginTop: 2, flexShrink: 0 }}
-                          />
-                          <Box sx={{ minWidth: 0 }}>
-                            <Stack direction="row" spacing={1.5}>
+                    {currentFailures.slice(0, 3).map((a) => (
+                      <Box
+                        key={`${a.type}-${a.id}`}
+                        sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
+                      >
+                        <XCircle size={13} color={T.red} style={{ marginTop: 2, flexShrink: 0 }} />
+                        <Box sx={{ minWidth: 0 }}>
+                          <Stack direction="row" spacing={1.5}>
+                            <Typography
+                              sx={{
+                                fontFamily: T.mono,
+                                fontSize: '0.68rem',
+                                fontWeight: 600,
+                                color: T.textPrimary,
+                              }}
+                            >
+                              {a.repository}
+                            </Typography>
+                            <Tooltip title={formatDateTimeFull(a.timestamp)} arrow placement="top">
                               <Typography
                                 sx={{
+                                  cursor: 'help',
                                   fontFamily: T.mono,
-                                  fontSize: '0.68rem',
-                                  fontWeight: 600,
-                                  color: T.textPrimary,
+                                  fontSize: '0.62rem',
+                                  color: T.textMuted,
                                 }}
                               >
-                                {a.repository}
+                                {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
                               </Typography>
-                              <Tooltip
-                                title={formatDateTimeFull(a.timestamp)}
-                                arrow
-                                placement="top"
-                              >
-                                <Typography
-                                  sx={{
-                                    cursor: 'help',
-                                    fontFamily: T.mono,
-                                    fontSize: '0.62rem',
-                                    color: T.textMuted,
-                                  }}
-                                >
-                                  {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
-                                </Typography>
-                              </Tooltip>
-                            </Stack>
-                            {a.error && (
-                              <Typography
-                                sx={{
-                                  fontFamily: T.mono,
-                                  fontSize: '0.6rem',
-                                  color: T.red + 'cc',
-                                  mt: 0.25,
-                                  wordBreak: 'break-all',
-                                }}
-                              >
-                                {a.error}
-                              </Typography>
-                            )}
-                          </Box>
+                            </Tooltip>
+                          </Stack>
+                          {a.error && (
+                            <Typography
+                              sx={{
+                                fontFamily: T.mono,
+                                fontSize: '0.6rem',
+                                color: T.red + 'cc',
+                                mt: 0.25,
+                                wordBreak: 'break-all',
+                              }}
+                            >
+                              {a.error}
+                            </Typography>
+                          )}
                         </Box>
-                      ))}
+                      </Box>
+                    ))}
                   </Stack>
                 </Box>
               )}
