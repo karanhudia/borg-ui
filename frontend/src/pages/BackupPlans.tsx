@@ -23,7 +23,12 @@ import {
 import { BorgApiClient } from '../services/borgApi'
 import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import { buildBackupPlanPayload } from '../utils/backupPlanPayload'
+import {
+  buildBackupPlanPayload,
+  normalizeSourceLocations,
+  summarizeSourceLocations,
+  type SourceLocationState,
+} from '../utils/backupPlanPayload'
 import {
   applyRepositorySelectionLimit,
   isRepositorySelectionOverLimit,
@@ -97,6 +102,7 @@ export default function BackupPlans() {
     createInitialBasicRepositoryState()
   )
   const [showSourceExplorer, setShowSourceExplorer] = useState(false)
+  const [activeSourceLocationIndex, setActiveSourceLocationIndex] = useState(0)
   const [showExcludeExplorer, setShowExcludeExplorer] = useState(false)
   const [showBasicRepositoryPathExplorer, setShowBasicRepositoryPathExplorer] = useState(false)
   const [startingPlanId, setStartingPlanId] = useState<number | null>(null)
@@ -199,9 +205,11 @@ export default function BackupPlans() {
     } else if (groupBy === 'source') {
       const local = sorted.filter((p) => p.source_type === 'local')
       const remote = sorted.filter((p) => p.source_type === 'remote')
+      const mixed = sorted.filter((p) => p.source_type === 'mixed')
       if (local.length > 0) groups.push({ name: t('backupPlans.groups.localSource'), plans: local })
       if (remote.length > 0)
         groups.push({ name: t('backupPlans.groups.remoteSource'), plans: remote })
+      if (mixed.length > 0) groups.push({ name: t('backupPlans.groups.mixedSource'), plans: mixed })
     }
 
     return { groups: groups.length > 0 ? groups : [{ name: null as string | null, plans: sorted }] }
@@ -244,17 +252,28 @@ export default function BackupPlans() {
         : null,
     [sshConnections, wizardState.sourceSshConnectionId]
   )
+  const sourceLocationsState = wizardState.sourceLocations || []
+  const activeSourceLocation = sourceLocationsState[activeSourceLocationIndex] || null
+  const activeSourceConnection = useMemo(
+    () =>
+      activeSourceLocation?.sourceType === 'remote' && activeSourceLocation.sourceSshConnectionId
+        ? sshConnections.find(
+            (connection) => connection.id === activeSourceLocation.sourceSshConnectionId
+          ) || null
+        : null,
+    [activeSourceLocation, sshConnections]
+  )
   const sourceExplorerSshConfig = useMemo(
     () =>
-      selectedSourceConnection
+      activeSourceConnection
         ? {
-            ssh_key_id: selectedSourceConnection.ssh_key_id,
-            host: selectedSourceConnection.host,
-            username: selectedSourceConnection.username,
-            port: selectedSourceConnection.port,
+            ssh_key_id: activeSourceConnection.ssh_key_id,
+            host: activeSourceConnection.host,
+            username: activeSourceConnection.username,
+            port: activeSourceConnection.port,
           }
         : undefined,
-    [selectedSourceConnection]
+    [activeSourceConnection]
   )
   const wizardSteps = useMemo(
     () =>
@@ -291,6 +310,7 @@ export default function BackupPlans() {
     setBasicRepositoryState(createInitialBasicRepositoryState())
     setBasicRepositoryOpen(false)
     setShowSourceExplorer(false)
+    setActiveSourceLocationIndex(0)
     setShowExcludeExplorer(false)
     setShowBasicRepositoryPathExplorer(false)
     setActiveStep(0)
@@ -440,6 +460,7 @@ export default function BackupPlans() {
     setBasicRepositoryState(createInitialBasicRepositoryState())
     setBasicRepositoryOpen(false)
     setShowSourceExplorer(false)
+    setActiveSourceLocationIndex(0)
     setShowExcludeExplorer(false)
     setShowBasicRepositoryPathExplorer(false)
     setLegacySourceReviewOpen(false)
@@ -455,6 +476,7 @@ export default function BackupPlans() {
     setBasicRepositoryState(createInitialBasicRepositoryState())
     setBasicRepositoryOpen(false)
     setLegacySourceReviewOpen(false)
+    setActiveSourceLocationIndex(0)
     setActiveStep(0)
     setWizardOpen(true)
   }
@@ -479,14 +501,30 @@ export default function BackupPlans() {
     ]
   }
 
-  const requireRemoteSourceConnection = () => {
-    if (wizardState.sourceType !== 'remote' || selectedSourceConnection) return true
+  const applySourceLocations = (sourceLocations: SourceLocationState[]) => {
+    const normalized = normalizeSourceLocations({
+      ...wizardState,
+      sourceLocations,
+    })
+    const summary = summarizeSourceLocations(normalized)
+    updateState({
+      sourceLocations,
+      sourceType: summary.sourceType === 'remote' ? 'remote' : 'local',
+      sourceSshConnectionId: summary.sourceSshConnectionId || '',
+      sourceDirectories: summary.sourceDirectories,
+    })
+  }
+
+  const requireRemoteSourceConnection = (sourceLocationIndex = 0) => {
+    const location = sourceLocationsState[sourceLocationIndex]
+    if (!location || location.sourceType !== 'remote' || location.sourceSshConnectionId) return true
     toast.error(t('backupPlans.toasts.selectSourceConnection'))
     return false
   }
 
-  const openSourceExplorer = () => {
-    if (!requireRemoteSourceConnection()) return
+  const openSourceExplorer = (sourceLocationIndex: number) => {
+    if (!requireRemoteSourceConnection(sourceLocationIndex)) return
+    setActiveSourceLocationIndex(sourceLocationIndex)
     setShowSourceExplorer(true)
   }
 
@@ -539,10 +577,15 @@ export default function BackupPlans() {
   const canProceed = () => {
     const stepKey = stepDefinitions[activeStep]?.key
     if (stepKey === 'source') {
+      const sourceLocations = normalizeSourceLocations(wizardState)
       return Boolean(
         wizardState.name.trim() &&
-        wizardState.sourceDirectories.length > 0 &&
-        (wizardState.sourceType === 'local' || wizardState.sourceSshConnectionId)
+        sourceLocations.length > 0 &&
+        sourceLocations.every(
+          (location) =>
+            location.sourceDirectories.length > 0 &&
+            (location.sourceType === 'local' || location.sourceSshConnectionId)
+        )
       )
     }
     if (stepKey === 'repositories') {
@@ -733,22 +776,34 @@ export default function BackupPlans() {
       />
 
       <FileExplorerDialog
-        key={`plan-source-explorer-${wizardState.sourceType}-${wizardState.sourceSshConnectionId || 'local'}`}
+        key={`plan-source-explorer-${activeSourceLocation?.sourceType || 'local'}-${
+          activeSourceLocation?.sourceSshConnectionId || 'local'
+        }`}
         open={showSourceExplorer}
         onClose={() => setShowSourceExplorer(false)}
         onSelect={(paths) => {
-          updateState({
-            sourceDirectories: appendUniquePaths(wizardState.sourceDirectories, paths),
-          })
+          const nextSourceLocations = sourceLocationsState.map((location, index) =>
+            index === activeSourceLocationIndex
+              ? {
+                  ...location,
+                  sourceDirectories: appendUniquePaths(location.sourceDirectories, paths),
+                }
+              : location
+          )
+          applySourceLocations(nextSourceLocations)
           setShowSourceExplorer(false)
         }}
         title={t('backupPlans.wizard.fileExplorer.sourceTitle')}
         initialPath={
-          wizardState.sourceType === 'remote' ? selectedSourceConnection?.default_path || '/' : '/'
+          activeSourceLocation?.sourceType === 'remote'
+            ? activeSourceConnection?.default_path || '/'
+            : '/'
         }
         multiSelect
-        connectionType={wizardState.sourceType === 'remote' ? 'ssh' : 'local'}
-        sshConfig={wizardState.sourceType === 'remote' ? sourceExplorerSshConfig : undefined}
+        connectionType={activeSourceLocation?.sourceType === 'remote' ? 'ssh' : 'local'}
+        sshConfig={
+          activeSourceLocation?.sourceType === 'remote' ? sourceExplorerSshConfig : undefined
+        }
         selectMode="both"
         showSshMountPoints={false}
       />

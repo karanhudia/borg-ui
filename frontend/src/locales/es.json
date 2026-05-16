@@ -589,7 +589,8 @@
       "scheduled": "Programados",
       "manual": "Solo manual",
       "localSource": "Origen local",
-      "remoteSource": "Origen remoto"
+      "remoteSource": "Origen remoto",
+      "mixedSource": "Origenes mixtos"
     },
     "noMatch": {
       "title": "No hay planes de copia coincidentes",
@@ -622,6 +623,7 @@
       "sourcePathCount_other": "{{count}} rutas de origen",
       "localSource": "Origen local",
       "remoteSource": "Origen remoto",
+      "mixedSource": "Origenes mixtos",
       "manualOnly": "Solo manual",
       "nextRunBadge": "Próxima {{when}}",
       "scheduledBadge": "Programado",
@@ -2445,6 +2447,17 @@
     "placeholder": "/home/usuario/documentos o /var/log/app.log",
     "browseTitle": "Explorar directorios y archivos",
     "add": "Agregar"
+  },
+  "sourceLocations": {
+    "title": "Ubicaciones de origen",
+    "subtitle": "Combina origenes locales y SSH en una copia.",
+    "sourceLabel": "Origen {{index}}",
+    "remove": "Eliminar origen",
+    "type": "Tipo de origen",
+    "local": "Local",
+    "remote": "SSH",
+    "mixed": "Mixto",
+    "add": "Agregar origen"
   },
   "excludePatterns": {
     "title": "Patrones de exclusión (Opcional)",

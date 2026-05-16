@@ -1,6 +1,11 @@
 import { getDefaultRepositoryEncryption } from '../../components/wizard'
 import { getBrowserTimeZone } from '../../utils/dateUtils'
-import type { BackupPlan } from '../../types'
+import type { BackupPlan, SourceLocation } from '../../types'
+import {
+  createSourceLocationState,
+  normalizeSourceLocations,
+  summarizeSourceLocations,
+} from '../../utils/backupPlanPayload'
 import type { BasicRepositoryState, WizardState } from './types'
 
 export const createInitialState = (): WizardState => ({
@@ -10,6 +15,7 @@ export const createInitialState = (): WizardState => ({
   sourceType: 'local',
   sourceSshConnectionId: '',
   sourceDirectories: [],
+  sourceLocations: [createSourceLocationState()],
   excludePatterns: [],
   repositoryIds: [],
   compression: 'lz4',
@@ -57,13 +63,41 @@ export function planToState(plan: BackupPlan): WizardState {
     .filter((link) => link.enabled)
     .sort((a, b) => a.execution_order - b.execution_order)
 
+  const sourceLocations =
+    plan.source_locations && plan.source_locations.length > 0
+      ? plan.source_locations.map((location: SourceLocation) =>
+          createSourceLocationState({
+            sourceType: location.source_type,
+            sourceSshConnectionId: location.source_ssh_connection_id || '',
+            sourceDirectories: location.source_directories || [],
+          })
+        )
+      : [
+          createSourceLocationState({
+            sourceType:
+              plan.source_type === 'remote' || plan.source_ssh_connection_id ? 'remote' : 'local',
+            sourceSshConnectionId: plan.source_ssh_connection_id || '',
+            sourceDirectories: plan.source_directories || [],
+          }),
+        ]
+  const sourceSummary = summarizeSourceLocations(
+    normalizeSourceLocations({
+      sourceType:
+        plan.source_type === 'remote' || plan.source_ssh_connection_id ? 'remote' : 'local',
+      sourceSshConnectionId: plan.source_ssh_connection_id || '',
+      sourceDirectories: plan.source_directories || [],
+      sourceLocations,
+    })
+  )
+
   return {
     name: plan.name,
     description: plan.description || '',
     enabled: plan.enabled,
-    sourceType: plan.source_type === 'remote' || plan.source_ssh_connection_id ? 'remote' : 'local',
-    sourceSshConnectionId: plan.source_ssh_connection_id || '',
-    sourceDirectories: plan.source_directories || [],
+    sourceType: sourceSummary.sourceType === 'remote' ? 'remote' : 'local',
+    sourceSshConnectionId: sourceSummary.sourceSshConnectionId || '',
+    sourceDirectories: sourceSummary.sourceDirectories,
+    sourceLocations,
     excludePatterns: plan.exclude_patterns || [],
     repositoryIds: repositoryLinks.map((link) => link.repository_id),
     compression: plan.compression || 'lz4',

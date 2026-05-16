@@ -2,7 +2,13 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock, Mock
 from app.services.backup_service import BackupService
-from app.database.models import BackupJob, Repository, SystemSettings, RepositoryScript
+from app.database.models import (
+    BackupJob,
+    Repository,
+    RepositoryScript,
+    SSHConnection,
+    SystemSettings,
+)
 
 
 @pytest.fixture
@@ -41,6 +47,46 @@ def _notification_service_mock():
     notifications.send_backup_success = AsyncMock()
     notifications.send_backup_warning = AsyncMock()
     return notifications
+
+
+def test_build_source_paths_from_multiple_locations(
+    backup_service_fixture, mock_db_session
+):
+    connection = SSHConnection(
+        id=7,
+        host="source.example",
+        username="backup",
+        port=2222,
+        default_path="/home/backup",
+    )
+    mock_db_session.query.return_value.filter.return_value.first.return_value = (
+        connection
+    )
+
+    paths, single_connection_id = (
+        backup_service_fixture._build_source_paths_from_locations(
+            mock_db_session,
+            [
+                {
+                    "source_type": "local",
+                    "source_ssh_connection_id": None,
+                    "source_directories": ["/srv/local"],
+                },
+                {
+                    "source_type": "remote",
+                    "source_ssh_connection_id": connection.id,
+                    "source_directories": ["project"],
+                },
+            ],
+            "/backups/repo",
+        )
+    )
+
+    assert paths == [
+        "/srv/local",
+        "ssh://backup@source.example:2222/home/backup/project",
+    ]
+    assert single_connection_id is None
 
 
 @pytest.mark.asyncio

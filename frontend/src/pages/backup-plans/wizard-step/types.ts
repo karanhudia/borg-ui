@@ -26,7 +26,7 @@ export interface BackupPlanWizardStepProps {
   handleRepositoryIdsChange: (ids: number[]) => void
   handlePruneSettingsChange: (values: PruneSettings) => void
   createBasicRepository: () => void
-  openSourceExplorer: () => void
+  openSourceExplorer: (sourceLocationIndex: number) => void
   openExcludeExplorer: () => void
   setBasicRepositoryOpen: Dispatch<SetStateAction<boolean>>
   setRepositoryWizardOpen: Dispatch<SetStateAction<boolean>>

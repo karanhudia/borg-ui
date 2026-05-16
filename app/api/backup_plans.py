@@ -22,6 +22,7 @@ from app.database.models import (
     ScheduledJobRepository,
     Script,
     ScriptExecution,
+    SSHConnection,
     User,
 )
 from app.services.backup_plan_policy import (
@@ -36,6 +37,13 @@ from app.utils.schedule_time import (
     InvalidScheduleTimezone,
     calculate_next_cron_run,
     normalize_schedule_timezone,
+)
+from app.utils.source_locations import (
+    SourceLocationPayload,
+    flatten_source_directories,
+    normalize_source_locations,
+    source_locations_from_record,
+    summarize_legacy_source_fields,
 )
 
 logger = structlog.get_logger()
@@ -59,7 +67,8 @@ class BackupPlanPayload(BaseModel):
     enabled: bool = True
     source_type: str = "local"
     source_ssh_connection_id: Optional[int] = None
-    source_directories: list[str]
+    source_directories: list[str] = Field(default_factory=list)
+    source_locations: Optional[list[SourceLocationPayload]] = None
     exclude_patterns: Optional[list[str]] = None
     archive_name_template: str = "{plan_name}-{now}"
     compression: str = "lz4"
@@ -218,13 +227,19 @@ def _payload_from_repository(
         else "{plan_name}-{repo_name}-{now}"
     )
 
+    source_locations = source_locations_from_record(repository)
+    source_type, source_ssh_connection_id, source_directories = (
+        summarize_legacy_source_fields(source_locations)
+    )
+
     return BackupPlanPayload(
         name=name,
         description=f'Created from repository "{repository.name}".',
         enabled=True,
-        source_type="remote" if repository.source_ssh_connection_id else "local",
-        source_ssh_connection_id=repository.source_ssh_connection_id,
-        source_directories=_decode_json_list(repository.source_directories),
+        source_type=source_type,
+        source_ssh_connection_id=source_ssh_connection_id,
+        source_directories=source_directories,
+        source_locations=[SourceLocationPayload(**item) for item in source_locations],
         exclude_patterns=_decode_json_list(repository.exclude_patterns),
         archive_name_template=archive_name_template,
         compression=repository.compression or "lz4",
@@ -295,14 +310,19 @@ def _serialize_repository_link(link: BackupPlanRepository) -> dict[str, Any]:
 
 def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]:
     enabled_links = [link for link in plan.repositories if link.enabled]
+    source_locations = source_locations_from_record(plan)
+    source_type, source_ssh_connection_id, source_directories = (
+        summarize_legacy_source_fields(source_locations)
+    )
     payload: dict[str, Any] = {
         "id": plan.id,
         "name": plan.name,
         "description": plan.description,
         "enabled": bool(plan.enabled),
-        "source_type": plan.source_type,
-        "source_ssh_connection_id": plan.source_ssh_connection_id,
-        "source_directories": _decode_json_list(plan.source_directories),
+        "source_type": source_type,
+        "source_ssh_connection_id": source_ssh_connection_id,
+        "source_directories": source_directories,
+        "source_locations": source_locations,
         "exclude_patterns": _decode_json_list(plan.exclude_patterns),
         "archive_name_template": plan.archive_name_template,
         "compression": plan.compression,
@@ -526,21 +546,54 @@ def _validate_payload(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.nameRequired"},
         )
-    if payload.source_type not in {"local", "remote"}:
+    source_locations = normalize_source_locations(
+        payload.source_locations,
+        source_type=payload.source_type,
+        source_ssh_connection_id=payload.source_ssh_connection_id,
+        source_directories=payload.source_directories,
+    )
+    if payload.source_locations is None and payload.source_type not in {
+        "local",
+        "remote",
+    }:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.invalidSourceType"},
         )
-    if payload.source_type == "remote" and not payload.source_ssh_connection_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"key": "backend.errors.backupPlans.sourceConnectionRequired"},
-        )
-    if not payload.source_directories:
+    if not source_locations or not flatten_source_directories(source_locations):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.sourceRequired"},
         )
+    for location in source_locations:
+        if location["source_type"] not in {"local", "remote"}:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.backupPlans.invalidSourceType"},
+            )
+        if not location["source_directories"]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.backupPlans.sourceRequired"},
+            )
+        if location["source_type"] == "remote":
+            connection_id = location["source_ssh_connection_id"]
+            if not connection_id:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "key": "backend.errors.backupPlans.sourceConnectionRequired"
+                    },
+                )
+            if (
+                not db.query(SSHConnection.id)
+                .filter(SSHConnection.id == connection_id)
+                .first()
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={"key": "backend.errors.ssh.sshConnectionNotFound"},
+                )
     if not payload.repositories:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -682,18 +735,29 @@ def _clear_legacy_source_settings(
         if repository.id not in clear_ids:
             continue
         repository.source_directories = None
+        repository.source_locations = None
         repository.exclude_patterns = None
         repository.source_ssh_connection_id = None
         repository.updated_at = datetime.utcnow()
 
 
 def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
+    source_locations = normalize_source_locations(
+        payload.source_locations,
+        source_type=payload.source_type,
+        source_ssh_connection_id=payload.source_ssh_connection_id,
+        source_directories=payload.source_directories,
+    )
+    source_type, source_ssh_connection_id, source_directories = (
+        summarize_legacy_source_fields(source_locations)
+    )
     plan.name = payload.name.strip()
     plan.description = payload.description.strip() if payload.description else None
     plan.enabled = payload.enabled
-    plan.source_type = payload.source_type
-    plan.source_ssh_connection_id = payload.source_ssh_connection_id
-    plan.source_directories = json.dumps(payload.source_directories)
+    plan.source_type = source_type
+    plan.source_ssh_connection_id = source_ssh_connection_id
+    plan.source_directories = json.dumps(source_directories)
+    plan.source_locations = json.dumps(source_locations)
     plan.exclude_patterns = json.dumps(payload.exclude_patterns or [])
     plan.archive_name_template = (
         payload.archive_name_template.strip() or "{plan_name}-{now}"
@@ -934,6 +998,7 @@ async def create_backup_plan_from_repository(
     source_settings_moved = False
     if payload.move_source_settings:
         repository.source_directories = None
+        repository.source_locations = None
         repository.exclude_patterns = None
         repository.source_ssh_connection_id = None
         repository.updated_at = datetime.utcnow()

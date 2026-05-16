@@ -24,6 +24,12 @@ from app.services.restore_check_canary import (
     to_restore_canary_archive_source_path,
 )
 from app.utils.ssh_paths import resolve_sshfs_source_path
+from app.utils.source_locations import (
+    flatten_source_directories,
+    normalize_source_locations,
+    source_locations_from_record,
+    summarize_legacy_source_fields,
+)
 from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
@@ -1256,6 +1262,90 @@ class BackupService:
 
         return backup_paths, backup_cwd
 
+    def _resolve_source_locations_for_backup(
+        self,
+        repo_record: Repository,
+        *,
+        source_locations: list[dict] | None,
+        source_directories: list[str] | None,
+        source_ssh_connection_id: int | None,
+    ) -> list[dict]:
+        if source_locations is not None:
+            return normalize_source_locations(
+                source_locations,
+                source_type="remote" if source_ssh_connection_id else "local",
+                source_ssh_connection_id=source_ssh_connection_id,
+                source_directories=source_directories,
+            )
+        if source_directories is not None:
+            return normalize_source_locations(
+                None,
+                source_type="remote" if source_ssh_connection_id else "local",
+                source_ssh_connection_id=source_ssh_connection_id,
+                source_directories=source_directories,
+            )
+        if source_ssh_connection_id is not None:
+            return normalize_source_locations(
+                None,
+                source_type="remote",
+                source_ssh_connection_id=source_ssh_connection_id,
+                source_directories=repo_record.source_directories,
+            )
+        return source_locations_from_record(repo_record)
+
+    def _build_source_paths_from_locations(
+        self,
+        db: Session,
+        source_locations: list[dict],
+        repository: str,
+    ) -> tuple[list[str], int | None]:
+        from app.database.models import SSHConnection
+
+        source_paths: list[str] = []
+        for location in source_locations:
+            source_dirs = location.get("source_directories") or []
+            if location.get("source_type") == "remote":
+                connection_id = location.get("source_ssh_connection_id")
+                connection = (
+                    db.query(SSHConnection)
+                    .filter(SSHConnection.id == connection_id)
+                    .first()
+                )
+                if not connection:
+                    error_msg = (
+                        f"SSH connection {connection_id} not found for remote source"
+                    )
+                    logger.error(error_msg, repository=repository)
+                    raise ValueError(error_msg)
+
+                source_paths.extend(
+                    f"ssh://{connection.username}@{connection.host}:{connection.port}"
+                    f"{resolve_sshfs_source_path(path, connection.default_path)}"
+                    for path in source_dirs
+                )
+                logger.info(
+                    "Using remote source location (pull-based backup)",
+                    repository=repository,
+                    connection_id=connection.id,
+                    connection_host=connection.host,
+                    source_directories=source_dirs,
+                )
+            else:
+                source_paths.extend(source_dirs)
+                logger.info(
+                    "Using local source location",
+                    repository=repository,
+                    source_directories=source_dirs,
+                )
+
+        source_type, source_ssh_connection_id, _source_directories = (
+            summarize_legacy_source_fields(source_locations)
+        )
+        single_source_ssh_connection_id = (
+            source_ssh_connection_id if source_type == "remote" else None
+        )
+        return source_paths, single_source_ssh_connection_id
+
     async def execute_backup(
         self,
         job_id: int,
@@ -1265,6 +1355,7 @@ class BackupService:
         skip_hooks: bool = False,
         source_directories: list[str] = None,
         source_ssh_connection_id: int = None,
+        source_locations: list[dict] = None,
         exclude_patterns_override: list[str] = None,
         compression_override: str = None,
         custom_flags_override: str = None,
@@ -1326,11 +1417,24 @@ class BackupService:
                 if not repo_record:
                     raise Exception(f"Repository not found: {repository}")
 
-                remote_source_paths = (
-                    source_directories
-                    if source_directories is not None
-                    else json.loads(repo_record.source_directories or "[]")
+                remote_source_locations = self._resolve_source_locations_for_backup(
+                    repo_record,
+                    source_locations=source_locations,
+                    source_directories=source_directories,
+                    source_ssh_connection_id=source_ssh_connection_id
+                    or job.source_ssh_connection_id,
                 )
+                if len(remote_source_locations) != 1:
+                    raise ValueError(
+                        "Remote SSH execution supports one source location. "
+                        "Use local execution for mixed source locations."
+                    )
+                remote_location = remote_source_locations[0]
+                if remote_location["source_type"] != "remote":
+                    raise ValueError(
+                        "Remote SSH execution requires a remote source location."
+                    )
+                remote_source_paths = remote_location["source_directories"]
                 remote_exclude_patterns = (
                     exclude_patterns_override
                     if exclude_patterns_override is not None
@@ -1342,11 +1446,9 @@ class BackupService:
                     if custom_flags_override is not None
                     else repo_record.custom_flags
                 )
-                remote_source_connection_id = (
-                    source_ssh_connection_id
-                    if source_directories is not None
-                    else job.source_ssh_connection_id
-                )
+                remote_source_connection_id = remote_location[
+                    "source_ssh_connection_id"
+                ]
 
                 # Execute remote backup
                 await remote_backup_service.execute_remote_backup(
@@ -1430,7 +1532,7 @@ class BackupService:
             exclude_patterns = []  # Default no exclusions
             compression = "lz4"  # Default compression
             router = None
-            using_source_override = source_directories is not None
+            effective_source_ssh_connection_id = None
             try:
                 repo_record = (
                     db.query(Repository).filter(Repository.path == repository).first()
@@ -1460,71 +1562,26 @@ class BackupService:
                             compression=compression,
                         )
 
-                    if using_source_override:
-                        source_dirs = source_directories or []
-                    elif repo_record.source_directories:
-                        try:
-                            source_dirs = json.loads(repo_record.source_directories)
-                        except json.JSONDecodeError as e:
-                            error_msg = (
-                                f"Could not parse source_directories JSON: {str(e)}"
-                            )
-                            logger.error(error_msg, repository=repository)
-                            raise ValueError(error_msg)
-                    else:
-                        error_msg = "No source directories configured for this repository. Please add source directories in repository settings."
-                        logger.error(error_msg, repository=repository)
-                        raise ValueError(error_msg)
-
-                    if not source_dirs or not isinstance(source_dirs, list):
+                    backup_source_locations = self._resolve_source_locations_for_backup(
+                        repo_record,
+                        source_locations=source_locations,
+                        source_directories=source_directories,
+                        source_ssh_connection_id=source_ssh_connection_id,
+                    )
+                    if not backup_source_locations or not flatten_source_directories(
+                        backup_source_locations
+                    ):
                         error_msg = "No source directories configured for this backup."
                         logger.error(error_msg, repository=repository)
                         raise ValueError(error_msg)
 
-                    effective_source_ssh_connection_id = (
-                        source_ssh_connection_id
-                        if using_source_override
-                        else repo_record.source_ssh_connection_id
+                    source_paths, effective_source_ssh_connection_id = (
+                        self._build_source_paths_from_locations(
+                            db,
+                            backup_source_locations,
+                            repository,
+                        )
                     )
-
-                    # Check if this is a remote source (pull-based backup)
-                    if effective_source_ssh_connection_id:
-                        from app.database.models import SSHConnection
-
-                        connection = (
-                            db.query(SSHConnection)
-                            .filter(
-                                SSHConnection.id == effective_source_ssh_connection_id
-                            )
-                            .first()
-                        )
-
-                        if connection:
-                            # Convert source paths from the SFTP/browsing view into
-                            # executable SSH paths for SSHFS mounts.
-                            source_paths = [
-                                f"ssh://{connection.username}@{connection.host}:{connection.port}{resolve_sshfs_source_path(path, connection.default_path)}"
-                                for path in source_dirs
-                            ]
-                            logger.info(
-                                "Using remote source directories (pull-based backup)",
-                                repository=repository,
-                                connection_id=connection.id,
-                                connection_host=connection.host,
-                                source_directories=source_paths,
-                            )
-                        else:
-                            error_msg = f"SSH connection {effective_source_ssh_connection_id} not found for remote source"
-                            logger.error(error_msg, repository=repository)
-                            raise ValueError(error_msg)
-                    else:
-                        # Local source paths
-                        source_paths = source_dirs
-                        logger.info(
-                            "Using local source directories",
-                            repository=repository,
-                            source_directories=source_paths,
-                        )
 
                     # Parse exclude patterns from JSON if available, or use caller override.
                     if exclude_patterns_override is not None:

@@ -444,6 +444,62 @@ class TestRepositoriesCreate:
 
         assert response.status_code == 200
 
+    def test_create_repository_with_multiple_source_locations(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Test creating repository with mixed local and remote source locations"""
+        connection = SSHConnection(host="server", username="user", port=22)
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Mixed Source Repo",
+                    "path": "/tmp/mixed-source",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "source_locations": [
+                        {
+                            "source_type": "local",
+                            "source_directories": ["/srv/local"],
+                        },
+                        {
+                            "source_type": "remote",
+                            "source_ssh_connection_id": connection.id,
+                            "source_directories": ["/srv/remote"],
+                        },
+                    ],
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = test_db.query(Repository).filter_by(name="Mixed Source Repo").one()
+        assert json.loads(repo.source_directories) == ["/srv/local", "/srv/remote"]
+        assert repo.source_ssh_connection_id is None
+        assert json.loads(repo.source_locations) == [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "source_directories": ["/srv/local"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": connection.id,
+                "source_directories": ["/srv/remote"],
+            },
+        ]
+
     def test_create_repository_with_exclude_patterns(
         self, test_client: TestClient, admin_headers
     ):

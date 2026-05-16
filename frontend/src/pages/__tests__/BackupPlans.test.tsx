@@ -267,6 +267,74 @@ describe('BackupPlans payload', () => {
     expect(payload.source_ssh_connection_id).toBe(42)
   })
 
+  it('builds mixed source location payloads', () => {
+    const payload = buildBackupPlanPayload({
+      name: 'Mixed Plan',
+      description: '',
+      enabled: true,
+      sourceType: 'local',
+      sourceSshConnectionId: '',
+      sourceDirectories: ['/srv/local', '/srv/remote'],
+      sourceLocations: [
+        {
+          id: 'local-source',
+          sourceType: 'local',
+          sourceSshConnectionId: '',
+          sourceDirectories: ['/srv/local'],
+        },
+        {
+          id: 'remote-source',
+          sourceType: 'remote',
+          sourceSshConnectionId: 42,
+          sourceDirectories: ['/srv/remote'],
+        },
+      ],
+      excludePatterns: [],
+      repositoryIds: [10],
+      compression: 'lz4',
+      archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+      customFlags: '',
+      uploadRatelimitMb: '',
+      repositoryRunMode: 'series',
+      maxParallelRepositories: 1,
+      failureBehavior: 'continue',
+      scheduleEnabled: false,
+      cronExpression: '0 21 * * *',
+      timezone: 'UTC',
+      preBackupScriptId: null,
+      postBackupScriptId: null,
+      preBackupScriptParameters: {},
+      postBackupScriptParameters: {},
+      runRepositoryScripts: true,
+      runPruneAfter: false,
+      runCompactAfter: false,
+      runCheckAfter: false,
+      checkMaxDuration: 3600,
+      pruneKeepHourly: 0,
+      pruneKeepDaily: 7,
+      pruneKeepWeekly: 4,
+      pruneKeepMonthly: 6,
+      pruneKeepQuarterly: 0,
+      pruneKeepYearly: 1,
+    })
+
+    expect(payload.source_type).toBe('mixed')
+    expect(payload.source_ssh_connection_id).toBeNull()
+    expect(payload.source_directories).toEqual(['/srv/local', '/srv/remote'])
+    expect(payload.source_locations).toEqual([
+      {
+        source_type: 'local',
+        source_ssh_connection_id: null,
+        source_directories: ['/srv/local'],
+      },
+      {
+        source_type: 'remote',
+        source_ssh_connection_id: 42,
+        source_directories: ['/srv/remote'],
+      },
+    ])
+  })
+
   it('includes repository ids whose legacy source settings should be cleared', () => {
     const payload = buildBackupPlanPayload(
       {

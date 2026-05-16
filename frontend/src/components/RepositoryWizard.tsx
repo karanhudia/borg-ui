@@ -5,21 +5,29 @@ import { FolderOpen, Database, Shield, Settings, CheckCircle } from 'lucide-reac
 import {
   WizardDialog,
   WizardStepLocation,
-  WizardStepDataSource,
   WizardStepSecurity,
   WizardStepRepositoryAdvanced,
   WizardStepBackupConfig,
   WizardStepReview,
 } from './wizard'
+import SourceLocationsInput from './SourceLocationsInput'
 import FileExplorerDialog from './FileExplorerDialog'
 import { sshKeysAPI, RepositoryData } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import {
+  createSourceLocationState,
+  normalizeSourceLocations,
+  summarizeSourceLocations,
+  type SourceLocationState,
+} from '../utils/backupPlanPayload'
+import type { SourceLocation } from '../types'
 
 interface Repository extends RepositoryData {
   id: number
   passphrase?: string
   source_ssh_connection_id?: number | null
   source_directories?: string[]
+  source_locations?: SourceLocation[]
   exclude_patterns?: string[]
   custom_flags?: string | null
   remote_path?: string
@@ -64,6 +72,7 @@ interface WizardState {
   dataSource: 'local' | 'remote'
   sourceSshConnectionId: number | ''
   sourceDirs: string[]
+  sourceLocations: SourceLocationState[]
   // Security step
   encryption: string
   passphrase: string
@@ -91,6 +100,7 @@ const createInitialState = (): WizardState => ({
   dataSource: 'local',
   sourceSshConnectionId: '',
   sourceDirs: [],
+  sourceLocations: [createSourceLocationState()],
   encryption: 'repokey',
   passphrase: '',
   remotePath: '',
@@ -115,7 +125,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   // File explorer states
   const [showPathExplorer, setShowPathExplorer] = useState(false)
   const [showSourceExplorer, setShowSourceExplorer] = useState(false)
-  const [showRemoteSourceExplorer, setShowRemoteSourceExplorer] = useState(false)
+  const [activeSourceLocationIndex, setActiveSourceLocationIndex] = useState(0)
   const [showExcludeExplorer, setShowExcludeExplorer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const showLegacyBackupSteps =
@@ -123,6 +133,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     wizardState.repositoryMode === 'full' &&
     Boolean(
       repository?.source_directories?.length ||
+      repository?.source_locations?.length ||
       repository?.exclude_patterns?.length ||
       repository?.source_ssh_connection_id ||
       repository?.custom_flags ||
@@ -212,6 +223,30 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         : repository.repository_type === 'ssh' || (repository.path || '').startsWith('ssh://') // Legacy fallback
 
     const repoVersion = (repository.borg_version === 2 ? 2 : 1) as 1 | 2
+    const sourceLocations =
+      repository.source_locations && repository.source_locations.length > 0
+        ? repository.source_locations.map((location) =>
+            createSourceLocationState({
+              sourceType: location.source_type,
+              sourceSshConnectionId: location.source_ssh_connection_id || '',
+              sourceDirectories: location.source_directories || [],
+            })
+          )
+        : [
+            createSourceLocationState({
+              sourceType: repository.source_ssh_connection_id ? 'remote' : 'local',
+              sourceSshConnectionId: repository.source_ssh_connection_id || '',
+              sourceDirectories: repository.source_directories || [],
+            }),
+          ]
+    const sourceSummary = summarizeSourceLocations(
+      normalizeSourceLocations({
+        sourceType: repository.source_ssh_connection_id ? 'remote' : 'local',
+        sourceSshConnectionId: repository.source_ssh_connection_id || '',
+        sourceDirectories: repository.source_directories || [],
+        sourceLocations,
+      })
+    )
     setWizardState({
       name: repository.name || '',
       borgVersion: repoVersion,
@@ -220,9 +255,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       path: repoPath,
       repoSshConnectionId: repository.connection_id || '',
       bypassLock: repository.bypass_lock || false,
-      dataSource: repository.source_ssh_connection_id ? 'remote' : 'local',
-      sourceSshConnectionId: repository.source_ssh_connection_id || '',
-      sourceDirs: repository.source_directories || [],
+      dataSource: sourceSummary.sourceType === 'remote' ? 'remote' : 'local',
+      sourceSshConnectionId: sourceSummary.sourceSshConnectionId || '',
+      sourceDirs: sourceSummary.sourceDirectories,
+      sourceLocations,
       encryption: repository.encryption || (repoVersion === 2 ? 'repokey-aes-ocb' : 'repokey'),
       passphrase: repository.passphrase || '',
       remotePath: repository.remote_path || '',
@@ -309,67 +345,19 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     handleStateChange({ path: newPath })
   }
 
-  const normalizeSourceDirs = (
-    paths: string[]
-  ): { processedPaths: string[]; detectedSshConnectionId: number | '' } => {
-    const processedPaths: string[] = []
-    let detectedSshConnection: SSHConnection | null = null
-
-    for (const p of paths) {
-      if (p.startsWith('ssh://')) {
-        const matchWithPort = p.match(/^ssh:\/\/([^@]+)@([^:/]+):(\d+)(\/.*)$/)
-        const matchWithoutPort = p.match(/^ssh:\/\/([^@]+)@([^/]+)(\/.*)$/)
-
-        if (matchWithPort) {
-          const [, parsedUsername, parsedHost, parsedPort, remotePath] = matchWithPort
-          if (!detectedSshConnection) {
-            detectedSshConnection =
-              sshConnections.find(
-                (c) =>
-                  c.username === parsedUsername &&
-                  c.host === parsedHost &&
-                  c.port === parseInt(parsedPort)
-              ) || null
-          }
-          processedPaths.push(remotePath || '/')
-        } else if (matchWithoutPort) {
-          const [, parsedUsername, parsedHost, remotePath] = matchWithoutPort
-          if (!detectedSshConnection) {
-            detectedSshConnection =
-              sshConnections.find(
-                (c) => c.username === parsedUsername && c.host === parsedHost && c.port === 22
-              ) || null
-          }
-          processedPaths.push(remotePath || '/')
-        } else {
-          processedPaths.push(p)
-        }
-      } else {
-        processedPaths.push(p)
-      }
-    }
-
-    return {
-      processedPaths,
-      detectedSshConnectionId: detectedSshConnection?.id ?? '',
-    }
-  }
-
-  // Handle source directories change with SSH URL detection
-  const handleSourceDirsChange = (paths: string[]) => {
-    const { processedPaths, detectedSshConnectionId } = normalizeSourceDirs(paths)
-
-    if (detectedSshConnectionId) {
-      handleStateChange({
-        dataSource: 'remote',
-        sourceSshConnectionId: detectedSshConnectionId,
-        sourceDirs: [...wizardState.sourceDirs, ...processedPaths],
-      })
-      return
-    }
-
+  const applySourceLocations = (sourceLocations: SourceLocationState[]) => {
+    const normalized = normalizeSourceLocations({
+      sourceType: wizardState.dataSource,
+      sourceSshConnectionId: wizardState.sourceSshConnectionId,
+      sourceDirectories: wizardState.sourceDirs,
+      sourceLocations,
+    })
+    const summary = summarizeSourceLocations(normalized)
     handleStateChange({
-      sourceDirs: [...wizardState.sourceDirs, ...processedPaths],
+      sourceLocations,
+      dataSource: summary.sourceType === 'remote' ? 'remote' : 'local',
+      sourceSshConnectionId: summary.sourceSshConnectionId || '',
+      sourceDirs: summary.sourceDirectories,
     })
   }
 
@@ -438,7 +426,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         return true
 
       case 'source':
-        if (wizardState.dataSource === 'remote' && !wizardState.sourceSshConnectionId) return false
+        if (
+          wizardState.sourceLocations.some(
+            (location) => location.sourceType === 'remote' && !location.sourceSshConnectionId
+          )
+        )
+          return false
         return true
 
       case 'security':
@@ -465,6 +458,13 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   }
 
   const handleSubmit = async () => {
+    const sourceLocations = normalizeSourceLocations({
+      sourceType: wizardState.dataSource,
+      sourceSshConnectionId: wizardState.sourceSshConnectionId,
+      sourceDirectories: wizardState.sourceDirs,
+      sourceLocations: wizardState.sourceLocations,
+    })
+    const sourceSummary = summarizeSourceLocations(sourceLocations)
     const data: RepositoryData = {
       name: wizardState.name,
       borg_version: wizardState.borgVersion,
@@ -473,7 +473,15 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       encryption: wizardState.encryption,
       passphrase: wizardState.passphrase,
       compression: wizardState.compression,
-      source_directories: wizardState.sourceDirs,
+      source_directories: sourceSummary.sourceDirectories,
+      source_locations: sourceLocations.map((location) => ({
+        source_type: location.sourceType,
+        source_ssh_connection_id:
+          location.sourceType === 'remote' && location.sourceSshConnectionId
+            ? Number(location.sourceSshConnectionId)
+            : null,
+        source_directories: location.sourceDirectories,
+      })),
       exclude_patterns: wizardState.excludePatterns,
       custom_flags: wizardState.customFlags,
       remote_path: wizardState.remotePath,
@@ -486,10 +494,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       bypass_lock: wizardState.bypassLock,
       // Connection IDs - single source of truth for SSH
       connection_id: wizardState.repoSshConnectionId || null,
-      source_connection_id:
-        wizardState.dataSource === 'remote' && wizardState.sourceSshConnectionId
-          ? wizardState.sourceSshConnectionId
-          : null,
+      source_connection_id: sourceSummary.sourceSshConnectionId,
     }
 
     track(
@@ -562,38 +567,19 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
       case 'source':
         return (
-          <WizardStepDataSource
+          <SourceLocationsInput
             repositoryLocation={wizardState.repositoryLocation}
             repoSshConnectionId={wizardState.repoSshConnectionId}
-            repositoryMode={wizardState.repositoryMode}
-            data={{
-              dataSource: wizardState.dataSource,
-              sourceSshConnectionId: wizardState.sourceSshConnectionId,
-              sourceDirs: wizardState.sourceDirs,
-            }}
+            sourceLocations={wizardState.sourceLocations}
             sshConnections={sshConnections}
-            onChange={(updates) => {
-              if (updates.sourceDirs) {
-                const { processedPaths, detectedSshConnectionId } = normalizeSourceDirs(
-                  updates.sourceDirs
-                )
-                handleStateChange({
-                  ...updates,
-                  dataSource: detectedSshConnectionId
-                    ? 'remote'
-                    : (updates.dataSource ?? wizardState.dataSource),
-                  sourceSshConnectionId:
-                    detectedSshConnectionId || updates.sourceSshConnectionId || '',
-                  sourceDirs: processedPaths,
-                })
-                return
-              }
-
-              handleStateChange(updates)
+            onChange={(sourceLocations) => {
+              applySourceLocations(sourceLocations)
             }}
-            onBrowseSource={() => setShowSourceExplorer(true)}
-            onBrowseRemoteSource={() => setShowRemoteSourceExplorer(true)}
-            sourceRequired={false}
+            onBrowse={(sourceLocationIndex) => {
+              setActiveSourceLocationIndex(sourceLocationIndex)
+              setShowSourceExplorer(true)
+            }}
+            required={false}
           />
         )
 
@@ -684,6 +670,14 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         return null
     }
   }
+
+  const activeSourceLocation = wizardState.sourceLocations[activeSourceLocationIndex] || null
+  const activeSourceConnection =
+    activeSourceLocation?.sourceType === 'remote' && activeSourceLocation.sourceSshConnectionId
+      ? sshConnections.find(
+          (connection) => connection.id === activeSourceLocation.sourceSshConnectionId
+        )
+      : null
 
   return (
     <>
@@ -784,62 +778,48 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       />
 
       <FileExplorerDialog
+        key={`source-explorer-${activeSourceLocation?.sourceType || 'local'}-${
+          activeSourceLocation?.sourceSshConnectionId || 'local'
+        }`}
         open={showSourceExplorer}
         onClose={() => setShowSourceExplorer(false)}
         onSelect={(paths) => {
-          handleSourceDirsChange(paths)
+          const nextSourceLocations = wizardState.sourceLocations.map((location, index) =>
+            index === activeSourceLocationIndex
+              ? {
+                  ...location,
+                  sourceDirectories: [...location.sourceDirectories, ...paths],
+                }
+              : location
+          )
+          applySourceLocations(nextSourceLocations)
           setShowSourceExplorer(false)
         }}
         title={
-          wizardState.sourceSshConnectionId && wizardState.dataSource === 'local'
-            ? t('repositoryWizard.fileExplorer.selectSourceDirsRemote')
+          activeSourceLocation?.sourceType === 'remote'
+            ? t('repositoryWizard.fileExplorer.selectSourceDirsOrFilesRemote')
             : t('repositoryWizard.fileExplorer.selectSourceDirs')
         }
-        initialPath="/"
+        initialPath={
+          activeSourceLocation?.sourceType === 'remote'
+            ? activeSourceConnection?.default_path || '/'
+            : '/'
+        }
         multiSelect={true}
-        connectionType="local"
-        selectMode="both"
-        showSshMountPoints={
-          wizardState.repositoryLocation !== 'ssh' &&
-          (!!wizardState.sourceSshConnectionId || wizardState.sourceDirs.length === 0)
-        }
-        allowedSshConnectionId={
-          wizardState.dataSource === 'local' ? wizardState.sourceSshConnectionId || null : null
-        }
-      />
-
-      {showRemoteSourceExplorer &&
-        wizardState.sourceSshConnectionId &&
-        (() => {
-          const conn = sshConnections.find((c) => c.id === wizardState.sourceSshConnectionId)
-          const config = conn
+        connectionType={activeSourceLocation?.sourceType === 'remote' ? 'ssh' : 'local'}
+        sshConfig={
+          activeSourceLocation?.sourceType === 'remote' && activeSourceConnection
             ? {
-                ssh_key_id: conn.ssh_key_id,
-                host: conn.host,
-                username: conn.username,
-                port: conn.port,
+                ssh_key_id: activeSourceConnection.ssh_key_id,
+                host: activeSourceConnection.host,
+                username: activeSourceConnection.username,
+                port: activeSourceConnection.port,
               }
             : undefined
-
-          return (
-            <FileExplorerDialog
-              open={true}
-              onClose={() => setShowRemoteSourceExplorer(false)}
-              onSelect={(paths) => {
-                handleStateChange({
-                  sourceDirs: [...wizardState.sourceDirs, ...paths],
-                })
-                setShowRemoteSourceExplorer(false)
-              }}
-              title={t('repositoryWizard.fileExplorer.selectSourceDirsOrFilesRemote')}
-              initialPath="/"
-              multiSelect={true}
-              connectionType="ssh"
-              sshConfig={config}
-              selectMode="both"
-            />
-          )
-        })()}
+        }
+        selectMode="both"
+        showSshMountPoints={false}
+      />
 
       {showExcludeExplorer &&
         (() => {

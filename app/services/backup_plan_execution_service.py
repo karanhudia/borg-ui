@@ -38,6 +38,10 @@ from app.services.template_service import get_system_variables
 from app.utils.archive_names import build_archive_name
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
 from app.utils.schedule_time import calculate_next_cron_run, to_utc_naive
+from app.utils.source_locations import (
+    source_locations_from_record,
+    summarize_legacy_source_fields,
+)
 
 logger = structlog.get_logger()
 
@@ -61,6 +65,7 @@ class PlanRunContext:
     source_type: str
     source_ssh_connection_id: Optional[int]
     source_directories: list[str]
+    source_locations: list[dict[str, Any]]
     exclude_patterns: list[str]
     archive_name_template: str
     compression: str
@@ -443,12 +448,17 @@ class BackupPlanExecutionService:
                 raise ValueError("Backup plan has no enabled repositories")
 
             now = datetime.now()
+            source_locations = source_locations_from_record(plan)
+            source_type, source_ssh_connection_id, source_directories = (
+                summarize_legacy_source_fields(source_locations)
+            )
             context = PlanRunContext(
                 plan_id=plan.id,
                 plan_name=plan.name,
-                source_type=plan.source_type,
-                source_ssh_connection_id=plan.source_ssh_connection_id,
-                source_directories=_json_list(plan.source_directories),
+                source_type=source_type,
+                source_ssh_connection_id=source_ssh_connection_id,
+                source_directories=source_directories,
+                source_locations=source_locations,
                 exclude_patterns=_json_list(plan.exclude_patterns),
                 archive_name_template=plan.archive_name_template,
                 compression=plan.compression,
@@ -614,7 +624,7 @@ class BackupPlanExecutionService:
                 raise FileNotFoundError(f"Script file not found: {script.file_path}")
 
             source_connection = None
-            if context.source_type == "remote" and context.source_ssh_connection_id:
+            if context.source_ssh_connection_id:
                 source_connection = (
                     db.query(SSHConnection)
                     .filter(SSHConnection.id == context.source_ssh_connection_id)
@@ -643,6 +653,7 @@ class BackupPlanExecutionService:
                     "BORG_UI_SOURCE_DIRECTORIES": json.dumps(
                         context.source_directories
                     ),
+                    "BORG_UI_SOURCE_LOCATIONS": json.dumps(context.source_locations),
                 }
             )
             if source_connection:
@@ -768,11 +779,7 @@ class BackupPlanExecutionService:
                 backup_plan_id=context.plan_id,
                 backup_plan_run_id=run_id,
                 status="pending",
-                source_ssh_connection_id=(
-                    context.source_ssh_connection_id
-                    if context.source_type == "remote"
-                    else None
-                ),
+                source_ssh_connection_id=(context.source_ssh_connection_id),
                 created_at=datetime.utcnow(),
             )
             db.add(backup_job)
@@ -801,11 +808,8 @@ class BackupPlanExecutionService:
                 archive_name=archive_name,
                 skip_hooks=not context.run_repository_scripts,
                 source_directories=context.source_directories,
-                source_ssh_connection_id=(
-                    context.source_ssh_connection_id
-                    if context.source_type == "remote"
-                    else None
-                ),
+                source_ssh_connection_id=(context.source_ssh_connection_id),
+                source_locations=context.source_locations,
                 exclude_patterns_override=context.exclude_patterns,
                 compression_override=repository_context.compression,
                 custom_flags_override=repository_context.custom_flags,

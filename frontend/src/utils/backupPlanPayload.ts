@@ -1,4 +1,11 @@
-import type { BackupPlanData } from '../types'
+import type { BackupPlanData, SourceLocationType } from '../types'
+
+export interface SourceLocationState {
+  id: string
+  sourceType: 'local' | 'remote'
+  sourceSshConnectionId: number | ''
+  sourceDirectories: string[]
+}
 
 export interface BackupPlanPayloadState {
   name: string
@@ -7,6 +14,7 @@ export interface BackupPlanPayloadState {
   sourceType: 'local' | 'remote'
   sourceSshConnectionId: number | ''
   sourceDirectories: string[]
+  sourceLocations?: SourceLocationState[]
   excludePatterns: string[]
   repositoryIds: number[]
   compression: string
@@ -42,20 +50,92 @@ function mbToKib(value: string): number | null {
   return Math.round(parsed * 1024)
 }
 
+export function createSourceLocationState(
+  overrides: Partial<SourceLocationState> = {}
+): SourceLocationState {
+  return {
+    id:
+      overrides.id ||
+      globalThis.crypto?.randomUUID?.() ||
+      `source-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    sourceType: overrides.sourceType || 'local',
+    sourceSshConnectionId: overrides.sourceSshConnectionId ?? '',
+    sourceDirectories: overrides.sourceDirectories || [],
+  }
+}
+
+export function normalizeSourceLocations(
+  state: Pick<
+    BackupPlanPayloadState,
+    'sourceType' | 'sourceSshConnectionId' | 'sourceDirectories' | 'sourceLocations'
+  >
+): SourceLocationState[] {
+  const locations =
+    state.sourceLocations && state.sourceLocations.length > 0
+      ? state.sourceLocations
+      : [
+          createSourceLocationState({
+            sourceType: state.sourceType,
+            sourceSshConnectionId: state.sourceSshConnectionId,
+            sourceDirectories: state.sourceDirectories,
+          }),
+        ]
+
+  return locations
+    .map((location) => ({
+      ...location,
+      sourceSshConnectionId: location.sourceType === 'remote' ? location.sourceSshConnectionId : '',
+      sourceDirectories: location.sourceDirectories.filter((path) => path.trim()),
+    }))
+    .filter((location) => location.sourceDirectories.length > 0)
+}
+
+export function summarizeSourceLocations(sourceLocations: SourceLocationState[]): {
+  sourceType: SourceLocationType
+  sourceSshConnectionId: number | null
+  sourceDirectories: string[]
+} {
+  const sourceDirectories = sourceLocations.flatMap((location) => location.sourceDirectories)
+  if (sourceLocations.length === 1) {
+    const [location] = sourceLocations
+    return {
+      sourceType: location.sourceType,
+      sourceSshConnectionId:
+        location.sourceType === 'remote' && location.sourceSshConnectionId
+          ? Number(location.sourceSshConnectionId)
+          : null,
+      sourceDirectories,
+    }
+  }
+  return {
+    sourceType: sourceLocations.length > 0 ? 'mixed' : 'local',
+    sourceSshConnectionId: null,
+    sourceDirectories,
+  }
+}
+
 export function buildBackupPlanPayload(
   state: BackupPlanPayloadState,
   clearLegacySourceRepositoryIds: number[] = []
 ): BackupPlanData {
+  const sourceLocations = normalizeSourceLocations(state)
+  const sourceSummary = summarizeSourceLocations(sourceLocations)
+
   return {
     name: state.name.trim(),
     description: state.description.trim() || null,
     enabled: state.enabled,
-    source_type: state.sourceType,
-    source_ssh_connection_id:
-      state.sourceType === 'remote' && state.sourceSshConnectionId
-        ? Number(state.sourceSshConnectionId)
-        : null,
-    source_directories: state.sourceDirectories,
+    source_type: sourceSummary.sourceType,
+    source_ssh_connection_id: sourceSummary.sourceSshConnectionId,
+    source_directories: sourceSummary.sourceDirectories,
+    source_locations: sourceLocations.map((location) => ({
+      source_type: location.sourceType,
+      source_ssh_connection_id:
+        location.sourceType === 'remote' && location.sourceSshConnectionId
+          ? Number(location.sourceSshConnectionId)
+          : null,
+      source_directories: location.sourceDirectories,
+    })),
     exclude_patterns: state.excludePatterns,
     archive_name_template: state.archiveNameTemplate.trim() || '{plan_name}-{repo_name}-{now}',
     compression: state.compression,

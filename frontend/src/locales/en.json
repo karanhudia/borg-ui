@@ -589,7 +589,8 @@
       "scheduled": "Scheduled",
       "manual": "Manual only",
       "localSource": "Local source",
-      "remoteSource": "Remote source"
+      "remoteSource": "Remote source",
+      "mixedSource": "Mixed sources"
     },
     "noMatch": {
       "title": "No matching backup plans",
@@ -622,6 +623,7 @@
       "sourcePathCount_other": "{{count}} source paths",
       "localSource": "Local source",
       "remoteSource": "Remote source",
+      "mixedSource": "Mixed sources",
       "manualOnly": "Manual only",
       "nextRunBadge": "Next {{when}}",
       "scheduledBadge": "Scheduled",
@@ -2445,6 +2447,17 @@
     "placeholder": "/home/user/documents or /var/log/app.log",
     "browseTitle": "Browse directories and files",
     "add": "Add"
+  },
+  "sourceLocations": {
+    "title": "Source Locations",
+    "subtitle": "Combine local and SSH sources in one backup.",
+    "sourceLabel": "Source {{index}}",
+    "remove": "Remove source",
+    "type": "Source type",
+    "local": "Local",
+    "remote": "SSH",
+    "mixed": "Mixed",
+    "add": "Add source"
   },
   "excludePatterns": {
     "title": "Exclude Patterns (Optional)",

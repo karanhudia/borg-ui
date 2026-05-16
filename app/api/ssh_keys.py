@@ -7,6 +7,7 @@ import os
 import subprocess
 import asyncio
 import tempfile
+import json
 
 from app.database.database import get_db
 from app.database.models import (
@@ -14,6 +15,7 @@ from app.database.models import (
     SSHKey,
     SSHConnection,
     Repository,
+    BackupPlan,
     BackupJob,
     RestoreJob,
     ScheduledJob,
@@ -22,6 +24,10 @@ from app.core.authorization import authorize_request
 from app.core.security import get_current_user, encrypt_secret, decrypt_secret
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.source_locations import (
+    source_locations_from_record,
+    summarize_legacy_source_fields,
+)
 import hashlib
 
 logger = structlog.get_logger()
@@ -29,6 +35,27 @@ router = APIRouter(tags=["ssh-keys"], dependencies=[Depends(authorize_request)])
 
 
 # Helper functions
+def _remove_source_locations_for_connection(records, connection_id: int) -> None:
+    for record in records:
+        source_locations = [
+            location
+            for location in source_locations_from_record(record)
+            if location["source_ssh_connection_id"] != connection_id
+        ]
+        source_type, source_ssh_connection_id, source_directories = (
+            summarize_legacy_source_fields(source_locations)
+        )
+        if hasattr(record, "source_type"):
+            record.source_type = source_type
+        record.source_ssh_connection_id = source_ssh_connection_id
+        record.source_directories = (
+            json.dumps(source_directories) if source_directories else None
+        )
+        record.source_locations = (
+            json.dumps(source_locations) if source_locations else None
+        )
+
+
 def format_bytes(bytes_size: int) -> str:
     """Format bytes to human readable string (e.g., '1.23 GB')"""
     for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
@@ -1571,8 +1598,22 @@ async def delete_ssh_connection(
         host = connection.host
 
         # Null out FK references so child records are preserved after deletion
+        _remove_source_locations_for_connection(
+            db.query(Repository).filter(Repository.source_locations.isnot(None)).all(),
+            connection_id,
+        )
+        _remove_source_locations_for_connection(
+            db.query(BackupPlan).filter(BackupPlan.source_locations.isnot(None)).all(),
+            connection_id,
+        )
         db.query(Repository).filter(Repository.connection_id == connection_id).update(
             {"connection_id": None}, synchronize_session=False
+        )
+        db.query(BackupPlan).filter(
+            BackupPlan.source_ssh_connection_id == connection_id
+        ).update(
+            {"source_type": "local", "source_ssh_connection_id": None},
+            synchronize_session=False,
         )
         db.query(Repository).filter(
             Repository.source_ssh_connection_id == connection_id

@@ -39,6 +39,7 @@ def upgrade(db):
                     source_type VARCHAR NOT NULL DEFAULT 'local',
                     source_ssh_connection_id INTEGER REFERENCES ssh_connections(id),
                     source_directories TEXT NOT NULL,
+                    source_locations TEXT,
                     exclude_patterns TEXT,
                     archive_name_template VARCHAR NOT NULL DEFAULT '{plan_name}-{now}',
                     compression VARCHAR NOT NULL DEFAULT 'lz4',
@@ -75,6 +76,14 @@ def upgrade(db):
         )
         db.execute(text("CREATE INDEX ix_backup_plans_id ON backup_plans (id)"))
         db.execute(text("CREATE INDEX ix_backup_plans_name ON backup_plans (name)"))
+
+    if _table_exists(db, "backup_plans"):
+        _add_column_if_missing(
+            db,
+            "backup_plans",
+            "source_locations",
+            "source_locations TEXT",
+        )
 
     if not _table_exists(db, "backup_plan_repositories"):
         db.execute(

@@ -327,7 +327,9 @@ export function BackupPlansContent({
                   const sourceTypeLabel =
                     plan.source_type === 'remote'
                       ? t('backupPlans.status.remoteSource')
-                      : t('backupPlans.status.localSource')
+                      : plan.source_type === 'mixed'
+                        ? t('backupPlans.status.mixedSource')
+                        : t('backupPlans.status.localSource')
 
                   return (
                     <Stack key={plan.id} spacing={1.25}>

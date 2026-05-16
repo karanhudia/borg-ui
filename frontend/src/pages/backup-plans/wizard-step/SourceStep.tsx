@@ -1,7 +1,11 @@
 import { Stack, TextField } from '@mui/material'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
-import { WizardStepDataSource } from '../../../components/wizard'
+import SourceLocationsInput from '../../../components/SourceLocationsInput'
+import {
+  normalizeSourceLocations,
+  summarizeSourceLocations,
+} from '../../../utils/backupPlanPayload'
 import type { BackupPlanWizardStepProps } from './types'
 
 type SourceStepProps = Pick<
@@ -39,27 +43,24 @@ export function SourceStep({
         rows={2}
         fullWidth
       />
-      <WizardStepDataSource
+      <SourceLocationsInput
         repositoryLocation="local"
-        repoSshConnectionId=""
-        repositoryMode="full"
-        data={{
-          dataSource: wizardState.sourceType,
-          sourceSshConnectionId: wizardState.sourceSshConnectionId,
-          sourceDirs: wizardState.sourceDirectories,
-        }}
+        sourceLocations={wizardState.sourceLocations || []}
         sshConnections={sshConnections}
-        onChange={(updates) => {
+        onChange={(sourceLocations) => {
+          const normalized = normalizeSourceLocations({
+            ...wizardState,
+            sourceLocations,
+          })
+          const summary = summarizeSourceLocations(normalized)
           updateState({
-            ...(updates.dataSource ? { sourceType: updates.dataSource } : {}),
-            ...(updates.sourceSshConnectionId !== undefined
-              ? { sourceSshConnectionId: updates.sourceSshConnectionId }
-              : {}),
-            ...(updates.sourceDirs !== undefined ? { sourceDirectories: updates.sourceDirs } : {}),
+            sourceLocations,
+            sourceType: summary.sourceType === 'remote' ? 'remote' : 'local',
+            sourceSshConnectionId: summary.sourceSshConnectionId || '',
+            sourceDirectories: summary.sourceDirectories,
           })
         }}
-        onBrowseSource={openSourceExplorer}
-        onBrowseRemoteSource={openSourceExplorer}
+        onBrowse={openSourceExplorer}
       />
       <ExcludePatternInput
         patterns={wizardState.excludePatterns}

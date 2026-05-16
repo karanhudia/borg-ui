@@ -25,6 +25,11 @@ from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import repository_borg_env
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
+from app.utils.source_locations import (
+    SourceLocationPayload,
+    normalize_source_locations,
+    summarize_legacy_source_fields,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Repositories v2"], dependencies=[require_feature("borg_v2")])
@@ -42,6 +47,7 @@ class RepositoryV2Create(BaseModel):
     connection_id: Optional[int] = None
     remote_path: Optional[str] = None
     source_directories: Optional[list[str]] = None
+    source_locations: Optional[list[SourceLocationPayload]] = None
     exclude_patterns: Optional[list[str]] = None
     mode: str = "full"
     bypass_lock: bool = False
@@ -64,6 +70,7 @@ class RepositoryV2Import(BaseModel):
     connection_id: Optional[int] = None
     remote_path: Optional[str] = None
     source_directories: Optional[list[str]] = None
+    source_locations: Optional[list[SourceLocationPayload]] = None
     exclude_patterns: Optional[list[str]] = None
     mode: str = "full"
     bypass_lock: bool = False
@@ -119,6 +126,46 @@ def _borg_keyfile_name(repo_path: str) -> str:
         else repo_path.lstrip("/")
     )
     return re.sub(r"[^a-zA-Z0-9]", "_", path)
+
+
+def _normalized_payload_source_locations(
+    data: RepositoryV2Create | RepositoryV2Import,
+) -> list[dict]:
+    return normalize_source_locations(
+        data.source_locations,
+        source_type="remote" if data.source_connection_id else "local",
+        source_ssh_connection_id=data.source_connection_id,
+        source_directories=data.source_directories,
+    )
+
+
+def _validate_source_locations(db: Session, source_locations: list[dict]) -> None:
+    for location in source_locations:
+        if location["source_type"] not in {"local", "remote"}:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.backupPlans.invalidSourceType"},
+            )
+        if location["source_type"] == "remote":
+            connection_id = location["source_ssh_connection_id"]
+            if not connection_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.backupPlans.sourceConnectionRequired"
+                    },
+                )
+            from app.database.models import SSHConnection
+
+            if (
+                not db.query(SSHConnection.id)
+                .filter(SSHConnection.id == connection_id)
+                .first()
+            ):
+                raise HTTPException(
+                    status_code=404,
+                    detail={"key": "backend.errors.repo.sshConnectionNotFound"},
+                )
 
 
 async def _rcreate(
@@ -240,9 +287,12 @@ async def create_repository(
             },
         )
 
-    source_dirs_json = (
-        json.dumps(data.source_directories) if data.source_directories else None
+    source_locations = _normalized_payload_source_locations(data)
+    _validate_source_locations(db, source_locations)
+    _source_type, source_ssh_connection_id, source_directories = (
+        summarize_legacy_source_fields(source_locations)
     )
+    source_dirs_json = json.dumps(source_directories) if source_directories else None
     exclude_patterns_json = (
         json.dumps(data.exclude_patterns) if data.exclude_patterns else None
     )
@@ -254,6 +304,7 @@ async def create_repository(
         compression=data.compression,
         passphrase=data.passphrase,
         source_directories=source_dirs_json,
+        source_locations=json.dumps(source_locations) if source_locations else None,
         exclude_patterns=exclude_patterns_json,
         connection_id=data.connection_id,
         remote_path=data.remote_path,
@@ -266,7 +317,7 @@ async def create_repository(
         post_hook_timeout=data.post_hook_timeout,
         continue_on_hook_failure=data.continue_on_hook_failure,
         skip_on_hook_failure=data.skip_on_hook_failure,
-        source_ssh_connection_id=data.source_connection_id,
+        source_ssh_connection_id=source_ssh_connection_id,
         borg_version=2,
         repository_type="ssh" if data.connection_id else "local",
     )
@@ -359,9 +410,12 @@ async def import_repository(
             },
         )
 
-    source_dirs_json = (
-        json.dumps(data.source_directories) if data.source_directories else None
+    source_locations = _normalized_payload_source_locations(data)
+    _validate_source_locations(db, source_locations)
+    _source_type, source_ssh_connection_id, source_directories = (
+        summarize_legacy_source_fields(source_locations)
     )
+    source_dirs_json = json.dumps(source_directories) if source_directories else None
     exclude_patterns_json = (
         json.dumps(data.exclude_patterns) if data.exclude_patterns else None
     )
@@ -373,6 +427,7 @@ async def import_repository(
         compression=data.compression,
         passphrase=data.passphrase,
         source_directories=source_dirs_json,
+        source_locations=json.dumps(source_locations) if source_locations else None,
         exclude_patterns=exclude_patterns_json,
         connection_id=data.connection_id,
         remote_path=data.remote_path,
@@ -385,7 +440,7 @@ async def import_repository(
         post_hook_timeout=data.post_hook_timeout,
         continue_on_hook_failure=data.continue_on_hook_failure,
         skip_on_hook_failure=data.skip_on_hook_failure,
-        source_ssh_connection_id=data.source_connection_id,
+        source_ssh_connection_id=source_ssh_connection_id,
         has_keyfile=bool(keyfile_path),
         borg_version=2,
         repository_type="ssh" if data.connection_id else "local",

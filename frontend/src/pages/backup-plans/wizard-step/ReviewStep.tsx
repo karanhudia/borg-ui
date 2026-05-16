@@ -39,10 +39,19 @@ export function ReviewStep({
   scripts,
   t,
 }: ReviewStepProps) {
+  const configuredSourceLocations = (wizardState.sourceLocations || []).filter(
+    (location) => location.sourceDirectories.length > 0
+  )
+  const sourceDirectoryCount = configuredSourceLocations.reduce(
+    (count, location) => count + location.sourceDirectories.length,
+    0
+  )
   const sourceLocationLabel =
-    wizardState.sourceType === 'remote'
-      ? t('backupPlans.wizard.review.remoteSource')
-      : t('backupPlans.wizard.review.localSource')
+    configuredSourceLocations.length > 1
+      ? t('sourceLocations.mixed')
+      : wizardState.sourceType === 'remote'
+        ? t('backupPlans.wizard.review.remoteSource')
+        : t('backupPlans.wizard.review.localSource')
   const sourceConnectionLabel = selectedSourceConnection
     ? formatSshConnectionLabel(selectedSourceConnection)
     : wizardState.sourceSshConnectionId
@@ -55,9 +64,11 @@ export function ReviewStep({
   const selectedRepositories = wizardState.repositoryIds
     .map((repositoryId) => repositories.find((repository) => repository.id === repositoryId))
     .filter((repository): repository is Repository => Boolean(repository))
-  const visibleSourceDirectories = wizardState.sourceDirectories.slice(0, 6)
+  const visibleSourceDirectories = configuredSourceLocations
+    .flatMap((location) => location.sourceDirectories)
+    .slice(0, 6)
   const hiddenSourceDirectoryCount = Math.max(
-    wizardState.sourceDirectories.length - visibleSourceDirectories.length,
+    sourceDirectoryCount - visibleSourceDirectories.length,
     0
   )
   const visibleExcludePatterns = wizardState.excludePatterns.slice(0, 4)
@@ -113,7 +124,9 @@ export function ReviewStep({
 
           <ReviewAttrRow label={t('backupPlans.wizard.review.sourceLocation')}>
             <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
-              {wizardState.sourceType === 'remote' ? (
+              {configuredSourceLocations.length > 1 ? (
+                <ListChecks size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
+              ) : wizardState.sourceType === 'remote' ? (
                 <Laptop size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
               ) : (
                 <HardDrive size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
@@ -124,7 +137,7 @@ export function ReviewStep({
             </Stack>
           </ReviewAttrRow>
 
-          {wizardState.sourceType === 'remote' && (
+          {configuredSourceLocations.length <= 1 && wizardState.sourceType === 'remote' && (
             <ReviewAttrRow label={t('backupPlans.wizard.review.sourceConnection')}>
               <Typography variant="body2" fontSize="0.75rem" fontWeight={500} noWrap>
                 {sourceConnectionLabel}
@@ -153,7 +166,7 @@ export function ReviewStep({
               </Typography>
               <ReviewCount>
                 {t('backupPlans.wizard.review.pathCount', {
-                  count: wizardState.sourceDirectories.length,
+                  count: sourceDirectoryCount,
                 })}
               </ReviewCount>
             </Box>

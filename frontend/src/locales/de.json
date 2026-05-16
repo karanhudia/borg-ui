@@ -589,7 +589,8 @@
       "scheduled": "Geplant",
       "manual": "Nur manuell",
       "localSource": "Lokale Quelle",
-      "remoteSource": "Remote-Quelle"
+      "remoteSource": "Remote-Quelle",
+      "mixedSource": "Gemischte Quellen"
     },
     "noMatch": {
       "title": "Keine passenden Backup-Pläne",
@@ -622,6 +623,7 @@
       "sourcePathCount_other": "{{count}} Quellpfade",
       "localSource": "Lokale Quelle",
       "remoteSource": "Remote-Quelle",
+      "mixedSource": "Gemischte Quellen",
       "manualOnly": "Nur manuell",
       "nextRunBadge": "Nächster Lauf {{when}}",
       "scheduledBadge": "Geplant",
@@ -2445,6 +2447,17 @@
     "placeholder": "/home/benutzer/dokumente oder /var/log/app.log",
     "browseTitle": "Verzeichnisse und Dateien durchsuchen",
     "add": "Hinzufügen"
+  },
+  "sourceLocations": {
+    "title": "Quellorte",
+    "subtitle": "Kombiniere lokale und SSH-Quellen in einer Sicherung.",
+    "sourceLabel": "Quelle {{index}}",
+    "remove": "Quelle entfernen",
+    "type": "Quelltyp",
+    "local": "Lokal",
+    "remote": "SSH",
+    "mixed": "Gemischt",
+    "add": "Quelle hinzufügen"
   },
   "excludePatterns": {
     "title": "Ausschlussmuster (Optional)",
