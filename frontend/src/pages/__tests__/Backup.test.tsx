@@ -40,6 +40,11 @@ async function openLegacyBackupTab(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('tab', { name: /legacy backup/i }))
 }
 
+async function selectBackupPlan(user: ReturnType<typeof userEvent.setup>, name: RegExp | string) {
+  await user.click(await screen.findByRole('combobox', { name: /backup plan/i }))
+  await user.click(await screen.findByRole('option', { name }))
+}
+
 vi.mock('../../hooks/useAnalytics', () => ({
   useAnalytics: () => ({
     trackBackup,
@@ -319,6 +324,7 @@ describe('Backup page', () => {
     renderWithProviders(<Backup />)
 
     const runButton = await screen.findByRole('button', { name: /run backup plan/i })
+    await selectBackupPlan(user, /nightly plan/i)
     await waitFor(() => {
       expect(runButton).toBeEnabled()
     })
@@ -329,6 +335,141 @@ describe('Backup page', () => {
     })
     expect(toastSuccess).toHaveBeenCalledWith('Backup plan started')
     expect(navigateMock).not.toHaveBeenCalled()
+  })
+
+  it('does not select a backup plan by default', async () => {
+    backupPlansPayload = [
+      {
+        id: 7,
+        name: 'Nightly Plan',
+        enabled: true,
+        repository_count: 1,
+        repository_run_mode: 'series',
+        source_directories: ['/data'],
+        exclude_patterns: [],
+        schedule_enabled: false,
+        compression: 'lz4',
+      },
+    ]
+
+    renderWithProviders(<Backup />)
+
+    const runButton = await screen.findByRole('button', { name: /run backup plan/i })
+
+    expect(await screen.findByText('Select a backup plan')).toBeInTheDocument()
+    expect(screen.queryByText('Nightly Plan')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(runButton).toBeDisabled()
+    })
+    expect(backupPlansRunMock).not.toHaveBeenCalled()
+  })
+
+  it('shows running backup plan runs from every plan regardless of selected plan', async () => {
+    const user = userEvent.setup()
+    backupPlansPayload = [
+      {
+        id: 7,
+        name: 'Nightly Plan',
+        enabled: true,
+        repository_count: 1,
+        repository_run_mode: 'series',
+        source_directories: ['/data'],
+        exclude_patterns: [],
+        schedule_enabled: false,
+        compression: 'lz4',
+      },
+      {
+        id: 8,
+        name: 'Weekly Plan',
+        enabled: true,
+        repository_count: 1,
+        repository_run_mode: 'series',
+        source_directories: ['/warehouse'],
+        exclude_patterns: [],
+        schedule_enabled: false,
+        compression: 'lz4',
+      },
+    ]
+    backupPlanRunsPayload = [
+      {
+        id: 99,
+        backup_plan_id: 7,
+        trigger: 'manual',
+        status: 'running',
+        started_at: '2026-01-01T10:00:00Z',
+        repositories: [
+          {
+            id: 100,
+            repository_id: 1,
+            status: 'running',
+            repository: {
+              id: 1,
+              name: 'Primary Repo',
+              path: '/repos/primary',
+            },
+            backup_job: {
+              id: 42,
+              repository: '/repos/primary',
+              repository_id: 1,
+              status: 'running',
+              progress: 50,
+              has_logs: true,
+              progress_details: {
+                nfiles: 12,
+                original_size: 1024,
+                backup_speed: 1.5,
+                current_file: '/data/file.txt',
+              },
+            },
+          },
+        ],
+      },
+      {
+        id: 100,
+        backup_plan_id: 8,
+        trigger: 'manual',
+        status: 'running',
+        started_at: '2026-01-01T11:00:00Z',
+        repositories: [
+          {
+            id: 101,
+            repository_id: 3,
+            status: 'running',
+            repository: {
+              id: 3,
+              name: 'Warehouse Repo',
+              path: '/repos/warehouse',
+            },
+            backup_job: {
+              id: 43,
+              repository: '/repos/warehouse',
+              repository_id: 3,
+              status: 'running',
+              progress: 25,
+              has_logs: true,
+              progress_details: {
+                nfiles: 3,
+                original_size: 2048,
+                backup_speed: 2.5,
+                current_file: '/warehouse/file.txt',
+              },
+            },
+          },
+        ],
+      },
+    ]
+
+    renderWithProviders(<Backup />)
+
+    await selectBackupPlan(user, /nightly plan/i)
+
+    const activeSection = await screen.findByRole('region', {
+      name: /running backup plan runs/i,
+    })
+    expect(within(activeSection).getByText('Nightly Plan')).toBeInTheDocument()
+    expect(within(activeSection).getByText('Weekly Plan')).toBeInTheDocument()
+    expect(within(activeSection).getByText('/data/file.txt')).toBeInTheDocument()
+    expect(within(activeSection).getByText('/warehouse/file.txt')).toBeInTheDocument()
   })
 
   it('shows active backup plan runs with per-repository status and cancellation', async () => {

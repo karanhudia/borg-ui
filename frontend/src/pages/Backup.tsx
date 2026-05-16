@@ -37,6 +37,7 @@ import { usePermissions } from '../hooks/usePermissions'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
+import { isActiveRun } from './backup-plans/runStatus'
 
 type BackupTab = 'plans' | 'legacy'
 
@@ -108,18 +109,22 @@ const Backup: React.FC = () => {
     () => runnableBackupPlans.find((plan) => plan.id === selectedBackupPlanId) || null,
     [runnableBackupPlans, selectedBackupPlanId]
   )
+  const visibleBackupPlanRuns = useMemo(
+    () =>
+      backupPlanRuns.filter(
+        (run) =>
+          isActiveRun(run.status) ||
+          (selectedBackupPlanId !== '' && run.backup_plan_id === selectedBackupPlanId)
+      ),
+    [backupPlanRuns, selectedBackupPlanId]
+  )
 
   useEffect(() => {
-    if (runnableBackupPlans.length === 0) {
-      if (selectedBackupPlanId !== '') setSelectedBackupPlanId('')
-      return
-    }
-
     if (
-      !selectedBackupPlanId ||
+      selectedBackupPlanId !== '' &&
       !runnableBackupPlans.some((plan) => plan.id === selectedBackupPlanId)
     ) {
-      setSelectedBackupPlanId(runnableBackupPlans[0].id)
+      setSelectedBackupPlanId('')
     }
   }, [runnableBackupPlans, selectedBackupPlanId])
 
@@ -381,8 +386,13 @@ const Backup: React.FC = () => {
                     fullWidth
                     label={t('backup.planRun.selectLabel')}
                     value={selectedBackupPlanId}
-                    onChange={(event) => setSelectedBackupPlanId(Number(event.target.value))}
+                    onChange={(event) => {
+                      const nextValue = event.target.value
+                      setSelectedBackupPlanId(nextValue === '' ? '' : Number(nextValue))
+                    }}
                     disabled={loadingBackupPlans || runnableBackupPlans.length === 0}
+                    SelectProps={{ displayEmpty: true }}
+                    InputLabelProps={{ shrink: true }}
                     sx={{
                       minWidth: { xs: '100%', sm: 300 },
                       '& .MuiInputBase-root': {
@@ -394,6 +404,11 @@ const Backup: React.FC = () => {
                       },
                     }}
                   >
+                    <MenuItem value="" disabled>
+                      {t('backup.planRun.selectPlaceholder', {
+                        defaultValue: 'Select a backup plan',
+                      })}
+                    </MenuItem>
                     {runnableBackupPlans.map((plan) => (
                       <MenuItem key={plan.id} value={plan.id}>
                         {plan.name}
@@ -431,12 +446,8 @@ const Backup: React.FC = () => {
           </Box>
 
           <BackupPlanRunsPanel
-            runs={
-              selectedBackupPlanId
-                ? backupPlanRuns.filter((run) => run.backup_plan_id === selectedBackupPlanId)
-                : []
-            }
-            plans={selectedBackupPlan ? [selectedBackupPlan] : []}
+            runs={visibleBackupPlanRuns}
+            plans={backupPlans}
             loading={loadingBackupPlanRuns}
             cancellingRunId={
               cancelBackupPlanRunMutation.isPending
