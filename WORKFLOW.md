@@ -245,6 +245,9 @@ Use this only when completion is blocked by missing required tools or missing au
 10. Update the workpad comment with final checklist status and validation notes.
     - Mark completed plan/acceptance/validation checklist items as checked.
     - Add final handoff notes (commit + validation summary) in the same workpad comment.
+    - Include this exact Human Review handoff note format so Merging can run
+      the fast-path preflight without guessing:
+      `Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>`.
     - Do not include PR URL in the workpad comment; keep PR linkage on the issue via attachment/link fields.
     - Add a short `### Confusions` section at the bottom when any part of task execution was unclear/confusing, with concise bullets.
     - Do not post any additional completion summary comment.
@@ -268,8 +271,21 @@ Use this only when completion is blocked by missing required tools or missing au
 2. Poll for updates as needed, including GitHub PR review comments from humans and bots.
 3. If review feedback requires changes, move the issue to `Rework` and follow the rework flow.
 4. If approved, human moves the issue to `Merging`.
-5. When the issue is in `Merging`, open and follow `.codex/skills/land/SKILL.md`, then run the `land` skill in a loop until the PR is merged. Do not call `gh pr merge` directly.
-6. After merge is complete, move the issue to `Done`.
+5. When the issue is in `Merging`, open and follow `.codex/skills/land/SKILL.md`; do not call `gh pr merge` directly outside that skill.
+6. Start with the fast landing preflight for already-green PRs:
+   - Read the latest `Human Review handoff: ...` note from the workpad.
+   - Run `python3 .codex/skills/land/land_watch.py --preflight --handoff-note '<handoff note>'`.
+   - If the preflight exits `0`, the PR head SHA is unchanged, GitHub checks
+     are green, mergeability is clean, and no new human/Codex feedback was
+     found since Human Review; skip full local validation and the full watcher
+     loop, then merge through the `land` skill flow.
+   - If the preflight exits `6`, fails, or lacks handoff/check/mergeability
+     data, use the conservative fallback in `.codex/skills/land/SKILL.md`.
+7. Always use the conservative fallback, including full local validation and
+   watcher mode, when the PR head changed after Human Review, conflicts were
+   resolved, GitHub checks are missing/pending/failed/inconclusive, feedback
+   appeared after Human Review, or the branch is updated during landing.
+8. After merge is complete, move the issue to `Done`.
 
 ## Step 4: Rework handling
 

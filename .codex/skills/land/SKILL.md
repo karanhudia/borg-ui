@@ -12,9 +12,12 @@ description:
 
 - Ensure the PR is conflict-free with main.
 - Keep CI green and fix failures when they occur.
+- Use a fast path for already-green PRs whose head SHA matches the Human Review
+  handoff.
 - Squash-merge the PR once checks pass.
 - Do not yield to the user until the PR is merged; keep the watcher loop running
-  unless blocked.
+  unless the fast path proves the full watcher is unnecessary or landing is
+  blocked.
 - No need to delete remote branches after merge; the repo auto-deletes head
   branches.
 
@@ -26,35 +29,48 @@ description:
 ## Steps
 
 1. Locate the PR for the current branch.
-2. Confirm the Borg UI validation gauntlet is green locally before any push:
+2. Read the workpad final handoff notes and find the exact line:
+   `Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>`.
+3. Run the fast-path preflight:
+   `python3 .codex/skills/land/land_watch.py --preflight --handoff-note '<handoff note>'`.
+4. If the preflight exits `0`, skip full local validation and the full watcher
+   loop for this already-green PR. The preflight has confirmed the head SHA is
+   unchanged since Human Review, mergeability is clean, checks are green, and no
+   new human/Codex feedback appeared since Human Review. Squash-merge with the
+   PR title/body after one final `gh pr view --json mergeable,mergeStateStatus`
+   check still reports a clean merge state.
+5. If the preflight exits `6`, fails, or reports missing/uncertain data, use the
+   conservative fallback below.
+6. Conservative fallback: confirm the Borg UI validation gauntlet is green
+   locally before any push:
    `git diff --check`; backend checks for backend changes; frontend checks for
    frontend changes; and smoke/runtime checks for user-facing app changes.
-3. If the working tree has uncommitted changes, commit with the `commit` skill
+7. If the working tree has uncommitted changes, commit with the `commit` skill
    and push with the `push` skill before proceeding.
-4. Check mergeability and conflicts against main.
-5. If conflicts exist, use the `pull` skill to fetch/merge `origin/main` and
+8. Check mergeability and conflicts against main.
+9. If conflicts exist, use the `pull` skill to fetch/merge `origin/main` and
    resolve conflicts, then use the `push` skill to publish the updated branch.
-6. Ensure Codex review comments (if present) are acknowledged and any required
+10. Ensure Codex review comments (if present) are acknowledged and any required
    fixes are handled before merging.
-7. Watch checks until complete.
-8. If checks fail, pull logs, fix the issue, commit with the `commit` skill,
+11. Watch checks until complete.
+12. If checks fail, pull logs, fix the issue, commit with the `commit` skill,
    push with the `push` skill, and re-run checks.
-9. When all checks are green and review feedback is addressed, squash-merge and
+13. When all checks are green and review feedback is addressed, squash-merge and
    delete the branch using the PR title/body for the merge subject/body.
-10. **Context guard:** Before implementing review feedback, confirm it does not
+14. **Context guard:** Before implementing review feedback, confirm it does not
     conflict with the user’s stated intent or task context. If it conflicts,
     respond inline with a justification and ask the user before changing code.
-11. **Pushback template:** When disagreeing, reply inline with: acknowledge +
+15. **Pushback template:** When disagreeing, reply inline with: acknowledge +
     rationale + offer alternative.
-12. **Ambiguity gate:** When ambiguity blocks progress, use the clarification
+16. **Ambiguity gate:** When ambiguity blocks progress, use the clarification
     flow (assign PR to current GH user, mention them, wait for response). Do not
     implement until ambiguity is resolved.
     - If you are confident you know better than the reviewer, you may proceed
       without asking the user, but reply inline with your rationale.
-13. **Per-comment mode:** For each review comment, choose one of: accept,
+17. **Per-comment mode:** For each review comment, choose one of: accept,
     clarify, or push back. Reply inline (or in the issue thread for Codex
     reviews) stating the mode before changing code.
-14. **Reply before change:** Always respond with intended action before pushing
+18. **Reply before change:** Always respond with intended action before pushing
     code changes (inline for review comments, issue thread for Codex reviews).
 
 ## Commands
@@ -65,8 +81,20 @@ branch=$(git branch --show-current)
 pr_number=$(gh pr view --json number -q .number)
 pr_title=$(gh pr view --json title -q .title)
 pr_body=$(gh pr view --json body -q .body)
+handoff_note='Human Review handoff: head=<sha>; at=<timestamp>; validation=<commands>'
 
-# Check mergeability and conflicts
+# Fast path for already-green PRs. If this exits 0, skip local validation and
+# the full watcher loop. If it exits 6 or errors, use the conservative fallback.
+if python3 .codex/skills/land/land_watch.py --preflight --handoff-note "$handoff_note"; then
+  mergeable=$(gh pr view --json mergeable -q .mergeable)
+  merge_state=$(gh pr view --json mergeStateStatus -q .mergeStateStatus)
+  if [ "$mergeable" = "MERGEABLE" ] && { [ "$merge_state" = "CLEAN" ] || [ "$merge_state" = "HAS_HOOKS" ]; }; then
+    gh pr merge --squash --subject "$pr_title" --body "$pr_body"
+    exit 0
+  fi
+fi
+
+# Check mergeability and conflicts for the conservative fallback.
 mergeable=$(gh pr view --json mergeable -q .mergeable)
 
 if [ "$mergeable" = "CONFLICTING" ]; then
@@ -74,7 +102,8 @@ if [ "$mergeable" = "CONFLICTING" ]; then
   # Then run the `push` skill to publish the updated branch.
 fi
 
-# Borg UI local validation before merge. Keep this scope-sensitive for the PR.
+# Conservative fallback: Borg UI local validation before merge. Keep this
+# scope-sensitive for the PR.
 git diff --check
 if git diff --name-only origin/main...HEAD | rg -q '^(app|tests|requirements.txt|pytest.ini|ruff.toml)(/|$)'; then
   ruff check app tests
@@ -85,8 +114,8 @@ if git diff --name-only origin/main...HEAD | rg -q '^frontend/'; then
   (cd frontend && npm run check:locales && npm run typecheck && npm run lint && npm run build)
 fi
 
-# Preferred: use the Async Watch Helper below. The manual loop is a fallback
-# when Python cannot run or the helper script is unavailable.
+# Fallback watcher path. The manual loop is a fallback when Python cannot run or
+# the helper script is unavailable.
 # Wait for review feedback: Codex reviews arrive as issue comments that start
 # with "## Codex Review — <persona>". Treat them like reviewer feedback: reply
 # with a `[codex]` issue comment acknowledging the findings and whether you're
@@ -111,10 +140,40 @@ fi
 gh pr merge --squash --subject "$pr_title" --body "$pr_body"
 ```
 
+## Fast Path Preflight
+
+For already-green PRs, the preflight command checks current GitHub state instead
+of repeating local validation:
+
+```
+python3 .codex/skills/land/land_watch.py --preflight --handoff-note "$handoff_note"
+```
+
+The handoff note must come from the workpad final handoff notes:
+
+```
+Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>
+```
+
+The fast path is allowed only when all of these are true:
+
+- The current PR head SHA matches the Human Review handoff SHA.
+- Mergeability is `MERGEABLE` and merge state is `CLEAN` or `HAS_HOOKS`.
+- GitHub check runs exist and are complete with successful, neutral, or skipped
+  conclusions.
+- No human issue comments, human inline review comments, blocking review states,
+  Codex review issue comments, or Codex inline comments appeared after the
+  Human Review handoff timestamp.
+
+Exit codes:
+
+- 0: Fast path ready; skip full local validation and full watcher mode.
+- 6: Full validation required; use the conservative fallback.
+
 ## Async Watch Helper
 
-Preferred: use the asyncio watcher to monitor review comments, CI, and head
-updates in parallel:
+Use the asyncio watcher in the conservative fallback to monitor review comments,
+CI, and head updates in parallel:
 
 ```
 python3 .codex/skills/land/land_watch.py
@@ -125,12 +184,18 @@ Exit codes:
 - 2: Review comments detected (address feedback)
 - 3: CI checks failed
 - 4: PR head updated (autofix commit detected)
+- 5: PR has merge conflicts
+- 6: Fast-path preflight requires full validation
 
 ## Failure Handling
 
 - If checks fail, pull details with `gh pr checks` and `gh run view --log`, then
   fix locally, commit with the `commit` skill, push with the `push` skill, and
   re-run the watch.
+- Run the full local validation and watcher fallback when the preflight reports
+  changed PR head, missing handoff data, conflicts, missing/pending/failed/
+  inconclusive checks, feedback after Human Review, or any uncertain GitHub
+  state.
 - Use judgment to identify flaky failures. If a failure is a flake (e.g., a
   timeout on only one platform), you may proceed without fixing it.
 - If CI pushes an auto-fix commit (authored by GitHub Actions), it does not

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import asyncio
 import json
 import random
@@ -17,6 +18,12 @@ CODEX_BOTS = {
 }
 MAX_GH_RETRIES = 5
 BASE_GH_BACKOFF_SECONDS = 2
+FAST_PATH_FALLBACK_EXIT_CODE = 6
+FAST_PATH_MERGE_STATES = {"CLEAN", "HAS_HOOKS"}
+HANDOFF_NOTE_RE = re.compile(
+    r"Human Review handoff:\s*head=`?([0-9a-fA-F]{7,40})`?;\s*at=`?([^;`\n]+)`?",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -26,6 +33,12 @@ class PrInfo:
     head_sha: str
     mergeable: str | None
     merge_state: str | None
+
+
+@dataclass
+class FastPathDecision:
+    can_fast_path: bool
+    reasons: list[str]
 
 
 class RateLimitError(RuntimeError):
@@ -166,6 +179,37 @@ def parse_time(value: str) -> datetime:
     return datetime.fromisoformat(normalized)
 
 
+def parse_handoff_note(note: str) -> tuple[str | None, datetime | None]:
+    match = HANDOFF_NOTE_RE.search(note)
+    if not match:
+        return None, None
+    return match.group(1), parse_time(match.group(2).strip())
+
+
+def resolve_handoff_inputs(
+    args: argparse.Namespace,
+) -> tuple[str | None, datetime | None]:
+    parsed_sha: str | None = None
+    parsed_at: datetime | None = None
+    handoff_note_file = getattr(args, "handoff_note_file", None)
+    if handoff_note_file:
+        with open(handoff_note_file, encoding="utf-8") as note_file:
+            parsed_sha, parsed_at = parse_handoff_note(note_file.read())
+
+    handoff_note = getattr(args, "handoff_note", None)
+    if handoff_note:
+        note_sha, note_at = parse_handoff_note(handoff_note)
+        parsed_sha = note_sha or parsed_sha
+        parsed_at = note_at or parsed_at
+
+    human_review_sha = getattr(args, "human_review_sha", None) or parsed_sha
+    human_review_at_value = getattr(args, "human_review_at", None)
+    human_review_at = (
+        parse_time(human_review_at_value) if human_review_at_value else parsed_at
+    )
+    return human_review_sha, human_review_at
+
+
 CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 
 
@@ -232,6 +276,30 @@ def latest_review_request_at(comments: list[dict[str, Any]]) -> datetime | None:
         if latest is None or timestamp > latest:
             latest = timestamp
     return latest
+
+
+def comments_after_handoff(
+    comments: list[dict[str, Any]],
+    handoff_at: datetime,
+) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    for comment in comments:
+        created_time = comment_time(comment)
+        if created_time is not None and created_time > handoff_at:
+            filtered.append(comment)
+    return filtered
+
+
+def reviews_after_handoff(
+    reviews: list[dict[str, Any]],
+    handoff_at: datetime,
+) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    for review in reviews:
+        created_time = review_timestamp(review)
+        if created_time is not None and created_time > handoff_at:
+            filtered.append(review)
+    return filtered
 
 
 def filter_codex_comments(
@@ -466,6 +534,107 @@ def filter_blocking_reviews(
     ]
 
 
+def collect_feedback_reasons_after_handoff(
+    issue_comments: list[dict[str, Any]],
+    review_comments: list[dict[str, Any]],
+    reviews: list[dict[str, Any]],
+    review_request_at: datetime | None,
+    human_review_at: datetime,
+) -> list[str]:
+    issue_comments_after = comments_after_handoff(issue_comments, human_review_at)
+    review_comments_after = comments_after_handoff(review_comments, human_review_at)
+    reviews_after = reviews_after_handoff(reviews, human_review_at)
+
+    human_issue_comments = filter_human_issue_comments(issue_comments_after)
+    codex_review_comments = filter_codex_review_issue_comments(issue_comments_after)
+    codex_inline_comments = filter_codex_comments(
+        review_comments_after,
+        review_request_at,
+    )
+    human_review_comments = filter_human_review_comments(review_comments_after)
+    blocking_reviews = filter_blocking_reviews(reviews_after, review_request_at)
+
+    reasons: list[str] = []
+    if human_issue_comments:
+        reasons.append(
+            f"Human issue comments after handoff: {len(human_issue_comments)}"
+        )
+    if codex_review_comments:
+        reasons.append(
+            f"Codex review comments after handoff: {len(codex_review_comments)}"
+        )
+    if codex_inline_comments:
+        reasons.append(
+            f"Codex inline comments after handoff: {len(codex_inline_comments)}"
+        )
+    if human_review_comments:
+        reasons.append(
+            f"Human inline review comments after handoff: {len(human_review_comments)}"
+        )
+    if blocking_reviews:
+        reasons.append(f"Blocking reviews after handoff: {len(blocking_reviews)}")
+    return reasons
+
+
+def evaluate_fast_path(
+    *,
+    pr: PrInfo,
+    human_review_sha: str | None,
+    human_review_at: datetime | None,
+    check_runs: list[dict[str, Any]],
+    issue_comments: list[dict[str, Any]],
+    review_comments: list[dict[str, Any]],
+    reviews: list[dict[str, Any]],
+    review_request_at: datetime | None,
+) -> FastPathDecision:
+    reasons: list[str] = []
+
+    if not human_review_sha:
+        reasons.append("Missing Human Review handoff SHA")
+    elif pr.head_sha != human_review_sha:
+        reasons.append(
+            "PR head changed since Human Review handoff "
+            f"({human_review_sha} -> {pr.head_sha})"
+        )
+
+    if human_review_at is None:
+        reasons.append("Missing Human Review handoff timestamp")
+
+    if is_merge_conflicting(pr):
+        reasons.append("PR has merge conflicts")
+    elif pr.mergeable != "MERGEABLE":
+        reasons.append(f"PR mergeability is not MERGEABLE: {pr.mergeable}")
+
+    if pr.merge_state is None:
+        reasons.append("PR merge state is unknown")
+    elif pr.merge_state not in FAST_PATH_MERGE_STATES:
+        reasons.append(f"PR merge state is {pr.merge_state}")
+
+    if not check_runs:
+        reasons.append("GitHub checks are missing")
+    else:
+        pending, failed, failures = summarize_checks(check_runs)
+        if pending:
+            reasons.append("GitHub checks are pending")
+        if failed:
+            reasons.append(
+                "GitHub checks failed or inconclusive: " + ", ".join(failures)
+            )
+
+    if human_review_at is not None:
+        reasons.extend(
+            collect_feedback_reasons_after_handoff(
+                issue_comments,
+                review_comments,
+                reviews,
+                review_request_at,
+                human_review_at,
+            )
+        )
+
+    return FastPathDecision(can_fast_path=not reasons, reasons=reasons)
+
+
 def is_merge_conflicting(pr: PrInfo) -> bool:
     return pr.mergeable == "CONFLICTING" or pr.merge_state == "DIRTY"
 
@@ -614,8 +783,110 @@ async def watch_pr() -> None:
             raise exc
 
 
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Watch or preflight a PR for the Symphony landing flow.",
+    )
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="check whether already-green PR landing can use the fast path",
+    )
+    parser.add_argument(
+        "--human-review-sha",
+        help="PR head SHA recorded in the Human Review handoff note",
+    )
+    parser.add_argument(
+        "--human-review-at",
+        help="ISO-8601 timestamp recorded in the Human Review handoff note",
+    )
+    parser.add_argument(
+        "--handoff-note",
+        help="workpad handoff note containing Human Review handoff metadata",
+    )
+    parser.add_argument(
+        "--handoff-note-file",
+        help="path to a file containing the workpad handoff note",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="print preflight output as JSON",
+    )
+    return parser
+
+
+def print_preflight_decision(
+    decision: FastPathDecision,
+    *,
+    json_output: bool,
+) -> None:
+    if json_output:
+        print(
+            json.dumps(
+                {
+                    "can_fast_path": decision.can_fast_path,
+                    "reasons": decision.reasons,
+                },
+                indent=2,
+            )
+        )
+        return
+
+    if decision.can_fast_path:
+        print(
+            "Fast path ready: PR head unchanged, mergeable, checks green, and "
+            "no new feedback since Human Review."
+        )
+        return
+
+    print("Full validation required:")
+    for reason in decision.reasons:
+        print(f"- {reason}")
+
+
+async def preflight_fast_path(args: argparse.Namespace) -> None:
+    human_review_sha, human_review_at = resolve_handoff_inputs(args)
+    pr = await get_pr_info()
+    review_context_task = asyncio.create_task(fetch_review_context(pr.number))
+    check_runs_task = asyncio.create_task(get_check_runs(pr.head_sha))
+    (
+        issue_comments,
+        review_comments,
+        reviews,
+        review_request_at,
+    ) = await review_context_task
+    check_runs = await check_runs_task
+
+    decision = evaluate_fast_path(
+        pr=pr,
+        human_review_sha=human_review_sha,
+        human_review_at=human_review_at,
+        check_runs=check_runs,
+        issue_comments=issue_comments,
+        review_comments=review_comments,
+        reviews=reviews,
+        review_request_at=review_request_at,
+    )
+    print_preflight_decision(
+        decision,
+        json_output=getattr(args, "json_output", False),
+    )
+    if not decision.can_fast_path:
+        raise SystemExit(FAST_PATH_FALLBACK_EXIT_CODE)
+
+
+async def main() -> None:
+    args = build_parser().parse_args()
+    if args.preflight:
+        await preflight_fast_path(args)
+        return
+    await watch_pr()
+
+
 if __name__ == "__main__":
     try:
-        asyncio.run(watch_pr())
+        asyncio.run(main())
     except SystemExit as exc:
         raise SystemExit(exc.code) from None
