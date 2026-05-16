@@ -11,6 +11,7 @@ interface ProtectedRouteProps {
     | 'sshKeys'
     | 'connections'
     | 'repositories'
+    | 'backupPlans'
     | 'backups'
     | 'archives'
     | 'restore'

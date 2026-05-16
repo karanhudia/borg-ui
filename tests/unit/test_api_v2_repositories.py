@@ -13,7 +13,14 @@ from sqlalchemy.orm import sessionmaker
 from app.api.v2 import repositories as repositories_v2_api
 from app.core.borg2 import BORG2_ENCRYPTION_MODES
 from app.config import settings
-from app.database.models import LicensingState, Repository, SystemSettings
+from app.database.models import (
+    BackupJob,
+    BackupPlan,
+    BackupPlanRun,
+    LicensingState,
+    Repository,
+    SystemSettings,
+)
 from app.database.models import SSHConnection, SSHKey
 
 
@@ -662,6 +669,68 @@ class TestV2RepositoryRoutes:
         assert response.json() == {"archives": [{"name": "one"}], "borg_version": 2}
         mock_list.assert_awaited_once()
         assert mock_list.call_args.kwargs["bypass_lock"] is True
+
+    def test_list_archives_marks_manual_backup_plan_archive(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, path="/tmp/v2-plan-repo")
+        plan = BackupPlan(
+            name="Monthly Plan",
+            enabled=True,
+            source_type="local",
+            source_directories='["/srv/project"]',
+            exclude_patterns="[]",
+            archive_name_template="{plan_name}-{repo_name}-{now}",
+            compression="lz4",
+            repository_run_mode="series",
+            max_parallel_repositories=1,
+            failure_behavior="continue",
+            schedule_enabled=False,
+            timezone="UTC",
+        )
+        test_db.add(plan)
+        test_db.flush()
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="manual",
+            status="completed",
+        )
+        test_db.add(run)
+        test_db.flush()
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                backup_plan_id=plan.id,
+                backup_plan_run_id=run.id,
+                archive_name="Monthly-Plan-V2-Repo",
+                status="completed",
+            )
+        )
+        test_db.commit()
+
+        with patch(
+            "app.api.v2.repositories.borg2.list_archives",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "stdout": json.dumps(
+                        {"archives": [{"name": "Monthly-Plan-V2-Repo"}]}
+                    ),
+                    "stderr": "",
+                }
+            ),
+        ):
+            response = test_client.get(
+                f"/api/v2/repositories/{repo.id}/archives", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        archive = response.json()["archives"][0]
+        assert archive["triggered_by"] == "manual"
+        assert archive["backup_plan_id"] == plan.id
+        assert archive["backup_plan_run_id"] == run.id
 
     def test_get_repository_info_respects_system_bypass_lock(
         self, test_client: TestClient, admin_headers, test_db

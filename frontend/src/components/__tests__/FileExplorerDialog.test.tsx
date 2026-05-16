@@ -685,6 +685,17 @@ describe('FileExplorerDialog', () => {
           connection_type: 'local',
         })
       )
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith(
+          '/filesystem/browse',
+          expect.objectContaining({
+            params: expect.objectContaining({
+              path: '/home/user/NewFolder',
+              connection_type: 'local',
+            }),
+          })
+        )
+      })
     })
 
     it('shows error when folder creation fails', async () => {

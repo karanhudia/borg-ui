@@ -9,6 +9,7 @@ const PLAN_RANK: Record<Plan, number> = {
 // Mirror of app/core/features.py - keep in sync when adding features
 export const FEATURES = {
   borg_v2: 'pro',
+  backup_plan_multi_repository: 'pro',
   multi_user: 'community',
   extra_users: 'pro',
   rbac: 'enterprise',

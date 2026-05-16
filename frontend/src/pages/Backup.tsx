@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Alert,
@@ -10,34 +10,46 @@ import {
   CardContent,
   CircularProgress,
   IconButton,
+  MenuItem,
   Stack,
+  Tab,
+  Tabs,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
 import { Clock, Info, Play } from 'lucide-react'
-import { backupAPI, repositoriesAPI } from '../services/api'
+import { backupAPI, backupPlansAPI, repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { toast } from 'react-hot-toast'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { BackupJob, Repository } from '../types'
+import type { BackupPlan, BackupPlanRun } from '../types'
 import BackupJobsTable from '../components/BackupJobsTable'
 import RepoSelect from '../components/RepoSelect'
 import LogViewerDialog from '../components/LogViewerDialog'
 import CommandPreview from '../components/CommandPreview'
 import RunningBackupsSection from '../components/RunningBackupsSection'
+import BackupPlanRunsPanel, { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
 import { getRepoCapabilities } from '../utils/repoCapabilities'
 import { useTrackedJobOutcomes } from '../hooks/useTrackedJobOutcomes'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
+import { isActiveRun } from './backup-plans/runStatus'
+
+type BackupTab = 'plans' | 'legacy'
 
 // Emerald green — matches the "Backup Now" button in RepositoryCard for visual continuity
 const Backup: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<BackupTab>('plans')
   const [selectedRepository, setSelectedRepository] = useState<string>('')
-  const [logJob, setLogJob] = useState<BackupJob | null>(null)
+  const [selectedBackupPlanId, setSelectedBackupPlanId] = useState<number | ''>('')
+  const [logJob, setLogJob] = useState<BackupPlanRunLogJob | null>(null)
   const queryClient = useQueryClient()
   const location = useLocation()
+  const navigate = useNavigate()
   const { trackBackup, EventAction } = useAnalytics()
   const { hasGlobalPermission } = useAuth()
   const canManageRepositoryOperations = hasGlobalPermission('repositories.manage_all')
@@ -50,6 +62,7 @@ const Backup: React.FC = () => {
     if (location.state && (location.state as any).repositoryPath) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setSelectedRepository((location.state as any).repositoryPath)
+      setActiveTab('legacy')
       // Reset scroll position to top
       window.scrollTo(0, 0)
     }
@@ -70,6 +83,51 @@ const Backup: React.FC = () => {
     queryFn: repositoriesAPI.getRepositories,
   })
 
+  const { data: backupPlansData, isLoading: loadingBackupPlans } = useQuery({
+    queryKey: ['backup-plans'],
+    queryFn: () => backupPlansAPI.list(),
+  })
+  const { data: backupPlanRunsData, isLoading: loadingBackupPlanRuns } = useQuery({
+    queryKey: ['backup-plan-runs'],
+    queryFn: () => backupPlansAPI.listRuns(),
+    refetchInterval: 2000,
+  })
+
+  const backupPlans = useMemo<BackupPlan[]>(
+    () => backupPlansData?.data?.backup_plans ?? [],
+    [backupPlansData?.data?.backup_plans]
+  )
+  const backupPlanRuns = useMemo<BackupPlanRun[]>(
+    () => backupPlanRunsData?.data?.runs ?? [],
+    [backupPlanRunsData?.data?.runs]
+  )
+  const runnableBackupPlans = useMemo(
+    () => backupPlans.filter((plan) => plan.enabled),
+    [backupPlans]
+  )
+  const selectedBackupPlan = useMemo(
+    () => runnableBackupPlans.find((plan) => plan.id === selectedBackupPlanId) || null,
+    [runnableBackupPlans, selectedBackupPlanId]
+  )
+  const visibleBackupPlanRuns = useMemo(
+    () =>
+      backupPlanRuns.filter(
+        (run) =>
+          isActiveRun(run.status) ||
+          (selectedBackupPlanId !== '' && run.backup_plan_id === selectedBackupPlanId)
+      ),
+    [backupPlanRuns, selectedBackupPlanId]
+  )
+
+  useEffect(() => {
+    if (
+      selectedBackupPlanId !== '' &&
+      !runnableBackupPlans.some((plan) => plan.id === selectedBackupPlanId)
+    ) {
+      setSelectedBackupPlanId('')
+    }
+  }, [runnableBackupPlans, selectedBackupPlanId])
+
   // Get selected repository details
   const selectedRepoData = useMemo(() => {
     if (!selectedRepository || !repositoriesData?.data?.repositories) return null
@@ -79,6 +137,41 @@ const Backup: React.FC = () => {
   }, [selectedRepository, repositoriesData])
 
   const canStartBackup = selectedRepoData ? permissions.canDo(selectedRepoData.id, 'backup') : false
+
+  const runBackupPlanMutation = useMutation({
+    mutationFn: (planId: number) => backupPlansAPI.run(planId),
+    onSuccess: (_response, planId) => {
+      toast.success(t('backup.planRun.toasts.started'))
+      queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-plan-runs'] })
+      trackBackup(EventAction.START, 'backup_plan', selectedBackupPlan || undefined, {
+        trigger: 'manual',
+        backup_plan_id: planId,
+      })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('backup.planRun.toasts.startFailed')
+      )
+    },
+  })
+
+  const cancelBackupPlanRunMutation = useMutation({
+    mutationFn: (runId: number) => backupPlansAPI.cancelRun(runId),
+    onSuccess: () => {
+      toast.success(t('backupPlans.toasts.cancelled'))
+      queryClient.invalidateQueries({ queryKey: ['backup-plan-runs'] })
+      queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      trackBackup(EventAction.STOP, 'backup_plan')
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('backupPlans.toasts.cancelFailed')
+      )
+    },
+  })
 
   // Start backup mutation
   const startBackupMutation = useMutation({
@@ -118,7 +211,7 @@ const Backup: React.FC = () => {
   })
 
   // Log viewer handlers
-  const handleViewLogs = (job: BackupJob) => {
+  const handleViewLogs = (job: BackupPlanRunLogJob) => {
     setLogJob(job)
   }
 
@@ -144,8 +237,37 @@ const Backup: React.FC = () => {
     startBackupMutation.mutate()
   }
 
+  const handleStartBackupPlan = () => {
+    if (!selectedBackupPlanId) {
+      toast.error(t('backup.planRun.toasts.selectPlan'))
+      return
+    }
+    runBackupPlanMutation.mutate(selectedBackupPlanId)
+  }
+
   const runningJobs = backupStatus?.filter((job: BackupJob) => job.status === 'running') || []
   const recentJobs = selectedRepository ? backupStatus || [] : []
+  const legacyBackupRepositories = useMemo(
+    () =>
+      (repositoriesData?.data?.repositories ?? []).filter(
+        (repo: Repository) =>
+          getRepoCapabilities(repo).canBackup &&
+          permissions.canDo(repo.id, 'backup') &&
+          Array.isArray(repo.source_directories) &&
+          repo.source_directories.length > 0
+      ),
+    [permissions, repositoriesData?.data?.repositories]
+  )
+
+  useEffect(() => {
+    if (
+      !loadingRepositories &&
+      selectedRepository &&
+      !legacyBackupRepositories.some((repo: Repository) => repo.path === selectedRepository)
+    ) {
+      setSelectedRepository('')
+    }
+  }, [legacyBackupRepositories, loadingRepositories, selectedRepository])
 
   useTrackedJobOutcomes<BackupJob>({
     jobs: recentJobs,
@@ -222,135 +344,263 @@ const Backup: React.FC = () => {
         <Stack direction="row" spacing={2} alignItems="center"></Stack>
       </Box>
 
-      {/* Manual Backup Control */}
-      <Box sx={{ mb: 4 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
-          <RepoSelect
-            repositories={(repositoriesData?.data?.repositories ?? []).filter(
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (repo: any) =>
-                getRepoCapabilities(repo).canBackup && permissions.canDo(repo.id, 'backup')
-            )}
-            value={selectedRepository}
-            onChange={(v) => handleRepositoryChange(v as string)}
-            loading={loadingRepositories}
-            valueKey="path"
-            label={t('backup.manualBackup.repository')}
-            loadingLabel={t('backup.manualBackup.loadingRepositories')}
-            placeholderLabel={t('backup.manualBackup.selectRepository')}
-            maintenanceLabel={t('backup.manualBackup.maintenanceRunning')}
-          />
-
-          <Button
-            variant="contained"
-            color="success"
-            size="medium"
-            startIcon={
-              startBackupMutation.isPending ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : (
-                <Play size={18} />
-              )
-            }
-            onClick={handleStartBackup}
-            disabled={startBackupMutation.isPending || !selectedRepository || !canStartBackup}
-            sx={{
-              minWidth: { xs: '100%', sm: 160 },
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            {startBackupMutation.isPending
-              ? t('backup.manualBackup.starting')
-              : t('backup.manualBackup.startBackup')}
-          </Button>
-        </Stack>
-
-        {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            <Typography variant="body2" fontWeight={500} gutterBottom>
-              {t('backup.manualBackup.noRepositories.title')}
-            </Typography>
-            <Typography variant="body2">
-              {t('backup.manualBackup.noRepositories.subtitle')}
-            </Typography>
-          </Alert>
-        )}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs
+          value={activeTab}
+          aria-label={t('backup.tabs.ariaLabel')}
+          onChange={(_, value: BackupTab) => setActiveTab(value)}
+        >
+          <Tab value="plans" label={t('backup.tabs.backupPlans')} />
+          <Tab value="legacy" label={t('backup.tabs.legacyBackup')} />
+        </Tabs>
       </Box>
 
-      {/* Command Preview Card */}
-      {selectedRepoData && (
-        <CommandPreview
-          mode="import"
-          displayMode="backup-only"
-          borgVersion={selectedRepoData.borg_version}
-          repositoryPath={selectedRepoData.path}
-          archiveName="manual-backup-{now}"
-          compression={selectedRepoData.compression}
-          excludePatterns={selectedRepoData.exclude_patterns}
-          sourceDirs={selectedRepoData.source_directories}
-          customFlags={selectedRepoData.custom_flags ?? ''}
-          remotePath={selectedRepoData.remote_path ?? ''}
-          repositoryMode="full"
-          dataSource="local"
-        />
+      {activeTab === 'plans' && (
+        <Stack spacing={4}>
+          <Box>
+            <Stack spacing={2.5}>
+              <Box>
+                <Typography variant="h6" fontWeight={600}>
+                  {t('backup.planRun.title')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('backup.planRun.description')}
+                </Typography>
+              </Box>
+
+              {runnableBackupPlans.length === 0 && !loadingBackupPlans ? (
+                <Alert
+                  severity="info"
+                  action={
+                    <Button color="inherit" size="small" onClick={() => navigate('/backup-plans')}>
+                      {t('backup.planRun.createAction')}
+                    </Button>
+                  }
+                >
+                  {t('backup.planRun.empty')}
+                </Alert>
+              ) : (
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
+                  <TextField
+                    select
+                    fullWidth
+                    label={t('backup.planRun.selectLabel')}
+                    value={selectedBackupPlanId}
+                    onChange={(event) => {
+                      const nextValue = event.target.value
+                      setSelectedBackupPlanId(nextValue === '' ? '' : Number(nextValue))
+                    }}
+                    disabled={loadingBackupPlans || runnableBackupPlans.length === 0}
+                    SelectProps={{ displayEmpty: true }}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{
+                      minWidth: { xs: '100%', sm: 300 },
+                      '& .MuiInputBase-root': {
+                        minHeight: { xs: 52, sm: 58 },
+                      },
+                      '& .MuiSelect-select': {
+                        display: 'flex',
+                        alignItems: 'center',
+                      },
+                    }}
+                  >
+                    <MenuItem value="" disabled>
+                      {t('backup.planRun.selectPlaceholder', {
+                        defaultValue: 'Select a backup plan',
+                      })}
+                    </MenuItem>
+                    {runnableBackupPlans.map((plan) => (
+                      <MenuItem key={plan.id} value={plan.id}>
+                        {plan.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="medium"
+                    startIcon={
+                      runBackupPlanMutation.isPending ? (
+                        <CircularProgress size={16} color="inherit" />
+                      ) : (
+                        <Play size={18} />
+                      )
+                    }
+                    onClick={handleStartBackupPlan}
+                    disabled={
+                      runBackupPlanMutation.isPending || loadingBackupPlans || !selectedBackupPlanId
+                    }
+                    sx={{
+                      minWidth: { xs: '100%', sm: 180 },
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {runBackupPlanMutation.isPending
+                      ? t('backup.planRun.starting')
+                      : t('backup.planRun.run')}
+                  </Button>
+                </Stack>
+              )}
+            </Stack>
+          </Box>
+
+          <BackupPlanRunsPanel
+            runs={visibleBackupPlanRuns}
+            plans={backupPlans}
+            loading={loadingBackupPlanRuns}
+            cancellingRunId={
+              cancelBackupPlanRunMutation.isPending
+                ? Number(cancelBackupPlanRunMutation.variables)
+                : null
+            }
+            onCancel={(runId) => cancelBackupPlanRunMutation.mutate(runId)}
+            onViewLogs={handleViewLogs}
+          />
+        </Stack>
       )}
 
-      {/* Running Jobs */}
-      <RunningBackupsSection
-        runningBackupJobs={runningJobs}
-        onCancelBackup={(jobId) => cancelBackupMutation.mutate(String(jobId))}
-        isCancelling={cancelBackupMutation.isPending}
-        onViewLogs={handleViewLogs}
-      />
+      {activeTab === 'legacy' && (
+        <Box>
+          <Alert severity="info" sx={{ mb: 3 }}>
+            {t('backup.legacyManual.notice')}
+          </Alert>
 
-      {/* Recent Jobs */}
-      <Card>
-        <CardContent>
-          <Stack
-            direction="row"
-            spacing={1.5}
-            alignItems="center"
-            sx={{ mb: 1, color: 'text.secondary' }}
-          >
-            <Clock size={20} />
-            <Typography variant="h6" fontWeight={600}>
-              {t('backup.recentJobs.title')}
-            </Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            {t('backup.recentJobs.subtitle')}
-          </Typography>
+          {/* Legacy Manual Backup Control */}
+          <Box sx={{ mb: 4 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
+              <RepoSelect
+                repositories={legacyBackupRepositories}
+                value={selectedRepository}
+                onChange={(v) => handleRepositoryChange(v as string)}
+                loading={loadingRepositories}
+                valueKey="path"
+                label={t('backup.manualBackup.repository')}
+                loadingLabel={t('backup.manualBackup.loadingRepositories')}
+                placeholderLabel={t('backup.manualBackup.selectRepository')}
+                maintenanceLabel={t('backup.manualBackup.maintenanceRunning')}
+              />
 
-          <BackupJobsTable
-            jobs={recentJobs}
-            repositories={repositoriesData?.data?.repositories || []}
-            loading={loadingStatus}
-            actions={{
-              viewLogs: true,
-              cancel: true,
-              breakLock: true,
-              downloadLogs: true,
-              errorInfo: true,
-              delete: true,
-            }}
-            canBreakLocks={canManageRepositoryOperations}
-            canDeleteJobs={canManageRepositoryOperations}
-            getRowKey={(job) => String(job.id)}
-            headerBgColor="background.default"
-            enableHover={true}
-            tableId="backup"
-            emptyState={{
-              icon: (
-                <Box sx={{ color: 'text.disabled' }}>
-                  <Clock size={48} />
-                </Box>
-              ),
-              title: t('backup.recentJobs.empty'),
-            }}
+              <Button
+                variant="contained"
+                color="success"
+                size="medium"
+                startIcon={
+                  startBackupMutation.isPending ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <Play size={18} />
+                  )
+                }
+                onClick={handleStartBackup}
+                disabled={startBackupMutation.isPending || !selectedRepository || !canStartBackup}
+                sx={{
+                  minWidth: { xs: '100%', sm: 160 },
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
+              >
+                {startBackupMutation.isPending
+                  ? t('backup.manualBackup.starting')
+                  : t('backup.manualBackup.startBackup')}
+              </Button>
+            </Stack>
+
+            {repositoriesData?.data?.repositories?.length === 0 && !loadingRepositories && (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                <Typography variant="body2" fontWeight={500} gutterBottom>
+                  {t('backup.manualBackup.noRepositories.title')}
+                </Typography>
+                <Typography variant="body2">
+                  {t('backup.manualBackup.noRepositories.subtitle')}
+                </Typography>
+              </Alert>
+            )}
+
+            {repositoriesData?.data?.repositories?.length > 0 &&
+              legacyBackupRepositories.length === 0 &&
+              !loadingRepositories && (
+                <Alert severity="info" sx={{ mt: 2 }}>
+                  {t('backup.legacyManual.empty')}
+                </Alert>
+              )}
+          </Box>
+
+          {/* Command Preview Card */}
+          {selectedRepoData && (
+            <CommandPreview
+              mode="import"
+              displayMode="backup-only"
+              borgVersion={selectedRepoData.borg_version}
+              repositoryPath={selectedRepoData.path}
+              archiveName="manual-backup-{now}"
+              compression={selectedRepoData.compression}
+              excludePatterns={selectedRepoData.exclude_patterns}
+              sourceDirs={selectedRepoData.source_directories}
+              customFlags={selectedRepoData.custom_flags ?? ''}
+              remotePath={selectedRepoData.remote_path ?? ''}
+              repositoryMode="full"
+              dataSource="local"
+            />
+          )}
+
+          {/* Running Jobs */}
+          <RunningBackupsSection
+            runningBackupJobs={runningJobs}
+            onCancelBackup={(jobId) => cancelBackupMutation.mutate(String(jobId))}
+            isCancelling={cancelBackupMutation.isPending}
+            onViewLogs={handleViewLogs}
           />
-        </CardContent>
-      </Card>
+
+          {/* Recent Jobs */}
+          <Card>
+            <CardContent>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                alignItems="center"
+                sx={{ mb: 1, color: 'text.secondary' }}
+              >
+                <Clock size={20} />
+                <Typography variant="h6" fontWeight={600}>
+                  {t('backup.recentJobs.title')}
+                </Typography>
+              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                {t('backup.recentJobs.subtitle')}
+              </Typography>
+
+              <BackupJobsTable
+                jobs={recentJobs}
+                repositories={repositoriesData?.data?.repositories || []}
+                loading={loadingStatus}
+                actions={{
+                  viewLogs: true,
+                  cancel: true,
+                  breakLock: true,
+                  downloadLogs: true,
+                  errorInfo: true,
+                  delete: true,
+                }}
+                canBreakLocks={canManageRepositoryOperations}
+                canDeleteJobs={canManageRepositoryOperations}
+                getRowKey={(job) => String(job.id)}
+                headerBgColor="background.default"
+                enableHover={true}
+                tableId="backup"
+                emptyState={{
+                  icon: (
+                    <Box sx={{ color: 'text.disabled' }}>
+                      <Clock size={48} />
+                    </Box>
+                  ),
+                  title: t('backup.recentJobs.empty'),
+                }}
+              />
+            </CardContent>
+          </Card>
+        </Box>
+      )}
 
       {/* Log Viewer Dialog */}
       <LogViewerDialog job={logJob} open={Boolean(logJob)} onClose={handleCloseLogs} />

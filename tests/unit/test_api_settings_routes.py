@@ -41,7 +41,7 @@ class TestSystemSettingsContracts:
         assert settings["max_concurrent_scheduled_checks"] == 4
         assert settings["log_retention_days"] == 30
         assert settings["timeout_sources"]["backup_timeout"] in (None, "env")
-        assert settings["app_version"] == "2.0.0"
+        assert settings["app_version"] == "2.1.0"
         assert test_db.query(SystemSettings).count() == 1
 
     def test_get_system_settings_falls_back_when_log_storage_lookup_fails(

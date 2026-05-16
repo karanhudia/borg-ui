@@ -136,104 +136,121 @@ export default function WizardStepIndicator({
   return (
     <Box
       sx={{
-        display: 'flex',
         bgcolor: isDark ? alpha(theme.palette.background.paper, 0.4) : 'rgba(0,0,0,0.04)',
         borderRadius: 0,
-        overflow: 'hidden',
+        overflowX: 'auto',
+        overflowY: 'hidden',
         mx: -3,
         mt: -2,
         mb: 2,
         borderBottom: 1,
         borderColor: 'divider',
+        scrollbarWidth: 'thin',
+        '&::-webkit-scrollbar': {
+          height: 6,
+        },
+        '&::-webkit-scrollbar-thumb': {
+          bgcolor: alpha(theme.palette.text.primary, 0.18),
+          borderRadius: 999,
+        },
       }}
     >
-      {steps.map((step, index) => {
-        const isActive = currentStep === index
-        const stepColor = getStepColor(step.key)
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${steps.length}, minmax(max-content, 1fr))`,
+          minWidth: '100%',
+        }}
+      >
+        {steps.map((step, index) => {
+          const isActive = currentStep === index
+          const stepColor = getStepColor(step.key)
 
-        return (
-          <Box
-            key={step.key}
-            onClick={() => onStepClick?.(index)}
-            sx={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 1,
-              py: 2,
-              px: 1,
-              cursor: 'pointer',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              position: 'relative',
-              bgcolor: isActive ? alpha(stepColor, 0.08) : 'transparent',
-              '&::after': {
-                content: '""',
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: 2,
-                bgcolor: stepColor,
-                transform: isActive ? 'scaleX(1)' : 'scaleX(0)',
-                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                transformOrigin: 'center',
-              },
-              '&:hover': !isActive
-                ? {
-                    bgcolor: isDark ? alpha(stepColor, 0.04) : alpha(stepColor, 0.04),
-                  }
-                : {},
-            }}
-          >
-            {/* Step icon circle */}
+          return (
             <Box
+              key={step.key}
+              onClick={() => onStepClick?.(index)}
               sx={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                bgcolor: isActive
-                  ? stepColor
-                  : isDark
-                    ? alpha(stepColor, 0.1)
-                    : alpha(stepColor, 0.1),
-                color: isActive ? '#fff' : stepColor,
-                flexShrink: 0,
-                transition: 'all 0.3s ease',
-                transform: isActive ? 'scale(1.05)' : 'scale(1)',
-                boxShadow: isActive ? `0 2px 8px ${alpha(stepColor, 0.4)}` : 'none',
+                minWidth: 0,
+                gap: { md: 0.75, lg: 1 },
+                py: 2,
+                px: { md: 1, lg: 1.5 },
+                cursor: 'pointer',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                position: 'relative',
+                bgcolor: isActive ? alpha(stepColor, 0.08) : 'transparent',
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 2,
+                  bgcolor: stepColor,
+                  transform: isActive ? 'scaleX(1)' : 'scaleX(0)',
+                  transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transformOrigin: 'center',
+                },
+                '&:hover': !isActive
+                  ? {
+                      bgcolor: isDark ? alpha(stepColor, 0.04) : alpha(stepColor, 0.04),
+                    }
+                  : {},
               }}
             >
-              {step.icon}
-            </Box>
-
-            {/* Label */}
-            <Box
-              component="span"
-              sx={{
-                fontSize: '0.875rem',
-                fontWeight: isActive ? 600 : 500,
-                whiteSpace: 'nowrap',
-                color: isActive
-                  ? isDark
-                    ? '#fff'
-                    : theme.palette.text.primary
-                  : theme.palette.text.secondary,
-                transition: 'color 0.2s ease',
-                opacity: isActive ? 1 : 0.8,
-              }}
-            >
-              <Box component="span" sx={{ opacity: 0.6, mr: 0.5, fontWeight: 400 }}>
-                {index + 1}.
+              {/* Step icon circle */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: { md: 30, lg: 32 },
+                  height: { md: 30, lg: 32 },
+                  borderRadius: '50%',
+                  bgcolor: isActive
+                    ? stepColor
+                    : isDark
+                      ? alpha(stepColor, 0.1)
+                      : alpha(stepColor, 0.1),
+                  color: isActive ? '#fff' : stepColor,
+                  flexShrink: 0,
+                  transition: 'all 0.3s ease',
+                  transform: isActive ? 'scale(1.05)' : 'scale(1)',
+                  boxShadow: isActive ? `0 2px 8px ${alpha(stepColor, 0.4)}` : 'none',
+                }}
+              >
+                {step.icon}
               </Box>
-              {step.label}
+
+              {/* Label */}
+              <Box
+                component="span"
+                sx={{
+                  fontSize: { md: '0.8125rem', lg: '0.875rem' },
+                  fontWeight: isActive ? 600 : 500,
+                  lineHeight: 1.2,
+                  whiteSpace: 'nowrap',
+                  color: isActive
+                    ? isDark
+                      ? '#fff'
+                      : theme.palette.text.primary
+                    : theme.palette.text.secondary,
+                  transition: 'color 0.2s ease',
+                  opacity: isActive ? 1 : 0.8,
+                }}
+              >
+                <Box component="span" sx={{ opacity: 0.6, mr: 0.5, fontWeight: 400 }}>
+                  {index + 1}.
+                </Box>
+                {step.label}
+              </Box>
             </Box>
-          </Box>
-        )
-      })}
+          )
+        })}
+      </Box>
     </Box>
   )
 }

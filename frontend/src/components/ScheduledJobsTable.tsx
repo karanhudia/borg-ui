@@ -43,6 +43,8 @@ interface ScheduledJobsTableProps {
   jobs: ScheduledJob[]
   repositories: Repository[]
   isLoading: boolean
+  title?: string
+  description?: string
   canManageJob: (job: ScheduledJob) => boolean
   onEdit: (job: ScheduledJob) => void
   onDelete: (job: ScheduledJob) => void
@@ -57,6 +59,8 @@ const ScheduledJobsTable = ({
   jobs,
   repositories,
   isLoading,
+  title,
+  description,
   canManageJob,
   onEdit,
   onDelete,
@@ -231,8 +235,13 @@ const ScheduledJobsTable = ({
   return (
     <Box>
       <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-        {t('scheduledJobsTableSection.title')}
+        {title || t('scheduledJobsTableSection.title')}
       </Typography>
+      {description && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: -1, mb: 2 }}>
+          {description}
+        </Typography>
+      )}
       {renderContent()}
     </Box>
   )

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Dict, Any, NoReturn
 from datetime import datetime, timedelta, timezone
 import structlog
@@ -17,6 +17,8 @@ from app.database.models import (
     Script,
     RepositoryScript,
     SystemSettings,
+    BackupPlan,
+    BackupPlanRepository,
 )
 from app.core.authorization import authorize_request
 from app.core.borg_router import BorgRouter
@@ -310,6 +312,49 @@ def _require_schedule_access(
         check_repo_access(db, current_user, repo, required_role)
 
     return repositories
+
+
+def _get_backup_plan_repositories(plan: BackupPlan) -> List[Repository]:
+    repositories = []
+    for link in sorted(plan.repositories, key=lambda item: item.execution_order):
+        if link.enabled and link.repository:
+            repositories.append(link.repository)
+    return repositories
+
+
+def _require_backup_plan_schedule_access(
+    db: Session, current_user: User, plan: BackupPlan, required_role: str
+) -> List[Repository]:
+    repositories = _get_backup_plan_repositories(plan)
+
+    if not repositories and current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={"key": "backend.errors.auth.insufficientPermissions"},
+        )
+
+    for repo in repositories:
+        check_repo_access(db, current_user, repo, required_role)
+
+    return repositories
+
+
+def _resolve_backup_plan_next_run(
+    plan: BackupPlan, now: datetime
+) -> Optional[datetime]:
+    now_utc = to_utc_naive(now)
+    if plan.next_run and to_utc_naive(plan.next_run) > now_utc:
+        return to_utc_naive(plan.next_run)
+    if not plan.cron_expression:
+        return None
+    try:
+        return _calculate_next_schedule_run(
+            plan.cron_expression,
+            now_utc,
+            plan.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+        )
+    except Exception:
+        return None
 
 
 @router.get("/")
@@ -864,17 +909,65 @@ async def get_upcoming_jobs(
                 )
 
                 if next_run <= end_time:
+                    repo_links = (
+                        db.query(ScheduledJobRepository)
+                        .filter_by(scheduled_job_id=job.id)
+                        .order_by(ScheduledJobRepository.execution_order)
+                        .all()
+                    )
+                    repository_ids = [link.repository_id for link in repo_links]
                     upcoming_jobs.append(
                         {
                             "id": job.id,
+                            "type": "schedule",
                             "name": job.name,
                             "repository": job.repository,
+                            "repository_id": job.repository_id,
+                            "repository_ids": repository_ids,
                             "next_run": serialize_datetime(next_run),
                             "cron_expression": job.cron_expression,
                             "timezone": job.timezone or DEFAULT_SCHEDULE_TIMEZONE,
                         }
                     )
             except:
+                continue
+
+        plans = (
+            db.query(BackupPlan)
+            .options(
+                joinedload(BackupPlan.repositories).joinedload(
+                    BackupPlanRepository.repository
+                )
+            )
+            .filter(
+                BackupPlan.enabled == True,
+                BackupPlan.schedule_enabled == True,
+            )
+            .all()
+        )
+        for plan in plans:
+            try:
+                repositories = _require_backup_plan_schedule_access(
+                    db, current_user, plan, "viewer"
+                )
+                next_run = _resolve_backup_plan_next_run(plan, now)
+                if not next_run or next_run > end_time:
+                    continue
+
+                upcoming_jobs.append(
+                    {
+                        "id": plan.id,
+                        "type": "backup_plan",
+                        "name": plan.name,
+                        "repository": None,
+                        "repository_id": None,
+                        "repository_ids": [repo.id for repo in repositories],
+                        "next_run": serialize_datetime(next_run),
+                        "cron_expression": plan.cron_expression,
+                        "timezone": plan.timezone or DEFAULT_SCHEDULE_TIMEZONE,
+                    }
+                )
+            except Exception:
                 continue
 
         # Sort by next run time
@@ -1522,6 +1615,7 @@ async def run_scheduled_job_now(
                 date=_now.strftime("%Y-%m-%d"),
                 time_str=_now.strftime("%H:%M:%S"),
                 unix_timestamp=str(int(_now.timestamp())),
+                stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
             # Execute backup with optional prune/compact asynchronously (non-blocking)
@@ -1891,6 +1985,7 @@ async def execute_multi_repo_schedule(scheduled_job: ScheduledJob, db: Session):
                 date=timestamp_date,
                 time_str=timestamp_time,
                 unix_timestamp=timestamp_unix,
+                stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
             # Run repository-level pre-scripts if enabled
@@ -2535,6 +2630,7 @@ def _dispatch_due_scheduled_job(
             date=_now.strftime("%Y-%m-%d"),
             time_str=_now.strftime("%H:%M:%S"),
             unix_timestamp=str(int(_now.timestamp())),
+            stable_series=getattr(repo, "borg_version", 1) == 2,
         )
 
         run_key = f"backup:{backup_job.id}"
@@ -2641,6 +2737,11 @@ async def check_scheduled_jobs():
         try:
             now = datetime.now(timezone.utc)
             await dispatch_due_scheduled_backups(db, now)
+            from app.services.backup_plan_execution_service import (
+                backup_plan_execution_service,
+            )
+
+            backup_plan_execution_service.dispatch_due_runs(db, now)
             await run_due_scheduled_checks(db, now)
             await run_due_scheduled_restore_checks(db, now)
 

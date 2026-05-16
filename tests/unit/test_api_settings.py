@@ -3,10 +3,11 @@ Comprehensive unit tests for settings API endpoints.
 Each test verifies ONE specific expected outcome.
 """
 
+from datetime import datetime, timedelta, timezone
 import pytest
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-from app.database.models import User, SystemSettings
+from app.database.models import AuthEvent, OidcLoginState, User, SystemSettings
 from app.core.features import Plan
 
 
@@ -91,6 +92,16 @@ class TestSystemSettings:
         assert payload["metrics_require_auth"] is False
         assert payload["metrics_token_set"] is False
         assert payload["borg2_fast_browse_beta_enabled"] is False
+        assert payload["dashboard_backup_warning_days"] == 3
+        assert payload["dashboard_backup_critical_days"] == 7
+        assert payload["dashboard_check_warning_days"] == 7
+        assert payload["dashboard_check_critical_days"] == 30
+        assert payload["dashboard_compact_warning_days"] == 30
+        assert payload["dashboard_compact_critical_days"] == 60
+        assert payload["dashboard_restore_check_warning_days"] == 14
+        assert payload["dashboard_restore_check_critical_days"] == 30
+        assert payload["dashboard_observe_freshness_warning_days"] == 2
+        assert payload["dashboard_observe_freshness_critical_days"] == 7
 
     def test_update_system_settings_persists_borg2_fast_browse_beta_enabled(
         self, test_client: TestClient, admin_headers, test_db
@@ -133,6 +144,75 @@ class TestSystemSettings:
         test_db.refresh(settings)
         assert settings.max_concurrent_scheduled_backups == 3
         assert settings.max_concurrent_scheduled_checks == 5
+
+    def test_update_system_settings_persists_dashboard_health_thresholds(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "dashboard_backup_warning_days": 14,
+                "dashboard_backup_critical_days": 31,
+                "dashboard_check_warning_days": 14,
+                "dashboard_check_critical_days": 45,
+                "dashboard_compact_warning_days": 45,
+                "dashboard_compact_critical_days": 90,
+                "dashboard_restore_check_warning_days": 21,
+                "dashboard_restore_check_critical_days": 45,
+                "dashboard_observe_freshness_warning_days": 14,
+                "dashboard_observe_freshness_critical_days": 31,
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["settings"]["dashboard_backup_warning_days"] == 14
+        assert body["settings"]["dashboard_backup_critical_days"] == 31
+        get_response = test_client.get("/api/settings/system", headers=admin_headers)
+        assert get_response.status_code == 200
+        get_payload = get_response.json()["settings"]
+        assert get_payload["dashboard_backup_warning_days"] == 14
+        assert get_payload["dashboard_backup_critical_days"] == 31
+        test_db.refresh(settings)
+        assert settings.dashboard_backup_warning_days == 14
+        assert settings.dashboard_backup_critical_days == 31
+        assert settings.dashboard_check_warning_days == 14
+        assert settings.dashboard_check_critical_days == 45
+        assert settings.dashboard_compact_warning_days == 45
+        assert settings.dashboard_compact_critical_days == 90
+        assert settings.dashboard_restore_check_warning_days == 21
+        assert settings.dashboard_restore_check_critical_days == 45
+        assert settings.dashboard_observe_freshness_warning_days == 14
+        assert settings.dashboard_observe_freshness_critical_days == 31
+
+    def test_update_system_settings_rejects_dashboard_critical_below_warning(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "dashboard_backup_warning_days": 30,
+                "dashboard_backup_critical_days": 14,
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidDashboardHealthThresholdOrder"
+        )
 
     def test_update_system_settings_persists_metrics_configuration(
         self, test_client: TestClient, admin_headers, test_db
@@ -718,6 +798,61 @@ class TestUserManagement:
         )
 
         assert response.status_code == 200
+
+    def test_delete_user_with_auth_history_and_oidc_state(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Deleting a user should not fail when auth audit rows reference it."""
+        test_db.add(
+            SystemSettings(
+                oidc_enabled=True,
+                oidc_discovery_url="https://id.example.com/.well-known/openid-configuration",
+                oidc_client_id="borg-ui",
+            )
+        )
+        user = User(
+            username="oidc-delete-local",
+            email="oidc-delete-local@example.com",
+            role="viewer",
+            password_hash="fakehash",
+            auth_source="local",
+        )
+        test_db.add(user)
+        test_db.commit()
+        test_db.refresh(user)
+
+        auth_event = AuthEvent(
+            event_type="local_login_succeeded",
+            auth_source="local",
+            username=user.username,
+            email=user.email,
+            success=True,
+            actor_user_id=user.id,
+        )
+        login_state = OidcLoginState(
+            state_id="delete-user-link-state",
+            nonce="nonce",
+            code_verifier="verifier",
+            return_to="http://testserver/settings/account",
+            flow="link",
+            user_id=user.id,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        )
+        test_db.add_all([auth_event, login_state])
+        test_db.commit()
+        test_db.refresh(auth_event)
+        test_db.refresh(login_state)
+
+        response = test_client.delete(
+            f"/api/settings/users/{user.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert test_db.query(User).filter(User.id == user.id).first() is None
+        test_db.refresh(auth_event)
+        test_db.refresh(login_state)
+        assert auth_event.actor_user_id is None
+        assert login_state.user_id is None
 
     def test_delete_user_nonexistent(self, test_client: TestClient, admin_headers):
         """Test deleting non-existent user returns 404"""

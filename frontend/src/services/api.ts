@@ -4,6 +4,7 @@ import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
 import { attachAccessTokenHeader } from './authHeaders'
 import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
+import type { BackupPlan, BackupPlanData } from '../types'
 
 export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
@@ -96,6 +97,16 @@ export interface SystemSettings {
   max_concurrent_scheduled_backups?: number
   max_concurrent_scheduled_checks?: number
   stats_refresh_interval_minutes?: number
+  dashboard_backup_warning_days?: number
+  dashboard_backup_critical_days?: number
+  dashboard_check_warning_days?: number
+  dashboard_check_critical_days?: number
+  dashboard_compact_warning_days?: number
+  dashboard_compact_critical_days?: number
+  dashboard_restore_check_warning_days?: number
+  dashboard_restore_check_critical_days?: number
+  dashboard_observe_freshness_warning_days?: number
+  dashboard_observe_freshness_critical_days?: number
   bypass_lock_on_info?: boolean
   bypass_lock_on_list?: boolean
   metrics_enabled?: boolean
@@ -215,6 +226,10 @@ export interface AuthConfigResponse {
   }
 }
 
+export interface OidcLinkStartResponse {
+  authorization_url: string
+}
+
 // Generic type for object data
 type ApiData = Record<string, unknown>
 
@@ -236,6 +251,8 @@ export const authAPI = {
     const suffix = params.toString()
     return `${API_BASE_URL}/auth/oidc/link${suffix ? `?${suffix}` : ''}`
   },
+  beginOidcLink: (returnTo?: string) =>
+    api.post<OidcLinkStartResponse>('/auth/oidc/link', { return_to: returnTo }),
   exchangeOidcToken: () => api.post<AuthLoginResponse>('/auth/oidc/exchange'),
   unlinkOidc: () => api.post('/auth/oidc/unlink'),
 
@@ -562,6 +579,37 @@ export const repositoriesAPI = {
     api.put(`/repositories/${id}/restore-check-schedule`, data),
   list: () => api.get('/repositories/'),
   startCheck: (id: number, data: ApiData) => api.post(`/repositories/${id}/check`, data),
+}
+
+export const backupPlansAPI = {
+  list: () => api.get('/backup-plans/'),
+  create: (data: BackupPlanData) => api.post('/backup-plans/', data),
+  createFromRepository: (
+    id: number,
+    data: {
+      name?: string
+      copy_schedule?: boolean
+      disable_repository_schedule?: boolean
+      move_source_settings?: boolean
+    } = {}
+  ) =>
+    api.post<{
+      backup_plan: BackupPlan
+      source_repository_id: number
+      copied_schedule_id?: number | null
+      repository_schedule_disabled: boolean
+      repository_schedule_disable_reason?: string | null
+      source_settings_moved: boolean
+    }>(`/backup-plans/from-repository/${id}`, data),
+  get: (id: number) => api.get(`/backup-plans/${id}`),
+  update: (id: number, data: BackupPlanData) => api.put(`/backup-plans/${id}`, data),
+  delete: (id: number) => api.delete(`/backup-plans/${id}`),
+  toggle: (id: number) => api.post(`/backup-plans/${id}/toggle`),
+  run: (id: number) => api.post(`/backup-plans/${id}/run`),
+  listRuns: () => api.get('/backup-plans/runs'),
+  getRun: (id: number) => api.get(`/backup-plans/runs/${id}`),
+  cancelRun: (id: number) => api.post(`/backup-plans/runs/${id}/cancel`),
+  listRunsForPlan: (id: number) => api.get(`/backup-plans/${id}/runs`),
 }
 
 // SSH Keys API

@@ -1,7 +1,417 @@
 {
   "version": 1,
-  "generated_at": "2026-04-06T00:00:00Z",
+  "generated_at": "2026-05-16T00:00:00Z",
   "announcements": [
+    {
+      "id": "update-2.1.0-available",
+      "type": "update_available",
+      "priority": 110,
+      "title": "Borg UI 2.1.0 is available",
+      "title_localized": {
+        "es": "Borg UI 2.1.0 ya esta disponible",
+        "de": "Borg UI 2.1.0 ist verfugbar",
+        "it": "Borg UI 2.1.0 e disponibile"
+      },
+      "message": "Update to Borg UI 2.1.0 for Backup Plans, plan-level schedules, multi-repository runs, configurable dashboard health thresholds, and clearer plan run monitoring.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.1.0 para obtener Backup Plans, programaciones a nivel de plan, ejecuciones en varios repositorios, umbrales de salud configurables en el panel y seguimiento mas claro de las ejecuciones de planes.",
+        "de": "Aktualisieren Sie auf Borg UI 2.1.0 fur Backup Plans, planbasierte Zeitplane, Ausfuhrungen uber mehrere Repositories, konfigurierbare Dashboard-Schwellenwerte und klarere Uberwachung von Plan-Ausfuhrungen.",
+        "it": "Aggiorna a Borg UI 2.1.0 per Backup Plans, pianificazioni a livello di piano, esecuzioni su piu repository, soglie di salute configurabili nella dashboard e monitoraggio piu chiaro delle esecuzioni dei piani."
+      },
+      "highlights": [
+        "Create reusable Backup Plans with shared sources, scripts, schedules, and repository targets",
+        "Run plans manually, track active runs per repository, and review plan run history",
+        "Use single-repository Backup Plans on Community; Pro unlocks multi-repository and parallel runs",
+        "See plan-centric schedules with backup, check, and restore-check timing in one place",
+        "Filter Activity by plan and launch plan runs directly from the Backup page",
+        "Tune dashboard health thresholds for stale, warning, and critical repository states",
+        "Improved plan conversion, legacy source review, Borg 2 archive naming, and backup progress recovery"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Crea Backup Plans reutilizables con origenes, scripts, programaciones y repositorios compartidos",
+          "Ejecuta planes manualmente, sigue ejecuciones activas por repositorio y revisa el historial",
+          "Usa Backup Plans de un solo repositorio en Community; Pro desbloquea varios repositorios y ejecuciones paralelas",
+          "Consulta programaciones centradas en el plan con backups, verificaciones y pruebas de restauracion en un solo lugar",
+          "Filtra Actividad por plan y lanza ejecuciones de planes desde la pagina Backup",
+          "Ajusta los umbrales de salud del panel para estados obsoletos, de advertencia y criticos",
+          "Mejoras en conversion de planes, revision de origenes heredados, nombres de archivos Borg 2 y recuperacion del progreso"
+        ],
+        "de": [
+          "Erstellen Sie wiederverwendbare Backup Plans mit gemeinsamen Quellen, Skripten, Zeitplanen und Repository-Zielen",
+          "Starten Sie Plane manuell, verfolgen Sie aktive Ausfuhrungen pro Repository und prufen Sie den Verlauf",
+          "Nutzen Sie Backup Plans mit einem Repository in Community; Pro schaltet mehrere Repositories und parallele Ausfuhrungen frei",
+          "Sehen Sie planzentrierte Zeitplane mit Backup-, Check- und Restore-Check-Zeiten an einer Stelle",
+          "Filtern Sie Aktivitat nach Plan und starten Sie Plan-Ausfuhrungen direkt von der Backup-Seite",
+          "Passen Sie Dashboard-Schwellenwerte fur veraltete, Warn- und kritische Repository-Zustande an",
+          "Verbesserte Plan-Konvertierung, Prufung alter Quellen, Borg-2-Archivnamen und Wiederherstellung des Backup-Fortschritts"
+        ],
+        "it": [
+          "Crea Backup Plans riutilizzabili con origini, script, pianificazioni e repository condivisi",
+          "Esegui i piani manualmente, segui le esecuzioni attive per repository e consulta lo storico",
+          "Usa Backup Plans con un solo repository in Community; Pro sblocca piu repository ed esecuzioni parallele",
+          "Vedi pianificazioni centrate sul piano con backup, verifiche e test di ripristino in un unico posto",
+          "Filtra Attivita per piano e avvia esecuzioni dei piani dalla pagina Backup",
+          "Regola le soglie di salute della dashboard per stati obsoleti, di avviso e critici",
+          "Miglioramenti a conversione dei piani, revisione delle origini legacy, nomi degli archivi Borg 2 e recupero del progresso"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualizacion",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.1.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-05-16T00:00:00Z",
+      "ends_at": "2027-05-16T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.0.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.1.0-whats-new",
+      "type": "release_highlight",
+      "priority": 80,
+      "title": "What's new in 2.1.0",
+      "title_localized": {
+        "es": "Novedades de la version 2.1.0",
+        "de": "Neu in Version 2.1.0",
+        "it": "Novita della versione 2.1.0"
+      },
+      "message": "Borg UI 2.1.0 introduces Backup Plans as a first-class workflow, adds plan-focused scheduling and monitoring, improves manual plan runs and run history, and adds configurable dashboard health thresholds.",
+      "message_localized": {
+        "es": "Borg UI 2.1.0 incorpora Backup Plans como flujo principal, agrega programacion y seguimiento centrados en el plan, mejora las ejecuciones manuales y el historial, y agrega umbrales de salud configurables en el panel.",
+        "de": "Borg UI 2.1.0 fuhrt Backup Plans als zentralen Workflow ein, erganzt planorientierte Zeitplanung und Uberwachung, verbessert manuelle Plan-Ausfuhrungen und Verlauf und fugt konfigurierbare Dashboard-Schwellenwerte hinzu.",
+        "it": "Borg UI 2.1.0 introduce Backup Plans come flusso principale, aggiunge pianificazione e monitoraggio centrati sul piano, migliora esecuzioni manuali e storico, e aggiunge soglie di salute configurabili nella dashboard."
+      },
+      "highlights": [
+        "Create reusable Backup Plans with shared sources, scripts, schedules, and repository targets",
+        "Run plans manually, track active runs per repository, and review plan run history",
+        "Use single-repository Backup Plans on Community; Pro unlocks multi-repository and parallel runs",
+        "See plan-centric schedules with backup, check, and restore-check timing in one place",
+        "Filter Activity by plan and launch plan runs directly from the Backup page",
+        "Tune dashboard health thresholds for stale, warning, and critical repository states",
+        "Improved plan conversion, legacy source review, Borg 2 archive naming, and backup progress recovery"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Crea Backup Plans reutilizables con origenes, scripts, programaciones y repositorios compartidos",
+          "Ejecuta planes manualmente, sigue ejecuciones activas por repositorio y revisa el historial",
+          "Usa Backup Plans de un solo repositorio en Community; Pro desbloquea varios repositorios y ejecuciones paralelas",
+          "Consulta programaciones centradas en el plan con backups, verificaciones y pruebas de restauracion en un solo lugar",
+          "Filtra Actividad por plan y lanza ejecuciones de planes desde la pagina Backup",
+          "Ajusta los umbrales de salud del panel para estados obsoletos, de advertencia y criticos",
+          "Mejoras en conversion de planes, revision de origenes heredados, nombres de archivos Borg 2 y recuperacion del progreso"
+        ],
+        "de": [
+          "Erstellen Sie wiederverwendbare Backup Plans mit gemeinsamen Quellen, Skripten, Zeitplanen und Repository-Zielen",
+          "Starten Sie Plane manuell, verfolgen Sie aktive Ausfuhrungen pro Repository und prufen Sie den Verlauf",
+          "Nutzen Sie Backup Plans mit einem Repository in Community; Pro schaltet mehrere Repositories und parallele Ausfuhrungen frei",
+          "Sehen Sie planzentrierte Zeitplane mit Backup-, Check- und Restore-Check-Zeiten an einer Stelle",
+          "Filtern Sie Aktivitat nach Plan und starten Sie Plan-Ausfuhrungen direkt von der Backup-Seite",
+          "Passen Sie Dashboard-Schwellenwerte fur veraltete, Warn- und kritische Repository-Zustande an",
+          "Verbesserte Plan-Konvertierung, Prufung alter Quellen, Borg-2-Archivnamen und Wiederherstellung des Backup-Fortschritts"
+        ],
+        "it": [
+          "Crea Backup Plans riutilizzabili con origini, script, pianificazioni e repository condivisi",
+          "Esegui i piani manualmente, segui le esecuzioni attive per repository e consulta lo storico",
+          "Usa Backup Plans con un solo repository in Community; Pro sblocca piu repository ed esecuzioni parallele",
+          "Vedi pianificazioni centrate sul piano con backup, verifiche e test di ripristino in un unico posto",
+          "Filtra Attivita per piano e avvia esecuzioni dei piani dalla pagina Backup",
+          "Regola le soglie di salute della dashboard per stati obsoleti, di avviso e critici",
+          "Miglioramenti a conversione dei piani, revisione delle origini legacy, nomi degli archivi Borg 2 e recupero del progresso"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.1.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-05-16T00:00:00Z",
+      "ends_at": "2027-05-16T00:00:00Z",
+      "min_app_version": "2.1.0",
+      "max_app_version": "2.1.0",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "update-2.0.9-available",
+      "type": "update_available",
+      "priority": 95,
+      "title": "Borg UI 2.0.9 is available",
+      "title_localized": {
+        "es": "Borg UI 2.0.9 ya esta disponible",
+        "de": "Borg UI 2.0.9 ist verfugbar",
+        "it": "Borg UI 2.0.9 e disponibile"
+      },
+      "message": "Update to Borg UI 2.0.9 for Enterprise OIDC SSO, timezone-aware schedules, scheduled restore checks, clearer restore destinations, and stronger dashboard visibility for backup health.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.0.9 para obtener SSO OIDC Enterprise, horarios con zona horaria, verificaciones de restauracion programadas, destinos de restauracion mas claros y mejor visibilidad del estado en el panel.",
+        "de": "Aktualisieren Sie auf Borg UI 2.0.9 fur Enterprise-OIDC-SSO, zeitzonenbewusste Zeitplane, geplante Wiederherstellungsprufungen, klarere Wiederherstellungsziele und bessere Sichtbarkeit des Backup-Zustands im Dashboard.",
+        "it": "Aggiorna a Borg UI 2.0.9 per SSO OIDC Enterprise, pianificazioni con fuso orario, verifiche di ripristino pianificate, destinazioni di ripristino piu chiare e maggiore visibilita dello stato dei backup nella dashboard."
+      },
+      "highlights": [
+        "Enterprise OIDC SSO and hardened auth/proxy flows",
+        "Timezone-aware backup and check schedules with clear next-run tooltips",
+        "Scheduled restore checks with Canary and probe-path verification modes",
+        "Restore check health in Dashboard, Schedule, Activity, and Notifications",
+        "Clearer restore destination previews for selected files and full archives",
+        "Managed Canary payload shown as Borg UI-owned archive content",
+        "Security dependency updates for Axios and PostCSS"
+      ],
+      "highlights_localized": {
+        "es": [
+          "SSO OIDC Enterprise y flujos de autenticacion/proxy reforzados",
+          "Horarios de copias y comprobaciones con zona horaria y tooltips claros de proxima ejecucion",
+          "Verificaciones de restauracion programadas con modos Canary y rutas de prueba",
+          "Estado de verificaciones de restauracion en Panel, Programacion, Actividad y Notificaciones",
+          "Vista previa mas clara del destino para archivos seleccionados y archivos completos",
+          "Carga Canary gestionada visible como contenido del archivo propiedad de Borg UI",
+          "Actualizaciones de seguridad para Axios y PostCSS"
+        ],
+        "de": [
+          "Enterprise-OIDC-SSO und gehartete Auth-/Proxy-Ablaufe",
+          "Zeitzonenbewusste Backup- und Prufzeitplane mit klaren Tooltips zur nachsten Ausfuhrung",
+          "Geplante Wiederherstellungsprufungen mit Canary- und Probe-Pfad-Modus",
+          "Status der Wiederherstellungsprufungen in Dashboard, Zeitplan, Aktivitat und Benachrichtigungen",
+          "Klarere Zielvorschau fur ausgewahlte Dateien und komplette Archive",
+          "Verwaltete Canary-Nutzlast ist im Archiv als Borg-UI-Inhalt erkennbar",
+          "Sicherheitsupdates fur Axios und PostCSS"
+        ],
+        "it": [
+          "SSO OIDC Enterprise e flussi auth/proxy rafforzati",
+          "Pianificazioni di backup e verifica con fuso orario e tooltip chiari sulla prossima esecuzione",
+          "Verifiche di ripristino pianificate con modalita Canary e percorsi di prova",
+          "Stato delle verifiche di ripristino in Dashboard, Schedule, Attivita e Notifiche",
+          "Anteprima piu chiara della destinazione per file selezionati e archivi completi",
+          "Payload Canary gestito visibile come contenuto dell'archivio di Borg UI",
+          "Aggiornamenti di sicurezza per Axios e PostCSS"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualizacion",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.0.9",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-05-05T00:00:00Z",
+      "ends_at": "2027-05-05T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.0.8",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.0.9-whats-new",
+      "type": "release_highlight",
+      "priority": 70,
+      "title": "What's new in 2.0.9",
+      "title_localized": {
+        "es": "Novedades de la version 2.0.9",
+        "de": "Neu in Version 2.0.9",
+        "it": "Novita della versione 2.0.9"
+      },
+      "message": "Borg UI 2.0.9 adds Enterprise OIDC SSO, timezone-aware schedules, scheduled restore verification with Canary and probe-path modes, clearer restore destination previews, restore-check notifications, and security dependency updates.",
+      "message_localized": {
+        "es": "Borg UI 2.0.9 agrega SSO OIDC Enterprise, horarios con zona horaria, verificacion de restauracion programada con modos Canary y rutas de prueba, vistas previas mas claras del destino de restauracion, notificaciones de verificaciones de restauracion y actualizaciones de seguridad.",
+        "de": "Borg UI 2.0.9 bringt Enterprise-OIDC-SSO, zeitzonenbewusste Zeitplane, geplante Wiederherstellungsprufungen mit Canary- und Probe-Pfad-Modus, klarere Zielvorschauen, Benachrichtigungen fur Wiederherstellungsprufungen und Sicherheitsupdates.",
+        "it": "Borg UI 2.0.9 aggiunge SSO OIDC Enterprise, pianificazioni con fuso orario, verifiche di ripristino pianificate con modalita Canary e percorsi di prova, anteprime piu chiare della destinazione, notifiche per le verifiche di ripristino e aggiornamenti di sicurezza."
+      },
+      "highlights": [
+        "Enterprise OIDC SSO and hardened auth/proxy flows",
+        "Timezone-aware backup and check schedules with clear next-run tooltips",
+        "Scheduled restore checks with Canary and probe-path verification modes",
+        "Restore check health in Dashboard, Schedule, Activity, and Notifications",
+        "Clearer restore destination previews for selected files and full archives",
+        "Managed Canary payload shown as Borg UI-owned archive content",
+        "Security dependency updates for Axios and PostCSS"
+      ],
+      "highlights_localized": {
+        "es": [
+          "SSO OIDC Enterprise y flujos de autenticacion/proxy reforzados",
+          "Horarios de copias y comprobaciones con zona horaria y tooltips claros de proxima ejecucion",
+          "Verificaciones de restauracion programadas con modos Canary y rutas de prueba",
+          "Estado de verificaciones de restauracion en Panel, Programacion, Actividad y Notificaciones",
+          "Vista previa mas clara del destino para archivos seleccionados y archivos completos",
+          "Carga Canary gestionada visible como contenido del archivo propiedad de Borg UI",
+          "Actualizaciones de seguridad para Axios y PostCSS"
+        ],
+        "de": [
+          "Enterprise-OIDC-SSO und gehartete Auth-/Proxy-Ablaufe",
+          "Zeitzonenbewusste Backup- und Prufzeitplane mit klaren Tooltips zur nachsten Ausfuhrung",
+          "Geplante Wiederherstellungsprufungen mit Canary- und Probe-Pfad-Modus",
+          "Status der Wiederherstellungsprufungen in Dashboard, Zeitplan, Aktivitat und Benachrichtigungen",
+          "Klarere Zielvorschau fur ausgewahlte Dateien und komplette Archive",
+          "Verwaltete Canary-Nutzlast ist im Archiv als Borg-UI-Inhalt erkennbar",
+          "Sicherheitsupdates fur Axios und PostCSS"
+        ],
+        "it": [
+          "SSO OIDC Enterprise e flussi auth/proxy rafforzati",
+          "Pianificazioni di backup e verifica con fuso orario e tooltip chiari sulla prossima esecuzione",
+          "Verifiche di ripristino pianificate con modalita Canary e percorsi di prova",
+          "Stato delle verifiche di ripristino in Dashboard, Schedule, Attivita e Notifiche",
+          "Anteprima piu chiara della destinazione per file selezionati e archivi completi",
+          "Payload Canary gestito visibile come contenuto dell'archivio di Borg UI",
+          "Aggiornamenti di sicurezza per Axios e PostCSS"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.0.9",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-05-05T00:00:00Z",
+      "ends_at": "2027-05-05T00:00:00Z",
+      "min_app_version": "2.0.9",
+      "max_app_version": "2.0.9",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "update-2.0.3-available",
+      "type": "update_available",
+      "priority": 80,
+      "title": "Borg UI 2.0.3 is available",
+      "title_localized": {
+        "es": "Borg UI 2.0.3 ya esta disponible",
+        "de": "Borg UI 2.0.3 ist verfugbar",
+        "it": "Borg UI 2.0.3 e disponibile"
+      },
+      "message": "Update to Borg UI 2.0.3 for a major security and UX refresh with passkeys, built-in TOTP, a new first-login onboarding flow, improved archive browsing, secured metrics configuration, and better Borg 2 and remote SSH reliability.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.0.3 para obtener una gran mejora de seguridad y experiencia de uso con passkeys, TOTP integrado, un nuevo flujo de onboarding en el primer acceso, mejor navegacion de archivos, configuracion segura de metricas y mejor fiabilidad con Borg 2 y SSH remoto.",
+        "de": "Aktualisieren Sie auf Borg UI 2.0.3 fur ein grosses Sicherheits- und UX-Update mit Passkeys, integriertem TOTP, einem neuen Onboarding beim ersten Login, verbessertem Archive-Browsing, gesicherter Metrik-Konfiguration sowie besserer Zuverlassigkeit fur Borg 2 und Remote-SSH.",
+        "it": "Aggiorna a Borg UI 2.0.3 per un importante aggiornamento di sicurezza e UX con passkey, TOTP integrato, un nuovo onboarding al primo accesso, navigazione degli archivi migliorata, configurazione sicura delle metriche e migliore affidabilita per Borg 2 e SSH remoto."
+      },
+      "highlights": [
+        "Passkeys and built-in TOTP for local accounts",
+        "New first-login password setup and onboarding flow",
+        "UX refresh across accounts, archives, navigation, and settings",
+        "Secured Prometheus metrics configuration and monitoring dashboards",
+        "Faster archive browsing and better Borg 2 compatibility",
+        "Better remote SSH backup, mount, and restore reliability"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Passkeys y TOTP integrado para cuentas locales",
+          "Nuevo flujo de configuracion de contrasena y onboarding en el primer acceso",
+          "Renovacion de UX en cuentas, archivos, navegacion y ajustes",
+          "Configuracion segura de metricas de Prometheus y paneles de monitorizacion",
+          "Navegacion de archivos mas rapida y mejor compatibilidad con Borg 2",
+          "Mejor fiabilidad en copias, montajes y restauraciones SSH remotas"
+        ],
+        "de": [
+          "Passkeys und integriertes TOTP fur lokale Konten",
+          "Neuer Passwort- und Onboarding-Ablauf beim ersten Login",
+          "UX-Auffrischung fur Konten, Archive, Navigation und Einstellungen",
+          "Gesicherte Prometheus-Metrik-Konfiguration und Monitoring-Dashboards",
+          "Schnelleres Archive-Browsing und bessere Borg-2-Kompatibilitat",
+          "Bessere Zuverlassigkeit fur Remote-SSH-Backups, Mounts und Wiederherstellungen"
+        ],
+        "it": [
+          "Passkey e TOTP integrato per gli account locali",
+          "Nuovo flusso di configurazione password e onboarding al primo accesso",
+          "Aggiornamento UX per account, archivi, navigazione e impostazioni",
+          "Configurazione sicura delle metriche Prometheus e dashboard di monitoraggio",
+          "Navigazione degli archivi piu veloce e migliore compatibilita con Borg 2",
+          "Migliore affidabilita per backup, mount e ripristini SSH remoti"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualizacion",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-04-14T00:00:00Z",
+      "ends_at": "2027-04-14T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.0.3-beta.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.0.3-whats-new",
+      "type": "release_highlight",
+      "priority": 60,
+      "title": "What's new in 2.0.3",
+      "title_localized": {
+        "es": "Novedades de la version 2.0.3",
+        "de": "Neu in Version 2.0.3",
+        "it": "Novita della versione 2.0.3"
+      },
+      "message": "Borg UI 2.0.3 delivers a major security and UX refresh with passkeys, built-in TOTP, a new first-login onboarding flow, refreshed account and archive experiences, secured metrics configuration, and stronger Borg 2 and remote SSH reliability.",
+      "message_localized": {
+        "es": "Borg UI 2.0.3 ofrece una gran mejora de seguridad y experiencia de uso con passkeys, TOTP integrado, un nuevo flujo de onboarding en el primer acceso, experiencias renovadas en cuentas y archivos, configuracion segura de metricas y mayor fiabilidad con Borg 2 y SSH remoto.",
+        "de": "Borg UI 2.0.3 bringt ein grosses Sicherheits- und UX-Update mit Passkeys, integriertem TOTP, einem neuen Onboarding beim ersten Login, erneuerten Konto- und Archiv-Oberflachen, gesicherter Metrik-Konfiguration sowie besserer Zuverlassigkeit fur Borg 2 und Remote-SSH.",
+        "it": "Borg UI 2.0.3 offre un importante aggiornamento di sicurezza e UX con passkey, TOTP integrato, un nuovo onboarding al primo accesso, esperienze rinnovate per account e archivi, configurazione sicura delle metriche e maggiore affidabilita per Borg 2 e SSH remoto."
+      },
+      "highlights": [
+        "Passkeys and built-in TOTP for local account security",
+        "New first-login password setup and post-login onboarding flow",
+        "Refreshed account, profile, and security surfaces",
+        "Redesigned archive browsing and archive views",
+        "Updated profile menu, plan drawer, and system settings surfaces",
+        "Secured Prometheus metrics configuration and monitoring dashboards",
+        "Better Borg 2 support and improved remote SSH reliability"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Passkeys y TOTP integrado para reforzar la seguridad de cuentas locales",
+          "Nuevo flujo de configuracion de contrasena y onboarding tras el primer acceso",
+          "Renovacion de las superficies de cuenta, perfil y seguridad",
+          "Navegacion de archivos y vistas de archivo redisenadas",
+          "Menu de perfil, panel del plan y superficies de ajustes del sistema actualizados",
+          "Configuracion segura de metricas de Prometheus y paneles de monitorizacion",
+          "Mejor soporte para Borg 2 y mejor fiabilidad con SSH remoto"
+        ],
+        "de": [
+          "Passkeys und integriertes TOTP fur mehr Sicherheit bei lokalen Konten",
+          "Neuer Passwort- und Onboarding-Ablauf nach dem ersten Login",
+          "Auffrischung der Konto-, Profil- und Sicherheitsoberflachen",
+          "Neu gestaltetes Archive-Browsing und Archivansichten",
+          "Aktualisiertes Profilmenu, Plan-Drawer und Oberflachen der Systemeinstellungen",
+          "Gesicherte Prometheus-Metrik-Konfiguration und Monitoring-Dashboards",
+          "Bessere Borg-2-Unterstutzung und bessere Zuverlassigkeit fur Remote-SSH"
+        ],
+        "it": [
+          "Passkey e TOTP integrato per rafforzare la sicurezza degli account locali",
+          "Nuovo flusso di configurazione password e onboarding dopo il primo accesso",
+          "Aggiornamento delle superfici di account, profilo e sicurezza",
+          "Navigazione degli archivi e viste archivio riprogettate",
+          "Menu profilo, pannello del piano e superfici delle impostazioni di sistema aggiornati",
+          "Configurazione sicura delle metriche Prometheus e dashboard di monitoraggio",
+          "Migliore supporto per Borg 2 e migliore affidabilita per SSH remoto"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-04-14T00:00:00Z",
+      "ends_at": "2027-04-14T00:00:00Z",
+      "min_app_version": "2.0.3",
+      "max_app_version": "2.0.3",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
     {
       "id": "release-2.0.0-whats-new",
       "type": "release_highlight",
@@ -9,31 +419,55 @@
       "title": "What's new in 2.0.0",
       "title_localized": {
         "es": "Novedades de la version 2.0.0",
-        "de": "Neu in 2.0.0",
+        "de": "Neu in Version 2.0.0",
         "it": "Novita della versione 2.0.0"
       },
-      "message": "Borg UI 2.0.0 adds built-in plans, Borg 2 support, better access control, and a more polished day-to-day experience. New installs include 60 days of full access before Community plan limits apply.",
+      "message": "Borg UI 2.0 is here with Borg 2 beta support, a fully responsive UI, RBAC, a fresh new look across the app, localisation across English, German, Spanish, and Italian, and a more reliable foundation backed by 64% combined test coverage.",
       "message_localized": {
-        "es": "Borg UI 2.0.0 agrega planes integrados, soporte para Borg 2, mejor control de acceso y una experiencia diaria mas pulida. Las instalaciones nuevas incluyen 60 dias de acceso completo antes de que se apliquen los limites del plan Community.",
-        "de": "Borg UI 2.0.0 bringt integrierte Plane, Borg-2-Unterstutzung, bessere Zugriffskontrollen und ein reiferes Nutzungserlebnis. Neue Installationen enthalten 60 Tage vollen Zugriff, bevor die Grenzen des Community-Plans gelten.",
-        "it": "Borg UI 2.0.0 aggiunge piani integrati, supporto a Borg 2, un controllo degli accessi migliore e un'esperienza d'uso piu rifinita. Le nuove installazioni includono 60 giorni di accesso completo prima che si applichino i limiti del piano Community."
+        "es": "Borg UI 2.0 ya esta aqui con soporte beta para Borg 2, una interfaz totalmente adaptable, RBAC, una apariencia renovada en toda la app, localizacion en ingles, aleman, espanol e italiano, y una base mas fiable respaldada por un 64 % de cobertura de pruebas combinada.",
+        "de": "Borg UI 2.0 ist da mit Borg-2-Beta-Unterstutzung, einer voll responsiven Oberflache, RBAC, einem frischen neuen Look in der gesamten App, Lokalisierung auf Englisch, Deutsch, Spanisch und Italienisch sowie einer zuverlassigeren Grundlage mit 64 % kombinierter Testabdeckung.",
+        "it": "Borg UI 2.0 e arrivato con supporto beta per Borg 2, un'interfaccia completamente reattiva, RBAC, un look rinnovato in tutta l'app, localizzazione in inglese, tedesco, spagnolo e italiano, e una base piu affidabile supportata dal 64% di copertura test combinata."
       },
       "highlights": [
-        "Built-in Community, Pro, and Enterprise plans, with licensing managed directly in the app",
-        "Borg 2 support across repository create, import, stats, and archive flows",
-        "A revamped dashboard, cleaner navigation, improved settings, and auto theme mode",
-        "RBAC, repository access controls, personal profiles, and API tokens for multi-user setups",
-        "Announcements, Umami analytics, and better product telemetry",
-        "Stronger SSH, restore, testing, and CI reliability"
+        "Borg 2 beta support across core repository flows",
+        "Responsive UI built for desktop and mobile",
+        "RBAC and repository permissions for multi-user setups",
+        "A redesigned interface with a fresh new look across the app",
+        "Community stays available, with most features continuing to stay free",
+        "Pro and Enterprise are available for users who need more advanced capabilities",
+        "New installs include 60 days of full access to explore everything",
+        "Cleaner architecture and broader test coverage for a more reliable product"
       ],
       "highlights_localized": {
         "es": [
-          "Planes Community, Pro y Enterprise integrados, con licencias gestionadas directamente en la app",
-          "Soporte para Borg 2 en creacion, importacion, estadisticas y archivos",
-          "Panel renovado, navegacion mas limpia, mejor configuracion y modo de tema automatico",
-          "RBAC, controles de acceso por repositorio, perfiles personales y tokens API para entornos multiusuario",
-          "Announcements, analitica Umami y mejor telemetria del producto",
-          "Mayor fiabilidad en SSH, restauracion, pruebas y CI"
+          "Soporte beta para Borg 2 en los flujos principales de repositorios",
+          "Interfaz adaptable pensada para escritorio y movil",
+          "RBAC y permisos de repositorio para entornos multiusuario",
+          "Una interfaz redisenada con un aspecto nuevo en toda la app",
+          "Community sigue disponible y la mayoria de las funciones continuan siendo gratuitas",
+          "Pro y Enterprise estan disponibles para quienes necesiten capacidades mas avanzadas",
+          "Las instalaciones nuevas incluyen 60 dias de acceso completo para explorar todo",
+          "Arquitectura mas limpia y mayor cobertura de pruebas para un producto mas fiable"
+        ],
+        "de": [
+          "Borg-2-Beta-Unterstutzung in den zentralen Repository-Ablaufen",
+          "Responsive Oberflache fur Desktop und Mobilgerate",
+          "RBAC und Repository-Berechtigungen fur Multi-User-Umgebungen",
+          "Eine neu gestaltete Oberflache mit frischem Look in der ganzen App",
+          "Community bleibt verfugbar und die meisten Funktionen bleiben kostenlos",
+          "Pro und Enterprise stehen fur Nutzer bereit, die erweiterte Funktionen brauchen",
+          "Neue Installationen enthalten 60 Tage vollen Zugriff, um alles auszuprobieren",
+          "Saubere Architektur und breitere Testabdeckung fur ein zuverlassigeres Produkt"
+        ],
+        "it": [
+          "Supporto beta per Borg 2 nei flussi principali dei repository",
+          "Interfaccia reattiva progettata per desktop e mobile",
+          "RBAC e permessi dei repository per configurazioni multiutente",
+          "Un'interfaccia riprogettata con un look nuovo in tutta l'app",
+          "Community resta disponibile e la maggior parte delle funzionalita continua a essere gratuita",
+          "Pro ed Enterprise sono disponibili per chi ha bisogno di capacita piu avanzate",
+          "Le nuove installazioni includono 60 giorni di accesso completo per esplorare tutto",
+          "Architettura piu pulita e copertura test piu ampia per un prodotto piu affidabile"
         ]
       },
       "cta_label": "View release notes",
@@ -45,8 +479,8 @@
       "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.0.0",
       "dismissible": true,
       "snooze_days": 7,
-      "starts_at": "2026-04-06T00:00:00Z",
-      "ends_at": "2027-04-06T00:00:00Z",
+      "starts_at": "2026-04-11T00:00:00Z",
+      "ends_at": "2026-04-13T23:59:59Z",
       "min_app_version": "2.0.0",
       "max_app_version": "2.0.0",
       "target_plans": ["community", "pro", "enterprise"]

@@ -7,6 +7,9 @@ from fastapi.testclient import TestClient
 
 from app.api import repositories as repositories_api
 from app.database.models import (
+    BackupJob,
+    BackupPlan,
+    BackupPlanRun,
     CheckJob,
     CompactJob,
     PruneJob,
@@ -551,3 +554,86 @@ class TestRepositoryHelperContracts:
         assert state["max_active"] == 1
         assert archives_result["archives"] == []
         assert info_result["info"]["repository"] == {}
+
+    @pytest.mark.asyncio
+    async def test_list_repository_archives_marks_manual_backup_plan_archive(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        plan = BackupPlan(
+            name="Monthly Plan",
+            enabled=True,
+            source_type="local",
+            source_directories='["/srv/project"]',
+            exclude_patterns="[]",
+            archive_name_template="{plan_name}-{repo_name}-{now}",
+            compression="lz4",
+            repository_run_mode="series",
+            max_parallel_repositories=1,
+            failure_behavior="continue",
+            schedule_enabled=False,
+            timezone="UTC",
+        )
+        test_db.add(plan)
+        test_db.flush()
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="manual",
+            status="completed",
+            started_at=datetime(2026, 5, 15, 10, 0, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 5, 15, 10, 5, tzinfo=timezone.utc),
+        )
+        test_db.add(run)
+        test_db.flush()
+        test_db.add(
+            BackupJob(
+                repository=repo.path,
+                repository_id=repo.id,
+                backup_plan_id=plan.id,
+                backup_plan_run_id=run.id,
+                archive_name="Monthly-Plan-Primary",
+                status="completed",
+                started_at=datetime(2026, 5, 15, 10, 0, tzinfo=timezone.utc),
+                completed_at=datetime(2026, 5, 15, 10, 5, tzinfo=timezone.utc),
+            )
+        )
+        test_db.commit()
+
+        with (
+            patch.object(
+                repositories_api,
+                "_load_repository_with_access",
+                return_value=repo,
+            ),
+            patch.object(
+                repositories_api,
+                "_resolve_bypass_lock",
+                return_value=(False, "none"),
+            ),
+            patch.object(
+                repositories_api,
+                "get_operation_timeouts",
+                return_value={"list_timeout": 30},
+            ),
+            patch.object(
+                repositories_api.BorgRouter,
+                "build_repo_list_command",
+                return_value=["borg", "list"],
+            ),
+            patch.object(
+                repositories_api,
+                "_run_repository_command_with_retries",
+                new=AsyncMock(
+                    return_value=b'{"archives":[{"name":"Monthly-Plan-Primary","start":"2026-05-15T10:00:00Z"}]}'
+                ),
+            ),
+        ):
+            result = await repositories_api.list_repository_archives(
+                repo.id, current_user=object(), db=test_db
+            )
+
+        archive = result["archives"][0]
+        assert archive["name"] == "Monthly-Plan-Primary"
+        assert archive["triggered_by"] == "manual"
+        assert archive["backup_plan_id"] == plan.id
+        assert archive["backup_plan_run_id"] == run.id

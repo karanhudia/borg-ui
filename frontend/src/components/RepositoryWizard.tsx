@@ -1,21 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Box,
-  Button,
-  Typography,
-  CircularProgress,
-} from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import { DialogActions, Box, Button, CircularProgress } from '@mui/material'
 import { FolderOpen, Database, Shield, Settings, CheckCircle } from 'lucide-react'
 import {
-  WizardStepIndicator,
+  WizardDialog,
   WizardStepLocation,
   WizardStepDataSource,
   WizardStepSecurity,
+  WizardStepRepositoryAdvanced,
   WizardStepBackupConfig,
   WizardStepReview,
 } from './wizard'
@@ -126,6 +118,17 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const [showRemoteSourceExplorer, setShowRemoteSourceExplorer] = useState(false)
   const [showExcludeExplorer, setShowExcludeExplorer] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const showLegacyBackupSteps =
+    mode === 'edit' &&
+    wizardState.repositoryMode === 'full' &&
+    Boolean(
+      repository?.source_directories?.length ||
+      repository?.exclude_patterns?.length ||
+      repository?.source_ssh_connection_id ||
+      repository?.custom_flags ||
+      repository?.pre_backup_script ||
+      repository?.post_backup_script
+    )
 
   // Step definitions
   const steps = useMemo(() => {
@@ -137,8 +140,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       },
     ]
 
-    // Add data source step only for full mode (not observe) and not import
-    if (wizardState.repositoryMode === 'full' || mode === 'import') {
+    if (showLegacyBackupSteps) {
       baseSteps.push({
         key: 'source',
         label: t('repositoryWizard.steps.source'),
@@ -152,12 +154,17 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       icon: <Shield size={14} />,
     })
 
-    // Add backup config step only for full mode
-    if (wizardState.repositoryMode === 'full') {
+    baseSteps.push({
+      key: 'advanced',
+      label: t('repositoryWizard.steps.advanced'),
+      icon: <Settings size={14} />,
+    })
+
+    if (showLegacyBackupSteps) {
       baseSteps.push({
         key: 'config',
         label: t('repositoryWizard.steps.config'),
-        icon: <Settings size={14} />,
+        icon: <Database size={14} />,
       })
     }
 
@@ -168,7 +175,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     })
 
     return baseSteps
-  }, [wizardState.repositoryMode, mode, t])
+  }, [showLegacyBackupSteps, t])
 
   // Load SSH connections
   const loadSshData = async () => {
@@ -432,8 +439,6 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
       case 'source':
         if (wizardState.dataSource === 'remote' && !wizardState.sourceSshConnectionId) return false
-        if (wizardState.repositoryMode !== 'observe' && wizardState.sourceDirs.length === 0)
-          return false
         return true
 
       case 'security':
@@ -588,6 +593,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             }}
             onBrowseSource={() => setShowSourceExplorer(true)}
             onBrowseRemoteSource={() => setShowRemoteSourceExplorer(true)}
+            sourceRequired={false}
           />
         )
 
@@ -601,6 +607,26 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               passphrase: wizardState.passphrase,
               remotePath: wizardState.remotePath,
               selectedKeyfile: wizardState.selectedKeyfile,
+            }}
+            onChange={handleStateChange}
+            showRemotePath={false}
+          />
+        )
+
+      case 'advanced':
+        return (
+          <WizardStepRepositoryAdvanced
+            repositoryId={mode === 'edit' ? repository?.id : null}
+            repositoryMode={wizardState.repositoryMode}
+            data={{
+              compression: wizardState.compression,
+              remotePath: wizardState.remotePath,
+              preBackupScript: wizardState.preBackupScript,
+              postBackupScript: wizardState.postBackupScript,
+              preHookTimeout: wizardState.preHookTimeout,
+              postHookTimeout: wizardState.postHookTimeout,
+              hookFailureMode: wizardState.hookFailureMode,
+              customFlags: wizardState.customFlags,
             }}
             onChange={handleStateChange}
           />
@@ -625,6 +651,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             }}
             onChange={handleStateChange}
             onBrowseExclude={() => setShowExcludeExplorer(true)}
+            showAdvancedOptions={false}
           />
         )
 
@@ -660,27 +687,19 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
   return (
     <>
-      <ResponsiveDialog
+      <WizardDialog
         open={open}
         onClose={onClose}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            height: { xs: 'auto', md: 'min(860px, calc(100vh - 64px))' },
-            backdropFilter: 'blur(10px)',
-            backgroundImage:
-              'linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05))',
-            boxShadow: (theme) =>
-              theme.palette.mode === 'dark'
-                ? '0 24px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1)'
-                : '0 24px 48px rgba(0,0,0,0.1)',
-          },
-        }}
+        title={
+          mode === 'create'
+            ? t('repositoryWizard.titleCreate')
+            : mode === 'edit'
+              ? t('repositoryWizard.titleEdit')
+              : t('repositoryWizard.titleImport')
+        }
+        steps={steps}
+        currentStep={activeStep}
+        onStepClick={setActiveStep}
         footer={
           <DialogActions sx={{ px: { xs: 1, sm: 3 }, pb: { xs: 1, sm: 2 } }}>
             <Button onClick={onClose} disabled={isSubmitting}>
@@ -723,38 +742,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           </DialogActions>
         }
       >
-        <DialogTitle sx={{ pt: 3, pb: 1 }}>
-          <Typography variant="h5" component="div" fontWeight={700}>
-            {mode === 'create'
-              ? t('repositoryWizard.titleCreate')
-              : mode === 'edit'
-                ? t('repositoryWizard.titleEdit')
-                : t('repositoryWizard.titleImport')}
-          </Typography>
-        </DialogTitle>
-        <DialogContent sx={{ pb: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-            {/* Step Indicator */}
-            <WizardStepIndicator
-              steps={steps}
-              currentStep={activeStep}
-              onStepClick={setActiveStep}
-            />
-
-            {/* Step Content - natural height on mobile, fixed on desktop */}
-            <Box
-              sx={{
-                minHeight: { xs: 'auto', md: 450 },
-                flex: { xs: '0 0 auto', md: 1 },
-                overflow: 'auto',
-                p: { xs: 1, sm: 3 },
-              }}
-            >
-              {renderStepContent()}
-            </Box>
-          </Box>
-        </DialogContent>
-      </ResponsiveDialog>
+        {renderStepContent()}
+      </WizardDialog>
 
       {/* File Explorer Dialogs */}
       <FileExplorerDialog

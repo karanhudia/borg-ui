@@ -342,7 +342,8 @@ async def browse_ssh_filesystem(
             with tempfile.NamedTemporaryFile(
                 mode="w", delete=False, suffix=".sftp"
             ) as batch_f:
-                batch_f.write(f'cd "{path}"\n')
+                if path != "/":
+                    batch_f.write(f'cd "{path}"\n')
                 batch_f.write("ls -la\n")
                 sftp_batch_file = batch_f.name
 

@@ -24,6 +24,7 @@ from app.services.repository_command_lock import run_serialized_repository_comma
 from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import repository_borg_env
+from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Repositories v2"], dependencies=[require_feature("borg_v2")])
@@ -553,7 +554,10 @@ async def list_archives(
         except json.JSONDecodeError:
             data = {}
 
-        return {"archives": data.get("archives", []), "borg_version": 2}
+        archives = enrich_archives_with_backup_metadata(
+            data.get("archives", []), repo, db
+        )
+        return {"archives": archives, "borg_version": 2}
 
     return await run_serialized_repository_command(repo_id, _operation)
 

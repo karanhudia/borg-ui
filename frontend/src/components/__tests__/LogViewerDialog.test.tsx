@@ -123,6 +123,12 @@ describe('LogViewerDialog', () => {
       expect(screen.getByText(/Package Logs/)).toBeInTheDocument()
     })
 
+    it('displays Script label for script execution logs', () => {
+      const scriptJob = { ...mockJob, type: 'script_execution' }
+      render(<LogViewerDialog job={scriptJob} open={true} onClose={vi.fn()} />)
+      expect(screen.getByText(/Script Logs/)).toBeInTheDocument()
+    })
+
     it('uses custom jobTypeLabel when provided', () => {
       render(
         <LogViewerDialog

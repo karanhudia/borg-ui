@@ -34,6 +34,10 @@ interface ScriptSelectorSectionProps {
   onPostParametersChange?: (params: Record<string, string>) => void
   disabled?: boolean
   size?: 'small' | 'medium'
+  title?: string
+  description?: string
+  runRepositoryScriptsLabel?: string
+  runRepositoryScriptsDescription?: string
 }
 
 const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
@@ -50,6 +54,10 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
   onPostParametersChange,
   disabled = false,
   size = 'medium',
+  title,
+  description,
+  runRepositoryScriptsLabel,
+  runRepositoryScriptsDescription,
 }) => {
   // Find selected scripts to get their parameters
   const { t } = useTranslation()
@@ -59,10 +67,10 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
   return (
     <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
       <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-        {t('scriptSelector.title')}
+        {title || t('scriptSelector.title')}
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
-        {t('scriptSelector.subtitle')}
+        {description || t('scriptSelector.subtitle')}
       </Typography>
 
       <Stack spacing={2}>
@@ -156,9 +164,11 @@ const ScriptSelectorSection: React.FC<ScriptSelectorSectionProps> = ({
           }
           label={
             <Box>
-              <Typography variant="body2">{t('scriptSelector.runRepoScripts')}</Typography>
+              <Typography variant="body2">
+                {runRepositoryScriptsLabel || t('scriptSelector.runRepoScripts')}
+              </Typography>
               <Typography variant="caption" color="text.secondary">
-                {t('scriptSelector.runRepoScriptsDesc')}
+                {runRepositoryScriptsDescription || t('scriptSelector.runRepoScriptsDesc')}
               </Typography>
             </Box>
           }

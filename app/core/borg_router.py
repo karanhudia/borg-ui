@@ -72,6 +72,7 @@ class BorgRouter:
         compression: str,
         exclude_patterns: List[str],
         custom_flags: List[str],
+        upload_ratelimit_kib: Optional[int] = None,
     ) -> List[str]:
         """Build the version-aware archive creation command."""
         if self.is_v2:
@@ -83,6 +84,7 @@ class BorgRouter:
                 compression=compression,
                 exclude_patterns=exclude_patterns,
                 custom_flags=custom_flags,
+                upload_ratelimit_kib=upload_ratelimit_kib,
             )
 
         cmd = [
@@ -95,6 +97,8 @@ class BorgRouter:
             "--compression",
             compression,
         ]
+        if upload_ratelimit_kib:
+            cmd.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
         for pattern in exclude_patterns:
             cmd.extend(["--exclude", pattern])
         cmd.extend(custom_flags)

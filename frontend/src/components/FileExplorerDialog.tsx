@@ -276,15 +276,22 @@ export default function FileExplorerDialog({
     onClose()
   }
 
+  const buildChildPath = (parentPath: string, childName: string) => {
+    const cleanedChildName = childName.trim().replace(/\//g, '').replace(/\.\./g, '')
+    if (!parentPath || parentPath === '/') return `/${cleanedChildName}`
+    return `${parentPath.replace(/\/+$/, '')}/${cleanedChildName}`
+  }
+
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return
 
     setCreatingFolder(true)
     try {
+      const folderName = newFolderName.trim()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const params: any = {
         path: currentPath,
-        folder_name: newFolderName.trim(),
+        folder_name: folderName,
         connection_type: activeConnectionType,
       }
 
@@ -295,17 +302,16 @@ export default function FileExplorerDialog({
         params.port = activeSshConfig.port
       }
 
-      await api.post('/filesystem/create-folder', params)
+      const response = await api.post('/filesystem/create-folder', params)
+      const createdPath = response.data?.path || buildChildPath(currentPath, folderName)
 
-      // Refresh directory
-      await loadDirectory(currentPath)
+      await loadDirectory(createdPath)
 
-      // Close dialog and reset
       setShowCreateFolder(false)
       setNewFolderName('')
       setError(null)
-      setNewFolderName('')
-      setError(null)
+      setSearchTerm('')
+      setSelectedPaths([])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Failed to create folder:', err)
@@ -419,7 +425,15 @@ export default function FileExplorerDialog({
           </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ p: 0 }}>
+        <DialogContent
+          sx={{
+            p: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            minHeight: 0,
+          }}
+        >
           {/* Breadcrumb Navigation */}
           <Box
             sx={{
@@ -527,6 +541,7 @@ export default function FileExplorerDialog({
               flexDirection="column"
               alignItems="center"
               justifyContent="center"
+              sx={{ flex: 1, minHeight: 0 }}
               py={4}
             >
               <CircularProgress size={32} />
@@ -535,12 +550,23 @@ export default function FileExplorerDialog({
               </Typography>
             </Box>
           ) : (
-            <>
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
               {/* File List */}
               <List
                 sx={{
                   flex: 1,
+                  minHeight: 0,
                   overflow: 'auto',
+                  overscrollBehavior: 'contain',
+                  WebkitOverflowScrolling: 'touch',
                   px: 0.5,
                   py: 0,
                 }}
@@ -672,6 +698,7 @@ export default function FileExplorerDialog({
               {/* Info Box */}
               {multiSelect && selectedPaths.length > 0 && (
                 <Box
+                  flexShrink={0}
                   sx={{ px: 2, py: 1, bgcolor: 'primary.50', borderTop: 1, borderColor: 'divider' }}
                 >
                   <Typography variant="caption" color="primary.main" fontWeight={600}>
@@ -679,7 +706,7 @@ export default function FileExplorerDialog({
                   </Typography>
                 </Box>
               )}
-            </>
+            </Box>
           )}
         </DialogContent>
 

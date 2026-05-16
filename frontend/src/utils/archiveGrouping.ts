@@ -21,10 +21,16 @@ export interface GroupInfo {
 }
 
 /**
- * Determine if an archive is manual or scheduled based on its name
+ * Determine if an archive is manual or scheduled.
  */
 export function getArchiveType(archive: Archive): 'manual' | 'scheduled' {
-  return archive.name.startsWith('manual-backup-') ? 'manual' : 'scheduled'
+  if (archive.triggered_by === 'manual') return 'manual'
+  if (archive.triggered_by === 'schedule' || archive.triggered_by === 'scheduled') {
+    return 'scheduled'
+  }
+  return archive.name === 'manual-backup' || archive.name.startsWith('manual-backup-')
+    ? 'manual'
+    : 'scheduled'
 }
 
 /**

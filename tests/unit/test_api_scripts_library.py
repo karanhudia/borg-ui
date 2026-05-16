@@ -7,7 +7,13 @@ Key test focus:
 """
 
 import pytest
-from app.database.models import Repository, ScheduledJob, Script, RepositoryScript
+from app.database.models import (
+    BackupPlan,
+    Repository,
+    ScheduledJob,
+    Script,
+    RepositoryScript,
+)
 
 
 @pytest.mark.unit
@@ -668,3 +674,62 @@ class TestScriptDeleteScheduleReference:
         test_db.refresh(schedule2)
         assert schedule1.pre_backup_script_id is None
         assert schedule2.post_backup_script_id is None
+
+    def test_delete_script_clears_backup_plan_references(
+        self, test_client, admin_headers, test_db
+    ):
+        """Deleting a script used by a backup plan clears plan-level script references"""
+        script = Script(
+            name="backup-plan-script",
+            description="Backup plan script",
+            file_path="library/backup-plan-script.sh",
+            category="custom",
+            timeout=300,
+            run_on="always",
+            usage_count=0,
+        )
+        test_db.add(script)
+        test_db.commit()
+
+        backup_plan = BackupPlan(
+            name="Scripted Plan",
+            enabled=True,
+            source_type="local",
+            source_directories='["/data"]',
+            exclude_patterns="[]",
+            archive_name_template="{plan_name}-{now}",
+            compression="lz4",
+            repository_run_mode="series",
+            max_parallel_repositories=1,
+            failure_behavior="continue",
+            schedule_enabled=False,
+            timezone="UTC",
+            pre_backup_script_id=script.id,
+            post_backup_script_id=script.id,
+            pre_backup_script_parameters={"TARGET": "database"},
+            post_backup_script_parameters={"STATUS_FILE": "/tmp/status"},
+            run_repository_scripts=True,
+            run_prune_after=False,
+            run_compact_after=False,
+            run_check_after=False,
+            check_max_duration=3600,
+            prune_keep_hourly=0,
+            prune_keep_daily=7,
+            prune_keep_weekly=4,
+            prune_keep_monthly=6,
+            prune_keep_quarterly=0,
+            prune_keep_yearly=1,
+        )
+        test_db.add(backup_plan)
+        test_db.commit()
+
+        response = test_client.delete(
+            f"/api/scripts/{script.id}", headers=admin_headers
+        )
+        assert response.status_code == 204
+
+        test_db.refresh(backup_plan)
+        assert backup_plan.pre_backup_script_id is None
+        assert backup_plan.post_backup_script_id is None
+        assert backup_plan.pre_backup_script_parameters is None
+        assert backup_plan.post_backup_script_parameters is None

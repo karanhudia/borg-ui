@@ -1,17 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Box,
-  Button,
-  Typography,
-} from '@mui/material'
+import { DialogActions, Box, Button } from '@mui/material'
 import { Files, HardDrive, CheckCircle } from 'lucide-react'
 import {
-  WizardStepIndicator,
+  WizardDialog,
   WizardStepRestoreFiles,
   WizardStepRestoreDestination,
   WizardStepRestoreReview,
@@ -334,81 +326,54 @@ const RestoreWizard = ({
 
   return (
     <>
-      <Dialog
+      <WizardDialog
         open={open}
         onClose={onClose}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            overflow: 'hidden',
-            backdropFilter: 'blur(10px)',
-            backgroundImage:
-              'linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05))',
-            boxShadow: (theme) =>
-              theme.palette.mode === 'dark'
-                ? '0 24px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1)'
-                : '0 24px 48px rgba(0,0,0,0.1)',
-          },
+        title={t('restoreWizard.title')}
+        subtitle={t('restoreWizard.fromArchive', { archiveName: archive.name })}
+        steps={steps}
+        currentStep={activeStep}
+        onStepClick={setActiveStep}
+        stepContentSx={{
+          height: { xs: 'auto', md: 450 },
+          minHeight: { xs: 'auto', md: 450 },
+          p: 0,
         }}
+        footer={
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
+            <Box sx={{ flex: 1 }} />
+            <Button disabled={activeStep === 0} onClick={handleBack}>
+              {t('common.buttons.back')}
+            </Button>
+            {activeStep < steps.length - 1 ? (
+              <Button
+                variant="contained"
+                onClick={handleNext}
+                disabled={!canProceed()}
+                sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+              >
+                {t('common.buttons.next')}
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                onClick={handleSubmit}
+                disabled={!canProceed()}
+                sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+              >
+                {t('restoreWizard.buttons.restore')}
+              </Button>
+            )}
+          </DialogActions>
+        }
       >
-        <DialogTitle sx={{ pt: 3, pb: 1 }}>
-          <Typography variant="h5" component="div" fontWeight={700}>
-            {t('restoreWizard.title')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {t('restoreWizard.fromArchive', { archiveName: archive.name })}
-          </Typography>
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            {/* Step Indicator */}
-            <WizardStepIndicator
-              steps={steps}
-              currentStep={activeStep}
-              onStepClick={setActiveStep}
-            />
-
-            {/* Step Content - Fixed height to prevent layout shift */}
-            <Box sx={{ height: 450, overflow: 'auto' }}>
-              {activeStep === 0 ? (
-                // Files step fills entire height with its own layout
-                <Box sx={{ height: '100%', px: 3, py: 2 }}>{renderStepContent()}</Box>
-              ) : (
-                // Other steps just need padding and scroll naturally
-                <Box sx={{ px: 3, py: 2 }}>{renderStepContent()}</Box>
-              )}
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
-          <Box sx={{ flex: 1 }} />
-          <Button disabled={activeStep === 0} onClick={handleBack}>
-            {t('common.buttons.back')}
-          </Button>
-          {activeStep < steps.length - 1 ? (
-            <Button
-              variant="contained"
-              onClick={handleNext}
-              disabled={!canProceed()}
-              sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
-            >
-              {t('common.buttons.next')}
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              onClick={handleSubmit}
-              disabled={!canProceed()}
-              sx={{ boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
-            >
-              {t('restoreWizard.buttons.restore')}
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
+        {activeStep === 0 ? (
+          <Box sx={{ height: '100%', px: 3, py: 2 }}>{renderStepContent()}</Box>
+        ) : (
+          <Box sx={{ px: 3, py: 2 }}>{renderStepContent()}</Box>
+        )}
+      </WizardDialog>
 
       {/* File Explorer Dialog for custom path */}
       {showPathExplorer && (

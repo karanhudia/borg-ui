@@ -17,9 +17,18 @@ vi.mock('@mui/material', async (importOriginal) => {
     ...actual,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Autocomplete: (props: any) => {
-      const { onChange, value, options } = props
+      const { onChange, value, options, getOptionDisabled } = props
       return (
         <div data-testid="mock-autocomplete">
+          {options.map((option: Repository) => (
+            <button
+              key={option.id}
+              data-testid={`option-${option.id}`}
+              disabled={getOptionDisabled?.(option) ?? false}
+            >
+              {option.name}
+            </button>
+          ))}
           <button
             data-testid="add-duplicate"
             onClick={() => {
@@ -88,5 +97,20 @@ describe('MultiRepositorySelector Uniqueness', () => {
 
     // Expectation: [1, 2]
     expect(onChange).toHaveBeenCalledWith([1, 2])
+  })
+
+  it('disables options returned by getOptionDisabled', () => {
+    render(
+      <MultiRepositorySelector
+        repositories={mockRepositories}
+        selectedIds={[1]}
+        onChange={vi.fn()}
+        getOptionDisabled={(repo) => repo.id !== 1}
+      />
+    )
+
+    expect(screen.getByTestId('option-1')).toBeEnabled()
+    expect(screen.getByTestId('option-2')).toBeDisabled()
+    expect(screen.getByTestId('option-3')).toBeDisabled()
   })
 })

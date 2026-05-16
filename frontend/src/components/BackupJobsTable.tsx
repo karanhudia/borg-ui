@@ -100,6 +100,8 @@ const getTypeLabel = (type: string, t: (key: string) => string): string => {
       return t('backupJobsTable.types.prune')
     case 'package':
       return t('backupJobsTable.types.package')
+    case 'script_execution':
+      return t('backupJobsTable.types.scriptExecution')
     default:
       return type
   }
@@ -123,6 +125,8 @@ const getTypeColor = (
       return 'warning'
     case 'package':
       return 'success'
+    case 'script_execution':
+      return 'secondary'
     default:
       return 'default'
   }
@@ -366,6 +370,11 @@ export const BackupJobsTable = <T extends Job = Job>({
       mobileFullWidth: true,
       render: (job: T) => {
         // Handle Activity items with different repository field names
+        if (job.type && job.type === 'script_execution') {
+          const displayName = job.package_name || job.archive_name || '-'
+          return <Typography variant="body2">{displayName}</Typography>
+        }
+
         if (job.type && job.type === 'package') {
           const displayName = job.archive_name || job.package_name || '-'
           return <Typography variant="body2">{displayName}</Typography>
@@ -426,18 +435,20 @@ export const BackupJobsTable = <T extends Job = Job>({
             width: '70px',
             render: (job: T) => {
               const isScheduled = job.triggered_by === 'schedule'
+              const isBackupPlan = job.triggered_by === 'backup_plan' || Boolean(job.backup_plan_id)
+              const title = isBackupPlan
+                ? t('backupJobsTable.backupPlanByName', {
+                    name: job.backup_plan_name || `#${job.backup_plan_id || 'N/A'}`,
+                  })
+                : isScheduled
+                  ? t('backupJobsTable.scheduledById', { id: job.schedule_id || 'N/A' })
+                  : t('backupJobsTable.manual')
               return (
-                <Tooltip
-                  title={
-                    isScheduled
-                      ? t('backupJobsTable.scheduledById', { id: job.schedule_id || 'N/A' })
-                      : t('backupJobsTable.manual')
-                  }
-                  placement="top"
-                  arrow
-                >
+                <Tooltip title={title} placement="top" arrow>
                   <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    {isScheduled ? (
+                    {isBackupPlan ? (
+                      <Play size={18} color="#059669" />
+                    ) : isScheduled ? (
                       <Calendar size={18} color="#1976d2" />
                     ) : (
                       <User size={18} color="#666" />

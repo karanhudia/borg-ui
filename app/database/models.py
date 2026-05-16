@@ -211,7 +211,10 @@ class Repository(Base):
     # Scheduled checks
     check_cron_expression = Column(
         String, nullable=True
-    )  # NULL = disabled, cron expression for schedule
+    )  # NULL = no schedule configured; cron expression when configured
+    check_schedule_enabled = Column(
+        Boolean, default=True, nullable=False
+    )  # User-facing on/off toggle; cron is preserved when toggled off
     check_timezone = Column(
         String, default="UTC", nullable=False
     )  # IANA timezone used to interpret check_cron_expression
@@ -230,7 +233,10 @@ class Repository(Base):
     )  # Per-repository override
     restore_check_cron_expression = Column(
         String, nullable=True
-    )  # NULL = disabled, cron expression for restore verification
+    )  # NULL = no schedule configured; cron expression when configured
+    restore_check_schedule_enabled = Column(
+        Boolean, default=True, nullable=False
+    )  # User-facing on/off toggle; cron is preserved when toggled off
     restore_check_timezone = Column(
         String, default="UTC", nullable=False
     )  # IANA timezone used to interpret restore_check_cron_expression
@@ -361,6 +367,15 @@ class BackupJob(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     repository = Column(String)  # Repository path/name
+    repository_id = Column(
+        Integer, ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True
+    )
+    backup_plan_id = Column(
+        Integer, ForeignKey("backup_plans.id", ondelete="SET NULL"), nullable=True
+    )
+    backup_plan_run_id = Column(
+        Integer, ForeignKey("backup_plan_runs.id", ondelete="SET NULL"), nullable=True
+    )
     status = Column(
         String, default="pending"
     )  # pending, running, completed, completed_with_warnings, failed
@@ -554,6 +569,159 @@ class ScheduledJobRepository(Base):
 
     def __repr__(self):
         return f"<ScheduledJobRepository(schedule_id={self.scheduled_job_id}, repo_id={self.repository_id}, order={self.execution_order})>"
+
+
+class BackupPlan(Base):
+    __tablename__ = "backup_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    enabled = Column(Boolean, default=True, nullable=False)
+
+    # Source ownership lives on the plan; repositories stay storage-focused.
+    source_type = Column(String, default="local", nullable=False)
+    source_ssh_connection_id = Column(
+        Integer, ForeignKey("ssh_connections.id"), nullable=True
+    )
+    source_directories = Column(Text, nullable=False)
+    exclude_patterns = Column(Text, nullable=True)
+
+    archive_name_template = Column(String, default="{plan_name}-{now}", nullable=False)
+    compression = Column(String, default="lz4", nullable=False)
+    custom_flags = Column(Text, nullable=True)
+    upload_ratelimit_kib = Column(Integer, nullable=True)
+
+    repository_run_mode = Column(String, default="series", nullable=False)
+    max_parallel_repositories = Column(Integer, default=1, nullable=False)
+    failure_behavior = Column(String, default="continue", nullable=False)
+
+    schedule_enabled = Column(Boolean, default=False, nullable=False)
+    cron_expression = Column(String, nullable=True)
+    timezone = Column(String, default="UTC", nullable=False)
+    last_run = Column(DateTime, nullable=True)
+    next_run = Column(DateTime, nullable=True)
+
+    pre_backup_script_id = Column(Integer, ForeignKey("scripts.id"), nullable=True)
+    post_backup_script_id = Column(Integer, ForeignKey("scripts.id"), nullable=True)
+    pre_backup_script_parameters = Column(JSON, nullable=True)
+    post_backup_script_parameters = Column(JSON, nullable=True)
+    run_repository_scripts = Column(Boolean, default=True, nullable=False)
+
+    run_prune_after = Column(Boolean, default=False, nullable=False)
+    run_compact_after = Column(Boolean, default=False, nullable=False)
+    run_check_after = Column(Boolean, default=False, nullable=False)
+    check_max_duration = Column(Integer, default=3600, nullable=False)
+    prune_keep_hourly = Column(Integer, default=0, nullable=False)
+    prune_keep_daily = Column(Integer, default=7, nullable=False)
+    prune_keep_weekly = Column(Integer, default=4, nullable=False)
+    prune_keep_monthly = Column(Integer, default=6, nullable=False)
+    prune_keep_quarterly = Column(Integer, default=0, nullable=False)
+    prune_keep_yearly = Column(Integer, default=1, nullable=False)
+
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+    repositories = relationship(
+        "BackupPlanRepository",
+        back_populates="backup_plan",
+        cascade="all, delete-orphan",
+        order_by="BackupPlanRepository.execution_order",
+    )
+    script_executions = relationship("ScriptExecution", back_populates="backup_plan")
+
+
+class BackupPlanRepository(Base):
+    __tablename__ = "backup_plan_repositories"
+    __table_args__ = (
+        UniqueConstraint(
+            "backup_plan_id", "repository_id", name="uq_backup_plan_repository"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_plan_id = Column(
+        Integer,
+        ForeignKey("backup_plans.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    enabled = Column(Boolean, default=True, nullable=False)
+    execution_order = Column(Integer, nullable=False)
+
+    compression_source = Column(String, default="plan", nullable=False)
+    compression_override = Column(String, nullable=True)
+    custom_flags_override = Column(Text, nullable=True)
+    upload_ratelimit_kib_override = Column(Integer, nullable=True)
+    failure_behavior_override = Column(String, nullable=True)
+
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    backup_plan = relationship("BackupPlan", back_populates="repositories")
+    repository = relationship("Repository")
+
+
+class BackupPlanRun(Base):
+    __tablename__ = "backup_plan_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_plan_id = Column(
+        Integer,
+        ForeignKey("backup_plans.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    trigger = Column(String, nullable=False)
+    status = Column(String, default="pending", nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+    repositories = relationship(
+        "BackupPlanRunRepository",
+        back_populates="backup_plan_run",
+        cascade="all, delete-orphan",
+    )
+    script_executions = relationship(
+        "ScriptExecution",
+        back_populates="backup_plan_run",
+    )
+
+
+class BackupPlanRunRepository(Base):
+    __tablename__ = "backup_plan_run_repositories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    backup_plan_run_id = Column(
+        Integer,
+        ForeignKey("backup_plan_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    backup_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    status = Column(String, default="pending", nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    backup_plan_run = relationship("BackupPlanRun", back_populates="repositories")
+    repository = relationship("Repository")
+    backup_job = relationship("BackupJob")
 
 
 class CheckJob(Base):
@@ -772,6 +940,20 @@ class SystemSettings(Base):
     last_stats_refresh = Column(
         DateTime, nullable=True
     )  # Last time stats were refreshed
+    dashboard_backup_warning_days = Column(Integer, default=3, nullable=False)
+    dashboard_backup_critical_days = Column(Integer, default=7, nullable=False)
+    dashboard_check_warning_days = Column(Integer, default=7, nullable=False)
+    dashboard_check_critical_days = Column(Integer, default=30, nullable=False)
+    dashboard_compact_warning_days = Column(Integer, default=30, nullable=False)
+    dashboard_compact_critical_days = Column(Integer, default=60, nullable=False)
+    dashboard_restore_check_warning_days = Column(Integer, default=14, nullable=False)
+    dashboard_restore_check_critical_days = Column(Integer, default=30, nullable=False)
+    dashboard_observe_freshness_warning_days = Column(
+        Integer, default=2, nullable=False
+    )
+    dashboard_observe_freshness_critical_days = Column(
+        Integer, default=7, nullable=False
+    )
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)
@@ -872,7 +1054,9 @@ class OidcLoginState(Base):
     code_verifier = Column(Text, nullable=False)
     return_to = Column(Text, nullable=False)
     flow = Column(String, default="login", nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     used_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
@@ -888,7 +1072,9 @@ class AuthEvent(Base):
     email = Column(String, nullable=True)
     success = Column(Boolean, default=True, nullable=False, index=True)
     detail = Column(Text, nullable=True)
-    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    actor_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(DateTime, default=utc_now, nullable=False, index=True)
 
 
@@ -1242,6 +1428,18 @@ class ScriptExecution(Base):
         nullable=True,
         index=True,
     )  # NULL for standalone runs
+    backup_plan_id = Column(
+        Integer,
+        ForeignKey("backup_plans.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )  # NULL outside backup plans
+    backup_plan_run_id = Column(
+        Integer,
+        ForeignKey("backup_plan_runs.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )  # NULL outside backup plan runs
 
     # Execution details
     hook_type = Column(
@@ -1272,6 +1470,8 @@ class ScriptExecution(Base):
     script = relationship("Script", back_populates="executions")
     repository = relationship("Repository")
     backup_job = relationship("BackupJob")
+    backup_plan = relationship("BackupPlan", back_populates="script_executions")
+    backup_plan_run = relationship("BackupPlanRun", back_populates="script_executions")
 
     def __repr__(self):
         return f"<ScriptExecution(id={self.id}, script_id={self.script_id}, status='{self.status}')>"

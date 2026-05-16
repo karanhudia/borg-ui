@@ -177,7 +177,9 @@ export default function RemoteMachineCard({
                   lineHeight: 1,
                 }}
               >
-                {machine.status}
+                {t(`remoteMachineCard.status.${machine.status}`, {
+                  defaultValue: t('remoteMachineCard.status.unknown'),
+                })}
               </Typography>
             </Box>
 
@@ -305,7 +307,8 @@ export default function RemoteMachineCard({
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <Typography sx={{ fontSize: '0.58rem', color: 'text.disabled', lineHeight: 1 }}>
-                    {machine.storage.percent_used.toFixed(1)}% used
+                    {machine.storage.percent_used.toFixed(1)}
+                    {t('remoteMachine.percentUsed')}
                   </Typography>
                 </Box>
                 <Typography
@@ -316,7 +319,7 @@ export default function RemoteMachineCard({
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >
-                  {machine.storage.total_formatted} total
+                  {t('remoteMachine.total', { value: machine.storage.total_formatted })}
                 </Typography>
               </Box>
               <LinearProgress

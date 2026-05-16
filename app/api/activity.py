@@ -17,6 +17,7 @@ import tempfile
 from app.database.database import get_db
 from app.database.models import (
     BackupJob,
+    BackupPlan,
     RestoreJob,
     CheckJob,
     CompactJob,
@@ -26,6 +27,7 @@ from app.database.models import (
     Repository,
     InstalledPackage,
     ScheduledJob,
+    ScriptExecution,
 )
 from app.api.auth import get_current_user, User
 from app.core.security import get_current_download_user
@@ -49,6 +51,9 @@ class ActivityItem(BaseModel):
     triggered_by: str = "manual"  # 'manual' or 'schedule'
     schedule_id: Optional[int] = None  # ScheduledJob ID if triggered_by schedule
     schedule_name: Optional[str] = None  # Schedule name if triggered_by schedule
+    backup_plan_id: Optional[int] = None  # BackupPlan ID if triggered by a plan
+    backup_plan_run_id: Optional[int] = None  # BackupPlanRun ID if triggered by a plan
+    backup_plan_name: Optional[str] = None  # BackupPlan name if triggered by a plan
 
     # Type-specific metadata
     archive_name: Optional[str] = None  # For backup/restore
@@ -61,6 +66,49 @@ class ActivityItem(BaseModel):
     class Config:
         from_attributes = True
         json_encoders = {datetime: lambda v: serialize_datetime(v)}
+
+
+def _paginate_log_text(log_text: str, offset: int, limit: int) -> dict:
+    lines = log_text.split("\n") if log_text else []
+    total_lines = len(lines)
+    end_offset = min(offset + limit, total_lines)
+    chunk = lines[offset:end_offset]
+    return {
+        "lines": [
+            {"line_number": offset + i + 1, "content": line}
+            for i, line in enumerate(chunk)
+        ],
+        "total_lines": total_lines,
+        "has_more": end_offset < total_lines,
+    }
+
+
+def _format_script_execution_logs(execution: ScriptExecution) -> str:
+    script_name = (
+        execution.script.name if execution.script else f"Script #{execution.script_id}"
+    )
+    lines = [
+        f"SCRIPT: {script_name}",
+        f"HOOK: {execution.hook_type or 'standalone'}",
+        f"STATUS: {execution.status}",
+    ]
+    if execution.exit_code is not None:
+        lines.append(f"EXIT CODE: {execution.exit_code}")
+    if execution.execution_time is not None:
+        lines.append(f"EXECUTION TIME: {execution.execution_time:.2f}s")
+    lines.extend(
+        [
+            "",
+            "STDOUT:",
+            execution.stdout or "(empty)",
+            "",
+            "STDERR:",
+            execution.stderr or "(empty)",
+        ]
+    )
+    if execution.error_message:
+        lines.extend(["", "ERROR:", execution.error_message])
+    return "\n".join(lines)
 
 
 @router.get("/recent", response_model=List[ActivityItem])
@@ -95,7 +143,13 @@ async def list_recent_activity(
             repo_name = repo.name if repo else job.repository
 
             # Determine trigger type
-            triggered_by = "schedule" if job.scheduled_job_id else "manual"
+            triggered_by = (
+                "backup_plan"
+                if job.backup_plan_id
+                else "schedule"
+                if job.scheduled_job_id
+                else "manual"
+            )
 
             # Get schedule name if this is a scheduled backup
             schedule_name = None
@@ -107,6 +161,15 @@ async def list_recent_activity(
                 )
                 if scheduled_job:
                     schedule_name = scheduled_job.name
+            backup_plan_name = None
+            if job.backup_plan_id:
+                backup_plan = (
+                    db.query(BackupPlan)
+                    .filter(BackupPlan.id == job.backup_plan_id)
+                    .first()
+                )
+                if backup_plan:
+                    backup_plan_name = backup_plan.name
 
             activities.append(
                 {
@@ -122,6 +185,9 @@ async def list_recent_activity(
                     "triggered_by": triggered_by,
                     "schedule_id": job.scheduled_job_id,
                     "schedule_name": schedule_name,
+                    "backup_plan_id": job.backup_plan_id,
+                    "backup_plan_run_id": job.backup_plan_run_id,
+                    "backup_plan_name": backup_plan_name,
                     "archive_name": getattr(job, "archive_name", None),
                     "package_name": None,
                     "has_logs": bool(job.log_file_path or job.logs),
@@ -366,6 +432,55 @@ async def list_recent_activity(
                 }
             )
 
+    # Fetch script executions
+    if not job_type or job_type == "script_execution":
+        script_executions = (
+            db.query(ScriptExecution)
+            .order_by(ScriptExecution.started_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for execution in script_executions:
+            if status and execution.status != status:
+                continue
+            script_name = (
+                execution.script.name
+                if execution.script
+                else f"Script #{execution.script_id}"
+            )
+            backup_plan_name = None
+            if execution.backup_plan:
+                backup_plan_name = execution.backup_plan.name
+            repo_name = (
+                execution.repository.name if execution.repository else script_name
+            )
+            repo_path = execution.repository.path if execution.repository else None
+            activities.append(
+                {
+                    "id": execution.id,
+                    "type": "script_execution",
+                    "status": execution.status,
+                    "started_at": execution.started_at,
+                    "completed_at": execution.completed_at,
+                    "error_message": execution.error_message,
+                    "repository": repo_name,
+                    "repository_path": repo_path,
+                    "log_file_path": None,
+                    "triggered_by": execution.triggered_by or "manual",
+                    "schedule_id": None,
+                    "schedule_name": None,
+                    "backup_plan_id": execution.backup_plan_id,
+                    "backup_plan_run_id": execution.backup_plan_run_id,
+                    "backup_plan_name": backup_plan_name,
+                    "archive_name": execution.hook_type,
+                    "package_name": script_name,
+                    "has_logs": bool(
+                        execution.stdout or execution.stderr or execution.error_message
+                    ),
+                    "_sort_at": execution.started_at,
+                }
+            )
+
     # Sort by start time, falling back to creation time for pending jobs.
     activities.sort(
         key=lambda x: x.get("_sort_at") or x["started_at"] or datetime.min,
@@ -405,7 +520,24 @@ async def get_job_logs(
         "compact": CompactJob,
         "prune": PruneJob,
         "package": PackageInstallJob,
+        "script_execution": ScriptExecution,
     }
+
+    if job_type == "script_execution":
+        execution = (
+            db.query(ScriptExecution).filter(ScriptExecution.id == job_id).first()
+        )
+        if not execution:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        return _paginate_log_text(
+            _format_script_execution_logs(execution), offset, limit
+        )
 
     if job_type not in job_models:
         raise HTTPException(
@@ -655,7 +787,48 @@ async def download_job_logs(
         "compact": CompactJob,
         "prune": PruneJob,
         "package": PackageInstallJob,
+        "script_execution": ScriptExecution,
     }
+
+    if job_type == "script_execution":
+        execution = (
+            db.query(ScriptExecution).filter(ScriptExecution.id == job_id).first()
+        )
+        if not execution:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        if execution.status == "running":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.activity.cannotDownloadLogsForRunningJob"
+                },
+            )
+        log_text = _format_script_execution_logs(execution)
+        if not log_text.strip():
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.activity.noLogsAvailableForJob"},
+            )
+        temp_file = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
+        try:
+            temp_file.write(log_text)
+            temp_file.flush()
+            temp_file.close()
+            return FileResponse(
+                path=temp_file.name,
+                filename=f"{job_type}_job_{job_id}_logs.txt",
+                media_type="text/plain",
+            )
+        except Exception as e:
+            if os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
+            raise e
 
     if job_type not in job_models:
         raise HTTPException(
@@ -749,6 +922,7 @@ async def delete_job(
         "compact": CompactJob,
         "prune": PruneJob,
         "package": PackageInstallJob,
+        "script_execution": ScriptExecution,
     }
 
     if job_type not in job_models:

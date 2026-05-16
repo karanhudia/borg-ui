@@ -1,7 +1,11 @@
 export { default as WizardStepIndicator } from './WizardStepIndicator'
+export { default as WizardDialog } from './WizardDialog'
 export { default as WizardStepLocation } from './WizardStepLocation'
 export { default as WizardStepDataSource } from './WizardStepDataSource'
 export { default as WizardStepSecurity } from './WizardStepSecurity'
+export { default as RepositoryEncryptionFields } from './RepositoryEncryptionFields'
+export { getDefaultRepositoryEncryption } from './repositoryEncryption'
+export { default as WizardStepRepositoryAdvanced } from './WizardStepRepositoryAdvanced'
 export { default as WizardStepBackupConfig } from './WizardStepBackupConfig'
 export { default as WizardStepReview } from './WizardStepReview'
 export { default as BackupFlowPreview } from './BackupFlowPreview'
@@ -12,8 +16,11 @@ export { default as WizardStepRestoreDestination } from './WizardStepRestoreDest
 export { default as WizardStepRestoreReview } from './WizardStepRestoreReview'
 
 export type { LocationStepData } from './WizardStepLocation'
+export type { WizardStep } from './WizardDialog'
 export type { DataSourceStepData } from './WizardStepDataSource'
 export type { SecurityStepData } from './WizardStepSecurity'
+export type { RepositoryEncryptionData } from './RepositoryEncryptionFields'
+export type { RepositoryAdvancedStepData } from './WizardStepRepositoryAdvanced'
 export type { BackupConfigStepData } from './WizardStepBackupConfig'
 export type { WizardReviewData } from './WizardStepReview'
 

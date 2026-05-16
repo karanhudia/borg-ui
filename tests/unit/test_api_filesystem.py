@@ -248,6 +248,55 @@ class TestFilesystemBrowseSSH:
         assert response.items[1].is_directory is False
 
     @pytest.mark.asyncio
+    async def test_browse_ssh_filesystem_lists_sftp_root_without_cd(
+        self,
+        test_db,
+        monkeypatch,
+    ):
+        secret_key = "a" * 32
+        monkeypatch.setattr(
+            filesystem.settings, "secret_key", secret_key, raising=False
+        )
+        monkeypatch.setattr(
+            filesystem.settings.__class__, "get_local_mount_points", lambda self: []
+        )
+        ssh_key = _create_ssh_key_record(test_db, secret_key)
+
+        batch_commands = []
+
+        def run_side_effect(cmd, *args, **kwargs):
+            if cmd[0] == "sftp":
+                batch_path = Path(cmd[cmd.index("-b") + 1])
+                batch_commands.append(batch_path.read_text())
+                return SimpleNamespace(
+                    returncode=0,
+                    stdout=(
+                        "drwxr-xr-x    ? user user 5 Aug 17 2023 .\n"
+                        "dr-x--x--x    ? root root 11 Feb 24 08:23 ..\n"
+                        "drwxr-xr-x    ? user user 3 Aug 17 2023 backups\n"
+                    ),
+                    stderr="",
+                )
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(filesystem.subprocess, "run", run_side_effect)
+        monkeypatch.setattr(
+            filesystem, "is_borg_repository_ssh", lambda *args, **kwargs: False
+        )
+
+        response = await filesystem.browse_ssh_filesystem(
+            path="/",
+            ssh_key_id=ssh_key.id,
+            host="example.com",
+            username="borg",
+            port=22,
+            db=test_db,
+        )
+
+        assert batch_commands[0] == "ls -la\n"
+        assert [item.name for item in response.items] == ["backups"]
+
+    @pytest.mark.asyncio
     async def test_browse_ssh_filesystem_missing_key_returns_404(self, test_db):
         with pytest.raises(filesystem.HTTPException) as exc:
             await filesystem.browse_ssh_filesystem(
