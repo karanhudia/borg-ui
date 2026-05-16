@@ -224,7 +224,7 @@
       "availability": "included"
     },
     {
-      "id": "multi_repo_orchestration",
+      "id": "backup_plan_multi_repository",
       "plan": "pro",
       "label": "Multi-repository backup",
       "label_localized": {
