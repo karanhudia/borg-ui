@@ -22,6 +22,7 @@ from app.core.authorization import authorize_request
 from app.core.security import get_current_user, encrypt_secret, decrypt_secret
 from app.config import settings
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.ssh_host_validation import normalize_ssh_host
 import hashlib
 
 logger = structlog.get_logger()
@@ -192,7 +193,7 @@ async def collect_storage_info(
 
 
 # Pydantic models
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SSHKeyCreate(BaseModel):
@@ -241,6 +242,13 @@ class SSHQuickSetup(BaseModel):
         description="Use SFTP mode for ssh-copy-id (required by Hetzner, disable for Synology/older systems)",
     )
 
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return normalize_ssh_host(value)
+
 
 class SSHConnectionCreate(BaseModel):
     host: str
@@ -258,11 +266,21 @@ class SSHConnectionCreate(BaseModel):
         description="Use SFTP mode for ssh-copy-id (required by Hetzner, disable for Synology/older systems)",
     )
 
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: str) -> str:
+        return normalize_ssh_host(value)
+
 
 class SSHConnectionTest(BaseModel):
     host: str
     username: str
     port: int = 22
+
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: str) -> str:
+        return normalize_ssh_host(value)
 
 
 class SSHConnectionUpdate(BaseModel):
@@ -274,6 +292,13 @@ class SSHConnectionUpdate(BaseModel):
     mount_point: Optional[str] = None  # Logical mount point
     use_sftp_mode: Optional[bool] = None
     use_sudo: Optional[bool] = None
+
+    @field_validator("host")
+    @classmethod
+    def normalize_host(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return normalize_ssh_host(value)
 
 
 class SSHConnectionStorage(BaseModel):
@@ -1071,6 +1096,118 @@ async def get_ssh_connections(
             status_code=500,
             detail={
                 "key": "backend.errors.ssh.failedRetrieveSshConnections",
+                "params": {"error": str(e)},
+            },
+        )
+
+
+def _audit_connection_host(connection: SSHConnection) -> Dict[str, Any]:
+    host = connection.host or ""
+    try:
+        normalized_host = normalize_ssh_host(host)
+    except ValueError as exc:
+        return {
+            "id": connection.id,
+            "host": host,
+            "username": connection.username,
+            "port": connection.port,
+            "status": "suspicious",
+            "reason": str(exc),
+        }
+
+    if normalized_host != host:
+        return {
+            "id": connection.id,
+            "host": host,
+            "normalized_host": normalized_host,
+            "username": connection.username,
+            "port": connection.port,
+            "status": "normalizable",
+            "reason": "Host can be safely normalized.",
+        }
+
+    return {
+        "id": connection.id,
+        "host": host,
+        "normalized_host": normalized_host,
+        "username": connection.username,
+        "port": connection.port,
+        "status": "valid",
+    }
+
+
+def _host_audit_response(entries: list[Dict[str, Any]]) -> Dict[str, Any]:
+    normalizable = [entry for entry in entries if entry["status"] == "normalizable"]
+    suspicious = [entry for entry in entries if entry["status"] == "suspicious"]
+    valid = [entry for entry in entries if entry["status"] == "valid"]
+
+    return {
+        "summary": {
+            "total": len(entries),
+            "valid": len(valid),
+            "normalizable": len(normalizable),
+            "suspicious": len(suspicious),
+        },
+        "normalizable": normalizable,
+        "suspicious": suspicious,
+    }
+
+
+@router.get("/connections/host-audit")
+async def audit_ssh_connection_hosts(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Audit saved SSH connection hosts for safe normalization or manual cleanup."""
+    try:
+        connections = db.query(SSHConnection).all()
+        return _host_audit_response(
+            [_audit_connection_host(connection) for connection in connections]
+        )
+    except Exception as e:
+        logger.error("Failed to audit SSH connection hosts", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.ssh.failedAuditSshConnectionHosts",
+                "params": {"error": str(e)},
+            },
+        )
+
+
+@router.post("/connections/host-cleanup")
+async def cleanup_ssh_connection_hosts(
+    dry_run: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Safely normalize saved SSH hosts; suspicious hosts are reported only."""
+    try:
+        connections = db.query(SSHConnection).all()
+        entries = [_audit_connection_host(connection) for connection in connections]
+        normalizable = [entry for entry in entries if entry["status"] == "normalizable"]
+
+        cleaned = 0
+        if not dry_run:
+            normalizable_by_id = {entry["id"]: entry for entry in normalizable}
+            for connection in connections:
+                entry = normalizable_by_id.get(connection.id)
+                if entry:
+                    connection.host = entry["normalized_host"]
+                    connection.updated_at = datetime.utcnow()
+                    cleaned += 1
+            db.commit()
+
+        response = _host_audit_response(entries)
+        response["dry_run"] = dry_run
+        response["summary"]["cleaned"] = cleaned
+        return response
+    except Exception as e:
+        db.rollback()
+        logger.error("Failed to clean up SSH connection hosts", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.ssh.failedCleanupSshConnectionHosts",
                 "params": {"error": str(e)},
             },
         )

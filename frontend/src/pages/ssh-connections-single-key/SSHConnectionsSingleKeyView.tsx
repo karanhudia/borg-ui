@@ -64,10 +64,16 @@ interface SSHConnectionsSingleKeyViewProps {
   setImportForm: Dispatch<SetStateAction<ImportKeyPayload>>
   connectionForm: DeployConnectionPayload
   setConnectionForm: Dispatch<SetStateAction<DeployConnectionPayload>>
+  connectionHostError?: string
+  setConnectionHostError: Dispatch<SetStateAction<string | undefined>>
   testConnectionForm: TestConnectionPayload
   setTestConnectionForm: Dispatch<SetStateAction<TestConnectionPayload>>
+  testConnectionHostError?: string
+  setTestConnectionHostError: Dispatch<SetStateAction<string | undefined>>
   editConnectionForm: UpdateConnectionPayload
   setEditConnectionForm: Dispatch<SetStateAction<UpdateConnectionPayload>>
+  editConnectionHostError?: string
+  setEditConnectionHostError: Dispatch<SetStateAction<string | undefined>>
   generateKeyPending: boolean
   importKeyPending: boolean
   deployKeyPending: boolean
@@ -134,10 +140,16 @@ export function SSHConnectionsSingleKeyView({
   setImportForm,
   connectionForm,
   setConnectionForm,
+  connectionHostError,
+  setConnectionHostError,
   testConnectionForm,
   setTestConnectionForm,
+  testConnectionHostError,
+  setTestConnectionHostError,
   editConnectionForm,
   setEditConnectionForm,
+  editConnectionHostError,
+  setEditConnectionHostError,
   generateKeyPending,
   importKeyPending,
   deployKeyPending,
@@ -215,10 +227,16 @@ export function SSHConnectionsSingleKeyView({
         setImportForm={setImportForm}
         connectionForm={connectionForm}
         setConnectionForm={setConnectionForm}
+        connectionHostError={connectionHostError}
+        setConnectionHostError={setConnectionHostError}
         testConnectionForm={testConnectionForm}
         setTestConnectionForm={setTestConnectionForm}
+        testConnectionHostError={testConnectionHostError}
+        setTestConnectionHostError={setTestConnectionHostError}
         editConnectionForm={editConnectionForm}
         setEditConnectionForm={setEditConnectionForm}
+        editConnectionHostError={editConnectionHostError}
+        setEditConnectionHostError={setEditConnectionHostError}
         generateDialogOpen={generateDialogOpen}
         setGenerateDialogOpen={setGenerateDialogOpen}
         importDialogOpen={importDialogOpen}

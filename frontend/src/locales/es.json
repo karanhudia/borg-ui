@@ -1417,6 +1417,9 @@
       "updating": "Actualizando...",
       "submit": "Actualizar conexión"
     },
+    "validation": {
+      "hostBareOnly": "Ingresa un nombre DNS o dirección IP sin esquema, ruta, usuario, espacios, corchetes ni puerto."
+    },
     "deleteConnectionDialog": {
       "title": "Eliminar conexión SSH",
       "confirm": "¿Estás seguro de que deseas eliminar esta conexión?",
