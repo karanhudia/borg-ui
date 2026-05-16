@@ -9,11 +9,7 @@ const FORBIDDEN_HOST_CHARS = /[/\\@[\]()<>,"'`|]/
 export function normalizeSshHostInput(rawHost: string): HostValidationResult {
   const host = rawHost.trim()
 
-  if (
-    !host ||
-    hasHiddenOrSpaceCharacter(host) ||
-    FORBIDDEN_HOST_CHARS.test(host)
-  ) {
+  if (!host || hasHiddenOrSpaceCharacter(host) || FORBIDDEN_HOST_CHARS.test(host)) {
     return { ok: false, errorKey: HOST_ERROR_KEY }
   }
 

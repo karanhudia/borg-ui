@@ -187,9 +187,7 @@ vi.mock('../ssh-connections-single-key/SSHConnectionsSingleKeyView', () => ({
       {props.testConnectionHostError && <p>{props.testConnectionHostError}</p>}
       <button onClick={props.handleTestManualConnection}>manual test</button>
 
-      <button onClick={() => props.handleEditConnection(props.connections[0])}>
-        open edit
-      </button>
+      <button onClick={() => props.handleEditConnection(props.connections[0])}>open edit</button>
       <label>
         Edit host
         <input
