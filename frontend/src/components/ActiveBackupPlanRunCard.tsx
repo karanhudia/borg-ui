@@ -14,12 +14,14 @@ import {
 import {
   Activity,
   Archive,
+  CheckCircle2,
   Clock,
   Database,
   Eye,
   FileText,
   HardDrive,
   Square,
+  XCircle,
   Zap,
 } from 'lucide-react'
 import type { BackupJob, BackupPlan, BackupPlanRun, BackupPlanRunRepository } from '../types'
@@ -495,6 +497,67 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
             {run.repositories.map((repoRun) => {
               const repoActive = isActive(repoRun.status)
               const repoDone = repoRun.status === 'completed'
+              const repoFailed = repoRun.status === 'failed' || repoRun.status === 'cancelled'
+
+              // Neutral paper background for every chip — state is communicated
+              // by icon color, border, and label. Avoids a wall of green when
+              // multiple repos are in flight.
+              const successColor = theme.palette.success.main
+              const errorColor = theme.palette.error.main
+              const runningColor = theme.palette.warning.main
+
+              let stateBorderColor: string
+              let stateBgColor: string
+              let icon: React.ReactNode
+              let statusTextColor: string
+
+              if (repoFailed) {
+                stateBorderColor = alpha(errorColor, isDark ? 0.5 : 0.45)
+                stateBgColor = alpha(errorColor, isDark ? 0.08 : 0.04)
+                statusTextColor = errorColor
+                icon = (
+                  <Box sx={{ color: errorColor, display: 'flex', flexShrink: 0 }}>
+                    <XCircle size={13} />
+                  </Box>
+                )
+              } else if (repoDone) {
+                stateBorderColor = alpha(successColor, isDark ? 0.45 : 0.35)
+                stateBgColor = 'background.paper'
+                statusTextColor = successColor
+                icon = (
+                  <Box sx={{ color: successColor, display: 'flex', flexShrink: 0 }}>
+                    <CheckCircle2 size={13} />
+                  </Box>
+                )
+              } else if (repoActive) {
+                // Amber + thicker visual weight so the in-flight repo pops.
+                stateBorderColor = alpha(runningColor, isDark ? 0.6 : 0.5)
+                stateBgColor = alpha(runningColor, isDark ? 0.08 : 0.05)
+                statusTextColor = runningColor
+                icon = (
+                  <Box
+                    sx={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      bgcolor: runningColor,
+                      flexShrink: 0,
+                      boxShadow: `0 0 0 3px ${alpha(runningColor, 0.2)}`,
+                      animation: 'planRunLiveDot 1.4s ease-in-out infinite',
+                    }}
+                  />
+                )
+              } else {
+                stateBorderColor = isDark ? alpha('#fff', 0.08) : alpha('#000', 0.08)
+                stateBgColor = 'background.paper'
+                statusTextColor = 'text.disabled'
+                icon = (
+                  <Box sx={{ color: 'text.disabled', display: 'flex', flexShrink: 0 }}>
+                    <Clock size={11} />
+                  </Box>
+                )
+              }
+
               return (
                 <Box
                   key={repoRun.id}
@@ -503,40 +566,16 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                     py: 0.75,
                     borderRadius: 1,
                     border: '1px solid',
-                    borderColor: repoActive
-                      ? alpha(ACCENT_BACKUP, 0.35)
-                      : isDark
-                        ? alpha('#fff', 0.08)
-                        : alpha('#000', 0.08),
-                    bgcolor: repoActive
-                      ? alpha(ACCENT_BACKUP, isDark ? 0.08 : 0.05)
-                      : 'background.paper',
+                    borderColor: stateBorderColor,
+                    bgcolor: stateBgColor,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 0.75,
                     minWidth: 0,
+                    opacity: !repoActive && !repoDone && !repoFailed ? 0.7 : 1,
                   }}
                 >
-                  {repoActive ? (
-                    <Box
-                      sx={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        bgcolor: ACCENT_BACKUP,
-                        flexShrink: 0,
-                        animation: 'planRunLiveDot 2s ease-in-out infinite',
-                      }}
-                    />
-                  ) : repoDone ? (
-                    <Box sx={{ color: ACCENT_BACKUP, display: 'flex', flexShrink: 0 }}>
-                      <Activity size={11} />
-                    </Box>
-                  ) : (
-                    <Box sx={{ color: 'text.disabled', display: 'flex', flexShrink: 0 }}>
-                      <Clock size={11} />
-                    </Box>
-                  )}
+                  {icon}
                   <Typography
                     variant="caption"
                     fontWeight={600}
@@ -547,8 +586,14 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                   </Typography>
                   <Typography
                     variant="caption"
-                    color="text.disabled"
-                    sx={{ fontSize: '0.65rem', flexShrink: 0 }}
+                    sx={{
+                      fontSize: '0.65rem',
+                      flexShrink: 0,
+                      fontWeight: 700,
+                      color: statusTextColor,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
                   >
                     {t(`backupPlans.statuses.${repoRun.status}`, { defaultValue: repoRun.status })}
                   </Typography>
