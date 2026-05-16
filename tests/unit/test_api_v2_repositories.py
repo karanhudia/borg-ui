@@ -70,6 +70,19 @@ def _create_v2_repo(
     return repo
 
 
+def _create_source_connection(test_db, *, host="source.example.com"):
+    connection = SSHConnection(
+        host=host,
+        username="backup",
+        port=22,
+        status="connected",
+    )
+    test_db.add(connection)
+    test_db.commit()
+    test_db.refresh(connection)
+    return connection
+
+
 @pytest.mark.unit
 class TestV2RepositoryRoutes:
     def test_encryption_modes_are_feature_gated(
@@ -101,13 +114,14 @@ class TestV2RepositoryRoutes:
         self, test_client: TestClient, admin_headers, test_db
     ):
         _enable_borg_v2(test_db)
+        source_connection = _create_source_connection(test_db)
         payload = {
             "name": "Borg 2 Repo",
             "path": "/tmp/v2-create-repo",
             "encryption": "repokey-aes-ocb",
             "compression": "lz4",
             "source_directories": ["/data/source-a", "/data/source-b"],
-            "source_connection_id": 44,
+            "source_connection_id": source_connection.id,
         }
 
         with patch(
@@ -139,7 +153,7 @@ class TestV2RepositoryRoutes:
         assert repo is not None
         assert repo.borg_version == 2
         assert json.loads(repo.source_directories) == payload["source_directories"]
-        assert repo.source_ssh_connection_id == 44
+        assert repo.source_ssh_connection_id == source_connection.id
         mock_rcreate.assert_awaited_once()
 
     def test_create_repository_rejects_invalid_encryption(
@@ -334,6 +348,9 @@ class TestV2RepositoryRoutes:
         self, test_client: TestClient, admin_headers, test_db
     ):
         _enable_borg_v2(test_db)
+        source_connection = _create_source_connection(
+            test_db, host="import-source.example.com"
+        )
 
         with patch(
             "app.api.v2.repositories._rinfo",
@@ -352,7 +369,7 @@ class TestV2RepositoryRoutes:
                     "path": "/tmp/v2-import-success",
                     "encryption": "none",
                     "source_directories": ["/data/source"],
-                    "source_connection_id": 55,
+                    "source_connection_id": source_connection.id,
                     "custom_flags": "--stats",
                     "pre_backup_script": "echo pre",
                     "post_backup_script": "echo post",
@@ -368,7 +385,7 @@ class TestV2RepositoryRoutes:
             test_db.query(Repository).filter(Repository.name == "Imported Repo").first()
         )
         assert repo is not None
-        assert repo.source_ssh_connection_id == 55
+        assert repo.source_ssh_connection_id == source_connection.id
         assert repo.custom_flags == "--stats"
         assert repo.pre_backup_script == "echo pre"
         assert repo.post_backup_script == "echo post"
