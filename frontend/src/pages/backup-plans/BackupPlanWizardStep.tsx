@@ -29,6 +29,7 @@ export function BackupPlanWizardStep({
   createBasicRepository,
   openSourceExplorer,
   openExcludeExplorer,
+  onApplyDatabaseDiscovery,
   setBasicRepositoryOpen,
   setRepositoryWizardOpen,
   setShowBasicRepositoryPathExplorer,
@@ -44,6 +45,7 @@ export function BackupPlanWizardStep({
         updateState={updateState}
         openSourceExplorer={openSourceExplorer}
         openExcludeExplorer={openExcludeExplorer}
+        onApplyDatabaseDiscovery={onApplyDatabaseDiscovery}
         t={t}
       />
     )

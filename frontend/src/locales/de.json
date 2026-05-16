@@ -744,6 +744,43 @@
         "runRepositoryScriptsHelper": "Verwendet die konfigurierten Pre/Post-Backup-Skripte jedes Repositorys während seiner eigenen Kopie.",
         "loading": "Skripte werden geladen..."
       },
+      "sourceDiscovery": {
+        "title": "Quellenerkennung",
+        "description": "Strukturierte Quellen scannen und Backup-Plan-Skripte generieren, ohne die manuelle Pfadeinrichtung zu ersetzen.",
+        "databases": {
+          "title": "Datenbanken",
+          "description": "Unterstützte Datenbankspeicher auf diesem Server finden.",
+          "action": "Datenbanken scannen"
+        },
+        "containers": {
+          "title": "Container",
+          "description": "Das Scannen von Docker-Containern wird später denselben Quellen-Workflow verwenden.",
+          "badge": "Geplant",
+          "action": "Später verfügbar"
+        },
+        "scriptName": {
+          "pre": "pre-backup",
+          "post": "post-backup"
+        },
+        "applyFailed": "Datenbankquelle konnte nicht angewendet werden",
+        "dialog": {
+          "title": "Datenbankerkennung",
+          "description": "Lokale Datenbankspeicher scannen und bearbeitbare Plan-Skripte für konsistente Dateisystem-Backups generieren.",
+          "rescan": "Erneut scannen",
+          "scanFailed": "Datenbankscan fehlgeschlagen. Erneut versuchen oder manuelle Pfade verwenden.",
+          "noDetected": "Es wurden keine laufenden unterstützten Datenbanken erkannt. Starte mit einer unterstützten Vorlage und prüfe den Pfad vor dem Speichern.",
+          "template": "Vorlage",
+          "detected": "Erkannt",
+          "strategy": "Borg sichert die Datenbankdateien, während generierte Plan-Skripte den Dienst stoppen und starten.",
+          "sourcePath": "Datenbank-Quellpfad",
+          "preScript": "Pre-Backup-Skript",
+          "postScript": "Post-Backup-Skript",
+          "reviewWarning": "Das Stoppen einer Datenbank pausiert Schreibvorgänge während der Plan läuft. Prüfe Pfade, Dienstnamen und Wartungsfenster, bevor du einen Zeitplan aktivierst.",
+          "selectDatabase": "Wähle eine Datenbank aus, um die generierten Skripte zu prüfen.",
+          "applying": "Wird angewendet...",
+          "apply": "Datenbankquelle verwenden"
+        }
+      },
       "schedule": {
         "title": "Zeitplan",
         "description": "Lege fest, wann dieser Plan automatisch ausgeführt wird. Deaktivieren, um ihn nur auf Abruf zu starten.",

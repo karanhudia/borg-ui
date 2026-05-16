@@ -744,6 +744,43 @@
         "runRepositoryScriptsHelper": "Use each repository's configured pre/post backup scripts during its own copy.",
         "loading": "Loading scripts..."
       },
+      "sourceDiscovery": {
+        "title": "Source discovery",
+        "description": "Scan structured sources and generate backup-plan scripts without replacing manual path setup.",
+        "databases": {
+          "title": "Databases",
+          "description": "Find supported database stores on this server.",
+          "action": "Scan databases"
+        },
+        "containers": {
+          "title": "Containers",
+          "description": "Docker container scanning will use this same source workflow later.",
+          "badge": "Planned",
+          "action": "Coming later"
+        },
+        "scriptName": {
+          "pre": "pre-backup",
+          "post": "post-backup"
+        },
+        "applyFailed": "Failed to apply database source",
+        "dialog": {
+          "title": "Database discovery",
+          "description": "Scan local database stores and generate editable plan scripts for consistent filesystem backups.",
+          "rescan": "Rescan",
+          "scanFailed": "Database scan failed. Try again or use manual paths.",
+          "noDetected": "No running supported databases were detected. Start from a supported template and verify the path before saving.",
+          "template": "Template",
+          "detected": "Detected",
+          "strategy": "Borg will back up the database files while generated plan scripts stop and start the service.",
+          "sourcePath": "Database source path",
+          "preScript": "Pre-backup script",
+          "postScript": "Post-backup script",
+          "reviewWarning": "Stopping a database pauses writes while the plan runs. Review paths, service names, and maintenance windows before enabling a schedule.",
+          "selectDatabase": "Select a database to review generated scripts.",
+          "applying": "Applying...",
+          "apply": "Use database source"
+        }
+      },
       "schedule": {
         "title": "Schedule",
         "description": "Choose when this plan should run automatically. Disable to run only on demand.",

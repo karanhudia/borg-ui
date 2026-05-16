@@ -744,6 +744,43 @@
         "runRepositoryScriptsHelper": "Usa los scripts pre/post copia configurados en cada repositorio durante su propia copia.",
         "loading": "Cargando scripts..."
       },
+      "sourceDiscovery": {
+        "title": "Descubrimiento de origen",
+        "description": "Escanea orígenes estructurados y genera scripts del plan sin reemplazar la configuración manual de rutas.",
+        "databases": {
+          "title": "Bases de datos",
+          "description": "Encuentra almacenes de bases de datos compatibles en este servidor.",
+          "action": "Escanear bases de datos"
+        },
+        "containers": {
+          "title": "Contenedores",
+          "description": "El escaneo de contenedores Docker usará este mismo flujo de origen más adelante.",
+          "badge": "Planificado",
+          "action": "Más adelante"
+        },
+        "scriptName": {
+          "pre": "pre-copia",
+          "post": "post-copia"
+        },
+        "applyFailed": "No se pudo aplicar el origen de base de datos",
+        "dialog": {
+          "title": "Descubrimiento de bases de datos",
+          "description": "Escanea almacenes locales de bases de datos y genera scripts editables para copias de sistema de archivos consistentes.",
+          "rescan": "Reescanear",
+          "scanFailed": "El escaneo de bases de datos falló. Inténtalo de nuevo o usa rutas manuales.",
+          "noDetected": "No se detectaron bases de datos compatibles en ejecución. Empieza con una plantilla compatible y verifica la ruta antes de guardar.",
+          "template": "Plantilla",
+          "detected": "Detectado",
+          "strategy": "Borg copiará los archivos de la base de datos mientras los scripts generados detienen e inician el servicio.",
+          "sourcePath": "Ruta de origen de la base de datos",
+          "preScript": "Script previo a la copia",
+          "postScript": "Script posterior a la copia",
+          "reviewWarning": "Detener una base de datos pausa escrituras mientras el plan se ejecuta. Revisa rutas, nombres de servicio y ventanas de mantenimiento antes de habilitar una programación.",
+          "selectDatabase": "Selecciona una base de datos para revisar los scripts generados.",
+          "applying": "Aplicando...",
+          "apply": "Usar origen de base de datos"
+        }
+      },
       "schedule": {
         "title": "Programación",
         "description": "Elige cuándo se debe ejecutar este plan automáticamente. Desactívalo para ejecutarlo solo bajo demanda.",

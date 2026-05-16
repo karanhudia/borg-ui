@@ -744,6 +744,43 @@
         "runRepositoryScriptsHelper": "Usa gli script pre/post backup configurati in ogni repository durante la sua copia.",
         "loading": "Caricamento script..."
       },
+      "sourceDiscovery": {
+        "title": "Rilevamento sorgenti",
+        "description": "Scansiona sorgenti strutturate e genera script del piano senza sostituire la configurazione manuale dei percorsi.",
+        "databases": {
+          "title": "Database",
+          "description": "Trova archivi database supportati su questo server.",
+          "action": "Scansiona database"
+        },
+        "containers": {
+          "title": "Container",
+          "description": "La scansione dei container Docker userà più avanti questo stesso flusso sorgente.",
+          "badge": "Pianificato",
+          "action": "Disponibile più avanti"
+        },
+        "scriptName": {
+          "pre": "pre-backup",
+          "post": "post-backup"
+        },
+        "applyFailed": "Impossibile applicare la sorgente database",
+        "dialog": {
+          "title": "Rilevamento database",
+          "description": "Scansiona archivi database locali e genera script modificabili per backup coerenti del filesystem.",
+          "rescan": "Scansiona di nuovo",
+          "scanFailed": "Scansione database non riuscita. Riprova o usa percorsi manuali.",
+          "noDetected": "Nessun database supportato in esecuzione rilevato. Parti da un modello supportato e verifica il percorso prima di salvare.",
+          "template": "Modello",
+          "detected": "Rilevato",
+          "strategy": "Borg copierà i file del database mentre gli script generati arrestano e avviano il servizio.",
+          "sourcePath": "Percorso sorgente database",
+          "preScript": "Script pre-backup",
+          "postScript": "Script post-backup",
+          "reviewWarning": "Arrestare un database sospende le scritture mentre il piano viene eseguito. Verifica percorsi, nomi servizio e finestre di manutenzione prima di abilitare una pianificazione.",
+          "selectDatabase": "Seleziona un database per rivedere gli script generati.",
+          "applying": "Applicazione...",
+          "apply": "Usa sorgente database"
+        }
+      },
       "schedule": {
         "title": "Pianificazione",
         "description": "Scegli quando questo piano deve essere eseguito automaticamente. Disattiva per avviarlo solo su richiesta.",

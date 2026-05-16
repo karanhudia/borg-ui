@@ -26,6 +26,7 @@ from app.api import (
     browse,
     notifications,
     scripts,
+    source_discovery,
     packages,
     activity,
     scripts_library,
@@ -212,6 +213,11 @@ app.include_router(
 app.include_router(
     scripts_library.router, prefix="/api", tags=["Script Library"]
 )  # New script management
+app.include_router(
+    source_discovery.router,
+    prefix="/api/source-discovery",
+    tags=["Source Discovery"],
+)
 app.include_router(packages.router, prefix="/api/packages", tags=["Packages"])
 app.include_router(notifications.router)
 app.include_router(activity.router)

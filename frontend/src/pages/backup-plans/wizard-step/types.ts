@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next'
 import type { PruneSettings } from '../../../components/PruneSettingsInput'
 import type { Repository } from '../../../types'
 import type { BasicRepositoryState, ScriptOption, SSHConnection, WizardState } from '../types'
+import type { DatabaseDiscoverySelection } from '../sourceDiscovery'
 
 export interface BackupPlanWizardStepProps {
   activeStep: number
@@ -28,6 +29,7 @@ export interface BackupPlanWizardStepProps {
   createBasicRepository: () => void
   openSourceExplorer: () => void
   openExcludeExplorer: () => void
+  onApplyDatabaseDiscovery: (selection: DatabaseDiscoverySelection) => Promise<void> | void
   setBasicRepositoryOpen: Dispatch<SetStateAction<boolean>>
   setRepositoryWizardOpen: Dispatch<SetStateAction<boolean>>
   setShowBasicRepositoryPathExplorer: Dispatch<SetStateAction<boolean>>

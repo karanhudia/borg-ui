@@ -50,6 +50,7 @@ import type {
   SSHConnection,
   WizardState,
 } from './backup-plans/types'
+import type { DatabaseDiscoverySelection } from './backup-plans/sourceDiscovery'
 
 const stepDefinitions = [
   { key: 'source', labelKey: 'backupPlans.wizard.steps.sources', icon: <ListChecks size={14} /> },
@@ -479,6 +480,51 @@ export default function BackupPlans() {
     ]
   }
 
+  const createDiscoveryScript = async (
+    selection: DatabaseDiscoverySelection,
+    hook: 'pre' | 'post',
+    uniqueSuffix: number
+  ) => {
+    const script = hook === 'pre' ? selection.preBackupScript : selection.postBackupScript
+    const planName = wizardState.name.trim() || t('backupPlans.wizard.createTitle')
+    const hookLabel =
+      hook === 'pre'
+        ? t('backupPlans.wizard.sourceDiscovery.scriptName.pre', {
+            defaultValue: 'pre-backup',
+          })
+        : t('backupPlans.wizard.sourceDiscovery.scriptName.post', {
+            defaultValue: 'post-backup',
+          })
+    const response = await scriptsAPI.create({
+      name: `${planName} - ${selection.database.engine_label} ${hookLabel} ${uniqueSuffix}`,
+      description: script.description,
+      content: script.content,
+      timeout: script.timeout,
+      run_on: script.run_on,
+      category: 'custom',
+    })
+
+    return Number(response.data.id)
+  }
+
+  const applyDatabaseDiscovery = async (selection: DatabaseDiscoverySelection) => {
+    const uniqueSuffix = Date.now()
+    const preBackupScriptId = await createDiscoveryScript(selection, 'pre', uniqueSuffix)
+    const postBackupScriptId = await createDiscoveryScript(selection, 'post', uniqueSuffix)
+
+    setWizardState((prev) => ({
+      ...prev,
+      sourceType: 'local',
+      sourceSshConnectionId: '',
+      sourceDirectories: appendUniquePaths(prev.sourceDirectories, selection.sourceDirectories),
+      preBackupScriptId,
+      postBackupScriptId,
+      preBackupScriptParameters: {},
+      postBackupScriptParameters: {},
+    }))
+    await queryClient.invalidateQueries({ queryKey: ['scripts'] })
+  }
+
   const requireRemoteSourceConnection = () => {
     if (wizardState.sourceType !== 'remote' || selectedSourceConnection) return true
     toast.error(t('backupPlans.toasts.selectSourceConnection'))
@@ -614,6 +660,7 @@ export default function BackupPlans() {
       createBasicRepository={createBasicRepository}
       openSourceExplorer={openSourceExplorer}
       openExcludeExplorer={openExcludeExplorer}
+      onApplyDatabaseDiscovery={applyDatabaseDiscovery}
       setBasicRepositoryOpen={setBasicRepositoryOpen}
       setRepositoryWizardOpen={setRepositoryWizardOpen}
       setShowBasicRepositoryPathExplorer={setShowBasicRepositoryPathExplorer}
