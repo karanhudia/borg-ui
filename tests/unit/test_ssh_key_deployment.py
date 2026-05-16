@@ -342,3 +342,49 @@ class TestSSHKeyConnectionTest:
         assert "PreferredAuthentications=publickey" in captured_cmd
         assert "PasswordAuthentication=no" in captured_cmd
         assert "NumberOfPasswordPrompts=0" in captured_cmd
+
+    @pytest.mark.asyncio
+    async def test_connection_test_reports_dns_resolution_failures(self):
+        """DNS failures should tell users to fix the hostname, not SSH server logs."""
+        mock_key = MagicMock(spec=SSHKey)
+        mock_key.id = 1
+        mock_key.public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest test@test"
+
+        from app.config import settings
+
+        encryption_key = settings.secret_key.encode()[:32]
+        cipher = Fernet(base64.urlsafe_b64encode(encryption_key))
+        fake_private_key = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----\n"
+        mock_key.private_key = cipher.encrypt(fake_private_key.encode()).decode()
+
+        dns_failure = (
+            b"ssh: Could not resolve hostname u331525-sub1.your-storagebox.de: "
+            b"Name or service not known\n"
+        )
+
+        async def mock_subprocess(*cmd, **kwargs):
+            class MockProcess:
+                returncode = 255
+
+                async def communicate(self):
+                    return b"", dns_failure
+
+            return MockProcess()
+
+        with patch(
+            "app.api.ssh_keys.asyncio.create_subprocess_exec",
+            side_effect=mock_subprocess,
+        ):
+            result = await run_ssh_key_connection_test(
+                mock_key,
+                "u331525-sub1.your-storagebox.de",
+                "u331525-sub1",
+                23,
+            )
+
+        assert result["success"] is False
+        assert (
+            "Cannot resolve SSH hostname u331525-sub1.your-storagebox.de"
+            in result["error"]
+        )
+        assert "Verify the host name or DNS configuration" in result["error"]
