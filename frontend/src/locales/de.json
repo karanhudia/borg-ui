@@ -2580,6 +2580,7 @@
     "showing": "Zeige {{filtered}} von {{total}} Sicherungsaufgaben",
     "showingFiltered": "Zeige {{filtered}} von {{total}} Sicherungsaufgaben (gefiltert)",
     "allSchedules": "Alle Zeitpläne",
+    "allPlans": "Alle Backup-Pläne",
     "allRepositories": "Alle Repositories",
     "allStatus": "Alle Status",
     "completed": "Abgeschlossen",

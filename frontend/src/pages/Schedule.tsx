@@ -140,6 +140,10 @@ const Schedule: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string | 'all'>(() => {
     return localStorage.getItem('scheduleBackupHistoryFilterStatus') || 'all'
   })
+  const [filterPlan, setFilterPlan] = useState<number | 'all'>(() => {
+    const saved = localStorage.getItem('scheduleBackupHistoryFilterPlan')
+    return saved ? (saved === 'all' ? 'all' : parseInt(saved)) : 'all'
+  })
 
   useEffect(() => {
     if (location.pathname === '/schedule') {
@@ -184,6 +188,10 @@ const Schedule: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('scheduleBackupHistoryFilterStatus', filterStatus)
   }, [filterStatus])
+
+  useEffect(() => {
+    localStorage.setItem('scheduleBackupHistoryFilterPlan', String(filterPlan))
+  }, [filterPlan])
 
   // Get scheduled jobs
   const { data: jobsData, isLoading } = useQuery({
@@ -691,6 +699,7 @@ const Schedule: React.FC = () => {
           <BackupHistorySection
             backupJobs={allBackupJobs}
             scheduledJobs={jobs}
+            backupPlans={backupPlans}
             repositories={repositories}
             isLoading={loadingBackupJobs}
             canBreakLocks={canManageRepositoriesGlobally}
@@ -698,9 +707,11 @@ const Schedule: React.FC = () => {
             filterSchedule={filterSchedule}
             filterRepository={filterRepository}
             filterStatus={filterStatus}
+            filterPlan={filterPlan}
             onFilterScheduleChange={setFilterSchedule}
             onFilterRepositoryChange={setFilterRepository}
             onFilterStatusChange={setFilterStatus}
+            onFilterPlanChange={setFilterPlan}
           />
         </Box>
       )}

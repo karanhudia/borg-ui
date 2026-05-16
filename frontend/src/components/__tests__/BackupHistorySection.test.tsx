@@ -107,6 +107,7 @@ describe('BackupHistorySection', () => {
   const defaultProps = {
     backupJobs: mockBackupJobs,
     scheduledJobs: mockScheduledJobs,
+    backupPlans: [],
     repositories: mockRepositories,
     isLoading: false,
     canBreakLocks: true,
@@ -114,9 +115,11 @@ describe('BackupHistorySection', () => {
     filterSchedule: 'all' as const,
     filterRepository: 'all',
     filterStatus: 'all',
+    filterPlan: 'all' as const,
     onFilterScheduleChange: vi.fn(),
     onFilterRepositoryChange: vi.fn(),
     onFilterStatusChange: vi.fn(),
+    onFilterPlanChange: vi.fn(),
   }
 
   it('renders header and description', () => {
@@ -126,11 +129,12 @@ describe('BackupHistorySection', () => {
     expect(screen.getByText(/Showing 3 of 3 backup jobs/)).toBeInTheDocument()
   })
 
-  it('renders three filter dropdowns', () => {
+  it('renders four filter dropdowns', () => {
     render(<BackupHistorySection {...defaultProps} />)
 
-    // Three comboboxes should be present: schedule, repository, status
-    expect(screen.getAllByRole('combobox').length).toBeGreaterThanOrEqual(3)
+    // Four comboboxes should be present: plan, schedule, repository, status
+    expect(screen.getAllByRole('combobox').length).toBeGreaterThanOrEqual(4)
+    expect(screen.getByText('All Backup Plans')).toBeInTheDocument()
     expect(screen.getByText('All Schedules')).toBeInTheDocument()
     expect(screen.getByText('All Status')).toBeInTheDocument()
   })
@@ -222,8 +226,8 @@ describe('BackupHistorySection', () => {
       <BackupHistorySection {...defaultProps} onFilterRepositoryChange={onFilterRepositoryChange} />
     )
 
-    // Repository is the second combobox (schedule, repository, status order)
-    const repoCombobox = screen.getAllByRole('combobox')[1]
+    // Repository is the third combobox (plan, schedule, repository, status order)
+    const repoCombobox = screen.getAllByRole('combobox')[2]
     fireEvent.mouseDown(repoCombobox)
 
     const listbox = within(screen.getByRole('listbox'))
@@ -262,8 +266,8 @@ describe('BackupHistorySection', () => {
   it('renders all repository options in dropdown', () => {
     render(<BackupHistorySection {...defaultProps} />)
 
-    // Repository is the second combobox (schedule, repository, status order)
-    const repoCombobox = screen.getAllByRole('combobox')[1]
+    // Repository is the third combobox (plan, schedule, repository, status order)
+    const repoCombobox = screen.getAllByRole('combobox')[2]
     fireEvent.mouseDown(repoCombobox)
 
     const listbox = within(screen.getByRole('listbox'))

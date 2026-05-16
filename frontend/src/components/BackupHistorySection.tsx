@@ -35,7 +35,7 @@ interface ScheduledJob {
   last_compact: string | null
 }
 
-import { Repository } from '../types'
+import { BackupPlan, Repository } from '../types'
 
 interface BackupJob {
   id: string
@@ -65,6 +65,7 @@ interface BackupJob {
 interface BackupHistorySectionProps {
   backupJobs: BackupJob[]
   scheduledJobs: ScheduledJob[]
+  backupPlans: BackupPlan[]
   repositories: Repository[]
   isLoading: boolean
   canBreakLocks?: boolean
@@ -72,14 +73,17 @@ interface BackupHistorySectionProps {
   filterSchedule: number | 'all'
   filterRepository: string | 'all'
   filterStatus: string | 'all'
+  filterPlan: number | 'all'
   onFilterScheduleChange: (value: number | 'all') => void
   onFilterRepositoryChange: (value: string | 'all') => void
   onFilterStatusChange: (value: string | 'all') => void
+  onFilterPlanChange: (value: number | 'all') => void
 }
 
 const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
   backupJobs,
   scheduledJobs,
+  backupPlans,
   repositories,
   isLoading,
   canBreakLocks = false,
@@ -87,15 +91,18 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
   filterSchedule,
   filterRepository,
   filterStatus,
+  filterPlan,
   onFilterScheduleChange,
   onFilterRepositoryChange,
   onFilterStatusChange,
+  onFilterPlanChange,
 }) => {
   const { trackNavigation, EventAction } = useAnalytics()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
   const filteredBackupJobs = backupJobs.filter((job: BackupJob) => {
+    if (filterPlan !== 'all' && job.backup_plan_id !== filterPlan) return false
     if (filterSchedule !== 'all' && job.scheduled_job_id !== filterSchedule) return false
     if (filterRepository !== 'all' && job.repository !== filterRepository) return false
     if (filterStatus !== 'all') {
@@ -107,7 +114,10 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
   })
 
   const hasFilters =
-    filterSchedule !== 'all' || filterRepository !== 'all' || filterStatus !== 'all'
+    filterPlan !== 'all' ||
+    filterSchedule !== 'all' ||
+    filterRepository !== 'all' ||
+    filterStatus !== 'all'
 
   const { t } = useTranslation()
 
@@ -157,6 +167,7 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
             size="small"
             variant="text"
             onClick={() => {
+              onFilterPlanChange('all')
               onFilterScheduleChange('all')
               onFilterRepositoryChange('all')
               onFilterStatusChange('all')
@@ -174,6 +185,35 @@ const BackupHistorySection: React.FC<BackupHistorySectionProps> = ({
 
       {/* Flat filter row */}
       <Box sx={{ mb: 2.5, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
+        <Select
+          size="small"
+          value={filterPlan}
+          displayEmpty
+          onChange={(e) => {
+            const value = e.target.value as number | 'all'
+            onFilterPlanChange(value)
+            trackNavigation(EventAction.FILTER, {
+              section: 'backup_history',
+              filter_kind: 'plan',
+              filter_value: value,
+            })
+          }}
+          sx={{
+            flex: 1,
+            minWidth: { xs: '100%', sm: 160 },
+            ...filterSelectSx,
+          }}
+        >
+          <MenuItem value="all">
+            {t('backupHistory.allPlans', { defaultValue: 'All Backup Plans' })}
+          </MenuItem>
+          {backupPlans.map((plan) => (
+            <MenuItem key={plan.id} value={plan.id}>
+              {plan.name}
+            </MenuItem>
+          ))}
+        </Select>
+
         <Select
           size="small"
           value={filterSchedule}

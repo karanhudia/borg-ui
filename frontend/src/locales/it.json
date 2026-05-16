@@ -2580,6 +2580,7 @@
     "showing": "Mostrando {{filtered}} di {{total}} job di backup",
     "showingFiltered": "Mostrando {{filtered}} di {{total}} job di backup (filtrati)",
     "allSchedules": "Tutte le Pianificazioni",
+    "allPlans": "Tutti i Piani di Backup",
     "allRepositories": "Tutti i Repository",
     "allStatus": "Tutti gli Stati",
     "completed": "Completato",

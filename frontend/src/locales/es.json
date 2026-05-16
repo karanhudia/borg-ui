@@ -2580,6 +2580,7 @@
     "showing": "Mostrando {{filtered}} de {{total}} trabajos de copia de seguridad",
     "showingFiltered": "Mostrando {{filtered}} de {{total}} trabajos de copia de seguridad (filtrado)",
     "allSchedules": "Todas las programaciones",
+    "allPlans": "Todos los planes de copia",
     "allRepositories": "Todos los repositorios",
     "allStatus": "Todos los estados",
     "completed": "Completado",
