@@ -731,6 +731,10 @@ export const scriptsAPI = {
   delete: (scriptId: number) => api.delete(`/scripts/${scriptId}`),
 }
 
+export const sourceDiscoveryAPI = {
+  scanDatabases: () => api.get('/source-discovery/databases'),
+}
+
 export const mountsAPI = {
   // Mount a Borg repository or archive
   mountBorgArchive: (data: {

@@ -675,6 +675,44 @@
         "schedule": "Pianificazione",
         "review": "Revisione"
       },
+      "sourceSelection": {
+        "summaryTitle": "Backup source",
+        "summaryEmpty": "Choose files, folders, databases, or other source types.",
+        "summaryConfigured": "{{count}} source path selected",
+        "chooseSource": "Choose source",
+        "changeSource": "Change source",
+        "dialogTitle": "Choose backup source",
+        "comingSoon": "Coming soon",
+        "apply": "Apply source",
+        "scanning": "Scanning local databases...",
+        "scanFailed": "Database scan failed. Try again or use manual paths.",
+        "detected": "Detected",
+        "template": "Template",
+        "scriptsWillBeCreated": "This database source can create plan scripts that stop the service before backup and start it afterwards. Review and edit them before applying.",
+        "scriptModeCreate": "Create new scripts",
+        "scriptModeReuse": "Use existing scripts",
+        "scriptModeSkip": "Skip script assignment",
+        "preScriptName": "Pre-backup script name",
+        "postScriptName": "Post-backup script name",
+        "preScriptContent": "Pre-backup script content",
+        "postScriptContent": "Post-backup script content",
+        "reusePreScript": "Existing pre-backup script",
+        "reusePostScript": "Existing post-backup script",
+        "generatedScriptDescription": "Generated source-discovery script for {{database}}.",
+        "scriptCreateFailed": "Failed to create generated scripts. Review the names and try again.",
+        "sourceTypes": {
+          "paths": "Files and folders",
+          "database": "Database",
+          "manual": "Manual paths",
+          "container": "Docker containers"
+        },
+        "sourceTypeDescriptions": {
+          "paths": "Choose files or folders from the Borg UI server or a remote client.",
+          "database": "Scan supported databases and prepare backup scripts.",
+          "manual": "Enter paths directly using the existing source controls.",
+          "container": "Container scanning will use this chooser next."
+        }
+      },
       "fields": {
         "planName": "Nome piano",
         "description": "Descrizione",

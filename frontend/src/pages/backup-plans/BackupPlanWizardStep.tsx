@@ -41,6 +41,8 @@ export function BackupPlanWizardStep({
       <SourceStep
         wizardState={wizardState}
         sshConnections={sshConnections}
+        scripts={scripts}
+        loadingScripts={loadingScripts}
         updateState={updateState}
         openSourceExplorer={openSourceExplorer}
         openExcludeExplorer={openExcludeExplorer}
