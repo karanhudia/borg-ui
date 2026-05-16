@@ -5,8 +5,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -24,7 +22,7 @@ import {
   CircularProgress,
   Tooltip,
 } from '@mui/material'
-import { Eye, FolderOpen, LifeBuoy, ShieldCheck, TestTubeDiagonal, Vault } from 'lucide-react'
+import { Eye, FolderOpen, LifeBuoy } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
@@ -190,8 +188,6 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
     enabled: repositories.length > 0 && !loadingRepositories,
   })
 
-  const restoreSchedules = useMemo(() => scheduledChecks || [], [scheduledChecks])
-
   const {
     data: archiveListData,
     isFetching: loadingArchiveList,
@@ -244,35 +240,6 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
   })
 
   const restoreJobs = restoreJobsData || []
-
-  const statCards = useMemo(
-    () => [
-      {
-        label: t('integrity.stats.restoreSchedules'),
-        value: restoreSchedules.length,
-        icon: <LifeBuoy size={18} />,
-      },
-      {
-        label: t('integrity.stats.canaryProtected'),
-        value: restoreSchedules.filter((schedule) => schedule.restore_check_mode === 'canary')
-          .length,
-        icon: <ShieldCheck size={18} />,
-      },
-      {
-        label: t('integrity.stats.probeProtected'),
-        value: restoreSchedules.filter((schedule) => schedule.restore_check_mode === 'probe_paths')
-          .length,
-        icon: <TestTubeDiagonal size={18} />,
-      },
-      {
-        label: t('integrity.stats.fullDrills'),
-        value: restoreSchedules.filter((schedule) => schedule.restore_check_mode === 'full_archive')
-          .length,
-        icon: <Vault size={18} />,
-      },
-    ],
-    [restoreSchedules, t]
-  )
 
   const historyColumns: Column<RestoreCheckJobRow>[] = [
     {
@@ -598,32 +565,6 @@ const ScheduledRestoreChecksSection = forwardRef<ScheduledRestoreChecksSectionRe
         <Alert severity="info">{t('scheduledRestoreChecks.needRepository')}</Alert>
       ) : (
         <Stack spacing={3}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(4, minmax(0, 1fr))' },
-              gap: 2,
-            }}
-          >
-            {statCards.map((card) => (
-              <Card key={card.label} variant="outlined" sx={{ borderRadius: 2 }}>
-                <CardContent>
-                  <Stack direction="row" spacing={1.25} alignItems="center">
-                    <Box sx={{ color: 'success.main' }}>{card.icon}</Box>
-                    <Box>
-                      <Typography variant="h5" fontWeight={700}>
-                        {card.value}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {card.label}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-            ))}
-          </Box>
-
           {isLoading || loadingRepositories ? (
             <Stack spacing={2}>
               {[0, 1, 2].map((i) => (

@@ -177,6 +177,39 @@ describe('ScheduledRestoreChecksSection', () => {
     })
   })
 
+  it('omits restore-check summary cards while preserving scheduled checks', async () => {
+    vi.mocked(repositoriesAPI.getRestoreCheckSchedule).mockResolvedValue({
+      data: {
+        repository_id: 1,
+        repository_name: 'Repo One',
+        repository_path: '/repo-one',
+        restore_check_cron_expression: '0 4 * * 0',
+        restore_check_timezone: 'UTC',
+        restore_check_paths: ['/etc/hostname'],
+        restore_check_full_archive: false,
+        restore_check_canary_enabled: false,
+        restore_check_mode: 'probe_paths',
+        last_restore_check: null,
+        last_scheduled_restore_check: null,
+        next_scheduled_restore_check: '2026-01-04T04:00:00Z',
+        notify_on_restore_check_success: false,
+        notify_on_restore_check_failure: true,
+        enabled: true,
+        restore_check_schedule_enabled: true,
+      },
+    } as AxiosResponse)
+
+    renderWithProviders(<ScheduledRestoreChecksSection />)
+
+    expect(await screen.findByText('Repo One')).toBeInTheDocument()
+    expect(screen.getByText('/repo-one')).toBeInTheDocument()
+
+    expect(screen.queryByText('Restore schedules')).not.toBeInTheDocument()
+    expect(screen.queryByText('Canary-protected')).not.toBeInTheDocument()
+    expect(screen.queryByText('Probe-path schedules')).not.toBeInTheDocument()
+    expect(screen.queryByText('Full-archive drills')).not.toBeInTheDocument()
+  })
+
   it('imports selected files and folders from the latest archive into probe paths', async () => {
     const user = userEvent.setup()
 
