@@ -33,6 +33,7 @@ from app.api import (
     metrics,
     tokens,
     permissions,
+    source_discovery,
 )
 from app.api.v2 import router as v2_router
 from app.routers import config
@@ -220,6 +221,11 @@ app.include_router(mounts.router)  # Mount management API
 
 app.include_router(tokens.router, prefix="/api")
 app.include_router(permissions.router, prefix="/api")
+app.include_router(
+    source_discovery.router,
+    prefix="/api/source-discovery",
+    tags=["Source Discovery"],
+)
 
 app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 

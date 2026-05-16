@@ -23,6 +23,7 @@ export function BackupPlanWizardStep({
   canUseBorg2,
   repositoryCreatePending,
   updateState,
+  onCreateScript,
   updateBasicRepositoryState,
   handleRepositoryIdsChange,
   handlePruneSettingsChange,
@@ -41,7 +42,10 @@ export function BackupPlanWizardStep({
       <SourceStep
         wizardState={wizardState}
         sshConnections={sshConnections}
+        scripts={scripts}
+        loadingScripts={loadingScripts}
         updateState={updateState}
+        onCreateScript={onCreateScript}
         openSourceExplorer={openSourceExplorer}
         openExcludeExplorer={openExcludeExplorer}
         t={t}

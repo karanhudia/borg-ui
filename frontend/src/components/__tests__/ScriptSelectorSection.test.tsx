@@ -251,6 +251,22 @@ describe('ScriptSelectorSection', () => {
     expect(screen.getByText('Wake Server')).toBeInTheDocument()
   })
 
+  it('preserves the full selected script name for long labels', () => {
+    const longName =
+      'Database backup script for production PostgreSQL primary with stop dump cleanup workflow'
+
+    render(
+      <ScriptSelectorSection
+        {...defaultProps}
+        preBackupScriptId={4}
+        scripts={[...mockScripts, { id: 4, name: longName, parameters: null }]}
+      />
+    )
+
+    const [preScriptSelect] = screen.getAllByRole('combobox')
+    expect(preScriptSelect).toHaveAttribute('title', longName)
+  })
+
   it('displays selected post-backup script', () => {
     render(<ScriptSelectorSection {...defaultProps} postBackupScriptId={2} />)
 
