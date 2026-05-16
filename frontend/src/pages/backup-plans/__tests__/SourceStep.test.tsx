@@ -188,10 +188,12 @@ describe('SourceStep', () => {
     const postgresqlTemplate = await screen.findByText(/postgresql database/i)
     fireEvent.click(postgresqlTemplate.closest('button') || postgresqlTemplate)
 
-    expect((screen.getByLabelText(/pre-backup script draft/i) as HTMLTextAreaElement).value)
-      .toContain('pg_dump')
-    expect((screen.getByLabelText(/post-backup script draft/i) as HTMLTextAreaElement).value)
-      .toContain('rm -rf')
+    expect(
+      (screen.getByLabelText(/pre-backup script draft/i) as HTMLTextAreaElement).value
+    ).toContain('pg_dump')
+    expect(
+      (screen.getByLabelText(/post-backup script draft/i) as HTMLTextAreaElement).value
+    ).toContain('rm -rf')
 
     fireEvent.click(screen.getByRole('button', { name: /use database source/i }))
 

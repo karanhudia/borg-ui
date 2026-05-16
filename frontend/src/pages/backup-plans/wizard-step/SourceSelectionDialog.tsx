@@ -154,9 +154,7 @@ export function SourceSelectionDialog({
     }
   }, [discovery, open])
 
-  const sourceTypes = discovery?.source_types?.length
-    ? discovery.source_types
-    : fallbackSourceTypes
+  const sourceTypes = discovery?.source_types?.length ? discovery.source_types : fallbackSourceTypes
   const databaseItems = useMemo(() => {
     const detections = discovery?.detections || []
     const templates = discovery?.templates || []
@@ -257,10 +255,7 @@ export function SourceSelectionDialog({
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.25 }}>
                     <Typography variant="subtitle2">{sourceType.label}</Typography>
                     {sourceType.disabled && (
-                      <Chip
-                        size="small"
-                        label={t('backupPlans.sourceChooser.containerPlanned')}
-                      />
+                      <Chip size="small" label={t('backupPlans.sourceChooser.containerPlanned')} />
                     )}
                   </Stack>
                   <Typography variant="body2" color="text.secondary">

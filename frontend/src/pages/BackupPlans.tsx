@@ -655,7 +655,8 @@ export default function BackupPlans() {
     />
   )
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending || createScriptMutation.isPending
+  const isSubmitting =
+    createMutation.isPending || updateMutation.isPending || createScriptMutation.isPending
   const formatStatusLabel = (status?: string) =>
     status
       ? t(`backupPlans.statuses.${status}`, { defaultValue: formatRunStatus(status) })

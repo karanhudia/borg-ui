@@ -88,7 +88,9 @@ export function SourceStep({
               )}
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="subtitle2">{t('backupPlans.sourceChooser.summaryTitle')}</Typography>
+              <Typography variant="subtitle2">
+                {t('backupPlans.sourceChooser.summaryTitle')}
+              </Typography>
               <Typography variant="body2" color="text.secondary">
                 {hasSources
                   ? wizardState.sourceDirectories.join(', ')
