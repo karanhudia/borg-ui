@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-04-08T00:00:00Z",
+  "generated_at": "2026-05-16T00:00:00Z",
   "features": [
     {
       "id": "unlimited_repos",
@@ -238,7 +238,7 @@
         "de": "Sichern Sie mit einer einzigen Konfiguration auf mehrere Ziele.",
         "it": "Esegui backup verso più destinazioni da un'unica configurazione."
       },
-      "availability": "coming_soon"
+      "availability": "included"
     },
     {
       "id": "multi_source_policies",
