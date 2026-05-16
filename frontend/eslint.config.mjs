@@ -6,6 +6,15 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 
 export default [
+  {
+    ignores: [
+      'build/**',
+      'dist/**',
+      'node_modules/**',
+      '.playwright-host-libs/**',
+      'storybook-static/**',
+    ],
+  },
   js.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
@@ -41,12 +50,24 @@ export default [
     },
   },
   {
-    ignores: ['dist', 'build', 'node_modules'],
-  },
-  {
     files: ['**/test/**/*', '**/*.test.tsx', '**/*.spec.tsx', '**/test-utils.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    files: ['.storybook/**/*.{ts,tsx}', '**/*.stories.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
     },
   },
 ];
