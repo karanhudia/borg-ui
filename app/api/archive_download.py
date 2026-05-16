@@ -29,8 +29,13 @@ async def extract_file_download(
             )
 
         temp_dir_realpath = os.path.realpath(temp_dir)
-        extracted_file_path = os.path.realpath(os.path.join(temp_dir_realpath, file_path.lstrip("/")))
-        if extracted_file_path != temp_dir_realpath and not extracted_file_path.startswith(temp_dir_realpath + os.sep):
+        extracted_file_path = os.path.realpath(
+            os.path.join(temp_dir_realpath, file_path.lstrip("/"))
+        )
+        if (
+            extracted_file_path != temp_dir_realpath
+            and not extracted_file_path.startswith(temp_dir_realpath + os.sep)
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.archives.fileNotFoundAfterExtraction"},
