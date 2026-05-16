@@ -15,6 +15,7 @@ Integration tests (test_api_archives_integration.py) handle:
 """
 
 import asyncio
+import os
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -365,7 +366,8 @@ class TestDownloadFileEndpoint:
         test_db.commit()
 
         fake_key_path = "/tmp/test-ssh.key"
-        extracted_path = "/tmp/archive-download/extracted.txt"
+        temp_dir = "/tmp/archive-download"
+        extracted_path = os.path.realpath(os.path.join(temp_dir, "extracted.txt"))
         with (
             patch(
                 "app.api.archives.resolve_repo_ssh_key_file", return_value=fake_key_path
@@ -377,7 +379,7 @@ class TestDownloadFileEndpoint:
             patch("app.api.archives.os.unlink") as mock_unlink,
             patch(
                 "app.api.archives.tempfile.mkdtemp",
-                return_value="/tmp/archive-download",
+                return_value=temp_dir,
             ),
             patch(
                 "app.api.archives.FileResponse",
@@ -414,7 +416,8 @@ class TestDownloadFileEndpoint:
         test_db.add(repo)
         test_db.commit()
 
-        extracted_path = "/tmp/archive-download/extracted.txt"
+        temp_dir = "/tmp/archive-download"
+        extracted_path = os.path.realpath(os.path.join(temp_dir, "extracted.txt"))
         with (
             patch("app.api.archives.resolve_repo_ssh_key_file", return_value=None),
             patch(
@@ -423,7 +426,7 @@ class TestDownloadFileEndpoint:
             ),
             patch(
                 "app.api.archives.tempfile.mkdtemp",
-                return_value="/tmp/archive-download",
+                return_value=temp_dir,
             ),
             patch(
                 "app.api.archives.FileResponse",
