@@ -101,13 +101,48 @@ class TestV2RepositoryRoutes:
         self, test_client: TestClient, admin_headers, test_db
     ):
         _enable_borg_v2(test_db)
+        source_a = SSHConnection(
+            host="server-a.example", username="backup-a", port=22, status="connected"
+        )
+        source_b = SSHConnection(
+            host="server-b.example",
+            username="backup-b",
+            port=2222,
+            status="connected",
+        )
+        test_db.add_all([source_a, source_b])
+        test_db.commit()
+        test_db.refresh(source_a)
+        test_db.refresh(source_b)
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": ["/data/source-a"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_a.id,
+                "paths": ["/remote/source-b"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_b.id,
+                "paths": ["/remote/source-c"],
+            },
+        ]
         payload = {
             "name": "Borg 2 Repo",
             "path": "/tmp/v2-create-repo",
             "encryption": "repokey-aes-ocb",
             "compression": "lz4",
-            "source_directories": ["/data/source-a", "/data/source-b"],
-            "source_connection_id": 44,
+            "source_directories": [
+                "/data/source-a",
+                "/remote/source-b",
+                "/remote/source-c",
+            ],
+            "source_connection_id": None,
+            "source_locations": source_locations,
         }
 
         with patch(
@@ -139,7 +174,8 @@ class TestV2RepositoryRoutes:
         assert repo is not None
         assert repo.borg_version == 2
         assert json.loads(repo.source_directories) == payload["source_directories"]
-        assert repo.source_ssh_connection_id == 44
+        assert repo.source_ssh_connection_id is None
+        assert json.loads(repo.source_locations) == source_locations
         mock_rcreate.assert_awaited_once()
 
     def test_create_repository_rejects_invalid_encryption(

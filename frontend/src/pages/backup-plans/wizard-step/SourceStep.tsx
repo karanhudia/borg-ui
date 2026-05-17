@@ -4,7 +4,9 @@ import { Database, FolderOpen } from 'lucide-react'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
 import { SourceSelectionDialog } from './SourceSelectionDialog'
+import type { SourceLocation } from '../../../types'
 import type { BackupPlanWizardStepProps } from './types'
+import type { SSHConnection, WizardState } from '../types'
 
 const DATABASE_DUMP_ROOT = '/var/tmp/borg-ui/database-dumps'
 
@@ -15,7 +17,6 @@ type SourceStepProps = Pick<
   | 'scripts'
   | 'loadingScripts'
   | 'updateState'
-  | 'openSourceExplorer'
   | 'openExcludeExplorer'
   | 'onCreateScript'
   | 't'
@@ -27,17 +28,21 @@ export function SourceStep({
   scripts,
   loadingScripts,
   updateState,
-  openSourceExplorer,
   openExcludeExplorer,
   onCreateScript,
   t,
 }: SourceStepProps) {
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
-  const hasSources = wizardState.sourceDirectories.length > 0
-  const isDatabaseSource = wizardState.sourceDirectories.some(
-    (sourceDirectory) =>
-      sourceDirectory === DATABASE_DUMP_ROOT || sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
-  )
+  const sourceLocations = getWizardSourceLocations(wizardState)
+  const sourcePaths = sourceLocations.flatMap((location) => location.paths)
+  const hasSources = sourcePaths.length > 0
+  const isDatabaseSource =
+    sourcePaths.length > 0 &&
+    sourcePaths.every(
+      (sourceDirectory) =>
+        sourceDirectory === DATABASE_DUMP_ROOT ||
+        sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
+    )
   const sourceKindLabel = isDatabaseSource
     ? t('backupPlans.sourceChooser.databaseTitle')
     : t('backupPlans.sourceChooser.filesTitle')
@@ -94,7 +99,7 @@ export function SourceStep({
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {hasSources
-                  ? wizardState.sourceDirectories.join(', ')
+                  ? t('backupPlans.sourceChooser.selectedSourceGroups')
                   : t('backupPlans.sourceChooser.summaryEmpty')}
               </Typography>
               {hasSources && (
@@ -103,10 +108,23 @@ export function SourceStep({
                   <Chip
                     size="small"
                     variant="outlined"
-                    label={t('backupPlans.sourceChooser.pathCount', {
-                      count: wizardState.sourceDirectories.length,
-                    })}
+                    label={t('backupPlans.sourceChooser.pathCount', { count: sourcePaths.length })}
                   />
+                  {sourceLocations.map((location) => (
+                    <Chip
+                      key={sourceLocationKey(location)}
+                      size="small"
+                      variant="outlined"
+                      label={sourceLocationLabel(location, sshConnections, t)}
+                    />
+                  ))}
+                </Stack>
+              )}
+              {hasSources && (
+                <Stack direction="row" spacing={0.75} sx={{ mt: 1 }} useFlexGap flexWrap="wrap">
+                  {sourcePaths.map((path) => (
+                    <Chip key={path} size="small" label={path} sx={{ maxWidth: '100%' }} />
+                  ))}
                 </Stack>
               )}
             </Box>
@@ -128,11 +146,49 @@ export function SourceStep({
         scripts={scripts}
         loadingScripts={loadingScripts}
         updateState={updateState}
-        openSourceExplorer={openSourceExplorer}
         onCreateScript={onCreateScript}
         onClose={() => setSourceDialogOpen(false)}
         t={t}
       />
     </Stack>
   )
+}
+
+function sourceLocationKey(location: SourceLocation) {
+  return `${location.source_type}:${location.source_ssh_connection_id || 'local'}`
+}
+
+function getWizardSourceLocations(wizardState: WizardState): SourceLocation[] {
+  if (wizardState.sourceLocations?.length) return wizardState.sourceLocations
+  if (wizardState.sourceDirectories.length === 0) return []
+  if (wizardState.sourceType === 'remote' && wizardState.sourceSshConnectionId) {
+    return [
+      {
+        source_type: 'remote',
+        source_ssh_connection_id: Number(wizardState.sourceSshConnectionId),
+        paths: wizardState.sourceDirectories,
+      },
+    ]
+  }
+  return [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      paths: wizardState.sourceDirectories,
+    },
+  ]
+}
+
+function sourceLocationLabel(
+  location: SourceLocation,
+  sshConnections: SSHConnection[],
+  t: SourceStepProps['t']
+) {
+  if (location.source_type === 'local') return t('backupPlans.sourceChooser.localSource')
+  const connection = sshConnections.find((item) => item.id === location.source_ssh_connection_id)
+  return connection
+    ? `${connection.username}@${connection.host}`
+    : t('backupPlans.wizard.review.connectionFallback', {
+        id: location.source_ssh_connection_id,
+      })
 }

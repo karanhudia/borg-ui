@@ -37,6 +37,11 @@ from app.utils.schedule_time import (
     calculate_next_cron_run,
     normalize_schedule_timezone,
 )
+from app.utils.source_locations import (
+    decode_source_locations,
+    legacy_source_fields,
+    normalize_source_locations,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["backup-plans"])
@@ -60,6 +65,7 @@ class BackupPlanPayload(BaseModel):
     source_type: str = "local"
     source_ssh_connection_id: Optional[int] = None
     source_directories: list[str]
+    source_locations: Optional[list[dict[str, Any]]] = None
     exclude_patterns: Optional[list[str]] = None
     archive_name_template: str = "{plan_name}-{now}"
     compression: str = "lz4"
@@ -225,6 +231,12 @@ def _payload_from_repository(
         source_type="remote" if repository.source_ssh_connection_id else "local",
         source_ssh_connection_id=repository.source_ssh_connection_id,
         source_directories=_decode_json_list(repository.source_directories),
+        source_locations=decode_source_locations(
+            repository.source_locations,
+            source_type="remote" if repository.source_ssh_connection_id else "local",
+            source_ssh_connection_id=repository.source_ssh_connection_id,
+            source_directories=_decode_json_list(repository.source_directories),
+        ),
         exclude_patterns=_decode_json_list(repository.exclude_patterns),
         archive_name_template=archive_name_template,
         compression=repository.compression or "lz4",
@@ -295,6 +307,13 @@ def _serialize_repository_link(link: BackupPlanRepository) -> dict[str, Any]:
 
 def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]:
     enabled_links = [link for link in plan.repositories if link.enabled]
+    source_directories = _decode_json_list(plan.source_directories)
+    source_locations = decode_source_locations(
+        plan.source_locations,
+        source_type=plan.source_type,
+        source_ssh_connection_id=plan.source_ssh_connection_id,
+        source_directories=source_directories,
+    )
     payload: dict[str, Any] = {
         "id": plan.id,
         "name": plan.name,
@@ -302,7 +321,8 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
         "enabled": bool(plan.enabled),
         "source_type": plan.source_type,
         "source_ssh_connection_id": plan.source_ssh_connection_id,
-        "source_directories": _decode_json_list(plan.source_directories),
+        "source_directories": source_directories,
+        "source_locations": source_locations,
         "exclude_patterns": _decode_json_list(plan.exclude_patterns),
         "archive_name_template": plan.archive_name_template,
         "compression": plan.compression,
@@ -526,16 +546,31 @@ def _validate_payload(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.nameRequired"},
         )
-    if payload.source_type not in {"local", "remote"}:
+    if payload.source_type not in {"local", "remote", "mixed"}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.invalidSourceType"},
         )
-    if payload.source_type == "remote" and not payload.source_ssh_connection_id:
+    try:
+        source_locations = normalize_source_locations(
+            payload.source_locations,
+            source_type=payload.source_type,
+            source_ssh_connection_id=payload.source_ssh_connection_id,
+            source_directories=payload.source_directories,
+        )
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.sourceConnectionRequired"},
-        )
+        ) from exc
+
+    payload.source_locations = source_locations
+    (
+        payload.source_type,
+        payload.source_ssh_connection_id,
+        payload.source_directories,
+    ) = legacy_source_fields(source_locations)
+
     if not payload.source_directories:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -682,6 +717,7 @@ def _clear_legacy_source_settings(
         if repository.id not in clear_ids:
             continue
         repository.source_directories = None
+        repository.source_locations = None
         repository.exclude_patterns = None
         repository.source_ssh_connection_id = None
         repository.updated_at = datetime.utcnow()
@@ -694,6 +730,7 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
     plan.source_type = payload.source_type
     plan.source_ssh_connection_id = payload.source_ssh_connection_id
     plan.source_directories = json.dumps(payload.source_directories)
+    plan.source_locations = json.dumps(payload.source_locations or [])
     plan.exclude_patterns = json.dumps(payload.exclude_patterns or [])
     plan.archive_name_template = (
         payload.archive_name_template.strip() or "{plan_name}-{now}"
@@ -934,6 +971,7 @@ async def create_backup_plan_from_repository(
     source_settings_moved = False
     if payload.move_source_settings:
         repository.source_directories = None
+        repository.source_locations = None
         repository.exclude_patterns = None
         repository.source_ssh_connection_id = None
         repository.updated_at = datetime.utcnow()
