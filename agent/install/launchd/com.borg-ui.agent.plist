@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.borg-ui.agent</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/borg-ui-agent/.venv/bin/borg-ui-agent</string>
+    <string>--config</string>
+    <string>/Library/Application Support/borg-ui-agent/config.toml</string>
+    <string>run</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/var/log/borg-ui-agent.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/var/log/borg-ui-agent.err</string>
+</dict>
+</plist>

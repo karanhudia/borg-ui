@@ -16,6 +16,8 @@ import tempfile
 
 from app.database.database import get_db
 from app.database.models import (
+    AgentJob,
+    AgentJobLog,
     BackupJob,
     RestoreJob,
     CheckJob,
@@ -35,6 +37,25 @@ from app.services.backup_service import backup_service
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/activity", tags=["activity"])
+
+
+def _get_agent_job_for_backup(db: Session, backup_job_id: int) -> Optional[AgentJob]:
+    return (
+        db.query(AgentJob)
+        .filter(AgentJob.backup_job_id == backup_job_id)
+        .order_by(AgentJob.id.desc())
+        .first()
+    )
+
+
+def _get_agent_log_lines(db: Session, agent_job_id: int) -> list[str]:
+    logs = (
+        db.query(AgentJobLog)
+        .filter(AgentJobLog.agent_job_id == agent_job_id)
+        .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+        .all()
+    )
+    return [log.message for log in logs]
 
 
 class ActivityItem(BaseModel):
@@ -428,6 +449,24 @@ async def get_job_logs(
             },
         )
 
+    if job_type == "backup" and getattr(job, "execution_mode", None) == "agent":
+        agent_job = _get_agent_job_for_backup(db, job.id)
+        if not agent_job:
+            return {"lines": [], "total_lines": 0, "has_more": False}
+
+        lines = _get_agent_log_lines(db, agent_job.id)
+        total_lines = len(lines)
+        end_offset = min(offset + limit, total_lines)
+        chunk = lines[offset:end_offset]
+        return {
+            "lines": [
+                {"line_number": offset + i + 1, "content": line}
+                for i, line in enumerate(chunk)
+            ],
+            "total_lines": total_lines,
+            "has_more": end_offset < total_lines,
+        }
+
     # For completed/failed jobs, prefer log_file_path (full borg output) over logs (hooks only)
     if job.status in ["completed", "failed", "completed_with_warnings"]:
         # First try reading from log file (contains all borg output)
@@ -712,6 +751,26 @@ async def download_job_logs(
             if os.path.exists(temp_file.name):
                 os.unlink(temp_file.name)
             raise e
+
+    if job_type == "backup" and getattr(job, "execution_mode", None) == "agent":
+        agent_job = _get_agent_job_for_backup(db, job.id)
+        if agent_job:
+            temp_file = tempfile.NamedTemporaryFile(
+                mode="w", delete=False, suffix=".txt"
+            )
+            try:
+                temp_file.write("\n".join(_get_agent_log_lines(db, agent_job.id)))
+                temp_file.flush()
+                temp_file.close()
+                return FileResponse(
+                    path=temp_file.name,
+                    filename=f"{job_type}_job_{job_id}_logs.txt",
+                    media_type="text/plain",
+                )
+            except Exception as e:
+                if os.path.exists(temp_file.name):
+                    os.unlink(temp_file.name)
+                raise e
 
     # No logs available
     raise HTTPException(

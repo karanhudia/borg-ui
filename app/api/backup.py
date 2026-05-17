@@ -9,7 +9,16 @@ from typing import Optional
 from datetime import datetime
 
 from app.database.database import get_db
-from app.database.models import User, BackupJob, Repository, PruneJob, CompactJob
+from app.database.models import (
+    AgentJob,
+    AgentJobLog,
+    AgentMachine,
+    User,
+    BackupJob,
+    Repository,
+    PruneJob,
+    CompactJob,
+)
 from app.config import settings
 from app.core.security import (
     get_current_user,
@@ -69,6 +78,174 @@ def _get_running_maintenance_job(
         )
         .order_by(job_model.id.desc())
         .first()
+    )
+
+
+def _decode_json_list(value) -> list:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return value
+    try:
+        decoded = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return decoded if isinstance(decoded, list) else []
+
+
+def _build_agent_backup_payload(repository: Repository, archive_name: str) -> dict:
+    repository_payload = {
+        "id": repository.id,
+        "path": repository.path,
+        "borg_version": repository.borg_version or 1,
+    }
+    if repository.remote_path:
+        repository_payload["remote_path"] = repository.remote_path
+
+    secrets = {}
+    if repository.passphrase:
+        secrets["BORG_PASSPHRASE"] = {"value": repository.passphrase}
+
+    return {
+        "schema_version": 1,
+        "job_kind": "backup.create",
+        "repository": repository_payload,
+        "backup": {
+            "archive_name": archive_name,
+            "source_paths": _decode_json_list(repository.source_directories),
+            "compression": repository.compression or "lz4",
+            "exclude_patterns": _decode_json_list(repository.exclude_patterns),
+            "custom_flags": repository.custom_flags or "",
+        },
+        "secrets": secrets,
+    }
+
+
+def _validate_agent_backup_repository(
+    db: Session, repository: Repository
+) -> AgentMachine:
+    if repository.mode == "observe":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.repo.cannotBackupObserveRepository"},
+        )
+    if not repository.agent_machine_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.agents.agentRequired"},
+        )
+
+    agent = (
+        db.query(AgentMachine)
+        .filter(AgentMachine.id == repository.agent_machine_id)
+        .first()
+    )
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+    if agent.status in ("disabled", "revoked"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"key": "backend.errors.agents.agentNotQueueable"},
+        )
+
+    source_paths = _decode_json_list(repository.source_directories)
+    if not source_paths:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
+        )
+    return agent
+
+
+def _queue_agent_backup_job(
+    db: Session, backup_job: BackupJob, repository: Repository
+) -> AgentJob:
+    agent = _validate_agent_backup_repository(db, repository)
+
+    archive_name = f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+    backup_job.execution_mode = "agent"
+    backup_job.archive_name = archive_name
+
+    now = datetime.utcnow()
+    agent_job = AgentJob(
+        agent_machine_id=agent.id,
+        backup_job_id=backup_job.id,
+        job_type="backup",
+        status="queued",
+        payload=_build_agent_backup_payload(repository, archive_name),
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(agent_job)
+    db.commit()
+    db.refresh(agent_job)
+
+    logger.info(
+        "Agent backup job queued from backup API",
+        backup_job_id=backup_job.id,
+        agent_job_id=agent_job.id,
+        agent_id=agent.agent_id,
+        repository_id=repository.id,
+    )
+    return agent_job
+
+
+def _get_agent_job_for_backup(db: Session, backup_job_id: int) -> Optional[AgentJob]:
+    return (
+        db.query(AgentJob)
+        .filter(AgentJob.backup_job_id == backup_job_id)
+        .order_by(AgentJob.id.desc())
+        .first()
+    )
+
+
+def _agent_job_logs_response(db: Session, backup_job: BackupJob, offset: int) -> dict:
+    agent_job = _get_agent_job_for_backup(db, backup_job.id)
+    if not agent_job:
+        return {
+            "job_id": backup_job.id,
+            "status": backup_job.status,
+            "lines": [],
+            "total_lines": 0,
+            "has_more": False,
+        }
+
+    logs = (
+        db.query(AgentJobLog)
+        .filter(AgentJobLog.agent_job_id == agent_job.id)
+        .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+        .all()
+    )
+    log_lines = [log.message for log in logs]
+    lines_to_return = log_lines[offset:]
+    return {
+        "job_id": backup_job.id,
+        "status": backup_job.status,
+        "lines": [
+            {"line_number": offset + i + 1, "content": line}
+            for i, line in enumerate(lines_to_return)
+        ],
+        "total_lines": len(log_lines),
+        "has_more": False,
+    }
+
+
+def _backup_job_has_logs(db: Session, job: BackupJob) -> bool:
+    if bool(job.logs):
+        return True
+    if job.execution_mode != "agent":
+        return False
+    agent_job = _get_agent_job_for_backup(db, job.id)
+    if not agent_job:
+        return False
+    return (
+        db.query(AgentJobLog.id)
+        .filter(AgentJobLog.agent_job_id == agent_job.id)
+        .first()
+        is not None
     )
 
 
@@ -135,6 +312,8 @@ async def _start_backup_impl(
             repo_record = _get_job_repository(db, backup_request.repository)
             if repo_record is not None:
                 check_repo_access(db, current_user, repo_record, "operator")
+                if (repo_record.execution_target or "local") == "agent":
+                    _validate_agent_backup_repository(db, repo_record)
 
         # Create backup job record
         backup_job = BackupJob(
@@ -163,13 +342,16 @@ async def _start_backup_impl(
             backup_job.completed_at = datetime.utcnow()
             db.commit()
         else:
-            asyncio.create_task(
-                backup_service.execute_backup(
-                    backup_job.id,
-                    backup_request.repository,
-                    None,  # Create new session for background task
+            if repo_record and (repo_record.execution_target or "local") == "agent":
+                _queue_agent_backup_job(db, backup_job, repo_record)
+            else:
+                asyncio.create_task(
+                    backup_service.execute_backup(
+                        backup_job.id,
+                        backup_request.repository,
+                        None,  # Create new session for background task
+                    )
                 )
-            )
 
         logger.info(
             "Backup job created", job_id=backup_job.id, user=current_user.username
@@ -260,7 +442,7 @@ async def get_all_backup_jobs(
                     "completed_at": serialize_datetime(job.completed_at),
                     "progress": job.progress,
                     "error_message": job.error_message,
-                    "has_logs": bool(job.logs),  # Indicate if logs are available
+                    "has_logs": _backup_job_has_logs(db, job),
                     "maintenance_status": job.maintenance_status,
                     "scheduled_job_id": job.scheduled_job_id,  # Include for filtering by schedule
                     "archive_name": getattr(job, "archive_name", None),
@@ -336,7 +518,29 @@ async def cancel_backup(
         if repo:
             check_repo_access(db, current_user, repo, "operator")
 
-        if job.status == "running":
+        if job.execution_mode == "agent":
+            agent_job = _get_agent_job_for_backup(db, job.id)
+            if not agent_job:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"key": "backend.errors.backup.canOnlyCancelRunningJobs"},
+                )
+            if agent_job.status == "queued":
+                agent_job.status = "canceled"
+                agent_job.completed_at = datetime.utcnow()
+                job.status = "cancelled"
+                job.completed_at = datetime.utcnow()
+            elif agent_job.status in ("claimed", "running", "cancel_requested"):
+                agent_job.status = "cancel_requested"
+                job.status = "running"
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"key": "backend.errors.backup.canOnlyCancelRunningJobs"},
+                )
+            agent_job.updated_at = datetime.utcnow()
+            process_killed = False
+        elif job.status == "running":
             process_killed = await backup_service.cancel_backup(job_id)
             job.status = "cancelled"
             job.completed_at = datetime.utcnow()
@@ -410,6 +614,38 @@ async def download_backup_logs(
                 },
             )
 
+        if job.execution_mode == "agent":
+            agent_job = _get_agent_job_for_backup(db, job.id)
+            if not agent_job:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={"key": "backend.errors.backup.noLogsAvailable"},
+                )
+            logs = (
+                db.query(AgentJobLog)
+                .filter(AgentJobLog.agent_job_id == agent_job.id)
+                .order_by(AgentJobLog.sequence.asc(), AgentJobLog.id.asc())
+                .all()
+            )
+            if not logs:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={"key": "backend.errors.backup.noLogsAvailable"},
+                )
+
+            import tempfile
+
+            temp_file = tempfile.NamedTemporaryFile(
+                mode="w", delete=False, suffix=".txt"
+            )
+            temp_file.write("\n".join(log.message for log in logs))
+            temp_file.close()
+            return FileResponse(
+                path=temp_file.name,
+                filename=f"backup_job_{job_id}_logs.txt",
+                media_type="text/plain",
+            )
+
         # Check if logs are available
         if not job.logs:
             raise HTTPException(
@@ -481,6 +717,9 @@ async def stream_backup_logs(
         repo = _get_job_repository(db, job.repository)
         if repo:
             check_repo_access(db, current_user, repo, "viewer")
+
+        if job.execution_mode == "agent":
+            return _agent_job_logs_response(db, job, offset)
 
         # Check if logs are available
         if not job.logs:

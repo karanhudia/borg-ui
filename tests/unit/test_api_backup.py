@@ -5,8 +5,18 @@ Comprehensive unit tests for backup API endpoints
 import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from app.database.models import Repository, BackupJob, PruneJob, CompactJob
+from app.core.agent_auth import AGENT_AUTH_HEADER
+from app.core.security import get_password_hash
+from app.database.models import (
+    AgentJob,
+    AgentMachine,
+    Repository,
+    BackupJob,
+    PruneJob,
+    CompactJob,
+)
 from datetime import datetime
+import json
 from tests.unit.helpers import assert_auth_required
 
 
@@ -240,6 +250,173 @@ class TestBackupStart:
 
             assert response.status_code == 200
             assert response.json()["status"] == "pending"
+
+    def test_start_backup_for_agent_repository_queues_agent_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = Repository(
+            name="Agent Repo",
+            path="/agent/repo",
+            encryption="repokey",
+            passphrase="repo-secret",
+            compression="zstd",
+            source_directories=json.dumps(["/home/user/docs"]),
+            exclude_patterns=json.dumps(["*.tmp"]),
+            repository_type="local",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+            custom_flags="--one-file-system",
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch(
+            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+        ) as execute_backup:
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        execute_backup.assert_not_called()
+
+        backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).first()
+        assert backup_job is not None
+        assert backup_job.execution_mode == "agent"
+        assert backup_job.archive_name.startswith("manual-backup-")
+
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.backup_job_id == backup_job.id)
+            .first()
+        )
+        assert agent_job is not None
+        assert agent_job.agent_machine_id == agent.id
+        assert agent_job.status == "queued"
+        assert agent_job.payload["repository"] == {
+            "id": repo.id,
+            "path": repo.path,
+            "borg_version": 1,
+        }
+        assert agent_job.payload["backup"]["source_paths"] == ["/home/user/docs"]
+        assert agent_job.payload["backup"]["exclude_patterns"] == ["*.tmp"]
+        assert agent_job.payload["backup"]["custom_flags"] == "--one-file-system"
+        assert agent_job.payload["secrets"] == {
+            "BORG_PASSPHRASE": {"value": "repo-secret"}
+        }
+
+    def test_agent_completion_updates_linked_backup_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        raw_token = "borgui_agent_secret"
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop",
+            token_hash=get_password_hash(raw_token),
+            token_prefix=raw_token[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = Repository(
+            name="Agent Repo",
+            path="/agent/repo",
+            encryption="none",
+            compression="lz4",
+            source_directories=json.dumps(["/home/user/docs"]),
+            repository_type="local",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/backup/start",
+            json={"repository": repo.path},
+            headers=admin_headers,
+        )
+        assert response.status_code == 200
+        backup_job_id = response.json()["job_id"]
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.backup_job_id == backup_job_id)
+            .first()
+        )
+        headers = {AGENT_AUTH_HEADER: f"Bearer {raw_token}"}
+
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/claim", headers=headers
+            ).status_code
+            == 200
+        )
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/start", json={}, headers=headers
+            ).status_code
+            == 200
+        )
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/progress",
+                json={"progress_percent": 42.5, "current_file": "/home/user/file"},
+                headers=headers,
+            ).status_code
+            == 200
+        )
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/logs",
+                json={"sequence": 1, "message": "Creating archive"},
+                headers=headers,
+            ).status_code
+            == 200
+        )
+        assert (
+            test_client.post(
+                f"/api/agents/jobs/{agent_job.id}/complete",
+                json={
+                    "result": {
+                        "archive_name": "agent-archive",
+                        "return_code": 0,
+                    }
+                },
+                headers=headers,
+            ).status_code
+            == 200
+        )
+
+        backup_job = test_db.query(BackupJob).filter_by(id=backup_job_id).first()
+        test_db.refresh(repo)
+        assert backup_job.status == "completed"
+        assert backup_job.progress == 100
+        assert backup_job.progress_percent == 100.0
+        assert backup_job.current_file == "/home/user/file"
+        assert backup_job.archive_name == "agent-archive"
+        assert backup_job.logs == "Creating archive"
+        assert repo.last_backup is not None
+
+        logs_response = test_client.get(
+            f"/api/activity/backup/{backup_job_id}/logs", headers=admin_headers
+        )
+        assert logs_response.status_code == 200
+        assert logs_response.json()["lines"] == [
+            {"line_number": 1, "content": "Creating archive"}
+        ]
 
 
 @pytest.mark.unit
@@ -507,6 +684,54 @@ class TestBackupCancel:
                 response.json()["message"] == "backend.success.backup.backupCancelled"
             )
             mock_cancel.assert_awaited_once_with(job.id)
+
+    def test_cancel_queued_agent_backup_cancels_agent_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        repo = Repository(
+            name="Agent Repo",
+            path="/agent/repo",
+            encryption="none",
+            compression="lz4",
+            source_directories=json.dumps(["/home/user/docs"]),
+            repository_type="local",
+            execution_target="agent",
+        )
+        test_db.add_all([agent, repo])
+        test_db.commit()
+        repo.agent_machine_id = agent.id
+        test_db.commit()
+
+        start = test_client.post(
+            "/api/backup/start",
+            json={"repository": repo.path},
+            headers=admin_headers,
+        )
+        assert start.status_code == 200
+        backup_job_id = start.json()["job_id"]
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.backup_job_id == backup_job_id)
+            .first()
+        )
+
+        response = test_client.post(
+            f"/api/backup/cancel/{backup_job_id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(agent_job)
+        backup_job = test_db.query(BackupJob).filter_by(id=backup_job_id).first()
+        assert agent_job.status == "canceled"
+        assert backup_job.status == "cancelled"
+        assert backup_job.completed_at is not None
 
     def test_cancel_backup_nonexistent(self, test_client: TestClient, admin_headers):
         """Test canceling non-existent backup job"""

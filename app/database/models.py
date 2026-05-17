@@ -75,6 +75,97 @@ class ApiToken(Base):
     last_used_at = Column(DateTime, nullable=True)
 
 
+class AgentMachine(Base):
+    __tablename__ = "agent_machines"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    agent_id = Column(String, unique=True, index=True, nullable=False)
+    token_hash = Column(String, nullable=False)
+    token_prefix = Column(String(20), index=True, nullable=False)
+    hostname = Column(String, nullable=True)
+    os = Column(String, nullable=True)
+    arch = Column(String, nullable=True)
+    agent_version = Column(String, nullable=True)
+    borg_versions = Column(JSON, nullable=True)
+    capabilities = Column(JSON, nullable=True)
+    labels = Column(JSON, nullable=True)
+    status = Column(String, default="pending", index=True, nullable=False)
+    last_seen_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class AgentEnrollmentToken(Base):
+    __tablename__ = "agent_enrollment_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    token_hash = Column(String, nullable=False)
+    token_prefix = Column(String(20), index=True, nullable=False)
+    created_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    used_by_agent_id = Column(
+        Integer, ForeignKey("agent_machines.id", ondelete="SET NULL"), nullable=True
+    )
+    revoked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+
+
+class AgentJob(Base):
+    __tablename__ = "agent_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    agent_machine_id = Column(
+        Integer, ForeignKey("agent_machines.id", ondelete="CASCADE"), nullable=False
+    )
+    backup_job_id = Column(
+        Integer, ForeignKey("backup_jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    job_type = Column(String, nullable=False)
+    status = Column(String, default="queued", index=True, nullable=False)
+    payload = Column(JSON, nullable=False)
+    result = Column(JSON, nullable=True)
+    claimed_at = Column(DateTime, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+    progress_percent = Column(Float, default=0.0)
+    current_file = Column(Text, nullable=True)
+    original_size = Column(BigInteger, default=0)
+    compressed_size = Column(BigInteger, default=0)
+    deduplicated_size = Column(BigInteger, default=0)
+    nfiles = Column(Integer, default=0)
+    backup_speed = Column(Float, default=0.0)
+    total_expected_size = Column(BigInteger, default=0)
+    estimated_time_remaining = Column(Integer, default=0)
+    progress = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class AgentJobLog(Base):
+    __tablename__ = "agent_job_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    agent_job_id = Column(
+        Integer, ForeignKey("agent_jobs.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence = Column(Integer, nullable=False)
+    stream = Column(String, default="stdout", nullable=False)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    received_at = Column(DateTime, default=utc_now, nullable=False)
+
+    __table_args__ = (UniqueConstraint("agent_job_id", "sequence"),)
+
+
 class PasskeyCredential(Base):
     __tablename__ = "passkey_credentials"
 
@@ -153,6 +244,12 @@ class Repository(Base):
     remote_path = Column(
         String, nullable=True
     )  # Path to borg binary on remote server (e.g., /usr/local/bin/borg)
+    execution_target = Column(
+        String, default="local", nullable=False
+    )  # Where borg create executes: local, ssh, or agent
+    agent_machine_id = Column(
+        Integer, ForeignKey("agent_machines.id"), nullable=True
+    )  # Agent machine that executes backups for this repository
 
     # New fields for authentication status
     auth_status = Column(

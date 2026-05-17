@@ -29,11 +29,20 @@ interface SSHConnection {
   ssh_path_prefix?: string
 }
 
+interface AgentMachine {
+  id: number
+  name: string
+  hostname?: string | null
+  status: string
+}
+
 export interface WizardReviewData {
   name: string
   borgVersion?: 1 | 2
   repositoryMode: 'full' | 'observe'
   repositoryLocation: 'local' | 'ssh'
+  executionTarget?: 'local' | 'agent'
+  agentMachineId?: number | ''
   path: string
   repoSshConnectionId: number | ''
   dataSource: 'local' | 'remote'
@@ -51,6 +60,7 @@ interface WizardStepReviewProps {
   mode: 'create' | 'edit' | 'import'
   data: WizardReviewData
   sshConnections: SSHConnection[]
+  agentMachines?: AgentMachine[]
 }
 
 function getEncryptionLabelKey(encryption: string) {
@@ -195,9 +205,15 @@ function SectionCard({
   )
 }
 
-export default function WizardStepReview({ mode, data, sshConnections }: WizardStepReviewProps) {
+export default function WizardStepReview({
+  mode,
+  data,
+  sshConnections,
+  agentMachines = [],
+}: WizardStepReviewProps) {
   const { t } = useTranslation()
   const [showPassphrase, setShowPassphrase] = useState(false)
+  const executionTarget = data.executionTarget ?? 'local'
 
   const getSourceSshConnection = () => {
     if (data.dataSource !== 'remote' || !data.sourceSshConnectionId) return null
@@ -232,6 +248,10 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
   }
 
   const repoDetails = getRepoConnectionDetails()
+  const selectedAgent =
+    executionTarget === 'agent' && data.agentMachineId
+      ? agentMachines.find((agent) => agent.id === data.agentMachineId)
+      : null
   const isEncrypted = data.encryption !== 'none'
 
   const EMERALD = '#10b981'
@@ -373,6 +393,29 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
             </Box>
           </AttrRow>
 
+          <AttrRow label={t('wizard.review.execution')}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {executionTarget === 'agent' ? (
+                <Laptop size={12} style={{ opacity: 0.6 }} />
+              ) : (
+                <Server size={12} style={{ opacity: 0.6 }} />
+              )}
+              <Typography variant="body2" fontSize="0.75rem">
+                {executionTarget === 'agent'
+                  ? t('wizard.review.managedAgent')
+                  : t('wizard.review.borgUiServer')}
+              </Typography>
+            </Box>
+          </AttrRow>
+
+          {executionTarget === 'agent' && (
+            <AttrRow label={t('wizard.review.agent')}>
+              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+                {selectedAgent?.hostname || selectedAgent?.name || t('wizard.review.notSet')}
+              </Typography>
+            </AttrRow>
+          )}
+
           <AttrRow label={t('wizard.review.path')}>
             <CodePill>{data.path || t('wizard.review.notSet')}</CodePill>
           </AttrRow>
@@ -441,9 +484,11 @@ export default function WizardStepReview({ mode, data, sshConnections }: WizardS
           >
             <AttrRow label={t('wizard.review.source')}>
               <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
-                {data.dataSource === 'local'
-                  ? t('wizard.review.borgUiServer')
-                  : t('wizard.review.remoteClient')}
+                {executionTarget === 'agent'
+                  ? t('wizard.review.managedAgent')
+                  : data.dataSource === 'local'
+                    ? t('wizard.review.borgUiServer')
+                    : t('wizard.review.remoteClient')}
               </Typography>
             </AttrRow>
 

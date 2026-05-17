@@ -59,6 +59,8 @@ export interface RepositoryData {
   source_directories?: string[]
   exclude_patterns?: string[]
   repository_type?: string
+  execution_target?: 'local' | 'ssh' | 'agent'
+  agent_machine_id?: number | null
   host?: string
   port?: number
   username?: string
@@ -594,6 +596,99 @@ export const sshKeysAPI = {
   redeployKeyToConnection: (connectionId: number, password: string) =>
     api.post(`/ssh-keys/connections/${connectionId}/redeploy`, { password }),
   importSSHKey: (data: ApiData) => api.post('/ssh-keys/import', data),
+}
+
+export interface AgentMachineResponse {
+  id: number
+  name: string
+  agent_id: string
+  hostname?: string | null
+  os?: string | null
+  arch?: string | null
+  agent_version?: string | null
+  borg_versions?: Array<Record<string, unknown>> | null
+  capabilities?: string[] | null
+  labels?: Record<string, unknown> | null
+  status: string
+  last_seen_at?: string | null
+  last_error?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentEnrollmentTokenSummary {
+  id: number
+  name: string
+  token_prefix: string
+  expires_at: string
+  used_at?: string | null
+  used_by_agent_id?: number | null
+  revoked_at?: string | null
+  created_at: string
+}
+
+export interface AgentEnrollmentTokenCreated extends AgentEnrollmentTokenSummary {
+  token: string
+}
+
+export interface AgentJobResponse {
+  id: number
+  agent_machine_id: number
+  backup_job_id?: number | null
+  job_type: string
+  status: string
+  payload: Record<string, unknown>
+  result?: Record<string, unknown> | null
+  claimed_at?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  error_message?: string | null
+  progress_percent?: number | null
+  current_file?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentJobLogEntryResponse {
+  id: number
+  agent_job_id: number
+  sequence: number
+  stream: string
+  message: string
+  created_at: string
+  received_at: string
+}
+
+export interface AgentBackupJobCreate {
+  repository_path: string
+  archive_name: string
+  source_paths: string[]
+  borg_version?: 1 | 2
+  borg_binary?: string | null
+  compression?: string
+  exclude_patterns?: string[]
+  custom_flags?: string[]
+  remote_path?: string | null
+  repository_id?: number | null
+  secrets?: Record<string, unknown>
+}
+
+export const managedAgentsAPI = {
+  listAgents: () => api.get<AgentMachineResponse[]>('/managed-machines/agents'),
+  revokeAgent: (agentId: number) => api.post(`/managed-machines/agents/${agentId}/revoke`),
+  createEnrollmentToken: (data: { name: string; expires_in_minutes: number }) =>
+    api.post<AgentEnrollmentTokenCreated>('/managed-machines/enrollment-tokens', data),
+  listEnrollmentTokens: () =>
+    api.get<AgentEnrollmentTokenSummary[]>('/managed-machines/enrollment-tokens'),
+  revokeEnrollmentToken: (tokenId: number) =>
+    api.post(`/managed-machines/enrollment-tokens/${tokenId}/revoke`),
+  listJobs: () => api.get<AgentJobResponse[]>('/managed-machines/agent-jobs'),
+  createBackupJob: (agentId: number, data: AgentBackupJobCreate) =>
+    api.post<AgentJobResponse>(`/managed-machines/agents/${agentId}/backup-jobs`, data),
+  cancelJob: (jobId: number) =>
+    api.post<AgentJobResponse>(`/managed-machines/agent-jobs/${jobId}/cancel`),
+  listJobLogs: (jobId: number) =>
+    api.get<AgentJobLogEntryResponse[]>(`/managed-machines/agent-jobs/${jobId}/logs`),
 }
 
 // Schedule API

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "borg-ui-agent"
+version = "0.1.0"
+description = "Lightweight managed agent for Borg UI"
+readme = "agent/README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-only" }
+authors = [{ name = "Borg UI" }]
+dependencies = ["requests>=2.31"]
+
+[project.scripts]
+borg-ui-agent = "agent.borg_ui_agent.cli:main"
+
+[tool.setuptools]
+packages = ["agent", "agent.borg_ui_agent"]

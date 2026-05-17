@@ -71,6 +71,8 @@ interface Repository extends RepositoryData {
   bypass_lock?: boolean
   source_ssh_connection_id?: number | null
   repository_type?: 'local' | 'ssh' | 'sftp'
+  execution_target?: 'local' | 'ssh' | 'agent'
+  agent_machine_id?: number | null
   borg_version?: 1 | 2
 }
 

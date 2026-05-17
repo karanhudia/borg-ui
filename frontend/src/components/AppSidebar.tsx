@@ -85,6 +85,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Dashboard: t('navigation.items.dashboard'),
       Activity: t('navigation.items.activity'),
       'Remote Machines': t('navigation.items.remoteMachines'),
+      'Managed Agents': t('navigation.items.managedAgents'),
       Repositories: t('navigation.items.repositories'),
       Backup: t('navigation.items.backup'),
       Archives: t('navigation.items.archives'),
@@ -142,6 +143,12 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
               name: 'Remote Machines',
               href: '/ssh-connections',
               icon: Computer,
+              key: 'connections' as const,
+            },
+            {
+              name: 'Managed Agents',
+              href: '/managed-agents',
+              icon: Server,
               key: 'connections' as const,
             },
           ]
