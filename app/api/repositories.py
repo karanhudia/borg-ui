@@ -1136,17 +1136,6 @@ async def create_repository(
                 detail={"key": "backend.errors.repo.invalidEncryptionMode"},
             )
 
-        # Validate source directories are provided (only for full mode repositories)
-        if repo_data.mode == "full":
-            if (
-                not repo_data.source_directories
-                or len(repo_data.source_directories) == 0
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
-                )
-
         # Validate passphrase for encrypted repositories
         if repo_data.encryption in [
             "repokey",
@@ -1473,17 +1462,6 @@ async def import_repository(
             return _create_agent_repository_record(
                 repo_data, current_user, db, imported=True
             )
-
-        # Validate source directories are provided (only for full mode repositories)
-        if repo_data.mode == "full":
-            if (
-                not repo_data.source_directories
-                or len(repo_data.source_directories) == 0
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
-                )
 
         # Validate connection_id and path
         repo_path = repo_data.path.strip()

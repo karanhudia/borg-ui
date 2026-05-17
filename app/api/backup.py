@@ -81,6 +81,7 @@ def _get_running_maintenance_job(
         .first()
     )
 
+
 def _decode_json_list(value) -> list:
     if not value:
         return []

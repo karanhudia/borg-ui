@@ -678,7 +678,7 @@ export default function ManagedAgents() {
   )
 }
 
-function AgentList({
+export function AgentList({
   agents,
   onQueueBackup,
   onRevoke,
@@ -781,7 +781,7 @@ function AgentList({
   )
 }
 
-function JobsTable({
+export function JobsTable({
   jobs,
   agentsById,
   onCancel,
@@ -865,7 +865,7 @@ function JobsTable({
   )
 }
 
-function TokensTable({
+export function TokensTable({
   tokens,
   onRevoke,
   isRevoking,
