@@ -28,6 +28,7 @@ export interface BackupPlanPayloadState {
   runCompactAfter: boolean
   runCheckAfter: boolean
   checkMaxDuration: number
+  checkExtraFlags: string
   pruneKeepHourly: number
   pruneKeepDaily: number
   pruneKeepWeekly: number
@@ -77,6 +78,7 @@ export function buildBackupPlanPayload(
     run_compact_after: state.runCompactAfter,
     run_check_after: state.runCheckAfter,
     check_max_duration: state.checkMaxDuration,
+    check_extra_flags: state.checkExtraFlags.trim() || null,
     prune_keep_hourly: state.pruneKeepHourly,
     prune_keep_daily: state.pruneKeepDaily,
     prune_keep_weekly: state.pruneKeepWeekly,

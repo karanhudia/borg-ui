@@ -55,6 +55,11 @@ export interface PruneOptions {
   dry_run?: boolean
 }
 
+export interface CheckRepositoryOptions {
+  maxDuration?: number
+  checkExtraFlags?: string | null
+}
+
 export class BorgApiClient {
   /** Version-aware URL prefix — the single routing decision point. */
   private readonly v: string
@@ -167,15 +172,22 @@ export class BorgApiClient {
     return httpClient.post(`/repositories/${this.repoId}/compact`)
   }
 
-  checkRepository(maxDuration?: number) {
+  checkRepository(optionsOrMaxDuration?: number | CheckRepositoryOptions) {
+    const options =
+      typeof optionsOrMaxDuration === 'number'
+        ? { maxDuration: optionsOrMaxDuration }
+        : optionsOrMaxDuration || {}
+    const payload = {
+      ...(options.maxDuration !== undefined && { max_duration: options.maxDuration }),
+      ...(options.checkExtraFlags !== undefined && { check_extra_flags: options.checkExtraFlags }),
+    }
+
     if (this.v === '/v2') {
       return httpClient.post(`/v2/backup/check`, {
         repository_id: this.repoId,
-        ...(maxDuration !== undefined && { max_duration: maxDuration }),
+        ...payload,
       })
     }
-    return httpClient.post(`/repositories/${this.repoId}/check`, {
-      ...(maxDuration !== undefined && { max_duration: maxDuration }),
-    })
+    return httpClient.post(`/repositories/${this.repoId}/check`, payload)
   }
 }

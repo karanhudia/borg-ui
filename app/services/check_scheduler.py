@@ -173,6 +173,7 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
                 ): BorgRouter(router_repo).check(job.id),
                 extra_fields={
                     "max_duration": repo.check_max_duration or 3600,
+                    "extra_flags": repo.check_extra_flags,
                     "scheduled_check": True,
                 },
             )

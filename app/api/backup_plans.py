@@ -80,6 +80,7 @@ class BackupPlanPayload(BaseModel):
     run_compact_after: bool = False
     run_check_after: bool = False
     check_max_duration: int = 3600
+    check_extra_flags: Optional[str] = None
     prune_keep_hourly: int = 0
     prune_keep_daily: int = 7
     prune_keep_weekly: int = 4
@@ -251,6 +252,7 @@ def _payload_from_repository(
         run_compact_after=bool(schedule and schedule.run_compact_after),
         run_check_after=False,
         check_max_duration=3600,
+        check_extra_flags=None,
         prune_keep_hourly=schedule.prune_keep_hourly if schedule else 0,
         prune_keep_daily=schedule.prune_keep_daily if schedule else 7,
         prune_keep_weekly=schedule.prune_keep_weekly if schedule else 4,
@@ -307,6 +309,7 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
         "archive_name_template": plan.archive_name_template,
         "compression": plan.compression,
         "custom_flags": plan.custom_flags,
+        "check_extra_flags": plan.check_extra_flags,
         "upload_ratelimit_kib": plan.upload_ratelimit_kib,
         "repository_run_mode": plan.repository_run_mode,
         "max_parallel_repositories": plan.max_parallel_repositories,
@@ -723,6 +726,9 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
     plan.run_compact_after = payload.run_compact_after
     plan.run_check_after = payload.run_check_after
     plan.check_max_duration = payload.check_max_duration
+    plan.check_extra_flags = (
+        payload.check_extra_flags.strip() if payload.check_extra_flags else None
+    )
     plan.prune_keep_hourly = payload.prune_keep_hourly
     plan.prune_keep_daily = payload.prune_keep_daily
     plan.prune_keep_weekly = payload.prune_keep_weekly

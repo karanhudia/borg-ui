@@ -436,6 +436,11 @@ export function ReviewStep({
               }
             />
           </ReviewAttrRow>
+          {wizardState.runCheckAfter && wizardState.checkExtraFlags.trim() && (
+            <ReviewAttrRow label={t('backupPlans.wizard.review.checkExtraFlags')}>
+              <ReviewCodePill>{wizardState.checkExtraFlags.trim()}</ReviewCodePill>
+            </ReviewAttrRow>
+          )}
         </ReviewSectionCard>
       </ReviewSectionGrid>
     </Box>

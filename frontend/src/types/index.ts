@@ -18,6 +18,7 @@ export interface Repository {
   mode?: 'full' | 'observe'
   bypass_lock?: boolean
   custom_flags?: string | null
+  check_extra_flags?: string | null
   archive_count?: number
   total_size?: string | null
   last_backup?: string | null
@@ -128,6 +129,7 @@ export interface BackupPlan {
   run_compact_after?: boolean
   run_check_after?: boolean
   check_max_duration?: number
+  check_extra_flags?: string | null
   prune_keep_hourly?: number
   prune_keep_daily?: number
   prune_keep_weekly?: number
@@ -203,6 +205,7 @@ export interface BackupPlanData {
   run_compact_after: boolean
   run_check_after: boolean
   check_max_duration: number
+  check_extra_flags?: string | null
   prune_keep_hourly: number
   prune_keep_daily: number
   prune_keep_weekly: number

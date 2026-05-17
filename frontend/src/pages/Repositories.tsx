@@ -13,7 +13,9 @@ import { usePermissions } from '../hooks/usePermissions'
 import { useAppState } from '../context/AppContext'
 import { AxiosResponse } from 'axios'
 import LockErrorDialog from '../components/LockErrorDialog'
-import CheckWarningDialog from '../components/CheckWarningDialog'
+import CheckWarningDialog, {
+  type CheckWarningConfirmOptions,
+} from '../components/CheckWarningDialog'
 import CompactWarningDialog from '../components/CompactWarningDialog'
 import RepositoryWizard from '../components/RepositoryWizard'
 import PruneRepositoryDialog from '../components/PruneRepositoryDialog'
@@ -170,13 +172,23 @@ export default function Repositories() {
   })
 
   const checkRepositoryMutation = useMutation({
-    mutationFn: ({ repositoryId, maxDuration }: { repositoryId: number; maxDuration: number }) => {
+    mutationFn: ({
+      repositoryId,
+      maxDuration,
+      checkExtraFlags,
+    }: {
+      repositoryId: number
+      maxDuration: number
+      checkExtraFlags: string
+    }) => {
       const repo = repositories.find((r: Repository) => r.id === repositoryId)
       if (!repo) throw new Error('Repository not found')
-      return new BorgApiClient(repo).checkRepository(maxDuration)
+      return new BorgApiClient(repo).checkRepository({ maxDuration, checkExtraFlags })
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSuccess: (_response: any, variables: { repositoryId: number; maxDuration: number }) => {
+    onSuccess: (
+      _response: unknown,
+      variables: { repositoryId: number; maxDuration: number; checkExtraFlags: string }
+    ) => {
       toast.success(t('repositories.toasts.checkStarted'))
       trackMaintenance(EventAction.START, 'Check', checkingRepository || undefined)
       maintenanceTrackingRef.current.set(variables.repositoryId, {
@@ -325,9 +337,13 @@ export default function Repositories() {
     setCheckingRepository(repository)
   }
 
-  const handleConfirmCheck = (maxDuration: number) => {
+  const handleConfirmCheck = ({ maxDuration, checkExtraFlags }: CheckWarningConfirmOptions) => {
     if (checkingRepository) {
-      checkRepositoryMutation.mutate({ repositoryId: checkingRepository.id, maxDuration })
+      checkRepositoryMutation.mutate({
+        repositoryId: checkingRepository.id,
+        maxDuration,
+        checkExtraFlags,
+      })
     }
   }
 

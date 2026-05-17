@@ -20,6 +20,7 @@ interface ScheduledCheck {
   last_scheduled_check: string | null
   next_scheduled_check: string | null
   check_max_duration: number
+  check_extra_flags?: string | null
   notify_on_check_success: boolean
   notify_on_check_failure: boolean
   // "enabled" = cron is set AND user toggle is on (will actually run)
@@ -99,6 +100,12 @@ export default function ScheduleCheckCard({
       value: scheduleTimezone,
     },
   ]
+  if (check.check_extra_flags) {
+    meta.push({
+      label: t('schedule.checkCard.meta.extraFlags'),
+      value: check.check_extra_flags,
+    })
+  }
 
   const actions: ActionItem[] = [
     {

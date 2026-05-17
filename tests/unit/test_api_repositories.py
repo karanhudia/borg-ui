@@ -1824,6 +1824,51 @@ class TestRepositoriesJobStatus:
 
 
 @pytest.mark.unit
+class TestRepositoryCheck:
+    """Test repository check endpoints"""
+
+    def test_start_check_stores_extra_flags(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Manual repository checks should store advanced check flags on the job."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job"
+        ) as mock_start:
+            mock_start.return_value = CheckJob(
+                id=42,
+                repository_id=repo.id,
+                status="pending",
+                max_duration=0,
+                extra_flags="--repair --archives-only",
+            )
+
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/check",
+                headers=admin_headers,
+                json={
+                    "max_duration": 0,
+                    "check_extra_flags": "  --repair --archives-only  ",
+                },
+            )
+
+        assert response.status_code == 200
+        assert mock_start.call_args.kwargs["extra_fields"] == {
+            "max_duration": 0,
+            "extra_flags": "--repair --archives-only",
+        }
+
+
+@pytest.mark.unit
 class TestRepositoryCheckSchedule:
     """Test repository check schedule endpoints"""
 
@@ -1836,6 +1881,7 @@ class TestRepositoryCheckSchedule:
             repository_type="local",
             check_cron_expression="0 2 * * 0",  # Weekly on Sunday at 2 AM
             check_max_duration=3600,
+            check_extra_flags="--verify-data",
             notify_on_check_success=False,
             notify_on_check_failure=True,
         )
@@ -1852,6 +1898,7 @@ class TestRepositoryCheckSchedule:
         assert data["repository_id"] == repo.id
         assert data["check_cron_expression"] == "0 2 * * 0"
         assert data["check_max_duration"] == 3600
+        assert data["check_extra_flags"] == "--verify-data"
         assert data["notify_on_check_success"] == False
         assert data["notify_on_check_failure"] == True
         assert data["enabled"] == True
@@ -1899,6 +1946,7 @@ class TestRepositoryCheckSchedule:
         payload = {
             "cron_expression": "0 3 * * *",  # Daily at 3 AM
             "max_duration": 7200,
+            "check_extra_flags": "  --repair --save-space  ",
             "notify_on_success": True,
             "notify_on_failure": False,
         }
@@ -1913,6 +1961,7 @@ class TestRepositoryCheckSchedule:
         assert data["success"] == True
         assert data["repository"]["check_cron_expression"] == "0 3 * * *"
         assert data["repository"]["check_max_duration"] == 7200
+        assert data["repository"]["check_extra_flags"] == "--repair --save-space"
         assert data["repository"]["notify_on_check_success"] == True
         assert data["repository"]["notify_on_check_failure"] == False
         assert data["repository"]["next_scheduled_check"] is not None
