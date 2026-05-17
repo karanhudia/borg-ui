@@ -57,7 +57,9 @@ describe('ManagedAgents', () => {
 
     expect(await screen.findByText('Set up an agent on a remote machine')).toBeInTheDocument()
     expect(
-      screen.getByText('Create an enrollment token, then run the registration command on the client.')
+      screen.getByText(
+        'Create an enrollment token, then run the registration command on the client.'
+      )
     ).toBeInTheDocument()
     expect(
       screen.getByText(/borg-ui-agent register --server .* --token <enrollment-token>/)
