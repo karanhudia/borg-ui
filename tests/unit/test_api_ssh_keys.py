@@ -8,7 +8,15 @@ from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
 
+from pydantic import ValidationError
+
 from app.api import ssh_keys as ssh_keys_api
+from app.api.ssh_keys import (
+    SSHConnectionCreate,
+    SSHConnectionTest,
+    SSHConnectionUpdate,
+    SSHQuickSetup,
+)
 from app.database.models import SSHConnection, SSHKey
 
 
@@ -490,6 +498,174 @@ class TestSSHKeyHelpers:
         assert ssh_keys_api.format_bytes(1024) == "1.00 KB"
         assert ssh_keys_api.format_bytes(1024 * 1024) == "1.00 MB"
         assert ssh_keys_api.format_bytes(5 * 1024 * 1024 * 1024) == "5.00 GB"
+
+
+@pytest.mark.unit
+class TestSSHConnectionHostValidation:
+    @pytest.mark.parametrize(
+        ("raw_host", "expected_host"),
+        [
+            ("  u123456.your-storagebox.de  ", "u123456.your-storagebox.de"),
+            ("\tbackup.example.com\n", "backup.example.com"),
+            ("192.0.2.10", "192.0.2.10"),
+            ("2001:db8::1", "2001:db8::1"),
+        ],
+    )
+    def test_connection_host_models_normalize_safe_hosts(self, raw_host, expected_host):
+        assert (
+            SSHConnectionCreate(host=raw_host, username="borg", password="secret").host
+            == expected_host
+        )
+        assert SSHConnectionUpdate(host=raw_host).host == expected_host
+        assert SSHConnectionTest(host=raw_host, username="borg").host == expected_host
+        assert (
+            SSHQuickSetup(
+                name="key",
+                host=raw_host,
+                username="borg",
+                password="secret",
+            ).host
+            == expected_host
+        )
+
+    @pytest.mark.parametrize(
+        "raw_host",
+        [
+            "http://host",
+            "ssh://user@host",
+            "host:23",
+            "example.com/path",
+            "user@example.com",
+            "[example.com]",
+            "[2001:db8::1]",
+            "[host](https://host)",
+            "host name",
+            "host\u200bname",
+            "",
+            "   ",
+        ],
+    )
+    def test_connection_host_models_reject_malformed_hosts(self, raw_host):
+        with pytest.raises(ValidationError):
+            SSHConnectionCreate(host=raw_host, username="borg", password="secret")
+        with pytest.raises(ValidationError):
+            SSHConnectionTest(host=raw_host, username="borg")
+        with pytest.raises(ValidationError):
+            SSHConnectionUpdate(host=raw_host)
+        with pytest.raises(ValidationError):
+            SSHQuickSetup(
+                name="key",
+                host=raw_host,
+                username="borg",
+                password="secret",
+            )
+
+    def test_audit_ssh_connection_hosts_reports_suspicious_saved_hosts(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        test_db.add_all(
+            [
+                SSHConnection(
+                    host="valid.example.com",
+                    username="borg",
+                    port=22,
+                    status="connected",
+                ),
+                SSHConnection(
+                    host=" u123456.your-storagebox.de ",
+                    username="borg",
+                    port=22,
+                    status="failed",
+                ),
+                SSHConnection(
+                    host="http://bad.example.com",
+                    username="borg",
+                    port=22,
+                    status="failed",
+                ),
+            ]
+        )
+        test_db.commit()
+
+        response = test_client.get(
+            "/api/ssh-keys/connections/host-audit",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["summary"] == {
+            "total": 3,
+            "valid": 1,
+            "normalizable": 1,
+            "suspicious": 1,
+        }
+        assert data["normalizable"][0]["host"] == " u123456.your-storagebox.de "
+        assert (
+            data["normalizable"][0]["normalized_host"] == "u123456.your-storagebox.de"
+        )
+        assert data["suspicious"][0]["host"] == "http://bad.example.com"
+
+    def test_cleanup_ssh_connection_hosts_dry_run_does_not_modify_saved_hosts(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        connection = SSHConnection(
+            host=" u123456.your-storagebox.de ",
+            username="borg",
+            port=22,
+            status="failed",
+        )
+        test_db.add(connection)
+        test_db.commit()
+        test_db.refresh(connection)
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/host-cleanup",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["dry_run"] is True
+        assert data["summary"]["cleaned"] == 0
+        assert data["summary"]["normalizable"] == 1
+        test_db.refresh(connection)
+        assert connection.host == " u123456.your-storagebox.de "
+
+    def test_cleanup_ssh_connection_hosts_applies_only_safe_normalizations(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        normalizable = SSHConnection(
+            host=" u123456.your-storagebox.de ",
+            username="borg",
+            port=22,
+            status="failed",
+        )
+        suspicious = SSHConnection(
+            host="host:23",
+            username="borg",
+            port=22,
+            status="failed",
+        )
+        test_db.add_all([normalizable, suspicious])
+        test_db.commit()
+        test_db.refresh(normalizable)
+        test_db.refresh(suspicious)
+
+        response = test_client.post(
+            "/api/ssh-keys/connections/host-cleanup?dry_run=false",
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["dry_run"] is False
+        assert data["summary"]["cleaned"] == 1
+        assert data["summary"]["suspicious"] == 1
+        test_db.refresh(normalizable)
+        test_db.refresh(suspicious)
+        assert normalizable.host == "u123456.your-storagebox.de"
+        assert suspicious.host == "host:23"
 
 
 @pytest.mark.unit

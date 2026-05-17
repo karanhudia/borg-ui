@@ -31,10 +31,16 @@ interface SSHConnectionDialogsProps {
   setImportForm: Dispatch<SetStateAction<ImportKeyPayload>>
   connectionForm: DeployConnectionPayload
   setConnectionForm: Dispatch<SetStateAction<DeployConnectionPayload>>
+  connectionHostError?: string
+  setConnectionHostError: Dispatch<SetStateAction<string | undefined>>
   testConnectionForm: TestConnectionPayload
   setTestConnectionForm: Dispatch<SetStateAction<TestConnectionPayload>>
+  testConnectionHostError?: string
+  setTestConnectionHostError: Dispatch<SetStateAction<string | undefined>>
   editConnectionForm: UpdateConnectionPayload
   setEditConnectionForm: Dispatch<SetStateAction<UpdateConnectionPayload>>
+  editConnectionHostError?: string
+  setEditConnectionHostError: Dispatch<SetStateAction<string | undefined>>
   generateDialogOpen: boolean
   setGenerateDialogOpen: Dispatch<SetStateAction<boolean>>
   importDialogOpen: boolean
@@ -83,10 +89,16 @@ export function SSHConnectionDialogs({
   setImportForm,
   connectionForm,
   setConnectionForm,
+  connectionHostError,
+  setConnectionHostError,
   testConnectionForm,
   setTestConnectionForm,
+  testConnectionHostError,
+  setTestConnectionHostError,
   editConnectionForm,
   setEditConnectionForm,
+  editConnectionHostError,
+  setEditConnectionHostError,
   generateDialogOpen,
   setGenerateDialogOpen,
   importDialogOpen,
@@ -146,6 +158,8 @@ export function SSHConnectionDialogs({
         setOpen={setDeployDialogOpen}
         connectionForm={connectionForm}
         setConnectionForm={setConnectionForm}
+        hostError={connectionHostError}
+        setHostError={setConnectionHostError}
         pending={deployKeyPending}
         onDeploy={handleDeployKey}
       />
@@ -155,6 +169,8 @@ export function SSHConnectionDialogs({
         setOpen={setTestConnectionDialogOpen}
         testConnectionForm={testConnectionForm}
         setTestConnectionForm={setTestConnectionForm}
+        hostError={testConnectionHostError}
+        setHostError={setTestConnectionHostError}
         pending={testConnectionPending}
         onTest={handleTestManualConnection}
       />
@@ -165,6 +181,8 @@ export function SSHConnectionDialogs({
         setSelectedConnection={setSelectedConnection}
         editConnectionForm={editConnectionForm}
         setEditConnectionForm={setEditConnectionForm}
+        hostError={editConnectionHostError}
+        setHostError={setEditConnectionHostError}
         pending={updateConnectionPending}
         onUpdate={handleUpdateConnection}
       />

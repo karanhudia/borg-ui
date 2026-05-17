@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import { Info } from 'lucide-react'
 import type { DeployConnectionPayload } from '../types'
+import { SshHostField } from './SshHostField'
 
 interface DeployKeyDialogProps {
   t: TFunction
@@ -24,6 +25,8 @@ interface DeployKeyDialogProps {
   setOpen: Dispatch<SetStateAction<boolean>>
   connectionForm: DeployConnectionPayload
   setConnectionForm: Dispatch<SetStateAction<DeployConnectionPayload>>
+  hostError?: string
+  setHostError: Dispatch<SetStateAction<string | undefined>>
   pending: boolean
   onDeploy: () => void
 }
@@ -34,6 +37,8 @@ export function DeployKeyDialog({
   setOpen,
   connectionForm,
   setConnectionForm,
+  hostError,
+  setHostError,
   pending,
   onDeploy,
 }: DeployKeyDialogProps) {
@@ -42,13 +47,15 @@ export function DeployKeyDialog({
       <DialogTitle>{t('sshConnections.deployDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
+          <SshHostField
             label={t('sshConnections.deployDialog.host')}
-            fullWidth
             value={connectionForm.host}
-            onChange={(e) => setConnectionForm({ ...connectionForm, host: e.target.value })}
             placeholder={t('sshConnections.deployDialog.hostPlaceholder')}
-            InputLabelProps={{ shrink: true }}
+            hostError={hostError}
+            onHostChange={(host) => {
+              setConnectionForm({ ...connectionForm, host })
+              setHostError(undefined)
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.username')}

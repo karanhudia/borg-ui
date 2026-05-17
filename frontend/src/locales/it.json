@@ -1450,6 +1450,9 @@
       "updating": "Aggiornamento in corso...",
       "submit": "Aggiorna Connessione"
     },
+    "validation": {
+      "hostBareOnly": "Inserisci un nome DNS o indirizzo IP senza schema, percorso, utente, spazi, parentesi o porta."
+    },
     "deleteConnectionDialog": {
       "title": "Elimina Connessione SSH",
       "confirm": "Sei sicuro di voler eliminare questa connessione?",

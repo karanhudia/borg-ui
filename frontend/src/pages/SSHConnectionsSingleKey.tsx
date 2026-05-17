@@ -16,6 +16,7 @@ import {
   createImportForm,
   createTestConnectionForm,
 } from './ssh-connections-single-key/formDefaults'
+import { normalizeSshHostInput } from './ssh-connections-single-key/hostValidation'
 import type {
   DeployConnectionPayload,
   ImportKeyPayload,
@@ -51,6 +52,9 @@ export default function SSHConnectionsSingleKey() {
   const [connectionForm, setConnectionForm] = useState(createConnectionForm)
   const [testConnectionForm, setTestConnectionForm] = useState(createTestConnectionForm)
   const [editConnectionForm, setEditConnectionForm] = useState(createEditConnectionForm)
+  const [connectionHostError, setConnectionHostError] = useState<string>()
+  const [testConnectionHostError, setTestConnectionHostError] = useState<string>()
+  const [editConnectionHostError, setEditConnectionHostError] = useState<string>()
 
   // Queries
   const { data: systemKeyData, isLoading: keyLoading } = useQuery({
@@ -333,17 +337,29 @@ export default function SSHConnectionsSingleKey() {
 
   const handleDeployKey = () => {
     if (!systemKey) return
+    const normalizedHost = normalizeSshHostInput(connectionForm.host)
+    if (!normalizedHost.ok) {
+      setConnectionHostError(t(normalizedHost.errorKey))
+      return
+    }
+    setConnectionHostError(undefined)
     deployKeyMutation.mutate({
       keyId: systemKey.id,
-      connectionData: connectionForm,
+      connectionData: { ...connectionForm, host: normalizedHost.host },
     })
   }
 
   const handleTestManualConnection = () => {
     if (!systemKey) return
+    const normalizedHost = normalizeSshHostInput(testConnectionForm.host)
+    if (!normalizedHost.ok) {
+      setTestConnectionHostError(t(normalizedHost.errorKey))
+      return
+    }
+    setTestConnectionHostError(undefined)
     testConnectionMutation.mutate({
       keyId: systemKey.id,
-      connectionData: testConnectionForm,
+      connectionData: { ...testConnectionForm, host: normalizedHost.host },
     })
     setTestConnectionDialogOpen(false)
     setTestConnectionForm(createTestConnectionForm())
@@ -351,6 +367,7 @@ export default function SSHConnectionsSingleKey() {
 
   const handleEditConnection = (connection: SSHConnection) => {
     setSelectedConnection(connection)
+    setEditConnectionHostError(undefined)
     setEditConnectionForm({
       host: connection.host,
       username: connection.username,
@@ -366,9 +383,15 @@ export default function SSHConnectionsSingleKey() {
 
   const handleUpdateConnection = () => {
     if (!selectedConnection) return
+    const normalizedHost = normalizeSshHostInput(editConnectionForm.host)
+    if (!normalizedHost.ok) {
+      setEditConnectionHostError(t(normalizedHost.errorKey))
+      return
+    }
+    setEditConnectionHostError(undefined)
     updateConnectionMutation.mutate({
       connectionId: selectedConnection.id,
-      connectionData: editConnectionForm,
+      connectionData: { ...editConnectionForm, host: normalizedHost.host },
     })
   }
 
@@ -446,10 +469,16 @@ export default function SSHConnectionsSingleKey() {
       setImportForm={setImportForm}
       connectionForm={connectionForm}
       setConnectionForm={setConnectionForm}
+      connectionHostError={connectionHostError}
+      setConnectionHostError={setConnectionHostError}
       testConnectionForm={testConnectionForm}
       setTestConnectionForm={setTestConnectionForm}
+      testConnectionHostError={testConnectionHostError}
+      setTestConnectionHostError={setTestConnectionHostError}
       editConnectionForm={editConnectionForm}
       setEditConnectionForm={setEditConnectionForm}
+      editConnectionHostError={editConnectionHostError}
+      setEditConnectionHostError={setEditConnectionHostError}
       generateKeyPending={generateKeyMutation.isPending}
       importKeyPending={importKeyMutation.isPending}
       deployKeyPending={deployKeyMutation.isPending}
