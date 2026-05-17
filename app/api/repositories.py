@@ -2394,6 +2394,42 @@ async def prune_repository(
         keep_yearly = request.get("keep_yearly", 1)
         dry_run = request.get("dry_run", False)
 
+        if not dry_run:
+            prune_job = start_background_maintenance_job(
+                db,
+                repository,
+                PruneJob,
+                error_key="backend.errors.repo.pruneAlreadyRunning",
+                dispatcher=lambda job,
+                router_repo=SimpleNamespace(
+                    id=repository.id,
+                    borg_version=repository.borg_version,
+                ): BorgRouter(router_repo).prune(
+                    job.id,
+                    keep_hourly,
+                    keep_daily,
+                    keep_weekly,
+                    keep_monthly,
+                    keep_quarterly,
+                    keep_yearly,
+                    False,
+                ),
+                extra_fields={"scheduled_prune": False},
+            )
+
+            logger.info(
+                "Prune job created",
+                job_id=prune_job.id,
+                repository_id=repo_id,
+                user=current_user.username,
+            )
+
+            return {
+                "job_id": prune_job.id,
+                "status": "pending",
+                "message": "backend.success.repo.pruneJobStarted",
+            }
+
         prune_job = create_maintenance_job(
             db,
             PruneJob,

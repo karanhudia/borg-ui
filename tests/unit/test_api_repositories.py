@@ -579,7 +579,7 @@ class TestRepositoriesCreate:
         ) as mock_prune:
             response = test_client.post(
                 f"/api/repositories/{repo.id}/prune",
-                json={"keep_daily": 7},
+                json={"keep_daily": 7, "dry_run": True},
                 headers=admin_headers,
             )
 
