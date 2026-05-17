@@ -14,7 +14,14 @@ from typing import Optional
 import structlog
 
 from app.database.database import get_db
-from app.database.models import User, Repository, CheckJob, CompactJob, BackupJob
+from app.database.models import (
+    User,
+    Repository,
+    CheckJob,
+    CompactJob,
+    BackupJob,
+    PruneJob,
+)
 from app.api.maintenance_jobs import (
     get_repository_with_access,
     start_background_maintenance_job,
@@ -156,6 +163,40 @@ async def prune_archives(
         )
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
+    if not data.dry_run:
+        prune_job = start_background_maintenance_job(
+            db,
+            repo,
+            PruneJob,
+            error_key="backend.errors.prune.alreadyRunning",
+            dispatcher=lambda job, repo_id=repo.id: prune_v2_service.execute_prune(
+                job.id,
+                repo_id,
+                data.keep_hourly,
+                data.keep_daily,
+                data.keep_weekly,
+                data.keep_monthly,
+                data.keep_quarterly,
+                data.keep_yearly,
+                False,
+            ),
+            status="running",
+            extra_fields={"scheduled_prune": False},
+        )
+
+        logger.info(
+            "Borg2 prune job created",
+            job_id=prune_job.id,
+            repository_id=repo.id,
+            user=current_user.username,
+        )
+
+        return {
+            "job_id": prune_job.id,
+            "status": "running",
+            "message": "backend.success.repo.pruneJobStarted",
+        }
+
     result = await prune_v2_service.run_prune(
         repo=repo,
         keep_hourly=data.keep_hourly,
