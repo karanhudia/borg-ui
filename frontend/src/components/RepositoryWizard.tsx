@@ -135,6 +135,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       repository?.pre_backup_script ||
       repository?.post_backup_script
     )
+  const showAgentBackupSourceStep =
+    wizardState.executionTarget === 'agent' && wizardState.repositoryMode === 'full'
+  const showSourceStep = showLegacyBackupSteps || showAgentBackupSourceStep
 
   // Step definitions
   const steps = useMemo(() => {
@@ -146,7 +149,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       },
     ]
 
-    if (showLegacyBackupSteps) {
+    if (showSourceStep) {
       baseSteps.push({
         key: 'source',
         label: t('repositoryWizard.steps.source'),
@@ -181,7 +184,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     })
 
     return baseSteps
-  }, [showLegacyBackupSteps, t])
+  }, [showLegacyBackupSteps, showSourceStep, t])
 
   // Load selectable remote execution targets.
   const loadWizardData = async () => {
@@ -480,6 +483,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       case 'source':
         if (wizardState.executionTarget === 'agent' && wizardState.dataSource === 'remote')
           return false
+        if (
+          wizardState.executionTarget === 'agent' &&
+          wizardState.repositoryMode === 'full' &&
+          wizardState.sourceDirs.length === 0
+        )
+          return false
         if (wizardState.dataSource === 'remote' && !wizardState.sourceSshConnectionId) return false
         return true
 
@@ -647,7 +656,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             }}
             onBrowseSource={() => setShowSourceExplorer(true)}
             onBrowseRemoteSource={() => setShowRemoteSourceExplorer(true)}
-            sourceRequired={false}
+            sourceRequired={showAgentBackupSourceStep}
           />
         )
 
@@ -663,7 +672,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               selectedKeyfile: wizardState.selectedKeyfile,
             }}
             onChange={handleStateChange}
-            showRemotePath={false}
+            showRemotePath={wizardState.executionTarget === 'agent'}
           />
         )
 

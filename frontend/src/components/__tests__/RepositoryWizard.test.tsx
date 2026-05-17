@@ -321,70 +321,70 @@ describe('RepositoryWizard', () => {
           null
         )
       })
+    })
 
-      it('submits managed-agent execution target fields', async () => {
-        const user = userEvent.setup()
-        const { onSubmit } = renderWizard('create')
+    it('submits managed-agent execution target fields', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
 
-        await waitFor(() => {
-          expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
-        })
-
-        setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Repo')
-        setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-repo')
-
-        await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
-
-        expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
-
-        await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
-        const agentListbox = await screen.findByRole('listbox')
-        await user.click(within(agentListbox).getByText('workstation.local'))
-
-        expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
-        await user.click(screen.getByRole('button', { name: /Next/i }))
-
-        await waitFor(() => {
-          expect(
-            screen.getByText(/Source paths are resolved on the selected managed agent/i)
-          ).toBeInTheDocument()
-        })
-
-        const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-        setInputValue(dirInput, '/home/user/data')
-        await user.click(screen.getByRole('button', { name: /Add/i }))
-        await user.click(screen.getByRole('button', { name: /Next/i }))
-
-        await waitFor(() => {
-          expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
-        })
-        setInputValue(screen.getByLabelText(/^Passphrase/i), 'agentpass')
-        await user.click(screen.getByRole('button', { name: /Next/i }))
-
-        await waitFor(() => {
-          expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
-        })
-        await user.click(screen.getByRole('button', { name: /Next/i }))
-
-        await waitFor(() => {
-          expect(screen.getByRole('button', { name: /Create Repository/i })).toBeInTheDocument()
-        })
-        await user.click(screen.getByRole('button', { name: /Create Repository/i }))
-
-        expect(onSubmit).toHaveBeenCalledWith(
-          expect.objectContaining({
-            name: 'Agent Repo',
-            path: '/srv/borg/agent-repo',
-            execution_target: 'agent',
-            agent_machine_id: 101,
-            connection_id: null,
-            source_connection_id: null,
-            source_directories: ['/home/user/data'],
-            passphrase: 'agentpass',
-          }),
-          null
-        )
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
       })
+
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Repo')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-repo')
+
+      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+
+      expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
+
+      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
+      const agentListbox = await screen.findByRole('listbox')
+      await user.click(within(agentListbox).getByText('workstation.local'))
+
+      expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Source paths are resolved on the selected managed agent/i)
+        ).toBeInTheDocument()
+      })
+
+      const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
+      setInputValue(dirInput, '/home/user/data')
+      await user.click(screen.getByRole('button', { name: /Add/i }))
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'agentpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Create Repository/i })).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Agent Repo',
+          path: '/srv/borg/agent-repo',
+          execution_target: 'agent',
+          agent_machine_id: 101,
+          connection_id: null,
+          source_connection_id: null,
+          source_directories: ['/home/user/data'],
+          passphrase: 'agentpass',
+        }),
+        null
+      )
     })
   })
 
