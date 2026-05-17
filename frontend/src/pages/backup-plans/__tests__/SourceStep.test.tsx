@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 
 import { createInitialState } from '../state'
 import { SourceStep } from '../wizard-step/SourceStep'
@@ -15,7 +17,31 @@ vi.mock('../../../services/api', () => ({
 }))
 
 vi.mock('../../../components/wizard', () => ({
-  WizardStepDataSource: () => <div data-testid="wizard-data-source">Path controls</div>,
+  WizardStepDataSource: ({
+    onChange,
+  }: {
+    onChange: (updates: {
+      dataSource: 'local'
+      sourceDirs: string[]
+      sourceSshConnectionId: string
+    }) => void
+  }) => (
+    <div data-testid="wizard-data-source">
+      Path controls
+      <button
+        type="button"
+        onClick={() =>
+          onChange({
+            dataSource: 'local',
+            sourceDirs: ['/srv/app-data'],
+            sourceSshConnectionId: '',
+          })
+        }
+      >
+        Select app data path
+      </button>
+    </div>
+  ),
 }))
 
 vi.mock('../../../components/ExcludePatternInput', () => ({
@@ -37,6 +63,26 @@ vi.mock('../../../components/CodeEditor', () => ({
       <textarea value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   ),
+}))
+
+vi.mock('../../../components/ResponsiveDialog', () => ({
+  default: ({
+    open,
+    children,
+    footer,
+    maxWidth,
+  }: {
+    open: boolean
+    children: ReactNode
+    footer?: ReactNode
+    maxWidth?: string
+  }) =>
+    open ? (
+      <div role="dialog" data-max-width={maxWidth}>
+        {children}
+        {footer}
+      </div>
+    ) : null,
 }))
 
 const discoveryResponse = {
@@ -148,6 +194,28 @@ function renderSourceStep(overrides = {}) {
   )
 }
 
+function StatefulSourceStep({
+  initialState = createInitialState(),
+}: {
+  initialState?: ReturnType<typeof createInitialState>
+}) {
+  const [wizardState, setWizardState] = useState(initialState)
+
+  return (
+    <SourceStep
+      wizardState={wizardState}
+      sshConnections={[]}
+      scripts={[]}
+      loadingScripts={false}
+      updateState={(updates) => setWizardState((current) => ({ ...current, ...updates }))}
+      openSourceExplorer={vi.fn()}
+      openExcludeExplorer={vi.fn()}
+      onCreateScript={vi.fn(async () => ({ id: 101 }))}
+      t={t as never}
+    />
+  )
+}
+
 describe('SourceStep', () => {
   afterEach(() => {
     vi.clearAllMocks()
@@ -160,17 +228,40 @@ describe('SourceStep', () => {
     expect(screen.queryByTestId('wizard-data-source')).not.toBeInTheDocument()
   })
 
-  it('offers one files route plus database and planned container source types', async () => {
+  it('offers one files route and database scanning without showing planned containers', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
     renderSourceStep()
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
 
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-max-width', 'sm')
     expect(await screen.findByRole('button', { name: /files and folders/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /database/i })).toBeInTheDocument()
-    expect(screen.getByText(/docker containers/i)).toBeInTheDocument()
-    expect(screen.getAllByText(/planned/i).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/docker containers/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/planned/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /manual path/i })).not.toBeInTheDocument()
+  })
+
+  it('keeps a files and folders summary after selecting paths on a scripted plan', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const initialState = {
+      ...createInitialState(),
+      sourceDirectories: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+      preBackupScriptId: 101,
+      postBackupScriptId: 102,
+    }
+    render(<StatefulSourceStep initialState={initialState} />)
+
+    expect(screen.getByText('Database scan')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /files and folders/i }))
+    fireEvent.click(screen.getByRole('button', { name: /select app data path/i }))
+    fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
+
+    expect(screen.getByText('/srv/app-data')).toBeInTheDocument()
+    expect(screen.getByText('Files and folders')).toBeInTheDocument()
+    expect(screen.queryByText('Database scan')).not.toBeInTheDocument()
   })
 
   it('applies database templates with code-editor script drafts', async () => {

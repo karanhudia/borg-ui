@@ -6,6 +6,8 @@ import ExcludePatternInput from '../../../components/ExcludePatternInput'
 import { SourceSelectionDialog } from './SourceSelectionDialog'
 import type { BackupPlanWizardStepProps } from './types'
 
+const DATABASE_DUMP_ROOT = '/var/tmp/borg-ui/database-dumps'
+
 type SourceStepProps = Pick<
   BackupPlanWizardStepProps,
   | 'wizardState'
@@ -32,10 +34,13 @@ export function SourceStep({
 }: SourceStepProps) {
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
   const hasSources = wizardState.sourceDirectories.length > 0
-  const sourceKindLabel =
-    wizardState.preBackupScriptId || wizardState.postBackupScriptId
-      ? t('backupPlans.sourceChooser.databaseTitle')
-      : t('backupPlans.sourceChooser.filesTitle')
+  const isDatabaseSource = wizardState.sourceDirectories.some(
+    (sourceDirectory) =>
+      sourceDirectory === DATABASE_DUMP_ROOT || sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
+  )
+  const sourceKindLabel = isDatabaseSource
+    ? t('backupPlans.sourceChooser.databaseTitle')
+    : t('backupPlans.sourceChooser.filesTitle')
 
   return (
     <Stack spacing={3}>
@@ -81,11 +86,7 @@ export function SourceStep({
                 width: 34,
               }}
             >
-              {wizardState.preBackupScriptId || wizardState.postBackupScriptId ? (
-                <Database size={18} />
-              ) : (
-                <FolderOpen size={18} />
-              )}
+              {isDatabaseSource ? <Database size={18} /> : <FolderOpen size={18} />}
             </Box>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="subtitle2">

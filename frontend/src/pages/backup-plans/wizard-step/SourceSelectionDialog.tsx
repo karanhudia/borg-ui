@@ -23,7 +23,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { ArrowLeft, Boxes, Database as DatabaseIcon, FolderOpen, Info } from 'lucide-react'
+import { ArrowLeft, Database as DatabaseIcon, FolderOpen, Info } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import CodeEditor from '../../../components/CodeEditor'
@@ -70,18 +70,10 @@ const fallbackSourceTypes: SourceDiscoveryTypeOption[] = [
     status: 'enabled',
     disabled: false,
   },
-  {
-    id: 'container',
-    label: 'Docker containers',
-    description: 'Container scanning is planned.',
-    status: 'planned',
-    disabled: true,
-  },
 ]
 
 function sourceIcon(id: string) {
   if (id === 'database') return <DatabaseIcon size={18} />
-  if (id === 'container') return <Boxes size={18} />
   return <FolderOpen size={18} />
 }
 
@@ -155,6 +147,7 @@ export function SourceSelectionDialog({
   }, [discovery, open])
 
   const sourceTypes = discovery?.source_types?.length ? discovery.source_types : fallbackSourceTypes
+  const visibleSourceTypes = sourceTypes.filter((sourceType) => sourceType.id !== 'container')
   const databaseItems = useMemo(() => {
     const detections = discovery?.detections || []
     const templates = discovery?.templates || []
@@ -216,7 +209,7 @@ export function SourceSelectionDialog({
 
   const renderTypeChooser = () => (
     <Stack spacing={1.25}>
-      {sourceTypes.map((sourceType) => (
+      {visibleSourceTypes.map((sourceType) => (
         <Card
           key={sourceType.id}
           variant="outlined"
@@ -524,7 +517,7 @@ export function SourceSelectionDialog({
     <ResponsiveDialog
       open={open}
       onClose={onClose}
-      maxWidth="md"
+      maxWidth="sm"
       fullWidth
       footer={
         <DialogActions>
