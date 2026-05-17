@@ -5,6 +5,7 @@ import os
 import json
 import re
 import tempfile
+import shutil
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -1069,15 +1070,18 @@ class BackupService:
 
                 try:
                     # Mount all paths from this connection under a single shared temp root
+                    mount_kwargs = {
+                        "connection_id": connection_id,
+                        "remote_paths": remote_paths,
+                        "job_id": job_id,
+                    }
+                    if shared_ssh_temp_root is not None:
+                        mount_kwargs["temp_root"] = shared_ssh_temp_root
+
                     (
                         temp_root,
                         mount_info_list,
-                    ) = await mount_service.mount_ssh_paths_shared(
-                        connection_id=connection_id,
-                        remote_paths=remote_paths,
-                        job_id=job_id,
-                        temp_root=shared_ssh_temp_root,
-                    )
+                    ) = await mount_service.mount_ssh_paths_shared(**mount_kwargs)
                     if shared_ssh_temp_root is None:
                         shared_ssh_temp_root = temp_root
 
@@ -1110,8 +1114,40 @@ class BackupService:
                     )
                     # Skip all paths from this connection
 
-            # Add local paths at the end
-            processed_paths.extend(local_paths)
+            # Add local paths at the end. Borg UI's managed restore canary is a
+            # local path, but when the backup cwd is an SSHFS root we stage that
+            # tiny generated payload under the same cwd so it still archives as
+            # .borg-ui/restore-canaries/... instead of an absolute data-dir path.
+            prepared_local_paths = []
+            for local_path in local_paths:
+                canary_archive_path = to_restore_canary_archive_source_path(
+                    local_path, settings.data_dir
+                )
+                if canary_archive_path and shared_ssh_temp_root:
+                    source = Path(local_path)
+                    target = Path(shared_ssh_temp_root) / canary_archive_path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if target.exists():
+                        if target.is_dir():
+                            shutil.rmtree(target)
+                        else:
+                            target.unlink()
+                    if source.is_dir():
+                        shutil.copytree(source, target)
+                    else:
+                        shutil.copy2(source, target)
+                    prepared_local_paths.append(canary_archive_path)
+                    logger.info(
+                        "Staged restore canary under SSH backup cwd",
+                        source=str(source),
+                        staged_path=str(target),
+                        archive_path=canary_archive_path,
+                        job_id=job_id,
+                    )
+                else:
+                    prepared_local_paths.append(local_path)
+
+            processed_paths.extend(prepared_local_paths)
 
             # Store mount_ids for cleanup
             if mount_ids:
@@ -1239,7 +1275,9 @@ class BackupService:
 
         if ssh_mount_info:
             ssh_path_count = len(ssh_mount_info)
-            temp_roots = list(set(temp_root for temp_root, _ in ssh_mount_info))
+            temp_roots = list(
+                dict.fromkeys(temp_root for temp_root, _ in ssh_mount_info)
+            )
 
             if len(temp_roots) == 1:
                 backup_cwd = temp_roots[0]
@@ -1270,7 +1308,7 @@ class BackupService:
             canary_archive_path = to_restore_canary_archive_source_path(
                 path, settings.data_dir
             )
-            if canary_archive_path and backup_cwd is None:
+            if canary_archive_path:
                 rewritten_paths.append(canary_archive_path)
                 has_canary_path = True
             else:
@@ -1278,12 +1316,19 @@ class BackupService:
 
         if has_canary_path:
             backup_paths = rewritten_paths
-            backup_cwd = str(Path(settings.data_dir))
-            logger.info(
-                "Using hidden archive path for restore canary",
-                cwd=backup_cwd,
-                job_id=job_id,
-            )
+            if backup_cwd is None:
+                backup_cwd = str(Path(settings.data_dir))
+                logger.info(
+                    "Using hidden archive path for restore canary",
+                    cwd=backup_cwd,
+                    job_id=job_id,
+                )
+            else:
+                logger.info(
+                    "Using hidden archive path for restore canary with existing backup cwd",
+                    cwd=backup_cwd,
+                    job_id=job_id,
+                )
 
         return backup_paths, backup_cwd
 
