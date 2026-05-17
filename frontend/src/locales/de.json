@@ -518,6 +518,9 @@
         "maxDuration": "Max Duration",
         "unlimited": "Unlimited"
       },
+      "meta": {
+        "extraFlags": "Check-Flags"
+      },
       "actions": {
         "editSchedule": "Edit schedule",
         "removeSchedule": "Remove schedule",
@@ -729,6 +732,7 @@
         "archiveNameTemplate": "Archivnamen-Vorlage",
         "compression": "Komprimierung",
         "extraBorgFlags": "Benutzerdefinierte Flags (Optional)",
+        "checkExtraFlags": "Erweiterte Check-Flags",
         "uploadSpeedLimit": "Upload-Geschwindigkeitslimit",
         "runRepositories": "Repositories ausführen",
         "maxParallelRepositories": "Max. parallele Repositories",
@@ -802,7 +806,8 @@
         "runPruneAfter": "Prune nach erfolgreichen Repository-Sicherungen ausführen",
         "runCompactAfter": "Compact nach der Backup-Wartung ausführen",
         "runCheckAfter": "Check nach erfolgreichen Repository-Sicherungen ausführen",
-        "checkMaxDurationHelper": "Sekunden. 0 bedeutet unbegrenzt."
+        "checkMaxDurationHelper": "Sekunden. 0 bedeutet unbegrenzt.",
+        "checkExtraFlagsHelper": "Zusätzliche borg check Optionen, die an Wartungs-Checks des Plans angehängt werden."
       },
       "review": {
         "plan": "Plan",
@@ -827,6 +832,7 @@
         "retentionValue": "H {{hourly}} / T {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / J {{yearly}}",
         "compact": "Compact",
         "check": "Check",
+        "checkExtraFlags": "Check-Flags",
         "checkDuration": "{{seconds}} Sekunden",
         "pathCount_one": "{{count}} Pfad",
         "pathCount_other": "{{count}} Pfade",
@@ -1694,6 +1700,8 @@
       "otherReposAccessible": "Andere Repositories bleiben während dieser Operation zugänglich.",
       "maxDurationLabel": "Maximale Dauer (Sekunden)",
       "maxDurationHelper": "Maximale Zeit für die Überprüfung. Standard: 3600 Sekunden (1 Stunde). 0 für unbegrenzt.",
+      "extraFlagsLabel": "Erweiterte Check-Flags",
+      "extraFlagsHelper": "Zusätzliche borg check Optionen, die an diesen Lauf angehängt werden, z. B. --repair oder --verify-data.",
       "maxDurationHelperBorg2": "Bei Borg 2 führt ein Zeitlimit zu einer partiellen, nur auf das Repository bezogenen Prüfung. Verwende 0 für eine vollständige Repository- und Archivprüfung.",
       "maxDurationHelperBorg2Short": "Zeitbegrenzte Borg-2-Prüfungen decken nur die Repository-Phase ab. Verwende 0 für eine vollständige Prüfung.",
       "borg2InlineNotice": "Zeitbegrenzte Borg-2-Prüfungen sind nur repository-basiert.",
@@ -2666,6 +2674,8 @@
     "maxDuration": "Maximale Dauer (Sekunden)",
     "maxDurationHint": "Zeitlimit für den Überprüfungsvorgang (3600 = 1 Stunde)",
     "maxDurationHintBorg2": "Bei Borg 2 startet ein Zeitlimit eine partielle Repository-Prüfung (3600 = 1 Stunde). Verwende 0, um Archivprüfungen einzuschließen.",
+    "extraFlags": "Erweiterte Check-Flags",
+    "extraFlagsHint": "Zusätzliche borg check Optionen, die an geplante Checks angehängt werden.",
     "notificationHint": "Benachrichtigungseinstellungen für Überprüfungsaufgaben können unter Einstellungen → Benachrichtigungen konfiguriert werden",
     "noScheduledChecks": "Keine geplanten Überprüfungen",
     "noScheduledChecksDesc": "Konfiguriere automatische Repository-Überprüfungen, um die Datenintegrität sicherzustellen",

@@ -110,6 +110,7 @@ def _payload(repo_ids: list[int], **overrides):
         "run_compact_after": False,
         "run_check_after": False,
         "check_max_duration": 3600,
+        "check_extra_flags": None,
         "prune_keep_hourly": 0,
         "prune_keep_daily": 7,
         "prune_keep_weekly": 4,
@@ -153,6 +154,7 @@ def _create_execution_plan(test_db, repos: list[Repository], **overrides):
         "run_compact_after": False,
         "run_check_after": False,
         "check_max_duration": 3600,
+        "check_extra_flags": None,
         "prune_keep_hourly": 0,
         "prune_keep_daily": 7,
         "prune_keep_weekly": 4,
@@ -252,7 +254,9 @@ class TestBackupPlanRoutes:
 
         create_response = test_client.post(
             "/api/backup-plans/",
-            json=_payload([repo.id]),
+            json=_payload(
+                [repo.id], run_check_after=True, check_extra_flags=" --verify-data "
+            ),
             headers=admin_headers,
         )
 
@@ -261,6 +265,7 @@ class TestBackupPlanRoutes:
         assert created["name"] == "Nightly project plan"
         assert created["source_directories"] == ["/srv/project"]
         assert created["repository_count"] == 1
+        assert created["check_extra_flags"] == "--verify-data"
         assert created["repositories"][0]["repository_id"] == repo.id
 
         list_response = test_client.get("/api/backup-plans/", headers=admin_headers)
@@ -269,7 +274,12 @@ class TestBackupPlanRoutes:
             created["id"]
         ]
 
-        update_payload = _payload([repo.id], name="Updated project plan")
+        update_payload = _payload(
+            [repo.id],
+            name="Updated project plan",
+            run_check_after=True,
+            check_extra_flags=" --repair --save-space ",
+        )
         update_response = test_client.put(
             f"/api/backup-plans/{created['id']}",
             json=update_payload,
@@ -278,6 +288,7 @@ class TestBackupPlanRoutes:
 
         assert update_response.status_code == 200
         assert update_response.json()["name"] == "Updated project plan"
+        assert update_response.json()["check_extra_flags"] == "--repair --save-space"
 
         delete_response = test_client.delete(
             f"/api/backup-plans/{created['id']}", headers=admin_headers
@@ -1927,6 +1938,7 @@ class TestBackupPlanRoutes:
             test_db,
             [repo],
             run_check_after=True,
+            check_extra_flags="--verify-data",
             run_prune_after=True,
             run_compact_after=True,
         )
@@ -1947,6 +1959,7 @@ class TestBackupPlanRoutes:
                 maintenance_calls.append("check")
                 job = test_db.query(CheckJob).filter_by(id=job_id).one()
                 assert job.repository_id == repo.id
+                assert job.extra_flags == "--verify-data"
                 job.status = "completed"
                 job.completed_at = datetime.utcnow()
                 test_db.commit()

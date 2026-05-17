@@ -36,6 +36,7 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
         repository_type="local",
         check_cron_expression="0 2 * * *",
         check_max_duration=123,
+        check_extra_flags="--verify-data",
     )
     db_session.add(repo)
     db_session.commit()
@@ -52,6 +53,7 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
                 repository_id=repo.id,
                 status="pending",
                 max_duration=kwargs["extra_fields"]["max_duration"],
+                extra_flags=kwargs["extra_fields"]["extra_flags"],
                 scheduled_check=True,
             )
             await run_due_scheduled_checks(db_session)
@@ -60,6 +62,7 @@ async def test_check_scheduler_creates_job_and_updates_next_run(db_session):
     assert repo.last_scheduled_check is not None
     assert repo.next_scheduled_check is not None
     mock_start.assert_called_once()
+    assert mock_start.call_args.kwargs["extra_fields"]["extra_flags"] == "--verify-data"
 
 
 @pytest.mark.unit

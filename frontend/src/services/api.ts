@@ -79,6 +79,7 @@ export interface RepositoryData {
   passphrase?: string
   mode?: 'full' | 'observe'
   custom_flags?: string | null
+  check_extra_flags?: string | null
   bypass_lock?: boolean
   has_schedule?: boolean
   schedule_enabled?: boolean

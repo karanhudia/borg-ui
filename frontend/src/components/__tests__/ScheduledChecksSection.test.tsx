@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { waitFor } from '@testing-library/react'
+import { createRef } from 'react'
+import { act, fireEvent, waitFor } from '@testing-library/react'
 import { AxiosResponse } from 'axios'
 
-import ScheduledChecksSection from '../ScheduledChecksSection'
+import ScheduledChecksSection, { type ScheduledChecksSectionRef } from '../ScheduledChecksSection'
 import { renderWithProviders, screen } from '../../test/test-utils'
 import { repositoriesAPI } from '@/services/api.ts'
 
@@ -75,11 +76,13 @@ describe('ScheduledChecksSection', () => {
         last_scheduled_check: null,
         next_scheduled_check: null,
         check_max_duration: 3600,
+        check_extra_flags: '--repair',
         notify_on_check_success: false,
         notify_on_check_failure: true,
         enabled: true,
       },
     } as AxiosResponse)
+    vi.mocked(repositoriesAPI.updateCheckSchedule).mockResolvedValue({ data: {} } as AxiosResponse)
     vi.mocked(repositoriesAPI.getRepositoryCheckJobs).mockResolvedValue({
       data: {
         jobs: [
@@ -107,4 +110,33 @@ describe('ScheduledChecksSection', () => {
 
     expect(await screen.findByText('Repo One')).toBeInTheDocument()
   })
+
+  it('prefills and saves advanced check flags for scheduled checks', async () => {
+    const sectionRef = createRef<ScheduledChecksSectionRef>()
+
+    renderWithProviders(<ScheduledChecksSection ref={sectionRef} />)
+
+    await waitFor(() => {
+      expect(sectionRef.current).not.toBeNull()
+    })
+
+    await act(async () => {
+      await sectionRef.current?.openEditForRepo(1)
+    })
+
+    const flagsInput = await screen.findByLabelText('Advanced check flags')
+    expect(flagsInput).toHaveValue('--repair')
+
+    fireEvent.change(flagsInput, { target: { value: '--verify-data' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }))
+
+    await waitFor(() => {
+      expect(repositoriesAPI.updateCheckSchedule).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          check_extra_flags: '--verify-data',
+        })
+      )
+    })
+  }, 60000)
 })

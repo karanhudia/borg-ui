@@ -128,19 +128,30 @@ export function ScheduleStep({
           />
           {wizardState.runCheckAfter && (
             <Box sx={wizardSwitchChildSx}>
-              <TextField
-                label={t('backupPlans.wizard.fields.checkMaxDuration')}
-                type="number"
-                value={wizardState.checkMaxDuration}
-                onChange={(event) =>
-                  updateState({
-                    checkMaxDuration: Math.max(0, Number(event.target.value) || 0),
-                  })
-                }
-                helperText={t('backupPlans.wizard.maintenance.checkMaxDurationHelper')}
-                inputProps={{ min: 0 }}
-                fullWidth
-              />
+              <Stack spacing={2}>
+                <TextField
+                  label={t('backupPlans.wizard.fields.checkMaxDuration')}
+                  type="number"
+                  value={wizardState.checkMaxDuration}
+                  onChange={(event) =>
+                    updateState({
+                      checkMaxDuration: Math.max(0, Number(event.target.value) || 0),
+                    })
+                  }
+                  helperText={t('backupPlans.wizard.maintenance.checkMaxDurationHelper')}
+                  inputProps={{ min: 0 }}
+                  fullWidth
+                />
+                <TextField
+                  label={t('backupPlans.wizard.fields.checkExtraFlags')}
+                  value={wizardState.checkExtraFlags}
+                  onChange={(event) => updateState({ checkExtraFlags: event.target.value })}
+                  helperText={t('backupPlans.wizard.maintenance.checkExtraFlagsHelper')}
+                  placeholder="--repair --verify-data"
+                  inputProps={{ spellCheck: false }}
+                  fullWidth
+                />
+              </Stack>
             </Box>
           )}
         </Box>

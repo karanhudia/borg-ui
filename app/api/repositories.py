@@ -100,6 +100,13 @@ def _normalize_restore_check_paths(paths: Any) -> list[str]:
     return normalized_paths
 
 
+def _normalize_optional_flags(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _resolve_restore_check_targets(
     *,
     request: Optional[dict],
@@ -2325,6 +2332,11 @@ async def check_repository(
 
         # Extract max_duration from request body (default to 3600)
         max_duration = request.get("max_duration", 3600) if request else 3600
+        check_extra_flags = (
+            _normalize_optional_flags(request.get("check_extra_flags"))
+            if request
+            else None
+        )
 
         check_job = start_background_maintenance_job(
             db,
@@ -2336,7 +2348,10 @@ async def check_repository(
                 id=repository.id,
                 borg_version=repository.borg_version,
             ): BorgRouter(router_repo).check(job.id),
-            extra_fields={"max_duration": max_duration},
+            extra_fields={
+                "max_duration": max_duration,
+                "extra_flags": check_extra_flags,
+            },
         )
 
         logger.info(
@@ -3520,6 +3535,11 @@ async def update_check_schedule(
         if max_duration is not None:
             repo.check_max_duration = max_duration
 
+        if "check_extra_flags" in request:
+            repo.check_extra_flags = _normalize_optional_flags(
+                request.get("check_extra_flags")
+            )
+
         notify_on_success = request.get("notify_on_success")
         if notify_on_success is not None:
             repo.notify_on_check_success = notify_on_success
@@ -3567,6 +3587,7 @@ async def update_check_schedule(
                 "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
                 "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
                 "check_max_duration": repo.check_max_duration,
+                "check_extra_flags": repo.check_extra_flags,
                 "notify_on_check_success": repo.notify_on_check_success,
                 "notify_on_check_failure": repo.notify_on_check_failure,
             },
@@ -3808,6 +3829,7 @@ async def get_check_schedule(
             "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
             "next_scheduled_check": serialize_datetime(repo.next_scheduled_check),
             "check_max_duration": repo.check_max_duration,
+            "check_extra_flags": repo.check_extra_flags,
             "notify_on_check_success": repo.notify_on_check_success,
             "notify_on_check_failure": repo.notify_on_check_failure,
             # "enabled" means "will actually run": cron is set AND toggle is on.

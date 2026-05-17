@@ -80,6 +80,7 @@ class PlanRunContext:
     run_compact_after: bool
     run_check_after: bool
     check_max_duration: int
+    check_extra_flags: Optional[str]
     prune_keep_hourly: int
     prune_keep_daily: int
     prune_keep_weekly: int
@@ -474,6 +475,7 @@ class BackupPlanExecutionService:
                 run_compact_after=bool(plan.run_compact_after),
                 run_check_after=bool(plan.run_check_after),
                 check_max_duration=plan.check_max_duration,
+                check_extra_flags=plan.check_extra_flags,
                 prune_keep_hourly=plan.prune_keep_hourly,
                 prune_keep_daily=plan.prune_keep_daily,
                 prune_keep_weekly=plan.prune_keep_weekly,
@@ -936,6 +938,7 @@ class BackupPlanExecutionService:
                 extra_fields={
                     "scheduled_check": False,
                     "max_duration": context.check_max_duration,
+                    "extra_flags": context.check_extra_flags,
                 },
             )
             backup_job.maintenance_status = "running_check"

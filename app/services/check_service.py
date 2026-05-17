@@ -1,5 +1,6 @@
 import asyncio
 import json
+import shlex
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -110,6 +111,26 @@ class CheckService:
                 cmd.extend(
                     ["--repository-only", "--max-duration", str(job.max_duration)]
                 )
+
+            extra_flags_value = getattr(job, "extra_flags", None)
+            extra_flags = (
+                extra_flags_value.strip() if isinstance(extra_flags_value, str) else ""
+            )
+            if extra_flags:
+                try:
+                    cmd.extend(shlex.split(extra_flags))
+                    logger.info(
+                        "Added extra flags to borg check command",
+                        job_id=job_id,
+                        extra_flags=extra_flags,
+                    )
+                except ValueError as exc:
+                    logger.warning(
+                        "Failed to parse check extra flags, skipping",
+                        job_id=job_id,
+                        extra_flags=extra_flags,
+                        error=str(exc),
+                    )
 
             if repository.remote_path:
                 cmd.extend(["--remote-path", repository.remote_path])

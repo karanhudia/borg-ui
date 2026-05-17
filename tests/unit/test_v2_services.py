@@ -243,6 +243,48 @@ class TestCheckV2Service:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_execute_check_appends_extra_flags(
+        self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
+    ):
+        job = CheckJob(
+            repository_id=borg_v2_repo_for_services.id,
+            status="running",
+            max_duration=0,
+            extra_flags="--verify-data --save-space",
+        )
+        db_session.add(job)
+        db_session.commit()
+        db_session.refresh(job)
+
+        service = CheckV2Service()
+        service.log_dir = tmp_path
+
+        with (
+            patch("app.services.v2.check_service.SessionLocal", testing_session_local),
+            patch(
+                "app.services.v2.check_service.resolve_repo_ssh_key_file",
+                return_value=None,
+            ),
+            patch(
+                "app.services.v2.check_service._get_borg2_binary", return_value="borg2"
+            ),
+            patch(
+                "app.services.v2.check_service._get_process_start_time",
+                return_value=123,
+            ),
+            patch(
+                "app.services.v2.check_service.asyncio.create_subprocess_exec",
+                return_value=FakeProcess(returncode=0, stderr_lines=[]),
+            ) as mock_exec,
+        ):
+            await service.execute_check(job.id, borg_v2_repo_for_services.id)
+
+        cmd = mock_exec.call_args.args
+        assert "--verify-data" in cmd
+        assert "--save-space" in cmd
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_execute_check_sets_warning_state(
         self, db_session, testing_session_local, borg_v2_repo_for_services, tmp_path
     ):

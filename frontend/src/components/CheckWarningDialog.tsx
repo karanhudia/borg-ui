@@ -18,13 +18,20 @@ import { Warning, CheckCircle, Lock, InfoOutlined } from '@mui/icons-material'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+export interface CheckWarningConfirmOptions {
+  maxDuration: number
+  checkExtraFlags: string
+}
+
 interface CheckWarningDialogProps {
   open: boolean
   repositoryName: string
   borgVersion?: number
-  onConfirm: (maxDuration: number) => void
+  onConfirm: (options: CheckWarningConfirmOptions) => void
   onCancel: () => void
   isLoading?: boolean
+  initialMaxDuration?: number
+  initialCheckExtraFlags?: string
 }
 
 export default function CheckWarningDialog({
@@ -34,9 +41,12 @@ export default function CheckWarningDialog({
   onConfirm,
   onCancel,
   isLoading = false,
+  initialMaxDuration = 3600,
+  initialCheckExtraFlags = '',
 }: CheckWarningDialogProps) {
   const { t } = useTranslation()
-  const [maxDuration, setMaxDuration] = useState<number>(3600)
+  const [maxDuration, setMaxDuration] = useState<number>(initialMaxDuration)
+  const [checkExtraFlags, setCheckExtraFlags] = useState(initialCheckExtraFlags)
   const isBorg2 = borgVersion === 2
   return (
     <ResponsiveDialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
@@ -93,6 +103,18 @@ export default function CheckWarningDialog({
             InputProps={{
               inputProps: { min: 0 },
             }}
+          />
+        </Box>
+
+        <Box sx={{ mt: 2 }}>
+          <TextField
+            label={t('dialogs.checkWarning.extraFlagsLabel')}
+            value={checkExtraFlags}
+            onChange={(e) => setCheckExtraFlags(e.target.value)}
+            fullWidth
+            placeholder="--repair --verify-data"
+            helperText={t('dialogs.checkWarning.extraFlagsHelper')}
+            inputProps={{ spellCheck: false }}
           />
         </Box>
 
@@ -159,7 +181,7 @@ export default function CheckWarningDialog({
           {t('dialogs.checkWarning.cancel')}
         </Button>
         <Button
-          onClick={() => onConfirm(maxDuration)}
+          onClick={() => onConfirm({ maxDuration, checkExtraFlags })}
           variant="contained"
           color="warning"
           disabled={isLoading}

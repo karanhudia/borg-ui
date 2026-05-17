@@ -532,6 +532,9 @@
         "maxDuration": "Max Duration",
         "unlimited": "Unlimited"
       },
+      "meta": {
+        "extraFlags": "Check flags"
+      },
       "actions": {
         "editSchedule": "Edit schedule",
         "removeSchedule": "Remove schedule",
@@ -729,6 +732,7 @@
         "archiveNameTemplate": "Archive name template",
         "compression": "Compression",
         "extraBorgFlags": "Custom Flags (Optional)",
+        "checkExtraFlags": "Advanced check flags",
         "uploadSpeedLimit": "Upload speed limit",
         "runRepositories": "Run repositories",
         "maxParallelRepositories": "Max parallel repositories",
@@ -802,7 +806,8 @@
         "runPruneAfter": "Run prune after successful repository backups",
         "runCompactAfter": "Run compact after backup maintenance",
         "runCheckAfter": "Run check after successful repository backups",
-        "checkMaxDurationHelper": "Seconds. Use 0 for unlimited."
+        "checkMaxDurationHelper": "Seconds. Use 0 for unlimited.",
+        "checkExtraFlagsHelper": "Additional borg check options appended to plan maintenance checks."
       },
       "review": {
         "plan": "Plan",
@@ -827,6 +832,7 @@
         "retentionValue": "H {{hourly}} / D {{daily}} / W {{weekly}} / M {{monthly}} / Q {{quarterly}} / Y {{yearly}}",
         "compact": "Compact",
         "check": "Check",
+        "checkExtraFlags": "Check flags",
         "checkDuration": "{{seconds}} seconds",
         "pathCount_one": "{{count}} path",
         "pathCount_other": "{{count}} paths",
@@ -1694,6 +1700,8 @@
       "otherReposAccessible": "Other repositories will remain accessible during this operation.",
       "maxDurationLabel": "Max Duration (seconds)",
       "maxDurationHelper": "Maximum time for the check operation. Default: 3600 seconds (1 hour). Set to 0 for unlimited.",
+      "extraFlagsLabel": "Advanced check flags",
+      "extraFlagsHelper": "Additional borg check options appended to this run, such as --repair or --verify-data.",
       "maxDurationHelperBorg2": "For Borg 2, setting a time limit runs a partial repository-only check. Use 0 for a full repository and archive check.",
       "maxDurationHelperBorg2Short": "Timed Borg 2 checks cover the repository phase only. Use 0 for a full check.",
       "borg2InlineNotice": "Timed Borg 2 checks are repository-only.",
@@ -2666,6 +2674,8 @@
     "maxDuration": "Max Duration (seconds)",
     "maxDurationHint": "Time limit for check operation (3600 = 1 hour)",
     "maxDurationHintBorg2": "For Borg 2, a time limit runs a partial repository-only check (3600 = 1 hour). Use 0 to include archive checks.",
+    "extraFlags": "Advanced check flags",
+    "extraFlagsHint": "Additional borg check options appended to scheduled checks.",
     "notificationHint": "Notification settings for check jobs can be configured in Settings → Notifications",
     "noScheduledChecks": "No scheduled checks",
     "noScheduledChecksDesc": "Configure automatic repository checks to ensure data integrity",

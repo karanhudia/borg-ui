@@ -395,6 +395,51 @@ class TestCheckServiceSSHKey:
         assert_borg_rsh_has_identity(captured_env)
 
     @pytest.mark.asyncio
+    async def test_extra_flags_are_appended_to_borg_check_command(self):
+        repo = _make_repo(repository_type="local")
+        job = MagicMock(spec=CheckJob)
+        job.id = 1
+        job.status = "pending"
+        job.max_duration = 0
+        job.extra_flags = "--verify-data --save-space"
+        job.process_pid = None
+        job.process_start_time = None
+
+        captured_cmd = ()
+
+        def mock_query(model):
+            m = MagicMock()
+            if model == CheckJob:
+                m.filter.return_value.first.return_value = job
+            elif model == Repository:
+                m.filter.return_value.first.return_value = repo
+            return m
+
+        mock_db = MagicMock()
+        mock_db.query.side_effect = mock_query
+
+        proc = _mock_process(returncode=0)
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal captured_cmd
+            captured_cmd = args
+            return proc
+
+        with patch("app.services.check_service.SessionLocal", return_value=mock_db):
+            with patch(
+                "app.services.check_service.asyncio.create_subprocess_exec",
+                side_effect=fake_exec,
+            ):
+                with patch("app.services.check_service.settings") as mock_settings:
+                    mock_settings.data_dir = tempfile.mkdtemp()
+                    with patch("app.services.check_service.NotificationService"):
+                        service = CheckService()
+                        await service.execute_check(job_id=1, repository_id=1)
+
+        assert "--verify-data" in captured_cmd
+        assert "--save-space" in captured_cmd
+
+    @pytest.mark.asyncio
     async def test_legacy_ssh_key_id_injected_into_borg_rsh(self):
         """BORG_RSH must include -i <key> for legacy repos using ssh_key_id directly."""
         secret = "testsecretkey1234567890123456789"

@@ -64,6 +64,7 @@ class CompactV2Request(BaseModel):
 class CheckV2Request(BaseModel):
     repository_id: int
     max_duration: Optional[int] = None
+    check_extra_flags: Optional[str] = None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -295,6 +296,12 @@ async def check_repository(
         )
 
     repo = _get_v2_repo_by_id(data.repository_id, db, current_user)
+    check_extra_flags = (
+        data.check_extra_flags.strip() if data.check_extra_flags else None
+    )
+    extra_fields = {"max_duration": data.max_duration}
+    if check_extra_flags:
+        extra_fields["extra_flags"] = check_extra_flags
 
     check_job = start_background_maintenance_job(
         db,
@@ -305,9 +312,7 @@ async def check_repository(
             job.id, repo_id
         ),
         status="running",
-        extra_fields={
-            "max_duration": data.max_duration,
-        },
+        extra_fields=extra_fields,
     )
 
     logger.info(

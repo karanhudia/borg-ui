@@ -43,6 +43,7 @@ interface ScheduledCheck {
   last_scheduled_check: string | null
   next_scheduled_check: string | null
   check_max_duration: number
+  check_extra_flags?: string | null
   notify_on_check_success: boolean
   notify_on_check_failure: boolean
   enabled: boolean
@@ -70,6 +71,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     cron_expression: '0 2 * * 0', // Default: Weekly on Sunday at 2 AM
     timezone: getBrowserTimeZone(),
     max_duration: 3600,
+    check_extra_flags: '',
   })
   const timezoneOptions = useMemo(
     () => getSupportedTimeZones(formData.timezone),
@@ -188,11 +190,14 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
 
   // Run check now mutation
   const runCheckMutation = useMutation({
-    mutationFn: async (repoId: number) => {
+    mutationFn: async (check: ScheduledCheck) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const repo = repositories.find((r: any) => r.id === repoId)
+      const repo = repositories.find((r: any) => r.id === check.repository_id)
       if (!repo) throw new Error('Repository not found')
-      return new BorgApiClient(repo).checkRepository()
+      return new BorgApiClient(repo).checkRepository({
+        maxDuration: check.check_max_duration,
+        checkExtraFlags: check.check_extra_flags || '',
+      })
     },
     onSuccess: () => {
       toast.success(t('scheduledChecks.toasts.checkStarted'))
@@ -211,6 +216,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       cron_expression: '0 2 * * 0', // Weekly on Sunday at 2 AM
       timezone: getBrowserTimeZone(),
       max_duration: 3600,
+      check_extra_flags: '',
     })
     setShowDialog(true)
   }
@@ -221,6 +227,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
       cron_expression: check.check_cron_expression || '0 2 * * 0',
       timezone: check.check_timezone || check.timezone || 'UTC',
       max_duration: check.check_max_duration,
+      check_extra_flags: check.check_extra_flags || '',
     })
     setShowDialog(true)
   }
@@ -240,12 +247,14 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
           cron_expression: data.check_cron_expression || '0 2 * * 0',
           timezone: data.check_timezone || data.timezone || getBrowserTimeZone(),
           max_duration: data.check_max_duration ?? 3600,
+          check_extra_flags: data.check_extra_flags || '',
         })
       } else {
         setFormData({
           cron_expression: '0 2 * * 0',
           timezone: getBrowserTimeZone(),
           max_duration: 3600,
+          check_extra_flags: '',
         })
       }
       setShowDialog(true)
@@ -256,6 +265,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
         cron_expression: '0 2 * * 0',
         timezone: getBrowserTimeZone(),
         max_duration: 3600,
+        check_extra_flags: '',
       })
       setShowDialog(true)
     }
@@ -362,7 +372,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               canManage={canDo(check.repository_id, 'maintenance')}
               onEdit={() => openEditDialog(check)}
               onDelete={() => handleDelete(check)}
-              onRunNow={() => runCheckMutation.mutate(check.repository_id)}
+              onRunNow={() => runCheckMutation.mutate(check)}
               onToggle={() => handleToggle(check)}
             />
           ))}
@@ -593,6 +603,16 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               }
               fullWidth
               inputProps={{ min: 60 }}
+            />
+
+            <TextField
+              label={t('scheduledChecks.extraFlags')}
+              value={formData.check_extra_flags}
+              onChange={(e) => setFormData({ ...formData, check_extra_flags: e.target.value })}
+              helperText={t('scheduledChecks.extraFlagsHint')}
+              fullWidth
+              placeholder="--repair --verify-data"
+              inputProps={{ spellCheck: false }}
             />
           </Stack>
         </DialogContent>

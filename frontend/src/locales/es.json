@@ -518,6 +518,9 @@
         "maxDuration": "Max Duration",
         "unlimited": "Unlimited"
       },
+      "meta": {
+        "extraFlags": "Flags de check"
+      },
       "actions": {
         "editSchedule": "Edit schedule",
         "removeSchedule": "Remove schedule",
@@ -729,6 +732,7 @@
         "archiveNameTemplate": "Plantilla de nombre de archivo",
         "compression": "Compresión",
         "extraBorgFlags": "Indicadores personalizados (Opcional)",
+        "checkExtraFlags": "Opciones avanzadas de check",
         "uploadSpeedLimit": "Límite de velocidad de subida",
         "runRepositories": "Ejecutar repositorios",
         "maxParallelRepositories": "Máx. repositorios en paralelo",
@@ -802,7 +806,8 @@
         "runPruneAfter": "Ejecutar prune tras copias correctas del repositorio",
         "runCompactAfter": "Ejecutar compact tras el mantenimiento de copia",
         "runCheckAfter": "Ejecutar check tras copias correctas del repositorio",
-        "checkMaxDurationHelper": "Segundos. Usa 0 para sin límite."
+        "checkMaxDurationHelper": "Segundos. Usa 0 para sin límite.",
+        "checkExtraFlagsHelper": "Opciones adicionales de borg check añadidas a los checks de mantenimiento del plan."
       },
       "review": {
         "plan": "Plan",
@@ -827,6 +832,7 @@
         "retentionValue": "H {{hourly}} / D {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
         "compact": "Compact",
         "check": "Check",
+        "checkExtraFlags": "Flags de check",
         "checkDuration": "{{seconds}} segundos",
         "pathCount_one": "{{count}} ruta",
         "pathCount_other": "{{count}} rutas",
@@ -1694,6 +1700,8 @@
       "otherReposAccessible": "Otros repositorios seguirán siendo accesibles durante esta operación.",
       "maxDurationLabel": "Duración máxima (segundos)",
       "maxDurationHelper": "Tiempo máximo para la operación de verificación. Predeterminado: 3600 segundos (1 hora). Establece 0 para ilimitado.",
+      "extraFlagsLabel": "Opciones avanzadas de check",
+      "extraFlagsHelper": "Opciones adicionales de borg check añadidas a esta ejecución, como --repair o --verify-data.",
       "maxDurationHelperBorg2": "En Borg 2, establecer un límite de tiempo ejecuta una comprobación parcial solo del repositorio. Usa 0 para una comprobación completa de repositorio y archivos.",
       "maxDurationHelperBorg2Short": "Las comprobaciones temporizadas de Borg 2 solo cubren la fase del repositorio. Usa 0 para una comprobación completa.",
       "borg2InlineNotice": "Las comprobaciones temporizadas de Borg 2 son solo del repositorio.",
@@ -2666,6 +2674,8 @@
     "maxDuration": "Duración máxima (segundos)",
     "maxDurationHint": "Límite de tiempo para la operación de comprobación (3600 = 1 hora)",
     "maxDurationHintBorg2": "En Borg 2, un límite de tiempo ejecuta una comprobación parcial solo del repositorio (3600 = 1 hora). Usa 0 para incluir comprobaciones de archivos.",
+    "extraFlags": "Opciones avanzadas de check",
+    "extraFlagsHint": "Opciones adicionales de borg check añadidas a comprobaciones programadas.",
     "notificationHint": "La configuración de notificaciones para trabajos de comprobación se puede configurar en Configuración → Notificaciones",
     "noScheduledChecks": "Sin comprobaciones programadas",
     "noScheduledChecksDesc": "Configura comprobaciones automáticas del repositorio para garantizar la integridad de los datos",

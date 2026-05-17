@@ -98,6 +98,20 @@ describe('CheckWarningDialog', () => {
       expect(screen.getByText(/Maximum time for the check operation/)).toBeInTheDocument()
     })
 
+    it('renders advanced check flags input', () => {
+      render(
+        <CheckWarningDialog
+          open={true}
+          repositoryName="test-repo"
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      )
+
+      expect(screen.getByLabelText('Advanced check flags')).toBeInTheDocument()
+      expect(screen.getByText(/Additional borg check options/)).toBeInTheDocument()
+    })
+
     it('renders Cancel button', () => {
       render(
         <CheckWarningDialog
@@ -148,7 +162,7 @@ describe('CheckWarningDialog', () => {
       )
 
       await user.click(screen.getByRole('button', { name: /Run Check/ }))
-      expect(mockOnConfirm).toHaveBeenCalledWith(3600)
+      expect(mockOnConfirm).toHaveBeenCalledWith({ maxDuration: 3600, checkExtraFlags: '' })
     })
 
     it('calls onCancel when Cancel is clicked', async () => {
@@ -180,7 +194,29 @@ describe('CheckWarningDialog', () => {
       fireEvent.change(input, { target: { value: '7200' } })
       fireEvent.click(screen.getByRole('button', { name: /Run Check/ }))
 
-      expect(mockOnConfirm).toHaveBeenCalledWith(7200)
+      expect(mockOnConfirm).toHaveBeenCalledWith({ maxDuration: 7200, checkExtraFlags: '' })
+    })
+
+    it('calls onConfirm with advanced check flags', () => {
+      render(
+        <CheckWarningDialog
+          open={true}
+          repositoryName="test-repo"
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+        />
+      )
+
+      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '7200' } })
+      fireEvent.change(screen.getByLabelText('Advanced check flags'), {
+        target: { value: '--repair --verify-data' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: /Run Check/ }))
+
+      expect(mockOnConfirm).toHaveBeenCalledWith({
+        maxDuration: 7200,
+        checkExtraFlags: '--repair --verify-data',
+      })
     })
 
     it('handles empty input by using default value', () => {

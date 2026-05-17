@@ -228,6 +228,9 @@ class Repository(Base):
     check_max_duration = Column(
         Integer, default=3600
     )  # Max check duration in seconds (for partial checks)
+    check_extra_flags = Column(
+        Text, nullable=True
+    )  # Extra command-line flags for borg check (advanced users)
     notify_on_check_success = Column(
         Boolean, default=False, nullable=False
     )  # Per-repository override
@@ -616,6 +619,7 @@ class BackupPlan(Base):
     run_compact_after = Column(Boolean, default=False, nullable=False)
     run_check_after = Column(Boolean, default=False, nullable=False)
     check_max_duration = Column(Integer, default=3600, nullable=False)
+    check_extra_flags = Column(Text, nullable=True)
     prune_keep_hourly = Column(Integer, default=0, nullable=False)
     prune_keep_daily = Column(Integer, default=7, nullable=False)
     prune_keep_weekly = Column(Integer, default=4, nullable=False)
@@ -754,6 +758,7 @@ class CheckJob(Base):
     max_duration = Column(
         Integer, nullable=True
     )  # Maximum duration in seconds (for partial checks)
+    extra_flags = Column(Text, nullable=True)  # Extra command-line flags for borg check
     process_pid = Column(Integer, nullable=True)  # Container PID for orphan detection
     process_start_time = Column(
         BigInteger, nullable=True
