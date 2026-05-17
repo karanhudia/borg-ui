@@ -1,7 +1,7 @@
 ---
 title: Usage Guide
 nav_order: 4
-description: "Create repositories, run backups, browse archives, and restore files"
+description: "Create repositories, build backup plans, browse archives, and restore files"
 ---
 
 # Usage Guide
@@ -64,6 +64,26 @@ Use the container path in repositories, sources, and restore destinations.
 
 Keep repository passphrases and keyfiles safe. Borg UI can help manage repositories, but Borg encryption recovery still depends on your secrets.
 
+## Create a Remote Repository
+
+Remote repositories use a Remote Machine connection.
+
+1. Go to Remote Machines.
+2. Add and test the remote machine.
+3. Go to Repositories.
+4. Choose Create Repository.
+5. Select a remote or SSH location.
+6. Pick the remote machine and enter the repository path, for example:
+
+```text
+/backups/laptop
+```
+
+7. Choose encryption settings.
+8. Save.
+
+Use remote repositories when the Borg archive should live on another server or off-site storage.
+
 ## Import an Existing Repository
 
 Use Import Existing when a Borg repository already exists and you want Borg UI to manage or monitor it.
@@ -76,7 +96,15 @@ Use Import Existing when a Borg repository already exists and you want Borg UI t
 
 Full mode lets Borg UI run backups for the repository. Observability-only mode is for repositories backed up by something else; Borg UI can browse archives, restore files, run checks, and show health, but it will not run backups or scheduled backups for that repository.
 
-## Add Backup Sources
+## Repository vs Backup Plan
+
+A repository is the storage target. Use it to inspect repository-level information such as path, archive count, total size, last backup, last check, archives, restores, and maintenance actions.
+
+A Backup Plan is the backup workflow. It defines what to back up, which repository or repositories to use, when the backup should run, and which scripts or maintenance actions should run around it.
+
+Community plans can use one repository. Pro plans can use multiple repositories, such as one local target and one off-site target, and can run them one after another or in parallel.
+
+## Choose Backup Sources
 
 Use paths that exist inside the container.
 
@@ -101,14 +129,45 @@ environment:
 
 Then use `/documents`, `/photos`, and `/backups` in the UI.
 
-## Run a Backup
+For remote sources, choose a Remote Machine in the Backup Plan and select paths from that machine.
 
-1. Open the repository.
-2. Go to Backup.
-3. Confirm the source paths.
-4. Start the backup.
+## Create a Backup Plan
 
-The job page shows live progress, logs, and final status.
+Create a Backup Plan after the repository exists.
+
+If the repository already has source paths, you can start from the repository:
+
+1. Go to Repositories.
+2. Find the local or remote repository.
+3. Choose Create Backup Plan.
+4. Name the plan.
+5. Choose whether to move the repository source settings into the plan.
+6. If the repository already has a schedule, choose whether to copy it to the plan and pause the old repository schedule.
+7. Save, then review the plan from Backup Plans.
+
+For a new setup, start from Backup Plans:
+
+1. Go to Backup Plans.
+2. Choose Create Backup Plan.
+3. Choose local paths or a remote source.
+4. Select one or more repositories as storage targets.
+5. Configure archive settings, scripts, and maintenance options.
+6. Configure the schedule, or leave it disabled for manual runs.
+7. Review and save.
+
+For a local repository, the plan can back up local container paths such as `/local/Documents` into `/local/borg-backups/laptop`.
+
+For a remote repository, the plan can back up local or remote sources into the SSH repository. If you want both a local copy and an off-site copy, add both repositories to the plan when your license allows multiple repositories.
+
+## Run a Backup Plan
+
+1. Go to Backup Plans.
+2. Find the plan.
+3. Choose Run.
+
+The job page shows live progress, logs, and final status for each repository in the plan.
+
+If an older repository still has legacy source settings, its repository card can also show Legacy Backup. Use Backup Plans for new backup workflows.
 
 ## Browse Archives
 
@@ -150,23 +209,26 @@ Typical flow:
 3. Add a remote machine with host, port, username, and optional default path.
 4. Deploy the public key or copy it into the remote user's `authorized_keys`.
 5. Test the connection.
-6. Use that remote machine when creating repositories or backup sources.
+6. Use that remote machine when creating remote repositories or remote backup sources.
 
 The old `/ssh-keys` route redirects to Remote Machines.
 
 Remote source backups and SSH restore destinations use SSHFS. The container needs FUSE access for those flows; see [Installation](installation#optional-fuse-access).
 
-## Schedules
+## Backup Plan Schedules
 
-Schedules run backups automatically.
+Backup Plan schedules run backups automatically.
 
-1. Go to Schedules.
-2. Create a schedule.
-3. Pick one or more repositories.
+1. Go to Backup Plans.
+2. Create or edit a plan.
+3. Open the Schedule step.
 4. Set the cron expression and timezone.
-5. Save.
+5. Turn the schedule on or off.
+6. Save.
 
-Schedules can also run prune and compact after a successful backup.
+Plans can also run prune, compact, and check after successful repository backups.
+
+The Schedules area still shows scheduled repository work. New backup schedules should usually live on Backup Plans.
 
 Use notifications for scheduled backup failures so failures do not go unnoticed.
 
