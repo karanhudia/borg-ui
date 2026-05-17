@@ -425,6 +425,64 @@ class TestBackupPlanRoutes:
         assert body["source_ssh_connection_id"] == source_connection.id
         assert body["source_directories"] == ["/home/tester/project"]
 
+    def test_create_plan_supports_multiple_source_locations(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        source_a = _create_ssh_connection(
+            test_db, host="server-a.example", username="backup-a", port=22
+        )
+        source_b = _create_ssh_connection(
+            test_db, host="server-b.example", username="backup-b", port=2222
+        )
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": ["/srv/app"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_a.id,
+                "paths": ["/home/app/data"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_b.id,
+                "paths": ["/var/lib/service"],
+            },
+        ]
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                source_type="mixed",
+                source_ssh_connection_id=None,
+                source_directories=[
+                    "/srv/app",
+                    "/home/app/data",
+                    "/var/lib/service",
+                ],
+                source_locations=source_locations,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["source_type"] == "mixed"
+        assert body["source_ssh_connection_id"] is None
+        assert body["source_directories"] == [
+            "/srv/app",
+            "/home/app/data",
+            "/var/lib/service",
+        ]
+        assert body["source_locations"] == source_locations
+
+        plan = test_db.query(BackupPlan).filter(BackupPlan.id == body["id"]).one()
+        assert json.loads(plan.source_locations) == source_locations
+
     def test_remote_source_requires_connection(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -2066,6 +2124,67 @@ class TestBackupPlanRoutes:
         async def fake_execute_backup(job_id, repository, db, **kwargs):
             assert kwargs["compression_override"] == "zstd,19"
             job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with patch(
+            "app.services.backup_plan_execution_service.backup_service.execute_backup",
+            side_effect=fake_execute_backup,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.refresh(run)
+        assert run.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_execute_plan_run_passes_grouped_source_locations(self, test_db):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        source_a = _create_ssh_connection(
+            test_db, host="server-a.example", username="backup-a", port=22
+        )
+        source_b = _create_ssh_connection(
+            test_db, host="server-b.example", username="backup-b", port=2222
+        )
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": ["/srv/app"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_a.id,
+                "paths": ["/home/app/data"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_b.id,
+                "paths": ["/var/lib/service"],
+            },
+        ]
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            source_type="mixed",
+            source_ssh_connection_id=None,
+            source_directories=json.dumps(
+                ["/srv/app", "/home/app/data", "/var/lib/service"]
+            ),
+            source_locations=json.dumps(source_locations),
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            assert repository == repo.path
+            assert kwargs["source_directories"] == [
+                "/srv/app",
+                "/home/app/data",
+                "/var/lib/service",
+            ]
+            assert kwargs["source_ssh_connection_id"] is None
+            assert kwargs["source_locations"] == source_locations
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            assert job.source_ssh_connection_id is None
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             db.commit()

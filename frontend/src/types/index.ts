@@ -1,3 +1,12 @@
+export type SourceLocationKind = 'local' | 'remote'
+export type SourceType = SourceLocationKind | 'mixed'
+
+export interface SourceLocation {
+  source_type: SourceLocationKind
+  source_ssh_connection_id?: number | null
+  paths: string[]
+}
+
 export interface Repository {
   id: number
   name: string
@@ -14,6 +23,7 @@ export interface Repository {
   remote_path?: string
   connection_id?: number | null
   source_directories?: string[]
+  source_locations?: SourceLocation[]
   exclude_patterns?: string[]
   mode?: 'full' | 'observe'
   bypass_lock?: boolean
@@ -102,9 +112,10 @@ export interface BackupPlan {
   name: string
   description?: string | null
   enabled: boolean
-  source_type: 'local' | 'remote'
+  source_type: SourceType
   source_ssh_connection_id?: number | null
   source_directories: string[]
+  source_locations?: SourceLocation[]
   exclude_patterns: string[]
   archive_name_template: string
   compression: string
@@ -182,9 +193,10 @@ export interface BackupPlanData {
   name: string
   description?: string | null
   enabled: boolean
-  source_type: 'local' | 'remote'
+  source_type: SourceType
   source_ssh_connection_id?: number | null
   source_directories: string[]
+  source_locations?: SourceLocation[]
   exclude_patterns?: string[]
   archive_name_template: string
   compression: string

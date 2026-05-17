@@ -42,7 +42,9 @@ export function ReviewStep({
   const sourceLocationLabel =
     wizardState.sourceType === 'remote'
       ? t('backupPlans.wizard.review.remoteSource')
-      : t('backupPlans.wizard.review.localSource')
+      : wizardState.sourceType === 'mixed'
+        ? t('backupPlans.sourceChooser.mixedSources')
+        : t('backupPlans.wizard.review.localSource')
   const sourceConnectionLabel = selectedSourceConnection
     ? formatSshConnectionLabel(selectedSourceConnection)
     : wizardState.sourceSshConnectionId
@@ -113,7 +115,7 @@ export function ReviewStep({
 
           <ReviewAttrRow label={t('backupPlans.wizard.review.sourceLocation')}>
             <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
-              {wizardState.sourceType === 'remote' ? (
+              {wizardState.sourceType === 'remote' || wizardState.sourceType === 'mixed' ? (
                 <Laptop size={12} style={{ opacity: 0.6, flexShrink: 0 }} />
               ) : (
                 <HardDrive size={12} style={{ opacity: 0.6, flexShrink: 0 }} />

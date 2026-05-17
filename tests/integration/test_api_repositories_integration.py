@@ -83,14 +83,18 @@ def _create_borg2_repo_with_archives(test_db, tmp_path):
 
 
 def _assert_prune_contract_shape(payload: dict, *, dry_run: bool) -> None:
-    assert payload["dry_run"] is dry_run
     assert isinstance(payload["job_id"], int)
     assert isinstance(payload["status"], str)
-    assert payload["status"] == "completed"
-    assert set(payload["prune_result"].keys()) == {"success", "stdout", "stderr"}
-    assert payload["prune_result"]["success"] is True
-    assert isinstance(payload["prune_result"]["stdout"], str)
-    assert isinstance(payload["prune_result"]["stderr"], str)
+    if dry_run:
+        assert payload["dry_run"] is True
+        assert payload["status"] == "completed"
+        assert set(payload["prune_result"].keys()) == {"success", "stdout", "stderr"}
+        assert payload["prune_result"]["success"] is True
+        assert isinstance(payload["prune_result"]["stdout"], str)
+        assert isinstance(payload["prune_result"]["stderr"], str)
+    else:
+        assert payload["status"] == "pending"
+        assert payload["message"] == "backend.success.repo.pruneJobStarted"
 
 
 def _run_prune_contract_assertions(
@@ -132,6 +136,15 @@ def _run_prune_contract_assertions(
     assert response.status_code == 200, f"Prune failed: {response.json()}"
     payload = response.json()
     _assert_prune_contract_shape(payload, dry_run=dry_run)
+
+    if not dry_run:
+        job_data = wait_for_job_terminal_status(
+            test_client,
+            "/api/repositories/prune-jobs",
+            payload["job_id"],
+            admin_headers,
+        )
+        assert job_data["status"] == "completed"
 
     list_after = test_client.get(
         archives_list_path,
@@ -341,7 +354,7 @@ class TestRepositoryStats:
         self, test_client: TestClient, admin_headers, db_borg_repo_with_archives
     ):
         """Test getting stats from a repository with archives"""
-        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+        repo, _, _, archive_names = db_borg_repo_with_archives
 
         response = test_client.get(
             f"/api/repositories/{repo.id}/stats", headers=admin_headers
@@ -728,39 +741,15 @@ class TestRepositoryMaintenanceOperations:
         WHY: Verifies prune removes old archives according to retention policy
         PREVENTS: Prune deleting wrong archives or failing silently
         """
-        repo, repo_path, test_data_path, archive_names = db_borg_repo_with_archives
+        repo, _, _, archive_names = db_borg_repo_with_archives
 
-        list_before = test_client.get(
-            f"/api/archives/list?repository={repo.path}", headers=admin_headers
+        _run_prune_contract_assertions(
+            test_client,
+            admin_headers,
+            repo,
+            archive_names,
+            dry_run=False,
         )
-        assert list_before.status_code == 200
-        assert len(parse_archives_payload(list_before.json())) == 2
-
-        response = test_client.post(
-            f"/api/repositories/{repo.id}/prune",
-            json={
-                "keep_hourly": 0,
-                "keep_daily": 1,
-                "keep_weekly": 0,
-                "keep_monthly": 0,
-                "keep_quarterly": 0,
-                "keep_yearly": 0,
-            },
-            headers=admin_headers,
-        )
-
-        assert response.status_code == 200, f"Prune failed: {response.json()}"
-        data = response.json()
-        assert data["status"] == "completed"
-        assert data["prune_result"]["success"] is True
-
-        list_after = test_client.get(
-            f"/api/archives/list?repository={repo.path}", headers=admin_headers
-        )
-        assert list_after.status_code == 200
-        remaining_archives = parse_archives_payload(list_after.json())
-        assert len(remaining_archives) == 1
-        assert remaining_archives[0]["name"] == archive_names[-1]
 
     def test_borg1_prune_dry_run_preserves_frontend_contract(
         self,

@@ -10,6 +10,7 @@ from app.database.models import (
     CheckJob,
     CompactJob,
     LicensingState,
+    PruneJob,
     Repository,
 )
 
@@ -186,18 +187,10 @@ class TestV2BackupRoutes:
         _enable_borg_v2(test_db)
         repo = _create_v2_repo(test_db, source_directories=["/data/source"])
 
-        with (
-            patch(
-                "app.api.v2.backups.prune_v2_service.run_prune",
-                new=AsyncMock(
-                    return_value={"success": True, "stdout": "done", "stderr": ""}
-                ),
-            ) as mock_prune,
-            patch(
-                "app.api.v2.backups.BorgRouter.update_stats",
-                new=AsyncMock(return_value=True),
-            ) as mock_update_stats,
-        ):
+        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
+            mock_start.return_value = PruneJob(
+                id=6, repository_id=repo.id, status="running"
+            )
             response = test_client.post(
                 "/api/v2/backup/prune",
                 json={"repository_id": repo.id, "keep_daily": 3, "dry_run": False},
@@ -206,25 +199,55 @@ class TestV2BackupRoutes:
 
         assert response.status_code == 200
         assert response.json() == {
-            "success": True,
-            "dry_run": False,
-            "prune_result": {
-                "success": True,
-                "stdout": "done\n\nRun compact to reclaim freed space",
-                "stderr": "",
-            },
+            "job_id": 6,
+            "status": "running",
+            "message": "backend.success.repo.pruneJobStarted",
         }
-        mock_prune.assert_awaited_once_with(
-            repo=repo,
-            keep_hourly=0,
-            keep_daily=3,
-            keep_weekly=4,
-            keep_monthly=6,
-            keep_quarterly=0,
-            keep_yearly=1,
-            dry_run=False,
-        )
-        mock_update_stats.assert_awaited_once_with(test_db)
+        mock_start.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_backup_prune_dispatcher_uses_stable_repo_id(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/data/source"])
+        dispatched = {}
+
+        def fake_start(db, repository, job_model, **kwargs):
+            dispatched["dispatcher"] = kwargs["dispatcher"]
+            assert job_model is PruneJob
+            assert kwargs["extra_fields"] == {"scheduled_prune": False}
+            return PruneJob(id=6, repository_id=repository.id, status="running")
+
+        with (
+            patch(
+                "app.api.v2.backups.start_background_maintenance_job",
+                side_effect=fake_start,
+            ),
+            patch(
+                "app.api.v2.backups.prune_v2_service.execute_prune",
+                new=AsyncMock(),
+            ) as mock_execute,
+        ):
+            response = test_client.post(
+                "/api/v2/backup/prune",
+                json={
+                    "repository_id": repo.id,
+                    "keep_hourly": 1,
+                    "keep_daily": 3,
+                    "keep_weekly": 2,
+                    "keep_monthly": 1,
+                    "keep_quarterly": 0,
+                    "keep_yearly": 0,
+                    "dry_run": False,
+                },
+                headers=admin_headers,
+            )
+            test_db.expunge_all()
+            await dispatched["dispatcher"](SimpleNamespace(id=44))
+
+        assert response.status_code == 200
+        mock_execute.assert_awaited_once_with(44, repo.id, 1, 3, 2, 1, 0, 0, False)
 
     def test_backup_prune_dry_run_returns_legacy_modal_shape(
         self, test_client: TestClient, admin_headers, test_db

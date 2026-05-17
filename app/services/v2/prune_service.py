@@ -8,6 +8,7 @@ import structlog
 
 from app.config import settings
 from app.core.borg2 import _get_borg2_binary, borg2
+from app.core.borg_router import BorgRouter
 from app.database.database import SessionLocal
 from app.database.models import PruneJob, Repository
 from app.utils.db_retries import commit_with_retry
@@ -206,6 +207,16 @@ class PruneV2Service:
                 job.status = "completed"
                 job.progress = 100
                 job.progress_message = "Prune completed successfully"
+                if not dry_run:
+                    try:
+                        await BorgRouter(repo).update_stats(db)
+                    except Exception as stats_error:
+                        logger.warning(
+                            "Borg2 prune completed but stats refresh failed",
+                            job_id=job_id,
+                            repository_id=repository_id,
+                            error=str(stats_error),
+                        )
             else:
                 job.status = "failed"
                 job.progress_message = "Prune failed"

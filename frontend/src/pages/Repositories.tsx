@@ -250,14 +250,29 @@ export default function Repositories() {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (response: any) => {
-      setPruneResults(response.data)
       if (response.data.dry_run) {
+        setPruneResults(response.data)
         toast.success(t('repositories.toasts.dryRunCompleted'))
         trackMaintenance(EventAction.COMPLETE, 'Prune', pruningRepository || undefined, {
           mode: 'dry_run',
           status: 'completed',
         })
+      } else if (response.data.job_id) {
+        setPruneResults(null)
+        toast.success(t('repositories.toasts.pruneStarted'))
+        trackMaintenance(EventAction.START, 'Prune', pruningRepository || undefined)
+        if (pruningRepository) {
+          maintenanceTrackingRef.current.set(pruningRepository.id, {
+            operation: 'Prune',
+          })
+          setRepositoriesWithJobs((prev) => new Set(prev).add(pruningRepository.id))
+          queryClient.invalidateQueries({ queryKey: ['running-jobs', pruningRepository.id] })
+          queryClient.invalidateQueries({ queryKey: ['repositories'] })
+          queryClient.invalidateQueries({ queryKey: ['repository-archives', pruningRepository.id] })
+        }
+        setPruningRepository(null)
       } else {
+        setPruneResults(response.data)
         toast.success(t('repositories.toasts.pruned'))
         trackMaintenance(EventAction.START, 'Prune', pruningRepository || undefined)
         if (pruningRepository) {

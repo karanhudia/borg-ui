@@ -52,6 +52,11 @@ from app.utils.schedule_time import (
 )
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.ssh_paths import apply_ssh_command_prefix
+from app.utils.source_locations import (
+    decode_source_locations,
+    legacy_source_fields,
+    normalize_source_locations,
+)
 from app.utils.borg_env import (
     get_standard_ssh_opts as shared_get_standard_ssh_opts,
     setup_borg_env as shared_setup_borg_env,
@@ -670,6 +675,44 @@ def _decode_json_list_field(value):
     return json.loads(value)
 
 
+def _repository_source_locations(repository: Repository) -> list[Dict[str, Any]]:
+    source_directories = _decode_json_list_field(repository.source_directories)
+    return decode_source_locations(
+        repository.source_locations,
+        source_type="remote" if repository.source_ssh_connection_id else "local",
+        source_ssh_connection_id=repository.source_ssh_connection_id,
+        source_directories=source_directories,
+    )
+
+
+def _normalize_repository_source_payload(
+    *,
+    source_locations: Optional[List[Dict[str, Any]]],
+    source_connection_id: Optional[int],
+    source_directories: Optional[List[str]],
+) -> tuple[list[Dict[str, Any]], Optional[int], list[str]]:
+    try:
+        normalized = normalize_source_locations(
+            source_locations,
+            source_type="remote" if source_connection_id else "local",
+            source_ssh_connection_id=source_connection_id,
+            source_directories=source_directories,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"key": "backend.errors.repo.sourceConnectionRequired"},
+        ) from exc
+
+    if not normalized:
+        return [], source_connection_id, source_directories or []
+
+    _source_type, legacy_connection_id, flattened_paths = legacy_source_fields(
+        normalized
+    )
+    return normalized, legacy_connection_id, flattened_paths
+
+
 # Helper function to format datetime with timezone
 def format_datetime(dt):
     """Format datetime to ISO8601 with UTC timezone indicator"""
@@ -688,6 +731,7 @@ class RepositoryCreate(BaseModel):
     compression: str = "lz4"  # lz4, zstd, zlib, none
     passphrase: Optional[str] = None
     source_directories: Optional[List[str]] = None  # List of directories to backup
+    source_locations: Optional[List[Dict[str, Any]]] = None
     exclude_patterns: Optional[List[str]] = (
         None  # List of exclude patterns (e.g., ["*.log", "*.tmp"])
     )
@@ -728,6 +772,7 @@ class RepositoryImport(BaseModel):
     passphrase: Optional[str] = None  # Required if repository is encrypted
     compression: str = "lz4"  # Default compression for future backups
     source_directories: Optional[List[str]] = None  # List of directories to backup
+    source_locations: Optional[List[Dict[str, Any]]] = None
     exclude_patterns: Optional[List[str]] = None  # List of exclude patterns
     connection_id: Optional[int] = None  # SSH connection ID for repository location
     remote_path: Optional[str] = None  # Path to borg on remote server
@@ -764,6 +809,7 @@ class RepositoryUpdate(BaseModel):
     path: Optional[str] = None
     compression: Optional[str] = None
     source_directories: Optional[List[str]] = None
+    source_locations: Optional[List[Dict[str, Any]]] = None
     exclude_patterns: Optional[List[str]] = None
     connection_id: Optional[int] = None  # SSH connection ID for repository location
     remote_path: Optional[str] = None
@@ -870,6 +916,7 @@ async def get_repositories(
                 is not None
             )
             schedule_summary = _get_repository_schedule_summary(repo.id, db)
+            source_directories = _decode_json_list_field(repo.source_directories)
 
             repo_list.append(
                 {
@@ -878,8 +925,14 @@ async def get_repositories(
                     "path": repo.path,
                     "encryption": repo.encryption,
                     "compression": repo.compression,
-                    "source_directories": _decode_json_list_field(
-                        repo.source_directories
+                    "source_directories": source_directories,
+                    "source_locations": decode_source_locations(
+                        repo.source_locations,
+                        source_type="remote"
+                        if repo.source_ssh_connection_id
+                        else "local",
+                        source_ssh_connection_id=repo.source_ssh_connection_id,
+                        source_directories=source_directories,
                     ),
                     "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
                     "repository_type": repo.repository_type,
@@ -1162,10 +1215,21 @@ async def create_repository(
                 detail={"key": "backend.errors.repo.failedToInitializeRepository"},
             )
 
-        # Serialize source directories as JSON
-        source_directories_json = None
-        if repo_data.source_directories:
-            source_directories_json = json.dumps(repo_data.source_directories)
+        (
+            source_locations,
+            source_connection_id,
+            source_directories,
+        ) = _normalize_repository_source_payload(
+            source_locations=repo_data.source_locations,
+            source_connection_id=repo_data.source_connection_id,
+            source_directories=repo_data.source_directories,
+        )
+        source_directories_json = (
+            json.dumps(source_directories) if source_directories else None
+        )
+        source_locations_json = (
+            json.dumps(source_locations) if source_locations else None
+        )
 
         # Serialize exclude patterns as JSON
         exclude_patterns_json = None
@@ -1193,7 +1257,8 @@ async def create_repository(
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
-            source_ssh_connection_id=repo_data.source_connection_id,
+            source_ssh_connection_id=source_connection_id,
+            source_locations=source_locations_json,
         )
 
         db.add(repository)
@@ -1449,10 +1514,21 @@ async def import_repository(
         repo_info = verify_result.get("info", {})
         encryption_mode = repo_info.get("encryption", {}).get("mode", "unknown")
 
-        # Serialize source directories as JSON
-        source_directories_json = None
-        if repo_data.source_directories:
-            source_directories_json = json.dumps(repo_data.source_directories)
+        (
+            source_locations,
+            source_connection_id,
+            source_directories,
+        ) = _normalize_repository_source_payload(
+            source_locations=repo_data.source_locations,
+            source_connection_id=repo_data.source_connection_id,
+            source_directories=repo_data.source_directories,
+        )
+        source_directories_json = (
+            json.dumps(source_directories) if source_directories else None
+        )
+        source_locations_json = (
+            json.dumps(source_locations) if source_locations else None
+        )
 
         # Serialize exclude patterns as JSON
         exclude_patterns_json = None
@@ -1482,7 +1558,8 @@ async def import_repository(
             mode=repo_data.mode,
             bypass_lock=repo_data.bypass_lock,
             custom_flags=repo_data.custom_flags,
-            source_ssh_connection_id=repo_data.source_connection_id,
+            source_ssh_connection_id=source_connection_id,
+            source_locations=source_locations_json,
         )
 
         db.add(repository)
@@ -1724,6 +1801,10 @@ async def get_repository(
                 "updated_at": format_datetime(repository.updated_at),
                 "has_keyfile": repository.has_keyfile or False,
                 "source_ssh_connection_id": repository.source_ssh_connection_id,
+                "source_directories": _decode_json_list_field(
+                    repository.source_directories
+                ),
+                "source_locations": _repository_source_locations(repository),
                 "stats": stats,
             },
         }
@@ -1953,11 +2034,48 @@ async def update_repository(
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
 
-        if repo_data.source_directories is not None:
+        update_data = repo_data.model_dump(exclude_unset=True)
+        source_settings_changed = any(
+            key in update_data
+            for key in (
+                "source_locations",
+                "source_directories",
+                "source_connection_id",
+            )
+        )
+        if source_settings_changed:
+            if "source_locations" in update_data:
+                source_locations_input = repo_data.source_locations or []
+                source_directories_input = None
+                source_connection_id_input = None
+            else:
+                source_locations_input = None
+                source_directories_input = (
+                    repo_data.source_directories
+                    if "source_directories" in update_data
+                    else _decode_json_list_field(repository.source_directories)
+                )
+                source_connection_id_input = (
+                    repo_data.source_connection_id
+                    if "source_connection_id" in update_data
+                    else repository.source_ssh_connection_id
+                )
+
+            (
+                source_locations,
+                source_connection_id,
+                source_directories,
+            ) = _normalize_repository_source_payload(
+                source_locations=source_locations_input,
+                source_connection_id=source_connection_id_input,
+                source_directories=source_directories_input,
+            )
             repository.source_directories = (
-                json.dumps(repo_data.source_directories)
-                if repo_data.source_directories
-                else None
+                json.dumps(source_directories) if source_directories else None
+            )
+            repository.source_ssh_connection_id = source_connection_id
+            repository.source_locations = (
+                json.dumps(source_locations) if source_locations else None
             )
 
         if repo_data.exclude_patterns is not None:
@@ -2014,14 +2132,6 @@ async def update_repository(
 
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
-
-        # Update source_connection_id - allow null to clear the field
-        # The frontend always sends this field explicitly (either with value or null)
-        # If not provided in the request body at all, Pydantic sets it to None (default)
-        # Since we can't distinguish "not provided" from "provided as null" with current setup,
-        # and the frontend wizard always sends this field, we check if it's in the request
-        if "source_connection_id" in repo_data.model_dump(exclude_unset=True):
-            repository.source_ssh_connection_id = repo_data.source_connection_id
 
         repository.updated_at = datetime.utcnow()
         db.commit()
@@ -2408,6 +2518,42 @@ async def prune_repository(
         keep_quarterly = request.get("keep_quarterly", 0)
         keep_yearly = request.get("keep_yearly", 1)
         dry_run = request.get("dry_run", False)
+
+        if not dry_run:
+            prune_job = start_background_maintenance_job(
+                db,
+                repository,
+                PruneJob,
+                error_key="backend.errors.repo.pruneAlreadyRunning",
+                dispatcher=lambda job,
+                router_repo=SimpleNamespace(
+                    id=repository.id,
+                    borg_version=repository.borg_version,
+                ): BorgRouter(router_repo).prune(
+                    job.id,
+                    keep_hourly,
+                    keep_daily,
+                    keep_weekly,
+                    keep_monthly,
+                    keep_quarterly,
+                    keep_yearly,
+                    False,
+                ),
+                extra_fields={"scheduled_prune": False},
+            )
+
+            logger.info(
+                "Prune job created",
+                job_id=prune_job.id,
+                repository_id=repo_id,
+                user=current_user.username,
+            )
+
+            return {
+                "job_id": prune_job.id,
+                "status": "pending",
+                "message": "backend.success.repo.pruneJobStarted",
+            }
 
         prune_job = create_maintenance_job(
             db,
