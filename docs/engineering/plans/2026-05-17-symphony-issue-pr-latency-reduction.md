@@ -1,10 +1,10 @@
 # Symphony Issue-to-PR Latency Reduction Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Subagent execution is not required for the Odroid profile because concurrent Node/Python work is part of the problem this plan reduces.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Implement the BOR-29 recommendations so Symphony creates Borg UI PRs faster while keeping validation decisions explicit and reviewable.
 
-**Architecture:** Add a repository-owned validation selector and manifest, update Symphony workflow/skills to use it, reduce Odroid bootstrap/concurrency overhead, and split broad CI lanes after the local selector is in place. The selector is advisory but conservative: agents may broaden selected commands, while unmapped or high-risk changes automatically fall back to full validation.
+**Architecture:** Add a repository-owned validation selector and manifest, update Symphony workflow/skills to use it, reduce bootstrap and prompt overhead, and split broad CI lanes after the local selector is in place. The selector is advisory but conservative: agents may broaden selected commands, while unmapped or high-risk changes automatically fall back to full validation.
 
 **Tech Stack:** Python 3 standard library, pytest, GitHub Actions, npm/Vitest, Markdown workflow docs.
 
@@ -62,7 +62,7 @@ git diff --check
 python3 scripts/select_validation.py --base origin/main --format json
 ```
 
-## Task 3: Reduce Odroid Bootstrap and Prompt Overhead
+## Task 3: Reduce Bootstrap and Prompt Overhead
 
 **Files:**
 
@@ -73,10 +73,9 @@ Steps:
 
 - [ ] Remove unconditional `cd frontend && npm ci` from the `after_create` hook.
 - [ ] Add a lazy dependency rule: frontend dependencies are installed only when the selector chooses a frontend command or the agent enters a frontend implementation path.
-- [ ] Lower the default Odroid `max_concurrent_agents` from 10 to 2.
-- [ ] Add a note that workstation/CI profiles may override concurrency upward.
 - [ ] Add a `### Current Digest` requirement to the workpad instructions with branch/head, active plan item, validation manifest, blockers, and PR/check state.
 - [ ] Update retry instructions to use the digest and unchecked items instead of replaying old notes as active context.
+- [ ] Add guidance that host-profile concurrency tuning is a later measured optimization, not the first implementation step.
 
 Validation:
 
@@ -142,4 +141,4 @@ git diff --check WORKFLOW.md docs/engineering/specs/2026-05-17-symphony-issue-pr
 
 ## Rollout Order
 
-Implement Tasks 1 and 2 first so validation quality is protected before reducing bootstrap or CI breadth. Task 3 can then reduce Odroid load safely. Task 4 should be merged after selector data proves the mappings are stable. Task 5 should land with or immediately after Task 1 so future latency changes are measurable.
+Implement Tasks 1 and 2 first so validation quality is protected before reducing bootstrap or CI breadth. Task 3 should then reduce dependency and prompt overhead while leaving host-profile concurrency tuning for measured follow-up work. Task 4 should be merged after selector data proves the mappings are stable. Task 5 should land with or immediately after Task 1 so future latency changes are measurable.

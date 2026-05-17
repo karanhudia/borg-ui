@@ -2,11 +2,12 @@
 
 ## Context
 
-Borg UI runs Symphony on an Odroid M1. The current workflow favors correctness:
-every active Linear issue gets a full Codex workpad, pull synchronization, scoped
-implementation plan, local validation, PR feedback sweep, GitHub checks, and a
-Human Review handoff. That process has produced good auditability, but it is too
-expensive for a low-power single-board orchestrator.
+Borg UI runs Symphony on a local orchestration host. The current workflow favors
+correctness: every active Linear issue gets a full Codex workpad, pull
+synchronization, scoped implementation plan, local validation, PR feedback sweep,
+GitHub checks, and a Human Review handoff. That process has produced good
+auditability, but it can be too expensive for resource-constrained local
+runners.
 
 This spec reviews the Borg UI Linear project history, the current Symphony
 contract in `WORKFLOW.md`, and the repository validation layout. The goal is to
@@ -22,7 +23,7 @@ reduce time to PR and token usage without reducing review quality.
 - `WORKFLOW.md`:
   - `after_create` clones the repo and runs `cd frontend && npm ci` for every
     workspace, even docs-only or backend-only tickets.
-  - `agent.max_concurrent_agents` is 10 on the Odroid host.
+  - `agent.max_concurrent_agents` is 10 on the current local host profile.
   - Codex is configured globally as `gpt-5.5` with `xhigh` reasoning.
   - Validation guidance asks for all backend or all frontend gates when those
     areas are touched.
@@ -70,8 +71,9 @@ Time-to-first-PR and total elapsed time point to different bottlenecks:
 
 1. Unconditional frontend dependency installation at workspace creation.
    `npm ci` runs before the agent knows whether a ticket touches frontend code.
-   On Odroid this front-loads a heavy Node install for docs-only, backend-only,
-   GitHub triage, and Linear triage tickets.
+   This front-loads a heavy Node install for docs-only, backend-only, GitHub
+   triage, and Linear triage tickets before the agent knows whether frontend
+   tooling is needed.
 
 2. Broad local validation gates.
    The current local pre-push path uses whole-area gates. That is safe, but
@@ -83,9 +85,11 @@ Time-to-first-PR and total elapsed time point to different bottlenecks:
    injected. Recent workpads are valuable but verbose. Tokens are spent restating
    already-decided plan, validation, and handoff details.
 
-4. Too much concurrent work for the host.
+4. Too much concurrent heavy work for some host profiles.
    `max_concurrent_agents: 10` can saturate CPU, RAM, disk, npm, Playwright, and
-   Python test processes on a low-power SBC, making every active task slower.
+   Python test processes on smaller runners, making every active task slower.
+   This should be measured after the code-level reductions below, not changed as
+   the first rollout step.
 
 5. CI lanes are parallel, but still broad.
    GitHub Actions already parallelizes jobs, yet unit coverage, integration, and
@@ -117,7 +121,7 @@ Replace unconditional `npm ci` in `WORKFLOW.md` with a lazy dependency policy:
   shallow clone that breaks branch ancestry.
 
 Expected impact: docs, triage, and backend-only tickets should start minutes
-faster and consume less disk I/O on Odroid.
+faster and consume less disk I/O on local runners.
 
 ### 2. Add a Validation Manifest
 
@@ -200,18 +204,23 @@ documents that skipped required workflows can leave checks pending, which blocks
 merge. Prefer a tiny always-running required check that computes changed domains,
 then make individual jobs exit successfully with "not applicable" when safe.
 
-### 5. Cap Odroid Concurrency
+### 5. Defer Host Concurrency Tuning
 
-Change the default Symphony host profile for Odroid:
+Do not make concurrency reduction the first implementation step. First reduce
+avoidable code-level work with lazy bootstrap, validation selection, and compact
+retry context. Then use recorded command durations and host metrics to tune
+concurrency per profile.
 
-- `max_concurrent_agents: 2` for active implementation sessions.
-- One Node-heavy workspace at a time.
-- One Playwright/Storybook snapshot run at a time.
-- Python test workers capped to the physical cores and memory budget, for
-  example `PYTEST_XDIST_AUTO_NUM_WORKERS=2` if pytest-xdist is adopted locally.
+Host-profile guidance after measurement:
 
-Use higher concurrency only on a workstation/CI runner profile. Ten concurrent
-agents look attractive but create contention that makes each PR slower.
+- Start from the selector/lazy-bootstrap baseline before changing
+  `max_concurrent_agents`.
+- Cap Node-heavy, Playwright, Storybook snapshot, and Python test worker
+  concurrency only when measurements show contention.
+- Keep workstation and CI profiles free to use higher concurrency when they have
+  enough CPU, RAM, and disk I/O.
+- Record the reason for any host-specific cap so it remains operational tuning,
+  not a blanket workflow rule.
 
 ### 6. Reduce Prompt and Workpad Token Load
 
@@ -256,9 +265,10 @@ validation does not hide slow cross-domain regressions.
 
 1. Immediate workflow tuning:
    - remove unconditional `npm ci` from workspace bootstrap;
-   - lower Odroid concurrency to 2;
    - add the workpad digest convention;
    - require a validation manifest in the workpad before push.
+   - add code-level validation guidance so agents select meaningful tests before
+     broadening to full local suites.
 
 2. Selector implementation:
    - add a tested `scripts/select_validation.py`;
@@ -275,15 +285,18 @@ validation does not hide slow cross-domain regressions.
      and token usage per issue;
    - publish a weekly summary from Linear/workpad data so future changes are
      judged by measured latency, not impressions.
+   - use those measurements to decide whether host-profile concurrency caps are
+     warranted.
 
 ## Expected Impact
 
 The largest win is not one command; it is removing avoidable work before the
-agent knows the ticket shape. Lazy dependency setup plus Odroid concurrency caps
-should reduce start latency and contention across all issues. Selector-based
-local validation should cut UI/backend implementation loops from "run the whole
-area" to "run the affected proof first, broaden only on risk." CI sharding should
+agent knows the ticket shape. Lazy dependency setup and selector-based local
+validation should cut UI/backend implementation loops from "run the whole area"
+to "run the affected proof first, broaden only on risk." CI sharding should
 reduce time waiting after PR creation without weakening the final merge gate.
+Host-profile concurrency tuning remains available after measurements show it is
+needed.
 
 Quality is preserved because every shortcut has an explicit broadening rule, the
 workpad records the validation rationale, and full scheduled CI remains the
