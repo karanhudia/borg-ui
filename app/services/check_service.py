@@ -112,7 +112,10 @@ class CheckService:
                     ["--repository-only", "--max-duration", str(job.max_duration)]
                 )
 
-            extra_flags = (getattr(job, "extra_flags", None) or "").strip()
+            extra_flags_value = getattr(job, "extra_flags", None)
+            extra_flags = (
+                extra_flags_value.strip() if isinstance(extra_flags_value, str) else ""
+            )
             if extra_flags:
                 try:
                     cmd.extend(shlex.split(extra_flags))

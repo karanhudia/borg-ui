@@ -258,6 +258,9 @@ async def check_repository(
     check_extra_flags = (
         data.check_extra_flags.strip() if data.check_extra_flags else None
     )
+    extra_fields = {"max_duration": data.max_duration}
+    if check_extra_flags:
+        extra_fields["extra_flags"] = check_extra_flags
 
     check_job = start_background_maintenance_job(
         db,
@@ -268,10 +271,7 @@ async def check_repository(
             job.id, repo_id
         ),
         status="running",
-        extra_fields={
-            "max_duration": data.max_duration,
-            "extra_flags": check_extra_flags,
-        },
+        extra_fields=extra_fields,
     )
 
     logger.info(

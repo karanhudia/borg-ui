@@ -367,6 +367,32 @@ class TestV2BackupRoutes:
         mock_start.assert_called_once()
         assert mock_start.call_args.kwargs["extra_fields"] == {"max_duration": 3600}
 
+    def test_backup_check_stores_extra_flags(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/data/source"])
+
+        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
+            mock_start.return_value = CheckJob(
+                id=7, repository_id=repo.id, status="running"
+            )
+            response = test_client.post(
+                "/api/v2/backup/check",
+                json={
+                    "repository_id": repo.id,
+                    "max_duration": 3600,
+                    "check_extra_flags": "  --repair --verify-data  ",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert mock_start.call_args.kwargs["extra_fields"] == {
+            "max_duration": 3600,
+            "extra_flags": "--repair --verify-data",
+        }
+
     @pytest.mark.asyncio
     async def test_backup_check_dispatcher_uses_stable_repo_id(
         self, test_client: TestClient, admin_headers, test_db
