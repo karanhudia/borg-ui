@@ -117,6 +117,68 @@ describe('BackupPlans legacy source settings', () => {
 })
 
 describe('BackupPlans payload', () => {
+  it('builds grouped source location payloads with legacy mirrors', () => {
+    const sourceLocations = [
+      {
+        source_type: 'local' as const,
+        source_ssh_connection_id: null,
+        paths: ['/srv/app'],
+      },
+      {
+        source_type: 'remote' as const,
+        source_ssh_connection_id: 11,
+        paths: ['/home/app/data'],
+      },
+      {
+        source_type: 'remote' as const,
+        source_ssh_connection_id: 12,
+        paths: ['/var/lib/service'],
+      },
+    ]
+
+    const payload = buildBackupPlanPayload({
+      name: 'Grouped Sources',
+      description: '',
+      enabled: true,
+      sourceType: 'mixed',
+      sourceSshConnectionId: '',
+      sourceDirectories: ['/srv/app', '/home/app/data', '/var/lib/service'],
+      sourceLocations,
+      excludePatterns: [],
+      repositoryIds: [10],
+      compression: 'lz4',
+      archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+      customFlags: '',
+      uploadRatelimitMb: '',
+      repositoryRunMode: 'series',
+      maxParallelRepositories: 1,
+      failureBehavior: 'continue',
+      scheduleEnabled: false,
+      cronExpression: '0 21 * * *',
+      timezone: 'UTC',
+      preBackupScriptId: null,
+      postBackupScriptId: null,
+      preBackupScriptParameters: {},
+      postBackupScriptParameters: {},
+      runRepositoryScripts: true,
+      runPruneAfter: false,
+      runCompactAfter: false,
+      runCheckAfter: false,
+      checkMaxDuration: 3600,
+      pruneKeepHourly: 0,
+      pruneKeepDaily: 7,
+      pruneKeepWeekly: 4,
+      pruneKeepMonthly: 6,
+      pruneKeepQuarterly: 0,
+      pruneKeepYearly: 1,
+    })
+
+    expect(payload.source_type).toBe('mixed')
+    expect(payload.source_ssh_connection_id).toBeNull()
+    expect(payload.source_directories).toEqual(['/srv/app', '/home/app/data', '/var/lib/service'])
+    expect(payload.source_locations).toEqual(sourceLocations)
+  })
+
   it('preserves a disabled plan in the payload', () => {
     const payload = buildBackupPlanPayload({
       name: 'Disabled Plan',

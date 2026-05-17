@@ -55,6 +55,7 @@ interface PruneRepositoryDialogProps {
   onConfirmPrune: (form: PruneForm) => Promise<void>
   isLoading: boolean
   results: PruneResults | null
+  initialForm?: Partial<PruneForm>
 }
 
 const defaultPruneForm: PruneForm = {
@@ -64,6 +65,27 @@ const defaultPruneForm: PruneForm = {
   keep_monthly: 6,
   keep_quarterly: 0,
   keep_yearly: 1,
+}
+
+type IntlListFormatConstructor = new (
+  locale: string,
+  options: { style: 'long'; type: 'conjunction' }
+) => {
+  format: (items: string[]) => string
+}
+
+const formatRetentionList = (items: string[], locale: string) => {
+  if (items.length === 0) return ''
+  const ListFormat =
+    typeof Intl !== 'undefined'
+      ? (Intl as typeof Intl & { ListFormat?: IntlListFormatConstructor }).ListFormat
+      : undefined
+  if (ListFormat) {
+    return new ListFormat(locale, { style: 'long', type: 'conjunction' }).format(items)
+  }
+  if (items.length === 1) return items[0]
+  if (items.length === 2) return `${items[0]} and ${items[1]}`
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`
 }
 
 // ─── Colorized terminal output ────────────────────────────────────────────────
@@ -543,17 +565,22 @@ export default function PruneRepositoryDialog({
   onConfirmPrune,
   isLoading,
   results,
+  initialForm,
 }: PruneRepositoryDialogProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const [pruneForm, setPruneForm] = useState<PruneForm>(defaultPruneForm)
+  const resolvedInitialForm = React.useMemo(
+    () => ({ ...defaultPruneForm, ...initialForm }),
+    [initialForm]
+  )
+  const [pruneForm, setPruneForm] = useState<PruneForm>(resolvedInitialForm)
   const [resultsOpen, setResultsOpen] = useState(false)
   const [activeOp, setActiveOp] = useState<'dry_run' | 'prune' | null>(null)
 
   React.useEffect(() => {
-    if (open) setPruneForm(defaultPruneForm)
-  }, [open])
+    if (open) setPruneForm(resolvedInitialForm)
+  }, [open, resolvedInitialForm])
 
   // Clear active op when loading finishes
   React.useEffect(() => {
@@ -586,31 +613,47 @@ export default function PruneRepositoryDialog({
       key: 'keep_hourly' as const,
       icon: <Clock size={14} />,
       label: t('dialogs.prune.keepHourly'),
+      unit: t('dialogs.prune.retentionUnits.hourly'),
     },
-    { key: 'keep_daily' as const, icon: <Sun size={14} />, label: t('dialogs.prune.keepDaily') },
+    {
+      key: 'keep_daily' as const,
+      icon: <Sun size={14} />,
+      label: t('dialogs.prune.keepDaily'),
+      unit: t('dialogs.prune.retentionUnits.daily'),
+    },
     {
       key: 'keep_weekly' as const,
       icon: <CalendarDays size={14} />,
       label: t('dialogs.prune.keepWeekly'),
+      unit: t('dialogs.prune.retentionUnits.weekly'),
     },
     {
       key: 'keep_monthly' as const,
       icon: <CalendarRange size={14} />,
       label: t('dialogs.prune.keepMonthly'),
+      unit: t('dialogs.prune.retentionUnits.monthly'),
     },
     {
       key: 'keep_quarterly' as const,
       icon: <CalendarRange size={14} />,
       label: t('dialogs.prune.keepQuarterly'),
+      unit: t('dialogs.prune.retentionUnits.quarterly'),
     },
     {
       key: 'keep_yearly' as const,
       icon: <Calendar size={14} />,
       label: t('dialogs.prune.keepYearly'),
+      unit: t('dialogs.prune.retentionUnits.yearly'),
     },
   ]
 
   const borderColor = isDark ? alpha('#fff', 0.08) : alpha('#000', 0.09)
+  const retentionSummary = formatRetentionList(
+    retentionFields
+      .filter((field) => pruneForm[field.key] > 0)
+      .map((field) => `${pruneForm[field.key]} ${field.unit}`),
+    i18n.resolvedLanguage || i18n.language
+  )
 
   return (
     <>
@@ -768,7 +811,9 @@ export default function PruneRepositoryDialog({
             color="text.disabled"
             sx={{ display: 'block', mb: 2, px: 0.25 }}
           >
-            {t('dialogs.prune.exampleExplanation')}
+            {retentionSummary
+              ? t('dialogs.prune.exampleExplanation', { retention: retentionSummary })
+              : t('dialogs.prune.noRetentionExample')}
           </Typography>
 
           {/* ── Warning strip ── */}

@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Box, Button, Chip, Paper, Stack, TextField, Typography } from '@mui/material'
-import { Database, FolderOpen } from 'lucide-react'
+import { Database, FolderOpen, HardDrive, Server } from 'lucide-react'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
 import { SourceSelectionDialog } from './SourceSelectionDialog'
+import type { SourceLocation } from '../../../types'
 import type { BackupPlanWizardStepProps } from './types'
+import type { SSHConnection, WizardState } from '../types'
 
 const DATABASE_DUMP_ROOT = '/var/tmp/borg-ui/database-dumps'
 
@@ -15,7 +17,6 @@ type SourceStepProps = Pick<
   | 'scripts'
   | 'loadingScripts'
   | 'updateState'
-  | 'openSourceExplorer'
   | 'openExcludeExplorer'
   | 'onCreateScript'
   | 't'
@@ -27,17 +28,21 @@ export function SourceStep({
   scripts,
   loadingScripts,
   updateState,
-  openSourceExplorer,
   openExcludeExplorer,
   onCreateScript,
   t,
 }: SourceStepProps) {
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
-  const hasSources = wizardState.sourceDirectories.length > 0
-  const isDatabaseSource = wizardState.sourceDirectories.some(
-    (sourceDirectory) =>
-      sourceDirectory === DATABASE_DUMP_ROOT || sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
-  )
+  const sourceLocations = getWizardSourceLocations(wizardState)
+  const sourcePaths = sourceLocations.flatMap((location) => location.paths)
+  const hasSources = sourcePaths.length > 0
+  const isDatabaseSource =
+    sourcePaths.length > 0 &&
+    sourcePaths.every(
+      (sourceDirectory) =>
+        sourceDirectory === DATABASE_DUMP_ROOT ||
+        sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
+    )
   const sourceKindLabel = isDatabaseSource
     ? t('backupPlans.sourceChooser.databaseTitle')
     : t('backupPlans.sourceChooser.filesTitle')
@@ -94,19 +99,88 @@ export function SourceStep({
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {hasSources
-                  ? wizardState.sourceDirectories.join(', ')
+                  ? t('backupPlans.sourceChooser.selectedSourceGroups')
                   : t('backupPlans.sourceChooser.summaryEmpty')}
               </Typography>
               {hasSources && (
-                <Stack direction="row" spacing={0.75} sx={{ mt: 0.75 }} useFlexGap flexWrap="wrap">
-                  <Chip size="small" label={sourceKindLabel} />
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={t('backupPlans.sourceChooser.pathCount', {
-                      count: wizardState.sourceDirectories.length,
-                    })}
-                  />
+                <Stack spacing={1} sx={{ mt: 1 }}>
+                  <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                    <Chip size="small" label={sourceKindLabel} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={t('backupPlans.sourceChooser.pathCount', {
+                        count: sourcePaths.length,
+                      })}
+                    />
+                  </Stack>
+                  <Stack spacing={1}>
+                    {sourceLocations.map((location) => (
+                      <Paper
+                        key={sourceLocationKey(location)}
+                        variant="outlined"
+                        sx={{
+                          p: 1,
+                          borderRadius: 1,
+                          bgcolor: 'background.default',
+                        }}
+                      >
+                        <Stack spacing={0.75}>
+                          <Stack direction="row" spacing={1} alignItems="flex-start">
+                            <Box
+                              sx={{
+                                alignItems: 'center',
+                                bgcolor: 'action.hover',
+                                borderRadius: 1,
+                                color: 'text.secondary',
+                                display: 'flex',
+                                height: 28,
+                                justifyContent: 'center',
+                                width: 28,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {location.source_type === 'remote' ? (
+                                <Server size={15} />
+                              ) : (
+                                <HardDrive size={15} />
+                              )}
+                            </Box>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                                <Typography variant="subtitle2" noWrap>
+                                  {sourceLocationLabel(location, sshConnections, t)}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  variant="outlined"
+                                  label={t('backupPlans.sourceChooser.pathCount', {
+                                    count: location.paths.length,
+                                  })}
+                                />
+                              </Stack>
+                              <Stack
+                                direction="row"
+                                spacing={0.75}
+                                sx={{ mt: 0.75 }}
+                                useFlexGap
+                                flexWrap="wrap"
+                              >
+                                {location.paths.map((path) => (
+                                  <Chip
+                                    key={path}
+                                    size="small"
+                                    label={path}
+                                    sx={{ maxWidth: '100%' }}
+                                  />
+                                ))}
+                              </Stack>
+                            </Box>
+                          </Stack>
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
                 </Stack>
               )}
             </Box>
@@ -128,11 +202,49 @@ export function SourceStep({
         scripts={scripts}
         loadingScripts={loadingScripts}
         updateState={updateState}
-        openSourceExplorer={openSourceExplorer}
         onCreateScript={onCreateScript}
         onClose={() => setSourceDialogOpen(false)}
         t={t}
       />
     </Stack>
   )
+}
+
+function sourceLocationKey(location: SourceLocation) {
+  return `${location.source_type}:${location.source_ssh_connection_id || 'local'}`
+}
+
+function getWizardSourceLocations(wizardState: WizardState): SourceLocation[] {
+  if (wizardState.sourceLocations?.length) return wizardState.sourceLocations
+  if (wizardState.sourceDirectories.length === 0) return []
+  if (wizardState.sourceType === 'remote' && wizardState.sourceSshConnectionId) {
+    return [
+      {
+        source_type: 'remote',
+        source_ssh_connection_id: Number(wizardState.sourceSshConnectionId),
+        paths: wizardState.sourceDirectories,
+      },
+    ]
+  }
+  return [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      paths: wizardState.sourceDirectories,
+    },
+  ]
+}
+
+function sourceLocationLabel(
+  location: SourceLocation,
+  sshConnections: SSHConnection[],
+  t: SourceStepProps['t']
+) {
+  if (location.source_type === 'local') return t('backupPlans.sourceChooser.localSource')
+  const connection = sshConnections.find((item) => item.id === location.source_ssh_connection_id)
+  return connection
+    ? `${connection.username}@${connection.host}`
+    : t('backupPlans.wizard.review.connectionFallback', {
+        id: location.source_ssh_connection_id,
+      })
 }

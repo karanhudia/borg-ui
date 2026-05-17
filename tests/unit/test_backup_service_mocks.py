@@ -2,7 +2,13 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock, Mock
 from app.services.backup_service import BackupService
-from app.database.models import BackupJob, Repository, SystemSettings, RepositoryScript
+from app.database.models import (
+    BackupJob,
+    Repository,
+    SystemSettings,
+    RepositoryScript,
+    SSHConnection,
+)
 
 
 @pytest.fixture
@@ -43,6 +49,87 @@ def _notification_service_mock():
     return notifications
 
 
+def test_resolve_backup_command_paths_uses_shared_cwd_for_mixed_ssh_and_local(
+    backup_service_fixture,
+):
+    backup_paths, backup_cwd = backup_service_fixture._resolve_backup_command_paths(
+        ["home/app/data", "var/lib/service", "/srv/app"],
+        [
+            ("/tmp/sshfs_mount_42_abcd", "home/app/data"),
+            ("/tmp/sshfs_mount_42_abcd", "var/lib/service"),
+        ],
+        job_id=42,
+    )
+
+    assert backup_cwd == "/tmp/sshfs_mount_42_abcd"
+    assert backup_paths == ["home/app/data", "var/lib/service", "/srv/app"]
+    assert all("/tmp/sshfs_mount_" not in path for path in backup_paths)
+
+
+@pytest.mark.asyncio
+async def test_prepare_source_paths_reuses_first_sshfs_temp_root_for_multiple_connections(
+    backup_service_fixture, mock_db_session
+):
+    source_a = SSHConnection(
+        id=11,
+        host="server-a.example",
+        username="backup-a",
+        port=22,
+    )
+    source_b = SSHConnection(
+        id=12,
+        host="server-b.example",
+        username="backup-b",
+        port=2222,
+    )
+
+    ssh_query = MagicMock()
+    ssh_query.filter.return_value.first.side_effect = [source_a, source_b]
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == SSHConnection:
+            return ssh_query
+        return m
+
+    mock_db_session.query.side_effect = query_side_effect
+
+    with (
+        patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),
+        patch(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            new=AsyncMock(
+                side_effect=[
+                    ("/tmp/sshfs_mount_42_shared", [("mount-a", "home/app/data")]),
+                    ("/tmp/sshfs_mount_42_shared", [("mount-b", "var/lib/service")]),
+                ]
+            ),
+        ) as mount_shared,
+    ):
+        (
+            processed_paths,
+            ssh_mount_info,
+        ) = await backup_service_fixture._prepare_source_paths(
+            [
+                "ssh://backup-a@server-a.example:22/home/app/data",
+                "ssh://backup-b@server-b.example:2222/var/lib/service",
+                "/srv/app",
+            ],
+            job_id=42,
+        )
+
+    assert processed_paths == ["home/app/data", "var/lib/service", "/srv/app"]
+    assert ssh_mount_info == [
+        ("/tmp/sshfs_mount_42_shared", "home/app/data"),
+        ("/tmp/sshfs_mount_42_shared", "var/lib/service"),
+    ]
+    assert mount_shared.await_args_list[0].kwargs.get("temp_root") is None
+    assert (
+        mount_shared.await_args_list[1].kwargs["temp_root"]
+        == "/tmp/sshfs_mount_42_shared"
+    )
+
+
 @pytest.mark.asyncio
 async def test_execute_backup_command(backup_service_fixture, mock_db_session):
     """Test 'borg create' command construction"""
@@ -59,7 +146,6 @@ async def test_execute_backup_command(backup_service_fixture, mock_db_session):
     )
     job = BackupJob(id=job_id, status="pending")
 
-    # Mock DB query
     def query_side_effect(model):
         m = MagicMock()
         if model == BackupJob:
@@ -604,6 +690,136 @@ async def test_execute_backup_delegates_remote_ssh_job(
 
     mock_remote_execute.assert_awaited_once()
     assert job.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_execute_backup_resolves_grouped_source_locations(
+    backup_service_fixture, mock_db_session
+):
+    job_id = 501
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        source_directories='["/legacy"]',
+        compression="lz4",
+        mode="full",
+    )
+    job = BackupJob(id=job_id, status="pending")
+    source_a = SSHConnection(
+        id=11,
+        host="server-a.example",
+        username="backup-a",
+        port=22,
+        default_path="/home/backup-a",
+        status="connected",
+    )
+    source_b = SSHConnection(
+        id=12,
+        host="server-b.example",
+        username="backup-b",
+        port=2222,
+        default_path="/",
+        status="connected",
+    )
+    ssh_connection_results = iter([source_a, source_b])
+    source_locations = [
+        {
+            "source_type": "local",
+            "source_ssh_connection_id": None,
+            "paths": ["/srv/app"],
+        },
+        {
+            "source_type": "remote",
+            "source_ssh_connection_id": source_a.id,
+            "paths": ["data"],
+        },
+        {
+            "source_type": "remote",
+            "source_ssh_connection_id": source_b.id,
+            "paths": ["/var/lib/service"],
+        },
+    ]
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == BackupJob:
+            m.filter.return_value.first.return_value = job
+        elif model == Repository:
+            m.filter.return_value.first.return_value = repo
+        elif model == SystemSettings:
+            m.first.return_value = SystemSettings()
+        elif model == RepositoryScript:
+            m.filter.return_value.count.return_value = 0
+        elif model == SSHConnection:
+            m.filter.return_value.first.side_effect = lambda: next(
+                ssh_connection_results
+            )
+        return m
+
+    mock_db_session.query.side_effect = query_side_effect
+    mock_process = AsyncMock()
+    mock_process.returncode = 0
+    mock_process.stdout = AsyncMock()
+    mock_process.stdout.__aiter__.return_value = iter([])
+
+    with (
+        patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),
+        patch(
+            "app.services.backup_service.BorgRouter.validate_local_repository_access",
+            return_value=None,
+        ),
+        patch.object(
+            backup_service_fixture,
+            "_execute_hooks",
+            return_value={
+                "success": True,
+                "execution_logs": [],
+                "scripts_executed": 0,
+                "scripts_failed": 0,
+                "using_library": False,
+            },
+        ),
+        patch.object(
+            backup_service_fixture,
+            "_prepare_source_paths",
+            new=AsyncMock(
+                return_value=(
+                    ["/srv/app", "data", "var/lib/service"],
+                    [
+                        ("/tmp/sshfs-a", "data"),
+                        ("/tmp/sshfs-b", "var/lib/service"),
+                    ],
+                )
+            ),
+        ) as prepare_source_paths,
+        patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec",
+            return_value=mock_process,
+        ),
+        patch(
+            "app.services.backup_service.notification_service",
+            _notification_service_mock(),
+        ),
+        patch("app.services.backup_service.mqtt_service") as mqtt,
+    ):
+        mqtt.sync_state_with_db = Mock()
+        await backup_service_fixture.execute_backup(
+            job_id,
+            repo.path,
+            db=mock_db_session,
+            source_directories=["/srv/app", "data", "/var/lib/service"],
+            source_locations=source_locations,
+        )
+
+    prepare_source_paths.assert_awaited_once_with(
+        [
+            "/srv/app",
+            "ssh://backup-a@server-a.example:22/home/backup-a/data",
+            "ssh://backup-b@server-b.example:2222/var/lib/service",
+        ],
+        job_id,
+        source_connection_id=None,
+    )
 
 
 @pytest.mark.asyncio

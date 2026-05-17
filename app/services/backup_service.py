@@ -5,6 +5,7 @@ import os
 import json
 import re
 import tempfile
+import shutil
 from datetime import datetime
 from pathlib import Path
 import structlog
@@ -24,6 +25,10 @@ from app.services.restore_check_canary import (
     to_restore_canary_archive_source_path,
 )
 from app.utils.ssh_paths import resolve_sshfs_source_path
+from app.utils.source_locations import (
+    decode_source_locations,
+    flatten_source_locations,
+)
 from app.utils.borg_env import (
     build_repository_borg_env,
     cleanup_temp_key_file,
@@ -46,6 +51,35 @@ class BackupService:
         self.error_msgids = {}  # Track error message IDs by job_id
         self.log_buffers = {}  # Track in-memory log buffers by job_id (for running jobs)
         self.ssh_mounts = {}  # Track SSH mount IDs by job_id: {job_id: [mount_id, ...]}
+
+    def _resolve_grouped_source_paths(
+        self, db: Session, source_locations: list[dict]
+    ) -> list[str]:
+        from app.database.models import SSHConnection
+
+        source_paths: list[str] = []
+        for location in source_locations:
+            paths = location.get("paths") or []
+            if location.get("source_type") == "remote":
+                connection_id = location.get("source_ssh_connection_id")
+                connection = (
+                    db.query(SSHConnection)
+                    .filter(SSHConnection.id == connection_id)
+                    .first()
+                )
+                if not connection:
+                    raise ValueError(
+                        f"SSH connection {connection_id} not found for remote source"
+                    )
+                source_paths.extend(
+                    f"ssh://{connection.username}@{connection.host}:{connection.port}"
+                    f"{resolve_sshfs_source_path(path, connection.default_path)}"
+                    for path in paths
+                )
+            else:
+                source_paths.extend(paths)
+
+        return source_paths
 
     def _get_operation_timeouts(self, db: Session = None) -> dict:
         """
@@ -1017,7 +1051,10 @@ class BackupService:
                     # Local path - use as-is
                     local_paths.append(path)
 
-            # Second pass: Mount SSH paths using shared temp root for same connection
+            # Second pass: Mount SSH paths. Reuse the first SSHFS temp root across
+            # source connections so Borg can run from one cwd and store relative
+            # remote paths instead of /tmp/sshfs_mount_* implementation paths.
+            shared_ssh_temp_root = None
             for connection_id, paths_data in ssh_paths_by_connection.items():
                 remote_paths = [parsed["path"] for _, parsed, _ in paths_data]
                 connection = paths_data[0][2]  # Get connection from first item
@@ -1033,14 +1070,20 @@ class BackupService:
 
                 try:
                     # Mount all paths from this connection under a single shared temp root
+                    mount_kwargs = {
+                        "connection_id": connection_id,
+                        "remote_paths": remote_paths,
+                        "job_id": job_id,
+                    }
+                    if shared_ssh_temp_root is not None:
+                        mount_kwargs["temp_root"] = shared_ssh_temp_root
+
                     (
                         temp_root,
                         mount_info_list,
-                    ) = await mount_service.mount_ssh_paths_shared(
-                        connection_id=connection_id,
-                        remote_paths=remote_paths,
-                        job_id=job_id,
-                    )
+                    ) = await mount_service.mount_ssh_paths_shared(**mount_kwargs)
+                    if shared_ssh_temp_root is None:
+                        shared_ssh_temp_root = temp_root
 
                     # Process mount results
                     for (mount_id, relative_path), (original_url, parsed, _) in zip(
@@ -1071,8 +1114,40 @@ class BackupService:
                     )
                     # Skip all paths from this connection
 
-            # Add local paths at the end
-            processed_paths.extend(local_paths)
+            # Add local paths at the end. Borg UI's managed restore canary is a
+            # local path, but when the backup cwd is an SSHFS root we stage that
+            # tiny generated payload under the same cwd so it still archives as
+            # .borg-ui/restore-canaries/... instead of an absolute data-dir path.
+            prepared_local_paths = []
+            for local_path in local_paths:
+                canary_archive_path = to_restore_canary_archive_source_path(
+                    local_path, settings.data_dir
+                )
+                if canary_archive_path and shared_ssh_temp_root:
+                    source = Path(local_path)
+                    target = Path(shared_ssh_temp_root) / canary_archive_path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    if target.exists():
+                        if target.is_dir():
+                            shutil.rmtree(target)
+                        else:
+                            target.unlink()
+                    if source.is_dir():
+                        shutil.copytree(source, target)
+                    else:
+                        shutil.copy2(source, target)
+                    prepared_local_paths.append(canary_archive_path)
+                    logger.info(
+                        "Staged restore canary under SSH backup cwd",
+                        source=str(source),
+                        staged_path=str(target),
+                        archive_path=canary_archive_path,
+                        job_id=job_id,
+                    )
+                else:
+                    prepared_local_paths.append(local_path)
+
+            processed_paths.extend(prepared_local_paths)
 
             # Store mount_ids for cleanup
             if mount_ids:
@@ -1198,11 +1273,17 @@ class BackupService:
         backup_cwd = None
         backup_paths = processed_source_paths
 
-        if ssh_mount_info and len(ssh_mount_info) == len(processed_source_paths):
-            temp_roots = list(set(temp_root for temp_root, _ in ssh_mount_info))
+        if ssh_mount_info:
+            ssh_path_count = len(ssh_mount_info)
+            temp_roots = list(
+                dict.fromkeys(temp_root for temp_root, _ in ssh_mount_info)
+            )
 
             if len(temp_roots) == 1:
                 backup_cwd = temp_roots[0]
+                backup_paths = [
+                    relative_path for _, relative_path in ssh_mount_info
+                ] + processed_source_paths[ssh_path_count:]
                 logger.info(
                     "Using cwd for SSH mount backup (preserves original path structure)",
                     cwd=backup_cwd,
@@ -1219,19 +1300,7 @@ class BackupService:
                     os.path.join(temp_root, relative_path)
                     for temp_root, relative_path in ssh_mount_info
                 ]
-        elif ssh_mount_info:
-            ssh_path_count = len(ssh_mount_info)
-            backup_paths = [
-                os.path.join(temp_root, relative_path)
-                for temp_root, relative_path in ssh_mount_info
-            ]
-            backup_paths.extend(processed_source_paths[ssh_path_count:])
-            logger.info(
-                "Using absolute SSH mount paths for mixed source backup",
-                ssh_path_count=ssh_path_count,
-                local_path_count=len(processed_source_paths) - ssh_path_count,
-                job_id=job_id,
-            )
+                backup_paths.extend(processed_source_paths[ssh_path_count:])
 
         rewritten_paths = []
         has_canary_path = False
@@ -1247,12 +1316,19 @@ class BackupService:
 
         if has_canary_path:
             backup_paths = rewritten_paths
-            backup_cwd = str(Path(settings.data_dir))
-            logger.info(
-                "Using hidden archive path for restore canary",
-                cwd=backup_cwd,
-                job_id=job_id,
-            )
+            if backup_cwd is None:
+                backup_cwd = str(Path(settings.data_dir))
+                logger.info(
+                    "Using hidden archive path for restore canary",
+                    cwd=backup_cwd,
+                    job_id=job_id,
+                )
+            else:
+                logger.info(
+                    "Using hidden archive path for restore canary with existing backup cwd",
+                    cwd=backup_cwd,
+                    job_id=job_id,
+                )
 
         return backup_paths, backup_cwd
 
@@ -1265,6 +1341,7 @@ class BackupService:
         skip_hooks: bool = False,
         source_directories: list[str] = None,
         source_ssh_connection_id: int = None,
+        source_locations: list[dict] = None,
         exclude_patterns_override: list[str] = None,
         compression_override: str = None,
         custom_flags_override: str = None,
@@ -1281,6 +1358,7 @@ class BackupService:
                         manage hook execution explicitly to avoid running scripts twice)
             source_directories: Optional source path override for backup plans.
             source_ssh_connection_id: Optional SSH source connection for source_directories.
+            source_locations: Optional grouped source path override for backup plans.
             exclude_patterns_override: Optional exclude pattern override for backup plans.
             compression_override: Optional compression override for backup plans.
             custom_flags_override: Optional custom flags override for backup plans.
@@ -1327,7 +1405,9 @@ class BackupService:
                     raise Exception(f"Repository not found: {repository}")
 
                 remote_source_paths = (
-                    source_directories
+                    flatten_source_locations(source_locations)
+                    if source_locations is not None
+                    else source_directories
                     if source_directories is not None
                     else json.loads(repo_record.source_directories or "[]")
                 )
@@ -1430,7 +1510,9 @@ class BackupService:
             exclude_patterns = []  # Default no exclusions
             compression = "lz4"  # Default compression
             router = None
-            using_source_override = source_directories is not None
+            using_source_override = (
+                source_directories is not None or source_locations is not None
+            )
             try:
                 repo_record = (
                     db.query(Repository).filter(Repository.path == repository).first()
@@ -1460,7 +1542,17 @@ class BackupService:
                             compression=compression,
                         )
 
-                    if using_source_override:
+                    if source_locations is not None:
+                        normalized_locations = decode_source_locations(
+                            json.dumps(source_locations),
+                            source_type="mixed",
+                            source_directories=source_directories or [],
+                        )
+                        source_dirs = flatten_source_locations(normalized_locations)
+                        source_paths = self._resolve_grouped_source_paths(
+                            db, normalized_locations
+                        )
+                    elif using_source_override:
                         source_dirs = source_directories or []
                     elif repo_record.source_directories:
                         try:
@@ -1482,13 +1574,22 @@ class BackupService:
                         raise ValueError(error_msg)
 
                     effective_source_ssh_connection_id = (
-                        source_ssh_connection_id
-                        if using_source_override
+                        None
+                        if source_locations is not None
+                        else source_ssh_connection_id
+                        if source_directories is not None
                         else repo_record.source_ssh_connection_id
                     )
 
                     # Check if this is a remote source (pull-based backup)
-                    if effective_source_ssh_connection_id:
+                    if source_locations is not None:
+                        logger.info(
+                            "Using grouped source locations",
+                            repository=repository,
+                            source_locations=normalized_locations,
+                            source_directories=source_paths,
+                        )
+                    elif effective_source_ssh_connection_id:
                         from app.database.models import SSHConnection
 
                         connection = (

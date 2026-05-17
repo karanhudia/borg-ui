@@ -444,6 +444,75 @@ class TestRepositoriesCreate:
 
         assert response.status_code == 200
 
+    def test_create_repository_with_multiple_source_locations(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Repositories can persist source groups from multiple machines."""
+        source_a = SSHConnection(host="server-a.example", username="backup-a", port=22)
+        source_b = SSHConnection(
+            host="server-b.example", username="backup-b", port=2222
+        )
+        test_db.add_all([source_a, source_b])
+        test_db.commit()
+        test_db.refresh(source_a)
+        test_db.refresh(source_b)
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": ["/srv/app"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_a.id,
+                "paths": ["/home/app/data"],
+            },
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": source_b.id,
+                "paths": ["/var/lib/service"],
+            },
+        ]
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Grouped Source Repo",
+                    "path": "/tmp/grouped-source",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "repository_type": "local",
+                    "source_directories": [
+                        "/srv/app",
+                        "/home/app/data",
+                        "/var/lib/service",
+                    ],
+                    "source_locations": source_locations,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        repo = (
+            test_db.query(Repository)
+            .filter(Repository.name == "Grouped Source Repo")
+            .one()
+        )
+        assert json.loads(repo.source_directories) == [
+            "/srv/app",
+            "/home/app/data",
+            "/var/lib/service",
+        ]
+        assert repo.source_ssh_connection_id is None
+        assert json.loads(repo.source_locations) == source_locations
+
     def test_create_repository_with_exclude_patterns(
         self, test_client: TestClient, admin_headers
     ):
@@ -579,7 +648,7 @@ class TestRepositoriesCreate:
         ) as mock_prune:
             response = test_client.post(
                 f"/api/repositories/{repo.id}/prune",
-                json={"keep_daily": 7},
+                json={"keep_daily": 7, "dry_run": True},
                 headers=admin_headers,
             )
 
