@@ -24,7 +24,7 @@ interface WizardStepBackupConfigProps {
   repositoryMode: 'full' | 'observe'
   data: BackupConfigStepData
   onChange: (data: Partial<BackupConfigStepData>) => void
-  onBrowseExclude: () => void
+  onBrowseExclude?: () => void
   showAdvancedOptions?: boolean
 }
 

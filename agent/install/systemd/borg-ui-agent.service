@@ -1,0 +1,20 @@
+[Unit]
+Description=Borg UI Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=borg-ui-agent
+Group=borg-ui-agent
+ExecStart=/opt/borg-ui-agent/.venv/bin/borg-ui-agent --config /etc/borg-ui-agent/config.toml run
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/etc/borg-ui-agent
+
+[Install]
+WantedBy=multi-user.target

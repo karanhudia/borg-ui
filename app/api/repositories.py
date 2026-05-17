@@ -13,6 +13,7 @@ from app.database.database import get_db, SessionLocal
 from app.database.models import (
     User,
     Repository,
+    AgentMachine,
     CheckJob,
     CompactJob,
     PruneJob,
@@ -762,6 +763,8 @@ class RepositoryCreate(BaseModel):
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source (pull-based backups)
     )
+    execution_target: str = "local"  # local, ssh, agent
+    agent_machine_id: Optional[int] = None  # Agent that executes backups
 
 
 class RepositoryImport(BaseModel):
@@ -802,6 +805,8 @@ class RepositoryImport(BaseModel):
     keyfile_content: Optional[str] = (
         None  # Content of borg keyfile for keyfile/keyfile-blake2 encryption
     )
+    execution_target: str = "local"  # local, ssh, agent
+    agent_machine_id: Optional[int] = None  # Agent that executes backups
 
 
 class RepositoryUpdate(BaseModel):
@@ -832,6 +837,8 @@ class RepositoryUpdate(BaseModel):
     source_connection_id: Optional[int] = (
         None  # SSH connection ID for remote data source
     )
+    execution_target: Optional[str] = None  # local, ssh, agent
+    agent_machine_id: Optional[int] = None  # Agent that executes backups
 
 
 class RepositoryInfo(BaseModel):
@@ -867,6 +874,171 @@ def _require_borg2_feature(db: Session) -> None:
                 "current": current_plan.value,
             },
         )
+
+
+def _normalize_execution_target(value: Optional[str]) -> str:
+    execution_target = (value or "local").strip().lower()
+    if execution_target not in {"local", "ssh", "agent"}:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.invalidExecutionTarget"},
+        )
+    return execution_target
+
+
+def _require_queueable_agent(
+    agent_machine_id: Optional[int], db: Session
+) -> AgentMachine:
+    if agent_machine_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.agents.agentRequired"},
+        )
+
+    agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
+    if not agent:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+    if agent.status in ("disabled", "revoked"):
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.agents.agentNotQueueable"},
+        )
+    return agent
+
+
+def _validate_agent_repository_payload(
+    repo_data: Union[RepositoryCreate, RepositoryImport], db: Session
+) -> AgentMachine:
+    if repo_data.mode == "full" and not repo_data.source_directories:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
+        )
+
+    if repo_data.encryption in [
+        "repokey",
+        "keyfile",
+        "repokey-blake2",
+        "keyfile-blake2",
+        "repokey-aes-ocb",
+        "repokey-chacha20-poly1305",
+        "keyfile-aes-ocb",
+        "keyfile-chacha20-poly1305",
+    ]:
+        if not repo_data.passphrase or repo_data.passphrase.strip() == "":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.repo.encryptedPassphraseRequired",
+                    "params": {"mode": repo_data.encryption},
+                },
+            )
+
+    return _require_queueable_agent(repo_data.agent_machine_id, db)
+
+
+def _create_agent_repository_record(
+    repo_data: Union[RepositoryCreate, RepositoryImport],
+    current_user: User,
+    db: Session,
+    *,
+    imported: bool,
+):
+    agent = _validate_agent_repository_payload(repo_data, db)
+    repo_path = repo_data.path.strip()
+    if not repo_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.pathRequired"},
+        )
+
+    if db.query(Repository).filter(Repository.name == repo_data.name).first():
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryNameExists"},
+        )
+
+    if db.query(Repository).filter(Repository.path == repo_path).first():
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryPathExists"},
+        )
+
+    source_directories_json = (
+        json.dumps(repo_data.source_directories)
+        if repo_data.source_directories
+        else None
+    )
+    exclude_patterns_json = (
+        json.dumps(repo_data.exclude_patterns) if repo_data.exclude_patterns else None
+    )
+
+    repository = Repository(
+        name=repo_data.name,
+        path=repo_path,
+        encryption=repo_data.encryption,
+        compression=repo_data.compression,
+        passphrase=repo_data.passphrase,
+        source_directories=source_directories_json,
+        exclude_patterns=exclude_patterns_json,
+        connection_id=repo_data.connection_id,
+        remote_path=repo_data.remote_path,
+        repository_type="ssh" if repo_path.startswith("ssh://") else "local",
+        execution_target="agent",
+        agent_machine_id=agent.id,
+        pre_backup_script=repo_data.pre_backup_script,
+        post_backup_script=repo_data.post_backup_script,
+        hook_timeout=repo_data.hook_timeout,
+        pre_hook_timeout=repo_data.pre_hook_timeout,
+        post_hook_timeout=repo_data.post_hook_timeout,
+        continue_on_hook_failure=repo_data.continue_on_hook_failure,
+        skip_on_hook_failure=repo_data.skip_on_hook_failure,
+        mode=repo_data.mode,
+        bypass_lock=repo_data.bypass_lock,
+        custom_flags=repo_data.custom_flags,
+        source_ssh_connection_id=None,
+        borg_version=repo_data.borg_version or 1,
+    )
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+
+    logger.info(
+        "Agent-managed repository recorded",
+        name=repository.name,
+        path=repository.path,
+        agent_id=agent.agent_id,
+        imported=imported,
+        user=current_user.username,
+    )
+
+    try:
+        mqtt_service.sync_state_with_db(db, reason="agent repository creation")
+    except Exception as e:
+        logger.warning(
+            "Failed to sync repositories with MQTT after agent repository creation",
+            repo_id=repository.id,
+            error=str(e),
+        )
+
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryImported"
+        if imported
+        else "backend.success.repo.repositoryCreated",
+        "repository": {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "execution_target": repository.execution_target,
+            "agent_machine_id": repository.agent_machine_id,
+        },
+    }
 
 
 @router.get("/")
@@ -936,6 +1108,8 @@ async def get_repositories(
                     ),
                     "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
                     "repository_type": repo.repository_type,
+                    "execution_target": repo.execution_target or "local",
+                    "agent_machine_id": repo.agent_machine_id,
                     "host": repo.host,
                     "port": repo.port,
                     "username": repo.username,
@@ -991,6 +1165,10 @@ async def create_repository(
     """Create a new repository"""
     try:
         if _uses_borg2_payload(repo_data):
+            if _normalize_execution_target(repo_data.execution_target) == "agent":
+                return _create_agent_repository_record(
+                    repo_data, current_user, db, imported=False
+                )
             _require_borg2_feature(db)
             from app.api.v2.repositories import (
                 RepositoryV2Create,
@@ -999,6 +1177,11 @@ async def create_repository(
 
             v2_payload = RepositoryV2Create(**repo_data.model_dump(exclude_none=True))
             return await create_repository_v2(v2_payload, current_user, db)
+
+        if _normalize_execution_target(repo_data.execution_target) == "agent":
+            return _create_agent_repository_record(
+                repo_data, current_user, db, imported=False
+            )
 
         valid_encryption_modes = {
             "repokey",
@@ -1259,6 +1442,8 @@ async def create_repository(
             custom_flags=repo_data.custom_flags,
             source_ssh_connection_id=source_connection_id,
             source_locations=source_locations_json,
+            execution_target=_normalize_execution_target(repo_data.execution_target),
+            agent_machine_id=None,
         )
 
         db.add(repository)
@@ -1332,6 +1517,10 @@ async def import_repository(
     """Import an existing Borg repository"""
     try:
         if _uses_borg2_payload(repo_data):
+            if _normalize_execution_target(repo_data.execution_target) == "agent":
+                return _create_agent_repository_record(
+                    repo_data, current_user, db, imported=True
+                )
             _require_borg2_feature(db)
             from app.api.v2.repositories import (
                 RepositoryV2Import,
@@ -1340,6 +1529,11 @@ async def import_repository(
 
             v2_payload = RepositoryV2Import(**repo_data.model_dump(exclude_none=True))
             return await import_repository_v2(v2_payload, current_user, db)
+
+        if _normalize_execution_target(repo_data.execution_target) == "agent":
+            return _create_agent_repository_record(
+                repo_data, current_user, db, imported=True
+            )
 
         # Validate connection_id and path
         repo_path = repo_data.path.strip()
@@ -1560,6 +1754,8 @@ async def import_repository(
             custom_flags=repo_data.custom_flags,
             source_ssh_connection_id=source_connection_id,
             source_locations=source_locations_json,
+            execution_target=_normalize_execution_target(repo_data.execution_target),
+            agent_machine_id=None,
         )
 
         db.add(repository)
@@ -1794,6 +1990,8 @@ async def get_repository(
                 "path": repository.path,
                 "encryption": repository.encryption,
                 "compression": repository.compression,
+                "execution_target": repository.execution_target or "local",
+                "agent_machine_id": repository.agent_machine_id,
                 "last_backup": format_datetime(repository.last_backup),
                 "total_size": repository.total_size,
                 "archive_count": repository.archive_count,
@@ -2132,6 +2330,26 @@ async def update_repository(
 
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
+
+        if repo_data.execution_target is not None:
+            execution_target = _normalize_execution_target(repo_data.execution_target)
+            if execution_target == "agent":
+                agent = _require_queueable_agent(repo_data.agent_machine_id, db)
+                repository.execution_target = "agent"
+                repository.agent_machine_id = agent.id
+                repository.source_ssh_connection_id = None
+            else:
+                repository.execution_target = execution_target
+                repository.agent_machine_id = None
+
+        elif "agent_machine_id" in repo_data.model_dump(exclude_unset=True):
+            if (repository.execution_target or "local") != "agent":
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.repo.invalidExecutionTarget"},
+                )
+            agent = _require_queueable_agent(repo_data.agent_machine_id, db)
+            repository.agent_machine_id = agent.id
 
         repository.updated_at = datetime.utcnow()
         db.commit()

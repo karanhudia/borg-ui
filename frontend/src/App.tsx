@@ -12,6 +12,7 @@ import Archives from './pages/Archives'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
 import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
+import ManagedAgents from './pages/ManagedAgents'
 import Activity from './pages/Activity'
 import Settings from './pages/Settings'
 import AuthLayout from './components/AuthLayout'
@@ -197,6 +198,14 @@ function App() {
           element={
             <ProtectedRoute requiredTab="connections">
               <SSHConnectionsSingleKey />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/managed-agents"
+          element={
+            <ProtectedRoute requiredTab="connections">
+              <ManagedAgents />
             </ProtectedRoute>
           }
         />

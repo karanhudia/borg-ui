@@ -89,6 +89,7 @@ export default defineConfig({
         items: [
           { text: 'Architecture', link: '/SPECIFICATION' },
           { text: 'Job System', link: '/architecture/job-system' },
+          { text: 'Managed Agent Spec', link: '/managed-agent-spec' },
           { text: 'Development', link: '/development' },
           { text: 'Testing', link: '/testing' },
           { text: 'Contributing', link: '/contributing' },

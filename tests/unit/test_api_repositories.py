@@ -20,7 +20,9 @@ import os
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
+from app.core.security import get_password_hash
 from app.database.models import (
+    AgentMachine,
     CheckJob,
     LicensingState,
     Repository,
@@ -375,6 +377,48 @@ class TestRepositoriesCreate:
             )
 
         assert response.status_code == 200
+
+    def test_create_agent_repository_records_target_without_server_init(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Repo",
+                    "path": "/agent/repo",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/user/docs"],
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        initialize.assert_not_awaited()
+        repo = test_db.query(Repository).filter_by(name="Agent Repo").first()
+        assert repo.execution_target == "agent"
+        assert repo.agent_machine_id == agent.id
+        assert repo.path == "/agent/repo"
 
     def test_create_repository_missing_name(
         self, test_client: TestClient, admin_headers

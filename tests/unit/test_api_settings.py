@@ -92,6 +92,7 @@ class TestSystemSettings:
         assert payload["metrics_require_auth"] is False
         assert payload["metrics_token_set"] is False
         assert payload["borg2_fast_browse_beta_enabled"] is False
+        assert payload["managed_agents_beta_enabled"] is False
         assert payload["dashboard_backup_warning_days"] == 3
         assert payload["dashboard_backup_critical_days"] == 7
         assert payload["dashboard_check_warning_days"] == 7
@@ -122,6 +123,26 @@ class TestSystemSettings:
         assert response.status_code == 200
         test_db.refresh(settings)
         assert settings.borg2_fast_browse_beta_enabled is True
+
+    def test_update_system_settings_persists_managed_agents_beta_enabled(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        settings = SystemSettings()
+        test_db.add(settings)
+        test_db.commit()
+
+        response = test_client.put(
+            "/api/settings/system",
+            json={
+                "managed_agents_beta_enabled": True,
+                "mqtt_password": "",
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(settings)
+        assert settings.managed_agents_beta_enabled is True
 
     def test_update_system_settings_persists_scheduler_concurrency_limits(
         self, test_client: TestClient, admin_headers, test_db

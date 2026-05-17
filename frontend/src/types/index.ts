@@ -12,6 +12,8 @@ export interface Repository {
   name: string
   path: string
   repository_type?: 'local' | 'ssh' | 'sftp'
+  execution_target?: 'local' | 'ssh' | 'agent'
+  agent_machine_id?: number | null
   has_running_maintenance?: boolean
   borg_version?: number
   host?: string

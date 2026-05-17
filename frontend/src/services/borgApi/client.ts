@@ -71,18 +71,18 @@ export class BorgApiClient {
   constructor(repo: Repository) {
     this.repoId = repo.id
     this.repoPath = typeof repo.path === 'string' ? repo.path : undefined
-    this.v = isV2Repo(repo) ? '/v2' : ''
+    this.v = repo.execution_target === 'agent' ? '' : isV2Repo(repo) ? '/v2' : ''
   }
 
   // ── Pre-creation (no repo ID yet) ────────────────────────────────────────
 
   static createRepository(data: Omit<Repository, 'id'>) {
-    const v = isV2Repo(data) ? '/v2' : ''
+    const v = data.execution_target === 'agent' ? '' : isV2Repo(data) ? '/v2' : ''
     return httpClient.post(`${v}/repositories/`, data)
   }
 
   static importRepository(data: Omit<Repository, 'id'>) {
-    const v = isV2Repo(data) ? '/v2' : ''
+    const v = data.execution_target === 'agent' ? '' : isV2Repo(data) ? '/v2' : ''
     return httpClient.post(`${v}/repositories/import`, data)
   }
 
