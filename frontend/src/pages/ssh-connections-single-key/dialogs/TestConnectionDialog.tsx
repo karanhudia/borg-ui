@@ -12,6 +12,7 @@ import {
   Typography,
 } from '@mui/material'
 import type { TestConnectionPayload } from '../types'
+import { SshHostField } from './SshHostField'
 
 interface TestConnectionDialogProps {
   t: TFunction
@@ -19,6 +20,8 @@ interface TestConnectionDialogProps {
   setOpen: Dispatch<SetStateAction<boolean>>
   testConnectionForm: TestConnectionPayload
   setTestConnectionForm: Dispatch<SetStateAction<TestConnectionPayload>>
+  hostError?: string
+  setHostError: Dispatch<SetStateAction<string | undefined>>
   pending: boolean
   onTest: () => void
 }
@@ -29,6 +32,8 @@ export function TestConnectionDialog({
   setOpen,
   testConnectionForm,
   setTestConnectionForm,
+  hostError,
+  setHostError,
   pending,
   onTest,
 }: TestConnectionDialogProps) {
@@ -52,13 +57,15 @@ export function TestConnectionDialog({
             </Typography>
           </Alert>
 
-          <TextField
+          <SshHostField
             label={t('sshConnections.deployDialog.host')}
-            fullWidth
             value={testConnectionForm.host}
-            onChange={(e) => setTestConnectionForm({ ...testConnectionForm, host: e.target.value })}
             placeholder={t('sshConnections.deployDialog.hostPlaceholder')}
-            InputLabelProps={{ shrink: true }}
+            hostError={hostError}
+            onHostChange={(host) => {
+              setTestConnectionForm({ ...testConnectionForm, host })
+              setHostError(undefined)
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.username')}

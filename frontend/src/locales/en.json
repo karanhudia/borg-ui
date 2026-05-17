@@ -1459,6 +1459,9 @@
       "updating": "Updating...",
       "submit": "Update Connection"
     },
+    "validation": {
+      "hostBareOnly": "Enter a bare DNS name or IP address without a scheme, path, user, spaces, brackets, or port."
+    },
     "deleteConnectionDialog": {
       "title": "Delete SSH Connection",
       "confirm": "Are you sure you want to delete this connection?",
@@ -3174,7 +3177,11 @@
     "archivesPreserve": "Archives preserve original paths (excludes work intuitively)",
     "cleanupDesc": "Unmounts remote directory after backup completes",
     "backupSourceDirs": "Backs up source directories to the repository",
-    "futureBackups": "This command will be used for future backups"
+    "futureBackups": "This command will be used for future backups",
+    "copyToClipboard": "Copy to clipboard",
+    "copied": "Copied!",
+    "commandCopied": "Command copied to clipboard",
+    "copyFailed": "Failed to copy to clipboard"
   },
   "cronBuilderComponent": {
     "runEvery": "Run every",

@@ -1459,6 +1459,9 @@
       "updating": "Aktualisiert...",
       "submit": "Verbindung aktualisieren"
     },
+    "validation": {
+      "hostBareOnly": "Gib einen reinen DNS-Namen oder eine IP-Adresse ohne Schema, Pfad, Benutzer, Leerzeichen, Klammern oder Port ein."
+    },
     "deleteConnectionDialog": {
       "title": "SSH-Verbindung löschen",
       "confirm": "Bist du sicher, dass du diese Verbindung löschen möchtest?",
@@ -3174,7 +3177,11 @@
     "archivesPreserve": "Archive behalten ursprüngliche Pfade bei (Ausschlüsse funktionieren intuitiv)",
     "cleanupDesc": "Hängt Remote-Verzeichnis nach Abschluss der Sicherung aus",
     "backupSourceDirs": "Sichert Quellverzeichnisse im Repository",
-    "futureBackups": "Dieser Befehl wird für zukünftige Sicherungen verwendet"
+    "futureBackups": "Dieser Befehl wird für zukünftige Sicherungen verwendet",
+    "copyToClipboard": "In Zwischenablage kopieren",
+    "copied": "Kopiert!",
+    "commandCopied": "Befehl in die Zwischenablage kopiert",
+    "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
   },
   "cronBuilderComponent": {
     "runEvery": "Alle",

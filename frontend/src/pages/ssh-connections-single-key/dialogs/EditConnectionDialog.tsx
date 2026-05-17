@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material'
 import type { SSHConnection, UpdateConnectionPayload } from '../types'
+import { SshHostField } from './SshHostField'
 
 interface EditConnectionDialogProps {
   t: TFunction
@@ -23,6 +24,8 @@ interface EditConnectionDialogProps {
   setSelectedConnection: Dispatch<SetStateAction<SSHConnection | null>>
   editConnectionForm: UpdateConnectionPayload
   setEditConnectionForm: Dispatch<SetStateAction<UpdateConnectionPayload>>
+  hostError?: string
+  setHostError: Dispatch<SetStateAction<string | undefined>>
   pending: boolean
   onUpdate: () => void
 }
@@ -34,6 +37,8 @@ export function EditConnectionDialog({
   setSelectedConnection,
   editConnectionForm,
   setEditConnectionForm,
+  hostError,
+  setHostError,
   pending,
   onUpdate,
 }: EditConnectionDialogProps) {
@@ -47,13 +52,15 @@ export function EditConnectionDialog({
       <DialogTitle>{t('sshConnections.editConnectionDialog.title')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
+          <SshHostField
             label={t('sshConnections.deployDialog.host')}
-            fullWidth
             value={editConnectionForm.host}
-            onChange={(e) => setEditConnectionForm({ ...editConnectionForm, host: e.target.value })}
             placeholder={t('sshConnections.deployDialog.hostPlaceholder')}
-            InputLabelProps={{ shrink: true }}
+            hostError={hostError}
+            onHostChange={(host) => {
+              setEditConnectionForm({ ...editConnectionForm, host })
+              setHostError(undefined)
+            }}
           />
           <TextField
             label={t('sshConnections.deployDialog.username')}
