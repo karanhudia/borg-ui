@@ -3165,7 +3165,11 @@
     "archivesPreserve": "Archive behalten ursprüngliche Pfade bei (Ausschlüsse funktionieren intuitiv)",
     "cleanupDesc": "Hängt Remote-Verzeichnis nach Abschluss der Sicherung aus",
     "backupSourceDirs": "Sichert Quellverzeichnisse im Repository",
-    "futureBackups": "Dieser Befehl wird für zukünftige Sicherungen verwendet"
+    "futureBackups": "Dieser Befehl wird für zukünftige Sicherungen verwendet",
+    "copyToClipboard": "In Zwischenablage kopieren",
+    "copied": "Kopiert!",
+    "commandCopied": "Befehl in die Zwischenablage kopiert",
+    "copyFailed": "Kopieren in die Zwischenablage fehlgeschlagen"
   },
   "cronBuilderComponent": {
     "runEvery": "Alle",

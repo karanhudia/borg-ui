@@ -3165,7 +3165,11 @@
     "archivesPreserve": "Los archivos preservan las rutas originales (las exclusiones funcionan intuitivamente)",
     "cleanupDesc": "Desmonta el directorio remoto después de que se completa la copia de seguridad",
     "backupSourceDirs": "Respalda los directorios de origen en el repositorio",
-    "futureBackups": "Este comando se usará para copias de seguridad futuras"
+    "futureBackups": "Este comando se usará para copias de seguridad futuras",
+    "copyToClipboard": "Copiar al portapapeles",
+    "copied": "¡Copiado!",
+    "commandCopied": "Comando copiado al portapapeles",
+    "copyFailed": "No se pudo copiar al portapapeles"
   },
   "cronBuilderComponent": {
     "runEvery": "Ejecutar cada",

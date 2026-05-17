@@ -1,7 +1,10 @@
-import React from 'react'
-import { Box, Typography, Paper } from '@mui/material'
+import { useEffect, useRef, useState } from 'react'
+import { Box, Typography, Paper, IconButton, Tooltip } from '@mui/material'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import CheckIcon from '@mui/icons-material/Check'
 import { generateBorgCreateCommand, generateBorgInitCommand } from '../utils/borgUtils'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'react-hot-toast'
 
 interface SourceSshConnection {
   username: string
@@ -32,23 +35,79 @@ interface CommandPreviewProps {
   sourceSshConnection?: SourceSshConnection | null
 }
 
-const CommandBox = ({ children }: { children: React.ReactNode }) => (
-  <Box
-    sx={{
-      bgcolor: 'grey.900',
-      color: 'grey.100',
-      p: 1.5,
-      borderRadius: 1,
-      fontFamily: 'monospace',
-      fontSize: '0.8rem',
-      overflow: 'auto',
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-all',
-    }}
-  >
-    {children}
-  </Box>
-)
+interface CopyableCommandBoxProps {
+  command: string
+}
+
+const CopyableCommandBox = ({ command }: CopyableCommandBoxProps) => {
+  const [copied, setCopied] = useState(false)
+  const resetCopiedTimeoutRef = useRef<number | null>(null)
+  const { t } = useTranslation()
+
+  useEffect(() => {
+    return () => {
+      if (resetCopiedTimeoutRef.current !== null) {
+        window.clearTimeout(resetCopiedTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopied(true)
+      toast.success(t('commandPreview.commandCopied'))
+      if (resetCopiedTimeoutRef.current !== null) {
+        window.clearTimeout(resetCopiedTimeoutRef.current)
+      }
+      resetCopiedTimeoutRef.current = window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error(t('commandPreview.copyFailed'))
+    }
+  }
+
+  const copyLabel = copied ? t('commandPreview.copied') : t('commandPreview.copyToClipboard')
+
+  return (
+    <Box
+      sx={{
+        position: 'relative',
+        bgcolor: 'grey.900',
+        color: 'grey.100',
+        p: 1.5,
+        pr: 5,
+        borderRadius: 1,
+        fontFamily: 'monospace',
+        fontSize: '0.8rem',
+        overflow: 'auto',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-all',
+      }}
+    >
+      {command}
+      <Tooltip title={copyLabel}>
+        <IconButton
+          size="small"
+          aria-label={copyLabel}
+          onClick={handleCopy}
+          sx={{
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            color: 'grey.400',
+            bgcolor: 'rgba(255,255,255,0.08)',
+            '&:hover': {
+              bgcolor: 'rgba(255,255,255,0.16)',
+              color: 'grey.200',
+            },
+          }}
+        >
+          {copied ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
+    </Box>
+  )
+}
 
 export default function CommandPreview({
   mode,
@@ -109,7 +168,7 @@ export default function CommandPreview({
       resolvedPath = `${normalizedDefaultPath.replace(/\/$/, '')}/${rawPath}`
     }
 
-    return resolvedPath.replace(/\/+/g, '/')
+    return resolvedPath.replace(/\/\/+/g, '/')
   }
 
   const resolvedRemoteSourceDirs = isRemoteSource
@@ -140,7 +199,7 @@ export default function CommandPreview({
         <Typography variant="subtitle2" gutterBottom sx={{ mb: 1.5 }}>
           {t('backup.commandPreview')}
         </Typography>
-        <CommandBox>{createCommand}</CommandBox>
+        <CopyableCommandBox command={createCommand} />
       </Paper>
     )
   }
@@ -198,7 +257,7 @@ export default function CommandPreview({
             >
               {t('commandPreview.step1InitRepo')}
             </Typography>
-            <CommandBox>{initCommand}</CommandBox>
+            <CopyableCommandBox command={initCommand} />
           </Box>
         )}
 
@@ -223,7 +282,7 @@ export default function CommandPreview({
                       : t('commandPreview.mountDirectory'),
                 })}
           </Typography>
-          <CommandBox>{sshfsMountCommands.join('\n')}</CommandBox>
+          <CopyableCommandBox command={sshfsMountCommands.join('\n')} />
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
             {mountDisplayText}
           </Typography>
@@ -240,7 +299,7 @@ export default function CommandPreview({
               ? t('commandPreview.step3RunBackup')
               : t('commandPreview.step2RunBackup')}
           </Typography>
-          <CommandBox>{createCommand}</CommandBox>
+          <CopyableCommandBox command={createCommand} />
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
             {t('commandPreview.archivesPreserve')}
           </Typography>
@@ -257,7 +316,7 @@ export default function CommandPreview({
               ? t('commandPreview.step4Cleanup')
               : t('commandPreview.step3Cleanup')}
           </Typography>
-          <CommandBox>fusermount -u /tmp/sshfs_mount/</CommandBox>
+          <CopyableCommandBox command="fusermount -u /tmp/sshfs_mount/" />
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
             {t('commandPreview.cleanupDesc')}
           </Typography>
@@ -285,7 +344,7 @@ export default function CommandPreview({
           >
             {t('commandPreview.step1InitRepo')}
           </Typography>
-          <CommandBox>{initCommand}</CommandBox>
+          <CopyableCommandBox command={initCommand} />
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
             {t('commandPreview.initRepositoryDesc')}
           </Typography>
@@ -304,7 +363,7 @@ export default function CommandPreview({
               ? t('commandPreview.step2RunBackup')
               : t('commandPreview.stepRunBackup')}
           </Typography>
-          <CommandBox>{createCommand}</CommandBox>
+          <CopyableCommandBox command={createCommand} />
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
             {mode === 'create'
               ? t('commandPreview.backupSourceDirs')
