@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Box, Typography, Paper, IconButton, Tooltip } from '@mui/material'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
 import { generateBorgCreateCommand, generateBorgInitCommand } from '../utils/borgUtils'
 import { useTranslation } from 'react-i18next'
-import toast from 'react-hot-toast'
+import { toast } from 'react-hot-toast'
 
 interface SourceSshConnection {
   username: string
@@ -41,17 +41,32 @@ interface CopyableCommandBoxProps {
 
 const CopyableCommandBox = ({ command }: CopyableCommandBoxProps) => {
   const [copied, setCopied] = useState(false)
+  const resetCopiedTimeoutRef = useRef<number | null>(null)
+  const { t } = useTranslation()
+
+  useEffect(() => {
+    return () => {
+      if (resetCopiedTimeoutRef.current !== null) {
+        window.clearTimeout(resetCopiedTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(command)
       setCopied(true)
-      toast.success('Command copied to clipboard')
-      setTimeout(() => setCopied(false), 2000)
+      toast.success(t('commandPreview.commandCopied'))
+      if (resetCopiedTimeoutRef.current !== null) {
+        window.clearTimeout(resetCopiedTimeoutRef.current)
+      }
+      resetCopiedTimeoutRef.current = window.setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error('Failed to copy to clipboard')
+      toast.error(t('commandPreview.copyFailed'))
     }
   }
+
+  const copyLabel = copied ? t('commandPreview.copied') : t('commandPreview.copyToClipboard')
 
   return (
     <Box
@@ -70,9 +85,10 @@ const CopyableCommandBox = ({ command }: CopyableCommandBoxProps) => {
       }}
     >
       {command}
-      <Tooltip title={copied ? 'Copied!' : 'Copy to clipboard'}>
+      <Tooltip title={copyLabel}>
         <IconButton
           size="small"
+          aria-label={copyLabel}
           onClick={handleCopy}
           sx={{
             position: 'absolute',

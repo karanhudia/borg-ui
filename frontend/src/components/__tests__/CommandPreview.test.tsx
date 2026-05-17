@@ -1,6 +1,39 @@
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { toast } from 'react-hot-toast'
+import i18n from '../../i18n'
 import CommandPreview from '../CommandPreview'
+
+const { writeText, toastMock } = vi.hoisted(() => ({
+  writeText: vi.fn(),
+  toastMock: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}))
+
+vi.mock('react-hot-toast', async () => {
+  const actual = await vi.importActual<typeof import('react-hot-toast')>('react-hot-toast')
+  return {
+    ...actual,
+    default: toastMock,
+    toast: toastMock,
+  }
+})
+
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
+  writeText.mockReset()
+  writeText.mockResolvedValue(undefined)
+  vi.mocked(toast.success).mockClear()
+  vi.mocked(toast.error).mockClear()
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      writeText,
+    },
+  })
+})
 
 describe('CommandPreview', () => {
   describe('Local source backups', () => {
@@ -373,5 +406,37 @@ describe('Copy-to-clipboard', () => {
     // Should have a copy button for the single command block
     const copyButtons = document.querySelectorAll('button[aria-label]')
     expect(copyButtons.length).toBeGreaterThan(0)
+  })
+
+  it('uses localized labels and shows copied feedback after copying a command', async () => {
+    await i18n.changeLanguage('de')
+
+    render(
+      <CommandPreview
+        mode="create"
+        repositoryPath="/backups/repo"
+        encryption="repokey"
+        compression="lz4"
+        sourceDirs={['/home/user/data']}
+        repositoryMode="full"
+        dataSource="local"
+      />
+    )
+
+    const copyButton = screen.getAllByRole('button', {
+      name: 'In Zwischenablage kopieren',
+    })[0]
+
+    fireEvent.click(copyButton)
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('borg init'))
+    })
+    expect(toast.success).toHaveBeenCalledWith('Befehl in die Zwischenablage kopiert')
+    expect(
+      screen.getByRole('button', {
+        name: 'Kopiert!',
+      })
+    ).toBeInTheDocument()
   })
 })
