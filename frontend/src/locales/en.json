@@ -2353,6 +2353,9 @@
     "mqttIntegrationTitle": "MQTT Integration",
     "enableMqtt": "Enable MQTT",
     "mqttIntegrationDescription": "Activates MQTT integration in the UI.",
+    "managedAgentsTitle": "Managed CLI Agents",
+    "enableManagedAgents": "Enable managed CLI agents",
+    "managedAgentsDescription": "Shows the Managed Agents navigation item and server-side agent enrollment workflow.",
     "failedToUpdateSetting": "Failed to update setting: {{message}}"
   },
   "exportImport": {

@@ -42,6 +42,7 @@ import {
   AgentJobResponse,
   AgentMachineResponse,
   managedAgentsAPI,
+  settingsAPI,
 } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { getApiErrorDetail } from '../utils/apiErrors'
@@ -135,30 +136,39 @@ export default function ManagedAgents() {
   const [backupForm, setBackupForm] = useState(emptyBackupForm)
   const [logsJob, setLogsJob] = useState<AgentJobResponse | null>(null)
 
+  const settingsQuery = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: settingsAPI.getSystemSettings,
+    enabled: canManageAgents,
+  })
+  const managedAgentsBetaEnabled =
+    settingsQuery.data?.data?.settings?.managed_agents_beta_enabled ?? false
+  const canUseManagedAgents = canManageAgents && managedAgentsBetaEnabled
+
   const agentsQuery = useQuery({
     queryKey: ['managed-agents'],
     queryFn: managedAgentsAPI.listAgents,
-    enabled: canManageAgents,
+    enabled: canUseManagedAgents,
     refetchInterval: 15000,
   })
 
   const tokensQuery = useQuery({
     queryKey: ['managed-agent-enrollment-tokens'],
     queryFn: managedAgentsAPI.listEnrollmentTokens,
-    enabled: canManageAgents,
+    enabled: canUseManagedAgents,
   })
 
   const jobsQuery = useQuery({
     queryKey: ['managed-agent-jobs'],
     queryFn: managedAgentsAPI.listJobs,
-    enabled: canManageAgents,
+    enabled: canUseManagedAgents,
     refetchInterval: 5000,
   })
 
   const logsQuery = useQuery({
     queryKey: ['managed-agent-job-logs', logsJob?.id],
     queryFn: () => managedAgentsAPI.listJobLogs(logsJob!.id),
-    enabled: canManageAgents && !!logsJob,
+    enabled: canUseManagedAgents && !!logsJob,
     refetchInterval: logsJob && !FINAL_JOB_STATUSES.has(logsJob.status) ? 2000 : false,
   })
 
@@ -247,6 +257,10 @@ export default function ManagedAgents() {
     return <Navigate to="/dashboard" replace />
   }
 
+  if (!settingsQuery.isLoading && !managedAgentsBetaEnabled) {
+    return <Navigate to="/dashboard" replace />
+  }
+
   const handleCreateEnrollmentToken = () => {
     createEnrollmentMutation.mutate({
       name: tokenName,
@@ -294,8 +308,10 @@ export default function ManagedAgents() {
   const registrationCommand = createdToken
     ? `borg-ui-agent register --server ${window.location.origin} --token ${createdToken} --name <machine-name>`
     : ''
+  const setupCommand = `borg-ui-agent register --server ${window.location.origin} --token <enrollment-token> --name <machine-name>`
 
-  const isLoading = agentsQuery.isLoading || tokensQuery.isLoading || jobsQuery.isLoading
+  const isLoading =
+    settingsQuery.isLoading || agentsQuery.isLoading || tokensQuery.isLoading || jobsQuery.isLoading
 
   return (
     <Box>
@@ -335,6 +351,15 @@ export default function ManagedAgents() {
           </Button>
         </Stack>
       </Stack>
+
+      <AgentSetupGuide
+        command={setupCommand}
+        onCopy={() => handleCopy(setupCommand)}
+        onCreateToken={() => {
+          setCreatedToken(null)
+          setEnrollmentDialogOpen(true)
+        }}
+      />
 
       <Box
         sx={{
@@ -675,6 +700,121 @@ export default function ManagedAgents() {
         </DialogActions>
       </Dialog>
     </Box>
+  )
+}
+
+export function AgentSetupGuide({
+  command,
+  onCopy,
+  onCreateToken,
+}: {
+  command: string
+  onCopy: () => void
+  onCreateToken: () => void
+}) {
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        mb: 3,
+        borderRadius: 2,
+        p: { xs: 2, md: 2.5 },
+        bgcolor: 'background.paper',
+      }}
+    >
+      <Stack spacing={2}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          justifyContent="space-between"
+          alignItems={{ xs: 'stretch', md: 'center' }}
+        >
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+              <Terminal size={18} />
+              <Typography variant="h6" fontWeight={700}>
+                Set up an agent on a remote machine
+              </Typography>
+            </Stack>
+            <Typography color="text.secondary">
+              Create an enrollment token, then run the registration command on the client.
+            </Typography>
+          </Box>
+          <Button variant="contained" startIcon={<Plus size={18} />} onClick={onCreateToken}>
+            Create Enrollment Token
+          </Button>
+        </Stack>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
+            gap: 1.5,
+          }}
+        >
+          {[
+            {
+              label: '1',
+              title: 'Install the CLI',
+              body: 'Install borg-ui-agent on the client machine that owns the files to back up.',
+            },
+            {
+              label: '2',
+              title: 'Create a token',
+              body: 'Use an enrollment token with a short expiry for each machine or rollout batch.',
+            },
+            {
+              label: '3',
+              title: 'Register the client',
+              body: 'Run the command on the remote machine; it will appear here after the first heartbeat.',
+            },
+          ].map((step) => (
+            <Box
+              key={step.label}
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1.5,
+                p: 1.5,
+                minWidth: 0,
+              }}
+            >
+              <Chip label={step.label} size="small" sx={{ mb: 1, fontWeight: 700 }} />
+              <Typography fontWeight={700}>{step.title}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {step.body}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems="stretch">
+          <Box
+            component="code"
+            sx={{
+              flex: 1,
+              display: 'block',
+              p: 1.5,
+              borderRadius: 1,
+              bgcolor: 'action.hover',
+              color: 'text.primary',
+              overflowX: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              fontSize: '0.8rem',
+              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+            }}
+          >
+            {command}
+          </Box>
+          <Tooltip title="Copy setup command">
+            <Button variant="outlined" startIcon={<Copy size={18} />} onClick={onCopy}>
+              Copy
+            </Button>
+          </Tooltip>
+        </Stack>
+      </Stack>
+    </Paper>
   )
 }
 

@@ -2353,6 +2353,9 @@
     "mqttIntegrationTitle": "Integración MQTT",
     "enableMqtt": "Habilitar MQTT",
     "mqttIntegrationDescription": "Activa la integración MQTT en la interfaz.",
+    "managedAgentsTitle": "Agentes CLI gestionados",
+    "enableManagedAgents": "Habilitar agentes CLI gestionados",
+    "managedAgentsDescription": "Muestra el elemento de navegación Agentes gestionados y el flujo de inscripción de agentes del servidor.",
     "failedToUpdateSetting": "Error al actualizar la configuración: {{message}}"
   },
   "exportImport": {

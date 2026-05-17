@@ -2353,6 +2353,9 @@
     "mqttIntegrationTitle": "MQTT-Integration",
     "enableMqtt": "MQTT aktivieren",
     "mqttIntegrationDescription": "Aktiviert die MQTT-Integration in der Benutzeroberfläche.",
+    "managedAgentsTitle": "Verwaltete CLI-Agenten",
+    "enableManagedAgents": "Verwaltete CLI-Agenten aktivieren",
+    "managedAgentsDescription": "Zeigt den Navigationseintrag Verwaltete Agenten und den serverseitigen Agent-Registrierungsablauf an.",
     "failedToUpdateSetting": "Einstellung konnte nicht aktualisiert werden: {{message}}"
   },
   "exportImport": {

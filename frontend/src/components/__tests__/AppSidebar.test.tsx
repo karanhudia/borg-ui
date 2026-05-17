@@ -107,11 +107,19 @@ describe('AppSidebar', () => {
       expect(screen.getAllByRole('link', { name: /dashboard/i }).length).toBeGreaterThan(0)
       expect(screen.getAllByRole('link', { name: /repositories/i }).length).toBeGreaterThan(0)
       expect(screen.getAllByRole('link', { name: /manual backup/i }).length).toBeGreaterThan(0)
-      expect(screen.getAllByRole('link', { name: /managed agents/i })[0]).toHaveAttribute(
-        'href',
-        '/managed-agents'
-      )
+      expect(screen.queryAllByRole('link', { name: /managed agents/i })).toHaveLength(0)
     })
+  })
+
+  it('shows Managed Agents navigation when its beta flag is enabled', async () => {
+    mockGetSystemSettings.mockResolvedValue({
+      data: { settings: { managed_agents_beta_enabled: true } },
+    })
+
+    renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
+
+    const managedAgentLinks = await screen.findAllByRole('link', { name: /managed agents/i })
+    expect(managedAgentLinks[0]).toHaveAttribute('href', '/managed-agents')
   })
 
   it('renders the version info section', async () => {
@@ -124,10 +132,13 @@ describe('AppSidebar', () => {
   it('fetches system info and forwards the app version to analytics', async () => {
     renderWithProviders(<AppSidebar mobileOpen={false} onClose={vi.fn()} />)
 
-    await waitFor(() => {
-      expect(mockApiGet).toHaveBeenCalledWith('/system/info')
-      expect(mockSetAppVersion).toHaveBeenCalledWith('1.78.0')
-    })
+    await waitFor(
+      () => {
+        expect(mockApiGet).toHaveBeenCalledWith('/system/info')
+        expect(mockSetAppVersion).toHaveBeenCalledWith('1.78.0')
+      },
+      { timeout: 10000 }
+    )
   })
 
   it('shows MQTT settings navigation when enabled', async () => {

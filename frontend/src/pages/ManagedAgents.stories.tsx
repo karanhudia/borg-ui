@@ -6,7 +6,7 @@ import type {
   AgentJobResponse,
   AgentMachineResponse,
 } from '../services/api'
-import { AgentList, JobsTable, TokensTable } from './ManagedAgents'
+import { AgentList, AgentSetupGuide, JobsTable, TokensTable } from './ManagedAgents'
 
 const agents: AgentMachineResponse[] = [
   {
@@ -138,6 +138,12 @@ export const FleetOverview: Story = {
           </Box>
           <Chip label="2 machines / 1 active job" color="primary" variant="outlined" />
         </Stack>
+
+        <AgentSetupGuide
+          command="borg-ui-agent register --server https://borg-ui.example.com --token <enrollment-token> --name <machine-name>"
+          onCopy={() => {}}
+          onCreateToken={() => {}}
+        />
 
         <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
           <Box
