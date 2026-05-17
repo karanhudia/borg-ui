@@ -15,6 +15,7 @@ from app.database.models import (
     AgentMachine,
     User,
     BackupJob,
+    BackupPlan,
     Repository,
     PruneJob,
     CompactJob,
@@ -79,7 +80,6 @@ def _get_running_maintenance_job(
         .order_by(job_model.id.desc())
         .first()
     )
-
 
 def _decode_json_list(value) -> list:
     if not value:
@@ -249,6 +249,13 @@ def _backup_job_has_logs(db: Session, job: BackupJob) -> bool:
     )
 
 
+def _get_backup_plan_name(db: Session, backup_plan_id: Optional[int]) -> Optional[str]:
+    if not backup_plan_id:
+        return None
+    plan = db.query(BackupPlan).filter(BackupPlan.id == backup_plan_id).first()
+    return plan.name if plan else None
+
+
 async def _cancel_running_maintenance_job(db: Session, backup_job: BackupJob):
     maintenance_job = _get_running_maintenance_job(
         db, backup_job, backup_job.maintenance_status
@@ -412,8 +419,12 @@ async def get_all_backup_jobs(
             # Filter to only jobs with scheduled_job_id set
             query = query.filter(BackupJob.scheduled_job_id.isnot(None))
         elif manual_only:
-            # Filter to only jobs without scheduled_job_id (manual backups)
-            query = query.filter(BackupJob.scheduled_job_id.is_(None))
+            # Filter to only legacy manual backups. Backup Plan runs are surfaced
+            # through the plan run APIs so the manual backup table stays scoped.
+            query = query.filter(
+                BackupJob.scheduled_job_id.is_(None),
+                BackupJob.backup_plan_id.is_(None),
+            )
 
         if repository:
             query = query.filter(BackupJob.repository == repository)
@@ -445,6 +456,16 @@ async def get_all_backup_jobs(
                     "has_logs": _backup_job_has_logs(db, job),
                     "maintenance_status": job.maintenance_status,
                     "scheduled_job_id": job.scheduled_job_id,  # Include for filtering by schedule
+                    "backup_plan_id": job.backup_plan_id,
+                    "backup_plan_run_id": job.backup_plan_run_id,
+                    "backup_plan_name": _get_backup_plan_name(db, job.backup_plan_id),
+                    "triggered_by": (
+                        "backup_plan"
+                        if job.backup_plan_id
+                        else "schedule"
+                        if job.scheduled_job_id
+                        else "manual"
+                    ),
                     "archive_name": getattr(job, "archive_name", None),
                     "progress_details": serialize_backup_progress_details(
                         job,
@@ -490,6 +511,16 @@ async def get_backup_status(
             "error_message": job.error_message,
             "logs": job.logs,
             "maintenance_status": job.maintenance_status,
+            "backup_plan_id": job.backup_plan_id,
+            "backup_plan_run_id": job.backup_plan_run_id,
+            "backup_plan_name": _get_backup_plan_name(db, job.backup_plan_id),
+            "triggered_by": (
+                "backup_plan"
+                if job.backup_plan_id
+                else "schedule"
+                if job.scheduled_job_id
+                else "manual"
+            ),
             "progress_details": serialize_backup_progress_details(job, repo),
         }
     except Exception as e:

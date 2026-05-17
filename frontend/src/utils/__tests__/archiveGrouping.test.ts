@@ -16,9 +16,23 @@ describe('getArchiveType', () => {
     expect(getArchiveType(archive)).toBe('manual')
   })
 
+  it('returns "manual" for the stable Borg 2 manual-backup archive name', () => {
+    const archive = makeArchive('manual-backup', '2024-01-01T00:00:00')
+    expect(getArchiveType(archive)).toBe('manual')
+  })
+
   it('returns "scheduled" for other archives', () => {
     const archive = makeArchive('repo-2024-01-01T00:00:00', '2024-01-01T00:00:00')
     expect(getArchiveType(archive)).toBe('scheduled')
+  })
+
+  it('uses explicit manual trigger metadata for backup plan archives', () => {
+    const archive = {
+      ...makeArchive('monthly-plan-primary-repo', '2024-01-01T00:00:00'),
+      triggered_by: 'manual',
+    } as Archive & { triggered_by: 'manual' }
+
+    expect(getArchiveType(archive)).toBe('manual')
   })
 })
 

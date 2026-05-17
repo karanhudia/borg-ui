@@ -13,6 +13,7 @@ from app.api import (
     auth,
     dashboard,
     backup,
+    backup_plans,
     archives,
     restore,
     schedule,
@@ -34,6 +35,7 @@ from app.api import (
     permissions,
     managed_machines,
     agents,
+    source_discovery,
 )
 from app.api.v2 import router as v2_router
 from app.routers import config
@@ -164,7 +166,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="Borg Web UI",
     description="A lightweight web interface for Borg backup management",
-    version="2.0.0",
+    version="2.1.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     root_path=BASE_PATH if BASE_PATH else None,
@@ -192,6 +194,9 @@ app.include_router(
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
+app.include_router(
+    backup_plans.router, prefix="/api/backup-plans", tags=["Backup Plans"]
+)
 app.include_router(archives.router, prefix="/api/archives", tags=["Archives"])
 app.include_router(browse.router, prefix="/api/browse", tags=["Browse"])
 app.include_router(restore.router, prefix="/api/restore", tags=["Restore"])
@@ -220,6 +225,11 @@ app.include_router(tokens.router, prefix="/api")
 app.include_router(permissions.router, prefix="/api")
 app.include_router(managed_machines.router)
 app.include_router(agents.router)
+app.include_router(
+    source_discovery.router,
+    prefix="/api/source-discovery",
+    tags=["Source Discovery"],
+)
 
 app.include_router(v2_router, prefix="/api/v2")  # Borg 2 versioned API
 

@@ -1,7 +1,145 @@
 {
   "version": 1,
-  "generated_at": "2026-05-05T00:00:00Z",
+  "generated_at": "2026-05-16T00:00:00Z",
   "announcements": [
+    {
+      "id": "update-2.1.0-available",
+      "type": "update_available",
+      "priority": 110,
+      "title": "Borg UI 2.1.0 is available",
+      "title_localized": {
+        "es": "Borg UI 2.1.0 ya esta disponible",
+        "de": "Borg UI 2.1.0 ist verfugbar",
+        "it": "Borg UI 2.1.0 e disponibile"
+      },
+      "message": "Update to Borg UI 2.1.0 for Backup Plans, plan-level schedules, multi-repository runs, configurable dashboard health thresholds, and clearer plan run monitoring.",
+      "message_localized": {
+        "es": "Actualiza a Borg UI 2.1.0 para obtener Backup Plans, programaciones a nivel de plan, ejecuciones en varios repositorios, umbrales de salud configurables en el panel y seguimiento mas claro de las ejecuciones de planes.",
+        "de": "Aktualisieren Sie auf Borg UI 2.1.0 fur Backup Plans, planbasierte Zeitplane, Ausfuhrungen uber mehrere Repositories, konfigurierbare Dashboard-Schwellenwerte und klarere Uberwachung von Plan-Ausfuhrungen.",
+        "it": "Aggiorna a Borg UI 2.1.0 per Backup Plans, pianificazioni a livello di piano, esecuzioni su piu repository, soglie di salute configurabili nella dashboard e monitoraggio piu chiaro delle esecuzioni dei piani."
+      },
+      "highlights": [
+        "Create reusable Backup Plans with shared sources, scripts, schedules, and repository targets",
+        "Run plans manually, track active runs per repository, and review plan run history",
+        "Use single-repository Backup Plans on Community; Pro unlocks multi-repository and parallel runs",
+        "See plan-centric schedules with backup, check, and restore-check timing in one place",
+        "Filter Activity by plan and launch plan runs directly from the Backup page",
+        "Tune dashboard health thresholds for stale, warning, and critical repository states",
+        "Improved plan conversion, legacy source review, Borg 2 archive naming, and backup progress recovery"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Crea Backup Plans reutilizables con origenes, scripts, programaciones y repositorios compartidos",
+          "Ejecuta planes manualmente, sigue ejecuciones activas por repositorio y revisa el historial",
+          "Usa Backup Plans de un solo repositorio en Community; Pro desbloquea varios repositorios y ejecuciones paralelas",
+          "Consulta programaciones centradas en el plan con backups, verificaciones y pruebas de restauracion en un solo lugar",
+          "Filtra Actividad por plan y lanza ejecuciones de planes desde la pagina Backup",
+          "Ajusta los umbrales de salud del panel para estados obsoletos, de advertencia y criticos",
+          "Mejoras en conversion de planes, revision de origenes heredados, nombres de archivos Borg 2 y recuperacion del progreso"
+        ],
+        "de": [
+          "Erstellen Sie wiederverwendbare Backup Plans mit gemeinsamen Quellen, Skripten, Zeitplanen und Repository-Zielen",
+          "Starten Sie Plane manuell, verfolgen Sie aktive Ausfuhrungen pro Repository und prufen Sie den Verlauf",
+          "Nutzen Sie Backup Plans mit einem Repository in Community; Pro schaltet mehrere Repositories und parallele Ausfuhrungen frei",
+          "Sehen Sie planzentrierte Zeitplane mit Backup-, Check- und Restore-Check-Zeiten an einer Stelle",
+          "Filtern Sie Aktivitat nach Plan und starten Sie Plan-Ausfuhrungen direkt von der Backup-Seite",
+          "Passen Sie Dashboard-Schwellenwerte fur veraltete, Warn- und kritische Repository-Zustande an",
+          "Verbesserte Plan-Konvertierung, Prufung alter Quellen, Borg-2-Archivnamen und Wiederherstellung des Backup-Fortschritts"
+        ],
+        "it": [
+          "Crea Backup Plans riutilizzabili con origini, script, pianificazioni e repository condivisi",
+          "Esegui i piani manualmente, segui le esecuzioni attive per repository e consulta lo storico",
+          "Usa Backup Plans con un solo repository in Community; Pro sblocca piu repository ed esecuzioni parallele",
+          "Vedi pianificazioni centrate sul piano con backup, verifiche e test di ripristino in un unico posto",
+          "Filtra Attivita per piano e avvia esecuzioni dei piani dalla pagina Backup",
+          "Regola le soglie di salute della dashboard per stati obsoleti, di avviso e critici",
+          "Miglioramenti a conversione dei piani, revisione delle origini legacy, nomi degli archivi Borg 2 e recupero del progresso"
+        ]
+      },
+      "cta_label": "Upgrade details",
+      "cta_label_localized": {
+        "es": "Detalles de la actualizacion",
+        "de": "Upgrade-Details",
+        "it": "Dettagli dell'aggiornamento"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.1.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-05-16T00:00:00Z",
+      "ends_at": "2027-05-16T00:00:00Z",
+      "min_app_version": "2.0.0",
+      "max_app_version": "2.0.999",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
+    {
+      "id": "release-2.1.0-whats-new",
+      "type": "release_highlight",
+      "priority": 80,
+      "title": "What's new in 2.1.0",
+      "title_localized": {
+        "es": "Novedades de la version 2.1.0",
+        "de": "Neu in Version 2.1.0",
+        "it": "Novita della versione 2.1.0"
+      },
+      "message": "Borg UI 2.1.0 introduces Backup Plans as a first-class workflow, adds plan-focused scheduling and monitoring, improves manual plan runs and run history, and adds configurable dashboard health thresholds.",
+      "message_localized": {
+        "es": "Borg UI 2.1.0 incorpora Backup Plans como flujo principal, agrega programacion y seguimiento centrados en el plan, mejora las ejecuciones manuales y el historial, y agrega umbrales de salud configurables en el panel.",
+        "de": "Borg UI 2.1.0 fuhrt Backup Plans als zentralen Workflow ein, erganzt planorientierte Zeitplanung und Uberwachung, verbessert manuelle Plan-Ausfuhrungen und Verlauf und fugt konfigurierbare Dashboard-Schwellenwerte hinzu.",
+        "it": "Borg UI 2.1.0 introduce Backup Plans come flusso principale, aggiunge pianificazione e monitoraggio centrati sul piano, migliora esecuzioni manuali e storico, e aggiunge soglie di salute configurabili nella dashboard."
+      },
+      "highlights": [
+        "Create reusable Backup Plans with shared sources, scripts, schedules, and repository targets",
+        "Run plans manually, track active runs per repository, and review plan run history",
+        "Use single-repository Backup Plans on Community; Pro unlocks multi-repository and parallel runs",
+        "See plan-centric schedules with backup, check, and restore-check timing in one place",
+        "Filter Activity by plan and launch plan runs directly from the Backup page",
+        "Tune dashboard health thresholds for stale, warning, and critical repository states",
+        "Improved plan conversion, legacy source review, Borg 2 archive naming, and backup progress recovery"
+      ],
+      "highlights_localized": {
+        "es": [
+          "Crea Backup Plans reutilizables con origenes, scripts, programaciones y repositorios compartidos",
+          "Ejecuta planes manualmente, sigue ejecuciones activas por repositorio y revisa el historial",
+          "Usa Backup Plans de un solo repositorio en Community; Pro desbloquea varios repositorios y ejecuciones paralelas",
+          "Consulta programaciones centradas en el plan con backups, verificaciones y pruebas de restauracion en un solo lugar",
+          "Filtra Actividad por plan y lanza ejecuciones de planes desde la pagina Backup",
+          "Ajusta los umbrales de salud del panel para estados obsoletos, de advertencia y criticos",
+          "Mejoras en conversion de planes, revision de origenes heredados, nombres de archivos Borg 2 y recuperacion del progreso"
+        ],
+        "de": [
+          "Erstellen Sie wiederverwendbare Backup Plans mit gemeinsamen Quellen, Skripten, Zeitplanen und Repository-Zielen",
+          "Starten Sie Plane manuell, verfolgen Sie aktive Ausfuhrungen pro Repository und prufen Sie den Verlauf",
+          "Nutzen Sie Backup Plans mit einem Repository in Community; Pro schaltet mehrere Repositories und parallele Ausfuhrungen frei",
+          "Sehen Sie planzentrierte Zeitplane mit Backup-, Check- und Restore-Check-Zeiten an einer Stelle",
+          "Filtern Sie Aktivitat nach Plan und starten Sie Plan-Ausfuhrungen direkt von der Backup-Seite",
+          "Passen Sie Dashboard-Schwellenwerte fur veraltete, Warn- und kritische Repository-Zustande an",
+          "Verbesserte Plan-Konvertierung, Prufung alter Quellen, Borg-2-Archivnamen und Wiederherstellung des Backup-Fortschritts"
+        ],
+        "it": [
+          "Crea Backup Plans riutilizzabili con origini, script, pianificazioni e repository condivisi",
+          "Esegui i piani manualmente, segui le esecuzioni attive per repository e consulta lo storico",
+          "Usa Backup Plans con un solo repository in Community; Pro sblocca piu repository ed esecuzioni parallele",
+          "Vedi pianificazioni centrate sul piano con backup, verifiche e test di ripristino in un unico posto",
+          "Filtra Attivita per piano e avvia esecuzioni dei piani dalla pagina Backup",
+          "Regola le soglie di salute della dashboard per stati obsoleti, di avviso e critici",
+          "Miglioramenti a conversione dei piani, revisione delle origini legacy, nomi degli archivi Borg 2 e recupero del progresso"
+        ]
+      },
+      "cta_label": "View release notes",
+      "cta_label_localized": {
+        "es": "Ver notas de la version",
+        "de": "Release Notes ansehen",
+        "it": "Vedi note di rilascio"
+      },
+      "cta_url": "https://github.com/karanhudia/borg-ui/releases/tag/v2.1.0",
+      "dismissible": true,
+      "snooze_days": 7,
+      "starts_at": "2026-05-16T00:00:00Z",
+      "ends_at": "2027-05-16T00:00:00Z",
+      "min_app_version": "2.1.0",
+      "max_app_version": "2.1.0",
+      "target_plans": ["community", "pro", "enterprise"]
+    },
     {
       "id": "update-2.0.9-available",
       "type": "update_available",

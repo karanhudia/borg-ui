@@ -43,6 +43,7 @@ describe('RepositoryCard', () => {
     onDelete: vi.fn(),
     onBackupNow: vi.fn(),
     onViewArchives: vi.fn(),
+    onCreateBackupPlan: vi.fn(),
     onJobCompleted: vi.fn(),
     canDo: vi.fn().mockReturnValue(true),
   }
@@ -348,7 +349,7 @@ describe('RepositoryCard', () => {
       expect(screen.queryByText('Observe Only')).not.toBeInTheDocument()
     })
 
-    it('does not show "Backup Now" button for observe mode', () => {
+    it('does not show legacy backup button for observe mode', () => {
       const observeRepo = { ...mockRepository, mode: 'observe' as const }
       renderWithProviders(
         <RepositoryCard
@@ -360,10 +361,10 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.queryByRole('button', { name: /Backup Now/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Legacy Backup/i })).not.toBeInTheDocument()
     })
 
-    it('shows "Backup Now" button for full mode', () => {
+    it('shows legacy backup button for full mode repositories with source paths', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -374,7 +375,22 @@ describe('RepositoryCard', () => {
         />
       )
 
-      expect(screen.getByRole('button', { name: /Backup Now/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Legacy Backup/i })).toBeInTheDocument()
+    })
+
+    it('shows Create Backup Plan as the primary repository backup action', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={{ ...mockRepository, source_directories: [] }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Legacy Backup/i })).not.toBeInTheDocument()
     })
 
     it('hides Compact and Prune buttons for observe mode but still allows Delete', () => {
@@ -558,7 +574,7 @@ describe('RepositoryCard', () => {
       expect(mockCallbacks.onPrune).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onBackupNow and tracks event when Backup Now button is clicked', async () => {
+    it('calls onBackupNow and tracks event when Legacy Backup button is clicked', async () => {
       const user = userEvent.setup()
       renderWithProviders(
         <RepositoryCard
@@ -570,13 +586,29 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Backup Now/i }))
+      await user.click(screen.getByRole('button', { name: /Legacy Backup/i }))
       expect(mockCallbacks.onBackupNow).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackBackup).toHaveBeenCalledWith(
         'Start',
-        undefined,
+        'legacy_repository',
         mockRepository
       )
+    })
+
+    it('calls onCreateBackupPlan when Create Backup Plan button is clicked', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(
+        <RepositoryCard
+          repository={{ ...mockRepository, source_directories: [] }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /Create Backup Plan/i }))
+      expect(mockCallbacks.onCreateBackupPlan).toHaveBeenCalledTimes(1)
     })
 
     it('calls onViewArchives and tracks event when View Archives button is clicked', async () => {
@@ -636,7 +668,8 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Check/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Compact/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /Prune/i })).toBeDisabled()
-      expect(screen.getByRole('button', { name: /Backup Now/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Legacy Backup/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeDisabled()
       expect(screen.getByRole('button', { name: /View Archives/i })).toBeDisabled()
     })
 
@@ -913,7 +946,8 @@ describe('RepositoryCard', () => {
       expect(screen.getByRole('button', { name: /Check/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Backup Now/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Legacy Backup/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Create Backup Plan/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /View Archives/i })).toBeInTheDocument()
 
       // Delete button (last one in list)

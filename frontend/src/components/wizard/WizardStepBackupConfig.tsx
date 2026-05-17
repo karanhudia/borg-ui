@@ -1,8 +1,8 @@
 import { Box, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import CompressionSettings from '../CompressionSettings'
 import ExcludePatternInput from '../ExcludePatternInput'
 import AdvancedRepositoryOptions from '../AdvancedRepositoryOptions'
+import CompressionSettings from '../CompressionSettings'
 
 type OnFailureMode = 'fail' | 'continue' | 'skip'
 
@@ -25,6 +25,7 @@ interface WizardStepBackupConfigProps {
   data: BackupConfigStepData
   onChange: (data: Partial<BackupConfigStepData>) => void
   onBrowseExclude?: () => void
+  showAdvancedOptions?: boolean
 }
 
 export default function WizardStepBackupConfig({
@@ -34,16 +35,18 @@ export default function WizardStepBackupConfig({
   data,
   onChange,
   onBrowseExclude,
+  showAdvancedOptions = true,
 }: WizardStepBackupConfigProps) {
   const { t } = useTranslation()
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* Compression Settings */}
-      <CompressionSettings
-        value={data.compression}
-        onChange={(value) => onChange({ compression: value })}
-      />
+      {repositoryMode === 'full' && (
+        <CompressionSettings
+          value={data.compression}
+          onChange={(value) => onChange({ compression: value })}
+        />
+      )}
 
       {/* Exclude Patterns - Now works for both local and remote sources */}
       <ExcludePatternInput
@@ -59,25 +62,26 @@ export default function WizardStepBackupConfig({
         </Typography>
       )}
 
-      {/* Advanced Options */}
-      <AdvancedRepositoryOptions
-        repositoryId={repositoryId}
-        mode={repositoryMode}
-        remotePath={data.remotePath}
-        preBackupScript={data.preBackupScript}
-        postBackupScript={data.postBackupScript}
-        preHookTimeout={data.preHookTimeout}
-        postHookTimeout={data.postHookTimeout}
-        hookFailureMode={data.hookFailureMode}
-        customFlags={data.customFlags}
-        onRemotePathChange={(value) => onChange({ remotePath: value })}
-        onPreBackupScriptChange={(value) => onChange({ preBackupScript: value })}
-        onPostBackupScriptChange={(value) => onChange({ postBackupScript: value })}
-        onPreHookTimeoutChange={(value) => onChange({ preHookTimeout: value })}
-        onPostHookTimeoutChange={(value) => onChange({ postHookTimeout: value })}
-        onHookFailureModeChange={(value) => onChange({ hookFailureMode: value })}
-        onCustomFlagsChange={(value) => onChange({ customFlags: value })}
-      />
+      {showAdvancedOptions && (
+        <AdvancedRepositoryOptions
+          repositoryId={repositoryId}
+          mode={repositoryMode}
+          remotePath={data.remotePath}
+          preBackupScript={data.preBackupScript}
+          postBackupScript={data.postBackupScript}
+          preHookTimeout={data.preHookTimeout}
+          postHookTimeout={data.postHookTimeout}
+          hookFailureMode={data.hookFailureMode}
+          customFlags={data.customFlags}
+          onRemotePathChange={(value) => onChange({ remotePath: value })}
+          onPreBackupScriptChange={(value) => onChange({ preBackupScript: value })}
+          onPostBackupScriptChange={(value) => onChange({ postBackupScript: value })}
+          onPreHookTimeoutChange={(value) => onChange({ preHookTimeout: value })}
+          onPostHookTimeoutChange={(value) => onChange({ postHookTimeout: value })}
+          onHookFailureModeChange={(value) => onChange({ hookFailureMode: value })}
+          onCustomFlagsChange={(value) => onChange({ customFlags: value })}
+        />
+      )}
     </Box>
   )
 }

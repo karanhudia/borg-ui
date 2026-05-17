@@ -27,8 +27,9 @@ import {
   HardDrive,
   Sliders,
   Wifi,
+  ListChecks,
 } from 'lucide-react'
-import api, { settingsAPI } from '../services/api'
+import api, { settingsAPI, backupPlansAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import NavItem from './NavItem'
 import NavGroup from './NavGroup'
@@ -47,7 +48,14 @@ interface NavigationItem {
   href?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: React.ComponentType<any>
-  key: 'dashboard' | 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
+  key:
+    | 'dashboard'
+    | 'connections'
+    | 'repositories'
+    | 'backupPlans'
+    | 'backups'
+    | 'archives'
+    | 'schedule'
   subItems?: Array<{
     name: string
     href?: string
@@ -86,6 +94,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Activity: t('navigation.items.activity'),
       'Remote Machines': t('navigation.items.remoteMachines'),
       'Managed Agents': t('navigation.items.managedAgents'),
+      'Backup Plans': t('navigation.items.backupPlans'),
       Repositories: t('navigation.items.repositories'),
       Backup: t('navigation.items.backup'),
       Archives: t('navigation.items.archives'),
@@ -129,13 +138,23 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
 
   const showMqttNav = systemData?.settings?.mqtt_beta_enabled ?? false
 
+  // Show a "NEW" badge on the Backup Plans nav item until the user has created
+  // at least one plan. The cache is invalidated on plan creation/deletion, so
+  // the badge disappears the moment they make one.
+  const { data: backupPlansData } = useQuery({
+    queryKey: ['backup-plans'],
+    queryFn: () => backupPlansAPI.list(),
+  })
+  const showBackupPlansNewBadge =
+    backupPlansData !== undefined && (backupPlansData?.data?.backup_plans?.length ?? 0) === 0
+
   const navigationSections = React.useMemo(() => {
     const backupItems: Array<{
       name: string
       href: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       icon: React.ComponentType<any>
-      key: 'connections' | 'repositories' | 'backups' | 'archives' | 'schedule'
+      key: 'connections' | 'repositories' | 'backupPlans' | 'backups' | 'archives' | 'schedule'
     }> = [
       ...(canManageSsh
         ? [
@@ -153,6 +172,12 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             },
           ]
         : []),
+      {
+        name: 'Backup Plans',
+        href: '/backup-plans',
+        icon: ListChecks,
+        key: 'backupPlans' as const,
+      },
       { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
       { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
       { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
@@ -440,6 +465,27 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                     isEnabled={isEnabled}
                     disabledReason={disabledReason ?? undefined}
                     navLabel={navLabel}
+                    badge={
+                      item.key === 'backupPlans' && showBackupPlansNewBadge ? (
+                        <Box
+                          component="span"
+                          sx={{
+                            fontSize: '0.6rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.06em',
+                            px: 0.65,
+                            py: 0.15,
+                            borderRadius: 0.75,
+                            color: '#fff',
+                            bgcolor: '#2563eb',
+                            lineHeight: 1.3,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {t('navigation.badges.new', { defaultValue: 'New' })}
+                        </Box>
+                      ) : undefined
+                    }
                   />
                 )
               })}

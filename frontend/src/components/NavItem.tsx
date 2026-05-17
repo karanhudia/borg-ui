@@ -13,6 +13,8 @@ interface NavItemProps {
   disabledReason?: string
   navLabel: (name: string) => string
   disabled?: boolean
+  /** Optional trailing slot (e.g. a small "NEW" badge). */
+  badge?: React.ReactNode
 }
 
 export default function NavItem({
@@ -23,6 +25,7 @@ export default function NavItem({
   isEnabled,
   disabledReason,
   navLabel,
+  badge,
 }: NavItemProps) {
   const button = (
     <ListItemButton
@@ -60,6 +63,7 @@ export default function NavItem({
           color: isActive ? 'text.primary' : isEnabled ? 'text.secondary' : 'text.disabled',
         }}
       />
+      {badge && <Box sx={{ ml: 1, display: 'flex', alignItems: 'center' }}>{badge}</Box>}
     </ListItemButton>
   )
 

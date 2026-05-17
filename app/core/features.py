@@ -19,6 +19,7 @@ _RANK = {Plan.COMMUNITY: 0, Plan.PRO: 1, Plan.ENTERPRISE: 2}
 # Single source of truth: feature name → minimum plan required
 FEATURES: dict[str, Plan] = {
     "borg_v2": Plan.PRO,
+    "backup_plan_multi_repository": Plan.PRO,
     "multi_user": Plan.COMMUNITY,  # up to 5 users
     "extra_users": Plan.PRO,  # >5 users (up to 10 on Pro)
     "rbac": Plan.ENTERPRISE,  # role-based access control

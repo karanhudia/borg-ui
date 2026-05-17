@@ -109,12 +109,16 @@
       "activity": "Attività",
       "remoteMachines": "Macchine Remote",
       "managedAgents": "Agenti gestiti",
+      "backupPlans": "Piani di backup",
       "repositories": "Repository",
       "backup": "Backup manuale",
       "archives": "Archivi",
       "restore": "Ripristino",
       "integrity": "Integrità",
       "schedule": "Pianificazione"
+    },
+    "badges": {
+      "new": "Nuovo"
     },
     "settings": {
       "personal": "Personali",
@@ -223,6 +227,9 @@
       "passed": "riusciti",
       "failed": "falliti"
     },
+    "upcomingBackups": {
+      "title": "Backup imminenti"
+    },
     "scheduleBadge": {
       "noSchedule": "Nessuna pianificazione automatica",
       "manual": "manuale",
@@ -257,6 +264,7 @@
       "stats": {
         "lastBackup": "Ultimo backup",
         "schedules": "Pianificazioni",
+        "automations": "Automazioni",
         "storage": "Archiviazione"
       }
     },
@@ -294,6 +302,25 @@
   "backup": {
     "title": "Operazioni di Backup",
     "subtitle": "Gestisci e monitora i tuoi job di backup",
+    "tabs": {
+      "ariaLabel": "Tipo di operazione di backup",
+      "backupPlans": "Piani di backup",
+      "legacyBackup": "Backup legacy"
+    },
+    "planRun": {
+      "title": "Esegui un piano di backup",
+      "description": "I piani di backup contengono percorsi sorgente, impostazioni, repository e pianificazione.",
+      "selectLabel": "Piano di backup",
+      "createAction": "Crea piano di backup",
+      "empty": "Crea un piano di backup prima di eseguire nuovi backup da questa pagina.",
+      "run": "Esegui piano di backup",
+      "starting": "Avvio in corso...",
+      "toasts": {
+        "started": "Piano di backup avviato",
+        "startFailed": "Impossibile avviare il piano di backup",
+        "selectPlan": "Seleziona un piano di backup"
+      }
+    },
     "manualBackup": {
       "title": "Backup Manuale",
       "subtitle": "Seleziona un repository e avvia un backup",
@@ -308,6 +335,10 @@
         "title": "Nessun Repository Trovato",
         "subtitle": "Crea un repository nella pagina Repository prima di avviare un backup"
       }
+    },
+    "legacyManual": {
+      "notice": "Il backup manuale del repository è disponibile solo per repository legacy che conservano ancora percorsi sorgente. I nuovi backup dovrebbero essere eseguiti tramite piani di backup.",
+      "empty": "Nessun repository legacy con percorsi sorgente disponibile per il backup manuale diretto."
     },
     "commandPreview": "Anteprima Comando",
     "runningJobs": {
@@ -405,14 +436,46 @@
     "title": "Pianificazione",
     "subtitle": "Gestisci backup automatizzati e controlli del repository",
     "createBackup": "Crea Pianificazione Backup",
+    "createBackupPlan": "Crea piano di backup",
+    "createSchedule": "Crea pianificazione",
+    "createLegacySchedule": "Crea pianificazione legacy",
     "addCheck": "Aggiungi Pianificazione Controllo",
     "addRestoreCheck": "Aggiungi controllo di ripristino",
     "tabs": {
-      "backupJobs": "Job di Backup",
+      "byPlan": "Pianificazioni",
+      "backupJobs": "Attività",
       "repositoryChecks": "Controlli Repository",
       "restoreChecks": "Controlli di ripristino"
     },
+    "byPlan": {
+      "backup": "Backup",
+      "check": "Controllo",
+      "restore": "Ripristino",
+      "enabled": "Abilitato",
+      "disabled": "Disabilitato",
+      "editPlan": "Modifica piano",
+      "edit": "Modifica",
+      "setSchedule": "Imposta pianificazione",
+      "notScheduled": "Non pianificato",
+      "scheduleDisabled": "Pianificazione disabilitata",
+      "noRepos": "Nessun repository associato a questo piano.",
+      "unassignedTitle": "Repository non inclusi in alcun piano ({{count}})",
+      "noPlansTitle": "Ancora nessun piano di backup",
+      "noPlansDesc": "Le pianificazioni di controllo repository e controllo ripristino qui sotto vengono eseguite indipendentemente da qualsiasi piano.",
+      "empty": "Non ci sono ancora piani di backup o repository. Crea un piano per vedere qui la sua pianificazione completa.",
+      "afterLabel": "Poi",
+      "paused": "In pausa",
+      "runPrune": "Pulizia",
+      "runPruneTip": "Gli archivi vecchi vengono puliti dopo ogni backup",
+      "runCompact": "Compatta",
+      "runCompactTip": "Il repository viene compattato dopo ogni backup",
+      "runCheck": "Controlla",
+      "runCheckTip": "Il controllo di integrità viene eseguito dopo ogni backup (oltre a qualsiasi controllo pianificato qui sotto)"
+    },
     "noRepositories": "Devi creare almeno un repository prima di pianificare i backup.",
+    "legacyBackupSchedulesTitle": "Pianificazioni backup legacy",
+    "legacyBackupSchedulesDescription": "Le pianificazioni esistenti basate su repository continuano a essere eseguite qui. I nuovi backup pianificati dovrebbero essere creati come piani di backup.",
+    "confirmRunNow": "Eseguire \"{{name}}\" ora?",
     "maintenance": {
       "pruning": "Pulizia archivi in corso...",
       "pruneCompleted": "Pulizia completata",
@@ -496,9 +559,334 @@
       "backupCancelFailed": "Impossibile annullare il backup"
     }
   },
+  "backupPlans": {
+    "title": "Piani di backup",
+    "subtitle": "Definisci sorgenti, impostazioni, pianificazioni e i repository in cui ogni backup scrive.",
+    "loading": "Caricamento piani di backup...",
+    "runTooltipPro": "Questo piano usa più repository o esecuzione parallela. Modificalo o passa a Pro per eseguirlo.",
+    "empty": {
+      "title": "Nessun piano di backup",
+      "description": "Crea un piano per collegare sorgenti, impostazioni, pianificazione e repository."
+    },
+    "search": "Cerca piani di backup...",
+    "sort": {
+      "nameAZ": "Nome A → Z",
+      "nameZA": "Nome Z → A",
+      "lastRunRecent": "Ultima esecuzione (più recente)",
+      "lastRunOldest": "Ultima esecuzione (meno recente)",
+      "nextRunSoonest": "Prossima esecuzione (più vicina)",
+      "createdNewest": "Creato (più recente)",
+      "createdOldest": "Creato (meno recente)"
+    },
+    "group": {
+      "none": "Nessun raggruppamento",
+      "status": "Per stato",
+      "schedule": "Per pianificazione",
+      "source": "Per origine"
+    },
+    "groups": {
+      "enabled": "Abilitati",
+      "disabled": "Disabilitati",
+      "scheduled": "Pianificati",
+      "manual": "Solo manuale",
+      "localSource": "Origine locale",
+      "remoteSource": "Origine remota"
+    },
+    "noMatch": {
+      "title": "Nessun piano di backup corrispondente",
+      "message": "Nessun piano di backup corrisponde a \"{{search}}\".",
+      "fallback": "Nessun piano di backup corrisponde ai filtri correnti.",
+      "clearSearch": "Cancella ricerca"
+    },
+    "actions": {
+      "create": "Crea piano di backup",
+      "edit": "Modifica",
+      "runs": "Esecuzioni",
+      "run": "Esegui",
+      "running": "In esecuzione",
+      "cancel": "Annulla",
+      "viewRepositories": "Visualizza repository",
+      "delete": "Elimina",
+      "deleteConfirm": "Eliminare il piano di backup \"{{name}}\"?"
+    },
+    "status": {
+      "enabled": "Abilitato",
+      "disabled": "Disabilitato",
+      "clickToEnable": "Fai clic per abilitare",
+      "clickToDisable": "Fai clic per disabilitare",
+      "created": "Creato",
+      "pro": "Pro",
+      "proRequired": "Pro richiesto",
+      "repositoryCount_one": "{{count}} repository",
+      "repositoryCount_other": "{{count}} repository",
+      "sourcePathCount_one": "{{count}} percorso sorgente",
+      "sourcePathCount_other": "{{count}} percorsi sorgente",
+      "localSource": "Sorgente locale",
+      "remoteSource": "Sorgente remota",
+      "manualOnly": "Solo manuale",
+      "nextRunBadge": "Prossima {{when}}",
+      "scheduledBadge": "Pianificato",
+      "nextRunTitle": "Prossima esecuzione: {{date}} ({{timezone}})",
+      "scheduleTitle": "{{schedule}} ({{timezone}})",
+      "parallel": "Parallelo",
+      "series": "In serie",
+      "nextRun": "Prossima esecuzione: {{date}}",
+      "repositoryFallback": "Repository",
+      "moreRepositories": "+{{count}} altri"
+    },
+    "statuses": {
+      "unknown": "Sconosciuto",
+      "pending": "in attesa",
+      "running": "in esecuzione",
+      "completed": "completato",
+      "completed_with_warnings": "completato con avvisi",
+      "partial": "parziale",
+      "failed": "fallito",
+      "cancelled": "annullato",
+      "skipped": "saltato"
+    },
+    "toasts": {
+      "created": "Piano di backup creato",
+      "createFailed": "Impossibile creare il piano di backup",
+      "updated": "Piano di backup aggiornato",
+      "updateFailed": "Impossibile aggiornare il piano di backup",
+      "deleted": "Piano di backup eliminato",
+      "deleteFailed": "Impossibile eliminare il piano di backup",
+      "toggled": "Stato del piano di backup aggiornato",
+      "toggleFailed": "Impossibile aggiornare lo stato del piano di backup",
+      "started": "Piano di backup avviato",
+      "startFailed": "Impossibile avviare il piano di backup",
+      "cancelled": "Esecuzione del piano annullata",
+      "cancelFailed": "Impossibile annullare l'esecuzione del piano",
+      "repositoryCreated": "Repository creato",
+      "repositoryCreateFailed": "Impossibile creare il repository",
+      "multiRepositoryRequiresPro": "Più repository in un piano di backup richiedono Pro",
+      "selectSourceConnection": "Seleziona un client remoto prima di sfogliare i percorsi sorgente",
+      "scriptCreateFailed": "Failed to create generated script"
+    },
+    "sourceChooser": {
+      "summaryTitle": "Backup source",
+      "summaryEmpty": "No source selected yet",
+      "chooseSource": "Choose source",
+      "title": "Choose backup source",
+      "databaseTitle": "Database scan",
+      "filesTitle": "Files and folders",
+      "containerPlanned": "Planned",
+      "backToTypes": "Back to source types",
+      "applyPaths": "Use these paths",
+      "loading": "Scanning sources...",
+      "discoveryError": "Source scan failed. You can still use the database templates.",
+      "noDatabaseTemplates": "No database templates available",
+      "databaseTemplates": "Templates",
+      "detectedDatabases": "Detected databases",
+      "detectedBadge": "Detected",
+      "scriptDrafts": "Script drafts",
+      "preScriptDraft": "Pre-backup script draft",
+      "postScriptDraft": "Post-backup script draft",
+      "createScripts": "Create new scripts",
+      "reuseScripts": "Use existing scripts",
+      "skipScripts": "Skip script assignment",
+      "preScriptName": "Pre-backup script name",
+      "postScriptName": "Post-backup script name",
+      "preExistingScript": "Existing pre-backup script",
+      "postExistingScript": "Existing post-backup script",
+      "applyDatabase": "Use database source",
+      "sourcePaths": "Source paths",
+      "notesLabel": "Notes",
+      "pathCount_one": "{{count}} path",
+      "pathCount_other": "{{count}} paths"
+    },
+    "wizard": {
+      "createTitle": "Crea piano di backup",
+      "editTitle": "Modifica piano di backup",
+      "createPlan": "Crea piano",
+      "updatePlan": "Aggiorna piano",
+      "steps": {
+        "sources": "Sorgenti",
+        "repositories": "Repository",
+        "settings": "Impostazioni",
+        "scripts": "Script",
+        "schedule": "Pianificazione",
+        "review": "Revisione"
+      },
+      "fields": {
+        "planName": "Nome piano",
+        "description": "Descrizione",
+        "repositories": "Repository",
+        "repositoryName": "Nome repository",
+        "borgVersion": "Versione Borg",
+        "repositoryPath": "Percorso repository",
+        "archiveNameTemplate": "Modello nome archivio",
+        "compression": "Compressione",
+        "extraBorgFlags": "Flag Personalizzati (Opzionale)",
+        "uploadSpeedLimit": "Limite velocità upload",
+        "runRepositories": "Esegui repository",
+        "maxParallelRepositories": "Repository paralleli max",
+        "cronExpression": "Espressione cron",
+        "timezone": "Fuso orario",
+        "checkMaxDuration": "Durata massima controllo"
+      },
+      "repositories": {
+        "noStorageTargets": "Crea prima una destinazione di archiviazione, poi collegala a questo piano di backup.",
+        "helperPro": "Seleziona uno o più repository. L'ordine di esecuzione è usato in modalità serie.",
+        "helperCommunity": "I piani Community possono usare un repository. Più repository richiedono Pro.",
+        "placeholder": "Seleziona repository...",
+        "addStorageTarget": "Aggiungi destinazione di archiviazione",
+        "basicDescription": "La configurazione base copre gli elementi Borg essenziali: nome, versione, percorso e crittografia.",
+        "basic": "Base",
+        "advancedSetup": "Configurazione avanzata",
+        "advancedNotice": "Usa la configurazione avanzata per repository SSH, script o opzioni di importazione.",
+        "pathHelper": "Percorso locale per questa destinazione di archiviazione. Usa la configurazione avanzata per percorsi remoti.",
+        "browsePath": "Sfoglia percorso repository",
+        "createAndSelect": "Crea e seleziona",
+        "legacyReview": {
+          "title": "Percorsi sorgente legacy rilevati",
+          "description": "Alcuni repository hanno percorsi sorgente che il piano non include. Scegli quali cancellare prima di salvare.",
+          "matchesHelper": "I percorsi sorgente legacy di questo repository corrispondono al piano di backup, quindi cancellarli non rimuoverà copertura.",
+          "legacyOnlyPaths": "Solo nel repository",
+          "planOnlyPaths": "Solo nel piano di backup",
+          "willBeCleared": "Verranno cancellati",
+          "planWillBackUp": "Il piano includerà invece questi",
+          "extraPathsCount_one": "{{count}} percorso extra",
+          "extraPathsCount_other": "{{count}} percorsi extra",
+          "selectAll": "Seleziona tutto",
+          "deselectAll": "Deseleziona tutto",
+          "saveWithoutClearing": "Mantieni percorsi legacy",
+          "saveAndClearSelected": "Cancella e salva",
+          "comparison": {
+            "matches": "Corrisponde al piano",
+            "plan_includes_legacy": "Il piano include altro",
+            "legacy_has_extra": "Il repository ha percorsi extra"
+          }
+        }
+      },
+      "settings": {
+        "archiveNameHelper": "Supporta {plan_name}, {repo_name}, {now}, {date}, {time} e {timestamp}.",
+        "extraBorgFlagsHelper": "Flag da riga di comando personalizzati per borg create (es., --stats, --progress, --list). Applicato a ogni esecuzione repository in questo piano.",
+        "uploadSpeedHelper": "MB/s. Vuoto significa senza limite.",
+        "runRepositoryScripts": "Esegui script del repository",
+        "runRepositoryScriptsHelper": "Usa gli script pre/post backup configurati in ogni repository durante l'esecuzione del piano.",
+        "seriesLabel": "Uno dopo l'altro",
+        "parallelLabel": "Allo stesso tempo",
+        "parallelTooltip": "Esegui più repository allo stesso tempo.",
+        "parallelRequiresPro": "L'esecuzione parallela dei repository richiede Pro."
+      },
+      "scripts": {
+        "title": "Script del piano",
+        "description": "Esegui script una volta per l'intero piano di backup, prima della prima copia repository e dopo il completamento di tutto il lavoro sui repository.",
+        "runRepositoryScripts": "Esegui anche script del repository",
+        "runRepositoryScriptsHelper": "Usa gli script pre/post backup configurati in ogni repository durante la sua copia.",
+        "loading": "Caricamento script..."
+      },
+      "schedule": {
+        "title": "Pianificazione",
+        "description": "Scegli quando questo piano deve essere eseguito automaticamente. Disattiva per avviarlo solo su richiesta.",
+        "enabled": "Esegui questo piano secondo una pianificazione",
+        "cronHelper": "Esempio: 0 21 * * * viene eseguito ogni giorno alle 21:00.",
+        "runPruneAfter": "Esegui prune dopo backup repository riusciti",
+        "runCompactAfter": "Esegui compact dopo prune"
+      },
+      "maintenance": {
+        "title": "Manutenzione",
+        "description": "Esegui manutenzione del repository dopo backup riusciti in questo piano.",
+        "runPruneAfter": "Esegui prune dopo backup repository riusciti",
+        "runCompactAfter": "Esegui compact dopo la manutenzione del backup",
+        "runCheckAfter": "Esegui check dopo backup repository riusciti",
+        "checkMaxDurationHelper": "Secondi. Usa 0 per nessun limite."
+      },
+      "review": {
+        "plan": "Piano",
+        "sourceLocation": "Posizione sorgente",
+        "sourceConnection": "Client remoto",
+        "localSource": "Server Borg UI",
+        "remoteSource": "Client remoto",
+        "connectionFallback": "Connessione #{{id}}",
+        "notSet": "Non impostato",
+        "sources": "Sorgenti",
+        "repositories": "Repository",
+        "compression": "Compressione",
+        "customFlags": "Flag personalizzati",
+        "planPreScript": "Script pre-piano",
+        "planPostScript": "Script post-piano",
+        "noScript": "Nessuno",
+        "repositoryScripts": "Script repository",
+        "runMode": "Modalità esecuzione",
+        "schedule": "Pianificazione",
+        "prune": "Prune",
+        "retention": "Conservazione",
+        "retentionValue": "H {{hourly}} / G {{daily}} / S {{weekly}} / M {{monthly}} / T {{quarterly}} / A {{yearly}}",
+        "compact": "Compact",
+        "check": "Check",
+        "checkDuration": "{{seconds}} secondi",
+        "pathCount_one": "{{count}} percorso",
+        "pathCount_other": "{{count}} percorsi",
+        "selectedCount_one": "{{count}} selezionato",
+        "selectedCount_other": "{{count}} selezionati",
+        "manualOnlyHint": "Viene eseguito solo se avviato manualmente."
+      },
+      "fileExplorer": {
+        "sourceTitle": "Seleziona percorsi sorgente",
+        "excludeTitle": "Seleziona percorsi da escludere",
+        "repositoryTitle": "Seleziona percorso repository"
+      }
+    },
+    "runsDialog": {
+      "title": "Esecuzioni di {{name}}",
+      "empty": {
+        "title": "Nessuna esecuzione",
+        "description": "Esegui questo piano di backup per vedere qui risultati repository e log."
+      },
+      "runNumber": "Esecuzione #{{id}}",
+      "jobNumber": "Job #{{id}}",
+      "completedRepositories": "{{completed}}/{{total}} repository",
+      "selectRun": "Seleziona un'esecuzione per ispezionare i risultati del repository.",
+      "trigger": "Trigger",
+      "started": "Avviato",
+      "completed": "Completato",
+      "maintenanceStatus": "Manutenzione: {{status}}",
+      "archiveName": "Archivio: {{name}}",
+      "archivePending": "Archivio in attesa",
+      "planScripts": "Script del piano",
+      "planScript": "Script del piano",
+      "prePlanScript": "Script pre-piano",
+      "postPlanScript": "Script post-piano",
+      "exitCode": "Codice di uscita {{code}}",
+      "scriptDuration": "{{seconds}}s",
+      "viewLogs": "Visualizza log"
+    },
+    "runsPanel": {
+      "title": "Esecuzioni piani di backup",
+      "subtitle": "Monitora le esecuzioni attive e recenti del piano tra i repository.",
+      "activeTitle": "Esecuzioni piani di backup in corso",
+      "activeSubtitle": "Esecuzioni dei piani attualmente in corso.",
+      "recentTitle": "Esecuzioni recenti dei piani di backup",
+      "recentSubtitle": "Esecuzioni dei piani completate, non riuscite o annullate.",
+      "active": "Esecuzioni attive",
+      "recent": "Esecuzioni recenti",
+      "activeCount_one": "{{count}} attiva",
+      "activeCount_other": "{{count}} attive",
+      "empty": "Nessuna esecuzione di piani di backup.",
+      "emptyActive": "Nessuna esecuzione di piani di backup in corso.",
+      "emptyRecent": "Nessuna esecuzione recente dei piani di backup.",
+      "planFallback": "Piano di backup #{{id}}",
+      "unknownPlan": "Piano di backup",
+      "duration": "Durata",
+      "columns": {
+        "run": "Esecuzione",
+        "plan": "Piano / repository",
+        "status": "Stato",
+        "repositories": "Repository",
+        "started": "Avviato",
+        "duration": "Durata"
+      },
+      "repositoryProgress": "{{completed}}/{{total}} repository completati",
+      "cancelRun": "Annulla esecuzione",
+      "noRepositories": "Nessuna esecuzione repository registrata."
+    }
+  },
   "repositories": {
     "title": "Gestione Repository",
-    "subtitle": "Un repository è dove verranno archiviati i tuoi dati di backup. I file dalle tue sorgenti configurate verranno salvati qui.",
+    "subtitle": "I repository sono destinazioni di archiviazione Borg. Definisci sorgenti e pianificazioni nei piani di backup.",
     "createRepository": "Crea Repository",
     "importExisting": "Importa Esistente",
     "search": "Cerca repository...",
@@ -517,6 +905,11 @@
       "hostname": "Posizione (Hostname)",
       "type": "Tipo Repository",
       "mode": "Modalità Backup"
+    },
+    "filter": {
+      "backupPlan": "Piano di backup",
+      "allBackupPlans": "Tutti i piani di backup",
+      "backupPlanFallback": "Piano di backup #{{id}}"
     },
     "loading": "Caricamento repository...",
     "empty": {
@@ -554,6 +947,18 @@
       "prune": "Pulisci",
       "compact": "Compatta"
     },
+    "createPlanDialog": {
+      "title": "Crea piano di backup",
+      "description": "Crea un piano di backup da \"{{name}}\" usando sorgenti, esclusioni, compressione, flag avanzati e pianificazione correnti.",
+      "planName": "Nome piano",
+      "scheduleNotice": "La pianificazione \"{{schedule}}\" verrà copiata nel nuovo piano.",
+      "copySchedule": "Copia la pianificazione nel piano di backup",
+      "moveSourceSettings": "Sposta le impostazioni sorgente nel piano di backup",
+      "disableSchedule": "Metti in pausa la pianificazione esistente del repository dopo aver creato il piano",
+      "sourceRequired": "Questo repository non ha percorsi sorgente configurati.",
+      "confirm": "Crea piano di backup",
+      "creating": "Creazione..."
+    },
     "toasts": {
       "deleted": "Repository eliminato con successo",
       "deleteFailed": "Impossibile eliminare il repository",
@@ -566,6 +971,9 @@
       "pruneFailed": "Impossibile pulire il repository",
       "updated": "Repository aggiornato con successo",
       "created": "Repository creato con successo",
+      "backupPlanCreated": "Piano di backup creato",
+      "backupPlanCreateFailed": "Impossibile creare il piano di backup",
+      "sharedScheduleKept": "La pianificazione originale è condivisa con altri repository ed è rimasta attiva.",
       "importedWithKeyfile": "Repository importato e file chiave salvato con successo",
       "imported": "Repository importato con successo",
       "wizardFailed": "Impossibile {{mode}} repository"
@@ -586,7 +994,8 @@
         "check": "Controllo",
         "compact": "Compattazione",
         "prune": "Pulizia",
-        "package": "Pacchetto"
+        "package": "Pacchetto",
+        "scriptExecution": "Script"
       },
       "statuses": {
         "completed": "Completato",
@@ -960,6 +1369,16 @@
       "type": "Tipo Chiave",
       "fingerprint": "Impronta Digitale",
       "publicKey": "Chiave Pubblica",
+      "tooltips": {
+        "hideFingerprint": "Nascondi impronta digitale",
+        "revealFingerprint": "Mostra impronta digitale",
+        "hideKey": "Nascondi chiave",
+        "revealKey": "Mostra chiave",
+        "copyToClipboard": "Copia negli appunti",
+        "deploy": "Distribuisci automaticamente la chiave SSH usando l'autenticazione con password",
+        "addManual": "Aggiungi una connessione per una chiave SSH distribuita manualmente",
+        "delete": "Elimina chiave SSH di sistema (le connessioni verranno conservate)"
+      },
       "actions": {
         "deploy": "Distribuisci su Server",
         "addManual": "Aggiungi Connessione Manuale",
@@ -969,6 +1388,7 @@
     },
     "generateDialog": {
       "title": "Genera Chiave SSH di Sistema",
+      "info": "Questo genererà una nuova coppia di chiavi SSH per il tuo sistema. Puoi avere una sola chiave di sistema alla volta.",
       "keyType": "Tipo Chiave",
       "ed25519": "ED25519 (Consigliato)",
       "rsa": "RSA",
@@ -978,24 +1398,38 @@
     },
     "importDialog": {
       "title": "Importa Chiave SSH Esistente",
+      "info": "Importa una chiave SSH esistente dal filesystem (ad esempio da un volume montato). La chiave verrà letta dai percorsi specificati e salvata nel database.",
       "keyName": "Nome Chiave",
+      "keyNamePlaceholder": "Chiave SSH di sistema",
       "privateKeyPath": "Percorso Chiave Privata",
+      "privateKeyPathPlaceholder": "/home/borg/.ssh/id_ed25519 o /root/.ssh/id_rsa",
+      "privateKeyPathHelper": "Percorso assoluto del file della chiave privata",
       "publicKeyPath": "Percorso Chiave Pubblica (Opzionale)",
+      "publicKeyPathPlaceholder": "Lascia vuoto per rilevare automaticamente (aggiunge .pub al percorso della chiave privata)",
+      "publicKeyPathHelper": "Se non fornito, verrà provato {private_key_path}.pub",
       "description": "Descrizione",
+      "descriptionPlaceholder": "Chiave SSH di sistema importata",
       "importing": "Importazione in corso...",
       "import": "Importa Chiave"
     },
     "deployDialog": {
       "title": "Distribuisci Chiave SSH su Server",
       "host": "Host",
+      "hostPlaceholder": "192.168.1.100 o example.com",
       "username": "Nome utente",
       "port": "Porta",
       "password": "Password",
+      "passwordPlaceholder": "Password del server (per la distribuzione iniziale)",
+      "passwordHelp": "La password viene usata per distribuire la chiave pubblica nel file authorized_keys del server. Dopo la distribuzione ti connetterai usando la chiave SSH.",
       "sftpMode": "Usa modalità SFTP per la distribuzione della chiave",
+      "sftpModeHint": "Richiesta da Hetzner Storage Box. Disattivala per Synology NAS o server SSH meno recenti.",
       "useSudo": "Usa sudo per i backup",
       "useSudoHint": "Antepone sudo a borg sull'host remoto. Richiede sudo senza password per l'utente SSH. Si applica solo alla modalità di backup SSH remoto.",
       "defaultPath": "Percorso Predefinito (Opzionale)",
+      "defaultPathHelper": "Directory iniziale per esplorare file via SSH (ad es. /home per Hetzner Storage Box)",
       "mountPoint": "Punto di Mount (Opzionale)",
+      "mountPointPlaceholder": "hetzner o homeserver",
+      "mountPointHelper": "Nome descrittivo per questa macchina remota (ad es. hetzner, backup-server)",
       "deploying": "Distribuzione in corso...",
       "deploy": "Distribuisci Chiave"
     },
@@ -1007,22 +1441,54 @@
         "step2": "Connettiti via SSH al tuo server",
         "step3": "Aggiungila a ~/.ssh/authorized_keys"
       },
+      "successInfo": "Questo testerà la connessione e la aggiungerà all'elenco delle connessioni se avrà successo.",
+      "testing": "Test in corso...",
       "submit": "Test e Aggiungi Connessione"
     },
     "editConnectionDialog": {
       "title": "Modifica Connessione SSH",
+      "updateInfo": "Aggiorna i dettagli della connessione. Potresti voler testare la connessione dopo l'aggiornamento.",
+      "updating": "Aggiornamento in corso...",
       "submit": "Aggiorna Connessione"
+    },
+    "validation": {
+      "hostBareOnly": "Inserisci un nome DNS o indirizzo IP senza schema, percorso, utente, spazi, parentesi o porta."
     },
     "deleteConnectionDialog": {
       "title": "Elimina Connessione SSH",
+      "confirm": "Sei sicuro di voler eliminare questa connessione?",
       "delete": "Elimina",
       "deleting": "Eliminazione in corso..."
     },
     "deleteKeyDialog": {
       "title": "Elimina Chiave SSH di Sistema",
       "confirm": "Sei sicuro di voler eliminare questa chiave SSH?",
+      "keyName": "Nome chiave",
+      "keyType": "Tipo chiave",
+      "activeConnections": "Connessioni attive",
+      "actionIntro": "Questa azione:",
       "warning1": "Rimuovi la chiave SSH dal database e dal filesystem",
-      "warning2": "I record di connessione verranno conservati."
+      "markConnectionsFailed_one": "Segnerà {{count}} connessione come fallita",
+      "markConnectionsFailed_other": "Segnerà {{count}} connessioni come fallite",
+      "clearRepositories": "Rimuoverà la chiave SSH da qualsiasi repository che la usa",
+      "warning2": "I record di connessione verranno conservati.",
+      "delete": "Elimina chiave SSH",
+      "deleting": "Eliminazione in corso..."
+    },
+    "redeployDialog": {
+      "title": "Distribuisci chiave SSH alla connessione",
+      "info": "Questo distribuirà la chiave SSH di sistema corrente a questa connessione. Dovrai fornire la password per autenticarti.",
+      "passwordPlaceholder": "Inserisci la password SSH",
+      "passwordHelper": "La password viene usata per distribuire la chiave pubblica in authorized_keys"
+    },
+    "remoteConnections": {
+      "title": "Connessioni remote",
+      "configured_one": "{{count}} macchina configurata",
+      "configured_other": "{{count}} macchine configurate",
+      "refresh": "Aggiorna connessioni",
+      "emptyTitle": "Ancora nessuna macchina remota",
+      "emptyWithKey": "Distribuisci la tua chiave SSH su un server remoto per iniziare.",
+      "emptyWithoutKey": "Genera o importa prima una chiave SSH, poi distribuiscila sui server remoti."
     },
     "toasts": {
       "keyGenerated": "Chiave SSH di sistema generata con successo!",
@@ -1141,8 +1607,17 @@
       "prune": "Pulisci",
       "compact": "Compatta",
       "backupNow": "Backup Ora",
+      "legacyBackup": "Backup legacy",
+      "legacyBackupTooltip": "Esegui il vecchio backup basato sul repository usando i percorsi sorgente legacy di questo repository",
+      "backupPlanRequired": "Crea un piano di backup per definire le sorgenti",
       "viewArchives": "Visualizza Archivi",
-      "delete": "Elimina"
+      "delete": "Elimina",
+      "createBackupPlan": "Crea piano di backup",
+      "createBackupPlanSourceRequired": "Aggiungi percorsi sorgente prima di creare un piano di backup"
+    },
+    "legacySources": {
+      "title": "Impostazioni sorgente legacy",
+      "description": "Sposta sorgenti e pianificazione di questo repository in un piano di backup."
     },
     "edit": "Modifica",
     "lastCheck": "Ultimo Controllo",
@@ -1385,9 +1860,11 @@
       "check": "Controllo Repository",
       "compact": "Compattazione",
       "prune": "Pulizia",
-      "package": "Installazione Pacchetto"
+      "package": "Installazione Pacchetto",
+      "scriptExecution": "Script"
     },
     "scheduledById": "Pianificato (ID: {{id}})",
+    "backupPlanByName": "Piano di backup: {{name}}",
     "manual": "Manuale",
     "toasts": {
       "authRequired": "Autenticazione richiesta",
@@ -1499,6 +1976,20 @@
     "statsRefreshDisabled": "Aggiornamento automatico statistiche disabilitato",
     "statsRefreshRangeError": "Deve essere compreso tra 0 e {{max}} minuti",
     "statsRefreshIntervalHelper": "Le statistiche del repository (conteggio archivi, dimensione, ultimo backup) verranno aggiornate ogni {{interval}} minuti",
+    "dashboardHealthThresholdsTitle": "Soglie salute dashboard",
+    "dashboardHealthThresholdsDescription": "Imposta quanti giorni possono avere i segnali di salute della dashboard prima di diventare avvisi o alert critici.",
+    "dashboardBackupWarningDaysLabel": "Età avviso backup (giorni)",
+    "dashboardBackupCriticalDaysLabel": "Età critica backup (giorni)",
+    "dashboardObserveFreshnessWarningDaysLabel": "Età avviso osservazione (giorni)",
+    "dashboardObserveFreshnessCriticalDaysLabel": "Età critica osservazione (giorni)",
+    "dashboardCheckWarningDaysLabel": "Età avviso controllo (giorni)",
+    "dashboardCheckCriticalDaysLabel": "Età critica controllo (giorni)",
+    "dashboardCompactWarningDaysLabel": "Età avviso compattazione (giorni)",
+    "dashboardCompactCriticalDaysLabel": "Età critica compattazione (giorni)",
+    "dashboardRestoreCheckWarningDaysLabel": "Età avviso controllo ripristino (giorni)",
+    "dashboardRestoreCheckCriticalDaysLabel": "Età critica controllo ripristino (giorni)",
+    "dashboardHealthThresholdRangeHelper": "1-{{max}} giorni. Avviso deve essere minore o uguale a critico.",
+    "dashboardHealthThresholdError": "Inserisci un numero di giorni valido. Avviso deve essere minore o uguale a critico.",
     "lastRefreshed": "Ultimo aggiornamento:",
     "manualRefreshAlert": "Imposta a 0 per disabilitare l'aggiornamento automatico. Il pianificatore aggiorna le statistiche per tutti i repository, inclusi quelli di sola osservazione dove i backup avvengono esternamente.",
     "metricsAccessTitle": "Accesso alle metriche",
@@ -2050,6 +2541,7 @@
     "status": {
       "connected": "Connesso",
       "failed": "Fallito",
+      "testing": "Test in corso",
       "unknown": "Sconosciuto"
     },
     "storage": "Archiviazione",
@@ -2125,6 +2617,7 @@
     "showing": "Mostrando {{filtered}} di {{total}} job di backup",
     "showingFiltered": "Mostrando {{filtered}} di {{total}} job di backup (filtrati)",
     "allSchedules": "Tutte le Pianificazioni",
+    "allPlans": "Tutti i Piani di Backup",
     "allRepositories": "Tutti i Repository",
     "allStatus": "Tutti gli Stati",
     "completed": "Completato",
@@ -2612,7 +3105,11 @@
   },
   "upcomingJobs": {
     "title": "Prossimi Job (Prossime 24 Ore)",
-    "repositories": "{{count}} repository"
+    "repositories": "{{count}} repository",
+    "types": {
+      "plan": "Piano",
+      "schedule": "Pianificazione"
+    }
   },
   "scheduledJobsTableSection": {
     "title": "Tutti i Job Pianificati",
@@ -2688,7 +3185,11 @@
     "archivesPreserve": "Gli archivi preservano i percorsi originali (le esclusioni funzionano in modo intuitivo)",
     "cleanupDesc": "Smonta la directory remota dopo il completamento del backup",
     "backupSourceDirs": "Esegue il backup delle directory sorgente nel repository",
-    "futureBackups": "Questo comando verrà usato per i backup futuri"
+    "futureBackups": "Questo comando verrà usato per i backup futuri",
+    "copyToClipboard": "Copia negli appunti",
+    "copied": "Copiato!",
+    "commandCopied": "Comando copiato negli appunti",
+    "copyFailed": "Impossibile copiare negli appunti"
   },
   "cronBuilderComponent": {
     "runEvery": "Esegui ogni",
@@ -2843,6 +3344,7 @@
       "location": "Posizione",
       "source": "Sorgente",
       "security": "Sicurezza",
+      "advanced": "Avanzate",
       "config": "Configurazione",
       "review": "Riepilogo"
     },
@@ -3017,6 +3519,7 @@
     "used": "usato",
     "free": "libero",
     "percentUsed": "% usato",
+    "total": "{{value}} totale",
     "noStorageInfo": "Nessuna info archiviazione",
     "refreshStorage": "Aggiorna archiviazione",
     "defaultPath": "Percorso Predefinito",
@@ -3081,7 +3584,8 @@
     "typeCheck": "Controllo",
     "typeCompact": "Compattazione",
     "typePrune": "Pulizia",
-    "typePackage": "Pacchetto"
+    "typePackage": "Pacchetto",
+    "typeScript": "Script"
   },
   "mounts": {
     "columns": {
@@ -3222,6 +3726,9 @@
         "failedCancelBackup": "Impossibile annullare il backup",
         "cannotDownloadLogsForRunningBackup": "Impossibile scaricare i log per un backup in esecuzione"
       },
+      "backupPlans": {
+        "clearLegacyRepositoryNotSelected": "Impossibile cancellare le impostazioni sorgente legacy per un repository non selezionato in questo piano di backup."
+      },
       "restore": {
         "cancelledByUser": "Ripristino annullato dall'utente",
         "cancelledByUserProcessNotFound": "Ripristino annullato dall'utente (processo non trovato, potrebbe essere già completato)",
@@ -3311,6 +3818,8 @@
         "invalidDeploymentType": "deployment_type deve essere 'individual' o 'enterprise'",
         "invalidLogSavePolicy": "log_save_policy non valido. Deve essere uno di: {{policies}}",
         "logSizeTooSmall": "log_max_total_size_mb deve essere almeno 10 MB",
+        "invalidDashboardHealthThreshold": "{{field}} deve essere compreso tra 1 e {{max}} giorni",
+        "invalidDashboardHealthThresholdOrder": "Le soglie di avviso della dashboard devono essere minori o uguali alle soglie critiche",
         "userNotFound": "Utente non trovato",
         "usernameAlreadyExists": "Nome utente già esistente",
         "failedRetrieveSystemSettings": "Impossibile recuperare le impostazioni di sistema: {{error}}",
@@ -3579,7 +4088,7 @@
     "instanceIdLabel": "ID istanza",
     "activeLicenseIdLabel": "Licenza attiva",
     "licenseKeyLabel": "Chiave di licenza",
-    "licenseKeyPlaceholder": "BORG-XXXX-XXXX-XXXX",
+    "licenseKeyPlaceholder": "BORG-0000-0000-0000",
     "activateLicenseButton": "Attiva licenza",
     "replaceLicenseButton": "Sostituisci licenza",
     "refreshLicenseButton": "Aggiorna stato",
@@ -3628,20 +4137,20 @@
     "defaultMessage": "Questa funzionalità richiede il piano {{plan}}.",
     "requiresPlan": "Richiede il piano {{plan}}",
     "buyLink": "Passa a borgui.com",
-    "learnMore": "See what's included →"
+    "learnMore": "Scopri cosa include →"
   },
   "announcements": {
-    "highlights": "What's new",
-    "viewDetails": "View details",
-    "remindLater": "Remind me later",
-    "gotIt": "Got it",
+    "highlights": "Novità",
+    "viewDetails": "Visualizza dettagli",
+    "remindLater": "Ricordamelo più tardi",
+    "gotIt": "Fatto",
     "types": {
-      "update_available": "Update available",
-      "release_highlight": "Release highlight",
-      "security_notice": "Security notice",
-      "maintenance_notice": "Maintenance notice",
-      "migration_notice": "Migration notice",
-      "custom_announcement": "Announcement"
+      "update_available": "Aggiornamento disponibile",
+      "release_highlight": "Novità del rilascio",
+      "security_notice": "Avviso di sicurezza",
+      "maintenance_notice": "Avviso di manutenzione",
+      "migration_notice": "Avviso di migrazione",
+      "custom_announcement": "Annuncio"
     }
   }
 }

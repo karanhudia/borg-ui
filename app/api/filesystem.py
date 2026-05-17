@@ -334,49 +334,95 @@ async def browse_ssh_filesystem(
 
         os.chmod(temp_key_file, 0o600)
 
+        def run_sftp_listing(cd_path: Optional[str]):
+            sftp_batch_file = None
+            try:
+                # Create SFTP batch file with commands
+                with tempfile.NamedTemporaryFile(
+                    mode="w", delete=False, suffix=".sftp"
+                ) as batch_f:
+                    if cd_path:
+                        batch_f.write(f'cd "{cd_path}"\n')
+                    batch_f.write("ls -la\n")
+                    sftp_batch_file = batch_f.name
+
+                logger.info("Browsing SSH path via SFTP", host=host, path=path)
+
+                sftp_cmd = [
+                    "sftp",
+                    "-b",
+                    sftp_batch_file,
+                    "-i",
+                    temp_key_file,
+                    "-P",
+                    str(port),
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "UserKnownHostsFile=/dev/null",
+                    "-o",
+                    "ConnectTimeout=10",
+                    f"{username}@{host}",
+                ]
+
+                return subprocess.run(
+                    sftp_cmd, capture_output=True, text=True, timeout=30
+                )
+            finally:
+                # Clean up SFTP batch file
+                if sftp_batch_file and os.path.exists(sftp_batch_file):
+                    try:
+                        os.unlink(sftp_batch_file)
+                    except Exception:
+                        pass
+
+        def has_sftp_listing_entries(stdout: str) -> bool:
+            for line in stdout.strip().split("\n"):
+                if (
+                    not line
+                    or line.startswith("sftp>")
+                    or line.startswith("total")
+                    or "Connecting to" in line
+                ):
+                    continue
+                return True
+            return False
+
+        def sftp_listing_failed(result) -> bool:
+            if result.returncode != 0:
+                return True
+
+            stderr = (result.stderr or "").lower()
+            failure_markers = (
+                "remote readdir",
+                "permission denied",
+                "no such file",
+                "not found",
+                "couldn't",
+                "cannot",
+                "failure",
+            )
+            return any(marker in stderr for marker in failure_markers) and not (
+                result.stdout and has_sftp_listing_entries(result.stdout)
+            )
+
         # Use SFTP for browsing (compatible with restricted shells like Hetzner Storage Box)
         # SFTP batch commands: ls -la shows detailed listing
-        sftp_batch_file = None
-        try:
-            # Create SFTP batch file with commands
-            with tempfile.NamedTemporaryFile(
-                mode="w", delete=False, suffix=".sftp"
-            ) as batch_f:
-                batch_f.write(f'cd "{path}"\n')
-                batch_f.write("ls -la\n")
-                sftp_batch_file = batch_f.name
+        result = run_sftp_listing(None if path == "/" else path)
 
-            logger.info("Browsing SSH path via SFTP", host=host, path=path)
+        if path.startswith("/") and path != "/" and sftp_listing_failed(result):
+            relative_path = path.lstrip("/")
+            if relative_path:
+                logger.info(
+                    "Retrying SFTP path relative to login directory",
+                    host=host,
+                    path=path,
+                    relative_path=relative_path,
+                    stderr=result.stderr[:500] if result.stderr else None,
+                )
+                result = run_sftp_listing(relative_path)
 
-            sftp_cmd = [
-                "sftp",
-                "-b",
-                sftp_batch_file,
-                "-i",
-                temp_key_file,
-                "-P",
-                str(port),
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-o",
-                "ConnectTimeout=10",
-                f"{username}@{host}",
-            ]
-
-            result = subprocess.run(
-                sftp_cmd, capture_output=True, text=True, timeout=30
-            )
-        finally:
-            # Clean up SFTP batch file
-            if sftp_batch_file and os.path.exists(sftp_batch_file):
-                try:
-                    os.unlink(sftp_batch_file)
-                except Exception:
-                    pass
-
-        if result.returncode != 0:
+        if sftp_listing_failed(result):
             error_msg = (
                 result.stderr.strip()
                 if result.stderr

@@ -101,7 +101,7 @@ describe('RemoteMachineCard', () => {
           onDeployKey={mockOnDeployKey}
         />
       )
-      expect(screen.getByText('connected')).toBeInTheDocument()
+      expect(screen.getByText('Connected')).toBeInTheDocument()
     })
 
     it('renders status chip for failed', () => {
@@ -116,7 +116,7 @@ describe('RemoteMachineCard', () => {
           onDeployKey={mockOnDeployKey}
         />
       )
-      expect(screen.getByText('failed')).toBeInTheDocument()
+      expect(screen.getByText('Failed')).toBeInTheDocument()
     })
 
     it('renders status chip for testing', () => {
@@ -131,7 +131,7 @@ describe('RemoteMachineCard', () => {
           onDeployKey={mockOnDeployKey}
         />
       )
-      expect(screen.getByText('testing')).toBeInTheDocument()
+      expect(screen.getByText('Testing')).toBeInTheDocument()
     })
 
     it('renders unknown status', () => {
@@ -146,7 +146,7 @@ describe('RemoteMachineCard', () => {
           onDeployKey={mockOnDeployKey}
         />
       )
-      expect(screen.getByText('unknown')).toBeInTheDocument()
+      expect(screen.getByText('Unknown')).toBeInTheDocument()
     })
   })
 

@@ -20,6 +20,7 @@ import PlanInfoDrawer from './PlanInfoDrawer'
 import { usePlan } from '../hooks/usePlan'
 import { useNavigate } from 'react-router-dom'
 import { PLAN_LABEL } from '../core/features'
+import { getProfileMenuColors, getRoleBadgeStyles } from './profileMenuColors'
 
 const drawerWidth = 240
 const headerHeight = 64
@@ -28,33 +29,13 @@ interface AppHeaderProps {
   onToggleMobileMenu: () => void
 }
 
-function getRoleBadgeStyles(roleLabel: string, isDark: boolean) {
-  if (roleLabel === 'Admin') {
-    return {
-      backgroundColor: isDark ? 'rgba(5,150,105,0.15)' : 'rgba(5,150,105,0.08)',
-      color: isDark ? '#6ee7b7' : '#059669',
-    }
-  }
-
-  if (roleLabel === 'Operator') {
-    return {
-      backgroundColor: isDark ? 'rgba(59,130,246,0.15)' : 'rgba(59,130,246,0.08)',
-      color: isDark ? '#93bbfd' : '#2563eb',
-    }
-  }
-
-  return {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-    color: 'text.secondary',
-  }
-}
-
 export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
   const { trackAuth, trackNavigation, trackPlan, EventAction } = useAnalytics()
   const muiTheme = useMuiTheme()
   const isDark = muiTheme.palette.mode === 'dark'
+  const menuColors = getProfileMenuColors(muiTheme)
   const { plan, features, entitlement } = usePlan()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
   const [planDrawerOpen, setPlanDrawerOpen] = useState(false)
@@ -154,9 +135,9 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
               fontSize: '0.8rem',
               fontWeight: 700,
               borderRadius: '8px',
-              bgcolor: 'rgba(5,150,105,0.15)',
-              color: '#34d399',
-              border: '1.5px solid rgba(5,150,105,0.3)',
+              bgcolor: menuColors.avatar.surface,
+              color: menuColors.avatar.color,
+              border: `1.5px solid ${menuColors.avatar.border}`,
             }}
           >
             {initials}
@@ -199,7 +180,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                 boxShadow: isDark
                   ? '0 16px 48px rgba(0,0,0,0.55)'
                   : '0 16px 48px rgba(15,23,42,0.14)',
-                bgcolor: muiTheme.palette.background.paper,
+                bgcolor: menuColors.menuSurface,
                 overflow: 'hidden',
               },
             },
@@ -213,7 +194,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
               display: 'flex',
               alignItems: 'center',
               gap: 1.5,
-              bgcolor: isDark ? 'rgba(5,150,105,0.05)' : 'rgba(5,150,105,0.03)',
+              bgcolor: menuColors.heroSurface,
               borderBottom: `1px solid ${alpha(muiTheme.palette.divider, 0.06)}`,
             }}
           >
@@ -224,9 +205,9 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                 fontSize: '1rem',
                 fontWeight: 800,
                 borderRadius: '12px',
-                bgcolor: 'rgba(5,150,105,0.12)',
-                color: '#34d399',
-                border: '1.5px solid rgba(52,211,153,0.22)',
+                bgcolor: menuColors.avatar.surface,
+                color: menuColors.avatar.color,
+                border: `1.5px solid ${menuColors.avatar.border}`,
               }}
             >
               {initials}
@@ -282,30 +263,17 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                 gap: 1.25,
                 width: '100%',
                 p: 1.25,
-                border: '1px solid rgba(99,102,241,0.22)',
+                border: `1px solid ${menuColors.plan.border}`,
                 borderRadius: 2.5,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
-                background:
-                  'linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(139,92,246,0.06) 100%)',
+                backgroundColor: menuColors.plan.surface,
                 position: 'relative',
                 overflow: 'hidden',
                 transition: 'all 0.18s ease',
                 '&:hover': {
-                  background:
-                    'linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(139,92,246,0.1) 100%)',
-                  borderColor: 'rgba(99,102,241,0.38)',
-                },
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: -20,
-                  right: -20,
-                  width: 80,
-                  height: 80,
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)',
-                  pointerEvents: 'none',
+                  backgroundColor: menuColors.plan.hoverSurface,
+                  borderColor: menuColors.plan.iconBorder,
                 },
               }}
             >
@@ -314,8 +282,8 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                   width: 30,
                   height: 30,
                   borderRadius: 2,
-                  bgcolor: 'rgba(99,102,241,0.15)',
-                  border: '1px solid rgba(99,102,241,0.28)',
+                  bgcolor: menuColors.plan.iconSurface,
+                  border: `1px solid ${menuColors.plan.iconBorder}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -324,13 +292,15 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                   zIndex: 1,
                 }}
               >
-                <Sparkles size={15} style={{ color: '#a78bfa' }} />
+                <Sparkles size={15} style={{ color: menuColors.plan.accent }} />
               </Box>
               <Box
                 sx={{ flex: 1, minWidth: 0, textAlign: 'left', position: 'relative', zIndex: 1 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, color: '#c4b5fd' }}>
+                  <Typography
+                    sx={{ fontSize: '0.78rem', fontWeight: 700, color: menuColors.plan.accent }}
+                  >
                     {planLabel} {t('plan.planSuffix', 'Plan')}
                   </Typography>
                   <Box
@@ -345,9 +315,9 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                       px: 0.6,
                       py: 0.2,
                       borderRadius: 0.5,
-                      bgcolor: 'rgba(167,139,250,0.14)',
-                      color: '#a78bfa',
-                      border: '1px solid rgba(167,139,250,0.22)',
+                      bgcolor: menuColors.plan.statusSurface,
+                      color: menuColors.plan.accent,
+                      border: `1px solid ${menuColors.plan.statusBorder}`,
                     }}
                   >
                     <Box
@@ -355,22 +325,22 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                         width: 4,
                         height: 4,
                         borderRadius: '50%',
-                        bgcolor: '#a78bfa',
-                        boxShadow: '0 0 4px #a78bfa',
+                        bgcolor: menuColors.plan.accent,
                       }}
                     />
                     {t('plan.activeStatus', 'Active')}
                   </Box>
                 </Box>
-                <Typography sx={{ fontSize: '0.61rem', color: '#6b6fa8', mt: 0.25 }}>
+                <Typography
+                  sx={{ fontSize: '0.61rem', color: menuColors.plan.description, mt: 0.25 }}
+                >
                   {planDescription}
                 </Typography>
               </Box>
               <ChevronRight
                 size={14}
                 style={{
-                  color: '#a78bfa',
-                  opacity: 0.7,
+                  color: menuColors.plan.accent,
                   flexShrink: 0,
                   position: 'relative',
                   zIndex: 1,
@@ -393,7 +363,7 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                 fontWeight: 700,
                 textTransform: 'uppercase',
                 letterSpacing: '0.09em',
-                color: 'text.disabled',
+                color: menuColors.sectionText,
                 px: 1.75,
                 pt: 0.75,
                 pb: 0.375,
@@ -461,11 +431,11 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
-                    bgcolor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                    bgcolor: menuColors.navIcon.surface,
                     border: `1px solid ${alpha(muiTheme.palette.divider, isDark ? 0.07 : 0.05)}`,
                   }}
                 >
-                  <Icon size={14} style={{ color: isDark ? '#64748b' : '#94a3b8' }} />
+                  <Icon size={14} style={{ color: menuColors.navIcon.color }} />
                 </Box>
                 <Box sx={{ flex: 1, textAlign: 'left' }}>
                   <Typography
@@ -478,13 +448,15 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                   >
                     {label}
                   </Typography>
-                  <Typography sx={{ fontSize: '0.59rem', color: 'text.disabled', mt: 0.125 }}>
+                  <Typography
+                    sx={{ fontSize: '0.59rem', color: menuColors.navDescription, mt: 0.125 }}
+                  >
                     {desc}
                   </Typography>
                 </Box>
                 <ChevronRight
                   size={13}
-                  style={{ color: isDark ? '#2d4059' : '#cbd5e1', flexShrink: 0 }}
+                  style={{ color: menuColors.navIcon.chevron, flexShrink: 0 }}
                 />
               </Box>
             ))}

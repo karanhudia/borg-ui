@@ -207,6 +207,37 @@ describe('ScheduledRestoreChecksSection', () => {
     expect(screen.getByLabelText('Probe Paths')).toHaveValue('etc\nsrv/app/config.yml')
   })
 
+  it('omits restore-check summary cards while preserving scheduled checks', async () => {
+    vi.mocked(repositoriesAPI.getRestoreCheckSchedule).mockResolvedValue({
+      data: {
+        repository_id: 1,
+        repository_name: 'Repo One',
+        repository_path: '/repo-one',
+        restore_check_cron_expression: '0 4 * * 0',
+        restore_check_timezone: 'UTC',
+        restore_check_paths: [],
+        restore_check_full_archive: false,
+        restore_check_canary_enabled: true,
+        restore_check_mode: 'canary',
+        last_restore_check: null,
+        last_scheduled_restore_check: null,
+        next_scheduled_restore_check: '2026-01-03T00:00:00Z',
+        notify_on_restore_check_success: false,
+        notify_on_restore_check_failure: true,
+        enabled: true,
+        restore_check_schedule_enabled: true,
+      },
+    } as AxiosResponse)
+
+    renderWithProviders(<ScheduledRestoreChecksSection />)
+
+    expect(await screen.findByText('Repo One')).toBeInTheDocument()
+    expect(screen.queryByText('Restore schedules')).not.toBeInTheDocument()
+    expect(screen.queryByText('Canary-protected')).not.toBeInTheDocument()
+    expect(screen.queryByText('Probe-path schedules')).not.toBeInTheDocument()
+    expect(screen.queryByText('Full-archive drills')).not.toBeInTheDocument()
+  })
+
   it('supports observe-only repositories while disabling canary mode', async () => {
     const user = userEvent.setup()
     vi.mocked(repositoriesAPI.getRepositories).mockResolvedValue({

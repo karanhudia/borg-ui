@@ -33,6 +33,13 @@ const { usePlanContentMock } = vi.hoisted(() => ({
         availability: 'included',
       },
       {
+        id: 'backup_plan_multi_repository',
+        plan: 'pro',
+        label: 'Multi-repository backup',
+        description: 'Back up to multiple destinations from one config.',
+        availability: 'included',
+      },
+      {
         id: 'backup_reports',
         plan: 'pro',
         label: 'Backup reports',
@@ -107,6 +114,7 @@ vi.mock('../../hooks/useAuth', () => ({
 
 const featureMap = {
   borg_v2: 'pro',
+  backup_plan_multi_repository: 'pro',
   multi_user: 'community',
   extra_users: 'pro',
 } as const
@@ -204,6 +212,8 @@ describe('PlanInfoDrawer', () => {
     expect(screen.getByText('Borg v2 beta testing')).toBeInTheDocument()
     expect(screen.getByText('Up to 10 users')).toBeInTheDocument()
     expect(screen.getByText('Deployment on 3 servers')).toBeInTheDocument()
+    expect(screen.getByText('Multi-repository backup')).toBeInTheDocument()
+    expect(screen.queryByText('backup_plan_multi_repository')).not.toBeInTheDocument()
 
     await user.click(screen.getByText('Enterprise'))
 

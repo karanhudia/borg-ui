@@ -42,6 +42,7 @@ class RemoteBackupService:
         exclude_patterns: List[str] = None,
         compression: str = "lz4",
         custom_flags: str = None,
+        upload_ratelimit_kib: int = None,
     ) -> dict:
         """
         Main method to execute backup on remote host
@@ -112,6 +113,7 @@ class RemoteBackupService:
                 exclude_patterns=exclude_patterns or [],
                 compression=compression,
                 custom_flags=custom_flags,
+                upload_ratelimit_kib=upload_ratelimit_kib,
                 borg_binary_path=ssh_connection.borg_binary_path,
                 use_sudo=ssh_connection.use_sudo,
             )
@@ -185,6 +187,7 @@ class RemoteBackupService:
         exclude_patterns: List[str],
         compression: str = "lz4",
         custom_flags: str = None,
+        upload_ratelimit_kib: int = None,
         borg_binary_path: str = "/usr/bin/borg",
         use_sudo: bool = False,
     ) -> str:
@@ -232,6 +235,8 @@ class RemoteBackupService:
 
         # Flags
         cmd_parts.extend(["--progress", "--stats", "--json"])
+        if upload_ratelimit_kib:
+            cmd_parts.extend(["--upload-ratelimit", str(upload_ratelimit_kib)])
 
         # Compression
         if compression:

@@ -43,6 +43,7 @@ interface WizardStepDataSourceProps {
   onChange: (data: Partial<DataSourceStepData>) => void
   onBrowseSource: () => void
   onBrowseRemoteSource: () => void
+  sourceRequired?: boolean
 }
 
 export default function WizardStepDataSource({
@@ -55,6 +56,7 @@ export default function WizardStepDataSource({
   onChange,
   onBrowseSource,
   onBrowseRemoteSource,
+  sourceRequired = true,
 }: WizardStepDataSourceProps) {
   const { t } = useTranslation()
 
@@ -318,7 +320,7 @@ export default function WizardStepDataSource({
             })
           }}
           onBrowseClick={isAgentExecution ? undefined : onBrowseSource}
-          required={repositoryMode !== 'observe'}
+          required={sourceRequired && repositoryMode !== 'observe'}
         />
       )}
 
@@ -392,7 +394,7 @@ export default function WizardStepDataSource({
                       })
                     }}
                     onBrowseClick={onBrowseRemoteSource}
-                    required={repositoryMode !== 'observe'}
+                    required={sourceRequired && repositoryMode !== 'observe'}
                   />
                   <Typography
                     variant="caption"

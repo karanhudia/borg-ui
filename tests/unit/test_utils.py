@@ -8,7 +8,15 @@ from app.utils.process_utils import (
     cleanup_orphaned_jobs,
     cleanup_orphaned_mounts,
 )
-from app.database.models import Repository, BackupJob, PruneJob, CompactJob
+from app.database.models import (
+    BackupJob,
+    BackupPlan,
+    BackupPlanRun,
+    BackupPlanRunRepository,
+    CompactJob,
+    PruneJob,
+    Repository,
+)
 
 # ==========================================
 # Datetime Utils Tests
@@ -165,6 +173,7 @@ class TestProcessUtils:
             [],  # running restore check jobs
             [mock_prune_job],  # running prune jobs
             [mock_compact_job],  # running compact jobs
+            [],  # active backup plan runs
             [mock_backup_job],  # backup jobs stuck in running_prune
             [],  # repository lookup for orphaned compact job
             [mock_compact_backup_job],  # backup jobs stuck in running_compact
@@ -232,6 +241,7 @@ class TestProcessUtils:
             [],  # running restore check jobs
             [],  # running prune jobs
             [],  # running compact jobs
+            [],  # active backup plan runs
         ]
 
         def build_query(result):
@@ -253,6 +263,101 @@ class TestProcessUtils:
             == "backend.errors.service.containerRestartedDuringOperation"
         )
         mock_db.commit.assert_called_once()
+
+    def test_cleanup_orphaned_jobs_finishes_interrupted_backup_plan_run(
+        self, db_session
+    ):
+        """Interrupted plan backups should not remain active after startup cleanup"""
+        repo = Repository(
+            name="Plan Repo",
+            path="/repos/plan",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        plan = BackupPlan(
+            name="Plan",
+            source_directories=json.dumps(["/src"]),
+            repositories=[],
+        )
+        db_session.add(plan)
+        db_session.flush()
+
+        run = BackupPlanRun(
+            backup_plan_id=plan.id,
+            trigger="manual",
+            status="running",
+            started_at=datetime.utcnow(),
+        )
+        db_session.add(run)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            backup_plan_id=plan.id,
+            backup_plan_run_id=run.id,
+            status="running",
+            started_at=datetime.utcnow(),
+            progress=42,
+        )
+        db_session.add(backup_job)
+        db_session.flush()
+
+        child = BackupPlanRunRepository(
+            backup_plan_run_id=run.id,
+            repository_id=repo.id,
+            backup_job_id=backup_job.id,
+            status="running",
+            started_at=datetime.utcnow(),
+        )
+        db_session.add(child)
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+        db_session.refresh(child)
+        db_session.refresh(run)
+
+        assert backup_job.status == "failed"
+        assert child.status == "failed"
+        assert child.completed_at is not None
+        assert run.status == "failed"
+        assert run.completed_at is not None
+
+    def test_cleanup_orphaned_jobs_marks_pending_backup_job_failed(self, db_session):
+        """Pending backup jobs are in-memory work and cannot resume after restart"""
+        repo = Repository(
+            name="Manual Repo",
+            path="/repos/manual",
+            encryption="none",
+            repository_type="local",
+        )
+        db_session.add(repo)
+        db_session.flush()
+
+        backup_job = BackupJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            status="pending",
+            progress=12,
+        )
+        db_session.add(backup_job)
+        db_session.commit()
+
+        cleanup_orphaned_jobs(db_session)
+
+        db_session.refresh(backup_job)
+
+        assert backup_job.status == "failed"
+        assert backup_job.completed_at is not None
+        assert (
+            json.loads(backup_job.error_message)["key"]
+            == "backend.errors.service.containerRestartedDuringBackup"
+        )
 
     @patch("app.utils.process_utils.settings")
     @patch("app.utils.process_utils.subprocess.run")

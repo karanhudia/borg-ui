@@ -51,6 +51,7 @@ from app.utils.schedule_time import (
     calculate_next_cron_run,
     normalize_schedule_timezone,
 )
+from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
 from app.utils.ssh_paths import apply_ssh_command_prefix
 from app.utils.borg_env import (
     get_standard_ssh_opts as shared_get_standard_ssh_opts,
@@ -1122,6 +1123,19 @@ async def create_repository(
                 repo_data, current_user, db, imported=False
             )
 
+        valid_encryption_modes = {
+            "repokey",
+            "keyfile",
+            "repokey-blake2",
+            "keyfile-blake2",
+            "none",
+        }
+        if repo_data.encryption not in valid_encryption_modes:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+            )
+
         # Validate source directories are provided (only for full mode repositories)
         if repo_data.mode == "full":
             if (
@@ -2153,10 +2167,18 @@ async def update_repository(
             repository.compression = repo_data.compression
 
         if repo_data.source_directories is not None:
-            repository.source_directories = json.dumps(repo_data.source_directories)
+            repository.source_directories = (
+                json.dumps(repo_data.source_directories)
+                if repo_data.source_directories
+                else None
+            )
 
         if repo_data.exclude_patterns is not None:
-            repository.exclude_patterns = json.dumps(repo_data.exclude_patterns)
+            repository.exclude_patterns = (
+                json.dumps(repo_data.exclude_patterns)
+                if repo_data.exclude_patterns
+                else None
+            )
 
         if repo_data.remote_path is not None:
             repository.remote_path = repo_data.remote_path
@@ -2193,17 +2215,6 @@ async def update_repository(
             repository.skip_on_hook_failure = repo_data.skip_on_hook_failure
 
         if repo_data.mode is not None:
-            # Validate source directories when switching to full mode
-            if repo_data.mode == "full" and (
-                not repository.source_directories
-                or repository.source_directories == "[]"
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "key": "backend.errors.repo.cannotSwitchToFullModeNoSourceDirs"
-                    },
-                )
             repository.mode = repo_data.mode
             # If switching to observe mode, log it
             if repo_data.mode == "observe":
@@ -2916,6 +2927,7 @@ async def list_repository_archives(
         try:
             archives_data = json.loads(stdout.decode())
             archives = archives_data.get("archives", [])
+            archives = enrich_archives_with_backup_metadata(archives, repository, db)
 
             logger.info(
                 "Archives listed successfully", repo_id=repo_id, count=len(archives)
@@ -3565,6 +3577,9 @@ async def update_check_schedule(
             # Set to None if empty string or "disabled"
             if not cron_expression or cron_expression.strip() == "":
                 repo.check_cron_expression = None
+                # Clearing the cron is "remove schedule" — also force toggle off
+                # so the row reflects a clean removed state.
+                repo.check_schedule_enabled = False
             else:
                 # Validate cron expression
                 try:
@@ -3587,6 +3602,16 @@ async def update_check_schedule(
                         status_code=400,
                         detail={"key": "backend.errors.repo.invalidCronExpression"},
                     )
+                # Setting a cron implies the user wants it active. The toggle
+                # request body can still override this by sending schedule_enabled
+                # below.
+                repo.check_schedule_enabled = True
+
+        # Explicit toggle (independent of cron). Allows pause/resume without
+        # losing the cron expression.
+        schedule_enabled = request.get("schedule_enabled")
+        if schedule_enabled is not None:
+            repo.check_schedule_enabled = bool(schedule_enabled)
 
         max_duration = request.get("max_duration")
         if max_duration is not None:
@@ -3601,7 +3626,7 @@ async def update_check_schedule(
             repo.notify_on_check_failure = notify_on_failure
 
         # Calculate next check time from cron expression
-        if repo.check_cron_expression:
+        if repo.check_cron_expression and repo.check_schedule_enabled:
             try:
                 repo.next_scheduled_check = calculate_next_cron_run(
                     repo.check_cron_expression,
@@ -3633,6 +3658,7 @@ async def update_check_schedule(
                 "id": repo.id,
                 "name": repo.name,
                 "check_cron_expression": repo.check_cron_expression,
+                "check_schedule_enabled": bool(repo.check_schedule_enabled),
                 "check_timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
                 "timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
                 "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
@@ -3711,6 +3737,7 @@ async def update_restore_check_schedule(
         if cron_expression is not None:
             if not cron_expression or cron_expression.strip() == "":
                 repo.restore_check_cron_expression = None
+                repo.restore_check_schedule_enabled = False
             else:
                 try:
                     calculate_next_cron_run(
@@ -3732,6 +3759,12 @@ async def update_restore_check_schedule(
                         status_code=400,
                         detail={"key": "backend.errors.repo.invalidCronExpression"},
                     )
+                repo.restore_check_schedule_enabled = True
+
+        # Explicit toggle (independent of cron).
+        schedule_enabled = request.get("schedule_enabled")
+        if schedule_enabled is not None:
+            repo.restore_check_schedule_enabled = bool(schedule_enabled)
 
         if "paths" in request:
             repo.restore_check_paths = json.dumps(
@@ -3776,7 +3809,7 @@ async def update_restore_check_schedule(
         if notify_on_failure is not None:
             repo.notify_on_restore_check_failure = notify_on_failure
 
-        if repo.restore_check_cron_expression:
+        if repo.restore_check_cron_expression and repo.restore_check_schedule_enabled:
             try:
                 repo.next_scheduled_restore_check = calculate_next_cron_run(
                     repo.restore_check_cron_expression,
@@ -3806,6 +3839,9 @@ async def update_restore_check_schedule(
                 "id": repo.id,
                 "name": repo.name,
                 "restore_check_cron_expression": repo.restore_check_cron_expression,
+                "restore_check_schedule_enabled": bool(
+                    repo.restore_check_schedule_enabled
+                ),
                 "restore_check_timezone": repo.restore_check_timezone
                 or DEFAULT_SCHEDULE_TIMEZONE,
                 "timezone": repo.restore_check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
@@ -3855,11 +3891,15 @@ async def get_check_schedule(
             )
         _require_repository_access(db, current_user, repo, "viewer")
 
+        cron_set = (
+            repo.check_cron_expression is not None and repo.check_cron_expression != ""
+        )
         return {
             "repository_id": repo.id,
             "repository_name": repo.name,
             "repository_path": repo.path,
             "check_cron_expression": repo.check_cron_expression,
+            "check_schedule_enabled": bool(repo.check_schedule_enabled),
             "check_timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
             "timezone": repo.check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
             "last_scheduled_check": serialize_datetime(repo.last_scheduled_check),
@@ -3867,8 +3907,8 @@ async def get_check_schedule(
             "check_max_duration": repo.check_max_duration,
             "notify_on_check_success": repo.notify_on_check_success,
             "notify_on_check_failure": repo.notify_on_check_failure,
-            "enabled": repo.check_cron_expression is not None
-            and repo.check_cron_expression != "",
+            # "enabled" means "will actually run": cron is set AND toggle is on.
+            "enabled": cron_set and bool(repo.check_schedule_enabled),
         }
     except HTTPException:
         raise
@@ -3900,11 +3940,16 @@ async def get_restore_check_schedule(
             json.loads(repo.restore_check_paths) if repo.restore_check_paths else []
         )
 
+        cron_set = (
+            repo.restore_check_cron_expression is not None
+            and repo.restore_check_cron_expression != ""
+        )
         return {
             "repository_id": repo.id,
             "repository_name": repo.name,
             "repository_path": repo.path,
             "restore_check_cron_expression": repo.restore_check_cron_expression,
+            "restore_check_schedule_enabled": bool(repo.restore_check_schedule_enabled),
             "restore_check_timezone": repo.restore_check_timezone
             or DEFAULT_SCHEDULE_TIMEZONE,
             "timezone": repo.restore_check_timezone or DEFAULT_SCHEDULE_TIMEZONE,
@@ -3924,8 +3969,7 @@ async def get_restore_check_schedule(
             ),
             "notify_on_restore_check_success": repo.notify_on_restore_check_success,
             "notify_on_restore_check_failure": repo.notify_on_restore_check_failure,
-            "enabled": repo.restore_check_cron_expression is not None
-            and repo.restore_check_cron_expression != "",
+            "enabled": cron_set and bool(repo.restore_check_schedule_enabled),
         }
     except HTTPException:
         raise

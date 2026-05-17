@@ -1,25 +1,11 @@
 import React, { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAnalytics } from '../hooks/useAnalytics'
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  Stack,
-  Select,
-  MenuItem,
-  InputBase,
-  Divider,
-  alpha,
-  useTheme,
-} from '@mui/material'
-import { Add, Storage, FileUpload, Search, FilterList } from '@mui/icons-material'
-import { repositoriesAPI, RepositoryData } from '../services/api'
+import { Box } from '@mui/material'
+import { backupPlansAPI, repositoriesAPI, RepositoryData } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
@@ -29,73 +15,40 @@ import { AxiosResponse } from 'axios'
 import LockErrorDialog from '../components/LockErrorDialog'
 import CheckWarningDialog from '../components/CheckWarningDialog'
 import CompactWarningDialog from '../components/CompactWarningDialog'
-import RepositoryCard from '../components/RepositoryCard'
-import RepositoryCardSkeleton from '../components/RepositoryCardSkeleton'
 import RepositoryWizard from '../components/RepositoryWizard'
 import PruneRepositoryDialog from '../components/PruneRepositoryDialog'
 import RepositoryInfoDialog from '../components/RepositoryInfoDialog'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
+import { CreateBackupPlanDialog } from './repositories-page/CreateBackupPlanDialog'
+import { RepositoriesHeader } from './repositories-page/RepositoriesHeader'
+import { RepositoryGroups } from './repositories-page/RepositoryGroups'
+import { RepositoriesToolbar } from './repositories-page/RepositoriesToolbar'
+import {
+  getCompressionLabel,
+  getCreatedRepositoryId,
+  getRepositoryResultCount,
+  processRepositories,
+} from './repositories-page/helpers'
+import type { PruneForm, Repository } from './repositories-page/types'
+import type { BackupPlan } from '../types'
 
-interface Repository extends RepositoryData {
-  id: number
-  name: string
-  path: string
-  encryption: string
-  compression: string
-  source_directories: string[]
-  exclude_patterns: string[]
-  last_backup: string | null
-  last_check: string | null
-  last_compact: string | null
-  has_schedule?: boolean
-  schedule_enabled?: boolean
-  schedule_name?: string | null
-  schedule_timezone?: string | null
-  next_run?: string | null
-  total_size: string | null
-  archive_count: number
-  created_at: string
-  updated_at: string | null
-  mode: 'full' | 'observe'
-  custom_flags?: string | null
-  has_running_maintenance?: boolean
-  has_keyfile?: boolean
-  remote_path?: string
-  pre_backup_script?: string
-  post_backup_script?: string
-  hook_timeout?: number
-  pre_hook_timeout?: number
-  post_hook_timeout?: number
-  continue_on_hook_failure?: boolean
-  skip_on_hook_failure?: boolean
-  bypass_lock?: boolean
-  source_ssh_connection_id?: number | null
-  repository_type?: 'local' | 'ssh' | 'sftp'
-  execution_target?: 'local' | 'ssh' | 'agent'
-  agent_machine_id?: number | null
-  borg_version?: 1 | 2
-}
+const EMPTY_REPOSITORIES: Repository[] = []
 
-interface PruneForm {
-  keep_hourly: number
-  keep_daily: number
-  keep_weekly: number
-  keep_monthly: number
-  keep_quarterly: number
-  keep_yearly: number
-  dry_run?: boolean
+function parseBackupPlanFilterId(value: string | null): number | null {
+  if (!value) return null
+  const id = Number(value)
+  return Number.isInteger(id) && id > 0 ? id : null
 }
 
 export default function Repositories() {
   const { t } = useTranslation()
-  const theme = useTheme()
-  const isDark = theme.palette.mode === 'dark'
   const { hasGlobalPermission } = useAuth()
   const canManageRepositoriesGlobally = hasGlobalPermission('repositories.manage_all')
   const permissions = usePermissions()
   const queryClient = useQueryClient()
   const appState = useAppState()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { trackMaintenance, trackRepository, EventAction } = useAnalytics()
   const maintenanceTrackingRef = useRef<Map<number, { operation: 'Check' | 'Compact' | 'Prune' }>>(
     new Map()
@@ -111,6 +64,11 @@ export default function Repositories() {
   const [checkingRepository, setCheckingRepository] = useState<Repository | null>(null)
   const [compactingRepository, setCompactingRepository] = useState<Repository | null>(null)
   const [pruningRepository, setPruningRepository] = useState<Repository | null>(null)
+  const [planSourceRepository, setPlanSourceRepository] = useState<Repository | null>(null)
+  const [backupPlanName, setBackupPlanName] = useState('')
+  const [copyExistingSchedule, setCopyExistingSchedule] = useState(true)
+  const [disableExistingSchedule, setDisableExistingSchedule] = useState(true)
+  const [moveSourceSettings, setMoveSourceSettings] = useState(true)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [pruneResults, setPruneResults] = useState<any>(null)
   const [lockError, setLockError] = useState<{
@@ -131,6 +89,10 @@ export default function Repositories() {
     return localStorage.getItem('repos_group') || 'none'
   })
   const deferredSearchQuery = React.useDeferredValue(searchQuery)
+  const selectedBackupPlanId = React.useMemo(
+    () => parseBackupPlanFilterId(searchParams.get('backupPlanId')),
+    [searchParams]
+  )
 
   // Queries
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -138,6 +100,30 @@ export default function Repositories() {
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
   })
+
+  const { data: backupPlansData, isLoading: loadingBackupPlanFilter } = useQuery({
+    queryKey: ['backup-plans'],
+    queryFn: () => backupPlansAPI.list(),
+  })
+
+  const backupPlans: BackupPlan[] = React.useMemo(
+    () => backupPlansData?.data?.backup_plans || [],
+    [backupPlansData]
+  )
+
+  const { data: selectedBackupPlanData, isLoading: loadingSelectedBackupPlan } = useQuery({
+    queryKey: ['backup-plan', selectedBackupPlanId],
+    queryFn: () => backupPlansAPI.get(selectedBackupPlanId!),
+    enabled: selectedBackupPlanId !== null,
+  })
+
+  const selectedBackupPlanRepositoryIds = React.useMemo(() => {
+    if (selectedBackupPlanId === null) return undefined
+    const repositories = (selectedBackupPlanData?.data as BackupPlan | undefined)?.repositories
+    if (!repositories) return undefined
+
+    return new Set(repositories.filter((link) => link.enabled).map((link) => link.repository_id))
+  }, [selectedBackupPlanData, selectedBackupPlanId])
 
   // Get repository info using borg info command
   const {
@@ -280,6 +266,54 @@ export default function Repositories() {
     },
   })
 
+  const createBackupPlanMutation = useMutation({
+    mutationFn: ({
+      repository,
+      name,
+      copySchedule,
+      disableSchedule,
+    }: {
+      repository: Repository
+      name: string
+      copySchedule: boolean
+      disableSchedule: boolean
+    }) =>
+      backupPlansAPI.createFromRepository(repository.id, {
+        name: name.trim() || undefined,
+        copy_schedule: copySchedule,
+        disable_repository_schedule: copySchedule && disableSchedule,
+        move_source_settings: moveSourceSettings,
+      }),
+    onSuccess: (response, variables) => {
+      toast.success(t('repositories.toasts.backupPlanCreated'))
+      if (
+        response.data.copied_schedule_id &&
+        variables.disableSchedule &&
+        !response.data.repository_schedule_disabled
+      ) {
+        toast(t('repositories.toasts.sharedScheduleKept'), { icon: 'i' })
+      }
+      setPlanSourceRepository(null)
+      setBackupPlanName('')
+      setCopyExistingSchedule(true)
+      setDisableExistingSchedule(true)
+      setMoveSourceSettings(true)
+      queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      appState.refetch()
+      navigate('/backup-plans', {
+        state: { highlightPlanId: response.data.backup_plan.id },
+      })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('repositories.toasts.backupPlanCreateFailed')
+      )
+    },
+  })
+
   // Event handlers
   const handleDeleteRepository = (repository: Repository) => {
     if (window.confirm(`Are you sure you want to delete repository "${repository.name}"?`)) {
@@ -381,6 +415,28 @@ export default function Repositories() {
     navigate('/archives', { state: { repositoryId: repository.id } })
   }
 
+  const handleCreateBackupPlan = (repository: Repository) => {
+    if (!repository.source_directories?.length) {
+      navigate('/backup-plans', { state: { createPlanForRepositoryId: repository.id } })
+      return
+    }
+    setPlanSourceRepository(repository)
+    setBackupPlanName(`${repository.name} Backup Plan`)
+    setCopyExistingSchedule(Boolean(repository.has_schedule))
+    setDisableExistingSchedule(Boolean(repository.has_schedule))
+    setMoveSourceSettings(true)
+  }
+
+  const handleConfirmCreateBackupPlan = () => {
+    if (!planSourceRepository) return
+    createBackupPlanMutation.mutate({
+      repository: planSourceRepository,
+      name: backupPlanName,
+      copySchedule: copyExistingSchedule,
+      disableSchedule: disableExistingSchedule,
+    })
+  }
+
   // Wizard functions
   const openWizard = (mode: 'create' | 'edit' | 'import', repository?: Repository) => {
     setWizardMode(mode)
@@ -405,13 +461,31 @@ export default function Repositories() {
         if (keyfile) {
           importData.keyfile_content = await keyfile.text()
         }
-        await BorgApiClient.importRepository(importData)
+        const response = await BorgApiClient.importRepository(importData)
         toast.success(
           keyfile ? t('repositories.toasts.importedWithKeyfile') : t('repositories.toasts.imported')
         )
+        const repositoryId = getCreatedRepositoryId(response)
+        if (repositoryId) {
+          queryClient.invalidateQueries({ queryKey: ['repositories'] })
+          queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
+          appState.refetch()
+          closeWizard()
+          navigate('/backup-plans', { state: { createPlanForRepositoryId: repositoryId } })
+          return
+        }
       } else {
-        await BorgApiClient.createRepository(data)
+        const response = await BorgApiClient.createRepository(data)
         toast.success(t('repositories.toasts.created'))
+        const repositoryId = getCreatedRepositoryId(response)
+        if (repositoryId) {
+          queryClient.invalidateQueries({ queryKey: ['repositories'] })
+          queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
+          appState.refetch()
+          closeWizard()
+          navigate('/backup-plans', { state: { createPlanForRepositoryId: repositoryId } })
+          return
+        }
       }
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       closeWizard()
@@ -430,11 +504,6 @@ export default function Repositories() {
     setShowWizard(true)
   }
 
-  // Utility functions
-  const getCompressionLabel = (compression: string) => {
-    return compression || 'lz4'
-  }
-
   // Save preferences to localStorage
   React.useEffect(() => {
     localStorage.setItem('repos_sort', sortBy)
@@ -444,117 +513,42 @@ export default function Repositories() {
     localStorage.setItem('repos_group', groupBy)
   }, [groupBy])
 
+  const repositories: Repository[] = repositoriesData?.data?.repositories || EMPTY_REPOSITORIES
+  const repositoriesLoading =
+    isLoading || (selectedBackupPlanId !== null && loadingSelectedBackupPlan)
+
   // Filter, sort, and group repositories
-  const processedRepositories = React.useMemo(() => {
-    let filtered = repositoriesData?.data?.repositories || []
+  const processedRepositories = React.useMemo(
+    () =>
+      processRepositories({
+        repositories,
+        searchQuery,
+        sortBy,
+        groupBy,
+        backupPlanRepositoryIds: selectedBackupPlanRepositoryIds,
+        t,
+      }),
+    [repositories, searchQuery, sortBy, groupBy, selectedBackupPlanRepositoryIds, t]
+  )
 
-    // Search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter((repo: Repository) => {
-        return (
-          repo.name?.toLowerCase().includes(query) ||
-          repo.path?.toLowerCase().includes(query) ||
-          repo.repository_type?.toLowerCase().includes(query)
-        )
-      })
-    }
-
-    // Sort
-    const sorted = [...filtered].sort((a: Repository, b: Repository) => {
-      switch (sortBy) {
-        case 'name-asc':
-          return (a.name || '').localeCompare(b.name || '')
-        case 'name-desc':
-          return (b.name || '').localeCompare(a.name || '')
-        case 'last-backup-recent':
-          if (!a.last_backup && !b.last_backup) return 0
-          if (!a.last_backup) return 1
-          if (!b.last_backup) return -1
-          return new Date(b.last_backup).getTime() - new Date(a.last_backup).getTime()
-        case 'last-backup-oldest':
-          if (!a.last_backup && !b.last_backup) return 0
-          if (!a.last_backup) return 1
-          if (!b.last_backup) return -1
-          return new Date(a.last_backup).getTime() - new Date(b.last_backup).getTime()
-        case 'created-newest':
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        case 'created-oldest':
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        default:
-          return 0
+  const handleBackupPlanFilterChange = React.useCallback(
+    (planId: number | null) => {
+      const nextParams = new URLSearchParams(searchParams)
+      if (planId === null) {
+        nextParams.delete('backupPlanId')
+      } else {
+        nextParams.set('backupPlanId', String(planId))
       }
-    })
-
-    // Group
-    if (groupBy === 'none') {
-      return { groups: [{ name: null, repositories: sorted }] }
-    }
-
-    const groups: { name: string; repositories: Repository[] }[] = []
-
-    if (groupBy === 'location') {
-      // Group by hostname (for SSH) or "Local"
-      const locationMap = new Map<string, Repository[]>()
-
-      sorted.forEach((repo: Repository) => {
-        let locationKey = t('repositories.groups.localMachine')
-
-        if (repo.path?.startsWith('ssh://')) {
-          // Extract hostname from SSH URL: ssh://user@hostname:port/path
-          const match = repo.path.match(/ssh:\/\/[^@]+@([^:/]+)/)
-          if (match) {
-            locationKey = match[1] // hostname
-          } else {
-            locationKey = t('repositories.groups.remoteSsh')
-          }
-        }
-
-        if (!locationMap.has(locationKey)) {
-          locationMap.set(locationKey, [])
-        }
-        locationMap.get(locationKey)!.push(repo)
-      })
-
-      // Sort location keys: Local Machine first, then alphabetically
-      const localMachineKey = t('repositories.groups.localMachine')
-      const sortedKeys = Array.from(locationMap.keys()).sort((a, b) => {
-        if (a === localMachineKey) return -1
-        if (b === localMachineKey) return 1
-        return a.localeCompare(b)
-      })
-
-      sortedKeys.forEach((key) => {
-        const repos = locationMap.get(key)!
-        groups.push({ name: key, repositories: repos })
-      })
-    } else if (groupBy === 'type') {
-      const local = sorted.filter((r: Repository) => !r.path?.startsWith('ssh://'))
-      const ssh = sorted.filter((r: Repository) => r.path?.startsWith('ssh://'))
-
-      if (local.length > 0)
-        groups.push({ name: t('repositories.groups.local'), repositories: local })
-      if (ssh.length > 0) groups.push({ name: t('repositories.groups.remote'), repositories: ssh })
-    } else if (groupBy === 'mode') {
-      const full = sorted.filter((r: Repository) => r.mode === 'full' || !r.mode)
-      const observe = sorted.filter((r: Repository) => r.mode === 'observe')
-
-      if (full.length > 0) groups.push({ name: t('repositories.groups.full'), repositories: full })
-      if (observe.length > 0)
-        groups.push({ name: t('repositories.groups.observeOnly'), repositories: observe })
-    }
-
-    return { groups: groups.length > 0 ? groups : [{ name: null, repositories: sorted }] }
-  }, [repositoriesData, searchQuery, sortBy, groupBy, t])
+      setSearchParams(nextParams, { replace: true })
+    },
+    [searchParams, setSearchParams]
+  )
 
   React.useEffect(() => {
     const trimmedQuery = deferredSearchQuery.trim()
     if (!trimmedQuery) return
 
-    const resultCount = processedRepositories.groups.reduce(
-      (total, group) => total + group.repositories.length,
-      0
-    )
+    const resultCount = getRepositoryResultCount(processedRepositories)
 
     trackRepository(EventAction.SEARCH, undefined, {
       section: 'repositories',
@@ -563,302 +557,73 @@ export default function Repositories() {
       sort_by: sortBy,
       group_by: groupBy,
     })
-  }, [
-    deferredSearchQuery,
-    groupBy,
-    processedRepositories.groups,
-    sortBy,
-    trackRepository,
-    EventAction,
-  ])
-
-  const repositories = repositoriesData?.data?.repositories || []
+  }, [deferredSearchQuery, groupBy, processedRepositories, sortBy, trackRepository, EventAction])
 
   return (
     <Box>
-      {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            justifyContent: 'space-between',
-            alignItems: { xs: 'stretch', md: 'flex-start' },
-            gap: 2,
-            mb: 2,
-          }}
-        >
-          <Box sx={{ flex: 1, mr: { md: 2 } }}>
-            <Typography variant="h4" fontWeight={600} gutterBottom>
-              {t('repositories.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              {t('repositories.subtitle')}
-            </Typography>
-          </Box>
-          {canManageRepositoriesGlobally && (
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={() => openWizard('create')}
-                sx={{
-                  width: { xs: '100%', md: 'auto' },
-                  boxShadow: '0 2px 8px rgba(37,99,235,0.3)',
-                }}
-              >
-                {t('repositories.createRepository')}
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<FileUpload />}
-                onClick={() => openWizard('import')}
-                sx={{ width: { xs: '100%', md: 'auto' } }}
-              >
-                {t('repositories.importExisting')}
-              </Button>
-            </Stack>
-          )}
-        </Box>
-      </Box>
+      <RepositoriesHeader
+        canManageRepositoriesGlobally={canManageRepositoriesGlobally}
+        onOpenWizard={openWizard}
+      />
 
-      {/* Filter, Sort, and Search Bar */}
-      {(isLoading || repositories.length > 0) && (
-        <Box sx={{ mb: 3, display: 'flex', flexWrap: 'wrap', gap: 1.5, alignItems: 'center' }}>
-          {/* Search */}
-          <Box
-            sx={{
-              flex: '1 1 100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              px: 1.5,
-              height: 40,
-              borderRadius: 1.5,
-              border: '1px solid',
-              borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
-              bgcolor: isDark ? alpha('#fff', 0.04) : alpha('#000', 0.02),
-              '&:focus-within': {
-                borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
-              },
-            }}
-          >
-            <Search sx={{ fontSize: 16, color: 'text.disabled', flexShrink: 0 }} />
-            <InputBase
-              placeholder={t('repositories.search')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{ flex: 1, fontSize: '0.875rem', minWidth: 0 }}
-            />
-          </Box>
+      <RepositoriesToolbar
+        isVisible={repositoriesLoading || repositories.length > 0}
+        searchQuery={searchQuery}
+        sortBy={sortBy}
+        groupBy={groupBy}
+        processedRepositories={processedRepositories}
+        backupPlans={backupPlans.map((plan) => ({ id: plan.id, name: plan.name }))}
+        backupPlanFilterLoading={loadingBackupPlanFilter}
+        selectedBackupPlanId={selectedBackupPlanId}
+        onSearchChange={setSearchQuery}
+        onSortChange={setSortBy}
+        onGroupChange={setGroupBy}
+        onBackupPlanFilterChange={handleBackupPlanFilterChange}
+        onFilterTracked={(metadata) => {
+          trackRepository(EventAction.FILTER, undefined, {
+            section: 'repositories',
+            ...metadata,
+          })
+        }}
+      />
 
-          {/* Sort By */}
-          <Select
-            size="small"
-            value={sortBy}
-            onChange={(e) => {
-              const nextSort = e.target.value
-              setSortBy(nextSort)
-              const resultCount = processedRepositories.groups.reduce(
-                (total, group) => total + group.repositories.length,
-                0
-              )
-              trackRepository(EventAction.FILTER, undefined, {
-                section: 'repositories',
-                filter_kind: 'sort',
-                sort_by: nextSort,
-                group_by: groupBy,
-                query_length: searchQuery.trim().length,
-                result_count: resultCount,
-              })
-            }}
-            sx={{
-              flex: 1,
-              minWidth: 160,
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              borderRadius: 1.5,
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
-              },
-              '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
-              },
-            }}
-          >
-            <MenuItem value="name-asc">{t('repositories.sort.nameAZ')}</MenuItem>
-            <MenuItem value="name-desc">{t('repositories.sort.nameZA')}</MenuItem>
-            <MenuItem value="last-backup-recent">
-              {t('repositories.sort.lastBackupRecent')}
-            </MenuItem>
-            <MenuItem value="last-backup-oldest">
-              {t('repositories.sort.lastBackupOldest')}
-            </MenuItem>
-            <MenuItem value="created-newest">{t('repositories.sort.createdNewest')}</MenuItem>
-            <MenuItem value="created-oldest">{t('repositories.sort.createdOldest')}</MenuItem>
-          </Select>
+      <RepositoryGroups
+        isLoading={repositoriesLoading}
+        repositories={repositories}
+        processedRepositories={processedRepositories}
+        repositoriesWithJobs={repositoriesWithJobs}
+        searchQuery={searchQuery}
+        canManageRepositoriesGlobally={canManageRepositoriesGlobally}
+        canDo={permissions.canDo}
+        onSearchChange={setSearchQuery}
+        onOpenWizard={openWizard}
+        onViewInfo={setViewingInfoRepository}
+        onCheck={handleCheckRepository}
+        onCompact={handleCompactRepository}
+        onPrune={handlePruneRepository}
+        onEdit={openEditModal}
+        onDelete={handleDeleteRepository}
+        onBackupNow={handleBackupNow}
+        onViewArchives={handleViewArchives}
+        onCreateBackupPlan={handleCreateBackupPlan}
+        getCompressionLabel={getCompressionLabel}
+        onJobCompleted={handleJobCompleted}
+      />
 
-          {/* Group By */}
-          <Select
-            size="small"
-            value={groupBy}
-            onChange={(e) => {
-              const nextGroup = e.target.value
-              setGroupBy(nextGroup)
-              const resultCount = processedRepositories.groups.reduce(
-                (total, group) => total + group.repositories.length,
-                0
-              )
-              trackRepository(EventAction.FILTER, undefined, {
-                section: 'repositories',
-                filter_kind: 'group',
-                sort_by: sortBy,
-                group_by: nextGroup,
-                query_length: searchQuery.trim().length,
-                result_count: resultCount,
-              })
-            }}
-            sx={{
-              flex: 1,
-              minWidth: 120,
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              borderRadius: 1.5,
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
-              },
-              '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
-              },
-            }}
-          >
-            <MenuItem value="none">{t('repositories.group.none')}</MenuItem>
-            <MenuItem value="location">{t('repositories.group.hostname')}</MenuItem>
-            <MenuItem value="type">{t('repositories.group.type')}</MenuItem>
-            <MenuItem value="mode">{t('repositories.group.mode')}</MenuItem>
-          </Select>
-        </Box>
-      )}
-
-      {/* Repositories Grid */}
-      {isLoading ? (
-        <Stack spacing={2}>
-          {[0, 1, 2].map((i) => (
-            <RepositoryCardSkeleton key={i} index={i} />
-          ))}
-        </Stack>
-      ) : repositories.length === 0 ? (
-        <Card>
-          <CardContent sx={{ textAlign: 'center', py: 8 }}>
-            <Storage sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-            <Typography variant="h6" gutterBottom>
-              {t('repositories.empty.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              {t('repositories.empty.subtitle')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {t('repositories.empty.hint')}
-            </Typography>
-            {canManageRepositoriesGlobally && (
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="center">
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  onClick={() => openWizard('create')}
-                  sx={{ width: { xs: '100%', sm: 'auto' } }}
-                >
-                  {t('repositories.createRepository')}
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<FileUpload />}
-                  onClick={() => openWizard('import')}
-                  sx={{ width: { xs: '100%', sm: 'auto' } }}
-                >
-                  {t('repositories.importExisting')}
-                </Button>
-              </Stack>
-            )}
-          </CardContent>
-        </Card>
-      ) : processedRepositories.groups.length === 0 ||
-        processedRepositories.groups.every((g) => g.repositories.length === 0) ? (
-        <Card>
-          <CardContent sx={{ textAlign: 'center', py: 8 }}>
-            <Storage sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-            <Typography variant="h6" gutterBottom>
-              {t('repositories.noMatch.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {searchQuery
-                ? t('repositories.noMatch.message', { search: searchQuery })
-                : t('repositories.noMatch.fallback')}
-            </Typography>
-            {searchQuery && (
-              <Button variant="outlined" onClick={() => setSearchQuery('')}>
-                {t('repositories.noMatch.clearSearch')}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <Stack spacing={3}>
-          {processedRepositories.groups.map((group, groupIndex) => (
-            <Box key={groupIndex}>
-              {/* Group Header */}
-              {group.name && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontSize: '1rem',
-                      fontWeight: 600,
-                      color: 'primary.main',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                    }}
-                  >
-                    <FilterList fontSize="small" />
-                    {group.name}
-                    <Typography
-                      component="span"
-                      sx={{ ml: 0.5, fontSize: '0.875rem', color: 'text.secondary' }}
-                    >
-                      ({group.repositories.length})
-                    </Typography>
-                  </Typography>
-                  <Divider sx={{ mt: 1 }} />
-                </Box>
-              )}
-
-              {/* Repository Cards */}
-              <Stack spacing={2} sx={{ minWidth: 0 }}>
-                {group.repositories.map((repository: Repository) => (
-                  <RepositoryCard
-                    key={repository.id}
-                    repository={repository}
-                    isInJobsSet={repositoriesWithJobs.has(repository.id)}
-                    onViewInfo={() => setViewingInfoRepository(repository)}
-                    onCheck={() => handleCheckRepository(repository)}
-                    onCompact={() => handleCompactRepository(repository)}
-                    onPrune={() => handlePruneRepository(repository)}
-                    onEdit={() => openEditModal(repository)}
-                    onDelete={() => handleDeleteRepository(repository)}
-                    onBackupNow={() => handleBackupNow(repository)}
-                    onViewArchives={() => handleViewArchives(repository)}
-                    getCompressionLabel={getCompressionLabel}
-                    canManageRepository={canManageRepositoriesGlobally}
-                    canDo={(action) => permissions.canDo(repository.id, action)}
-                    onJobCompleted={handleJobCompleted}
-                  />
-                ))}
-              </Stack>
-            </Box>
-          ))}
-        </Stack>
-      )}
+      <CreateBackupPlanDialog
+        repository={planSourceRepository}
+        backupPlanName={backupPlanName}
+        copyExistingSchedule={copyExistingSchedule}
+        disableExistingSchedule={disableExistingSchedule}
+        moveSourceSettings={moveSourceSettings}
+        isPending={createBackupPlanMutation.isPending}
+        onClose={() => setPlanSourceRepository(null)}
+        onPlanNameChange={setBackupPlanName}
+        onCopyExistingScheduleChange={setCopyExistingSchedule}
+        onDisableExistingScheduleChange={setDisableExistingSchedule}
+        onMoveSourceSettingsChange={setMoveSourceSettings}
+        onConfirm={handleConfirmCreateBackupPlan}
+      />
 
       {/* Warning Dialogs */}
       <CheckWarningDialog

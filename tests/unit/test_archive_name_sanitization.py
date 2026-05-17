@@ -72,6 +72,16 @@ class TestBuildArchiveName:
         )
         assert result == "my-job-repo-2025-01-01T12:00:00"
 
+    def test_template_with_plan_name_alias(self):
+        """Backup plan templates can use {plan_name} as a job-name alias."""
+        result = build_archive_name(
+            job_name="nightly plan",
+            repo_name="repo",
+            template="{plan_name}-{repo_name}-{now}",
+            timestamp="2025-01-01T12:00:00",
+        )
+        assert result == "nightly-plan-repo-2025-01-01T12:00:00"
+
     def test_template_without_repo_placeholder(self):
         """Template without {repo_name} placeholder — no substitution attempted"""
         result = build_archive_name(
@@ -134,3 +144,50 @@ class TestBuildArchiveName:
             timestamp="2025-01-01T12:00:00",
         )
         assert result == "my-backup-backup"
+
+    def test_stable_series_default_no_template_with_repo(self):
+        """Stable series names omit the timestamp while keeping job/repo context."""
+        result = build_archive_name(
+            job_name="my job",
+            repo_name="my/repo",
+            template=None,
+            timestamp="2025-01-01T12:00:00",
+            stable_series=True,
+        )
+        assert result == "my-job-my-repo"
+
+    def test_stable_series_template_removes_time_placeholders(self):
+        """Stable Borg 2 series names strip time placeholders from templates."""
+        result = build_archive_name(
+            job_name="nightly plan",
+            repo_name="primary repo",
+            template="{plan_name}-{repo_name}-{now}",
+            timestamp="2025-01-01T12:00:00",
+            date="2025-01-01",
+            time_str="12:00:00",
+            unix_timestamp="1735732800",
+            stable_series=True,
+        )
+        assert result == "nightly-plan-primary-repo"
+
+    def test_stable_series_template_removes_formatted_borg_time_placeholders(self):
+        """Stable Borg 2 series names strip Borg runtime time placeholders too."""
+        result = build_archive_name(
+            job_name="root backup",
+            repo_name=None,
+            template="{job_name}-{now:%Y-%m-%d}",
+            timestamp="2025-01-01T12:00:00",
+            stable_series=True,
+        )
+        assert result == "root-backup"
+
+    def test_stable_series_template_falls_back_when_only_time_placeholders(self):
+        """A time-only template falls back to the stable default name."""
+        result = build_archive_name(
+            job_name="nightly plan",
+            repo_name="primary repo",
+            template="{now}",
+            timestamp="2025-01-01T12:00:00",
+            stable_series=True,
+        )
+        assert result == "nightly-plan-primary-repo"

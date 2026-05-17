@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/DashboardV3'
 import Backup from './pages/Backup'
+import BackupPlans from './pages/BackupPlans'
 import Archives from './pages/Archives'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
@@ -150,6 +151,14 @@ function App() {
           <Route path="/login" element={<Navigate to="/dashboard" replace />} />
         ) : null}
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route
+          path="/backup-plans"
+          element={
+            <ProtectedRoute requiredTab="backupPlans">
+              <BackupPlans />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/backup"
           element={

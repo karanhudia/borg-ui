@@ -1,6 +1,6 @@
 {
   "name": "borg-web-ui-frontend",
-  "version": "2.0.9",
+  "version": "2.1.0",
   "type": "module",
   "description": "React frontend for Borg Web UI",
   "license": "AGPL-3.0",
@@ -33,6 +33,8 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@storybook/addon-docs": "^10.4.0",
+    "@storybook/react-vite": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -52,8 +54,10 @@
     "husky": "^9.1.7",
     "jsdom": "^29.0.2",
     "lint-staged": "^16.4.0",
+    "playwright": "^1.60.0",
     "postcss": "^8.5.14",
     "prettier": "^3.8.2",
+    "storybook": "^10.4.0",
     "tailwindcss": "^3.4.18",
     "typescript": "^5.9.3",
     "vite": "^7.3.2",
@@ -61,8 +65,11 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build -o storybook-static",
+    "snapshots": "npm run build-storybook && node scripts/generate-storybook-snapshots.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",

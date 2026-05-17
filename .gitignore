@@ -2,6 +2,8 @@
 /frontend/node_modules
 /frontend/build
 /frontend/dist
+/frontend/.playwright-host-libs
+/frontend/storybook-static
 /updates-worker/node_modules
 /updates-worker/.wrangler
 

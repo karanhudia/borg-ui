@@ -7,7 +7,7 @@ nav_order: 99
 
 The production announcement feed is published from:
 
-`https://docs.borgui.com/announcements.json`
+`https://updates.borgui.com/announcements.json`
 
 This file is sourced from `docs/announcements.json`.
 
@@ -73,9 +73,14 @@ Resolution order is:
 
 Local frontend development does not use the published announcement feed automatically.
 
-The app defaults to the published GitHub Pages manifest unless `VITE_ANNOUNCEMENTS_URL` is explicitly set.
+Production builds try the published updates endpoint first, then fall back to the bundled
+`frontend/src/data/announcements.json` manifest. Local development uses that bundled manifest unless
+`VITE_ANNOUNCEMENTS_URL` is explicitly set.
 
-To turn local announcements on for testing:
+When changing announcements, keep `frontend/src/data/announcements.json` in sync with
+`docs/announcements.json` so local development and the production fallback match the feed.
 
-1. Start the frontend with `VITE_ANNOUNCEMENTS_URL=/announcements.json`.
+To test a custom manifest URL:
+
+1. Start the frontend with `VITE_ANNOUNCEMENTS_URL=<manifest-url>`.
 2. Clear any `announcement:*` localStorage keys if the modal was previously acknowledged or snoozed.

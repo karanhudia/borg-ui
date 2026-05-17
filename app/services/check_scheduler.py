@@ -136,6 +136,7 @@ async def run_due_scheduled_checks(db: Session, now: Optional[datetime] = None) 
         .filter(
             Repository.check_cron_expression.isnot(None),
             Repository.check_cron_expression != "",
+            Repository.check_schedule_enabled.is_(True),
             or_(
                 Repository.next_scheduled_check.is_(None),
                 Repository.next_scheduled_check <= now,

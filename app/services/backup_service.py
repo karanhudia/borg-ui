@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import os
 import json
@@ -1261,6 +1263,12 @@ class BackupService:
         db: Session = None,
         archive_name: str = None,
         skip_hooks: bool = False,
+        source_directories: list[str] = None,
+        source_ssh_connection_id: int = None,
+        exclude_patterns_override: list[str] = None,
+        compression_override: str = None,
+        custom_flags_override: str = None,
+        upload_ratelimit_kib: int = None,
     ):
         """Execute backup using borg directly for better control
 
@@ -1271,6 +1279,12 @@ class BackupService:
             archive_name: Optional custom archive name (if None, will use default manual-backup naming)
             skip_hooks: If True, skip pre/post-backup hook execution (used by multi-repo schedules that
                         manage hook execution explicitly to avoid running scripts twice)
+            source_directories: Optional source path override for backup plans.
+            source_ssh_connection_id: Optional SSH source connection for source_directories.
+            exclude_patterns_override: Optional exclude pattern override for backup plans.
+            compression_override: Optional compression override for backup plans.
+            custom_flags_override: Optional custom flags override for backup plans.
+            upload_ratelimit_kib: Optional Borg upload rate limit in KiB/s.
         """
 
         # Use provided session or create a new one
@@ -1312,15 +1326,38 @@ class BackupService:
                 if not repo_record:
                     raise Exception(f"Repository not found: {repository}")
 
+                remote_source_paths = (
+                    source_directories
+                    if source_directories is not None
+                    else json.loads(repo_record.source_directories or "[]")
+                )
+                remote_exclude_patterns = (
+                    exclude_patterns_override
+                    if exclude_patterns_override is not None
+                    else json.loads(repo_record.exclude_patterns or "[]")
+                )
+                remote_compression = compression_override or repo_record.compression
+                remote_custom_flags = (
+                    custom_flags_override
+                    if custom_flags_override is not None
+                    else repo_record.custom_flags
+                )
+                remote_source_connection_id = (
+                    source_ssh_connection_id
+                    if source_directories is not None
+                    else job.source_ssh_connection_id
+                )
+
                 # Execute remote backup
                 await remote_backup_service.execute_remote_backup(
                     job_id=job_id,
-                    source_ssh_connection_id=job.source_ssh_connection_id,
+                    source_ssh_connection_id=remote_source_connection_id,
                     repository_id=repo_record.id,
-                    source_paths=json.loads(repo_record.source_directories or "[]"),
-                    exclude_patterns=json.loads(repo_record.exclude_patterns or "[]"),
-                    compression=repo_record.compression,
-                    custom_flags=repo_record.custom_flags,
+                    source_paths=remote_source_paths,
+                    exclude_patterns=remote_exclude_patterns,
+                    compression=remote_compression,
+                    custom_flags=remote_custom_flags,
+                    upload_ratelimit_kib=upload_ratelimit_kib,
                 )
                 return
 
@@ -1344,9 +1381,29 @@ class BackupService:
             # Format: borg create --progress --stats --list REPOSITORY::ARCHIVE PATH [PATH ...]
             # Use local time for archive names so they're meaningful to users
             if not archive_name:
-                archive_name = (
-                    f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
-                )
+                repo_for_archive_name = None
+                try:
+                    repo_for_archive_name = (
+                        db.query(Repository)
+                        .filter(Repository.path == repository)
+                        .first()
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Could not look up repository for archive naming",
+                        repository=repository,
+                        error=str(e),
+                    )
+
+                if (
+                    repo_for_archive_name
+                    and getattr(repo_for_archive_name, "borg_version", 1) == 2
+                ):
+                    archive_name = "manual-backup"
+                else:
+                    archive_name = (
+                        f"manual-backup-{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}"
+                    )
 
             # Store archive name on the job for later reference
             try:
@@ -1367,11 +1424,13 @@ class BackupService:
             # Modern: 0 = success, 1-99 reserved, 3-99 = errors, 100-127 = warnings
             env["BORG_EXIT_CODES"] = "modern"
 
-            # Look up repository record to get passphrase, source directories, exclude patterns, and compression
+            # Look up repository record to get passphrase and repository-specific settings.
+            # Backup plans may override source/config while still targeting the repository.
             source_paths = None  # No default - must be configured
             exclude_patterns = []  # Default no exclusions
             compression = "lz4"  # Default compression
             router = None
+            using_source_override = source_directories is not None
             try:
                 repo_record = (
                     db.query(Repository).filter(Repository.path == repository).first()
@@ -1385,8 +1444,15 @@ class BackupService:
                             error_msg, repository=repository, mode=repo_record.mode
                         )
                         raise ValueError(error_msg)
-                    # Get compression setting from repository
-                    if repo_record.compression:
+                    # Get compression setting from repository or caller override.
+                    if compression_override:
+                        compression = compression_override
+                        logger.info(
+                            "Using compression override",
+                            repository=repository,
+                            compression=compression,
+                        )
+                    elif repo_record.compression:
                         compression = repo_record.compression
                         logger.info(
                             "Using compression from repository",
@@ -1394,59 +1460,11 @@ class BackupService:
                             compression=compression,
                         )
 
-                    # Parse source directories from JSON if available
-                    if repo_record.source_directories:
+                    if using_source_override:
+                        source_dirs = source_directories or []
+                    elif repo_record.source_directories:
                         try:
                             source_dirs = json.loads(repo_record.source_directories)
-                            if (
-                                source_dirs
-                                and isinstance(source_dirs, list)
-                                and len(source_dirs) > 0
-                            ):
-                                # Check if this is a remote source (pull-based backup)
-                                if repo_record.source_ssh_connection_id:
-                                    # Construct SSH URLs for remote sources
-                                    from app.database.models import SSHConnection
-
-                                    connection = (
-                                        db.query(SSHConnection)
-                                        .filter(
-                                            SSHConnection.id
-                                            == repo_record.source_ssh_connection_id
-                                        )
-                                        .first()
-                                    )
-
-                                    if connection:
-                                        # Convert source paths from the SFTP/browsing view into
-                                        # executable SSH paths for SSHFS mounts.
-                                        source_paths = [
-                                            f"ssh://{connection.username}@{connection.host}:{connection.port}{resolve_sshfs_source_path(path, connection.default_path)}"
-                                            for path in source_dirs
-                                        ]
-                                        logger.info(
-                                            "Using remote source directories (pull-based backup)",
-                                            repository=repository,
-                                            connection_id=connection.id,
-                                            connection_host=connection.host,
-                                            source_directories=source_paths,
-                                        )
-                                    else:
-                                        error_msg = f"SSH connection {repo_record.source_ssh_connection_id} not found for remote source"
-                                        logger.error(error_msg, repository=repository)
-                                        raise ValueError(error_msg)
-                                else:
-                                    # Local source paths
-                                    source_paths = source_dirs
-                                    logger.info(
-                                        "Using local source directories",
-                                        repository=repository,
-                                        source_directories=source_paths,
-                                    )
-                            else:
-                                error_msg = "No source directories configured for this repository. Please add source directories in repository settings."
-                                logger.error(error_msg, repository=repository)
-                                raise ValueError(error_msg)
                         except json.JSONDecodeError as e:
                             error_msg = (
                                 f"Could not parse source_directories JSON: {str(e)}"
@@ -1458,8 +1476,65 @@ class BackupService:
                         logger.error(error_msg, repository=repository)
                         raise ValueError(error_msg)
 
-                    # Parse exclude patterns from JSON if available
-                    if repo_record.exclude_patterns:
+                    if not source_dirs or not isinstance(source_dirs, list):
+                        error_msg = "No source directories configured for this backup."
+                        logger.error(error_msg, repository=repository)
+                        raise ValueError(error_msg)
+
+                    effective_source_ssh_connection_id = (
+                        source_ssh_connection_id
+                        if using_source_override
+                        else repo_record.source_ssh_connection_id
+                    )
+
+                    # Check if this is a remote source (pull-based backup)
+                    if effective_source_ssh_connection_id:
+                        from app.database.models import SSHConnection
+
+                        connection = (
+                            db.query(SSHConnection)
+                            .filter(
+                                SSHConnection.id == effective_source_ssh_connection_id
+                            )
+                            .first()
+                        )
+
+                        if connection:
+                            # Convert source paths from the SFTP/browsing view into
+                            # executable SSH paths for SSHFS mounts.
+                            source_paths = [
+                                f"ssh://{connection.username}@{connection.host}:{connection.port}{resolve_sshfs_source_path(path, connection.default_path)}"
+                                for path in source_dirs
+                            ]
+                            logger.info(
+                                "Using remote source directories (pull-based backup)",
+                                repository=repository,
+                                connection_id=connection.id,
+                                connection_host=connection.host,
+                                source_directories=source_paths,
+                            )
+                        else:
+                            error_msg = f"SSH connection {effective_source_ssh_connection_id} not found for remote source"
+                            logger.error(error_msg, repository=repository)
+                            raise ValueError(error_msg)
+                    else:
+                        # Local source paths
+                        source_paths = source_dirs
+                        logger.info(
+                            "Using local source directories",
+                            repository=repository,
+                            source_directories=source_paths,
+                        )
+
+                    # Parse exclude patterns from JSON if available, or use caller override.
+                    if exclude_patterns_override is not None:
+                        exclude_patterns = exclude_patterns_override
+                        logger.info(
+                            "Using exclude pattern override",
+                            repository=repository,
+                            exclude_patterns=exclude_patterns,
+                        )
+                    elif repo_record.exclude_patterns:
                         try:
                             patterns = json.loads(repo_record.exclude_patterns)
                             if (
@@ -1658,17 +1733,13 @@ class BackupService:
             logger.info(
                 "Preparing source paths (mounting SSH URLs if needed)",
                 source_paths=source_paths,
-                source_connection_id=repo_record.source_ssh_connection_id
-                if repo_record
-                else None,
+                source_connection_id=effective_source_ssh_connection_id,
                 job_id=job_id,
             )
             processed_source_paths, ssh_mount_info = await self._prepare_source_paths(
                 source_paths,
                 job_id,
-                source_connection_id=repo_record.source_ssh_connection_id
-                if repo_record
-                else None,
+                source_connection_id=effective_source_ssh_connection_id,
             )
             if not processed_source_paths:
                 logger.error(
@@ -1694,8 +1765,15 @@ class BackupService:
             )
 
             custom_flag_list = []
-            if repo_record and repo_record.custom_flags:
-                custom_flags = repo_record.custom_flags.strip()
+            custom_flags_text = (
+                custom_flags_override
+                if custom_flags_override is not None
+                else repo_record.custom_flags
+                if repo_record
+                else None
+            )
+            if custom_flags_text:
+                custom_flags = custom_flags_text.strip()
                 if custom_flags:
                     import shlex
 
@@ -1720,6 +1798,7 @@ class BackupService:
                 compression=compression,
                 exclude_patterns=exclude_patterns,
                 custom_flags=custom_flag_list,
+                upload_ratelimit_kib=upload_ratelimit_kib,
             )
 
             backup_paths, backup_cwd = self._resolve_backup_command_paths(
