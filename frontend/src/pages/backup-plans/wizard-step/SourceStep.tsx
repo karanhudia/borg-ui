@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Box, Button, Chip, Paper, Stack, TextField, Typography } from '@mui/material'
-import { Database, FolderOpen } from 'lucide-react'
+import { Database, FolderOpen, HardDrive, Server } from 'lucide-react'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
 import { SourceSelectionDialog } from './SourceSelectionDialog'
@@ -103,28 +103,84 @@ export function SourceStep({
                   : t('backupPlans.sourceChooser.summaryEmpty')}
               </Typography>
               {hasSources && (
-                <Stack direction="row" spacing={0.75} sx={{ mt: 0.75 }} useFlexGap flexWrap="wrap">
-                  <Chip size="small" label={sourceKindLabel} />
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={t('backupPlans.sourceChooser.pathCount', { count: sourcePaths.length })}
-                  />
-                  {sourceLocations.map((location) => (
+                <Stack spacing={1} sx={{ mt: 1 }}>
+                  <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                    <Chip size="small" label={sourceKindLabel} />
                     <Chip
-                      key={sourceLocationKey(location)}
                       size="small"
                       variant="outlined"
-                      label={sourceLocationLabel(location, sshConnections, t)}
+                      label={t('backupPlans.sourceChooser.pathCount', {
+                        count: sourcePaths.length,
+                      })}
                     />
-                  ))}
-                </Stack>
-              )}
-              {hasSources && (
-                <Stack direction="row" spacing={0.75} sx={{ mt: 1 }} useFlexGap flexWrap="wrap">
-                  {sourcePaths.map((path) => (
-                    <Chip key={path} size="small" label={path} sx={{ maxWidth: '100%' }} />
-                  ))}
+                  </Stack>
+                  <Stack spacing={1}>
+                    {sourceLocations.map((location) => (
+                      <Paper
+                        key={sourceLocationKey(location)}
+                        variant="outlined"
+                        sx={{
+                          p: 1,
+                          borderRadius: 1,
+                          bgcolor: 'background.default',
+                        }}
+                      >
+                        <Stack spacing={0.75}>
+                          <Stack direction="row" spacing={1} alignItems="flex-start">
+                            <Box
+                              sx={{
+                                alignItems: 'center',
+                                bgcolor: 'action.hover',
+                                borderRadius: 1,
+                                color: 'text.secondary',
+                                display: 'flex',
+                                height: 28,
+                                justifyContent: 'center',
+                                width: 28,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {location.source_type === 'remote' ? (
+                                <Server size={15} />
+                              ) : (
+                                <HardDrive size={15} />
+                              )}
+                            </Box>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                                <Typography variant="subtitle2" noWrap>
+                                  {sourceLocationLabel(location, sshConnections, t)}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  variant="outlined"
+                                  label={t('backupPlans.sourceChooser.pathCount', {
+                                    count: location.paths.length,
+                                  })}
+                                />
+                              </Stack>
+                              <Stack
+                                direction="row"
+                                spacing={0.75}
+                                sx={{ mt: 0.75 }}
+                                useFlexGap
+                                flexWrap="wrap"
+                              >
+                                {location.paths.map((path) => (
+                                  <Chip
+                                    key={path}
+                                    size="small"
+                                    label={path}
+                                    sx={{ maxWidth: '100%' }}
+                                  />
+                                ))}
+                              </Stack>
+                            </Box>
+                          </Stack>
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
                 </Stack>
               )}
             </Box>

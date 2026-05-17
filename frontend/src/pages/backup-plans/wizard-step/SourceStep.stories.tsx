@@ -61,12 +61,15 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.chooseSource': 'Choose source',
   'backupPlans.sourceChooser.filesTitle': 'Files and folders',
   'backupPlans.sourceChooser.localSource': 'Local source',
+  'backupPlans.sourceChooser.localSourceDescription': 'This Borg UI server',
+  'backupPlans.sourceChooser.sshSourceDescription': 'Remote machine',
   'backupPlans.wizard.review.connectionFallback': 'Connection #{{id}}',
 }
 
 const t = (key: string, options?: Record<string, unknown>) => {
   if (key === 'backupPlans.sourceChooser.pathCount') {
-    return `${options?.count ?? 0} paths`
+    const count = Number(options?.count ?? 0)
+    return `${count} ${count === 1 ? 'path' : 'paths'}`
   }
   const template = translations[key] || key
   return template.replace('{{id}}', String(options?.id ?? ''))

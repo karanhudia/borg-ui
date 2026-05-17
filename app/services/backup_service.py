@@ -1050,7 +1050,10 @@ class BackupService:
                     # Local path - use as-is
                     local_paths.append(path)
 
-            # Second pass: Mount SSH paths using shared temp root for same connection
+            # Second pass: Mount SSH paths. Reuse the first SSHFS temp root across
+            # source connections so Borg can run from one cwd and store relative
+            # remote paths instead of /tmp/sshfs_mount_* implementation paths.
+            shared_ssh_temp_root = None
             for connection_id, paths_data in ssh_paths_by_connection.items():
                 remote_paths = [parsed["path"] for _, parsed, _ in paths_data]
                 connection = paths_data[0][2]  # Get connection from first item
@@ -1073,7 +1076,10 @@ class BackupService:
                         connection_id=connection_id,
                         remote_paths=remote_paths,
                         job_id=job_id,
+                        temp_root=shared_ssh_temp_root,
                     )
+                    if shared_ssh_temp_root is None:
+                        shared_ssh_temp_root = temp_root
 
                     # Process mount results
                     for (mount_id, relative_path), (original_url, parsed, _) in zip(
@@ -1231,11 +1237,15 @@ class BackupService:
         backup_cwd = None
         backup_paths = processed_source_paths
 
-        if ssh_mount_info and len(ssh_mount_info) == len(processed_source_paths):
+        if ssh_mount_info:
+            ssh_path_count = len(ssh_mount_info)
             temp_roots = list(set(temp_root for temp_root, _ in ssh_mount_info))
 
             if len(temp_roots) == 1:
                 backup_cwd = temp_roots[0]
+                backup_paths = [
+                    relative_path for _, relative_path in ssh_mount_info
+                ] + processed_source_paths[ssh_path_count:]
                 logger.info(
                     "Using cwd for SSH mount backup (preserves original path structure)",
                     cwd=backup_cwd,
@@ -1252,19 +1262,7 @@ class BackupService:
                     os.path.join(temp_root, relative_path)
                     for temp_root, relative_path in ssh_mount_info
                 ]
-        elif ssh_mount_info:
-            ssh_path_count = len(ssh_mount_info)
-            backup_paths = [
-                os.path.join(temp_root, relative_path)
-                for temp_root, relative_path in ssh_mount_info
-            ]
-            backup_paths.extend(processed_source_paths[ssh_path_count:])
-            logger.info(
-                "Using absolute SSH mount paths for mixed source backup",
-                ssh_path_count=ssh_path_count,
-                local_path_count=len(processed_source_paths) - ssh_path_count,
-                job_id=job_id,
-            )
+                backup_paths.extend(processed_source_paths[ssh_path_count:])
 
         rewritten_paths = []
         has_canary_path = False
@@ -1272,7 +1270,7 @@ class BackupService:
             canary_archive_path = to_restore_canary_archive_source_path(
                 path, settings.data_dir
             )
-            if canary_archive_path:
+            if canary_archive_path and backup_cwd is None:
                 rewritten_paths.append(canary_archive_path)
                 has_canary_path = True
             else:

@@ -49,6 +49,87 @@ def _notification_service_mock():
     return notifications
 
 
+def test_resolve_backup_command_paths_uses_shared_cwd_for_mixed_ssh_and_local(
+    backup_service_fixture,
+):
+    backup_paths, backup_cwd = backup_service_fixture._resolve_backup_command_paths(
+        ["home/app/data", "var/lib/service", "/srv/app"],
+        [
+            ("/tmp/sshfs_mount_42_abcd", "home/app/data"),
+            ("/tmp/sshfs_mount_42_abcd", "var/lib/service"),
+        ],
+        job_id=42,
+    )
+
+    assert backup_cwd == "/tmp/sshfs_mount_42_abcd"
+    assert backup_paths == ["home/app/data", "var/lib/service", "/srv/app"]
+    assert all("/tmp/sshfs_mount_" not in path for path in backup_paths)
+
+
+@pytest.mark.asyncio
+async def test_prepare_source_paths_reuses_first_sshfs_temp_root_for_multiple_connections(
+    backup_service_fixture, mock_db_session
+):
+    source_a = SSHConnection(
+        id=11,
+        host="server-a.example",
+        username="backup-a",
+        port=22,
+    )
+    source_b = SSHConnection(
+        id=12,
+        host="server-b.example",
+        username="backup-b",
+        port=2222,
+    )
+
+    ssh_query = MagicMock()
+    ssh_query.filter.return_value.first.side_effect = [source_a, source_b]
+
+    def query_side_effect(model):
+        m = MagicMock()
+        if model == SSHConnection:
+            return ssh_query
+        return m
+
+    mock_db_session.query.side_effect = query_side_effect
+
+    with (
+        patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),
+        patch(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            new=AsyncMock(
+                side_effect=[
+                    ("/tmp/sshfs_mount_42_shared", [("mount-a", "home/app/data")]),
+                    ("/tmp/sshfs_mount_42_shared", [("mount-b", "var/lib/service")]),
+                ]
+            ),
+        ) as mount_shared,
+    ):
+        (
+            processed_paths,
+            ssh_mount_info,
+        ) = await backup_service_fixture._prepare_source_paths(
+            [
+                "ssh://backup-a@server-a.example:22/home/app/data",
+                "ssh://backup-b@server-b.example:2222/var/lib/service",
+                "/srv/app",
+            ],
+            job_id=42,
+        )
+
+    assert processed_paths == ["home/app/data", "var/lib/service", "/srv/app"]
+    assert ssh_mount_info == [
+        ("/tmp/sshfs_mount_42_shared", "home/app/data"),
+        ("/tmp/sshfs_mount_42_shared", "var/lib/service"),
+    ]
+    assert mount_shared.await_args_list[0].kwargs.get("temp_root") is None
+    assert (
+        mount_shared.await_args_list[1].kwargs["temp_root"]
+        == "/tmp/sshfs_mount_42_shared"
+    )
+
+
 @pytest.mark.asyncio
 async def test_execute_backup_command(backup_service_fixture, mock_db_session):
     """Test 'borg create' command construction"""

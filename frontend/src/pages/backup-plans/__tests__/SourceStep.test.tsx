@@ -201,7 +201,9 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.applyDatabase': 'Use database source',
   'backupPlans.sourceChooser.addSourceGroup': 'Add source group',
   'backupPlans.sourceChooser.localSource': 'Local source',
+  'backupPlans.sourceChooser.localSourceDescription': 'This Borg UI server',
   'backupPlans.sourceChooser.sshSource': 'SSH source',
+  'backupPlans.sourceChooser.sshSourceDescription': 'Remote machine',
   'backupPlans.sourceChooser.sourcePath': 'Source path',
   'backupPlans.sourceChooser.addPath': 'Add path',
   'backupPlans.sourceChooser.browseCurrentSource': 'Browse current source',
@@ -211,7 +213,12 @@ const translations: Record<string, string> = {
   'backupPlans.wizard.fileExplorer.sourceTitle': 'Select source paths',
 }
 
-const t = (key: string) => translations[key] || key
+const t = (key: string, options?: { count?: number }) => {
+  if (key === 'backupPlans.sourceChooser.pathCount' && typeof options?.count === 'number') {
+    return `${options.count} ${options.count === 1 ? 'path' : 'paths'}`
+  }
+  return translations[key] || key
+}
 
 async function clickTextButton(name: string | RegExp) {
   const labels = await screen.findAllByText(name)
@@ -360,6 +367,9 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
     await clickTextButton(/files and folders/i)
 
+    expect(await screen.findByText('This Borg UI server')).toBeInTheDocument()
+    expect(screen.getAllByText('Remote machine')).toHaveLength(2)
+
     clickExistingTextButton(/local source/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app' },
@@ -385,6 +395,7 @@ describe('SourceStep', () => {
     expect(screen.getByText('/var/lib/service')).toBeInTheDocument()
     expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
     expect(screen.getByText('backup-b@server-b.example')).toBeInTheDocument()
+    expect(screen.getAllByText('1 path')).toHaveLength(3)
   })
 
   it('browses paths for the selected SSH source without replacing other groups', async () => {

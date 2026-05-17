@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -24,13 +24,17 @@ import {
   TextField,
   Tooltip,
   Typography,
+  alpha,
 } from '@mui/material'
 import {
   ArrowLeft,
+  CheckCircle2,
   Database as DatabaseIcon,
   FolderOpen,
+  HardDrive,
   Info,
   Plus,
+  Server,
   Trash2,
   X,
 } from 'lucide-react'
@@ -170,6 +174,88 @@ function sourceLocationLabel(
     : t('backupPlans.wizard.review.connectionFallback', {
         id: location.source_ssh_connection_id,
       })
+}
+
+interface SourceOptionCardProps {
+  selected: boolean
+  icon: ReactNode
+  title: string
+  description: string
+  meta: string
+  onClick: () => void
+}
+
+function SourceOptionCard({
+  selected,
+  icon,
+  title,
+  description,
+  meta,
+  onClick,
+}: SourceOptionCardProps) {
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        borderColor: selected ? 'primary.main' : 'divider',
+        borderWidth: selected ? 2 : 1,
+        bgcolor: selected ? (theme) => alpha(theme.palette.primary.main, 0.07) : 'background.paper',
+        borderRadius: 1,
+        transition: 'border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease',
+        '&:hover': {
+          borderColor: selected ? 'primary.main' : 'text.secondary',
+          boxShadow: (theme) => `0 2px 10px ${alpha(theme.palette.common.black, 0.06)}`,
+        },
+      }}
+    >
+      <CardActionArea
+        component="button"
+        aria-pressed={selected}
+        onClick={onClick}
+        sx={{ alignItems: 'stretch', height: '100%', textAlign: 'left', width: '100%' }}
+      >
+        <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <Box
+              sx={{
+                alignItems: 'center',
+                bgcolor: selected ? 'primary.main' : 'action.hover',
+                borderRadius: 1,
+                color: selected ? 'primary.contrastText' : 'text.secondary',
+                display: 'flex',
+                height: 32,
+                justifyContent: 'center',
+                width: 32,
+                flexShrink: 0,
+              }}
+            >
+              {icon}
+            </Box>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" noWrap>
+                  {title}
+                </Typography>
+                {selected && (
+                  <CheckCircle2 size={15} aria-hidden="true" style={{ flexShrink: 0 }} />
+                )}
+              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                {description}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: 0.35 }}
+              >
+                {meta}
+              </Typography>
+            </Box>
+          </Stack>
+        </CardContent>
+      </CardActionArea>
+    </Card>
+  )
 }
 
 export function SourceSelectionDialog({
@@ -449,28 +535,36 @@ export function SourceSelectionDialog({
       >
         {t('backupPlans.sourceChooser.backToTypes')}
       </Button>
-      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-        <Button
-          variant={selectedSourceKey === 'local' ? 'contained' : 'outlined'}
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 1,
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+        }}
+      >
+        <SourceOptionCard
+          selected={selectedSourceKey === 'local'}
+          icon={<HardDrive size={18} />}
+          title={t('backupPlans.sourceChooser.localSource')}
+          description={t('backupPlans.sourceChooser.localSourceDescription')}
+          meta={t('backupPlans.sourceChooser.filesTitle')}
           onClick={() => setSelectedSourceKey('local')}
-          size="small"
-        >
-          {t('backupPlans.sourceChooser.localSource')}
-        </Button>
+        />
         {sshConnections.map((connection) => {
           const key: SourceKey = `remote:${connection.id}`
           return (
-            <Button
+            <SourceOptionCard
               key={connection.id}
-              variant={selectedSourceKey === key ? 'contained' : 'outlined'}
+              selected={selectedSourceKey === key}
+              icon={<Server size={18} />}
+              title={`${connection.username}@${connection.host}`}
+              description={t('backupPlans.sourceChooser.sshSourceDescription')}
+              meta={`Port ${connection.port}${connection.default_path ? ` • ${connection.default_path}` : ''}`}
               onClick={() => setSelectedSourceKey(key)}
-              size="small"
-            >
-              {`${connection.username}@${connection.host}`}
-            </Button>
+            />
           )
         })}
-      </Stack>
+      </Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="stretch">
         <TextField
           label={t('backupPlans.sourceChooser.sourcePath')}
@@ -516,17 +610,77 @@ export function SourceSelectionDialog({
             {draftSourceLocations.map((location) => {
               const key = locationKey(location)
               return (
-                <Paper key={key} variant="outlined" sx={{ p: 1.25, borderRadius: 1 }}>
+                <Paper
+                  key={key}
+                  variant="outlined"
+                  sx={{
+                    p: 1.25,
+                    borderRadius: 1,
+                    bgcolor: 'background.default',
+                  }}
+                >
                   <Stack spacing={1}>
                     <Stack
                       direction="row"
                       spacing={1}
-                      alignItems="center"
+                      alignItems="flex-start"
                       justifyContent="space-between"
                     >
-                      <Typography variant="subtitle2">
-                        {sourceLocationLabel(location, sshConnections, t)}
-                      </Typography>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        alignItems="flex-start"
+                        sx={{ minWidth: 0 }}
+                      >
+                        <Box
+                          sx={{
+                            alignItems: 'center',
+                            bgcolor: 'action.hover',
+                            borderRadius: 1,
+                            color: 'text.secondary',
+                            display: 'flex',
+                            height: 30,
+                            justifyContent: 'center',
+                            width: 30,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {location.source_type === 'remote' ? (
+                            <Server size={16} />
+                          ) : (
+                            <HardDrive size={16} />
+                          )}
+                        </Box>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="subtitle2" noWrap>
+                            {sourceLocationLabel(location, sshConnections, t)}
+                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            sx={{ mt: 0.5 }}
+                            useFlexGap
+                            flexWrap="wrap"
+                          >
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={
+                                location.source_type === 'remote'
+                                  ? t('backupPlans.sourceChooser.sshSource')
+                                  : t('backupPlans.sourceChooser.localSource')
+                              }
+                            />
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={t('backupPlans.sourceChooser.pathCount', {
+                                count: location.paths.length,
+                              })}
+                            />
+                          </Stack>
+                        </Box>
+                      </Stack>
                       <Tooltip title={t('backupPlans.sourceChooser.removeSourceGroup')}>
                         <IconButton
                           aria-label={t('backupPlans.sourceChooser.removeSourceGroup')}
@@ -537,7 +691,13 @@ export function SourceSelectionDialog({
                         </IconButton>
                       </Tooltip>
                     </Stack>
-                    <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                    <Stack
+                      direction="row"
+                      spacing={0.75}
+                      useFlexGap
+                      flexWrap="wrap"
+                      sx={{ pl: { sm: 4.75 } }}
+                    >
                       {location.paths.map((path) => (
                         <Chip
                           key={path}
