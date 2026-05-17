@@ -24,6 +24,7 @@ export interface ScriptParameter {
 export interface ScriptOption {
   id: number
   name: string
+  description?: string | null
   parameters?: ScriptParameter[] | null
 }
 

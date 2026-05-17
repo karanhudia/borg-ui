@@ -22,6 +22,7 @@ export interface BackupPlanWizardStepProps {
   canUseBorg2: boolean
   repositoryCreatePending: boolean
   updateState: (updates: Partial<WizardState>) => void
+  onCreateScript: (input: SourceScriptCreateInput) => Promise<{ id: number }>
   updateBasicRepositoryState: (updates: Partial<BasicRepositoryState>) => void
   handleRepositoryIdsChange: (ids: number[]) => void
   handlePruneSettingsChange: (values: PruneSettings) => void
@@ -32,4 +33,13 @@ export interface BackupPlanWizardStepProps {
   setRepositoryWizardOpen: Dispatch<SetStateAction<boolean>>
   setShowBasicRepositoryPathExplorer: Dispatch<SetStateAction<boolean>>
   t: TFunction
+}
+
+export interface SourceScriptCreateInput {
+  name: string
+  description: string
+  content: string
+  timeout: number
+  run_on: string
+  category: string
 }

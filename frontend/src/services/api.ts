@@ -233,6 +233,44 @@ export interface OidcLinkStartResponse {
 // Generic type for object data
 type ApiData = Record<string, unknown>
 
+export interface SourceDiscoveryTypeOption {
+  id: string
+  label: string
+  description: string
+  status: string
+  disabled: boolean
+}
+
+export interface SourceDiscoveryScriptDraft {
+  name: string
+  description: string
+  content: string
+  timeout: number
+}
+
+export interface SourceDiscoveryDatabase {
+  id: string
+  engine: string
+  display_name: string
+  backup_strategy: string
+  source_directories: string[]
+  client_commands: string[]
+  documentation_url: string
+  detected: boolean
+  detection_source: string | null
+  notes: string[]
+  script_drafts: {
+    pre_backup: SourceDiscoveryScriptDraft
+    post_backup: SourceDiscoveryScriptDraft
+  }
+}
+
+export interface SourceDiscoveryResponse {
+  source_types: SourceDiscoveryTypeOption[]
+  detections: SourceDiscoveryDatabase[]
+  templates: SourceDiscoveryDatabase[]
+}
+
 export const authAPI = {
   getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
   getOidcLoginUrl: (returnTo?: string) => {
@@ -729,6 +767,10 @@ export const scriptsAPI = {
 
   // Delete a script
   delete: (scriptId: number) => api.delete(`/scripts/${scriptId}`),
+}
+
+export const sourceDiscoveryAPI = {
+  databases: () => api.get<SourceDiscoveryResponse>('/source-discovery/databases'),
 }
 
 export const mountsAPI = {

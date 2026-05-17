@@ -330,6 +330,23 @@ export default function BackupPlans() {
     },
   })
 
+  const createScriptMutation = useMutation({
+    mutationFn: (data: {
+      name: string
+      description: string
+      content: string
+      timeout: number
+      run_on: string
+      category: string
+    }) => scriptsAPI.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scripts'] })
+    },
+    onError: (error: unknown) => {
+      toast.error(errorMessage(error, t('backupPlans.toasts.scriptCreateFailed')))
+    },
+  })
+
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: BackupPlanData }) =>
       backupPlansAPI.update(id, data),
@@ -570,6 +587,22 @@ export default function BackupPlans() {
     }
   }
 
+  const createSourceScript = async (data: {
+    name: string
+    description: string
+    content: string
+    timeout: number
+    run_on: string
+    category: string
+  }) => {
+    const response = await createScriptMutation.mutateAsync(data)
+    const id = response.data?.id
+    if (typeof id !== 'number') {
+      throw new Error('Script creation response did not include an id')
+    }
+    return { id }
+  }
+
   const submitPlan = () => {
     if (isRepositorySelectionOverLimit(wizardState.repositoryIds, canUseMultiRepository)) {
       toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
@@ -608,6 +641,7 @@ export default function BackupPlans() {
       canUseBorg2={canUseBorg2}
       repositoryCreatePending={repositoryCreateMutation.isPending}
       updateState={updateState}
+      onCreateScript={createSourceScript}
       updateBasicRepositoryState={updateBasicRepositoryState}
       handleRepositoryIdsChange={handleRepositoryIdsChange}
       handlePruneSettingsChange={handlePruneSettingsChange}
@@ -621,7 +655,8 @@ export default function BackupPlans() {
     />
   )
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending
+  const isSubmitting =
+    createMutation.isPending || updateMutation.isPending || createScriptMutation.isPending
   const formatStatusLabel = (status?: string) =>
     status
       ? t(`backupPlans.statuses.${status}`, { defaultValue: formatRunStatus(status) })

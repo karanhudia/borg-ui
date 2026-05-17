@@ -1,27 +1,47 @@
-import { Stack, TextField } from '@mui/material'
+import { useState } from 'react'
+import { Box, Button, Chip, Paper, Stack, TextField, Typography } from '@mui/material'
+import { Database, FolderOpen } from 'lucide-react'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
-import { WizardStepDataSource } from '../../../components/wizard'
+import { SourceSelectionDialog } from './SourceSelectionDialog'
 import type { BackupPlanWizardStepProps } from './types'
+
+const DATABASE_DUMP_ROOT = '/var/tmp/borg-ui/database-dumps'
 
 type SourceStepProps = Pick<
   BackupPlanWizardStepProps,
   | 'wizardState'
   | 'sshConnections'
+  | 'scripts'
+  | 'loadingScripts'
   | 'updateState'
   | 'openSourceExplorer'
   | 'openExcludeExplorer'
+  | 'onCreateScript'
   | 't'
 >
 
 export function SourceStep({
   wizardState,
   sshConnections,
+  scripts,
+  loadingScripts,
   updateState,
   openSourceExplorer,
   openExcludeExplorer,
+  onCreateScript,
   t,
 }: SourceStepProps) {
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
+  const hasSources = wizardState.sourceDirectories.length > 0
+  const isDatabaseSource = wizardState.sourceDirectories.some(
+    (sourceDirectory) =>
+      sourceDirectory === DATABASE_DUMP_ROOT || sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
+  )
+  const sourceKindLabel = isDatabaseSource
+    ? t('backupPlans.sourceChooser.databaseTitle')
+    : t('backupPlans.sourceChooser.filesTitle')
+
   return (
     <Stack spacing={3}>
       <TextField
@@ -39,32 +59,79 @@ export function SourceStep({
         rows={2}
         fullWidth
       />
-      <WizardStepDataSource
-        repositoryLocation="local"
-        repoSshConnectionId=""
-        repositoryMode="full"
-        data={{
-          dataSource: wizardState.sourceType,
-          sourceSshConnectionId: wizardState.sourceSshConnectionId,
-          sourceDirs: wizardState.sourceDirectories,
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 2,
+          borderRadius: 1,
+          bgcolor: 'background.paper',
         }}
-        sshConnections={sshConnections}
-        onChange={(updates) => {
-          updateState({
-            ...(updates.dataSource ? { sourceType: updates.dataSource } : {}),
-            ...(updates.sourceSshConnectionId !== undefined
-              ? { sourceSshConnectionId: updates.sourceSshConnectionId }
-              : {}),
-            ...(updates.sourceDirs !== undefined ? { sourceDirectories: updates.sourceDirs } : {}),
-          })
-        }}
-        onBrowseSource={openSourceExplorer}
-        onBrowseRemoteSource={openSourceExplorer}
-      />
+      >
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1.5}
+          alignItems={{ xs: 'stretch', sm: 'center' }}
+          justifyContent="space-between"
+        >
+          <Stack direction="row" spacing={1.25} alignItems="flex-start" sx={{ minWidth: 0 }}>
+            <Box
+              sx={{
+                alignItems: 'center',
+                bgcolor: 'action.hover',
+                borderRadius: 1,
+                color: 'text.secondary',
+                display: 'flex',
+                height: 34,
+                justifyContent: 'center',
+                width: 34,
+              }}
+            >
+              {isDatabaseSource ? <Database size={18} /> : <FolderOpen size={18} />}
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle2">
+                {t('backupPlans.sourceChooser.summaryTitle')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {hasSources
+                  ? wizardState.sourceDirectories.join(', ')
+                  : t('backupPlans.sourceChooser.summaryEmpty')}
+              </Typography>
+              {hasSources && (
+                <Stack direction="row" spacing={0.75} sx={{ mt: 0.75 }} useFlexGap flexWrap="wrap">
+                  <Chip size="small" label={sourceKindLabel} />
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={t('backupPlans.sourceChooser.pathCount', {
+                      count: wizardState.sourceDirectories.length,
+                    })}
+                  />
+                </Stack>
+              )}
+            </Box>
+          </Stack>
+          <Button variant="outlined" onClick={() => setSourceDialogOpen(true)}>
+            {t('backupPlans.sourceChooser.chooseSource')}
+          </Button>
+        </Stack>
+      </Paper>
       <ExcludePatternInput
         patterns={wizardState.excludePatterns}
         onChange={(excludePatterns) => updateState({ excludePatterns })}
         onBrowseClick={openExcludeExplorer}
+      />
+      <SourceSelectionDialog
+        open={sourceDialogOpen}
+        wizardState={wizardState}
+        sshConnections={sshConnections}
+        scripts={scripts}
+        loadingScripts={loadingScripts}
+        updateState={updateState}
+        openSourceExplorer={openSourceExplorer}
+        onCreateScript={onCreateScript}
+        onClose={() => setSourceDialogOpen(false)}
+        t={t}
       />
     </Stack>
   )
