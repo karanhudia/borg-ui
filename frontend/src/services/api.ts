@@ -4,7 +4,7 @@ import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
 import { attachAccessTokenHeader } from './authHeaders'
 import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
-import type { BackupPlan, BackupPlanData } from '../types'
+import type { BackupPlan, BackupPlanData, SourceLocation } from '../types'
 
 export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
@@ -58,6 +58,7 @@ export interface RepositoryData {
   encryption?: string
   compression?: string
   source_directories?: string[]
+  source_locations?: SourceLocation[]
   exclude_patterns?: string[]
   repository_type?: string
   execution_target?: 'local' | 'ssh' | 'agent'

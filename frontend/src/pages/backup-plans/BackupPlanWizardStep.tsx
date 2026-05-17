@@ -28,7 +28,6 @@ export function BackupPlanWizardStep({
   handleRepositoryIdsChange,
   handlePruneSettingsChange,
   createBasicRepository,
-  openSourceExplorer,
   openExcludeExplorer,
   setBasicRepositoryOpen,
   setRepositoryWizardOpen,
@@ -46,7 +45,6 @@ export function BackupPlanWizardStep({
         loadingScripts={loadingScripts}
         updateState={updateState}
         onCreateScript={onCreateScript}
-        openSourceExplorer={openSourceExplorer}
         openExcludeExplorer={openExcludeExplorer}
         t={t}
       />

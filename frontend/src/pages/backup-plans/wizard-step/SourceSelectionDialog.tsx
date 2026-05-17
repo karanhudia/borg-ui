@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -13,8 +13,10 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  IconButton,
   InputLabel,
   MenuItem,
+  Paper,
   Radio,
   RadioGroup,
   Select,
@@ -22,13 +24,25 @@ import {
   TextField,
   Tooltip,
   Typography,
+  alpha,
 } from '@mui/material'
-import { ArrowLeft, Database as DatabaseIcon, FolderOpen, Info } from 'lucide-react'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Database as DatabaseIcon,
+  FolderOpen,
+  HardDrive,
+  Info,
+  Plus,
+  Server,
+  Trash2,
+  X,
+} from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import CodeEditor from '../../../components/CodeEditor'
+import FileExplorerDialog from '../../../components/FileExplorerDialog'
 import ResponsiveDialog from '../../../components/ResponsiveDialog'
-import { WizardStepDataSource } from '../../../components/wizard'
 import {
   sourceDiscoveryAPI,
   type SourceDiscoveryDatabase,
@@ -36,11 +50,13 @@ import {
   type SourceDiscoveryScriptDraft,
   type SourceDiscoveryTypeOption,
 } from '../../../services/api'
+import type { SourceLocation, SourceType } from '../../../types'
 import type { ScriptOption, SSHConnection, WizardState } from '../types'
 import type { SourceScriptCreateInput } from './types'
 
 type SourceChoiceView = 'types' | 'paths' | 'database' | 'database-detail'
 type ScriptMode = 'create' | 'reuse' | 'skip'
+type SourceKey = 'local' | `remote:${number}`
 
 interface SourceSelectionDialogProps {
   open: boolean
@@ -50,7 +66,6 @@ interface SourceSelectionDialogProps {
   loadingScripts: boolean
   onClose: () => void
   updateState: (updates: Partial<WizardState>) => void
-  openSourceExplorer: () => void
   onCreateScript: (input: SourceScriptCreateInput) => Promise<{ id: number }>
   t: TFunction
 }
@@ -88,6 +103,161 @@ function scriptPayload(draft: SourceDiscoveryScriptDraft, name: string): SourceS
   }
 }
 
+function cleanLocations(locations: SourceLocation[]): SourceLocation[] {
+  return locations
+    .map((location) => ({
+      ...location,
+      source_ssh_connection_id:
+        location.source_type === 'remote' ? location.source_ssh_connection_id : null,
+      paths: location.paths.map((path) => path.trim()).filter(Boolean),
+    }))
+    .filter((location) => location.paths.length > 0)
+}
+
+function locationsFromWizardState(wizardState: WizardState): SourceLocation[] {
+  const existing = cleanLocations(wizardState.sourceLocations || [])
+  if (existing.length > 0) return existing
+  if (wizardState.sourceDirectories.length === 0) return []
+  if (wizardState.sourceType === 'remote' && wizardState.sourceSshConnectionId) {
+    return [
+      {
+        source_type: 'remote',
+        source_ssh_connection_id: Number(wizardState.sourceSshConnectionId),
+        paths: wizardState.sourceDirectories,
+      },
+    ]
+  }
+  return [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      paths: wizardState.sourceDirectories,
+    },
+  ]
+}
+
+function locationKey(location: SourceLocation): SourceKey {
+  return location.source_type === 'remote' && location.source_ssh_connection_id
+    ? `remote:${location.source_ssh_connection_id}`
+    : 'local'
+}
+
+function locationForKey(
+  sourceKey: SourceKey
+): Pick<SourceLocation, 'source_type' | 'source_ssh_connection_id'> {
+  if (sourceKey === 'local') {
+    return { source_type: 'local', source_ssh_connection_id: null }
+  }
+  return { source_type: 'remote', source_ssh_connection_id: Number(sourceKey.split(':')[1]) }
+}
+
+function sourceTypeFromLocations(locations: SourceLocation[]): SourceType {
+  if (locations.length === 0) return 'local'
+  if (locations.length > 1) return 'mixed'
+  return locations[0].source_type
+}
+
+function sourceConnectionFromLocations(locations: SourceLocation[]): number | '' {
+  if (locations.length !== 1 || locations[0].source_type !== 'remote') return ''
+  return locations[0].source_ssh_connection_id ? Number(locations[0].source_ssh_connection_id) : ''
+}
+
+function sourceLocationLabel(
+  location: SourceLocation,
+  sshConnections: SSHConnection[],
+  t: TFunction
+) {
+  if (location.source_type === 'local') return t('backupPlans.sourceChooser.localSource')
+  const connection = sshConnections.find((item) => item.id === location.source_ssh_connection_id)
+  return connection
+    ? `${connection.username}@${connection.host}`
+    : t('backupPlans.wizard.review.connectionFallback', {
+        id: location.source_ssh_connection_id,
+      })
+}
+
+interface SourceOptionCardProps {
+  selected: boolean
+  icon: ReactNode
+  title: string
+  description: string
+  meta: string
+  onClick: () => void
+}
+
+function SourceOptionCard({
+  selected,
+  icon,
+  title,
+  description,
+  meta,
+  onClick,
+}: SourceOptionCardProps) {
+  return (
+    <Card
+      variant="outlined"
+      sx={{
+        borderColor: selected ? 'primary.main' : 'divider',
+        borderWidth: selected ? 2 : 1,
+        bgcolor: selected ? (theme) => alpha(theme.palette.primary.main, 0.07) : 'background.paper',
+        borderRadius: 1,
+        transition: 'border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease',
+        '&:hover': {
+          borderColor: selected ? 'primary.main' : 'text.secondary',
+          boxShadow: (theme) => `0 2px 10px ${alpha(theme.palette.common.black, 0.06)}`,
+        },
+      }}
+    >
+      <CardActionArea
+        component="button"
+        aria-pressed={selected}
+        onClick={onClick}
+        sx={{ alignItems: 'stretch', height: '100%', textAlign: 'left', width: '100%' }}
+      >
+        <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <Box
+              sx={{
+                alignItems: 'center',
+                bgcolor: selected ? 'primary.main' : 'action.hover',
+                borderRadius: 1,
+                color: selected ? 'primary.contrastText' : 'text.secondary',
+                display: 'flex',
+                height: 32,
+                justifyContent: 'center',
+                width: 32,
+                flexShrink: 0,
+              }}
+            >
+              {icon}
+            </Box>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" noWrap>
+                  {title}
+                </Typography>
+                {selected && (
+                  <CheckCircle2 size={15} aria-hidden="true" style={{ flexShrink: 0 }} />
+                )}
+              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                {description}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: 0.35 }}
+              >
+                {meta}
+              </Typography>
+            </Box>
+          </Stack>
+        </CardContent>
+      </CardActionArea>
+    </Card>
+  )
+}
+
 export function SourceSelectionDialog({
   open,
   wizardState,
@@ -96,7 +266,6 @@ export function SourceSelectionDialog({
   loadingScripts,
   onClose,
   updateState,
-  openSourceExplorer,
   onCreateScript,
   t,
 }: SourceSelectionDialogProps) {
@@ -113,15 +282,24 @@ export function SourceSelectionDialog({
   const [preExistingScriptId, setPreExistingScriptId] = useState<number | ''>('')
   const [postExistingScriptId, setPostExistingScriptId] = useState<number | ''>('')
   const [applying, setApplying] = useState(false)
+  const [selectedSourceKey, setSelectedSourceKey] = useState<SourceKey>('local')
+  const [sourcePath, setSourcePath] = useState('')
+  const [draftSourceLocations, setDraftSourceLocations] = useState<SourceLocation[]>([])
+  const [sourceExplorerOpen, setSourceExplorerOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setView('types')
+    const nextLocations = locationsFromWizardState(wizardState)
+    setDraftSourceLocations(nextLocations)
+    setSelectedSourceKey(nextLocations[0] ? locationKey(nextLocations[0]) : 'local')
+    setSourcePath('')
+    setSourceExplorerOpen(false)
     setSelectedDatabase(null)
     setScriptMode('create')
     setPreExistingScriptId(wizardState.preBackupScriptId || '')
     setPostExistingScriptId(wizardState.postBackupScriptId || '')
-  }, [open, wizardState.postBackupScriptId, wizardState.preBackupScriptId])
+  }, [open, wizardState])
 
   useEffect(() => {
     if (!open || discovery) return
@@ -196,6 +374,13 @@ export function SourceSelectionDialog({
         sourceType: 'local',
         sourceSshConnectionId: '',
         sourceDirectories: selectedDatabase.source_directories,
+        sourceLocations: [
+          {
+            source_type: 'local',
+            source_ssh_connection_id: null,
+            paths: selectedDatabase.source_directories,
+          },
+        ],
         preBackupScriptId,
         postBackupScriptId,
         preBackupScriptParameters: {},
@@ -206,6 +391,83 @@ export function SourceSelectionDialog({
       setApplying(false)
     }
   }
+
+  const addPathsToSelectedSource = (paths: string[]) => {
+    const nextPaths = paths.map((path) => path.trim()).filter(Boolean)
+    if (nextPaths.length === 0) return
+    const locationBase = locationForKey(selectedSourceKey)
+
+    setDraftSourceLocations((current) => {
+      const existingIndex = current.findIndex(
+        (location) => locationKey(location) === selectedSourceKey
+      )
+      if (existingIndex === -1) {
+        return [
+          ...current,
+          {
+            ...locationBase,
+            paths: Array.from(new Set(nextPaths)),
+          },
+        ]
+      }
+
+      return current.map((location, index) => {
+        if (index !== existingIndex) return location
+        return {
+          ...location,
+          paths: Array.from(new Set([...location.paths, ...nextPaths])),
+        }
+      })
+    })
+  }
+
+  const addSourcePath = () => {
+    addPathsToSelectedSource([sourcePath])
+    setSourcePath('')
+  }
+
+  const removeSourcePath = (sourceKey: SourceKey, path: string) => {
+    setDraftSourceLocations((current) =>
+      current
+        .map((location) =>
+          locationKey(location) === sourceKey
+            ? { ...location, paths: location.paths.filter((item) => item !== path) }
+            : location
+        )
+        .filter((location) => location.paths.length > 0)
+    )
+  }
+
+  const removeSourceLocation = (sourceKey: SourceKey) => {
+    setDraftSourceLocations((current) =>
+      current.filter((location) => locationKey(location) !== sourceKey)
+    )
+  }
+
+  const applyPaths = () => {
+    const sourceLocations = cleanLocations(draftSourceLocations)
+    updateState({
+      sourceType: sourceTypeFromLocations(sourceLocations),
+      sourceSshConnectionId: sourceConnectionFromLocations(sourceLocations),
+      sourceDirectories: sourceLocations.flatMap((location) => location.paths),
+      sourceLocations,
+    })
+    onClose()
+  }
+
+  const selectedSourceConnection =
+    selectedSourceKey === 'local'
+      ? null
+      : sshConnections.find((connection) => selectedSourceKey === `remote:${connection.id}`) || null
+
+  const selectedSourceExplorerSshConfig = selectedSourceConnection
+    ? {
+        ssh_key_id: selectedSourceConnection.ssh_key_id,
+        host: selectedSourceConnection.host,
+        username: selectedSourceConnection.username,
+        port: selectedSourceConnection.port,
+      }
+    : undefined
 
   const renderTypeChooser = () => (
     <Stack spacing={1.25}>
@@ -273,27 +535,201 @@ export function SourceSelectionDialog({
       >
         {t('backupPlans.sourceChooser.backToTypes')}
       </Button>
-      <WizardStepDataSource
-        repositoryLocation="local"
-        repoSshConnectionId=""
-        repositoryMode="full"
-        data={{
-          dataSource: wizardState.sourceType,
-          sourceSshConnectionId: wizardState.sourceSshConnectionId,
-          sourceDirs: wizardState.sourceDirectories,
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 1,
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
         }}
-        sshConnections={sshConnections}
-        onChange={(updates) => {
-          updateState({
-            ...(updates.dataSource ? { sourceType: updates.dataSource } : {}),
-            ...(updates.sourceSshConnectionId !== undefined
-              ? { sourceSshConnectionId: updates.sourceSshConnectionId }
-              : {}),
-            ...(updates.sourceDirs !== undefined ? { sourceDirectories: updates.sourceDirs } : {}),
-          })
+      >
+        <SourceOptionCard
+          selected={selectedSourceKey === 'local'}
+          icon={<HardDrive size={18} />}
+          title={t('backupPlans.sourceChooser.localSource')}
+          description={t('backupPlans.sourceChooser.localSourceDescription')}
+          meta={t('backupPlans.sourceChooser.filesTitle')}
+          onClick={() => setSelectedSourceKey('local')}
+        />
+        {sshConnections.map((connection) => {
+          const key: SourceKey = `remote:${connection.id}`
+          return (
+            <SourceOptionCard
+              key={connection.id}
+              selected={selectedSourceKey === key}
+              icon={<Server size={18} />}
+              title={`${connection.username}@${connection.host}`}
+              description={t('backupPlans.sourceChooser.sshSourceDescription')}
+              meta={`Port ${connection.port}${connection.default_path ? ` • ${connection.default_path}` : ''}`}
+              onClick={() => setSelectedSourceKey(key)}
+            />
+          )
+        })}
+      </Box>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="stretch">
+        <TextField
+          label={t('backupPlans.sourceChooser.sourcePath')}
+          value={sourcePath}
+          onChange={(event) => setSourcePath(event.target.value)}
+          size="small"
+          fullWidth
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              addSourcePath()
+            }
+          }}
+        />
+        <Button
+          variant="contained"
+          startIcon={<Plus size={16} />}
+          onClick={addSourcePath}
+          disabled={!sourcePath.trim()}
+          sx={{ flexShrink: 0 }}
+        >
+          {t('backupPlans.sourceChooser.addPath')}
+        </Button>
+        <Button
+          variant="outlined"
+          startIcon={<FolderOpen size={16} />}
+          onClick={() => setSourceExplorerOpen(true)}
+          sx={{ flexShrink: 0 }}
+        >
+          {t('backupPlans.sourceChooser.browseCurrentSource')}
+        </Button>
+      </Stack>
+      <Box>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          {t('backupPlans.sourceChooser.selectedSourceGroups')}
+        </Typography>
+        {draftSourceLocations.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            {t('backupPlans.sourceChooser.summaryEmpty')}
+          </Typography>
+        ) : (
+          <Stack spacing={1}>
+            {draftSourceLocations.map((location) => {
+              const key = locationKey(location)
+              return (
+                <Paper
+                  key={key}
+                  variant="outlined"
+                  sx={{
+                    p: 1.25,
+                    borderRadius: 1,
+                    bgcolor: 'background.default',
+                  }}
+                >
+                  <Stack spacing={1}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="flex-start"
+                      justifyContent="space-between"
+                    >
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        alignItems="flex-start"
+                        sx={{ minWidth: 0 }}
+                      >
+                        <Box
+                          sx={{
+                            alignItems: 'center',
+                            bgcolor: 'action.hover',
+                            borderRadius: 1,
+                            color: 'text.secondary',
+                            display: 'flex',
+                            height: 30,
+                            justifyContent: 'center',
+                            width: 30,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {location.source_type === 'remote' ? (
+                            <Server size={16} />
+                          ) : (
+                            <HardDrive size={16} />
+                          )}
+                        </Box>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="subtitle2" noWrap>
+                            {sourceLocationLabel(location, sshConnections, t)}
+                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            sx={{ mt: 0.5 }}
+                            useFlexGap
+                            flexWrap="wrap"
+                          >
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={
+                                location.source_type === 'remote'
+                                  ? t('backupPlans.sourceChooser.sshSource')
+                                  : t('backupPlans.sourceChooser.localSource')
+                              }
+                            />
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={t('backupPlans.sourceChooser.pathCount', {
+                                count: location.paths.length,
+                              })}
+                            />
+                          </Stack>
+                        </Box>
+                      </Stack>
+                      <Tooltip title={t('backupPlans.sourceChooser.removeSourceGroup')}>
+                        <IconButton
+                          aria-label={t('backupPlans.sourceChooser.removeSourceGroup')}
+                          onClick={() => removeSourceLocation(key)}
+                          size="small"
+                        >
+                          <Trash2 size={16} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                    <Stack
+                      direction="row"
+                      spacing={0.75}
+                      useFlexGap
+                      flexWrap="wrap"
+                      sx={{ pl: { sm: 4.75 } }}
+                    >
+                      {location.paths.map((path) => (
+                        <Chip
+                          key={path}
+                          label={path}
+                          size="small"
+                          onDelete={() => removeSourcePath(key, path)}
+                          deleteIcon={<X size={14} />}
+                        />
+                      ))}
+                    </Stack>
+                  </Stack>
+                </Paper>
+              )
+            })}
+          </Stack>
+        )}
+      </Box>
+      <FileExplorerDialog
+        key={`source-picker-${selectedSourceKey}`}
+        open={sourceExplorerOpen}
+        onClose={() => setSourceExplorerOpen(false)}
+        onSelect={(paths) => {
+          addPathsToSelectedSource(paths)
+          setSourceExplorerOpen(false)
         }}
-        onBrowseSource={openSourceExplorer}
-        onBrowseRemoteSource={openSourceExplorer}
+        title={t('backupPlans.wizard.fileExplorer.sourceTitle')}
+        initialPath={selectedSourceConnection ? selectedSourceConnection.default_path || '/' : '/'}
+        multiSelect
+        connectionType={selectedSourceConnection ? 'ssh' : 'local'}
+        sshConfig={selectedSourceExplorerSshConfig}
+        selectMode="both"
+        showSshMountPoints={false}
       />
     </Stack>
   )
@@ -523,7 +959,11 @@ export function SourceSelectionDialog({
         <DialogActions>
           <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
           {view === 'paths' && (
-            <Button variant="contained" onClick={onClose}>
+            <Button
+              variant="contained"
+              onClick={applyPaths}
+              disabled={cleanLocations(draftSourceLocations).length === 0}
+            >
               {t('backupPlans.sourceChooser.applyPaths')}
             </Button>
           )}

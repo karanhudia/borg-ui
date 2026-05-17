@@ -219,6 +219,9 @@ class Repository(Base):
     source_directories = Column(
         Text, nullable=True
     )  # JSON array of directories to backup
+    source_locations = Column(
+        Text, nullable=True
+    )  # JSON array of grouped source locations to backup
     exclude_patterns = Column(
         Text, nullable=True
     )  # JSON array of exclude patterns (e.g., ["*.log", "*.tmp"])
@@ -682,6 +685,7 @@ class BackupPlan(Base):
         Integer, ForeignKey("ssh_connections.id"), nullable=True
     )
     source_directories = Column(Text, nullable=False)
+    source_locations = Column(Text, nullable=True)
     exclude_patterns = Column(Text, nullable=True)
 
     archive_name_template = Column(String, default="{plan_name}-{now}", nullable=False)

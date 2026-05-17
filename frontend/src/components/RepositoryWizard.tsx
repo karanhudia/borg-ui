@@ -15,6 +15,7 @@ import FileExplorerDialog from './FileExplorerDialog'
 import { managedAgentsAPI, sshKeysAPI, RepositoryData } from '../services/api'
 import type { AgentMachineResponse } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import type { SourceLocation } from '../types'
 
 interface Repository extends RepositoryData {
   id: number
@@ -67,6 +68,7 @@ interface WizardState {
   dataSource: 'local' | 'remote'
   sourceSshConnectionId: number | ''
   sourceDirs: string[]
+  sourceLocations: SourceLocation[]
   // Security step
   encryption: string
   passphrase: string
@@ -96,6 +98,7 @@ const createInitialState = (): WizardState => ({
   dataSource: 'local',
   sourceSshConnectionId: '',
   sourceDirs: [],
+  sourceLocations: [],
   encryption: 'repokey',
   passphrase: '',
   remotePath: '',
@@ -109,6 +112,40 @@ const createInitialState = (): WizardState => ({
   postHookTimeout: 300,
   hookFailureMode: 'fail',
 })
+
+function repositorySourceLocations(repository?: Repository): SourceLocation[] {
+  if (repository?.source_locations?.length) return repository.source_locations
+  if (!repository?.source_directories?.length) return []
+  return legacySourceLocations({
+    dataSource: repository.source_ssh_connection_id ? 'remote' : 'local',
+    sourceSshConnectionId: repository.source_ssh_connection_id || '',
+    sourceDirs: repository.source_directories,
+  })
+}
+
+function legacySourceLocations(source: {
+  dataSource: 'local' | 'remote'
+  sourceSshConnectionId: number | ''
+  sourceDirs: string[]
+}): SourceLocation[] {
+  if (!source.sourceDirs.length) return []
+  if (source.dataSource === 'remote' && source.sourceSshConnectionId) {
+    return [
+      {
+        source_type: 'remote',
+        source_ssh_connection_id: Number(source.sourceSshConnectionId),
+        paths: source.sourceDirs,
+      },
+    ]
+  }
+  return [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      paths: source.sourceDirs,
+    },
+  ]
+}
 
 const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: RepositoryWizardProps) => {
   const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
@@ -246,6 +283,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       sourceSshConnectionId:
         executionTarget === 'agent' ? '' : repository.source_ssh_connection_id || '',
       sourceDirs: repository.source_directories || [],
+      sourceLocations: repositorySourceLocations(repository),
       encryption: repository.encryption || (repoVersion === 2 ? 'repokey-aes-ocb' : 'repokey'),
       passphrase: repository.passphrase || '',
       remotePath: repository.remote_path || '',
@@ -297,7 +335,15 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         nextUpdates.sourceSshConnectionId = ''
       }
 
-      return { ...prev, ...nextUpdates }
+      const next = { ...prev, ...nextUpdates }
+      const sourceFieldsChanged =
+        nextUpdates.sourceDirs !== undefined ||
+        nextUpdates.sourceSshConnectionId !== undefined ||
+        nextUpdates.dataSource !== undefined
+      if (sourceFieldsChanged && nextUpdates.sourceLocations === undefined) {
+        next.sourceLocations = legacySourceLocations(next)
+      }
+      return next
     })
   }
 
@@ -525,6 +571,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       passphrase: wizardState.passphrase,
       compression: wizardState.compression,
       source_directories: wizardState.sourceDirs,
+      source_locations: wizardState.sourceLocations,
       exclude_patterns: wizardState.excludePatterns,
       custom_flags: wizardState.customFlags,
       remote_path: wizardState.remotePath,

@@ -559,7 +559,7 @@ export default function BackupPlans() {
       return Boolean(
         wizardState.name.trim() &&
         wizardState.sourceDirectories.length > 0 &&
-        (wizardState.sourceType === 'local' || wizardState.sourceSshConnectionId)
+        (wizardState.sourceType !== 'remote' || wizardState.sourceSshConnectionId)
       )
     }
     if (stepKey === 'repositories') {
