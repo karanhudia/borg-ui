@@ -388,8 +388,16 @@ def test_my_feature(self) -> bool:
 
 ### GitHub Actions Workflows
 
-- `Tests` runs backend coverage plus frontend quality, tests, and build as separate parallel jobs.
-- `Smoke Tests` runs a built app against live Borg smoke scenarios, split into `core` and `extended` tiers.
+- `Tests` starts with `CI / Changed Files`, which runs
+  `scripts/select_validation.py` and publishes a selector manifest hash plus
+  lane booleans for downstream jobs.
+- Backend, frontend, build, coverage, and smoke jobs keep their required check
+  names, but print an explicit "not applicable" message and exit green when the
+  selector says the lane is unrelated to the change set.
+- Scheduled and manual full runs select every lane. Pull requests and pushes use
+  the changed-file manifest so backend unit/integration, frontend quality/unit,
+  frontend build, and smoke tiers only spend time when relevant.
+- Smoke coverage remains split into `core`, `extended`, and `SSH` tiers.
 
 ## Test Coverage
 
