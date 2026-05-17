@@ -44,8 +44,8 @@ function mbToKib(value: string): number | null {
 }
 
 function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation[] {
-  const grouped = (state.sourceLocations || [])
-    .map((location) => {
+  const grouped: SourceLocation[] = (state.sourceLocations || [])
+    .map<SourceLocation | null>((location) => {
       const paths = location.paths.map((path) => path.trim()).filter(Boolean)
       if (paths.length === 0) return null
       if (location.source_type === 'remote') {
@@ -63,7 +63,7 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
         paths,
       }
     })
-    .filter((location): location is SourceLocation => Boolean(location))
+    .filter((location): location is SourceLocation => location !== null)
 
   if (grouped.length > 0) return grouped
   if (state.sourceDirectories.length === 0) return []

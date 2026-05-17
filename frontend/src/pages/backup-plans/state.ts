@@ -54,8 +54,8 @@ function kibToMb(value?: number | null): string {
 }
 
 function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
-  const grouped = (plan.source_locations || [])
-    .map((location) => {
+  const grouped: SourceLocation[] = (plan.source_locations || [])
+    .map<SourceLocation | null>((location) => {
       const paths = (location.paths || []).map((path) => path.trim()).filter(Boolean)
       if (paths.length === 0) return null
       if (location.source_type === 'remote') {
@@ -73,7 +73,7 @@ function normalizePlanSourceLocations(plan: BackupPlan): SourceLocation[] {
         paths,
       }
     })
-    .filter((location): location is SourceLocation => Boolean(location))
+    .filter((location): location is SourceLocation => location !== null)
 
   if (grouped.length > 0) return grouped
   if (!plan.source_directories?.length) return []
