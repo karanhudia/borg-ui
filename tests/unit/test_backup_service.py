@@ -1607,6 +1607,53 @@ class TestBackupServicePeriodicSync:
         assert processed_paths == ["etc/komodo"]
         assert ssh_mount_info == [("/tmp/sshfs_mount_test", "etc/komodo")]
 
+    @pytest.mark.asyncio
+    async def test_prepare_source_paths_stages_canary_under_shared_ssh_cwd(
+        self, backup_service, db_session, monkeypatch, tmp_path
+    ):
+        connection = SSHConnection(
+            host="example.com",
+            username="borg",
+            port=22,
+            default_path="/etc/komodo",
+        )
+        db_session.add(connection)
+        db_session.commit()
+        db_session.refresh(connection)
+
+        data_dir = backup_service.log_dir.parent
+        canary_dir = data_dir / ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        canary_dir.mkdir(parents=True)
+        (canary_dir / "manifest.json").write_text("{}", encoding="utf-8")
+        temp_root = tmp_path / "sshfs_mount_test"
+
+        async def mock_mount_ssh_paths_shared(connection_id, remote_paths, job_id):
+            return str(temp_root), [("mount-1", "etc/komodo")]
+
+        monkeypatch.setattr(
+            "app.services.backup_service.SessionLocal", lambda: db_session
+        )
+        monkeypatch.setattr(
+            "app.services.mount_service.mount_service.mount_ssh_paths_shared",
+            mock_mount_ssh_paths_shared,
+        )
+
+        processed_paths, ssh_mount_info = await backup_service._prepare_source_paths(
+            [
+                f"ssh://{connection.username}@{connection.host}:{connection.port}/etc/komodo",
+                str(canary_dir),
+            ],
+            job_id=42,
+            source_connection_id=connection.id,
+        )
+
+        staged_archive_path = ".borg-ui/restore-canaries/repository-1/.borgui-canary"
+        assert processed_paths == ["etc/komodo", staged_archive_path]
+        assert ssh_mount_info == [(str(temp_root), "etc/komodo")]
+        assert (temp_root / staged_archive_path / "manifest.json").read_text(
+            encoding="utf-8"
+        ) == "{}"
+
     def test_resolve_backup_command_paths_mixes_remote_source_and_local_canary(
         self, backup_service
     ):
@@ -1621,8 +1668,8 @@ class TestBackupServicePeriodicSync:
             job_id=42,
         )
 
-        assert backup_cwd == str(data_dir)
+        assert backup_cwd == "/tmp/sshfs_mount_test"
         assert backup_paths == [
-            "/tmp/sshfs_mount_test/etc/komodo",
+            "etc/komodo",
             ".borg-ui/restore-canaries/repository-1/.borgui-canary",
         ]

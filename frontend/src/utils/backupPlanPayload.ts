@@ -1,12 +1,13 @@
-import type { BackupPlanData } from '../types'
+import type { BackupPlanData, SourceLocation, SourceType } from '../types'
 
 export interface BackupPlanPayloadState {
   name: string
   description: string
   enabled: boolean
-  sourceType: 'local' | 'remote'
+  sourceType: SourceType
   sourceSshConnectionId: number | ''
   sourceDirectories: string[]
+  sourceLocations?: SourceLocation[]
   excludePatterns: string[]
   repositoryIds: number[]
   compression: string
@@ -42,20 +43,80 @@ function mbToKib(value: string): number | null {
   return Math.round(parsed * 1024)
 }
 
+function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation[] {
+  const grouped: SourceLocation[] = (state.sourceLocations || [])
+    .map<SourceLocation | null>((location) => {
+      const paths = location.paths.map((path) => path.trim()).filter(Boolean)
+      if (paths.length === 0) return null
+      if (location.source_type === 'remote') {
+        const connectionId = location.source_ssh_connection_id
+        if (!connectionId) return null
+        return {
+          source_type: 'remote' as const,
+          source_ssh_connection_id: Number(connectionId),
+          paths,
+        }
+      }
+      return {
+        source_type: 'local' as const,
+        source_ssh_connection_id: null,
+        paths,
+      }
+    })
+    .filter((location): location is SourceLocation => location !== null)
+
+  if (grouped.length > 0) return grouped
+  if (state.sourceDirectories.length === 0) return []
+
+  if (state.sourceType === 'remote' && state.sourceSshConnectionId) {
+    return [
+      {
+        source_type: 'remote',
+        source_ssh_connection_id: Number(state.sourceSshConnectionId),
+        paths: state.sourceDirectories,
+      },
+    ]
+  }
+
+  return [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      paths: state.sourceDirectories,
+    },
+  ]
+}
+
+function sourceTypeFromLocations(locations: SourceLocation[], fallback: SourceType): SourceType {
+  if (locations.length === 0) return fallback
+  if (locations.length > 1) return 'mixed'
+  return locations[0].source_type
+}
+
+function sourceConnectionFromLocations(locations: SourceLocation[]): number | null {
+  if (locations.length !== 1 || locations[0].source_type !== 'remote') return null
+  return locations[0].source_ssh_connection_id
+    ? Number(locations[0].source_ssh_connection_id)
+    : null
+}
+
 export function buildBackupPlanPayload(
   state: BackupPlanPayloadState,
   clearLegacySourceRepositoryIds: number[] = []
 ): BackupPlanData {
+  const sourceLocations = normalizeSourceLocations(state)
+  const sourceDirectories = sourceLocations.length
+    ? sourceLocations.flatMap((location) => location.paths)
+    : state.sourceDirectories
+
   return {
     name: state.name.trim(),
     description: state.description.trim() || null,
     enabled: state.enabled,
-    source_type: state.sourceType,
-    source_ssh_connection_id:
-      state.sourceType === 'remote' && state.sourceSshConnectionId
-        ? Number(state.sourceSshConnectionId)
-        : null,
-    source_directories: state.sourceDirectories,
+    source_type: sourceTypeFromLocations(sourceLocations, state.sourceType),
+    source_ssh_connection_id: sourceConnectionFromLocations(sourceLocations),
+    source_directories: sourceDirectories,
+    source_locations: sourceLocations,
     exclude_patterns: state.excludePatterns,
     archive_name_template: state.archiveNameTemplate.trim() || '{plan_name}-{repo_name}-{now}',
     compression: state.compression,

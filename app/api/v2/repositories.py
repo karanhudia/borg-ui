@@ -11,7 +11,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Any, Optional
 import structlog
 
 from app.database.database import get_db
@@ -25,6 +25,7 @@ from app.services.v2.repository_service import repository_v2_service
 from app.utils.fs import calculate_path_size_bytes
 from app.utils.borg_env import repository_borg_env
 from app.utils.archive_job_metadata import enrich_archives_with_backup_metadata
+from app.utils.source_locations import legacy_source_fields, normalize_source_locations
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Repositories v2"], dependencies=[require_feature("borg_v2")])
@@ -42,6 +43,7 @@ class RepositoryV2Create(BaseModel):
     connection_id: Optional[int] = None
     remote_path: Optional[str] = None
     source_directories: Optional[list[str]] = None
+    source_locations: Optional[list[dict[str, Any]]] = None
     exclude_patterns: Optional[list[str]] = None
     mode: str = "full"
     bypass_lock: bool = False
@@ -64,6 +66,7 @@ class RepositoryV2Import(BaseModel):
     connection_id: Optional[int] = None
     remote_path: Optional[str] = None
     source_directories: Optional[list[str]] = None
+    source_locations: Optional[list[dict[str, Any]]] = None
     exclude_patterns: Optional[list[str]] = None
     mode: str = "full"
     bypass_lock: bool = False
@@ -109,6 +112,34 @@ def _is_borg2_lock_like_failure(result: dict) -> bool:
         is_lock_error(exit_code=result.get("return_code"))
         or "ObjectNotFound: locks/" in stderr
     )
+
+
+def _normalize_source_payload(
+    *,
+    source_locations: Optional[list[dict[str, Any]]],
+    source_connection_id: Optional[int],
+    source_directories: Optional[list[str]],
+) -> tuple[list[dict[str, Any]], Optional[int], list[str]]:
+    try:
+        normalized = normalize_source_locations(
+            source_locations,
+            source_type="remote" if source_connection_id else "local",
+            source_ssh_connection_id=source_connection_id,
+            source_directories=source_directories,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"key": "backend.errors.repo.sourceConnectionRequired"},
+        ) from exc
+
+    if not normalized:
+        return [], source_connection_id, source_directories or []
+
+    _source_type, legacy_connection_id, flattened_paths = legacy_source_fields(
+        normalized
+    )
+    return normalized, legacy_connection_id, flattened_paths
 
 
 def _borg_keyfile_name(repo_path: str) -> str:
@@ -240,9 +271,17 @@ async def create_repository(
             },
         )
 
-    source_dirs_json = (
-        json.dumps(data.source_directories) if data.source_directories else None
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_source_payload(
+        source_locations=data.source_locations,
+        source_connection_id=data.source_connection_id,
+        source_directories=data.source_directories,
     )
+    source_dirs_json = json.dumps(source_directories) if source_directories else None
+    source_locations_json = json.dumps(source_locations) if source_locations else None
     exclude_patterns_json = (
         json.dumps(data.exclude_patterns) if data.exclude_patterns else None
     )
@@ -266,7 +305,8 @@ async def create_repository(
         post_hook_timeout=data.post_hook_timeout,
         continue_on_hook_failure=data.continue_on_hook_failure,
         skip_on_hook_failure=data.skip_on_hook_failure,
-        source_ssh_connection_id=data.source_connection_id,
+        source_ssh_connection_id=source_connection_id,
+        source_locations=source_locations_json,
         borg_version=2,
         repository_type="ssh" if data.connection_id else "local",
     )
@@ -359,9 +399,17 @@ async def import_repository(
             },
         )
 
-    source_dirs_json = (
-        json.dumps(data.source_directories) if data.source_directories else None
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_source_payload(
+        source_locations=data.source_locations,
+        source_connection_id=data.source_connection_id,
+        source_directories=data.source_directories,
     )
+    source_dirs_json = json.dumps(source_directories) if source_directories else None
+    source_locations_json = json.dumps(source_locations) if source_locations else None
     exclude_patterns_json = (
         json.dumps(data.exclude_patterns) if data.exclude_patterns else None
     )
@@ -385,7 +433,8 @@ async def import_repository(
         post_hook_timeout=data.post_hook_timeout,
         continue_on_hook_failure=data.continue_on_hook_failure,
         skip_on_hook_failure=data.skip_on_hook_failure,
-        source_ssh_connection_id=data.source_connection_id,
+        source_ssh_connection_id=source_connection_id,
+        source_locations=source_locations_json,
         has_keyfile=bool(keyfile_path),
         borg_version=2,
         repository_type="ssh" if data.connection_id else "local",

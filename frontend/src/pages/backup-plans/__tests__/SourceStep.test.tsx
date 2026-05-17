@@ -85,6 +85,38 @@ vi.mock('../../../components/ResponsiveDialog', () => ({
     ) : null,
 }))
 
+vi.mock('../../../components/FileExplorerDialog', () => ({
+  default: ({
+    open,
+    onSelect,
+    title,
+    connectionType,
+    initialPath,
+    sshConfig,
+  }: {
+    open: boolean
+    onSelect: (paths: string[]) => void
+    title?: string
+    connectionType?: 'local' | 'ssh'
+    initialPath?: string
+    sshConfig?: { host: string }
+  }) =>
+    open ? (
+      <div
+        role="dialog"
+        aria-label={title || 'File explorer'}
+        data-testid="file-explorer-dialog"
+        data-connection-type={connectionType}
+        data-initial-path={initialPath}
+        data-ssh-host={sshConfig?.host || ''}
+      >
+        <button type="button" onClick={() => onSelect(['/selected/from-browser'])}>
+          Select browsed path
+        </button>
+      </div>
+    ) : null,
+}))
+
 const discoveryResponse = {
   source_types: [
     {
@@ -167,9 +199,40 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.preExistingScript': 'Existing pre-backup script',
   'backupPlans.sourceChooser.postExistingScript': 'Existing post-backup script',
   'backupPlans.sourceChooser.applyDatabase': 'Use database source',
+  'backupPlans.sourceChooser.addSourceGroup': 'Add source group',
+  'backupPlans.sourceChooser.localSource': 'Local source',
+  'backupPlans.sourceChooser.localSourceDescription': 'This Borg UI server',
+  'backupPlans.sourceChooser.sshSource': 'SSH source',
+  'backupPlans.sourceChooser.sshSourceDescription': 'Remote machine',
+  'backupPlans.sourceChooser.sourcePath': 'Source path',
+  'backupPlans.sourceChooser.addPath': 'Add path',
+  'backupPlans.sourceChooser.browseCurrentSource': 'Browse current source',
+  'backupPlans.sourceChooser.selectedSourceGroups': 'Selected source groups',
+  'backupPlans.sourceChooser.removePath': 'Remove path',
+  'backupPlans.sourceChooser.removeSourceGroup': 'Remove source group',
+  'backupPlans.wizard.fileExplorer.sourceTitle': 'Select source paths',
 }
 
-const t = (key: string) => translations[key] || key
+const t = (key: string, options?: { count?: number }) => {
+  if (key === 'backupPlans.sourceChooser.pathCount' && typeof options?.count === 'number') {
+    return `${options.count} ${options.count === 1 ? 'path' : 'paths'}`
+  }
+  return translations[key] || key
+}
+
+async function clickTextButton(name: string | RegExp) {
+  const labels = await screen.findAllByText(name)
+  const button = labels.map((label) => label.closest('button')).find(Boolean)
+  expect(button).not.toBeNull()
+  fireEvent.click(button as HTMLButtonElement)
+}
+
+function clickExistingTextButton(name: string | RegExp) {
+  const labels = screen.getAllByText(name)
+  const button = labels.map((label) => label.closest('button')).find(Boolean)
+  expect(button).not.toBeNull()
+  fireEvent.click(button as HTMLButtonElement)
+}
 
 function renderSourceStep(overrides = {}) {
   return render(
@@ -185,7 +248,6 @@ function renderSourceStep(overrides = {}) {
       ]}
       loadingScripts={false}
       updateState={vi.fn()}
-      openSourceExplorer={vi.fn()}
       openExcludeExplorer={vi.fn()}
       onCreateScript={vi.fn(async () => ({ id: 101 }))}
       t={t as never}
@@ -196,19 +258,29 @@ function renderSourceStep(overrides = {}) {
 
 function StatefulSourceStep({
   initialState = createInitialState(),
+  sshConnections = [],
 }: {
   initialState?: ReturnType<typeof createInitialState>
+  sshConnections?: Array<{
+    id: number
+    host: string
+    username: string
+    port: number
+    ssh_key_id: number
+    default_path?: string
+    mount_point?: string
+    status: string
+  }>
 }) {
   const [wizardState, setWizardState] = useState(initialState)
 
   return (
     <SourceStep
       wizardState={wizardState}
-      sshConnections={[]}
+      sshConnections={sshConnections}
       scripts={[]}
       loadingScripts={false}
       updateState={(updates) => setWizardState((current) => ({ ...current, ...updates }))}
-      openSourceExplorer={vi.fn()}
       openExcludeExplorer={vi.fn()}
       onCreateScript={vi.fn(async () => ({ id: 101 }))}
       t={t as never}
@@ -235,8 +307,8 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
 
     expect(screen.getByRole('dialog')).toHaveAttribute('data-max-width', 'sm')
-    expect(await screen.findByRole('button', { name: /files and folders/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /database/i })).toBeInTheDocument()
+    expect(await screen.findByText('Files and folders')).toBeInTheDocument()
+    expect(screen.getByText('Database')).toBeInTheDocument()
     expect(screen.queryByText(/docker containers/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/planned/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /manual path/i })).not.toBeInTheDocument()
@@ -255,14 +327,116 @@ describe('SourceStep', () => {
     expect(screen.getByText('Database scan')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /files and folders/i }))
-    fireEvent.click(screen.getByRole('button', { name: /select app data path/i }))
-    fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
+    await clickTextButton(/files and folders/i)
+    clickExistingTextButton(/local source/i)
+    fireEvent.change(screen.getByLabelText(/source path/i), {
+      target: { value: '/srv/app-data' },
+    })
+    clickExistingTextButton(/add path/i)
+    clickExistingTextButton(/use these paths/i)
 
     expect(screen.getByText('/srv/app-data')).toBeInTheDocument()
     expect(screen.getByText('Files and folders')).toBeInTheDocument()
     expect(screen.queryByText('Database scan')).not.toBeInTheDocument()
   })
+
+  it('adds local and multiple SSH source groups from the source modal', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const sshConnections = [
+      {
+        id: 11,
+        host: 'server-a.example',
+        username: 'backup-a',
+        port: 22,
+        ssh_key_id: 1,
+        default_path: '/home/backup-a',
+        status: 'connected',
+      },
+      {
+        id: 12,
+        host: 'server-b.example',
+        username: 'backup-b',
+        port: 2222,
+        ssh_key_id: 2,
+        default_path: '/',
+        status: 'connected',
+      },
+    ]
+    render(<StatefulSourceStep sshConnections={sshConnections} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    await clickTextButton(/files and folders/i)
+
+    expect(await screen.findByText('This Borg UI server')).toBeInTheDocument()
+    expect(screen.getAllByText('Remote machine')).toHaveLength(2)
+
+    clickExistingTextButton(/local source/i)
+    fireEvent.change(screen.getByLabelText(/source path/i), {
+      target: { value: '/srv/app' },
+    })
+    clickExistingTextButton(/add path/i)
+
+    clickExistingTextButton(/backup-a@server-a.example/i)
+    fireEvent.change(screen.getByLabelText(/source path/i), {
+      target: { value: '/home/app/data' },
+    })
+    clickExistingTextButton(/add path/i)
+
+    clickExistingTextButton(/backup-b@server-b.example/i)
+    fireEvent.change(screen.getByLabelText(/source path/i), {
+      target: { value: '/var/lib/service' },
+    })
+    clickExistingTextButton(/add path/i)
+
+    clickExistingTextButton(/use these paths/i)
+
+    expect(screen.getByText('/srv/app')).toBeInTheDocument()
+    expect(screen.getByText('/home/app/data')).toBeInTheDocument()
+    expect(screen.getByText('/var/lib/service')).toBeInTheDocument()
+    expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
+    expect(screen.getByText('backup-b@server-b.example')).toBeInTheDocument()
+    expect(screen.getAllByText('1 path')).toHaveLength(3)
+  })
+
+  it('browses paths for the selected SSH source without replacing other groups', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const sshConnections = [
+      {
+        id: 11,
+        host: 'server-a.example',
+        username: 'backup-a',
+        port: 22,
+        ssh_key_id: 1,
+        default_path: '/home/backup-a',
+        status: 'connected',
+      },
+    ]
+    render(<StatefulSourceStep sshConnections={sshConnections} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    await clickTextButton(/files and folders/i)
+
+    clickExistingTextButton(/local source/i)
+    fireEvent.change(screen.getByLabelText(/source path/i), {
+      target: { value: '/srv/app' },
+    })
+    clickExistingTextButton(/add path/i)
+
+    clickExistingTextButton(/backup-a@server-a.example/i)
+    clickExistingTextButton(/browse current source/i)
+
+    const explorer = screen.getByTestId('file-explorer-dialog')
+    expect(explorer).toHaveAttribute('data-connection-type', 'ssh')
+    expect(explorer).toHaveAttribute('data-initial-path', '/home/backup-a')
+    expect(explorer).toHaveAttribute('data-ssh-host', 'server-a.example')
+
+    clickExistingTextButton(/select browsed path/i)
+    clickExistingTextButton(/use these paths/i)
+
+    expect(screen.getByText('/srv/app')).toBeInTheDocument()
+    expect(screen.getByText('/selected/from-browser')).toBeInTheDocument()
+    expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
+  }, 30000)
 
   it('applies database templates with code-editor script drafts', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
@@ -275,7 +449,7 @@ describe('SourceStep', () => {
     renderSourceStep({ updateState, onCreateScript })
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /database/i }))
+    await clickTextButton(/database/i)
     const postgresqlTemplate = await screen.findByText(/postgresql database/i)
     fireEvent.click(postgresqlTemplate.closest('button') || postgresqlTemplate)
 

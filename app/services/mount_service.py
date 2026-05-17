@@ -450,7 +450,11 @@ class MountService:
             db.close()
 
     async def mount_ssh_paths_shared(
-        self, connection_id: int, remote_paths: List[str], job_id: Optional[int] = None
+        self,
+        connection_id: int,
+        remote_paths: List[str],
+        job_id: Optional[int] = None,
+        temp_root: Optional[str] = None,
     ) -> Tuple[str, List[Tuple[str, str]]]:
         """
         Mount multiple remote SSH directories from the same connection under a single shared temp root.
@@ -460,6 +464,7 @@ class MountService:
             connection_id: SSHConnection ID to use
             remote_paths: List of remote paths to mount (all from the same connection)
             job_id: Optional backup job ID for tracking
+            temp_root: Optional existing temporary root to reuse across source connections
 
         Returns:
             Tuple of (temp_root, mount_info_list)
@@ -503,8 +508,13 @@ class MountService:
             # Decrypt SSH key
             temp_key_file = self._decrypt_and_write_key(ssh_key)
 
-            # Create ONE shared temporary directory for all mounts from this connection
-            temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
+            # Create ONE shared temporary directory, or reuse one supplied by the
+            # backup service when a backup spans multiple SSH source connections.
+            owns_temp_root = temp_root is None
+            if temp_root is None:
+                temp_root = tempfile.mkdtemp(prefix=f"sshfs_mount_{job_id or 'user'}_")
+            else:
+                os.makedirs(temp_root, exist_ok=True)
 
             logger.info(
                 "Mounting multiple SSH paths under shared temp root",
@@ -780,7 +790,9 @@ class MountService:
                         )
 
                 # Cleanup temp files
-                self._cleanup_temp_files(temp_root, temp_key_file)
+                self._cleanup_temp_files(
+                    temp_root if owns_temp_root else None, temp_key_file
+                )
                 raise
 
         finally:
