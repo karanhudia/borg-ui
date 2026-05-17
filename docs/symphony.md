@@ -85,6 +85,21 @@ The workflow prompt tells agents to choose validation by change scope:
   `docker compose up -d --build`, or smoke runners under `tests/smoke/` when
   the ticket warrants end-to-end proof.
 
+## Performance Planning
+
+The current Borg UI Symphony workflow prioritizes auditability and broad local
+validation. On resource-constrained local runners, that can make issue-to-PR
+latency and token usage much higher than necessary. The current reduction
+proposal is tracked in:
+
+- `docs/engineering/specs/2026-05-17-symphony-issue-pr-latency-reduction.md`
+- `docs/engineering/plans/2026-05-17-symphony-issue-pr-latency-reduction.md`
+
+The proposal keeps quality gates explicit while recommending lazy dependency
+setup, selector-based validation manifests, code-level validation guidance, CI
+sharding, and compact retry context. Host concurrency should be tuned only after
+those code-level reductions are measured.
+
 ## Notes
 
 - Keep the Symphony runtime checkout separate from Borg UI.
