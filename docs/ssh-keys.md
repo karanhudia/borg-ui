@@ -93,6 +93,33 @@ For Hetzner Storage Box-style paths, keep the provider-specific path syntax:
 ssh://u123456@u123456.your-storagebox.de:23/./backup-repo
 ```
 
+## Synology and NAS Path Prefixes
+
+Some NAS devices expose different paths over SFTP and SSH. Synology DSM is a
+common example:
+
+```text
+SFTP path shown while browsing: /playbackup/borguitest
+Path Borg needs over SSH:       /volume1/playbackup/borguitest
+```
+
+In this setup, configure the remote machine like this:
+
+```text
+Default path: /playbackup
+SSH path prefix: /volume1
+```
+
+Then select or enter repository paths using the SFTP-visible path, such as
+`/playbackup/borguitest`. Borg UI keeps SFTP browsing in that namespace and
+prepends the SSH path prefix only when it builds SSH/Borg commands.
+
+If repository initialization fails with an error like `The parent path of the
+repo directory [...] does not exist`, compare the path shown by SFTP browsing
+with the full path needed by Borg over SSH. Put only the missing leading
+segment, such as `/volume1`, in SSH path prefix. Do not include that prefix
+again in the repository path, or the generated SSH path may be wrong.
+
 ## Import an Existing Key
 
 If you import from the host filesystem, mount the key read-only into the container first:
