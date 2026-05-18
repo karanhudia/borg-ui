@@ -14,15 +14,20 @@ from app.core.security import get_password_hash, create_access_token
 
 
 @pytest.fixture(scope="function")
-def test_db():
+def test_db(tmp_path, monkeypatch):
     """Create a test database with shared session"""
-    # Import app FIRST, before doing anything else
+    db_url = f"sqlite:///{tmp_path / 'test.db'}"
+    monkeypatch.setenv("DATABASE_URL", db_url)
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "database_url", db_url)
+
     from app.main import app as application
 
-    import os
-
-    # Use the file-based DB from environment if available (set in conftest.py)
-    db_url = os.environ.get("DATABASE_URL", "sqlite:///:memory:")
+    # Use a unique file per test. Backup/restore routes can leave TestClient
+    # background tasks running after a skip; a session-wide DB lets those tasks
+    # collide with the next test's reused primary keys.
     print(f"DEBUG: test_db using URL: {db_url}")
 
     from sqlalchemy.pool import StaticPool, NullPool
@@ -68,12 +73,37 @@ def test_db():
     # PATCHING SERVICES: Ensure background tasks use the same engine/session factory
     from unittest.mock import patch, AsyncMock
 
-    # We patch the SessionLocal imported in these modules to use our TestingSessionLocal
-    # This ensures background tasks (which create their own sessions) connect to the same DB file
+    # Patch module-level SessionLocal aliases so request helpers and background
+    # tasks connect to this test's isolated DB file.
     patches = [
+        patch("app.database.database.SessionLocal", TestingSessionLocal),
         patch("app.services.backup_service.SessionLocal", TestingSessionLocal),
         patch("app.services.restore_service.SessionLocal", TestingSessionLocal),
         patch("app.services.check_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.restore_check_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.delete_archive_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.prune_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.compact_service.SessionLocal", TestingSessionLocal),
+        patch(
+            "app.services.backup_plan_execution_service.SessionLocal",
+            TestingSessionLocal,
+        ),
+        patch("app.services.repository_service.SessionLocal", TestingSessionLocal),
+        patch(
+            "app.services.v2.delete_archive_service.SessionLocal", TestingSessionLocal
+        ),
+        patch("app.services.v2.prune_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.v2.check_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.v2.compact_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.v2.repository_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.mount_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.mqtt_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.remote_backup_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.stats_refresh_scheduler.SessionLocal", TestingSessionLocal),
+        patch("app.services.restore_check_scheduler.SessionLocal", TestingSessionLocal),
+        patch("app.api.schedule.SessionLocal", TestingSessionLocal),
+        patch("app.api.repositories.SessionLocal", TestingSessionLocal),
+        patch("app.utils.ssh_utils.SessionLocal", TestingSessionLocal),
         # Prevent startup event from creating users or running migrations (conflicts with fixtures)
         patch("app.main.create_first_user", new_callable=AsyncMock),
         patch(
@@ -94,6 +124,7 @@ def test_db():
         shared_session.close()
         # Clean up database tables
         Base.metadata.drop_all(bind=engine)
+        engine.dispose()
         application.dependency_overrides.clear()
 
 

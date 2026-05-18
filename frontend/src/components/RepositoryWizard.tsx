@@ -12,7 +12,8 @@ import {
   WizardStepReview,
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
-import { sshKeysAPI, RepositoryData } from '../services/api'
+import { managedAgentsAPI, sshKeysAPI, RepositoryData } from '../services/api'
+import type { AgentMachineResponse } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
 import type { SourceLocation } from '../types'
 
@@ -58,6 +59,8 @@ interface WizardState {
   borgVersion: 1 | 2
   repositoryMode: 'full' | 'observe'
   repositoryLocation: 'local' | 'ssh'
+  executionTarget: 'local' | 'agent'
+  agentMachineId: number | ''
   path: string
   repoSshConnectionId: number | ''
   bypassLock: boolean
@@ -87,6 +90,8 @@ const createInitialState = (): WizardState => ({
   borgVersion: 1,
   repositoryMode: 'full',
   repositoryLocation: 'local',
+  executionTarget: 'local',
+  agentMachineId: '',
   path: '',
   repoSshConnectionId: '',
   bypassLock: false,
@@ -148,6 +153,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const [activeStep, setActiveStep] = useState(0)
   const [wizardState, setWizardState] = useState<WizardState>(() => createInitialState())
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
+  const [agentMachines, setAgentMachines] = useState<AgentMachineResponse[]>([])
 
   // File explorer states
   const [showPathExplorer, setShowPathExplorer] = useState(false)
@@ -166,6 +172,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       repository?.pre_backup_script ||
       repository?.post_backup_script
     )
+  const showAgentBackupSourceStep =
+    wizardState.executionTarget === 'agent' && wizardState.repositoryMode === 'full'
+  const showSourceStep = showLegacyBackupSteps || showAgentBackupSourceStep
 
   // Step definitions
   const steps = useMemo(() => {
@@ -177,7 +186,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       },
     ]
 
-    if (showLegacyBackupSteps) {
+    if (showSourceStep) {
       baseSteps.push({
         key: 'source',
         label: t('repositoryWizard.steps.source'),
@@ -212,10 +221,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     })
 
     return baseSteps
-  }, [showLegacyBackupSteps, t])
+  }, [showLegacyBackupSteps, showSourceStep, t])
 
-  // Load SSH connections
-  const loadSshData = async () => {
+  // Load selectable remote execution targets.
+  const loadWizardData = async () => {
     try {
       const connectionsRes = await sshKeysAPI.getSSHConnections()
       const connections = connectionsRes.data?.connections || []
@@ -223,6 +232,14 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     } catch (error) {
       console.error('Failed to load SSH data:', error)
       setSshConnections([])
+    }
+
+    try {
+      const agentsRes = await managedAgentsAPI.listAgents()
+      setAgentMachines(Array.isArray(agentsRes.data) ? agentsRes.data : [])
+    } catch (error) {
+      console.error('Failed to load managed agents:', error)
+      setAgentMachines([])
     }
   }
 
@@ -249,16 +266,22 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         : repository.repository_type === 'ssh' || (repository.path || '').startsWith('ssh://') // Legacy fallback
 
     const repoVersion = (repository.borg_version === 2 ? 2 : 1) as 1 | 2
+    const executionTarget = repository.execution_target === 'agent' ? 'agent' : 'local'
+
     setWizardState({
       name: repository.name || '',
       borgVersion: repoVersion,
       repositoryMode: repository.mode || 'full',
-      repositoryLocation: isSSH ? 'ssh' : 'local',
+      repositoryLocation: executionTarget === 'agent' ? 'local' : isSSH ? 'ssh' : 'local',
+      executionTarget,
+      agentMachineId: executionTarget === 'agent' ? repository.agent_machine_id || '' : '',
       path: repoPath,
-      repoSshConnectionId: repository.connection_id || '',
+      repoSshConnectionId: executionTarget === 'agent' ? '' : repository.connection_id || '',
       bypassLock: repository.bypass_lock || false,
-      dataSource: repository.source_ssh_connection_id ? 'remote' : 'local',
-      sourceSshConnectionId: repository.source_ssh_connection_id || '',
+      dataSource:
+        executionTarget === 'agent' || !repository.source_ssh_connection_id ? 'local' : 'remote',
+      sourceSshConnectionId:
+        executionTarget === 'agent' ? '' : repository.source_ssh_connection_id || '',
       sourceDirs: repository.source_directories || [],
       sourceLocations: repositorySourceLocations(repository),
       encryption: repository.encryption || (repoVersion === 2 ? 'repokey-aes-ocb' : 'repokey'),
@@ -289,16 +312,35 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   // Handle state changes
   const handleStateChange = (updates: Partial<WizardState>) => {
     setWizardState((prev) => {
+      const nextUpdates = { ...updates }
+
       // When borg version changes, reset encryption to a sensible default for that version
-      if (updates.borgVersion !== undefined && updates.borgVersion !== prev.borgVersion) {
-        updates.encryption = updates.borgVersion === 2 ? 'repokey-aes-ocb' : 'repokey'
+      if (nextUpdates.borgVersion !== undefined && nextUpdates.borgVersion !== prev.borgVersion) {
+        nextUpdates.encryption = nextUpdates.borgVersion === 2 ? 'repokey-aes-ocb' : 'repokey'
       }
-      const next = { ...prev, ...updates }
+
+      const effectiveExecutionTarget = nextUpdates.executionTarget ?? prev.executionTarget
+
+      if (effectiveExecutionTarget === 'agent') {
+        nextUpdates.repositoryLocation = 'local'
+        nextUpdates.repoSshConnectionId = ''
+        nextUpdates.dataSource = 'local'
+        nextUpdates.sourceSshConnectionId = ''
+      } else if (nextUpdates.executionTarget === 'local') {
+        nextUpdates.agentMachineId = ''
+      }
+
+      if (effectiveExecutionTarget === 'agent' && nextUpdates.dataSource === 'remote') {
+        nextUpdates.dataSource = 'local'
+        nextUpdates.sourceSshConnectionId = ''
+      }
+
+      const next = { ...prev, ...nextUpdates }
       const sourceFieldsChanged =
-        updates.sourceDirs !== undefined ||
-        updates.sourceSshConnectionId !== undefined ||
-        updates.dataSource !== undefined
-      if (sourceFieldsChanged && updates.sourceLocations === undefined) {
+        nextUpdates.sourceDirs !== undefined ||
+        nextUpdates.sourceSshConnectionId !== undefined ||
+        nextUpdates.dataSource !== undefined
+      if (sourceFieldsChanged && nextUpdates.sourceLocations === undefined) {
         next.sourceLocations = legacySourceLocations(next)
       }
       return next
@@ -428,7 +470,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
   useEffect(() => {
     if (open) {
-      loadSshData()
+      loadWizardData()
       if (mode === 'edit' && repository) {
         populateEditData()
       } else {
@@ -479,11 +521,20 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     switch (currentStepKey) {
       case 'location':
         if (!wizardState.name.trim() || !wizardState.path.trim()) return false
+        if (wizardState.executionTarget === 'agent' && !wizardState.agentMachineId) return false
         if (wizardState.repositoryLocation === 'ssh' && !wizardState.repoSshConnectionId)
           return false
         return true
 
       case 'source':
+        if (wizardState.executionTarget === 'agent' && wizardState.dataSource === 'remote')
+          return false
+        if (
+          wizardState.executionTarget === 'agent' &&
+          wizardState.repositoryMode === 'full' &&
+          wizardState.sourceDirs.length === 0
+        )
+          return false
         if (wizardState.dataSource === 'remote' && !wizardState.sourceSshConnectionId) return false
         return true
 
@@ -531,10 +582,18 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       continue_on_hook_failure: wizardState.hookFailureMode === 'continue',
       skip_on_hook_failure: wizardState.hookFailureMode === 'skip',
       bypass_lock: wizardState.bypassLock,
+      execution_target: wizardState.executionTarget === 'agent' ? 'agent' : 'local',
+      agent_machine_id:
+        wizardState.executionTarget === 'agent' && wizardState.agentMachineId
+          ? wizardState.agentMachineId
+          : null,
       // Connection IDs - single source of truth for SSH
-      connection_id: wizardState.repoSshConnectionId || null,
+      connection_id:
+        wizardState.executionTarget === 'agent' ? null : wizardState.repoSshConnectionId || null,
       source_connection_id:
-        wizardState.dataSource === 'remote' && wizardState.sourceSshConnectionId
+        wizardState.executionTarget !== 'agent' &&
+        wizardState.dataSource === 'remote' &&
+        wizardState.sourceSshConnectionId
           ? wizardState.sourceSshConnectionId
           : null,
     }
@@ -580,11 +639,14 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               borgVersion: wizardState.borgVersion,
               repositoryMode: wizardState.repositoryMode,
               repositoryLocation: wizardState.repositoryLocation,
+              executionTarget: wizardState.executionTarget,
+              agentMachineId: wizardState.agentMachineId,
               path: wizardState.path,
               repoSshConnectionId: wizardState.repoSshConnectionId,
               bypassLock: wizardState.bypassLock,
             }}
             sshConnections={sshConnections}
+            agentMachines={agentMachines}
             dataSource={wizardState.dataSource}
             sourceSshConnectionId={wizardState.sourceSshConnectionId}
             onChange={(updates) => {
@@ -611,6 +673,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         return (
           <WizardStepDataSource
             repositoryLocation={wizardState.repositoryLocation}
+            executionTarget={wizardState.executionTarget}
             repoSshConnectionId={wizardState.repoSshConnectionId}
             repositoryMode={wizardState.repositoryMode}
             data={{
@@ -640,7 +703,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             }}
             onBrowseSource={() => setShowSourceExplorer(true)}
             onBrowseRemoteSource={() => setShowRemoteSourceExplorer(true)}
-            sourceRequired={false}
+            sourceRequired={showAgentBackupSourceStep}
           />
         )
 
@@ -656,7 +719,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               selectedKeyfile: wizardState.selectedKeyfile,
             }}
             onChange={handleStateChange}
-            showRemotePath={false}
+            showRemotePath={wizardState.executionTarget === 'agent'}
           />
         )
 
@@ -697,7 +760,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               hookFailureMode: wizardState.hookFailureMode,
             }}
             onChange={handleStateChange}
-            onBrowseExclude={() => setShowExcludeExplorer(true)}
+            onBrowseExclude={
+              wizardState.executionTarget === 'agent'
+                ? undefined
+                : () => setShowExcludeExplorer(true)
+            }
             showAdvancedOptions={false}
           />
         )
@@ -711,6 +778,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               borgVersion: wizardState.borgVersion,
               repositoryMode: wizardState.repositoryMode,
               repositoryLocation: wizardState.repositoryLocation,
+              executionTarget: wizardState.executionTarget,
+              agentMachineId: wizardState.agentMachineId,
               path: wizardState.path,
               repoSshConnectionId: wizardState.repoSshConnectionId,
               dataSource: wizardState.dataSource,
@@ -724,6 +793,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               remotePath: wizardState.remotePath,
             }}
             sshConnections={sshConnections}
+            agentMachines={agentMachines}
           />
         )
 

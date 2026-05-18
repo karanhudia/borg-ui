@@ -35,6 +35,7 @@ export interface DataSourceStepData {
 
 interface WizardStepDataSourceProps {
   repositoryLocation: 'local' | 'ssh'
+  executionTarget?: 'local' | 'agent'
   repoSshConnectionId: number | ''
   repositoryMode: 'full' | 'observe'
   data: DataSourceStepData
@@ -47,6 +48,7 @@ interface WizardStepDataSourceProps {
 
 export default function WizardStepDataSource({
   repositoryLocation,
+  executionTarget = 'local',
   repoSshConnectionId,
   repositoryMode,
   data,
@@ -59,7 +61,8 @@ export default function WizardStepDataSource({
   const { t } = useTranslation()
 
   // Remote-to-remote is not allowed
-  const isRemoteToRemoteDisabled = repositoryLocation === 'ssh'
+  const isAgentExecution = executionTarget === 'agent'
+  const isRemoteToRemoteDisabled = repositoryLocation === 'ssh' || isAgentExecution
 
   // Determine if cards should be disabled based on already selected directories
   const hasLocalDirs = data.sourceDirs.length > 0 && !data.sourceSshConnectionId
@@ -100,6 +103,8 @@ export default function WizardStepDataSource({
       <Typography variant="subtitle2" gutterBottom>
         {t('wizard.dataSource.title')}
       </Typography>
+
+      {isAgentExecution && <Alert severity="info">{t('wizard.dataSource.agentSourceInfo')}</Alert>}
 
       <Box
         sx={{
@@ -190,7 +195,11 @@ export default function WizardStepDataSource({
         {/* Remote Data Source Card */}
         <Tooltip
           title={
-            isRemoteToRemoteDisabled ? t('wizard.dataSource.remoteToRemoteDisabledTooltip') : ''
+            isRemoteToRemoteDisabled
+              ? isAgentExecution
+                ? t('wizard.dataSource.agentRemoteSourceDisabledTooltip')
+                : t('wizard.dataSource.remoteToRemoteDisabledTooltip')
+              : ''
           }
           arrow
           placement="top"
@@ -270,7 +279,9 @@ export default function WizardStepDataSource({
                 </Box>
                 <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
                   {isRemoteToRemoteDisabled
-                    ? t('wizard.dataSource.notAvailableRemoteRepo')
+                    ? isAgentExecution
+                      ? t('wizard.dataSource.notAvailableAgentExecution')
+                      : t('wizard.dataSource.notAvailableRemoteRepo')
                     : t('wizard.dataSource.remoteDescription')}
                 </Typography>
                 {hasLocalDirs && !isRemoteToRemoteDisabled && (
@@ -289,7 +300,7 @@ export default function WizardStepDataSource({
       </Box>
 
       {/* Remote-to-remote explanation */}
-      {isRemoteToRemoteDisabled && (
+      {isRemoteToRemoteDisabled && !isAgentExecution && (
         <Alert severity="info">
           <Typography variant="body2">
             <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
@@ -308,7 +319,7 @@ export default function WizardStepDataSource({
               sourceSshConnectionId: newDirs.length === 0 ? '' : data.sourceSshConnectionId,
             })
           }}
-          onBrowseClick={onBrowseSource}
+          onBrowseClick={isAgentExecution ? undefined : onBrowseSource}
           required={sourceRequired && repositoryMode !== 'observe'}
         />
       )}

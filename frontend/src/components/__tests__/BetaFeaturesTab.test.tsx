@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import BetaFeaturesTab from '../BetaFeaturesTab'
 import { settingsAPI } from '@/services/api.ts'
@@ -31,6 +31,7 @@ describe('BetaFeaturesTab', () => {
       bypass_lock_on_list: false,
       borg2_fast_browse_beta_enabled: false,
       mqtt_beta_enabled: false,
+      managed_agents_beta_enabled: false,
     },
   }
 
@@ -91,6 +92,13 @@ describe('BetaFeaturesTab', () => {
       })
     })
 
+    it('renders managed CLI agents toggle', async () => {
+      renderWithProviders(<BetaFeaturesTab />)
+      await waitFor(() => {
+        expect(screen.getByText('Enable managed CLI agents')).toBeInTheDocument()
+      })
+    })
+
     it('renders Borg 2 fast browse toggle', async () => {
       renderWithProviders(<BetaFeaturesTab />)
       await waitFor(() => {
@@ -105,6 +113,7 @@ describe('BetaFeaturesTab', () => {
         expect(screen.getByText('Bypass Locks for List Commands')).toBeInTheDocument()
         expect(screen.getByText('Fast Borg 2 Archive Browse')).toBeInTheDocument()
         expect(screen.getByText('MQTT Integration')).toBeInTheDocument()
+        expect(screen.getByText('Managed CLI Agents')).toBeInTheDocument()
       })
     })
   })
@@ -388,6 +397,58 @@ describe('BetaFeaturesTab', () => {
     })
   })
 
+  describe('Managed CLI Agents Beta', () => {
+    it('toggle is initially unchecked', async () => {
+      renderWithProviders(<BetaFeaturesTab />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Enable managed CLI agents')).toBeInTheDocument()
+      })
+
+      const agentLabel = screen.getByText('Enable managed CLI agents').closest('label')
+      expect(agentLabel).not.toBeNull()
+      const agentSwitch = within(agentLabel as HTMLElement).getByRole('switch')
+      expect(agentSwitch).not.toBeChecked()
+    })
+
+    it('can enable managed CLI agents', async () => {
+      const user = userEvent.setup()
+      vi.mocked(settingsAPI.updateSystemSettings).mockResolvedValue({} as AxiosResponse)
+
+      renderWithProviders(<BetaFeaturesTab />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Enable managed CLI agents')).toBeInTheDocument()
+      })
+
+      const agentSwitch = screen
+        .getAllByRole('switch')
+        .find((sw) => sw.parentElement?.textContent?.includes('Enable managed CLI agents'))
+
+      if (agentSwitch) {
+        await user.click(agentSwitch)
+
+        await waitFor(() => {
+          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
+            managed_agents_beta_enabled: true,
+          })
+        })
+      }
+    })
+
+    it('shows managed CLI agents description', async () => {
+      renderWithProviders(<BetaFeaturesTab />)
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            'Shows the Managed Agents navigation item and server-side agent enrollment workflow.'
+          )
+        ).toBeInTheDocument()
+      })
+    })
+  })
+
   describe('Loading State', () => {
     it('disables all switches while mutation is pending', async () => {
       const user = userEvent.setup()
@@ -426,6 +487,7 @@ describe('BetaFeaturesTab', () => {
           bypass_lock_on_list: true,
           borg2_fast_browse_beta_enabled: true,
           mqtt_beta_enabled: true,
+          managed_agents_beta_enabled: true,
         },
       }
 
@@ -536,6 +598,7 @@ describe('BetaFeaturesTab', () => {
               ...mockSystemSettings.settings,
               borg2_fast_browse_beta_enabled: false,
               mqtt_beta_enabled: true,
+              managed_agents_beta_enabled: false,
             },
           },
         } as AxiosResponse)

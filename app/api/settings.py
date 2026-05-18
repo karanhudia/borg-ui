@@ -182,6 +182,7 @@ class SystemSettingsUpdate(BaseModel):
         None  # Show legacy Restore tab in navigation (beta)
     )
     borg2_fast_browse_beta_enabled: Optional[bool] = None
+    managed_agents_beta_enabled: Optional[bool] = None
     stats_refresh_interval_minutes: Optional[int] = (
         None  # How often to refresh repository stats (0 = disabled)
     )
@@ -380,6 +381,7 @@ async def get_system_settings(
                 "bypass_lock_on_list": settings.bypass_lock_on_list,
                 "show_restore_tab": settings.show_restore_tab,
                 "borg2_fast_browse_beta_enabled": settings.borg2_fast_browse_beta_enabled,
+                "managed_agents_beta_enabled": settings.managed_agents_beta_enabled,
                 "stats_refresh_interval_minutes": settings.stats_refresh_interval_minutes
                 if settings.stats_refresh_interval_minutes is not None
                 else 60,
@@ -650,6 +652,10 @@ async def update_system_settings(
         if settings_update.borg2_fast_browse_beta_enabled is not None:
             settings.borg2_fast_browse_beta_enabled = (
                 settings_update.borg2_fast_browse_beta_enabled
+            )
+        if settings_update.managed_agents_beta_enabled is not None:
+            settings.managed_agents_beta_enabled = (
+                settings_update.managed_agents_beta_enabled
             )
         if settings_update.stats_refresh_interval_minutes is not None:
             settings.stats_refresh_interval_minutes = (

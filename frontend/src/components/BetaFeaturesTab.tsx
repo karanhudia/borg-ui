@@ -15,6 +15,7 @@ const BetaFeaturesTab: React.FC = () => {
   const [bypassLockOnList, setBypassLockOnList] = useState(false)
   const [borg2FastBrowseBetaEnabled, setBorg2FastBrowseBetaEnabled] = useState(false)
   const [mqttBetaEnabled, setMqttBetaEnabled] = useState(false)
+  const [managedAgentsBetaEnabled, setManagedAgentsBetaEnabled] = useState(false)
 
   // Fetch system settings
   const { data: systemData, isLoading: systemLoading } = useQuery({
@@ -34,6 +35,7 @@ const BetaFeaturesTab: React.FC = () => {
       setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
       setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
       setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
+      setManagedAgentsBetaEnabled(systemSettings.managed_agents_beta_enabled ?? false)
     }
   }, [systemSettings])
 
@@ -44,6 +46,7 @@ const BetaFeaturesTab: React.FC = () => {
       bypass_lock_on_list?: boolean
       borg2_fast_browse_beta_enabled?: boolean
       mqtt_beta_enabled?: boolean
+      managed_agents_beta_enabled?: boolean
     }) => {
       await settingsAPI.updateSystemSettings(settings)
     },
@@ -59,6 +62,7 @@ const BetaFeaturesTab: React.FC = () => {
         setBypassLockOnList(systemSettings.bypass_lock_on_list ?? false)
         setBorg2FastBrowseBetaEnabled(systemSettings.borg2_fast_browse_beta_enabled ?? false)
         setMqttBetaEnabled(systemSettings.mqtt_beta_enabled ?? false)
+        setManagedAgentsBetaEnabled(systemSettings.managed_agents_beta_enabled ?? false)
       }
     },
   })
@@ -101,6 +105,16 @@ const BetaFeaturesTab: React.FC = () => {
       enabled: checked,
     })
     saveSettingsMutation.mutate({ mqtt_beta_enabled: checked })
+  }
+
+  const handleManagedAgentsBetaToggle = (checked: boolean) => {
+    setManagedAgentsBetaEnabled(checked)
+    trackSettings(EventAction.EDIT, {
+      section: 'beta_features',
+      feature: 'managed_agents_beta_enabled',
+      enabled: checked,
+    })
+    saveSettingsMutation.mutate({ managed_agents_beta_enabled: checked })
   }
 
   if (systemLoading) {
@@ -220,6 +234,31 @@ const BetaFeaturesTab: React.FC = () => {
                   <Typography variant="body1">{t('betaFeatures.enableMqtt')}</Typography>
                   <Typography variant="body2" color="text.secondary">
                     {t('betaFeatures.mqttIntegrationDescription')}
+                  </Typography>
+                </Box>
+              }
+            />
+          </Box>
+
+          <Box>
+            <Typography variant="h6" fontSize="1rem" sx={{ mb: 2 }}>
+              {t('betaFeatures.managedAgentsTitle')}
+            </Typography>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={managedAgentsBetaEnabled}
+                  onChange={(e) => handleManagedAgentsBetaToggle(e.target.checked)}
+                  disabled={saveSettingsMutation.isPending}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">{t('betaFeatures.enableManagedAgents')}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('betaFeatures.managedAgentsDescription')}
                   </Typography>
                 </Box>
               }

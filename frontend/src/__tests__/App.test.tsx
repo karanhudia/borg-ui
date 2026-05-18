@@ -68,6 +68,9 @@ vi.mock('../pages/Repositories', () => ({
 vi.mock('../pages/SSHConnectionsSingleKey', () => ({
   default: () => <div>SSH Connections Page</div>,
 }))
+vi.mock('../pages/ManagedAgents', () => ({
+  default: () => <div>Managed Agents Page</div>,
+}))
 vi.mock('../pages/Activity', () => ({
   default: () => <div>Activity Page</div>,
 }))
@@ -210,6 +213,14 @@ describe('App', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/settings/scripts')
     })
+  })
+
+  it('renders managed agents under the connections tab', async () => {
+    renderWithProviders(<App />, { initialRoute: '/managed-agents' })
+
+    expect(await screen.findByText('Managed Agents Page')).toBeInTheDocument()
+    expect(screen.getByText('Protected:connections')).toBeInTheDocument()
+    expect(protectedRouteMock).toHaveBeenCalledWith('connections')
   })
 
   it('loads analytics preferences and initializes analytics on mount', async () => {
