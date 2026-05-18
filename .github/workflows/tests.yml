@@ -20,36 +20,97 @@ env:
   SMOKE_URL: "http://localhost:8082"
 
 jobs:
-  backend-lint:
-    name: Backend / Lint & Format
+  changed-files:
+    name: CI / Changed Files
     runs-on: ubuntu-latest
+    outputs:
+      run_docs: ${{ steps.selector.outputs.run_docs }}
+      run_backend_lint: ${{ steps.selector.outputs.run_backend_lint }}
+      run_backend_unit: ${{ steps.selector.outputs.run_backend_unit }}
+      run_backend_integration: ${{ steps.selector.outputs.run_backend_integration }}
+      run_frontend_quality: ${{ steps.selector.outputs.run_frontend_quality }}
+      run_frontend_unit: ${{ steps.selector.outputs.run_frontend_unit }}
+      run_frontend_build: ${{ steps.selector.outputs.run_frontend_build }}
+      run_smoke_core: ${{ steps.selector.outputs.run_smoke_core }}
+      run_smoke_extended: ${{ steps.selector.outputs.run_smoke_extended }}
+      run_smoke_ssh: ${{ steps.selector.outputs.run_smoke_ssh }}
+      manifest_hash: ${{ steps.selector.outputs.manifest_hash }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Select validation lanes
+        id: selector
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python3 scripts/select_validation.py --all --format github-output >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.sha }}" > /tmp/changed-files.txt
+          else
+            git diff --name-only "${{ github.event.before }}...${{ github.sha }}" > /tmp/changed-files.txt
+          fi
+
+          echo "Changed files:"
+          cat /tmp/changed-files.txt
+          python3 scripts/select_validation.py --changed-files /tmp/changed-files.txt --format github-output >> "$GITHUB_OUTPUT"
+
+      - name: Show validation manifest
+        run: |
+          echo "Manifest hash: ${{ steps.selector.outputs.manifest_hash }}"
+          echo "Backend unit: ${{ steps.selector.outputs.run_backend_unit }}"
+          echo "Frontend unit: ${{ steps.selector.outputs.run_frontend_unit }}"
+          echo "Frontend build: ${{ steps.selector.outputs.run_frontend_build }}"
+          echo "Smoke core: ${{ steps.selector.outputs.run_smoke_core }}"
+          echo "Smoke extended: ${{ steps.selector.outputs.run_smoke_extended }}"
+          echo "Smoke SSH: ${{ steps.selector.outputs.run_smoke_ssh }}"
+
+  backend-lint:
+    name: Backend / Lint & Format
+    runs-on: ubuntu-latest
+    needs: [changed-files]
+
+    steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_backend_lint != 'true'
+        run: echo "Backend lint lane not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
+      - name: Checkout code
+        if: needs.changed-files.outputs.run_backend_lint == 'true'
+        uses: actions/checkout@v5
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: needs.changed-files.outputs.run_backend_lint == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Install Python dependencies
+        if: needs.changed-files.outputs.run_backend_lint == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run Ruff lint
+        if: needs.changed-files.outputs.run_backend_lint == 'true'
         run: |
           ruff check app tests
 
       - name: Run Ruff format check
+        if: needs.changed-files.outputs.run_backend_lint == 'true'
         run: |
           ruff format --check app tests
 
   backend-unit-coverage:
     name: Backend / Unit Tests
     runs-on: ubuntu-latest
+    needs: [changed-files]
 
     services:
       redis:
@@ -63,37 +124,48 @@ jobs:
           - 6379:6379
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_backend_unit != 'true'
+        run: echo "Backend unit lane not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Install system dependencies
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y borgbackup
 
       - name: Verify Borg installation
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         run: |
           borg --version
           which borg
 
       - name: Install Python dependencies
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Create test directories
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         run: |
           mkdir -p /tmp/borg-ui-tests
           mkdir -p data
           mkdir -p logs
 
       - name: Run backend unit coverage
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         run: |
           pytest \
             tests/unit \
@@ -107,6 +179,7 @@ jobs:
           REDIS_PORT: 6379
 
       - name: Upload backend coverage artifact
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: backend-coverage-xml
@@ -115,15 +188,15 @@ jobs:
           retention-days: 7
 
       - name: Upload coverage HTML report
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         uses: actions/upload-artifact@v7
-        if: always()
         with:
           name: coverage-report-backend
           path: htmlcov/
           retention-days: 30
 
       - name: Comment coverage on PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && needs.changed-files.outputs.run_backend_unit == 'true'
         uses: py-cov-action/python-coverage-comment-action@v3
         with:
           GITHUB_TOKEN: ${{ github.token }}
@@ -133,6 +206,7 @@ jobs:
   backend-api-integration:
     name: Backend / Integration Tests
     runs-on: ubuntu-latest
+    needs: [changed-files]
 
     services:
       redis:
@@ -146,37 +220,48 @@ jobs:
           - 6379:6379
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_backend_integration != 'true'
+        run: echo "Backend integration lane not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_backend_integration == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: needs.changed-files.outputs.run_backend_integration == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Install system dependencies
+        if: needs.changed-files.outputs.run_backend_integration == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y borgbackup
 
       - name: Verify Borg installation
+        if: needs.changed-files.outputs.run_backend_integration == 'true'
         run: |
           borg --version
           which borg
 
       - name: Install Python dependencies
+        if: needs.changed-files.outputs.run_backend_integration == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Create test directories
+        if: needs.changed-files.outputs.run_backend_integration == 'true'
         run: |
           mkdir -p /tmp/borg-ui-tests
           mkdir -p data
           mkdir -p logs
 
       - name: Run backend integration suite
+        if: needs.changed-files.outputs.run_backend_integration == 'true'
         run: |
           pytest \
             tests/integration/test_api_archives_integration.py \
@@ -195,12 +280,19 @@ jobs:
   typecheck-lint-format:
     name: Frontend / Code Quality
     runs-on: ubuntu-latest
+    needs: [changed-files]
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_frontend_quality != 'true'
+        run: echo "Frontend quality lane not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_frontend_quality == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
+        if: needs.changed-files.outputs.run_frontend_quality == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -208,34 +300,46 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        if: needs.changed-files.outputs.run_frontend_quality == 'true'
         working-directory: frontend
         run: npm ci
 
       - name: Check locale key parity
+        if: needs.changed-files.outputs.run_frontend_quality == 'true'
         working-directory: frontend
         run: npm run check:locales
 
       - name: TypeScript type check
+        if: needs.changed-files.outputs.run_frontend_quality == 'true'
         working-directory: frontend
         run: npm run typecheck
 
       - name: Prettier format check
+        if: needs.changed-files.outputs.run_frontend_quality == 'true'
         working-directory: frontend
         run: npm run format:check
 
       - name: Run linter
+        if: needs.changed-files.outputs.run_frontend_quality == 'true'
         working-directory: frontend
         run: npm run lint
 
   frontend-vitest:
     name: Frontend / Unit Tests
     runs-on: ubuntu-latest
+    needs: [changed-files]
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_frontend_unit != 'true'
+        run: echo "Frontend unit lane not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_frontend_unit == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
+        if: needs.changed-files.outputs.run_frontend_unit == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -243,14 +347,17 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        if: needs.changed-files.outputs.run_frontend_unit == 'true'
         working-directory: frontend
         run: npm ci
 
       - name: Run frontend tests with coverage
+        if: needs.changed-files.outputs.run_frontend_unit == 'true'
         working-directory: frontend
         run: npm run test:coverage
 
       - name: Upload frontend coverage artifact
+        if: needs.changed-files.outputs.run_frontend_unit == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: frontend-coverage-lcov
@@ -261,19 +368,26 @@ jobs:
   coverage-backend:
     name: Coverage / Backend
     runs-on: ubuntu-latest
-    needs: [backend-unit-coverage, backend-api-integration, frontend-vitest]
+    needs: [changed-files, backend-unit-coverage, backend-api-integration, frontend-vitest]
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_backend_unit != 'true'
+        run: echo "Backend coverage upload not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         uses: actions/checkout@v5
 
       - name: Download backend coverage artifact
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         uses: actions/download-artifact@v8
         with:
           name: backend-coverage-xml
           path: coverage-artifacts/backend
 
       - name: Upload backend coverage to Codecov
+        if: needs.changed-files.outputs.run_backend_unit == 'true'
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -287,19 +401,26 @@ jobs:
   coverage-frontend:
     name: Coverage / Frontend
     runs-on: ubuntu-latest
-    needs: [backend-unit-coverage, backend-api-integration, frontend-vitest]
+    needs: [changed-files, backend-unit-coverage, backend-api-integration, frontend-vitest]
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_frontend_unit != 'true'
+        run: echo "Frontend coverage upload not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_frontend_unit == 'true'
         uses: actions/checkout@v5
 
       - name: Download frontend coverage artifact
+        if: needs.changed-files.outputs.run_frontend_unit == 'true'
         uses: actions/download-artifact@v8
         with:
           name: frontend-coverage-lcov
           path: coverage-artifacts/frontend
 
       - name: Upload frontend coverage to Codecov
+        if: needs.changed-files.outputs.run_frontend_unit == 'true'
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -313,12 +434,19 @@ jobs:
   frontend-build:
     name: Frontend / Build
     runs-on: ubuntu-latest
+    needs: [changed-files]
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_frontend_build != 'true'
+        run: echo "Frontend build lane not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_frontend_build == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
+        if: needs.changed-files.outputs.run_frontend_build == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -326,14 +454,17 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        if: needs.changed-files.outputs.run_frontend_build == 'true'
         working-directory: frontend
         run: npm ci
 
       - name: Build frontend
+        if: needs.changed-files.outputs.run_frontend_build == 'true'
         working-directory: frontend
         run: npm run build
 
       - name: Check build output
+        if: needs.changed-files.outputs.run_frontend_build == 'true'
         working-directory: frontend
         run: |
           if [ -d "dist" ]; then
@@ -349,6 +480,7 @@ jobs:
           fi
 
       - name: Upload frontend build artifact
+        if: needs.changed-files.outputs.run_frontend_build == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: frontend-build-output
@@ -360,10 +492,9 @@ jobs:
 
   smoke-borg-core:
     name: Smoke / Core
-    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    needs: [frontend-build]
+    needs: [changed-files, frontend-build]
 
     services:
       redis:
@@ -377,32 +508,42 @@ jobs:
           - 6379:6379
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_smoke_core != 'true'
+        run: echo "Core smoke lane not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Install system dependencies
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y borgbackup
 
       - name: Install Python dependencies
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Download frontend build artifact
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         uses: actions/download-artifact@v8
         with:
           name: frontend-build-output
           path: frontend-artifact
 
       - name: Copy frontend build to static directory
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         run: |
           mkdir -p app/static
           if [ -d "frontend-artifact/build" ]; then
@@ -420,11 +561,13 @@ jobs:
           fi
 
       - name: Create smoke test data
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         run: |
           chmod +x tests/setup_test_env.sh
           ./tests/setup_test_env.sh
 
       - name: Start Borg UI backend
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         run: |
           mkdir -p data logs
           uvicorn app.main:app --host 0.0.0.0 --port 8082 &
@@ -438,17 +581,19 @@ jobs:
           ACTIVATION_SERVICE_URL: ""
 
       - name: Wait for service to be ready
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         run: |
           timeout 60 bash -c 'until curl -s ${{ env.SMOKE_URL }}/api/docs > /dev/null; do sleep 2; done'
 
       - name: Run core smoke suite
+        if: needs.changed-files.outputs.run_smoke_core == 'true'
         run: |
           python3 tests/smoke/run_core_smoke.py --url ${{ env.SMOKE_URL }}
         env:
           BORG_UI_CONTAINER: false
 
       - name: Stop Borg UI
-        if: always()
+        if: always() && needs.changed-files.outputs.run_smoke_core == 'true'
         run: |
           if [ -f /tmp/borg-ui.pid ]; then
             kill "$(cat /tmp/borg-ui.pid)" || true
@@ -456,7 +601,7 @@ jobs:
 
       - name: Upload smoke artifacts
         uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && needs.changed-files.outputs.run_smoke_core == 'true'
         with:
           name: smoke-core-artifacts
           path: |
@@ -469,7 +614,7 @@ jobs:
     name: Smoke / Extended
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [frontend-build]
+    needs: [changed-files, frontend-build]
 
     services:
       redis:
@@ -483,32 +628,42 @@ jobs:
           - 6379:6379
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_smoke_extended != 'true'
+        run: echo "Extended smoke lane not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Install system dependencies
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y borgbackup
 
       - name: Install Python dependencies
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Download frontend build artifact
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         uses: actions/download-artifact@v8
         with:
           name: frontend-build-output
           path: frontend-artifact
 
       - name: Copy frontend build to static directory
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         run: |
           mkdir -p app/static
           if [ -d "frontend-artifact/build" ]; then
@@ -526,11 +681,13 @@ jobs:
           fi
 
       - name: Create smoke test data
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         run: |
           chmod +x tests/setup_test_env.sh
           ./tests/setup_test_env.sh
 
       - name: Start Borg UI backend
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         run: |
           mkdir -p data logs
           uvicorn app.main:app --host 0.0.0.0 --port 8082 &
@@ -544,17 +701,19 @@ jobs:
           ACTIVATION_SERVICE_URL: ""
 
       - name: Wait for service to be ready
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         run: |
           timeout 60 bash -c 'until curl -s ${{ env.SMOKE_URL }}/api/docs > /dev/null; do sleep 2; done'
 
       - name: Run extended smoke suite
+        if: needs.changed-files.outputs.run_smoke_extended == 'true'
         run: |
           python3 tests/smoke/run_extended_smoke.py --url ${{ env.SMOKE_URL }}
         env:
           BORG_UI_CONTAINER: false
 
       - name: Stop Borg UI
-        if: always()
+        if: always() && needs.changed-files.outputs.run_smoke_extended == 'true'
         run: |
           if [ -f /tmp/borg-ui.pid ]; then
             kill "$(cat /tmp/borg-ui.pid)" || true
@@ -562,7 +721,7 @@ jobs:
 
       - name: Upload smoke artifacts
         uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && needs.changed-files.outputs.run_smoke_extended == 'true'
         with:
           name: smoke-extended-artifacts
           path: |
@@ -575,7 +734,7 @@ jobs:
     name: Smoke / SSH
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [frontend-build]
+    needs: [changed-files, frontend-build]
 
     services:
       redis:
@@ -589,21 +748,29 @@ jobs:
           - 6379:6379
 
     steps:
+      - name: Report not applicable
+        if: needs.changed-files.outputs.run_smoke_ssh != 'true'
+        run: echo "SSH smoke lane not applicable for selector manifest ${{ needs.changed-files.outputs.manifest_hash }}."
+
       - name: Checkout code
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Install system dependencies
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y borgbackup openssh-server
 
       - name: Configure localhost SSH target
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         run: |
           sudo useradd -m -s /bin/bash borgsmoke || true
           sudo mkdir -p /home/borgsmoke/.ssh
@@ -621,17 +788,20 @@ jobs:
           sudo /usr/sbin/sshd -p 2222
 
       - name: Install Python dependencies
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Download frontend build artifact
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         uses: actions/download-artifact@v8
         with:
           name: frontend-build-output
           path: frontend-artifact
 
       - name: Copy frontend build to static directory
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         run: |
           mkdir -p app/static
           if [ -d "frontend-artifact/build" ]; then
@@ -649,6 +819,7 @@ jobs:
           fi
 
       - name: Start Borg UI backend
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         run: |
           mkdir -p data logs
           uvicorn app.main:app --host 0.0.0.0 --port 8082 &
@@ -662,10 +833,12 @@ jobs:
           ACTIVATION_SERVICE_URL: ""
 
       - name: Wait for service to be ready
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         run: |
           timeout 60 bash -c 'until curl -s ${{ env.SMOKE_URL }}/api/docs > /dev/null; do sleep 2; done'
 
       - name: Run localhost SSH smoke
+        if: needs.changed-files.outputs.run_smoke_ssh == 'true'
         run: |
           python3 tests/smoke/test_remote_ssh_smoke.py --url ${{ env.SMOKE_URL }}
         env:
@@ -677,7 +850,7 @@ jobs:
           SSH_SMOKE_REMOTE_REPO: /home/borgsmoke/remote-repo
 
       - name: Stop Borg UI
-        if: always()
+        if: always() && needs.changed-files.outputs.run_smoke_ssh == 'true'
         run: |
           if [ -f /tmp/borg-ui.pid ]; then
             kill "$(cat /tmp/borg-ui.pid)" || true
@@ -685,7 +858,7 @@ jobs:
 
       - name: Upload smoke artifacts
         uses: actions/upload-artifact@v7
-        if: always()
+        if: always() && needs.changed-files.outputs.run_smoke_ssh == 'true'
         with:
           name: smoke-ssh-localhost-artifacts
           path: |
@@ -696,13 +869,14 @@ jobs:
   test-results:
     name: CI / Summary
     runs-on: ubuntu-latest
-    needs: [backend-lint, backend-unit-coverage, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-backend, coverage-frontend, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
+    needs: [changed-files, backend-lint, backend-unit-coverage, backend-api-integration, typecheck-lint-format, frontend-vitest, coverage-backend, coverage-frontend, frontend-build, smoke-borg-core, smoke-borg-extended, smoke-borg-ssh-localhost]
     if: always()
 
     steps:
       - name: Check test results
         run: |
           echo "Backend / Lint & Format: ${{ needs.backend-lint.result }}"
+          echo "Selector manifest: ${{ needs.changed-files.outputs.manifest_hash }}"
           echo "Backend / Unit Tests: ${{ needs.backend-unit-coverage.result }}"
           echo "Backend / Integration Tests: ${{ needs.backend-api-integration.result }}"
           echo "Frontend / Code Quality: ${{ needs.typecheck-lint-format.result }}"
@@ -713,6 +887,11 @@ jobs:
           echo "Smoke / Core: ${{ needs.smoke-borg-core.result }}"
           echo "Smoke / Extended: ${{ needs.smoke-borg-extended.result }}"
           echo "Smoke / SSH: ${{ needs.smoke-borg-ssh-localhost.result }}"
+
+          if [ "${{ needs.changed-files.result }}" != "success" ]; then
+            echo "CI / Changed Files failed"
+            exit 1
+          fi
 
           if [ "${{ needs.backend-lint.result }}" != "success" ]; then
             echo "Backend / Lint & Format failed"
