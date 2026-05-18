@@ -109,6 +109,10 @@ class TestRepositoryWipeApi:
             "has_logs": False,
         }
 
+        def close_background_coroutine(coro):
+            coro.close()
+            return object()
+
         with (
             patch(
                 "app.api.repositories.repository_wipe_service.start_execution",
@@ -119,7 +123,8 @@ class TestRepositoryWipeApi:
                 return_value=serialized,
             ),
             patch(
-                "app.api.repositories.asyncio.create_task", return_value=object()
+                "app.api.repositories.asyncio.create_task",
+                side_effect=close_background_coroutine,
             ) as create_task,
         ):
             response = test_client.post(
