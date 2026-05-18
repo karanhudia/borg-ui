@@ -30,47 +30,53 @@ description:
 
 1. Locate the PR for the current branch.
 2. Read the workpad final handoff notes and find the exact line:
-   `Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>`.
-3. Run the fast-path preflight:
+   `Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>; manifest=<selector manifest hash>`.
+3. Re-run `python3 scripts/select_validation.py --base origin/main --format json`
+   and compare its `manifest_hash` with the handoff `manifest=` value. If the
+   selector is unavailable, the hash differs, or the manifest contains new
+   broadening reasons, use the conservative fallback.
+4. Run the fast-path preflight:
    `python3 .codex/skills/land/land_watch.py --preflight --handoff-note '<handoff note>'`.
-4. If the preflight exits `0`, skip full local validation and the full watcher
+5. If the preflight exits `0`, skip full local validation and the full watcher
    loop for this already-green PR. The preflight has confirmed the head SHA is
    unchanged since Human Review, mergeability is clean, checks are green, and no
-   new human/Codex feedback appeared since Human Review. Squash-merge with the
+   new human/Codex feedback appeared since Human Review. The manifest hash check
+   confirms the selected validation surface is unchanged. Squash-merge with the
    PR title/body after one final `gh pr view --json mergeable,mergeStateStatus`
    check still reports a clean merge state.
-5. If the preflight exits `6`, fails, or reports missing/uncertain data, use the
+6. If the preflight exits `6`, fails, or reports missing/uncertain data, use the
    conservative fallback below.
-6. Conservative fallback: confirm the Borg UI validation gauntlet is green
-   locally before any push:
+7. Conservative fallback: re-run the selector, record the new manifest in the
+   workpad, then confirm the selected commands and any broad fallback commands
+   are green locally before any push. If the selector cannot run, use
    `git diff --check`; backend checks for backend changes; frontend checks for
    frontend changes; and smoke/runtime checks for user-facing app changes.
-7. If the working tree has uncommitted changes, commit with the `commit` skill
+8. If the working tree has uncommitted changes, commit with the `commit` skill
    and push with the `push` skill before proceeding.
-8. Check mergeability and conflicts against main.
-9. If conflicts exist, use the `pull` skill to fetch/merge `origin/main` and
+9. Check mergeability and conflicts against main.
+10. If conflicts exist, use the `pull` skill to fetch/merge `origin/main` and
    resolve conflicts, then use the `push` skill to publish the updated branch.
-10. Ensure Codex review comments (if present) are acknowledged and any required
+11. Ensure Codex review comments (if present) are acknowledged and any required
    fixes are handled before merging.
-11. Watch checks until complete.
-12. If checks fail, pull logs, fix the issue, commit with the `commit` skill,
+12. Watch checks until complete.
+13. If checks fail, pull logs, fix the issue, commit with the `commit` skill,
    push with the `push` skill, and re-run checks.
-13. When all checks are green and review feedback is addressed, squash-merge and
+14. When all checks are green and review feedback is addressed, squash-merge and
    delete the branch using the PR title/body for the merge subject/body.
-14. **Context guard:** Before implementing review feedback, confirm it does not
+15. **Context guard:** Before implementing review feedback, confirm it does not
     conflict with the user’s stated intent or task context. If it conflicts,
     respond inline with a justification and ask the user before changing code.
-15. **Pushback template:** When disagreeing, reply inline with: acknowledge +
+16. **Pushback template:** When disagreeing, reply inline with: acknowledge +
     rationale + offer alternative.
-16. **Ambiguity gate:** When ambiguity blocks progress, use the clarification
+17. **Ambiguity gate:** When ambiguity blocks progress, use the clarification
     flow (assign PR to current GH user, mention them, wait for response). Do not
     implement until ambiguity is resolved.
     - If you are confident you know better than the reviewer, you may proceed
       without asking the user, but reply inline with your rationale.
-17. **Per-comment mode:** For each review comment, choose one of: accept,
+18. **Per-comment mode:** For each review comment, choose one of: accept,
     clarify, or push back. Reply inline (or in the issue thread for Codex
     reviews) stating the mode before changing code.
-18. **Reply before change:** Always respond with intended action before pushing
+19. **Reply before change:** Always respond with intended action before pushing
     code changes (inline for review comments, issue thread for Codex reviews).
 
 ## Commands
@@ -81,11 +87,31 @@ branch=$(git branch --show-current)
 pr_number=$(gh pr view --json number -q .number)
 pr_title=$(gh pr view --json title -q .title)
 pr_body=$(gh pr view --json body -q .body)
-handoff_note='Human Review handoff: head=<sha>; at=<timestamp>; validation=<commands>'
+handoff_note='Human Review handoff: head=<sha>; at=<timestamp>; validation=<commands>; manifest=<hash>'
+handoff_manifest_hash='<hash from handoff note>'
+
+# Confirm selector manifest is unchanged before using the fast path.
+fast_path_manifest_ok=false
+if python3 scripts/select_validation.py --base origin/main --format json | tee /tmp/borg-ui-validation-manifest.json; then
+  current_manifest_hash=$(python3 - <<'PY'
+import json
+manifest = json.load(open('/tmp/borg-ui-validation-manifest.json', encoding='utf-8'))
+print(manifest['manifest_hash'])
+PY
+  )
+  if [ "$current_manifest_hash" = "$handoff_manifest_hash" ]; then
+    fast_path_manifest_ok=true
+  else
+    echo "Validation manifest changed since Human Review; use conservative fallback." >&2
+  fi
+else
+  echo "Validation selector failed; use conservative fallback." >&2
+fi
 
 # Fast path for already-green PRs. If this exits 0, skip local validation and
-# the full watcher loop. If it exits 6 or errors, use the conservative fallback.
-if python3 .codex/skills/land/land_watch.py --preflight --handoff-note "$handoff_note"; then
+# the full watcher loop only after the manifest hash comparison above succeeds.
+# If it exits 6 or errors, use the conservative fallback.
+if [ "$fast_path_manifest_ok" = true ] && python3 .codex/skills/land/land_watch.py --preflight --handoff-note "$handoff_note"; then
   mergeable=$(gh pr view --json mergeable -q .mergeable)
   merge_state=$(gh pr view --json mergeStateStatus -q .mergeStateStatus)
   if [ "$mergeable" = "MERGEABLE" ] && { [ "$merge_state" = "CLEAN" ] || [ "$merge_state" = "HAS_HOOKS" ]; }; then
@@ -102,15 +128,34 @@ if [ "$mergeable" = "CONFLICTING" ]; then
   # Then run the `push` skill to publish the updated branch.
 fi
 
-# Conservative fallback: Borg UI local validation before merge. Keep this
-# scope-sensitive for the PR.
+# Conservative fallback: Borg UI local validation before merge. The selector
+# output is the minimum scope; broadening reasons require fallback commands.
 git diff --check
-if git diff --name-only origin/main...HEAD | rg -q '^(app|tests|requirements.txt|pytest.ini|ruff.toml)(/|$)'; then
+if python3 - <<'PY'
+import json
+manifest = json.load(open('/tmp/borg-ui-validation-manifest.json', encoding='utf-8'))
+commands = {command['id'] for command in manifest['local_commands']}
+reasons = {reason['id'] for reason in manifest['broadening_reasons']}
+needs_backend = bool({'backend-unit-tests', 'backend-api-tests', 'backend-targeted-pytest'} & commands)
+needs_backend = needs_backend or any(reason.startswith(('backend-', 'ci-', 'workflow-', 'unmapped-', 'all-')) for reason in reasons)
+raise SystemExit(0 if needs_backend else 1)
+PY
+then
   ruff check app tests
   ruff format --check app tests
   pytest tests/unit -v
 fi
-if git diff --name-only origin/main...HEAD | rg -q '^frontend/'; then
+if python3 - <<'PY'
+import json
+manifest = json.load(open('/tmp/borg-ui-validation-manifest.json', encoding='utf-8'))
+commands = {command['id'] for command in manifest['local_commands']}
+reasons = {reason['id'] for reason in manifest['broadening_reasons']}
+needs_frontend = any(command.startswith('frontend-') for command in commands)
+needs_frontend = needs_frontend or any(reason.startswith(('frontend-', 'ci-', 'workflow-', 'unmapped-', 'all-')) for reason in reasons)
+raise SystemExit(0 if needs_frontend else 1)
+PY
+then
+  (cd frontend && npm ci)
   (cd frontend && npm run check:locales && npm run typecheck && npm run lint && npm run build)
 fi
 
@@ -152,12 +197,13 @@ python3 .codex/skills/land/land_watch.py --preflight --handoff-note "$handoff_no
 The handoff note must come from the workpad final handoff notes:
 
 ```
-Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>
+Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>; manifest=<selector manifest hash>
 ```
 
 The fast path is allowed only when all of these are true:
 
 - The current PR head SHA matches the Human Review handoff SHA.
+- The current selector manifest hash matches the Human Review handoff manifest.
 - Mergeability is `MERGEABLE` and merge state is `CLEAN` or `HAS_HOOKS`.
 - GitHub check runs exist and are complete with successful, neutral, or skipped
   conclusions.

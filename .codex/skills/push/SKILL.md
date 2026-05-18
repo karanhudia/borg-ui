@@ -26,10 +26,17 @@ description:
 ## Steps
 
 1. Identify current branch and confirm remote state.
-2. Run Borg UI validation appropriate to the changed files before pushing.
-3. Push branch to `origin` with upstream tracking if needed, using whatever
+2. Run `python3 scripts/select_validation.py --base origin/main --format json`
+   before pushing. Record the manifest hash, selected commands, and broadening
+   reasons in the Linear workpad. Treat the selector as the minimum validation
+   gate; ticket-provided checks and reviewer-requested checks still apply.
+3. Run the selected local commands. If the selector is unavailable, exits
+   non-zero, reports an unmapped/risky broadening reason, or selects
+   backend/frontend fallback commands, run the documented conservative fallback
+   commands before pushing.
+4. Push branch to `origin` with upstream tracking if needed, using whatever
    remote URL is already configured.
-4. If push is not clean/rejected:
+5. If push is not clean/rejected:
    - If the failure is a non-fast-forward or sync problem, run the `pull`
      skill to merge `origin/main`, resolve conflicts, and rerun validation.
    - Push again; use `--force-with-lease` only when history was rewritten.
@@ -37,14 +44,14 @@ description:
      the configured remote, stop and surface the exact error instead of
      rewriting remotes or switching protocols as a workaround.
 
-5. Ensure a PR exists for the branch:
+6. Ensure a PR exists for the branch:
    - If no PR exists, create one.
    - If a PR exists and is open, update it.
    - If branch is tied to a closed/merged PR, create a new branch + PR.
    - Write a proper PR title that clearly describes the change outcome
    - For branch updates, explicitly reconsider whether current PR title still
      matches the latest scope; update it if it no longer does.
-6. Write/update PR body explicitly using `.github/PULL_REQUEST_TEMPLATE.md`:
+7. Write/update PR body explicitly using `.github/PULL_REQUEST_TEMPLATE.md`:
    - Fill every section with concrete content for this change.
    - Replace all placeholder comments (`<!-- ... -->`).
    - Keep bullets/checkboxes where template expects them.
@@ -52,8 +59,8 @@ description:
      scope (all intended work on the branch), not just the newest commits,
      including newly added work, removed work, or changed approach.
    - Do not reuse stale description text from earlier iterations.
-7. Validate the PR body has no template comments or unresolved placeholders.
-8. Reply with the PR URL from `gh pr view`.
+8. Validate the PR body has no template comments or unresolved placeholders.
+9. Reply with the PR URL from `gh pr view`.
 
 ## Commands
 
@@ -61,18 +68,46 @@ description:
 # Identify branch
 branch=$(git branch --show-current)
 
-# Minimal validation gate for Borg UI setup and docs changes.
+# Selector-first validation manifest. Save this output in the workpad before
+# pushing. The JSON includes local_commands, ci_lanes, broadening_reasons, and a
+# manifest_hash reviewers can compare during Human Review and Merging.
+python3 scripts/select_validation.py --base origin/main --format json | tee /tmp/borg-ui-validation-manifest.json
+python3 scripts/select_validation.py --base origin/main --format text
+
+# Always keep the repository hygiene gate.
 git diff --check
 
-# Backend validation for backend changes.
-if git diff --name-only origin/main...HEAD | rg -q '^(app|tests|requirements.txt|pytest.ini|ruff.toml)(/|$)'; then
+# Conservative backend fallback. Run this when the manifest selects backend
+# fallback commands, contains backend broadening reasons, or the selector cannot
+# run.
+if python3 - <<'PY'
+import json
+manifest = json.load(open('/tmp/borg-ui-validation-manifest.json', encoding='utf-8'))
+commands = {command['id'] for command in manifest['local_commands']}
+reasons = {reason['id'] for reason in manifest['broadening_reasons']}
+needs_backend = bool({'backend-unit-tests', 'backend-api-tests', 'backend-targeted-pytest'} & commands)
+needs_backend = needs_backend or any(reason.startswith(('backend-', 'ci-', 'workflow-', 'unmapped-', 'all-')) for reason in reasons)
+raise SystemExit(0 if needs_backend else 1)
+PY
+then
   ruff check app tests
   ruff format --check app tests
   pytest tests/unit -v
 fi
 
-# Frontend validation for frontend changes.
-if git diff --name-only origin/main...HEAD | rg -q '^frontend/'; then
+# Conservative frontend fallback. Install dependencies lazily only when the
+# selector or fallback requires frontend commands.
+if python3 - <<'PY'
+import json
+manifest = json.load(open('/tmp/borg-ui-validation-manifest.json', encoding='utf-8'))
+commands = {command['id'] for command in manifest['local_commands']}
+reasons = {reason['id'] for reason in manifest['broadening_reasons']}
+needs_frontend = any(command.startswith('frontend-') for command in commands)
+needs_frontend = needs_frontend or any(reason.startswith(('frontend-', 'ci-', 'workflow-', 'unmapped-', 'all-')) for reason in reasons)
+raise SystemExit(0 if needs_frontend else 1)
+PY
+then
+  (cd frontend && npm ci)
   (cd frontend && npm run check:locales && npm run typecheck && npm run lint && npm run build)
 fi
 
