@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Subagent execution is not used because BOR-30 is an unattended single-workspace orchestration session.
 
-**Goal:** Implement selector-driven validation, lazy Symphony bootstrap, conservative Odroid defaults, compact workpad digest guidance, and path-aware CI lanes for Borg UI's Symphony workflow.
+**Goal:** Implement selector-driven validation, lazy Symphony bootstrap, compact workpad digest guidance, and path-aware CI lanes for Borg UI's Symphony workflow while leaving host concurrency unchanged until measured tuning is warranted.
 
 **Architecture:** Add a pure Python validation selector that turns changed files into a reviewable JSON manifest with minimum local commands, CI lane intent, and explicit broadening reasons. Wire that manifest into Symphony workflow guidance, push/land skills, and CI lane applicability while keeping conservative full backend/frontend fallbacks for risky or unmapped changes.
 
@@ -14,10 +14,10 @@
 
 - Create `scripts/select_validation.py`: selector CLI and importable selection helpers.
 - Create `tests/unit/test_select_validation.py`: unit tests covering selector mappings, broadening reasons, manifest shape, and GitHub Actions output.
-- Modify `WORKFLOW.md`: lazy bootstrap, lower Odroid concurrency, current digest/manifest requirements, and validation selector usage before push/Human Review.
+- Modify `WORKFLOW.md`: lazy bootstrap, current digest/manifest requirements, validation selector usage before push/Human Review, and unchanged host concurrency.
 - Modify `.codex/skills/push/SKILL.md`: selector-first push validation with conservative fallback handling.
 - Modify `.codex/skills/land/SKILL.md`: selector manifest trust/fallback rules during landing.
-- Modify `docs/symphony.md`: operator guidance for lazy frontend dependencies, selector use, Odroid profile, and digest review evidence.
+- Modify `docs/symphony.md`: operator guidance for lazy frontend dependencies, selector use, measured concurrency tuning, and digest review evidence.
 - Modify `.github/workflows/tests.yml`: changed-file classification job and path-aware no-op behavior for backend, frontend, build, coverage, and smoke lanes.
 - Modify `tests/README.md`: document path-aware CI lane behavior.
 
@@ -31,7 +31,7 @@
   nl -ba WORKFLOW.md | sed -n '19,36p'
   ```
 
-  Expected: `hooks.after_create` includes `cd frontend && npm ci`, and `agent.max_concurrent_agents` is above the desired Odroid default.
+  Expected: `hooks.after_create` includes `cd frontend && npm ci`, and `agent.max_concurrent_agents` remains at the current host default.
 
 - [x] **Step 2: Capture selector absence**
 
@@ -133,10 +133,10 @@
       git clone --filter=blob:none git@github.com:karanhudia/borg-ui.git .
       echo "Frontend dependencies are installed lazily when selected validation or implementation requires them."
   agent:
-    max_concurrent_agents: 3
+    max_concurrent_agents: 10
   ```
 
-  Add requirements that every push/Human Review handoff records a selector manifest, broadening reasons, and a compact `### Current Digest`.
+  Add requirements that every push/Human Review handoff records a selector manifest, broadening reasons, and a compact `### Current Digest`. Leave concurrency unchanged until measured local contention data justifies a profile-specific cap.
 
 - [x] **Step 2: Update `push` skill**
 
@@ -155,7 +155,7 @@
 
 - [x] **Step 4: Update `docs/symphony.md`**
 
-  Document lazy frontend dependency installation, selector-first validation, Odroid default concurrency, and digest evidence.
+  Document lazy frontend dependency installation, selector-first validation, measured concurrency tuning, and digest evidence.
 
 ## Task 4: Path-Aware CI
 
@@ -217,7 +217,7 @@
 
 ## Self-Review
 
-- Spec coverage: covers selector/manifest, push/land/Symphony docs, lazy bootstrap, Odroid concurrency, compact digest, and path-aware CI lanes.
+- Spec coverage: covers selector/manifest, push/land/Symphony docs, lazy bootstrap, measured concurrency tuning, compact digest, and path-aware CI lanes.
 - Scope control: does not change app runtime behavior or frontend UI. No Storybook story or snapshot is required.
 - Conservative fallback: unknown, dependency, CI/workflow, smoke/runtime, and security changes broaden instead of silently narrowing validation.
 - Validation design: selector behavior is testable locally before CI path awareness relies on it.

@@ -118,10 +118,10 @@ proposal is tracked in:
 
 The implementation keeps quality gates explicit while using lazy dependency
 setup, selector-based validation manifests, code-level validation guidance,
-path-aware CI lanes, and compact retry context. The Odroid M1 workflow profile
-uses a conservative `max_concurrent_agents: 3` default so Node installs,
-Python/pytest, and Storybook/snapshot work do not contend across too many
-simultaneous issue workspaces.
+path-aware CI lanes, and compact retry context. Keep workflow concurrency at the
+current host default until local measurements show that a lower profile-specific
+cap is needed; lazy dependency setup and selector-scoped validation should reduce
+contention before changing parallel issue throughput.
 
 ## Notes
 
