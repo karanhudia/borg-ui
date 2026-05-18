@@ -10,7 +10,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material'
-import { ContentCopy } from '@mui/icons-material'
+import ContentCopy from '@mui/icons-material/ContentCopy'
 import ResponsiveDialog from './ResponsiveDialog'
 import StatusBadge from './StatusBadge'
 import { TerminalLogViewer, TerminalLogViewerHandle } from './TerminalLogViewer'

@@ -14,7 +14,10 @@ import {
   Tooltip,
 } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
-import { Warning, CheckCircle, Lock, InfoOutlined } from '@mui/icons-material'
+import CheckCircle from '@mui/icons-material/CheckCircle'
+import InfoOutlined from '@mui/icons-material/InfoOutlined'
+import Lock from '@mui/icons-material/Lock'
+import Warning from '@mui/icons-material/Warning'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Box, Button, Typography, Paper, Chip } from '@mui/material'
-import { ContentCopy, Download } from '@mui/icons-material'
+import ContentCopy from '@mui/icons-material/ContentCopy'
+import Download from '@mui/icons-material/Download'
 import { PlayCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'

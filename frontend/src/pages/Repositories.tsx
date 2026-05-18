@@ -19,6 +19,7 @@ import CheckWarningDialog, {
 import CompactWarningDialog from '../components/CompactWarningDialog'
 import RepositoryWizard from '../components/RepositoryWizard'
 import PruneRepositoryDialog from '../components/PruneRepositoryDialog'
+import RepositoryWipeDialog from '../components/RepositoryWipeDialog'
 import RepositoryInfoDialog from '../components/RepositoryInfoDialog'
 import { getJobDurationSeconds } from '../utils/analyticsProperties'
 import { CreateBackupPlanDialog } from './repositories-page/CreateBackupPlanDialog'
@@ -32,9 +33,18 @@ import {
   processRepositories,
 } from './repositories-page/helpers'
 import type { PruneForm, Repository } from './repositories-page/types'
-import type { BackupPlan } from '../types'
+import type { BackupPlan, RepositoryWipeExecuteRequest, RepositoryWipeJob } from '../types'
 
 const EMPTY_REPOSITORIES: Repository[] = []
+const RUNNING_WIPE_STATUSES = new Set(['pending', 'running'])
+const TERMINAL_WIPE_STATUSES = new Set([
+  'completed',
+  'completed_compaction_failed',
+  'completed_with_warnings',
+  'failed',
+  'failed_partial',
+  'cancelled',
+])
 
 function parseBackupPlanFilterId(value: string | null): number | null {
   if (!value) return null
@@ -66,6 +76,9 @@ export default function Repositories() {
   const [checkingRepository, setCheckingRepository] = useState<Repository | null>(null)
   const [compactingRepository, setCompactingRepository] = useState<Repository | null>(null)
   const [pruningRepository, setPruningRepository] = useState<Repository | null>(null)
+  const [wipingRepository, setWipingRepository] = useState<Repository | null>(null)
+  const [wipePreview, setWipePreview] = useState<RepositoryWipeJob | null>(null)
+  const [wipeJob, setWipeJob] = useState<RepositoryWipeJob | null>(null)
   const [planSourceRepository, setPlanSourceRepository] = useState<Repository | null>(null)
   const [backupPlanName, setBackupPlanName] = useState('')
   const [copyExistingSchedule, setCopyExistingSchedule] = useState(true)
@@ -81,6 +94,7 @@ export default function Repositories() {
 
   // Track repositories with running jobs for polling
   const [repositoriesWithJobs, setRepositoriesWithJobs] = useState<Set<number>>(new Set())
+  const announcedWipeJobsRef = useRef<Set<number>>(new Set())
 
   // Filter, sort, and search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -117,6 +131,27 @@ export default function Repositories() {
     queryKey: ['backup-plan', selectedBackupPlanId],
     queryFn: () => backupPlansAPI.get(selectedBackupPlanId!),
     enabled: selectedBackupPlanId !== null,
+  })
+
+  const activeWipeJobId =
+    wipingRepository && wipeJob && RUNNING_WIPE_STATUSES.has(wipeJob.status) ? wipeJob.id : null
+
+  const { data: wipeJobStatusData } = useQuery({
+    queryKey: ['repository-wipe-job', wipingRepository?.id, activeWipeJobId],
+    queryFn: async () => {
+      const response = await repositoriesAPI.getRepositoryWipeJob(
+        wipingRepository!.id,
+        activeWipeJobId!
+      )
+      return response.data
+    },
+    enabled: Boolean(wipingRepository && activeWipeJobId),
+    refetchInterval: (query) => {
+      const data = query.state.data as RepositoryWipeJob | undefined
+      return !data || RUNNING_WIPE_STATUSES.has(data.status) ? 2000 : false
+    },
+    refetchIntervalInBackground: true,
+    retry: false,
   })
 
   const selectedBackupPlanRepositoryIds = React.useMemo(() => {
@@ -293,6 +328,65 @@ export default function Repositories() {
     },
   })
 
+  const wipePreviewMutation = useMutation({
+    mutationFn: ({ repository, runCompact }: { repository: Repository; runCompact: boolean }) =>
+      repositoriesAPI.previewRepositoryWipe(repository.id, { run_compact: runCompact }),
+    onSuccess: (response) => {
+      setWipePreview(response.data)
+      setWipeJob(null)
+      toast.success(t('repositories.toasts.wipePreviewGenerated'))
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('repositories.toasts.wipePreviewFailed')
+      )
+    },
+  })
+
+  const executeWipeMutation = useMutation({
+    mutationFn: ({
+      repository,
+      payload,
+    }: {
+      repository: Repository
+      payload: RepositoryWipeExecuteRequest
+    }) => repositoriesAPI.executeRepositoryWipe(repository.id, payload),
+    onSuccess: (response, variables) => {
+      setWipeJob(response.data)
+      toast.success(t('repositories.toasts.wipeStarted'))
+      setRepositoriesWithJobs((prev) => new Set(prev).add(variables.repository.id))
+      queryClient.invalidateQueries({ queryKey: ['running-jobs', variables.repository.id] })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      if (error.response?.status === 409) {
+        setWipePreview((current) => (current ? { ...current, phase: 'stale' } : current))
+      }
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('repositories.toasts.wipeFailed')
+      )
+    },
+  })
+
+  const cancelWipePreviewMutation = useMutation({
+    mutationFn: ({ repositoryId, jobId }: { repositoryId: number; jobId: number }) =>
+      repositoriesAPI.cancelRepositoryWipeJob(repositoryId, jobId),
+    onSuccess: (response) => {
+      setWipePreview(response.data)
+      setWipeJob(response.data)
+      toast.success(t('repositories.toasts.wipeCancelled'))
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          t('repositories.toasts.wipeCancelFailed')
+      )
+    },
+  })
+
   const createBackupPlanMutation = useMutation({
     mutationFn: ({
       repository,
@@ -413,6 +507,35 @@ export default function Repositories() {
   const handlePruneRepository = (repository: Repository) => {
     setPruningRepository(repository)
     setPruneResults(null)
+  }
+
+  const handleWipeRepository = (repository: Repository) => {
+    setWipingRepository(repository)
+    setWipePreview(null)
+    setWipeJob(null)
+  }
+
+  const handleCloseWipeDialog = () => {
+    setWipingRepository(null)
+    if (!wipeJob || TERMINAL_WIPE_STATUSES.has(wipeJob.status)) {
+      setWipePreview(null)
+      setWipeJob(null)
+    }
+  }
+
+  const handleGenerateWipePreview = (runCompact: boolean) => {
+    if (!wipingRepository) return
+    wipePreviewMutation.mutate({ repository: wipingRepository, runCompact })
+  }
+
+  const handleExecuteWipe = (payload: RepositoryWipeExecuteRequest) => {
+    if (!wipingRepository) return
+    executeWipeMutation.mutate({ repository: wipingRepository, payload })
+  }
+
+  const handleCancelWipePreview = (jobId: number) => {
+    if (!wipingRepository) return
+    cancelWipePreviewMutation.mutate({ repositoryId: wipingRepository.id, jobId })
   }
 
   const handleClosePruneDialog = () => {
@@ -590,6 +713,36 @@ export default function Repositories() {
     })
   }, [deferredSearchQuery, groupBy, processedRepositories, sortBy, trackRepository, EventAction])
 
+  React.useEffect(() => {
+    if (!wipeJobStatusData || !wipingRepository) return
+    setWipeJob(wipeJobStatusData)
+
+    if (!TERMINAL_WIPE_STATUSES.has(wipeJobStatusData.status)) return
+    if (announcedWipeJobsRef.current.has(wipeJobStatusData.id)) return
+    announcedWipeJobsRef.current.add(wipeJobStatusData.id)
+
+    setRepositoriesWithJobs((prev) => {
+      const next = new Set(prev)
+      next.delete(wipingRepository.id)
+      return next
+    })
+    queryClient.invalidateQueries({ queryKey: ['repositories'] })
+    queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
+    queryClient.invalidateQueries({ queryKey: ['repository-archives', wipingRepository.id] })
+    queryClient.invalidateQueries({ queryKey: ['running-jobs', wipingRepository.id] })
+    appState.refetch()
+
+    if (wipeJobStatusData.status === 'completed') {
+      toast.success(t('repositories.toasts.wipeSuccess'))
+    } else if (wipeJobStatusData.status === 'completed_compaction_failed') {
+      toast.error(t('repositories.toasts.wipeCompactFailed'))
+    } else if (wipeJobStatusData.status === 'completed_with_warnings') {
+      toast(t('repositories.toasts.wipeCompactSkipped'), { icon: '!' })
+    } else if (wipeJobStatusData.status !== 'cancelled') {
+      toast.error(t('repositories.toasts.wipeFailed'))
+    }
+  }, [appState, queryClient, t, wipeJobStatusData, wipingRepository])
+
   return (
     <Box>
       <RepositoriesHeader
@@ -632,6 +785,7 @@ export default function Repositories() {
         onCheck={handleCheckRepository}
         onCompact={handleCompactRepository}
         onPrune={handlePruneRepository}
+        onWipeContents={handleWipeRepository}
         onEdit={openEditModal}
         onDelete={handleDeleteRepository}
         onBackupNow={handleBackupNow}
@@ -692,6 +846,19 @@ export default function Repositories() {
         onConfirmPrune={handleConfirmPrune}
         isLoading={pruneRepositoryMutation.isPending}
         results={pruneResults}
+      />
+
+      <RepositoryWipeDialog
+        open={!!wipingRepository}
+        repository={wipingRepository}
+        preview={wipePreview}
+        job={wipeJob}
+        isPreviewLoading={wipePreviewMutation.isPending}
+        isExecuteLoading={executeWipeMutation.isPending}
+        onClose={handleCloseWipeDialog}
+        onGeneratePreview={handleGenerateWipePreview}
+        onExecute={handleExecuteWipe}
+        onCancelPreview={handleCancelWipePreview}
       />
 
       {/* Lock Error Dialog */}

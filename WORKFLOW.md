@@ -20,8 +20,10 @@ workspace:
   root: ~/code/borg-ui-symphony-workspaces
 hooks:
   after_create: |
-    git clone --filter=blob:none git@github.com:karanhudia/borg-ui.git .
-    echo "Frontend dependencies are installed lazily when selected validation or implementation requires them."
+    git clone --depth 1 git@github.com:karanhudia/borg-ui.git .
+    if command -v npm >/dev/null 2>&1 && [ -f frontend/package-lock.json ]; then
+      (cd frontend && npm ci)
+    fi
   before_remove: |
     if command -v docker-compose >/dev/null 2>&1; then
       docker-compose -p borg-ui-dev -f docker-compose.dev.yml down 2>/dev/null || true
@@ -107,14 +109,6 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
 - User-facing UI or runtime changes require an app walkthrough using
   `./scripts/dev.sh`, `docker compose up -d --build`, or the smoke runners in
   `tests/smoke/` when the ticket warrants end-to-end proof.
-- Use `python3 scripts/select_validation.py --base origin/main --format json`
-  before local validation when the selector exists. Treat selector output as the
-  minimum gate, never as permission to narrow required ticket-provided checks.
-  Broadening reasons in the manifest require the documented fallback commands.
-- Install frontend dependencies lazily with `cd frontend && npm ci` only when a
-  frontend command is selected, a frontend implementation path is opened,
-  Storybook/snapshots are needed, or the selector cannot run and frontend
-  fallback validation is required.
 - Pull requests must use `.github/PULL_REQUEST_TEMPLATE.md`; replace all
   placeholder comments with concrete Borg UI-specific content before handoff.
 - Keep Borg UI's generated, runtime, secret, and dependency artifacts out of
@@ -180,25 +174,18 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
     - Format: `<host>:<abs-workdir>@<short-sha>`
     - Example: `devbox-01:/home/dev-user/code/symphony-workspaces/MT-32@7bdde33bc`
     - Do not include metadata already inferable from Linear issue fields (`issue ID`, `status`, `branch`, `PR link`).
-6.  Add a compact `### Current Digest` section directly after the environment
-    stamp. Keep it current on every meaningful update with:
-    - current branch/head,
-    - active plan item,
-    - selected validation manifest hash and selected command summary,
-    - blockers,
-    - PR/check state.
-7.  Add explicit acceptance criteria and TODOs in checklist form in the same comment.
+6.  Add explicit acceptance criteria and TODOs in checklist form in the same comment.
     - If changes are user-facing, include a UI walkthrough acceptance criterion that describes the end-to-end user path to validate.
     - If changes touch app files or app behavior, add explicit app-specific flow checks to `Acceptance Criteria` in the workpad (for example: launch path, changed interaction path, and expected result path).
     - If the ticket description/comment context includes `Validation`, `Test Plan`, or `Testing` sections, copy those requirements into the workpad `Acceptance Criteria` and `Validation` sections as required checkboxes (no optional downgrade).
-8.  Run a principal-style self-review of the plan and refine it in the comment.
-9.  Before implementing, capture a concrete reproduction signal and record it in the workpad `Notes` section (command/output, screenshot, or deterministic UI behavior).
-10. Run the `pull` skill to sync with latest `origin/main` before any code edits, then record the pull/sync result in the workpad `Notes`.
+7.  Run a principal-style self-review of the plan and refine it in the comment.
+8.  Before implementing, capture a concrete reproduction signal and record it in the workpad `Notes` section (command/output, screenshot, or deterministic UI behavior).
+9.  Run the `pull` skill to sync with latest `origin/main` before any code edits, then record the pull/sync result in the workpad `Notes`.
     - Include a `pull skill evidence` note with:
       - merge source(s),
       - result (`clean` or `conflicts resolved`),
       - resulting `HEAD` short SHA.
-11. Compact context and proceed to execution.
+10. Compact context and proceed to execution.
 
 ## PR feedback sweep protocol (required)
 
@@ -251,13 +238,7 @@ Use this only when completion is blocked by missing required tools or missing au
       evidence in the workpad. Use screenshots or smoke-test output when useful
       and available in the current environment.
 6.  Re-check all acceptance criteria and close any gaps.
-7.  Before every `git push` attempt, run
-    `python3 scripts/select_validation.py --base origin/main --format json`
-    when available, record the manifest hash, selected commands, and broadening
-    reasons in the workpad, then run the required validation for your scope and
-    confirm it passes. If the selector is missing/fails, or the manifest reports
-    broadening reasons, use the conservative backend/frontend fallback rules and
-    record why.
+7.  Before every `git push` attempt, run the required validation for your scope and confirm it passes; if it fails, address issues and rerun until green, then commit and push changes.
 8.  Attach PR URL to the issue (prefer attachment; use the workpad comment only if attachment is unavailable).
     - Ensure the GitHub PR has label `symphony` (add it if missing).
 9.  Merge latest `origin/main` into branch, resolve conflicts, and rerun checks.
@@ -266,7 +247,7 @@ Use this only when completion is blocked by missing required tools or missing au
     - Add final handoff notes (commit + validation summary) in the same workpad comment.
     - Include this exact Human Review handoff note format so Merging can run
       the fast-path preflight without guessing:
-      `Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>; manifest=<selector manifest hash>`.
+      `Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>`.
     - Do not include PR URL in the workpad comment; keep PR linkage on the issue via attachment/link fields.
     - Add a short `### Confusions` section at the bottom when any part of task execution was unclear/confusing, with concise bullets.
     - Do not post any additional completion summary comment.
@@ -293,21 +274,11 @@ Use this only when completion is blocked by missing required tools or missing au
 5. When the issue is in `Merging`, open and follow `.codex/skills/land/SKILL.md`; do not call `gh pr merge` directly outside that skill.
 6. Start with the fast landing preflight for already-green PRs:
    - Read the latest `Human Review handoff: ...` note from the workpad.
-   - Run `python3 .codex/skills/land/land_watch.py --preflight --json --handoff-note '<handoff note>'`.
+   - Run `python3 .codex/skills/land/land_watch.py --preflight --handoff-note '<handoff note>'`.
    - If the preflight exits `0`, the PR head SHA is unchanged, GitHub checks
-     are green, and no new human/Codex feedback was found since Human Review;
-     skip full local validation and the full watcher loop, then merge through
-     the `land` skill flow.
-   - If the preflight JSON has `requires_admin_bypass: true`, this means the
-     issue is in `Merging`, GitHub reports `reviewDecision=REVIEW_REQUIRED`,
-     and the remaining branch-policy approval requirement is being satisfied by
-     the Linear state transition. Use `gh pr merge --admin` only after a final
-     check still reports `mergeable=MERGEABLE`,
-     `mergeStateStatus=BLOCKED`, and `reviewDecision=REVIEW_REQUIRED`.
-     If that admin merge fails, record the exact missing permission or
-     branch-policy error in the workpad as the landing blocker.
-   - If `requires_admin_bypass` is false, merge only after the final check still
-     reports `mergeable=MERGEABLE` and `mergeStateStatus=CLEAN` or `HAS_HOOKS`.
+     are green, mergeability is clean, and no new human/Codex feedback was
+     found since Human Review; skip full local validation and the full watcher
+     loop, then merge through the `land` skill flow.
    - If the preflight exits `6`, fails, or lacks handoff/check/mergeability
      data, use the conservative fallback in `.codex/skills/land/SKILL.md`.
 7. Always use the conservative fallback, including full local validation and
@@ -333,8 +304,6 @@ Use this only when completion is blocked by missing required tools or missing au
 - Step 1/2 checklist is fully complete and accurately reflected in the single workpad comment.
 - Acceptance criteria and required ticket-provided validation items are complete.
 - Validation/tests are green for the latest commit.
-- Selector manifest evidence is present in the workpad unless the selector is
-  unavailable, in which case the conservative fallback reason is present.
 - PR feedback sweep is complete and no actionable comments remain.
 - PR checks are green, branch is pushed, and PR is linked on the issue.
 - Required PR metadata is present (`symphony` label).
@@ -370,14 +339,6 @@ Use this exact structure for the persistent workpad comment and keep it updated 
 ```text
 <hostname>:<abs-path>@<short-sha>
 ```
-
-### Current Digest
-
-- branch/head: `<branch>` @ `<short-sha>`
-- active plan item: `<current checklist item>`
-- selected validation: `<selector manifest hash + selected commands or fallback reason>`
-- blockers: `<none or concise blocker>`
-- PR/check state: `<no PR yet | PR/check summary>`
 
 ### Plan
 

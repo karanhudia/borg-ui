@@ -68,8 +68,6 @@ http://localhost:4000
 - Create an isolated workspace under `~/code/borg-ui-symphony-workspaces`.
 - Clone Borg UI into the issue workspace.
 - Start `codex app-server` in the workspace.
-- Install frontend dependencies only after the validation selector or an active
-  implementation path requires frontend work.
 - Instruct Codex to keep a single `## Codex Workpad` comment on the Linear
   issue.
 - Move validated PR work to `Human Review`.
@@ -77,20 +75,7 @@ http://localhost:4000
 
 ## Borg UI Validation Policy
 
-The workflow prompt tells agents to choose validation by change scope. When
-`scripts/select_validation.py` exists, agents must run it before local
-validation and record its manifest hash, selected commands, and broadening
-reasons in the Linear workpad:
-
-```bash
-python3 scripts/select_validation.py --base origin/main --format json
-python3 scripts/select_validation.py --base origin/main --format text
-```
-
-Selector output is the minimum local gate. Agents may broaden from it, but may
-not silently narrow ticket-provided validation, reviewer-requested validation,
-or manifest broadening reasons. If the selector is unavailable or reports an
-unmapped/risky change, use the conservative fallback for the affected areas:
+The workflow prompt tells agents to choose validation by change scope:
 
 - Backend changes: `ruff check app tests`, `ruff format --check app tests`, and
   relevant `pytest` tests.
@@ -99,12 +84,6 @@ unmapped/risky change, use the conservative fallback for the affected areas:
 - User-facing runtime changes: validate with `./scripts/dev.sh`,
   `docker compose up -d --build`, or smoke runners under `tests/smoke/` when
   the ticket warrants end-to-end proof.
-
-Before moving a PR to `Human Review`, the workpad should include a compact
-`### Current Digest` with branch/head, active plan item, selector manifest hash,
-selected validation, blockers, and PR/check state. The handoff note includes
-the manifest hash so `Merging` can detect whether landing can use the already
-validated fast path or must rerun selector-selected validation.
 
 ## Performance Planning
 
@@ -116,12 +95,10 @@ proposal is tracked in:
 - `docs/engineering/specs/2026-05-17-symphony-issue-pr-latency-reduction.md`
 - `docs/engineering/plans/2026-05-17-symphony-issue-pr-latency-reduction.md`
 
-The implementation keeps quality gates explicit while using lazy dependency
-setup, selector-based validation manifests, code-level validation guidance,
-path-aware CI lanes, and compact retry context. Keep workflow concurrency at the
-current host default until local measurements show that a lower profile-specific
-cap is needed; lazy dependency setup and selector-scoped validation should reduce
-contention before changing parallel issue throughput.
+The proposal keeps quality gates explicit while recommending lazy dependency
+setup, selector-based validation manifests, code-level validation guidance, CI
+sharding, and compact retry context. Host concurrency should be tuned only after
+those code-level reductions are measured.
 
 ## Notes
 

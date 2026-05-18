@@ -39,6 +39,7 @@ describe('RepositoryCard', () => {
     onCheck: vi.fn(),
     onCompact: vi.fn(),
     onPrune: vi.fn(),
+    onWipeContents: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     onBackupNow: vi.fn(),
@@ -122,6 +123,7 @@ describe('RepositoryCard', () => {
     checkJob: null,
     compactJob: null,
     pruneJob: null,
+    wipeJob: null,
     isLoading: false,
   }
 
@@ -423,6 +425,7 @@ describe('RepositoryCard', () => {
 
       expect(screen.getByRole('button', { name: /Compact/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Prune/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Wipe contents/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument()
     })
 
@@ -488,6 +491,7 @@ describe('RepositoryCard', () => {
       expect(screen.queryByRole('button', { name: /Info/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Check/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Compact/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Wipe contents/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Delete/i })).not.toBeInTheDocument()
     })
   })
@@ -572,6 +576,22 @@ describe('RepositoryCard', () => {
 
       await user.click(screen.getByRole('button', { name: /Prune/i }))
       expect(mockCallbacks.onPrune).toHaveBeenCalledTimes(1)
+    })
+
+    it('calls onWipeContents when Wipe contents button is clicked', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /Wipe contents/i }))
+      expect(mockCallbacks.onWipeContents).toHaveBeenCalledTimes(1)
     })
 
     it('calls onBackupNow and tracks event when Legacy Backup button is clicked', async () => {

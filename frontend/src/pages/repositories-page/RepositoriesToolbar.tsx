@@ -1,4 +1,4 @@
-import { Search } from '@mui/icons-material'
+import Search from '@mui/icons-material/Search'
 import { Box, InputBase, MenuItem, Select, alpha, useTheme } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { ProcessedRepositories } from './types'
