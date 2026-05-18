@@ -102,6 +102,19 @@ ENDPOINT_POLICIES: Dict[Tuple[str, str], EndpointPolicy] = {
     ("POST", "/api/repositories/{repo_id}/prune"): EndpointPolicy(
         ("admin",), "backend.errors.repo.adminAccessRequired"
     ),
+    ("POST", "/api/repositories/{repo_id}/wipe-preview"): EndpointPolicy(
+        ("admin",), "backend.errors.repo.adminAccessRequired"
+    ),
+    ("POST", "/api/repositories/{repo_id}/wipe"): EndpointPolicy(
+        ("admin",), "backend.errors.repo.adminAccessRequired"
+    ),
+    ("GET", "/api/repositories/{repo_id}/wipe-jobs/{job_id}"): EndpointPolicy(
+        ("admin",), "backend.errors.repo.adminAccessRequired"
+    ),
+    (
+        "POST",
+        "/api/repositories/{repo_id}/wipe-jobs/{job_id}/cancel",
+    ): EndpointPolicy(("admin",), "backend.errors.repo.adminAccessRequired"),
     ("POST", "/api/ssh-keys"): EndpointPolicy(
         ("admin",), "backend.errors.ssh.adminAccessRequired"
     ),

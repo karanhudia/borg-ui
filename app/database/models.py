@@ -997,6 +997,45 @@ class DeleteArchiveJob(Base):
     created_at = Column(DateTime, default=utc_now)
 
 
+class RepositoryWipeJob(Base):
+    __tablename__ = "repository_wipe_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(
+        Integer, ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True
+    )
+    repository_path = Column(String, nullable=True)
+    repository_name = Column(String, nullable=True)
+    borg_version = Column(Integer, nullable=True)
+    status = Column(
+        String, default="previewed"
+    )  # previewed, pending, running, completed, completed_compaction_failed, completed_with_warnings, failed, failed_partial, cancelled
+    phase = Column(String, nullable=True)
+    archive_count = Column(Integer, default=0)
+    archive_fingerprint = Column(String, nullable=True)
+    archive_manifest_json = Column(Text, nullable=True)
+    dry_run_output = Column(Text, nullable=True)
+    blocking_reason = Column(String, nullable=True)
+    protected_archives_json = Column(Text, nullable=True)
+    run_compact = Column(Boolean, default=True, nullable=False)
+    requested_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    confirmed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    confirmed_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    progress = Column(Integer, default=0)
+    progress_message = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    logs = Column(Text, nullable=True)
+    log_file_path = Column(String, nullable=True)
+    has_logs = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=utc_now)
+
+    repository = relationship("Repository")
+    requested_by_user = relationship("User", foreign_keys=[requested_by_user_id])
+    confirmed_by_user = relationship("User", foreign_keys=[confirmed_by_user_id])
+
+
 class SystemSettings(Base):
     __tablename__ = "system_settings"
 

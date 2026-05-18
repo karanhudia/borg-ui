@@ -3,6 +3,8 @@ import { repositoriesAPI } from '../services/api'
 
 interface MaintenanceJob {
   id: number
+  status?: string
+  phase?: string | null
   progress: number
   progress_message: string | null
   started_at: string | null
@@ -13,6 +15,7 @@ interface RunningJobsResponse {
   check_job: MaintenanceJob | null
   compact_job: MaintenanceJob | null
   prune_job: MaintenanceJob | null
+  wipe_job: MaintenanceJob | null
 }
 
 /**
@@ -47,6 +50,7 @@ export function useMaintenanceJobs(repositoryId: number | null, enabled: boolean
     checkJob: data?.check_job ?? null,
     compactJob: data?.compact_job ?? null,
     pruneJob: data?.prune_job ?? null,
+    wipeJob: data?.wipe_job ?? null,
     isLoading,
   }
 }

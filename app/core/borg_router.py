@@ -181,6 +181,53 @@ class BorgRouter:
         cmd.append(repository_path)
         return cmd
 
+    def build_wipe_delete_command(self, *, dry_run: bool) -> List[str]:
+        """Build a repository-contents wipe delete command.
+
+        This intentionally selects all archives and never uses Borg repository
+        deletion commands.
+        """
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            cmd = [borg2.borg_cmd, "-r", self.repo.path, "delete", "--list"]
+            if dry_run:
+                cmd.append("--dry-run")
+            cmd.extend(["-a", "sh:*"])
+            if self.repo.remote_path:
+                cmd.extend(["--remote-path", self.repo.remote_path])
+            return cmd
+
+        from app.core.borg import borg
+
+        cmd = [borg.borg_cmd, "delete", "--list"]
+        if dry_run:
+            cmd.append("--dry-run")
+        else:
+            cmd.append("--stats")
+        if self.repo.remote_path:
+            cmd.extend(["--remote-path", self.repo.remote_path])
+        cmd.extend(["--glob-archives", "*", self.repo.path])
+        return cmd
+
+    def build_wipe_compact_command(self) -> List[str]:
+        """Build the matching compact command for a contents wipe."""
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            cmd = [borg2.borg_cmd, "-r", self.repo.path, "compact"]
+            if self.repo.remote_path:
+                cmd.extend(["--remote-path", self.repo.remote_path])
+            return cmd
+
+        from app.core.borg import borg
+
+        cmd = [borg.borg_cmd, "compact", "--progress", "--verbose"]
+        if self.repo.remote_path:
+            cmd.extend(["--remote-path", self.repo.remote_path])
+        cmd.append(self.repo.path)
+        return cmd
+
     def build_mount_command(
         self,
         repository_path: str,
@@ -244,6 +291,30 @@ class BorgRouter:
         if env is not None:
             kwargs["env"] = env
         return await borg.break_lock(self.repo.path, **kwargs)
+
+    async def run_wipe_delete(self, *, dry_run: bool, env: dict = None) -> dict:
+        """Run the version-aware repository contents wipe delete command."""
+        cmd = self.build_wipe_delete_command(dry_run=dry_run)
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            return await borg2._run(cmd, env=env)
+
+        from app.core.borg import borg
+
+        return await borg._execute_command(cmd, env=env)
+
+    async def run_wipe_compact(self, *, env: dict = None) -> dict:
+        """Run the version-aware compact command used after wipe delete."""
+        cmd = self.build_wipe_compact_command()
+        if self.is_v2:
+            from app.core.borg2 import borg2
+
+            return await borg2._run(cmd, env=env)
+
+        from app.core.borg import borg
+
+        return await borg._execute_command(cmd, env=env)
 
     async def preview_restore(
         self, archive: str, paths: List[str], destination: str, env: dict = None

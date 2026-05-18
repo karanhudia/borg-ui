@@ -1,4 +1,7 @@
-import { Add, FileUpload, FilterList, Storage } from '@mui/icons-material'
+import Add from '@mui/icons-material/Add'
+import FileUpload from '@mui/icons-material/FileUpload'
+import FilterList from '@mui/icons-material/FilterList'
+import Storage from '@mui/icons-material/Storage'
 import { Box, Button, Divider, Stack, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import EmptyStateCard from '../../components/EmptyStateCard'
@@ -21,6 +24,7 @@ interface RepositoryGroupsProps {
   onCheck: (repository: Repository) => void
   onCompact: (repository: Repository) => void
   onPrune: (repository: Repository) => void
+  onWipeContents: (repository: Repository) => void
   onEdit: (repository: Repository) => void
   onDelete: (repository: Repository) => void
   onBackupNow: (repository: Repository) => void
@@ -44,6 +48,7 @@ export function RepositoryGroups({
   onCheck,
   onCompact,
   onPrune,
+  onWipeContents,
   onEdit,
   onDelete,
   onBackupNow,
@@ -161,6 +166,7 @@ export function RepositoryGroups({
                 onCheck={() => onCheck(repository)}
                 onCompact={() => onCompact(repository)}
                 onPrune={() => onPrune(repository)}
+                onWipeContents={() => onWipeContents(repository)}
                 onEdit={() => onEdit(repository)}
                 onDelete={() => onDelete(repository)}
                 onBackupNow={() => onBackupNow(repository)}

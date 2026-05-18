@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TextField, IconButton, InputAdornment } from '@mui/material'
-import { FolderOpen } from '@mui/icons-material'
+import FolderOpen from '@mui/icons-material/FolderOpen'
 import FileExplorerDialog from './FileExplorerDialog'
 
 interface PathSelectorFieldProps {
