@@ -293,21 +293,11 @@ Use this only when completion is blocked by missing required tools or missing au
 5. When the issue is in `Merging`, open and follow `.codex/skills/land/SKILL.md`; do not call `gh pr merge` directly outside that skill.
 6. Start with the fast landing preflight for already-green PRs:
    - Read the latest `Human Review handoff: ...` note from the workpad.
-   - Run `python3 .codex/skills/land/land_watch.py --preflight --json --handoff-note '<handoff note>'`.
+   - Run `python3 .codex/skills/land/land_watch.py --preflight --handoff-note '<handoff note>'`.
    - If the preflight exits `0`, the PR head SHA is unchanged, GitHub checks
-     are green, and no new human/Codex feedback was found since Human Review;
-     skip full local validation and the full watcher loop, then merge through
-     the `land` skill flow.
-   - If the preflight JSON has `requires_admin_bypass: true`, this means the
-     issue is in `Merging`, GitHub reports `reviewDecision=REVIEW_REQUIRED`,
-     and the remaining branch-policy approval requirement is being satisfied by
-     the Linear state transition. Use `gh pr merge --admin` only after a final
-     check still reports `mergeable=MERGEABLE`,
-     `mergeStateStatus=BLOCKED`, and `reviewDecision=REVIEW_REQUIRED`.
-     If that admin merge fails, record the exact missing permission or
-     branch-policy error in the workpad as the landing blocker.
-   - If `requires_admin_bypass` is false, merge only after the final check still
-     reports `mergeable=MERGEABLE` and `mergeStateStatus=CLEAN` or `HAS_HOOKS`.
+     are green, mergeability is clean, and no new human/Codex feedback was
+     found since Human Review; skip full local validation and the full watcher
+     loop, then merge through the `land` skill flow.
    - If the preflight exits `6`, fails, or lacks handoff/check/mergeability
      data, use the conservative fallback in `.codex/skills/land/SKILL.md`.
 7. Always use the conservative fallback, including full local validation and
