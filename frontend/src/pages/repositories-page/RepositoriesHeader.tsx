@@ -1,4 +1,5 @@
-import { Add, FileUpload } from '@mui/icons-material'
+import Add from '@mui/icons-material/Add'
+import FileUpload from '@mui/icons-material/FileUpload'
 import { Box, Button, Stack, Typography } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import type { Repository } from './types'

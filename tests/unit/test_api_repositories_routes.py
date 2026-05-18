@@ -14,6 +14,7 @@ from app.database.models import (
     CompactJob,
     PruneJob,
     Repository,
+    RepositoryWipeJob,
     SSHConnection,
     SystemSettings,
     UserRepositoryPermission,
@@ -118,6 +119,38 @@ class TestRepositoryRouteContracts:
         assert body["check_job"]["progress"] == 35
         assert body["compact_job"]["progress"] == 60
         assert body["prune_job"]["id"] is not None
+
+    def test_get_running_jobs_reports_repository_wipe_job(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Repo", "/repos/main")
+        wipe_job = RepositoryWipeJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            repository_name=repo.name,
+            borg_version=1,
+            status="running",
+            phase="delete",
+            archive_count=2,
+            archive_fingerprint="sha256:abc",
+            run_compact=True,
+            progress=35,
+            progress_message="Deleting repository archives",
+            started_at=datetime(2026, 1, 1, 12, 15, tzinfo=timezone.utc),
+        )
+        test_db.add(wipe_job)
+        test_db.commit()
+
+        response = test_client.get(
+            f"/api/repositories/{repo.id}/running-jobs", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["has_running_jobs"] is True
+        assert body["wipe_job"]["id"] == wipe_job.id
+        assert body["wipe_job"]["progress"] == 35
+        assert body["wipe_job"]["progress_message"] == "Deleting repository archives"
 
     def test_get_check_job_status_reads_log_file(
         self, test_client: TestClient, admin_headers, test_db, tmp_path

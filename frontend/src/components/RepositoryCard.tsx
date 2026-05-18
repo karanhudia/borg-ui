@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Play,
   Trash2,
+  Eraser,
   SquarePen,
   Archive,
   HardDrive,
@@ -34,6 +35,7 @@ interface RepositoryCardProps {
   onCheck: () => void
   onCompact: () => void
   onPrune: () => void
+  onWipeContents: () => void
   onEdit: () => void
   onDelete: () => void
   onBackupNow: () => void
@@ -64,6 +66,7 @@ export default function RepositoryCard({
   onCheck,
   onCompact,
   onPrune,
+  onWipeContents,
   onEdit,
   onDelete,
   onBackupNow,
@@ -81,7 +84,10 @@ export default function RepositoryCard({
   const { trackRepository, trackBackup, trackArchive, EventAction } = useAnalytics()
 
   const capabilities = getRepoCapabilities(repository)
-  const { hasRunningJobs, checkJob, compactJob, pruneJob } = useMaintenanceJobs(repository.id, true)
+  const { hasRunningJobs, checkJob, compactJob, pruneJob, wipeJob } = useMaintenanceJobs(
+    repository.id,
+    true
+  )
   const isMaintenanceRunning = hasRunningJobs
   const hasManualBackupSources = Boolean(repository.source_directories?.length)
   const canCreatePlan = Boolean(onCreateBackupPlan) && canDo('backup') && repository.mode === 'full'
@@ -94,14 +100,21 @@ export default function RepositoryCard({
       setElapsedTime('')
       return
     }
-    const startTime = checkJob?.started_at || compactJob?.started_at || pruneJob?.started_at
+    const startTime =
+      checkJob?.started_at || compactJob?.started_at || pruneJob?.started_at || wipeJob?.started_at
     if (!startTime) return
     setElapsedTime(formatElapsedTime(startTime))
     const interval = setInterval(() => {
       setElapsedTime(formatElapsedTime(startTime))
     }, 1000)
     return () => clearInterval(interval)
-  }, [hasRunningJobs, checkJob?.started_at, compactJob?.started_at, pruneJob?.started_at])
+  }, [
+    hasRunningJobs,
+    checkJob?.started_at,
+    compactJob?.started_at,
+    pruneJob?.started_at,
+    wipeJob?.started_at,
+  ])
 
   useEffect(() => {
     if (!hasRunningJobs && isInJobsSet) {
@@ -641,7 +654,7 @@ export default function RepositoryCard({
               </Tooltip>
             )}
 
-            {/* Delete — separated with a vertical rule */}
+            {/* Destructive repository actions — separated with a vertical rule */}
             {canManageRepository && capabilities.canDeleteRepository && (
               <>
                 <Box
@@ -653,6 +666,24 @@ export default function RepositoryCard({
                     flexShrink: 0,
                   }}
                 />
+                <Tooltip title={t('repositoryCard.buttons.wipeContents')} arrow>
+                  <IconButton
+                    size="small"
+                    onClick={onWipeContents}
+                    aria-label={t('repositoryCard.buttons.wipeContents')}
+                    disabled={isMaintenanceRunning}
+                    sx={{
+                      ...iconBtnSx,
+                      color: alpha(theme.palette.error.main, 0.56),
+                      '&:hover': {
+                        color: theme.palette.error.main,
+                        bgcolor: alpha(theme.palette.error.main, 0.09),
+                      },
+                    }}
+                  >
+                    <Eraser size={16} />
+                  </IconButton>
+                </Tooltip>
                 <Tooltip title={t('repositoryCard.buttons.delete')} arrow>
                   <IconButton
                     size="small"

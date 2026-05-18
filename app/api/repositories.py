@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ from app.database.models import (
     ScheduledJobRepository,
     SystemSettings,
     UserRepositoryPermission,
+    RepositoryWipeJob,
 )
 from app.api.maintenance_jobs import (
     create_maintenance_job,
@@ -43,6 +45,11 @@ from app.core.features import FEATURES, get_current_plan, plan_includes
 from app.config import settings
 from app.services.mqtt_service import mqtt_service
 from app.services.restore_check_service import restore_check_service
+from app.services.repository_wipe_service import (
+    WipeArchiveSetChanged,
+    WipeValidationError,
+    repository_wipe_service,
+)
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -79,6 +86,18 @@ V2_ONLY_ENCRYPTION_MODES = {
 
 # Initialize Borg interface
 borg = BorgInterface()
+
+
+class RepositoryWipePreviewRequest(BaseModel):
+    run_compact: bool = True
+
+
+class RepositoryWipeExecuteRequest(BaseModel):
+    preview_id: int
+    preview_fingerprint: str
+    confirmation_phrase: str
+    understood: bool
+    run_compact: bool = True
 
 
 def _normalize_restore_check_paths(paths: Any) -> list[str]:
@@ -203,6 +222,7 @@ def _empty_running_jobs_response() -> Dict[str, Any]:
         "compact_job": None,
         "prune_job": None,
         "restore_check_job": None,
+        "wipe_job": None,
     }
 
 
@@ -2831,6 +2851,143 @@ async def prune_repository(
         )
 
 
+@router.post("/{repo_id}/wipe-preview")
+async def preview_repository_wipe(
+    repo_id: int,
+    request: RepositoryWipePreviewRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate a guarded dry-run preview for wiping repository archives."""
+    try:
+        repository = get_repository_with_access(
+            db, current_user, repo_id, required_role="operator"
+        )
+        return await repository_wipe_service.create_preview(
+            db,
+            repository,
+            current_user,
+            run_compact=request.run_compact,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to generate repository wipe preview", error=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToPreviewWipe"},
+        )
+
+
+@router.post("/{repo_id}/wipe")
+async def execute_repository_wipe(
+    repo_id: int,
+    request: RepositoryWipeExecuteRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Validate the preview and start repository contents wipe execution."""
+    try:
+        repository = get_repository_with_access(
+            db, current_user, repo_id, required_role="operator"
+        )
+        job = await repository_wipe_service.start_execution(
+            db,
+            repository,
+            current_user,
+            preview_id=request.preview_id,
+            preview_fingerprint=request.preview_fingerprint,
+            confirmation_phrase=request.confirmation_phrase,
+            understood=request.understood,
+            run_compact=request.run_compact,
+        )
+        asyncio.create_task(repository_wipe_service.execute_wipe(job.id, repo_id))
+        return repository_wipe_service.serialize_job(job)
+    except WipeArchiveSetChanged:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.repo.wipePreviewStale"},
+        )
+    except WipeValidationError as e:
+        raise HTTPException(status_code=e.status_code, detail={"key": e.detail_key})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to start repository wipe", error=str(e))
+        raise HTTPException(
+            status_code=500, detail={"key": "backend.errors.repo.failedToStartWipe"}
+        )
+
+
+@router.get("/{repo_id}/wipe-jobs/{job_id}")
+async def get_repository_wipe_job(
+    repo_id: int,
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get repository wipe job status and logs."""
+    try:
+        repository = get_repository_with_access(
+            db, current_user, repo_id, required_role="operator"
+        )
+        job = (
+            db.query(RepositoryWipeJob)
+            .filter(
+                RepositoryWipeJob.id == job_id,
+                RepositoryWipeJob.repository_id == repository.id,
+            )
+            .first()
+        )
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.repo.wipeJobNotFound"},
+            )
+        return repository_wipe_service.serialize_job(
+            job,
+            include_preview=True,
+            include_logs=True,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get repository wipe job", error=str(e), job_id=job_id)
+        raise HTTPException(
+            status_code=500, detail={"key": "backend.errors.repo.failedToGetWipeJob"}
+        )
+
+
+@router.post("/{repo_id}/wipe-jobs/{job_id}/cancel")
+async def cancel_repository_wipe_preview(
+    repo_id: int,
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Record cancellation for a previewed or queued wipe job."""
+    try:
+        repository = get_repository_with_access(
+            db, current_user, repo_id, required_role="operator"
+        )
+        return repository_wipe_service.cancel_preview(
+            db,
+            repository,
+            current_user,
+            job_id=job_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to cancel repository wipe preview", error=str(e), job_id=job_id
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToCancelWipe"},
+        )
+
+
 @router.get("/{repo_id}/stats")
 async def get_repository_statistics(
     repo_id: int,
@@ -3627,9 +3784,18 @@ async def get_running_jobs(
             .first()
         )
 
+        wipe_job = (
+            db.query(RepositoryWipeJob)
+            .filter(
+                RepositoryWipeJob.repository_id == repo_id,
+                RepositoryWipeJob.status.in_(("pending", "running")),
+            )
+            .first()
+        )
+
         result = {
             "has_running_jobs": bool(
-                check_job or compact_job or prune_job or restore_check_job
+                check_job or compact_job or prune_job or restore_check_job or wipe_job
             ),
             "check_job": {
                 "id": check_job.id,
@@ -3660,6 +3826,16 @@ async def get_running_jobs(
                 "started_at": serialize_datetime(restore_check_job.started_at),
             }
             if restore_check_job
+            else None,
+            "wipe_job": {
+                "id": wipe_job.id,
+                "status": wipe_job.status,
+                "phase": wipe_job.phase,
+                "progress": wipe_job.progress,
+                "progress_message": wipe_job.progress_message,
+                "started_at": serialize_datetime(wipe_job.started_at),
+            }
+            if wipe_job
             else None,
         }
 

@@ -96,6 +96,61 @@ export interface BackupJob {
   }
 }
 
+export interface RepositoryWipeArchive {
+  identity: string
+  name: string
+  time?: string | null
+  id?: string | null
+  protected?: boolean
+}
+
+export type RepositoryWipeStatus =
+  | 'previewed'
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'completed_compaction_failed'
+  | 'completed_with_warnings'
+  | 'failed'
+  | 'failed_partial'
+  | 'cancelled'
+  | string
+
+export interface RepositoryWipeJob {
+  id: number
+  repository_id: number
+  status: RepositoryWipeStatus
+  phase?: string | null
+  started_at?: string | null
+  confirmed_at?: string | null
+  completed_at?: string | null
+  error_message?: string | null
+  progress?: number | null
+  progress_message?: string | null
+  archive_count: number
+  archive_fingerprint: string
+  run_compact: boolean
+  has_logs: boolean
+  logs?: string
+  archives?: RepositoryWipeArchive[]
+  dry_run_output?: string
+  blocked?: boolean
+  blocking_reason?: string | null
+  protected_archives?: string[]
+}
+
+export interface RepositoryWipePreviewRequest {
+  run_compact: boolean
+}
+
+export interface RepositoryWipeExecuteRequest {
+  preview_id: number
+  preview_fingerprint: string
+  confirmation_phrase: string
+  understood: boolean
+  run_compact: boolean
+}
+
 export interface BackupPlanRepositoryLink {
   id?: number
   repository_id: number

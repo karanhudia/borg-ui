@@ -82,6 +82,7 @@ def test_db(tmp_path, monkeypatch):
         patch("app.services.check_service.SessionLocal", TestingSessionLocal),
         patch("app.services.restore_check_service.SessionLocal", TestingSessionLocal),
         patch("app.services.delete_archive_service.SessionLocal", TestingSessionLocal),
+        patch("app.services.repository_wipe_service.SessionLocal", TestingSessionLocal),
         patch("app.services.prune_service.SessionLocal", TestingSessionLocal),
         patch("app.services.compact_service.SessionLocal", TestingSessionLocal),
         patch(
