@@ -8,7 +8,9 @@ process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '..')
-const staticDir = path.join(frontendRoot, 'storybook-static')
+const staticDir = process.env.STORYBOOK_STATIC_DIR
+  ? path.resolve(frontendRoot, process.env.STORYBOOK_STATIC_DIR)
+  : path.join(frontendRoot, 'storybook-static')
 const indexPath = path.join(staticDir, 'index.json')
 const snapshotsDir = path.join(frontendRoot, 'storybook-snapshots')
 const localHostLibRoot = path.join(frontendRoot, '.playwright-host-libs', 'root')
@@ -80,13 +82,26 @@ function startStaticServer(rootDir) {
         return
       }
 
-      const fileStat = await stat(filePath)
+      let fileStat = await stat(filePath)
       if (fileStat.isDirectory()) {
         filePath = path.join(filePath, 'index.html')
+        fileStat = await stat(filePath)
       }
 
-      response.writeHead(200, { 'Content-Type': getContentType(filePath) })
-      createReadStream(filePath).pipe(response)
+      response.writeHead(200, {
+        'Cache-Control': 'no-store',
+        Connection: 'close',
+        'Content-Length': fileStat.size,
+        'Content-Type': getContentType(filePath),
+      })
+      createReadStream(filePath)
+        .once('error', () => {
+          if (!response.headersSent) {
+            response.writeHead(500)
+          }
+          response.end()
+        })
+        .pipe(response)
     } catch {
       response.writeHead(404)
       response.end('Not found')
@@ -160,11 +175,11 @@ async function withFixedDate(page) {
 }
 
 async function captureStorySnapshots(stories, baseUrl) {
-  let browser
+  let chromium
 
   try {
-    const { chromium } = await import('playwright')
-    browser = await chromium.launch()
+    const playwright = await import('playwright')
+    chromium = playwright.chromium
   } catch (error) {
     throw new Error(
       `Unable to launch Playwright Chromium. Run \`PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium\` and retry. Original error: ${
@@ -173,41 +188,54 @@ async function captureStorySnapshots(stories, baseUrl) {
     )
   }
 
-  try {
-    const context = await browser.newContext({
-      deviceScaleFactor: 1,
-      locale: 'en-US',
-      timezoneId: 'UTC',
-      viewport: { width: 720, height: 520 },
-    })
+  for (const story of stories) {
+    const outputPath = path.join(snapshotsDir, `${story.id}.png`)
+    let lastError
 
-    for (const story of stories) {
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const browser = await chromium.launch()
+      const context = await browser.newContext({
+        deviceScaleFactor: 1,
+        locale: 'en-US',
+        timezoneId: 'UTC',
+        viewport: { width: 720, height: 520 },
+      })
       const page = await context.newPage()
-      const outputPath = path.join(snapshotsDir, `${story.id}.png`)
 
-      await withFixedDate(page)
-      await page.goto(`${baseUrl}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`, {
-        waitUntil: 'networkidle',
-      })
-      await page.waitForSelector('#storybook-root', { state: 'visible' })
-      await page.addStyleTag({
-        content: `
-          *, *::before, *::after {
-            animation: none !important;
-            caret-color: transparent !important;
-            transition-duration: 0s !important;
-            transition-property: none !important;
-          }
-        `,
-      })
-      await page.locator('#storybook-root').screenshot({ path: outputPath })
-      await page.close()
-      console.log(`Wrote ${path.relative(frontendRoot, outputPath)}`)
+      try {
+        await withFixedDate(page)
+        await page.goto(`${baseUrl}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`, {
+          waitUntil: 'networkidle',
+        })
+        await page.waitForSelector('#storybook-root', { state: 'visible' })
+        await page.addStyleTag({
+          content: `
+            *, *::before, *::after {
+              animation: none !important;
+              caret-color: transparent !important;
+              transition-duration: 0s !important;
+              transition-property: none !important;
+            }
+          `,
+        })
+        await page.locator('#storybook-root').screenshot({ path: outputPath })
+        console.log(`Wrote ${path.relative(frontendRoot, outputPath)}`)
+        lastError = undefined
+        break
+      } catch (error) {
+        lastError = error
+        if (attempt < 5) {
+          console.warn(`Retrying ${story.id} snapshot after load failure (${attempt}/5)`)
+        }
+      } finally {
+        await context.close().catch(() => {})
+        await browser.close().catch(() => {})
+      }
     }
 
-    await context.close()
-  } finally {
-    await browser.close()
+    if (lastError) {
+      throw lastError
+    }
   }
 }
 

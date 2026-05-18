@@ -1,5 +1,5 @@
 import { useTheme, useMediaQuery, Dialog, SwipeableDrawer, Box, IconButton } from '@mui/material'
-import { Close } from '@mui/icons-material'
+import Close from '@mui/icons-material/Close'
 import type { DialogProps } from '@mui/material'
 import type { ReactNode } from 'react'
 

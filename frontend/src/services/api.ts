@@ -4,7 +4,14 @@ import { BASE_PATH } from '@/utils/basePath'
 import { API_BASE_URL, buildDownloadUrl } from '@/utils/downloadUrl'
 import { attachAccessTokenHeader } from './authHeaders'
 import type { RestoreLayout, RestorePathMetadata } from '@/utils/restorePaths'
-import type { BackupPlan, BackupPlanData, SourceLocation } from '../types'
+import type {
+  BackupPlan,
+  BackupPlanData,
+  RepositoryWipeExecuteRequest,
+  RepositoryWipeJob,
+  RepositoryWipePreviewRequest,
+  SourceLocation,
+} from '../types'
 
 export type AuthTransportMode = 'jwt' | 'proxy' | 'insecure-no-auth'
 
@@ -595,6 +602,14 @@ export const repositoriesAPI = {
   ) => api.post(`/repositories/${id}/restore-check`, data || {}),
   compactRepository: (id: number) => api.post(`/repositories/${id}/compact`),
   pruneRepository: (id: number, data: ApiData) => api.post(`/repositories/${id}/prune`, data),
+  previewRepositoryWipe: (id: number, data: RepositoryWipePreviewRequest) =>
+    api.post<RepositoryWipeJob>(`/repositories/${id}/wipe-preview`, data),
+  executeRepositoryWipe: (id: number, data: RepositoryWipeExecuteRequest) =>
+    api.post<RepositoryWipeJob>(`/repositories/${id}/wipe`, data),
+  getRepositoryWipeJob: (id: number, jobId: number) =>
+    api.get<RepositoryWipeJob>(`/repositories/${id}/wipe-jobs/${jobId}`),
+  cancelRepositoryWipeJob: (id: number, jobId: number) =>
+    api.post<RepositoryWipeJob>(`/repositories/${id}/wipe-jobs/${jobId}/cancel`),
   breakLock: (id: number) => api.post(`/repositories/${id}/break-lock`),
   getRepositoryStats: (id: number) => api.get(`/repositories/${id}/stats`),
   listRepositoryArchives: (id: number) => api.get(`/repositories/${id}/archives`),
