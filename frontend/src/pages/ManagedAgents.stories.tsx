@@ -6,7 +6,13 @@ import type {
   AgentJobResponse,
   AgentMachineResponse,
 } from '../services/api'
-import { AgentList, AgentSetupGuide, JobsTable, TokensTable } from './ManagedAgents'
+import {
+  AgentList,
+  AgentSetupGuide,
+  AgentSetupHelpContent,
+  JobsTable,
+  TokensTable,
+} from './ManagedAgents'
 
 const agents: AgentMachineResponse[] = [
   {
@@ -142,7 +148,6 @@ export const FleetOverview: Story = {
         <AgentSetupGuide
           command="borg-ui-agent register --server https://borg-ui.example.com --token <enrollment-token> --name <machine-name>"
           onCopy={() => {}}
-          onCreateToken={() => {}}
         />
 
         <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
@@ -218,6 +223,29 @@ export const FleetOverview: Story = {
           <TokensTable tokens={tokens} onRevoke={() => {}} isRevoking={false} />
         </Box>
       </Stack>
+    </Box>
+  ),
+}
+
+export const SetupHelpDetails: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <Paper variant="outlined" sx={{ maxWidth: 820, mx: 'auto', p: 3, borderRadius: 2 }}>
+        <Stack spacing={2}>
+          <Box>
+            <Typography variant="h5" fontWeight={700}>
+              Agent Setup Help
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+              Fresh-machine install, registration URL, and startup guidance
+            </Typography>
+          </Box>
+          <AgentSetupHelpContent
+            command="borg-ui-agent register --server https://borg-ui.example.com --token <enrollment-token> --name <machine-name>"
+            onCopy={() => {}}
+          />
+        </Stack>
+      </Paper>
     </Box>
   ),
 }
