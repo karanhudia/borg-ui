@@ -33,12 +33,15 @@ class PrInfo:
     head_sha: str
     mergeable: str | None
     merge_state: str | None
+    review_decision: str | None = None
 
 
 @dataclass
 class FastPathDecision:
     can_fast_path: bool
     reasons: list[str]
+    requires_admin_bypass: bool = False
+    admin_bypass_reason: str | None = None
 
 
 class RateLimitError(RuntimeError):
@@ -80,7 +83,7 @@ async def get_pr_info() -> PrInfo:
         "pr",
         "view",
         "--json",
-        "number,url,headRefOid,mergeable,mergeStateStatus",
+        "number,url,headRefOid,mergeable,mergeStateStatus,reviewDecision",
     )
     parsed = json.loads(data)
     return PrInfo(
@@ -89,6 +92,7 @@ async def get_pr_info() -> PrInfo:
         head_sha=parsed["headRefOid"],
         mergeable=parsed.get("mergeable"),
         merge_state=parsed.get("mergeStateStatus"),
+        review_decision=parsed.get("reviewDecision"),
     )
 
 
@@ -588,6 +592,7 @@ def evaluate_fast_path(
     review_request_at: datetime | None,
 ) -> FastPathDecision:
     reasons: list[str] = []
+    admin_bypass_reason: str | None = None
 
     if not human_review_sha:
         reasons.append("Missing Human Review handoff SHA")
@@ -608,7 +613,12 @@ def evaluate_fast_path(
     if pr.merge_state is None:
         reasons.append("PR merge state is unknown")
     elif pr.merge_state not in FAST_PATH_MERGE_STATES:
-        reasons.append(f"PR merge state is {pr.merge_state}")
+        if requires_review_admin_bypass(pr):
+            admin_bypass_reason = (
+                "GitHub review requirement satisfied by Linear Merging"
+            )
+        else:
+            reasons.append(f"PR merge state is {pr.merge_state}")
 
     if not check_runs:
         reasons.append("GitHub checks are missing")
@@ -632,11 +642,25 @@ def evaluate_fast_path(
             )
         )
 
-    return FastPathDecision(can_fast_path=not reasons, reasons=reasons)
+    can_fast_path = not reasons
+    return FastPathDecision(
+        can_fast_path=can_fast_path,
+        reasons=reasons,
+        requires_admin_bypass=bool(can_fast_path and admin_bypass_reason),
+        admin_bypass_reason=admin_bypass_reason if can_fast_path else None,
+    )
 
 
 def is_merge_conflicting(pr: PrInfo) -> bool:
     return pr.mergeable == "CONFLICTING" or pr.merge_state == "DIRTY"
+
+
+def requires_review_admin_bypass(pr: PrInfo) -> bool:
+    return (
+        pr.mergeable == "MERGEABLE"
+        and pr.merge_state == "BLOCKED"
+        and pr.review_decision == "REVIEW_REQUIRED"
+    )
 
 
 async def fetch_review_context(
@@ -828,6 +852,8 @@ def print_preflight_decision(
                 {
                     "can_fast_path": decision.can_fast_path,
                     "reasons": decision.reasons,
+                    "requires_admin_bypass": decision.requires_admin_bypass,
+                    "admin_bypass_reason": decision.admin_bypass_reason,
                 },
                 indent=2,
             )
@@ -839,6 +865,8 @@ def print_preflight_decision(
             "Fast path ready: PR head unchanged, mergeable, checks green, and "
             "no new feedback since Human Review."
         )
+        if decision.requires_admin_bypass:
+            print(f"Administrator bypass required: {decision.admin_bypass_reason}")
         return
 
     print("Full validation required:")
