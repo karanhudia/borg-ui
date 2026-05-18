@@ -4,6 +4,9 @@ import { createServer } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { storyRootSelector, waitForStoryRoot } from './snapshot-capture-config.mjs'
+import { writeSnapshotIfChanged } from './snapshot-file-writer.mjs'
+
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -189,7 +192,7 @@ async function captureStorySnapshots(stories, baseUrl) {
       await page.goto(`${baseUrl}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`, {
         waitUntil: 'networkidle',
       })
-      await page.waitForSelector('#storybook-root', { state: 'visible' })
+      await waitForStoryRoot(page)
       await page.addStyleTag({
         content: `
           *, *::before, *::after {
@@ -200,9 +203,10 @@ async function captureStorySnapshots(stories, baseUrl) {
           }
         `,
       })
-      await page.locator('#storybook-root').screenshot({ path: outputPath })
+      const snapshotBuffer = await page.locator(storyRootSelector).screenshot()
+      const result = await writeSnapshotIfChanged(outputPath, snapshotBuffer)
       await page.close()
-      console.log(`Wrote ${path.relative(frontendRoot, outputPath)}`)
+      console.log(`${result.changed ? 'Wrote' : 'Kept'} ${path.relative(frontendRoot, outputPath)}`)
     }
 
     await context.close()
