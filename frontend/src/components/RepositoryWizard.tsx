@@ -266,17 +266,20 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         : repository.repository_type === 'ssh' || (repository.path || '').startsWith('ssh://') // Legacy fallback
 
     const repoVersion = (repository.borg_version === 2 ? 2 : 1) as 1 | 2
-    const executionTarget = repository.execution_target === 'agent' ? 'agent' : 'local'
+    const executionTarget =
+      repository.executor_type === 'agent' || repository.execution_target === 'agent'
+        ? 'agent'
+        : 'local'
 
     setWizardState({
       name: repository.name || '',
       borgVersion: repoVersion,
       repositoryMode: repository.mode || 'full',
-      repositoryLocation: executionTarget === 'agent' ? 'local' : isSSH ? 'ssh' : 'local',
+      repositoryLocation: isSSH ? 'ssh' : 'local',
       executionTarget,
       agentMachineId: executionTarget === 'agent' ? repository.agent_machine_id || '' : '',
       path: repoPath,
-      repoSshConnectionId: executionTarget === 'agent' ? '' : repository.connection_id || '',
+      repoSshConnectionId: repository.connection_id || '',
       bypassLock: repository.bypass_lock || false,
       dataSource:
         executionTarget === 'agent' || !repository.source_ssh_connection_id ? 'local' : 'remote',
@@ -322,8 +325,6 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       const effectiveExecutionTarget = nextUpdates.executionTarget ?? prev.executionTarget
 
       if (effectiveExecutionTarget === 'agent') {
-        nextUpdates.repositoryLocation = 'local'
-        nextUpdates.repoSshConnectionId = ''
         nextUpdates.dataSource = 'local'
         nextUpdates.sourceSshConnectionId = ''
       } else if (nextUpdates.executionTarget === 'local') {
@@ -582,14 +583,19 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       continue_on_hook_failure: wizardState.hookFailureMode === 'continue',
       skip_on_hook_failure: wizardState.hookFailureMode === 'skip',
       bypass_lock: wizardState.bypassLock,
-      execution_target: wizardState.executionTarget === 'agent' ? 'agent' : 'local',
+      executor_type: wizardState.executionTarget === 'agent' ? 'agent' : 'server',
+      execution_target:
+        wizardState.executionTarget === 'agent'
+          ? 'agent'
+          : wizardState.repositoryLocation === 'ssh'
+            ? 'ssh'
+            : 'local',
       agent_machine_id:
         wizardState.executionTarget === 'agent' && wizardState.agentMachineId
           ? wizardState.agentMachineId
           : null,
       // Connection IDs - single source of truth for SSH
-      connection_id:
-        wizardState.executionTarget === 'agent' ? null : wizardState.repoSshConnectionId || null,
+      connection_id: wizardState.repoSshConnectionId || null,
       source_connection_id:
         wizardState.executionTarget !== 'agent' &&
         wizardState.dataSource === 'remote' &&

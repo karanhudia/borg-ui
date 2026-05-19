@@ -250,6 +250,9 @@ class Repository(Base):
     execution_target = Column(
         String, default="local", nullable=False
     )  # Where borg create executes: local, ssh, or agent
+    executor_type = Column(
+        String, default="server", nullable=False
+    )  # First-class executor: server or agent
     agent_machine_id = Column(
         Integer, ForeignKey("agent_machines.id"), nullable=True
     )  # Agent machine that executes backups for this repository

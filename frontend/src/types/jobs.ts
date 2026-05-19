@@ -33,6 +33,7 @@ export interface Job {
   processed_size?: string
   maintenance_status?: string | null
   scheduled_job_id?: number | null
+  execution_mode?: string | null
   progress_details?: unknown
 }
 
@@ -40,6 +41,8 @@ export interface Repository {
   id: number
   name: string
   path: string
+  executor_type?: 'server' | 'agent'
+  execution_target?: 'local' | 'ssh' | 'agent'
   mode?: 'full' | 'observe'
   encryption?: string
   compression?: string

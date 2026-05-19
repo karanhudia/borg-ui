@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import signal
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ class BackupCreatePayload:
     compression: str = "lz4"
     exclude_patterns: list[str] = field(default_factory=list)
     custom_flags: list[str] = field(default_factory=list)
+    upload_ratelimit_kib: Optional[int] = None
     remote_path: Optional[str] = None
     environment: dict[str, str] = field(default_factory=dict)
 
@@ -65,6 +67,13 @@ class BackupCreatePayload:
         borg_version = int(
             repository.get("borg_version") or payload.get("borg_version") or 1
         )
+        upload_ratelimit_kib = backup.get(
+            "upload_ratelimit_kib", payload.get("upload_ratelimit_kib")
+        )
+        if upload_ratelimit_kib is not None:
+            upload_ratelimit_kib = int(upload_ratelimit_kib)
+            if upload_ratelimit_kib <= 0:
+                raise ValueError("backup.create upload_ratelimit_kib must be positive")
         environment = _extract_environment(payload, repository)
 
         return cls(
@@ -78,6 +87,7 @@ class BackupCreatePayload:
             or "lz4",
             exclude_patterns=exclude_patterns,
             custom_flags=custom_flags,
+            upload_ratelimit_kib=upload_ratelimit_kib,
             remote_path=repository.get("remote_path") or payload.get("remote_path"),
             environment=environment,
         )
@@ -97,6 +107,8 @@ class BackupCreatePayload:
                 "--compression",
                 self.compression,
             ]
+            if self.upload_ratelimit_kib:
+                cmd.extend(["--upload-ratelimit", str(self.upload_ratelimit_kib)])
             for pattern in self.exclude_patterns:
                 cmd.extend(["--exclude", pattern])
             cmd.extend(self.custom_flags)
@@ -116,6 +128,8 @@ class BackupCreatePayload:
         ]
         if self.remote_path:
             cmd.extend(["--remote-path", self.remote_path])
+        if self.upload_ratelimit_kib:
+            cmd.extend(["--upload-ratelimit", str(self.upload_ratelimit_kib)])
         for pattern in self.exclude_patterns:
             cmd.extend(["--exclude", pattern])
         cmd.extend(self.custom_flags)
@@ -237,13 +251,15 @@ def execute_backup_create_job(
     sequence += 1
 
     try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env=env,
-        )
+        popen_kwargs: dict[str, Any] = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "env": env,
+        }
+        if os.name == "posix":
+            popen_kwargs["start_new_session"] = True
+        process = subprocess.Popen(cmd, **popen_kwargs)
     except OSError as exc:
         error_message = f"Failed to start borg create: {exc}"
         client.send_log(
@@ -304,9 +320,22 @@ def execute_backup_create_job(
 
 
 def _terminate_process(process: subprocess.Popen) -> int:
-    process.terminate()
+    if os.name == "posix" and getattr(process, "pid", None):
+        try:
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        except OSError:
+            process.terminate()
+    else:
+        process.terminate()
+
     try:
         return process.wait(timeout=10)
     except subprocess.TimeoutExpired:
-        process.kill()
+        if os.name == "posix" and getattr(process, "pid", None):
+            try:
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            except OSError:
+                process.kill()
+        else:
+            process.kill()
         return process.wait(timeout=5)

@@ -86,7 +86,7 @@ export default function WizardStepLocation({
   const isAgentExecution = executionTarget === 'agent'
 
   const handleLocationChange = (location: 'local' | 'ssh') => {
-    if (location === 'ssh' && (isRemoteLocationDisabled || isAgentExecution)) {
+    if (location === 'ssh' && isRemoteLocationDisabled) {
       return // Don't allow switching to SSH if data source is remote
     }
     onChange({
@@ -448,23 +448,22 @@ export default function WizardStepLocation({
                 data.repositoryLocation === 'ssh'
                   ? (theme) => alpha(theme.palette.primary.main, 0.08)
                   : 'background.paper',
-              opacity: isRemoteLocationDisabled || isAgentExecution ? 0.5 : 1,
+              opacity: isRemoteLocationDisabled ? 0.5 : 1,
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
               transform: data.repositoryLocation === 'ssh' ? 'translateY(-2px)' : 'none',
-              '&:hover':
-                !isRemoteLocationDisabled && !isAgentExecution
-                  ? {
-                      transform: 'translateY(-2px)',
-                      boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-                      borderColor:
-                        data.repositoryLocation === 'ssh' ? 'primary.main' : 'text.primary',
-                    }
-                  : {},
+              '&:hover': !isRemoteLocationDisabled
+                ? {
+                    transform: 'translateY(-2px)',
+                    boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
+                    borderColor:
+                      data.repositoryLocation === 'ssh' ? 'primary.main' : 'text.primary',
+                  }
+                : {},
             }}
           >
             <CardActionArea
               onClick={() => handleLocationChange('ssh')}
-              disabled={isRemoteLocationDisabled || isAgentExecution}
+              disabled={isRemoteLocationDisabled}
               sx={{ p: 1 }}
             >
               <CardContent>

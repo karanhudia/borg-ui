@@ -176,12 +176,16 @@ export default function WizardStepDataSource({
                 </Box>
                 <Box>
                   <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                    {t('wizard.borgUiServer')}
+                    {isAgentExecution
+                      ? t('wizard.location.managedAgentFilesystem')
+                      : t('wizard.borgUiServer')}
                   </Typography>
                 </Box>
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-                {t('wizard.dataSource.localDescription')}
+                {isAgentExecution
+                  ? t('wizard.dataSource.agentLocalDescription')
+                  : t('wizard.dataSource.localDescription')}
               </Typography>
               {hasRemoteDirs && (
                 <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>

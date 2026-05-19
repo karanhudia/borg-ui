@@ -533,6 +533,65 @@ class TestAgentJobTransport:
         )
         assert after_complete.status_code == 409
 
+    def test_repeated_complete_report_is_idempotent(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        job = _create_agent_job(test_db, agent, status="running")
+        headers = _agent_headers(registered["agent_token"])
+
+        first = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"archive_name": "first-archive", "return_code": 0}},
+            headers=headers,
+        )
+        second = test_client.post(
+            f"/api/agents/jobs/{job.id}/complete",
+            json={"result": {"archive_name": "retry-archive", "return_code": 0}},
+            headers=headers,
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert second.json()["status"] == "completed"
+        test_db.refresh(job)
+        assert job.result == {"archive_name": "first-archive", "return_code": 0}
+
+    def test_heartbeat_requeues_stale_claimed_job_not_running_on_agent(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        job = _create_agent_job(test_db, agent, status="claimed")
+        job.claimed_at = stale_at
+        job.updated_at = stale_at
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/agents/heartbeat",
+            json={
+                "agent_id": registered["agent_id"],
+                "agent_version": "0.1.0",
+                "borg_versions": [],
+                "capabilities": ["backup.create"],
+                "running_job_ids": [],
+            },
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 200
+        test_db.refresh(job)
+        assert job.status == "queued"
+        assert job.claimed_at is None
+
     def test_agent_cannot_mutate_another_agents_job(
         self, test_client: TestClient, test_db, admin_headers
     ):

@@ -899,7 +899,11 @@
       "postPlanScript": "Post-plan script",
       "exitCode": "Exit code {{code}}",
       "scriptDuration": "{{seconds}}s",
-      "viewLogs": "View Logs"
+      "viewLogs": "View Logs",
+      "transport": {
+        "server": "Server",
+        "agent": "Agent"
+      }
     },
     "runsPanel": {
       "title": "Backup Plan Runs",
@@ -1968,6 +1972,10 @@
     "scheduledById": "Scheduled (ID: {{id}})",
     "backupPlanByName": "Backup Plan: {{name}}",
     "manual": "Manual",
+    "transport": {
+      "server": "Server",
+      "agent": "Agent"
+    },
     "toasts": {
       "authRequired": "Authentication required",
       "downloadingLogs": "Downloading logs...",
@@ -2946,6 +2954,7 @@
     "dataSource": {
       "title": "Where is the data you want to back up?",
       "localDescription": "Back up data from this server (local or mounted filesystems)",
+      "agentLocalDescription": "Back up paths from the selected managed agent filesystem",
       "agentSourceInfo": "Source paths are resolved on the selected managed agent.",
       "removeRemoteDirsFirst": "Remove remote directories first to switch",
       "remoteToRemoteDisabledTooltip": "Remote-to-remote backups are not supported. Select a local repository or use the same remote machine.",
@@ -2980,7 +2989,7 @@
       "noActiveManagedAgents": "No active managed agents are enrolled.",
       "managedAgentFilesystem": "Managed Agent Filesystem",
       "managedAgentFilesystemDesc": "Store backups on the selected managed agent",
-      "agentSshDisabledInfo": "Managed-agent repositories use paths on the selected agent. Configure SSH access on the agent itself if the Borg repository path uses SSH.",
+      "agentSshDisabledInfo": "Agent execution can target an SSH repository when the selected agent has the needed SSH credentials. Borg UI keeps the SSH connection for configuration and does not proxy backup data.",
       "whereToStore": "Where should backups be stored?",
       "borgUiServerDesc": "Store backups on this server's local storage",
       "remoteClientDesc": "Store backups on a remote machine via SSH",

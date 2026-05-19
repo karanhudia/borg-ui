@@ -274,6 +274,7 @@ class TestBackupStart:
             exclude_patterns=json.dumps(["*.tmp"]),
             repository_type="local",
             execution_target="agent",
+            executor_type="agent",
             agent_machine_id=agent.id,
             custom_flags="--one-file-system",
         )
@@ -317,6 +318,53 @@ class TestBackupStart:
             "BORG_PASSPHRASE": {"value": "repo-secret"}
         }
 
+    def test_start_backup_routes_agent_repository_by_executor_type(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Workstation",
+            agent_id="agt_workstation",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = Repository(
+            name="Executor Agent Repo",
+            path="/executor-agent/repo",
+            encryption="none",
+            compression="lz4",
+            source_directories=json.dumps(["/home/user/data"]),
+            repository_type="local",
+            execution_target="local",
+            executor_type="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch(
+            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+        ) as execute_backup:
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        execute_backup.assert_not_called()
+        backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).first()
+        assert backup_job.execution_mode == "agent"
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.backup_job_id == backup_job.id)
+            .one()
+        )
+        assert agent_job.agent_machine_id == agent.id
+
     def test_agent_completion_updates_linked_backup_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -339,6 +387,7 @@ class TestBackupStart:
             source_directories=json.dumps(["/home/user/docs"]),
             repository_type="local",
             execution_target="agent",
+            executor_type="agent",
             agent_machine_id=agent.id,
         )
         test_db.add(repo)
@@ -357,6 +406,13 @@ class TestBackupStart:
             .first()
         )
         headers = {AGENT_AUTH_HEADER: f"Bearer {raw_token}"}
+
+        poll_response = test_client.get("/api/agents/jobs/poll", headers=headers)
+        assert poll_response.status_code == 200
+        polled_job = poll_response.json()["jobs"][0]
+        assert polled_job["id"] == agent_job.id
+        assert polled_job["payload"]["job_kind"] == "backup.create"
+        assert polled_job["payload"]["backup"]["source_paths"] == ["/home/user/docs"]
 
         assert (
             test_client.post(
@@ -417,6 +473,18 @@ class TestBackupStart:
         assert logs_response.json()["lines"] == [
             {"line_number": 1, "content": "Creating archive"}
         ]
+
+        jobs_response = test_client.get(
+            "/api/backup/jobs", params={"manual_only": True}, headers=admin_headers
+        )
+        assert jobs_response.status_code == 200
+        history_job = next(
+            item for item in jobs_response.json()["jobs"] if item["id"] == backup_job_id
+        )
+        assert history_job["triggered_by"] == "manual"
+        assert history_job["execution_mode"] == "agent"
+        assert history_job["archive_name"] == "agent-archive"
+        assert history_job["has_logs"] is True
 
 
 @pytest.mark.unit
@@ -625,6 +693,7 @@ class TestBackupStatus:
         payload_job = next(
             item for item in response.json()["jobs"] if item["id"] == job.id
         )
+        assert payload_job["execution_mode"] == "local"
         progress = payload_job["progress_details"]
         assert progress["compressed_size"] == 512
         assert progress["deduplicated_size"] == 256
@@ -703,6 +772,7 @@ class TestBackupCancel:
             source_directories=json.dumps(["/home/user/docs"]),
             repository_type="local",
             execution_target="agent",
+            executor_type="agent",
         )
         test_db.add_all([agent, repo])
         test_db.commit()

@@ -31,6 +31,7 @@ from app.services.backup_plan_policy import (
 )
 from app.services.backup_plan_execution_service import backup_plan_execution_service
 from app.services.backup_progress_contract import serialize_backup_progress_details
+from app.services.repository_executor import repository_executor_type
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     InvalidScheduleTimezone,
@@ -301,6 +302,9 @@ def _serialize_repository_link(link: BackupPlanRepository) -> dict[str, Any]:
             "mode": repo.mode,
             "repository_type": repo.repository_type,
             "connection_id": repo.connection_id,
+            "execution_target": repo.execution_target,
+            "executor_type": repository_executor_type(repo),
+            "agent_machine_id": repo.agent_machine_id,
         }
         if repo
         else None,
@@ -386,6 +390,7 @@ def _serialize_backup_job(
         "has_logs": bool(job.log_file_path or job.logs),
         "maintenance_status": job.maintenance_status,
         "archive_name": job.archive_name,
+        "execution_mode": job.execution_mode or "local",
         "progress_details": serialize_backup_progress_details(job, repo),
     }
 
@@ -407,6 +412,9 @@ def _serialize_plan_run_repository(link: BackupPlanRunRepository) -> dict[str, A
             "mode": repo.mode,
             "repository_type": repo.repository_type,
             "connection_id": repo.connection_id,
+            "execution_target": repo.execution_target,
+            "executor_type": repository_executor_type(repo),
+            "agent_machine_id": repo.agent_machine_id,
         }
         if repo
         else None,
