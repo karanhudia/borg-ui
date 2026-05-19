@@ -455,9 +455,16 @@ class BackupClient:
 def test_execute_backup_create_job_completes_successfully(monkeypatch):
     popen_calls = []
 
-    def fake_popen(cmd, stdout, stderr, text, env):
+    def fake_popen(cmd, stdout, stderr, text, env, **kwargs):
         popen_calls.append(
-            {"cmd": cmd, "stdout": stdout, "stderr": stderr, "text": text, "env": env}
+            {
+                "cmd": cmd,
+                "stdout": stdout,
+                "stderr": stderr,
+                "text": text,
+                "env": env,
+                "kwargs": kwargs,
+            }
         )
         return FakeProcess(
             [
@@ -488,6 +495,7 @@ def test_execute_backup_create_job_completes_successfully(monkeypatch):
     assert result.status == "completed"
     assert popen_calls[0]["cmd"][-2:] == ["/repo::archive", "/src"]
     assert popen_calls[0]["env"]["BORG_PASSPHRASE"] == "secret"
+    assert popen_calls[0]["kwargs"]["start_new_session"] is True
     assert any(call[0] == "send_progress" for call in client.calls)
     complete_call = [call for call in client.calls if call[0] == "complete_job"][0]
     assert complete_call[2]["archive_name"] == "archive"
