@@ -16,6 +16,7 @@ import {
   FormControl,
   IconButton,
   InputLabel,
+  Link as MuiLink,
   LinearProgress,
   MenuItem,
   Paper,
@@ -34,7 +35,18 @@ import {
   Typography,
   useTheme,
 } from '@mui/material'
-import { Ban, Copy, Laptop, Play, Plus, RefreshCw, Server, Terminal, XCircle } from 'lucide-react'
+import {
+  Ban,
+  Copy,
+  Info,
+  Laptop,
+  Play,
+  Plus,
+  RefreshCw,
+  Server,
+  Terminal,
+  XCircle,
+} from 'lucide-react'
 import {
   AgentBackupJobCreate,
   AgentEnrollmentTokenSummary,
@@ -138,11 +150,14 @@ export default function ManagedAgents() {
 
   const settingsQuery = useQuery({
     queryKey: ['systemSettings'],
-    queryFn: settingsAPI.getSystemSettings,
+    queryFn: async () => {
+      const response = await settingsAPI.getSystemSettings()
+      return response.data
+    },
     enabled: canManageAgents,
   })
   const managedAgentsBetaEnabled =
-    settingsQuery.data?.data?.settings?.managed_agents_beta_enabled ?? false
+    settingsQuery.data?.settings?.managed_agents_beta_enabled ?? false
   const canUseManagedAgents = canManageAgents && managedAgentsBetaEnabled
 
   const agentsQuery = useQuery({
@@ -340,26 +355,19 @@ export default function ManagedAgents() {
             </IconButton>
           </Tooltip>
           <Button
-            variant="outlined"
+            variant="contained"
             startIcon={<Plus size={18} />}
             onClick={() => {
               setCreatedToken(null)
               setEnrollmentDialogOpen(true)
             }}
           >
-            Enrollment Token
+            Create Enrollment Token
           </Button>
         </Stack>
       </Stack>
 
-      <AgentSetupGuide
-        command={setupCommand}
-        onCopy={() => handleCopy(setupCommand)}
-        onCreateToken={() => {
-          setCreatedToken(null)
-          setEnrollmentDialogOpen(true)
-        }}
-      />
+      <AgentSetupGuide command={setupCommand} onCopy={handleCopy} />
 
       <Box
         sx={{
@@ -483,51 +491,23 @@ export default function ManagedAgents() {
                 <Typography variant="caption" color="text.secondary" fontWeight={700}>
                   Token
                 </Typography>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
-                  <Box
-                    component="code"
-                    sx={{
-                      flex: 1,
-                      display: 'block',
-                      p: 1.5,
-                      borderRadius: 1,
-                      bgcolor: 'action.hover',
-                      overflowX: 'auto',
-                      fontSize: '0.8rem',
-                    }}
-                  >
-                    {createdToken}
-                  </Box>
-                  <Tooltip title="Copy token">
-                    <IconButton onClick={() => handleCopy(createdToken)}>
-                      <Copy size={18} />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
+                <Box sx={{ mt: 0.75, mb: 2 }}>
+                  <CopyableCodeBlock
+                    value={createdToken}
+                    copyLabel="Copy token"
+                    onCopy={() => handleCopy(createdToken)}
+                  />
+                </Box>
                 <Typography variant="caption" color="text.secondary" fontWeight={700}>
                   Command
                 </Typography>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
-                  <Box
-                    component="code"
-                    sx={{
-                      flex: 1,
-                      display: 'block',
-                      p: 1.5,
-                      borderRadius: 1,
-                      bgcolor: 'action.hover',
-                      overflowX: 'auto',
-                      fontSize: '0.8rem',
-                    }}
-                  >
-                    {registrationCommand}
-                  </Box>
-                  <Tooltip title="Copy command">
-                    <IconButton onClick={() => handleCopy(registrationCommand)}>
-                      <Copy size={18} />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
+                <Box sx={{ mt: 0.75 }}>
+                  <CopyableCodeBlock
+                    value={registrationCommand}
+                    copyLabel="Copy command"
+                    onCopy={() => handleCopy(registrationCommand)}
+                  />
+                </Box>
               </Box>
             ) : null}
           </Stack>
@@ -706,12 +686,12 @@ export default function ManagedAgents() {
 export function AgentSetupGuide({
   command,
   onCopy,
-  onCreateToken,
 }: {
   command: string
-  onCopy: () => void
-  onCreateToken: () => void
+  onCopy: (value: string) => void
 }) {
+  const [helpOpen, setHelpOpen] = useState(false)
+
   return (
     <Paper
       variant="outlined"
@@ -737,11 +717,16 @@ export function AgentSetupGuide({
               </Typography>
             </Stack>
             <Typography color="text.secondary">
-              Create an enrollment token, then run the registration command on the client.
+              Create an enrollment token above, install the agent on the client, then register it
+              with this Borg UI server.
             </Typography>
           </Box>
-          <Button variant="contained" startIcon={<Plus size={18} />} onClick={onCreateToken}>
-            Create Enrollment Token
+          <Button
+            variant="outlined"
+            startIcon={<Info size={16} />}
+            onClick={() => setHelpOpen(true)}
+          >
+            Setup Help
           </Button>
         </Stack>
 
@@ -755,18 +740,18 @@ export function AgentSetupGuide({
           {[
             {
               label: '1',
-              title: 'Install the CLI',
-              body: 'Install borg-ui-agent on the client machine that owns the files to back up.',
+              title: 'Install the agent',
+              body: 'Clone Borg UI on the client machine, create a Python 3.11 virtualenv, and install the agent package.',
             },
             {
               label: '2',
               title: 'Create a token',
-              body: 'Use an enrollment token with a short expiry for each machine or rollout batch.',
+              body: 'Use the primary Create Enrollment Token action above. Tokens are shown once, so copy them before closing.',
             },
             {
               label: '3',
               title: 'Register the client',
-              body: 'Run the command on the remote machine; it will appear here after the first heartbeat.',
+              body: 'Run the command with a server URL this client can reach, then start borg-ui-agent run.',
             },
           ].map((step) => (
             <Box
@@ -788,33 +773,164 @@ export function AgentSetupGuide({
           ))}
         </Box>
 
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems="stretch">
-          <Box
-            component="code"
-            sx={{
-              flex: 1,
-              display: 'block',
-              p: 1.5,
-              borderRadius: 1,
-              bgcolor: 'action.hover',
-              color: 'text.primary',
-              overflowX: 'auto',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              fontSize: '0.8rem',
-              fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
-            }}
-          >
-            {command}
-          </Box>
-          <Tooltip title="Copy setup command">
-            <Button variant="outlined" startIcon={<Copy size={18} />} onClick={onCopy}>
-              Copy
-            </Button>
-          </Tooltip>
-        </Stack>
+        <CopyableCodeBlock
+          value={command}
+          copyLabel="Copy setup command"
+          onCopy={() => onCopy(command)}
+        />
       </Stack>
+
+      <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>Agent Setup Help</DialogTitle>
+        <DialogContent>
+          <AgentSetupHelpContent command={command} onCopy={onCopy} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHelpOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
+  )
+}
+
+export function AgentSetupHelpContent({
+  command,
+  onCopy,
+}: {
+  command: string
+  onCopy: (value: string) => void
+}) {
+  const installCommand = [
+    'git clone https://github.com/karanhudia/borg-ui.git',
+    'cd borg-ui',
+    'python3.11 -m venv .venv',
+    '. .venv/bin/activate',
+    'pip install .',
+  ].join('\n')
+  const runCommand = 'borg-ui-agent run'
+  const linuxStartupCommand = [
+    'sudo cp agent/install/systemd/borg-ui-agent.service /etc/systemd/system/',
+    'sudo systemctl daemon-reload',
+    'sudo systemctl enable --now borg-ui-agent',
+  ].join('\n')
+
+  return (
+    <Stack spacing={2.5} sx={{ mt: 1 }}>
+      <Box>
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          1. Install on the client machine
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 1 }}>
+          Run this on the machine that owns the files Borg should back up. The agent source is in
+          the{' '}
+          <MuiLink
+            href="https://github.com/karanhudia/borg-ui/tree/main/agent"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Borg UI agent directory
+          </MuiLink>
+          .
+        </Typography>
+        <CopyableCodeBlock
+          value={installCommand}
+          copyLabel="Copy install commands"
+          onCopy={() => onCopy(installCommand)}
+        />
+      </Box>
+
+      <Box>
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          2. Register with Borg UI
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 1 }}>
+          Replace the token with the enrollment token you created above. The server URL must be
+          reachable from the client machine. localhost:7879 is only correct when the agent runs on
+          the same machine as Borg UI; remote clients should use the Borg UI host name, IP address,
+          or HTTPS URL they can reach.
+        </Typography>
+        <CopyableCodeBlock
+          value={command}
+          copyLabel="Copy setup command"
+          onCopy={() => onCopy(command)}
+        />
+      </Box>
+
+      <Box>
+        <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+          3. Start now or on boot
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 1 }}>
+          Use systemd on Linux or launchd on macOS for long-running clients. Edit the bundled
+          template paths to match your virtualenv and config path before enabling the service.
+        </Typography>
+        <CopyableCodeBlock
+          value={runCommand}
+          copyLabel="Copy run command"
+          onCopy={() => onCopy(runCommand)}
+        />
+        <Box sx={{ mt: 1 }}>
+          <CopyableCodeBlock
+            value={linuxStartupCommand}
+            copyLabel="Copy systemd commands"
+            onCopy={() => onCopy(linuxStartupCommand)}
+          />
+        </Box>
+      </Box>
+    </Stack>
+  )
+}
+
+function CopyableCodeBlock({
+  value,
+  copyLabel,
+  onCopy,
+}: {
+  value: string
+  copyLabel: string
+  onCopy: () => void
+}) {
+  return (
+    <Box sx={{ position: 'relative', minWidth: 0 }}>
+      <Box
+        component="code"
+        sx={{
+          display: 'block',
+          p: 1.5,
+          pr: 5.5,
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'action.hover',
+          color: 'text.primary',
+          overflowX: 'auto',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          fontSize: '0.8rem',
+          fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
+        }}
+      >
+        {value}
+      </Box>
+      <Tooltip title={copyLabel}>
+        <IconButton
+          aria-label={copyLabel}
+          size="small"
+          onClick={onCopy}
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            border: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            '&:hover': { bgcolor: 'background.default' },
+          }}
+        >
+          <Copy size={16} />
+        </IconButton>
+      </Tooltip>
+    </Box>
   )
 }
 
