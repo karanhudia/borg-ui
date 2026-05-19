@@ -733,6 +733,7 @@
       "scanEndpointMissing": "Database scanning isn't available on this server yet. Pick a template below to configure manually.",
       "nothingFoundTitle": "No databases found on {{target}}",
       "nothingFoundBody": "Add another path above, or pick a template below to set one up manually.",
+      "checkedPaths": "Checked:",
       "detectedSection": "Detected",
       "orPickTemplate": "Or pick a template",
       "pickTemplateManually": "Pick a template to configure manually",

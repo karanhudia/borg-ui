@@ -719,13 +719,13 @@ export function SourceSelectionDialog({
                       style={{ flexShrink: 0, color: 'currentColor', opacity: 0.7 }}
                     />
                     <Typography variant="body2" noWrap>
-                      {`${connection.username}@${connection.host}`}
+                      {`${connection.username}@${connection.host}:${connection.port}`}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                      {`:${connection.port}${
-                        connection.default_path ? ` · ${connection.default_path}` : ''
-                      }`}
-                    </Typography>
+                    {connection.default_path && (
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        {connection.default_path}
+                      </Typography>
+                    )}
                     {connection.status === 'connected' && (
                       <Box
                         sx={{
@@ -1039,10 +1039,7 @@ export function SourceSelectionDialog({
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
                         <Server size={14} style={{ flexShrink: 0, opacity: 0.7 }} />
                         <Typography variant="body2" noWrap>
-                          {`${connection.username}@${connection.host}`}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap>
-                          {`:${connection.port}`}
+                          {`${connection.username}@${connection.host}:${connection.port}`}
                         </Typography>
                       </Stack>
                     </MenuItem>
@@ -1201,10 +1198,37 @@ export function SourceSelectionDialog({
 
         {nothingFound && (
           <Alert severity="info">
-            <Stack spacing={0.25}>
+            <Stack spacing={0.5}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {t('backupPlans.sourceChooser.nothingFoundTitle', { target: targetLabel })}
               </Typography>
+              {scanResult && scanResult.scanned_paths.length > 0 && (
+                <Stack
+                  direction="row"
+                  spacing={0.5}
+                  useFlexGap
+                  flexWrap="wrap"
+                  alignItems="baseline"
+                >
+                  <Typography variant="caption" sx={{ flexShrink: 0 }}>
+                    {t('backupPlans.sourceChooser.checkedPaths')}
+                  </Typography>
+                  {scanResult.scanned_paths.map((path, index) => (
+                    <Typography
+                      key={path}
+                      component="span"
+                      variant="caption"
+                      sx={{
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                      }}
+                    >
+                      {path}
+                      {index < scanResult.scanned_paths.length - 1 ? ',' : ''}
+                    </Typography>
+                  ))}
+                </Stack>
+              )}
               <Typography variant="caption">
                 {t('backupPlans.sourceChooser.nothingFoundBody')}
               </Typography>
