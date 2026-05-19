@@ -158,57 +158,59 @@ function DatabaseBrandTile({ database, detectedLabel, onClick }: DatabaseBrandTi
         },
       }}
     >
-      <CardActionArea component="button" onClick={onClick} sx={{ height: '100%', p: 1.5 }}>
-        <Stack spacing={1} alignItems="center">
+      <CardActionArea
+        component="button"
+        onClick={onClick}
+        sx={{ height: '100%', p: 1.25, display: 'flex', justifyContent: 'flex-start' }}
+      >
+        <Stack
+          direction="row"
+          spacing={1.25}
+          alignItems="center"
+          sx={{ width: '100%', minWidth: 0 }}
+        >
           <Box
             sx={{
               alignItems: 'center',
               bgcolor: brand.color,
-              borderRadius: 2,
+              borderRadius: 1.5,
               boxShadow: `0 4px 12px ${alpha(brand.color, 0.35)}`,
               color: 'common.white',
               display: 'flex',
               fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-              fontSize: '1.125rem',
+              fontSize: '0.875rem',
               fontWeight: 700,
-              height: 56,
+              height: 36,
               justifyContent: 'center',
               letterSpacing: '-0.02em',
-              width: 56,
+              width: 36,
+              flexShrink: 0,
             }}
             aria-hidden
           >
             {brand.monogram}
           </Box>
-          <Typography
-            variant="subtitle2"
-            align="center"
-            sx={{
-              fontWeight: 600,
-              lineHeight: 1.25,
-              overflow: 'hidden',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-            }}
-          >
-            {database.engine}
-          </Typography>
-          {database.detected && (
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              <Box
-                sx={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  bgcolor: 'success.main',
-                }}
-              />
-              <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }}>
-                {detectedLabel}
-              </Typography>
-            </Stack>
-          )}
+          <Stack spacing={0.25} sx={{ minWidth: 0, textAlign: 'left' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }} noWrap>
+              {database.engine}
+            </Typography>
+            {database.detected && (
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <Box
+                  sx={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    bgcolor: 'success.main',
+                    flexShrink: 0,
+                  }}
+                />
+                <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }} noWrap>
+                  {detectedLabel}
+                </Typography>
+              </Stack>
+            )}
+          </Stack>
         </Stack>
       </CardActionArea>
     </Card>
@@ -815,6 +817,18 @@ export function SourceSelectionDialog({
             <Stack spacing={1}>
               {draftSourceLocations.map((location) => {
                 const key = locationKey(location)
+                const isSinglePath = location.paths.length === 1
+                const monospacePathSx = {
+                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                  fontSize: '0.8125rem',
+                  color: 'text.primary',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                  flex: 1,
+                } as const
+
                 return (
                   <Paper
                     key={key}
@@ -825,101 +839,143 @@ export function SourceSelectionDialog({
                       bgcolor: 'background.default',
                     }}
                   >
-                    <Stack spacing={0.75}>
+                    {isSinglePath ? (
                       <Stack
                         direction="row"
-                        spacing={1}
+                        spacing={1.25}
                         alignItems="center"
-                        justifyContent="space-between"
+                        sx={{ minWidth: 0 }}
                       >
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          alignItems="center"
-                          flexWrap="wrap"
-                          useFlexGap
-                          sx={{ minWidth: 0 }}
+                        <Box
+                          sx={{
+                            alignItems: 'center',
+                            bgcolor: 'action.hover',
+                            borderRadius: 1,
+                            color: 'text.secondary',
+                            display: 'flex',
+                            height: 28,
+                            justifyContent: 'center',
+                            width: 28,
+                            flexShrink: 0,
+                          }}
                         >
-                          <Box
-                            sx={{
-                              alignItems: 'center',
-                              bgcolor: 'action.hover',
-                              borderRadius: 1,
-                              color: 'text.secondary',
-                              display: 'flex',
-                              height: 26,
-                              justifyContent: 'center',
-                              width: 26,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {location.source_type === 'remote' ? (
-                              <Server size={14} />
-                            ) : (
-                              <HardDrive size={14} />
-                            )}
-                          </Box>
-                          <Typography variant="subtitle2" noWrap>
-                            {sourceLocationLabel(location, sshConnections, t)}
-                          </Typography>
-                          <Chip
+                          {location.source_type === 'remote' ? (
+                            <Server size={14} />
+                          ) : (
+                            <HardDrive size={14} />
+                          )}
+                        </Box>
+                        <Typography variant="subtitle2" noWrap sx={{ flexShrink: 0 }}>
+                          {sourceLocationLabel(location, sshConnections, t)}
+                        </Typography>
+                        <Typography variant="caption" sx={{ flexShrink: 0, opacity: 0.6 }}>
+                          ·
+                        </Typography>
+                        <Typography variant="body2" title={location.paths[0]} sx={monospacePathSx}>
+                          {location.paths[0]}
+                        </Typography>
+                        <Tooltip title={t('backupPlans.sourceChooser.removePath')}>
+                          <IconButton
+                            aria-label={t('backupPlans.sourceChooser.removePath')}
+                            onClick={() => removeSourcePath(key, location.paths[0])}
                             size="small"
-                            variant="outlined"
-                            label={t('backupPlans.sourceChooser.pathCount', {
-                              count: location.paths.length,
-                            })}
-                          />
-                        </Stack>
+                            sx={{ p: 0.25, flexShrink: 0 }}
+                          >
+                            <X size={13} />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title={t('backupPlans.sourceChooser.removeSourceGroup')}>
                           <IconButton
                             aria-label={t('backupPlans.sourceChooser.removeSourceGroup')}
                             onClick={() => removeSourceLocation(key)}
                             size="small"
+                            sx={{ flexShrink: 0 }}
                           >
                             <Trash2 size={14} />
                           </IconButton>
                         </Tooltip>
                       </Stack>
-                      <Stack spacing={0.25} sx={{ pl: 4.25 }}>
-                        {location.paths.map((path) => (
+                    ) : (
+                      <Stack spacing={0.75}>
+                        <Stack
+                          direction="row"
+                          spacing={1.25}
+                          alignItems="center"
+                          justifyContent="space-between"
+                        >
                           <Stack
-                            key={path}
                             direction="row"
-                            spacing={0.5}
+                            spacing={1.25}
                             alignItems="center"
                             sx={{ minWidth: 0 }}
                           >
-                            <Typography
-                              variant="body2"
-                              title={path}
+                            <Box
                               sx={{
-                                fontFamily:
-                                  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                                fontSize: '0.8125rem',
-                                color: 'text.primary',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                minWidth: 0,
-                                flex: 1,
+                                alignItems: 'center',
+                                bgcolor: 'action.hover',
+                                borderRadius: 1,
+                                color: 'text.secondary',
+                                display: 'flex',
+                                height: 28,
+                                justifyContent: 'center',
+                                width: 28,
+                                flexShrink: 0,
                               }}
                             >
-                              {path}
+                              {location.source_type === 'remote' ? (
+                                <Server size={14} />
+                              ) : (
+                                <HardDrive size={14} />
+                              )}
+                            </Box>
+                            <Typography variant="subtitle2" noWrap>
+                              {sourceLocationLabel(location, sshConnections, t)}
                             </Typography>
-                            <Tooltip title={t('backupPlans.sourceChooser.removePath')}>
-                              <IconButton
-                                aria-label={t('backupPlans.sourceChooser.removePath')}
-                                onClick={() => removeSourcePath(key, path)}
-                                size="small"
-                                sx={{ p: 0.25, flexShrink: 0 }}
-                              >
-                                <X size={13} />
-                              </IconButton>
-                            </Tooltip>
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={t('backupPlans.sourceChooser.pathCount', {
+                                count: location.paths.length,
+                              })}
+                            />
                           </Stack>
-                        ))}
+                          <Tooltip title={t('backupPlans.sourceChooser.removeSourceGroup')}>
+                            <IconButton
+                              aria-label={t('backupPlans.sourceChooser.removeSourceGroup')}
+                              onClick={() => removeSourceLocation(key)}
+                              size="small"
+                            >
+                              <Trash2 size={14} />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                        <Stack spacing={0.25} sx={{ pl: 4.5 }}>
+                          {location.paths.map((path) => (
+                            <Stack
+                              key={path}
+                              direction="row"
+                              spacing={0.5}
+                              alignItems="center"
+                              sx={{ minWidth: 0 }}
+                            >
+                              <Typography variant="body2" title={path} sx={monospacePathSx}>
+                                {path}
+                              </Typography>
+                              <Tooltip title={t('backupPlans.sourceChooser.removePath')}>
+                                <IconButton
+                                  aria-label={t('backupPlans.sourceChooser.removePath')}
+                                  onClick={() => removeSourcePath(key, path)}
+                                  size="small"
+                                  sx={{ p: 0.25, flexShrink: 0 }}
+                                >
+                                  <X size={13} />
+                                </IconButton>
+                              </Tooltip>
+                            </Stack>
+                          ))}
+                        </Stack>
                       </Stack>
-                    </Stack>
+                    )}
                   </Paper>
                 )
               })}
@@ -1181,7 +1237,7 @@ export function SourceSelectionDialog({
                 <Skeleton
                   key={index}
                   variant="rounded"
-                  height={140}
+                  height={64}
                   sx={{ borderRadius: 1 }}
                   animation={scanLoading ? 'wave' : 'pulse'}
                 />
@@ -1485,6 +1541,13 @@ export function SourceSelectionDialog({
       onClose={onClose}
       maxWidth="md"
       fullWidth
+      PaperProps={{
+        sx: {
+          height: { xs: 'auto', md: 'min(720px, calc(100vh - 64px))' },
+          display: 'flex',
+          flexDirection: 'column',
+        },
+      }}
       footer={
         <DialogActions>
           <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
@@ -1526,7 +1589,7 @@ export function SourceSelectionDialog({
           </Typography>
         </Stack>
       </DialogTitle>
-      <DialogContent sx={{ pt: 1 }}>
+      <DialogContent sx={{ pt: 1, flex: 1, overflowY: 'auto' }}>
         <Stack spacing={2}>{content}</Stack>
       </DialogContent>
     </ResponsiveDialog>

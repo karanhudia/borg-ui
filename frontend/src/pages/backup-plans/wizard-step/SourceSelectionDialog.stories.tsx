@@ -166,6 +166,27 @@ const localPathsState: WizardState = {
   ],
 }
 
+const mixedSinglePathState: WizardState = {
+  ...createInitialState(),
+  sourceType: 'mixed',
+  sourceDirectories: [
+    '/local/Users/karanhudia/test-backups/restore-speed-test',
+    '/home/karanhudia/test-backup-source',
+  ],
+  sourceLocations: [
+    {
+      source_type: 'remote',
+      source_ssh_connection_id: 11,
+      paths: ['/home/karanhudia/test-backup-source'],
+    },
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      paths: ['/local/Users/karanhudia/test-backups/restore-speed-test'],
+    },
+  ],
+}
+
 const translations: Record<string, string> = {
   'backupPlans.sourceChooser.title': 'Choose backup source',
   'backupPlans.sourceChooser.where': 'Where are the files?',
@@ -267,6 +288,20 @@ export const PathPickerWithLocalSelections: Story = {
   render: () => (
     <DialogStory wizardState={localPathsState} mockOptions={{ scanStatus: 'detected' }} />
   ),
+}
+
+export const PathPickerMixedSinglePathGroups: Story = {
+  render: () => (
+    <DialogStory wizardState={mixedSinglePathState} mockOptions={{ scanStatus: 'detected' }} />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Two source groups, each with a single path — exercises the inline single-line group layout.',
+      },
+    },
+  },
 }
 
 export const DatabaseScanDetected: Story = {
