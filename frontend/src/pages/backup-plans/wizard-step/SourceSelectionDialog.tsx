@@ -40,6 +40,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import { SiMariadb, SiMongodb, SiMysql, SiPostgresql, SiRedis, SiSqlite } from 'react-icons/si'
+import type { IconType } from 'react-icons'
 import type { TFunction } from 'i18next'
 
 import CodeEditor from '../../../components/CodeEditor'
@@ -103,37 +105,26 @@ interface SourceSelectionDialogProps {
 }
 
 interface DatabaseBrand {
-  monogram: string
+  Icon: IconType
   color: string
 }
 
 const DATABASE_BRANDS: Record<string, DatabaseBrand> = {
-  PostgreSQL: { monogram: 'Pg', color: '#336791' },
-  postgresql: { monogram: 'Pg', color: '#336791' },
-  MySQL: { monogram: 'My', color: '#00758F' },
-  mysql: { monogram: 'My', color: '#00758F' },
-  MariaDB: { monogram: 'Ma', color: '#C0765C' },
-  mariadb: { monogram: 'Ma', color: '#C0765C' },
-  'MySQL / MariaDB': { monogram: 'My', color: '#00758F' },
-  MongoDB: { monogram: 'Mo', color: '#00684A' },
-  mongodb: { monogram: 'Mo', color: '#00684A' },
-  Redis: { monogram: 'Rd', color: '#FF4438' },
-  redis: { monogram: 'Rd', color: '#FF4438' },
-  SQLite: { monogram: 'Sq', color: '#003B57' },
-  sqlite: { monogram: 'Sq', color: '#003B57' },
+  postgresql: { Icon: SiPostgresql, color: '#336791' },
+  mysql: { Icon: SiMysql, color: '#00758F' },
+  mariadb: { Icon: SiMariadb, color: '#003545' },
+  'mysql / mariadb': { Icon: SiMysql, color: '#00758F' },
+  mongodb: { Icon: SiMongodb, color: '#00684A' },
+  redis: { Icon: SiRedis, color: '#FF4438' },
+  sqlite: { Icon: SiSqlite, color: '#003B57' },
 }
 
 function brandFor(engine: string): DatabaseBrand {
-  if (DATABASE_BRANDS[engine]) return DATABASE_BRANDS[engine]
-  const key = Object.keys(DATABASE_BRANDS).find((name) =>
-    engine.toLowerCase().includes(name.toLowerCase())
-  )
+  const normalised = engine.trim().toLowerCase()
+  if (DATABASE_BRANDS[normalised]) return DATABASE_BRANDS[normalised]
+  const key = Object.keys(DATABASE_BRANDS).find((name) => normalised.includes(name))
   if (key) return DATABASE_BRANDS[key]
-  const fallback = engine.trim().slice(0, 2)
-  return {
-    monogram: fallback ? fallback[0].toUpperCase() + (fallback[1] || '').toLowerCase() : 'Db',
-    color: '#5C6B7A',
-  }
+  return { Icon: SiPostgresql, color: '#5C6B7A' }
 }
 
 interface DatabaseBrandTileProps {
@@ -144,6 +135,7 @@ interface DatabaseBrandTileProps {
 
 function DatabaseBrandTile({ database, detectedLabel, onClick }: DatabaseBrandTileProps) {
   const brand = brandFor(database.engine)
+  const BrandIcon = brand.Icon
 
   return (
     <Card
@@ -177,18 +169,14 @@ function DatabaseBrandTile({ database, detectedLabel, onClick }: DatabaseBrandTi
               boxShadow: `0 4px 12px ${alpha(brand.color, 0.35)}`,
               color: 'common.white',
               display: 'flex',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-              fontSize: '0.875rem',
-              fontWeight: 700,
               height: 36,
               justifyContent: 'center',
-              letterSpacing: '-0.02em',
               width: 36,
               flexShrink: 0,
             }}
             aria-hidden
           >
-            {brand.monogram}
+            <BrandIcon size={20} />
           </Box>
           <Stack spacing={0.25} sx={{ minWidth: 0, textAlign: 'left' }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }} noWrap>
@@ -699,7 +687,7 @@ export function SourceSelectionDialog({
         </Box>
 
         {sourceKind === 'remote' && hasRemoteOptions ? (
-          <FormControl size="small" fullWidth>
+          <FormControl fullWidth>
             <InputLabel id="source-remote-machine-label">
               {t('backupPlans.sourceChooser.selectRemoteMachine')}
             </InputLabel>
@@ -758,7 +746,7 @@ export function SourceSelectionDialog({
               alignItems: 'center',
               gap: 1,
               px: 1.5,
-              minHeight: 40,
+              minHeight: 56,
             }}
           >
             <HardDrive size={14} />
@@ -1079,9 +1067,9 @@ export function SourceSelectionDialog({
               }}
             />
           </Box>
-          <Box sx={{ mt: 1.5 }}>
+          <Box sx={{ mt: 2.5 }}>
             {scanTarget.type === 'remote' && hasRemoteOptions ? (
-              <FormControl size="small" fullWidth>
+              <FormControl fullWidth>
                 <InputLabel id="scan-remote-target-label">
                   {t('backupPlans.sourceChooser.selectRemoteMachine')}
                 </InputLabel>
@@ -1117,7 +1105,7 @@ export function SourceSelectionDialog({
                   alignItems: 'center',
                   gap: 1,
                   px: 1.5,
-                  minHeight: 40,
+                  minHeight: 56,
                 }}
               >
                 <HardDrive size={14} />
@@ -1230,6 +1218,7 @@ export function SourceSelectionDialog({
                 gridTemplateColumns: {
                   xs: 'repeat(2, minmax(0, 1fr))',
                   sm: 'repeat(3, minmax(0, 1fr))',
+                  md: 'repeat(4, minmax(0, 1fr))',
                 },
               }}
             >
@@ -1342,6 +1331,7 @@ export function SourceSelectionDialog({
                 gridTemplateColumns: {
                   xs: 'repeat(2, minmax(0, 1fr))',
                   sm: 'repeat(3, minmax(0, 1fr))',
+                  md: 'repeat(4, minmax(0, 1fr))',
                 },
               }}
             >
@@ -1373,6 +1363,7 @@ export function SourceSelectionDialog({
                 gridTemplateColumns: {
                   xs: 'repeat(2, minmax(0, 1fr))',
                   sm: 'repeat(3, minmax(0, 1fr))',
+                  md: 'repeat(4, minmax(0, 1fr))',
                 },
               }}
             >
