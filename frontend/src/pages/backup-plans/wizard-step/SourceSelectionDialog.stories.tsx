@@ -222,9 +222,10 @@ const t = (key: string, options?: Record<string, unknown>) => {
 interface DialogStoryArgs {
   wizardState: WizardState
   mockOptions: MockOptions
+  initialView?: 'paths' | 'database' | 'database-detail'
 }
 
-function DialogStory({ wizardState, mockOptions }: DialogStoryArgs) {
+function DialogStory({ wizardState, mockOptions, initialView }: DialogStoryArgs) {
   useMockedDiscovery(mockOptions)
   const stableState = useMemo(() => wizardState, [wizardState])
   return (
@@ -239,6 +240,7 @@ function DialogStory({ wizardState, mockOptions }: DialogStoryArgs) {
         onCreateScript={async () => ({ id: 1 })}
         onClose={() => {}}
         t={t as never}
+        initialView={initialView}
       />
     </Box>
   )
@@ -269,7 +271,11 @@ export const PathPickerWithLocalSelections: Story = {
 
 export const DatabaseScanDetected: Story = {
   render: () => (
-    <DialogStory wizardState={emptyWizardState} mockOptions={{ scanStatus: 'detected' }} />
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="database"
+    />
   ),
   parameters: {
     docs: {
@@ -283,7 +289,11 @@ export const DatabaseScanDetected: Story = {
 
 export const DatabaseScanNothingFound: Story = {
   render: () => (
-    <DialogStory wizardState={emptyWizardState} mockOptions={{ scanStatus: 'nothing-found' }} />
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'nothing-found' }}
+      initialView="database"
+    />
   ),
   parameters: {
     docs: {
@@ -297,7 +307,11 @@ export const DatabaseScanNothingFound: Story = {
 
 export const DatabaseScanFailed: Story = {
   render: () => (
-    <DialogStory wizardState={emptyWizardState} mockOptions={{ scanStatus: 'failed' }} />
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'failed' }}
+      initialView="database"
+    />
   ),
   parameters: {
     docs: {
@@ -311,7 +325,11 @@ export const DatabaseScanFailed: Story = {
 
 export const DatabaseScanEndpointMissing: Story = {
   render: () => (
-    <DialogStory wizardState={emptyWizardState} mockOptions={{ scanStatus: 'endpoint-missing' }} />
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'endpoint-missing' }}
+      initialView="database"
+    />
   ),
   parameters: {
     docs: {

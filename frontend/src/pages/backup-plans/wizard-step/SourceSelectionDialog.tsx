@@ -97,6 +97,8 @@ interface SourceSelectionDialogProps {
   updateState: (updates: Partial<WizardState>) => void
   onCreateScript: (input: SourceScriptCreateInput) => Promise<{ id: number }>
   t: TFunction
+  /** Override the initial view. Defaults to 'paths'. Used by Storybook to deep-link into specific views. */
+  initialView?: SourceChoiceView
 }
 
 interface DatabaseBrand {
@@ -393,8 +395,9 @@ export function SourceSelectionDialog({
   updateState,
   onCreateScript,
   t,
+  initialView = 'paths',
 }: SourceSelectionDialogProps) {
-  const [view, setView] = useState<SourceChoiceView>('paths')
+  const [view, setView] = useState<SourceChoiceView>(initialView)
   const [scanResult, setScanResult] = useState<DatabaseScanResponse | null>(null)
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState<ScanErrorState | null>(null)
@@ -422,7 +425,7 @@ export function SourceSelectionDialog({
 
   useEffect(() => {
     if (!open) return
-    setView('paths')
+    setView(initialView)
     const nextLocations = locationsFromWizardState(wizardState)
     setDraftSourceLocations(nextLocations)
     setSelectedSourceKey(nextLocations[0] ? locationKey(nextLocations[0]) : 'local')
@@ -438,7 +441,7 @@ export function SourceSelectionDialog({
     setScanResult(null)
     setScanError(null)
     setFallbackTemplates([])
-  }, [open, wizardState])
+  }, [open, wizardState, initialView])
 
   useEffect(() => {
     if (!open) return
