@@ -161,6 +161,7 @@ class Settings(BaseSettings):
     source_size_timeout: int = (
         3600  # 1 hour - for du-based source size calculation (large datasets)
     )
+    scan_timeout_seconds: int = 15  # Source discovery database scan timeout
 
     # Health check settings
     health_check_interval: int = 30
