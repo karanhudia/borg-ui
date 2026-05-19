@@ -13,7 +13,6 @@ import {
   MenuItem,
   Stack,
   Tab,
-  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -31,6 +30,7 @@ import LogViewerDialog from '../components/LogViewerDialog'
 import CommandPreview from '../components/CommandPreview'
 import RunningBackupsSection from '../components/RunningBackupsSection'
 import BackupPlanRunsPanel, { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
+import PageTabs from '../components/PageTabs'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
@@ -344,16 +344,14 @@ const Backup: React.FC = () => {
         <Stack direction="row" spacing={2} alignItems="center"></Stack>
       </Box>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs
-          value={activeTab}
-          aria-label={t('backup.tabs.ariaLabel')}
-          onChange={(_, value: BackupTab) => setActiveTab(value)}
-        >
-          <Tab value="plans" label={t('backup.tabs.backupPlans')} />
-          <Tab value="legacy" label={t('backup.tabs.legacyBackup')} />
-        </Tabs>
-      </Box>
+      <PageTabs
+        value={activeTab}
+        ariaLabel={t('backup.tabs.ariaLabel')}
+        onChange={(_, value: BackupTab) => setActiveTab(value)}
+      >
+        <Tab value="plans" label={t('backup.tabs.backupPlans')} />
+        <Tab value="legacy" label={t('backup.tabs.legacyBackup')} />
+      </PageTabs>
 
       {activeTab === 'plans' && (
         <Stack spacing={4}>

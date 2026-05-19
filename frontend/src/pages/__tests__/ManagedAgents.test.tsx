@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import ManagedAgents, {
   AgentList,
@@ -67,15 +67,13 @@ describe('ManagedAgents', () => {
   it('shows concrete remote setup instructions before any agents are enrolled', async () => {
     renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
 
-    expect(await screen.findByText('Set up an agent on a remote machine')).toBeInTheDocument()
     expect(
-      screen.getByText(
-        'Create an enrollment token above, install the agent on the client, then register it with this Borg UI server.'
-      )
+      await screen.findByText(/Run this on a remote machine to register it/i)
     ).toBeInTheDocument()
     expect(
       screen.getByText(/borg-ui-agent register --server .* --token <enrollment-token>/)
     ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /setup help/i })).toBeInTheDocument()
   })
 
   it('opens from the shared system settings cache without redirecting to dashboard', async () => {
@@ -113,7 +111,7 @@ describe('ManagedAgents', () => {
       screen.queryByRole('button', { name: /create enrollment token/i })
     ).not.toBeInTheDocument()
     expect(screen.getByLabelText('Copy setup command')).toBeInTheDocument()
-    expect(screen.getByText(/Clone Borg UI on the client machine/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Clone Borg UI on the client machine/i)).not.toBeInTheDocument()
 
     await user.click(screen.getByLabelText('Copy setup command'))
     expect(onCopy).toHaveBeenCalledWith(
@@ -181,68 +179,8 @@ describe('ManagedAgents', () => {
     )
   })
 
-  it('queues a backup job with trimmed paths, flags, and secrets', async () => {
+  it('renders populated agent cards and wires the revoke action', async () => {
     const user = userEvent.setup()
-    const agent = {
-      id: 42,
-      agent_id: 'agent-client-42',
-      name: 'client',
-      hostname: 'client-02',
-      status: 'online',
-      borg_versions: [{ path: '/usr/bin/borg', version: 'borg 1.4.4' }],
-      created_at: '2026-05-18T09:00:00.000Z',
-      updated_at: '2026-05-18T10:00:00.000Z',
-    } as AgentMachineResponse
-    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [agent] } as AxiosResponse)
-    vi.mocked(managedAgentsAPI.createBackupJob).mockResolvedValue({ data: {} } as AxiosResponse)
-
-    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
-
-    expect(await screen.findByText('client-02')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Backup' }))
-
-    expect(await screen.findByRole('dialog', { name: /queue agent backup/i })).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Repository Path'), {
-      target: { value: '  /srv/borg/repo  ' },
-    })
-    fireEvent.change(screen.getByLabelText('Source Paths'), {
-      target: { value: ' /home/alice \n\n /etc ' },
-    })
-    fireEvent.change(screen.getByLabelText('Exclude Patterns'), {
-      target: { value: ' *.tmp \n cache ' },
-    })
-    fireEvent.change(screen.getByLabelText('Custom Flags'), {
-      target: { value: ' --stats \n --one-file-system ' },
-    })
-    fireEvent.change(screen.getByLabelText('Remote Borg Path'), {
-      target: { value: ' /usr/local/bin/borg ' },
-    })
-    fireEvent.change(screen.getByLabelText('Repository Passphrase'), {
-      target: { value: ' secret-pass ' },
-    })
-
-    await user.click(screen.getByRole('button', { name: /queue backup/i }))
-
-    await waitFor(() => {
-      expect(managedAgentsAPI.createBackupJob).toHaveBeenCalledWith(42, {
-        repository_path: '/srv/borg/repo',
-        archive_name: 'client-{now}',
-        source_paths: ['/home/alice', '/etc'],
-        borg_version: 1,
-        compression: 'lz4',
-        exclude_patterns: ['*.tmp', 'cache'],
-        custom_flags: ['--stats', '--one-file-system'],
-        remote_path: '/usr/local/bin/borg',
-        secrets: {
-          BORG_PASSPHRASE: { value: 'secret-pass' },
-        },
-      })
-    })
-  })
-
-  it('renders populated agent cards and wires agent actions', async () => {
-    const user = userEvent.setup()
-    const onQueueBackup = vi.fn()
     const onRevoke = vi.fn()
     const agent = {
       id: 7,
@@ -260,14 +198,7 @@ describe('ManagedAgents', () => {
       updated_at: '2026-05-18T10:00:00.000Z',
     } as AgentMachineResponse
 
-    renderWithProviders(
-      <AgentList
-        agents={[agent]}
-        onQueueBackup={onQueueBackup}
-        onRevoke={onRevoke}
-        isRevoking={false}
-      />
-    )
+    renderWithProviders(<AgentList agents={[agent]} onRevoke={onRevoke} isRevoking={false} />)
 
     expect(screen.getByText('client-01')).toBeInTheDocument()
     expect(screen.getByText('agent-client-7')).toBeInTheDocument()
@@ -275,11 +206,7 @@ describe('ManagedAgents', () => {
     expect(screen.getByText('borg 1.4.4')).toBeInTheDocument()
     expect(screen.getByText('Last run failed')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Backup' }))
-    expect(onQueueBackup).toHaveBeenCalledWith(agent)
-
-    const buttons = screen.getAllByRole('button')
-    await user.click(buttons[1])
+    await user.click(screen.getByRole('button', { name: /revoke agent/i }))
     expect(onRevoke).toHaveBeenCalledWith(agent)
   })
 

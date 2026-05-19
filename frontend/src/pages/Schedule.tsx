@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Box, Typography, Button, Alert, Tabs, Tab, Stack } from '@mui/material'
+import { Box, Typography, Button, Alert, Tab, Stack } from '@mui/material'
+import PageTabs from '../components/PageTabs'
 import { Plus } from 'lucide-react'
 import {
   scheduleAPI,
@@ -604,22 +605,19 @@ const Schedule: React.FC = () => {
         )}
       </Box>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs
-          value={currentTab}
-          onChange={(_, newValue) => {
-            setCurrentTab(newValue)
-            navigate(SCHEDULE_TAB_PATHS[newValue] || SCHEDULE_TAB_PATHS[0])
-          }}
-          variant="scrollable"
-          scrollButtons="auto"
-        >
-          <Tab label={t('schedule.tabs.byPlan', { defaultValue: 'By Plan' })} />
-          <Tab label={t('schedule.tabs.repositoryChecks')} />
-          <Tab label={t('schedule.tabs.restoreChecks')} />
-          <Tab label={t('schedule.tabs.backupJobs')} />
-        </Tabs>
-      </Box>
+      <PageTabs
+        value={currentTab}
+        onChange={(_, newValue: number) => {
+          setCurrentTab(newValue)
+          navigate(SCHEDULE_TAB_PATHS[newValue] || SCHEDULE_TAB_PATHS[0])
+        }}
+        scrollable
+      >
+        <Tab label={t('schedule.tabs.byPlan', { defaultValue: 'By Plan' })} />
+        <Tab label={t('schedule.tabs.repositoryChecks')} />
+        <Tab label={t('schedule.tabs.restoreChecks')} />
+        <Tab label={t('schedule.tabs.backupJobs')} />
+      </PageTabs>
 
       {!loadingRepositories && (!repositories || repositories.length === 0) && (
         <Alert severity="info" sx={{ mb: 3 }}>

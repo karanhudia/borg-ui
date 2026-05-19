@@ -12,15 +12,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
-  FormControl,
   IconButton,
-  InputLabel,
   Link as MuiLink,
   LinearProgress,
-  MenuItem,
   Paper,
-  Select,
   Skeleton,
   Stack,
   Tab,
@@ -29,26 +24,23 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  Tabs,
   TextField,
   Tooltip,
   Typography,
   useTheme,
 } from '@mui/material'
 import {
+  AlertTriangle,
   Ban,
+  CheckCircle,
   Copy,
   Info,
-  Laptop,
-  Play,
   Plus,
   RefreshCw,
-  Server,
   Terminal,
   XCircle,
 } from 'lucide-react'
 import {
-  AgentBackupJobCreate,
   AgentEnrollmentTokenSummary,
   AgentJobLogEntryResponse,
   AgentJobResponse,
@@ -59,6 +51,7 @@ import {
 import { useAuth } from '../hooks/useAuth'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import PageTabs from '../components/PageTabs'
 
 type PageTab = 'agents' | 'jobs' | 'tokens'
 
@@ -68,31 +61,12 @@ const EMPTY_TOKENS: AgentEnrollmentTokenSummary[] = []
 const EMPTY_JOBS: AgentJobResponse[] = []
 const EMPTY_LOGS: AgentJobLogEntryResponse[] = []
 
-const emptyBackupForm = {
-  repository_path: '',
-  archive_name: '',
-  source_paths: '',
-  borg_version: 1 as 1 | 2,
-  compression: 'lz4',
-  exclude_patterns: '',
-  custom_flags: '',
-  remote_path: '',
-  passphrase: '',
-}
-
 function formatDate(value?: string | null): string {
   if (!value) return 'Never'
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
-}
-
-function parseLines(value: string): string[] {
-  return value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
 }
 
 function statusChipColor(
@@ -134,8 +108,6 @@ function extractBackendMessage(error: unknown, fallback: string): string {
 }
 
 export default function ManagedAgents() {
-  const theme = useTheme()
-  const isDark = theme.palette.mode === 'dark'
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
   const canManageAgents = hasGlobalPermission('settings.ssh.manage')
@@ -144,8 +116,6 @@ export default function ManagedAgents() {
   const [tokenName, setTokenName] = useState('Agent enrollment')
   const [tokenExpiryMinutes, setTokenExpiryMinutes] = useState(60)
   const [createdToken, setCreatedToken] = useState<string | null>(null)
-  const [backupDialogAgent, setBackupDialogAgent] = useState<AgentMachineResponse | null>(null)
-  const [backupForm, setBackupForm] = useState(emptyBackupForm)
   const [logsJob, setLogsJob] = useState<AgentJobResponse | null>(null)
 
   const settingsQuery = useQuery({
@@ -196,12 +166,6 @@ export default function ManagedAgents() {
     return new Map(agents.map((agent) => [agent.id, agent]))
   }, [agents])
 
-  const stats = {
-    total: agents.length,
-    online: agents.filter((agent) => agent.status === 'online').length,
-    running: jobs.filter((job) => job.status === 'running').length,
-  }
-
   const refreshAll = () => {
     queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
     queryClient.invalidateQueries({ queryKey: ['managed-agent-enrollment-tokens'] })
@@ -242,21 +206,6 @@ export default function ManagedAgents() {
     },
   })
 
-  const createBackupMutation = useMutation({
-    mutationFn: ({ agentId, data }: { agentId: number; data: AgentBackupJobCreate }) =>
-      managedAgentsAPI.createBackupJob(agentId, data),
-    onSuccess: () => {
-      setBackupDialogAgent(null)
-      setBackupForm(emptyBackupForm)
-      queryClient.invalidateQueries({ queryKey: ['managed-agent-jobs'] })
-      toast.success('Backup job queued')
-      setActiveTab('jobs')
-    },
-    onError: (error: unknown) => {
-      toast.error(extractBackendMessage(error, 'Failed to queue backup job'))
-    },
-  })
-
   const cancelJobMutation = useMutation({
     mutationFn: managedAgentsAPI.cancelJob,
     onSuccess: () => {
@@ -286,38 +235,6 @@ export default function ManagedAgents() {
   const handleCopy = async (value: string) => {
     await navigator.clipboard.writeText(value)
     toast.success('Copied')
-  }
-
-  const handleOpenBackupDialog = (agent: AgentMachineResponse) => {
-    setBackupDialogAgent(agent)
-    setBackupForm({
-      ...emptyBackupForm,
-      archive_name: `${agent.name || agent.hostname || 'agent'}-{now}`,
-    })
-  }
-
-  const handleQueueBackup = () => {
-    if (!backupDialogAgent) return
-
-    const secrets: Record<string, unknown> = {}
-    if (backupForm.passphrase.trim()) {
-      secrets.BORG_PASSPHRASE = { value: backupForm.passphrase.trim() }
-    }
-
-    createBackupMutation.mutate({
-      agentId: backupDialogAgent.id,
-      data: {
-        repository_path: backupForm.repository_path.trim(),
-        archive_name: backupForm.archive_name.trim(),
-        source_paths: parseLines(backupForm.source_paths),
-        borg_version: backupForm.borg_version,
-        compression: backupForm.compression.trim() || 'lz4',
-        exclude_patterns: parseLines(backupForm.exclude_patterns),
-        custom_flags: parseLines(backupForm.custom_flags),
-        remote_path: backupForm.remote_path.trim() || null,
-        secrets,
-      },
-    })
   }
 
   const registrationCommand = createdToken
@@ -369,64 +286,11 @@ export default function ManagedAgents() {
 
       <AgentSetupGuide command={setupCommand} onCopy={handleCopy} />
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
-          borderRadius: 2,
-          border: '1px solid',
-          borderColor: 'divider',
-          overflow: 'hidden',
-          mb: 3,
-          bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
-        }}
-      >
-        {[
-          { label: 'Agents', value: stats.total, icon: Laptop },
-          { label: 'Online', value: stats.online, icon: Server },
-          { label: 'Running Jobs', value: stats.running, icon: Play },
-        ].map((stat, index) => {
-          const Icon = stat.icon
-          return (
-            <Box
-              key={stat.label}
-              sx={{
-                px: 2,
-                py: 1.75,
-                borderRight: { xs: 0, sm: index < 2 ? '1px solid' : 0 },
-                borderBottom: { xs: index < 2 ? '1px solid' : 0, sm: 0 },
-                borderColor: 'divider',
-              }}
-            >
-              <Stack direction="row" spacing={0.75} alignItems="center" color="text.secondary">
-                <Icon size={15} />
-                <Typography variant="caption" fontWeight={700} textTransform="uppercase">
-                  {stat.label}
-                </Typography>
-              </Stack>
-              <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5 }}>
-                {stat.value}
-              </Typography>
-            </Box>
-          )
-        })}
-      </Box>
-
-      <Paper
-        variant="outlined"
-        sx={{
-          mb: 3,
-          borderRadius: 2,
-          bgcolor: 'background.paper',
-          overflow: 'hidden',
-        }}
-      >
-        <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value as PageTab)}>
-          <Tab label="Agents" value="agents" />
-          <Tab label="Jobs" value="jobs" />
-          <Tab label="Enrollment Tokens" value="tokens" />
-        </Tabs>
-      </Paper>
+      <PageTabs value={activeTab} onChange={(_, value: PageTab) => setActiveTab(value)}>
+        <Tab label="Agents" value="agents" />
+        <Tab label="Jobs" value="jobs" />
+        <Tab label="Enrollment Tokens" value="tokens" />
+      </PageTabs>
 
       {isLoading ? (
         <Stack spacing={2}>
@@ -439,7 +303,6 @@ export default function ManagedAgents() {
       {!isLoading && activeTab === 'agents' ? (
         <AgentList
           agents={agents}
-          onQueueBackup={handleOpenBackupDialog}
           onRevoke={(agent) => revokeAgentMutation.mutate(agent.id)}
           isRevoking={revokeAgentMutation.isPending}
         />
@@ -524,131 +387,6 @@ export default function ManagedAgents() {
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={!!backupDialogAgent}
-        onClose={() => setBackupDialogAgent(null)}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle>Queue Agent Backup</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2.25} sx={{ mt: 1 }}>
-            <Alert severity="info">
-              {backupDialogAgent ? getAgentLabel(backupDialogAgent) : ''}
-            </Alert>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                label="Repository Path"
-                value={backupForm.repository_path}
-                onChange={(event) =>
-                  setBackupForm((prev) => ({ ...prev, repository_path: event.target.value }))
-                }
-                fullWidth
-              />
-              <TextField
-                label="Archive Name"
-                value={backupForm.archive_name}
-                onChange={(event) =>
-                  setBackupForm((prev) => ({ ...prev, archive_name: event.target.value }))
-                }
-                fullWidth
-              />
-            </Stack>
-            <TextField
-              label="Source Paths"
-              value={backupForm.source_paths}
-              onChange={(event) =>
-                setBackupForm((prev) => ({ ...prev, source_paths: event.target.value }))
-              }
-              minRows={3}
-              multiline
-              fullWidth
-            />
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <FormControl fullWidth>
-                <InputLabel id="agent-borg-version-label">Borg Version</InputLabel>
-                <Select
-                  labelId="agent-borg-version-label"
-                  label="Borg Version"
-                  value={backupForm.borg_version}
-                  onChange={(event) =>
-                    setBackupForm((prev) => ({
-                      ...prev,
-                      borg_version: Number(event.target.value) as 1 | 2,
-                    }))
-                  }
-                >
-                  <MenuItem value={1}>Borg 1</MenuItem>
-                  <MenuItem value={2}>Borg 2</MenuItem>
-                </Select>
-              </FormControl>
-              <TextField
-                label="Compression"
-                value={backupForm.compression}
-                onChange={(event) =>
-                  setBackupForm((prev) => ({ ...prev, compression: event.target.value }))
-                }
-                fullWidth
-              />
-            </Stack>
-            <TextField
-              label="Exclude Patterns"
-              value={backupForm.exclude_patterns}
-              onChange={(event) =>
-                setBackupForm((prev) => ({ ...prev, exclude_patterns: event.target.value }))
-              }
-              minRows={2}
-              multiline
-              fullWidth
-            />
-            <TextField
-              label="Custom Flags"
-              value={backupForm.custom_flags}
-              onChange={(event) =>
-                setBackupForm((prev) => ({ ...prev, custom_flags: event.target.value }))
-              }
-              minRows={2}
-              multiline
-              fullWidth
-            />
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-              <TextField
-                label="Remote Borg Path"
-                value={backupForm.remote_path}
-                onChange={(event) =>
-                  setBackupForm((prev) => ({ ...prev, remote_path: event.target.value }))
-                }
-                fullWidth
-              />
-              <TextField
-                label="Repository Passphrase"
-                type="password"
-                value={backupForm.passphrase}
-                onChange={(event) =>
-                  setBackupForm((prev) => ({ ...prev, passphrase: event.target.value }))
-                }
-                fullWidth
-              />
-            </Stack>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setBackupDialogAgent(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleQueueBackup}
-            disabled={
-              createBackupMutation.isPending ||
-              !backupForm.repository_path.trim() ||
-              !backupForm.archive_name.trim() ||
-              parseLines(backupForm.source_paths).length === 0
-            }
-          >
-            Queue Backup
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       <Dialog open={!!logsJob} onClose={() => setLogsJob(null)} fullWidth maxWidth="lg">
         <DialogTitle>Agent Job Logs</DialogTitle>
         <DialogContent>
@@ -693,92 +431,35 @@ export function AgentSetupGuide({
   const [helpOpen, setHelpOpen] = useState(false)
 
   return (
-    <Paper
-      variant="outlined"
-      sx={{
-        mb: 3,
-        borderRadius: 2,
-        p: { xs: 2, md: 2.5 },
-        bgcolor: 'background.paper',
-      }}
-    >
-      <Stack spacing={2}>
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          spacing={2}
-          justifyContent="space-between"
-          alignItems={{ xs: 'stretch', md: 'center' }}
-        >
-          <Box>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
-              <Terminal size={18} />
-              <Typography variant="h6" fontWeight={700}>
-                Set up an agent on a remote machine
-              </Typography>
-            </Stack>
-            <Typography color="text.secondary">
-              Create an enrollment token above, install the agent on the client, then register it
-              with this Borg UI server.
-            </Typography>
-          </Box>
-          <Button
-            variant="outlined"
-            startIcon={<Info size={16} />}
-            onClick={() => setHelpOpen(true)}
-          >
-            Setup Help
-          </Button>
+    <Box sx={{ mb: 3 }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        alignItems={{ xs: 'stretch', sm: 'center' }}
+        justifyContent="space-between"
+        sx={{ mb: 1 }}
+      >
+        <Stack direction="row" spacing={1} alignItems="center" color="text.secondary">
+          <Terminal size={16} />
+          <Typography variant="body2">
+            Run this on a remote machine to register it with this Borg UI server.
+          </Typography>
         </Stack>
-
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
-            gap: 1.5,
-          }}
+        <Button
+          variant="text"
+          size="small"
+          startIcon={<Info size={16} />}
+          onClick={() => setHelpOpen(true)}
         >
-          {[
-            {
-              label: '1',
-              title: 'Install the agent',
-              body: 'Clone Borg UI on the client machine, create a Python 3.11 virtualenv, and install the agent package.',
-            },
-            {
-              label: '2',
-              title: 'Create a token',
-              body: 'Use the primary Create Enrollment Token action above. Tokens are shown once, so copy them before closing.',
-            },
-            {
-              label: '3',
-              title: 'Register the client',
-              body: 'Run the command with a server URL this client can reach, then start borg-ui-agent run.',
-            },
-          ].map((step) => (
-            <Box
-              key={step.label}
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1.5,
-                p: 1.5,
-                minWidth: 0,
-              }}
-            >
-              <Chip label={step.label} size="small" sx={{ mb: 1, fontWeight: 700 }} />
-              <Typography fontWeight={700}>{step.title}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {step.body}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-
-        <CopyableCodeBlock
-          value={command}
-          copyLabel="Copy setup command"
-          onCopy={() => onCopy(command)}
-        />
+          Setup Help
+        </Button>
       </Stack>
+
+      <CopyableCodeBlock
+        value={command}
+        copyLabel="Copy setup command"
+        onCopy={() => onCopy(command)}
+      />
 
       <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>Agent Setup Help</DialogTitle>
@@ -789,7 +470,7 @@ export function AgentSetupGuide({
           <Button onClick={() => setHelpOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
-    </Paper>
+    </Box>
   )
 }
 
@@ -934,17 +615,39 @@ function CopyableCodeBlock({
   )
 }
 
+const AGENT_STATUS_ACCENT: Record<string, string> = {
+  online: '#059669',
+  offline: '#6b7280',
+  revoked: '#ef4444',
+  disabled: '#ef4444',
+}
+
+const getAgentStatusAccent = (status: string) => AGENT_STATUS_ACCENT[status] ?? '#6b7280'
+
+const getAgentStatusIcon = (status: string) => {
+  switch (status) {
+    case 'online':
+      return <CheckCircle size={13} />
+    case 'revoked':
+    case 'disabled':
+      return <XCircle size={13} />
+    default:
+      return <AlertTriangle size={13} />
+  }
+}
+
 export function AgentList({
   agents,
-  onQueueBackup,
   onRevoke,
   isRevoking,
 }: {
   agents: AgentMachineResponse[]
-  onQueueBackup: (agent: AgentMachineResponse) => void
   onRevoke: (agent: AgentMachineResponse) => void
   isRevoking: boolean
 }) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
   if (!agents.length) {
     return <Alert severity="info">No agents enrolled.</Alert>
   }
@@ -957,82 +660,233 @@ export function AgentList({
         gap: 2,
       }}
     >
-      {agents.map((agent) => (
-        <Paper key={agent.id} variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
-          <Stack spacing={2}>
-            <Stack
-              direction="row"
-              spacing={1.5}
-              alignItems="flex-start"
-              justifyContent="space-between"
+      {agents.map((agent) => {
+        const accent = getAgentStatusAccent(agent.status)
+        const borgValue = agent.borg_versions?.length
+          ? agent.borg_versions
+              .map((binary) => String(binary.version || binary.path || 'borg'))
+              .join(', ')
+          : '—'
+        const stats = [
+          { label: 'OS', value: [agent.os, agent.arch].filter(Boolean).join(' / ') || '—' },
+          { label: 'Agent', value: agent.agent_version || '—' },
+          { label: 'Last Seen', value: formatDate(agent.last_seen_at) },
+          { label: 'Borg', value: borgValue },
+        ]
+
+        return (
+          <Box
+            key={agent.id}
+            sx={{
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: 2,
+              bgcolor: 'background.paper',
+              boxShadow: isDark
+                ? `0 0 0 1px ${alpha('#fff', 0.08)}, 0 4px 16px ${alpha('#000', 0.25)}`
+                : `0 0 0 1px ${alpha('#000', 0.08)}, 0 2px 8px ${alpha('#000', 0.07)}`,
+              transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: isDark
+                  ? `0 0 0 1px ${alpha(accent, 0.4)}, 0 8px 24px ${alpha('#000', 0.3)}, 0 2px 8px ${alpha(accent, 0.1)}`
+                  : `0 0 0 1px ${alpha(accent, 0.3)}, 0 8px 24px ${alpha('#000', 0.12)}, 0 2px 8px ${alpha(accent, 0.08)}`,
+              },
+            }}
+          >
+            <Box
+              sx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                px: { xs: 1.75, sm: 2 },
+                pt: { xs: 1.75, sm: 2 },
+                pb: { xs: 1.5, sm: 1.75 },
+              }}
             >
-              <Box sx={{ minWidth: 0 }}>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
-                  <Laptop size={18} />
-                  <Typography variant="h6" fontWeight={700} noWrap>
-                    {getAgentLabel(agent)}
-                  </Typography>
-                </Stack>
+              <Box sx={{ mb: 1.5 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 0.5,
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Box sx={{ color: accent, display: 'flex', alignItems: 'center' }}>
+                      {getAgentStatusIcon(agent.status)}
+                    </Box>
+                    <Typography
+                      sx={{
+                        fontSize: '0.6rem',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        color: alpha(accent, 0.9),
+                        lineHeight: 1,
+                      }}
+                    >
+                      {agent.status}
+                    </Typography>
+                  </Box>
+                  {agent.agent_version && (
+                    <Typography
+                      sx={{
+                        fontSize: '0.58rem',
+                        fontWeight: 500,
+                        color: 'text.disabled',
+                        letterSpacing: '0.02em',
+                        flexShrink: 0,
+                      }}
+                    >
+                      v{agent.agent_version}
+                    </Typography>
+                  )}
+                </Box>
+
                 <Typography
-                  color="text.secondary"
+                  variant="subtitle1"
+                  fontWeight={700}
+                  noWrap
+                  title={getAgentLabel(agent)}
+                  sx={{ lineHeight: 1.3, mb: 0.25 }}
+                >
+                  {getAgentLabel(agent)}
+                </Typography>
+
+                <Typography
+                  noWrap
+                  title={agent.agent_id}
                   sx={{
                     fontFamily: '"JetBrains Mono","Fira Code",ui-monospace,monospace',
-                    fontSize: '0.78rem',
+                    fontSize: '0.7rem',
+                    color: 'text.disabled',
                   }}
-                  noWrap
                 >
                   {agent.agent_id}
                 </Typography>
               </Box>
-              <Chip label={agent.status} color={statusChipColor(agent.status)} size="small" />
-            </Stack>
-            <Divider />
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                gap: 1.5,
-              }}
-            >
-              <Meta label="OS" value={[agent.os, agent.arch].filter(Boolean).join(' / ') || '-'} />
-              <Meta label="Agent" value={agent.agent_version || '-'} />
-              <Meta label="Last Seen" value={formatDate(agent.last_seen_at)} />
-              <Meta
-                label="Borg"
-                value={
-                  agent.borg_versions?.length
-                    ? agent.borg_versions
-                        .map((binary) => String(binary.version || binary.path || 'borg'))
-                        .join(', ')
-                    : '-'
-                }
-              />
-            </Box>
-            {agent.last_error ? <Alert severity="error">{agent.last_error}</Alert> : null}
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button
-                variant="outlined"
-                startIcon={<Play size={16} />}
-                onClick={() => onQueueBackup(agent)}
-                disabled={agent.status === 'revoked' || agent.status === 'disabled'}
+
+              <Box
+                sx={{
+                  borderRadius: 1.5,
+                  border: '1px solid',
+                  borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+                  overflow: 'hidden',
+                  mb: 1.5,
+                  bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
+                }}
               >
-                Backup
-              </Button>
-              <Tooltip title="Revoke agent">
-                <span>
-                  <IconButton
-                    color="error"
-                    onClick={() => onRevoke(agent)}
-                    disabled={isRevoking || agent.status === 'revoked'}
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                  {stats.map((stat, i) => (
+                    <Box
+                      key={stat.label}
+                      sx={{
+                        px: { xs: 1.25, sm: 1.5 },
+                        py: { xs: 1.25, sm: 1 },
+                        borderRight: i % 2 === 0 ? '1px solid' : 0,
+                        borderBottom: i < 2 ? '1px solid' : 0,
+                        borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+                        minWidth: 0,
+                      }}
+                    >
+                      <Typography
+                        noWrap
+                        sx={{
+                          fontSize: '0.6rem',
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          color: 'text.disabled',
+                          lineHeight: 1,
+                          mb: 0.5,
+                        }}
+                      >
+                        {stat.label}
+                      </Typography>
+                      <Typography
+                        noWrap
+                        title={stat.value}
+                        sx={{
+                          fontSize: { xs: '0.82rem', sm: '0.78rem' },
+                          fontWeight: 600,
+                          fontVariantNumeric: 'tabular-nums',
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {stat.value}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+
+              {agent.last_error && (
+                <Box
+                  sx={{
+                    mb: 1.5,
+                    px: 1.25,
+                    py: 0.875,
+                    bgcolor: alpha(theme.palette.error.main, isDark ? 0.1 : 0.06),
+                    borderRadius: 1.5,
+                    border: '1px solid',
+                    borderColor: alpha(theme.palette.error.main, 0.25),
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: '0.7rem',
+                      color: 'error.main',
+                      wordBreak: 'break-word',
+                      lineHeight: 1.4,
+                    }}
                   >
-                    <Ban size={18} />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Stack>
-          </Stack>
-        </Paper>
-      ))}
+                    {agent.last_error}
+                  </Typography>
+                </Box>
+              )}
+
+              <Box
+                sx={{
+                  mt: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  pt: { xs: 1.5, sm: 1.25 },
+                  borderTop: '1px solid',
+                  borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
+                }}
+              >
+                <Tooltip title="Revoke agent" arrow>
+                  <span>
+                    <IconButton
+                      size="small"
+                      aria-label="Revoke agent"
+                      onClick={() => onRevoke(agent)}
+                      disabled={isRevoking || agent.status === 'revoked'}
+                      sx={{
+                        width: { xs: 40, sm: 34 },
+                        height: { xs: 40, sm: 34 },
+                        borderRadius: 1.5,
+                        color: alpha(theme.palette.error.main, 0.6),
+                        '&:hover': {
+                          color: theme.palette.error.main,
+                          bgcolor: alpha(theme.palette.error.main, isDark ? 0.15 : 0.1),
+                        },
+                        '&.Mui-disabled': { opacity: 0.28 },
+                      }}
+                    >
+                      <Ban size={16} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Box>
+            </Box>
+          </Box>
+        )
+      })}
     </Box>
   )
 }
@@ -1196,16 +1050,5 @@ export function TokensTable({
         </TableBody>
       </Table>
     </Paper>
-  )
-}
-
-function Meta({ label, value }: { label: string; value: string }) {
-  return (
-    <Box sx={{ minWidth: 0 }}>
-      <Typography variant="caption" color="text.secondary" fontWeight={700}>
-        {label}
-      </Typography>
-      <Typography noWrap>{value}</Typography>
-    </Box>
   )
 }

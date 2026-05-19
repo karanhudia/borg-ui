@@ -193,12 +193,7 @@ export const FleetOverview: Story = {
           <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
             Fleet
           </Typography>
-          <AgentList
-            agents={agents}
-            onQueueBackup={() => {}}
-            onRevoke={() => {}}
-            isRevoking={false}
-          />
+          <AgentList agents={agents} onRevoke={() => {}} isRevoking={false} />
         </Box>
 
         <Divider />
