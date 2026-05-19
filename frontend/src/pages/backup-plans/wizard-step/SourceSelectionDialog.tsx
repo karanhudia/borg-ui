@@ -21,6 +21,7 @@ import {
   Radio,
   RadioGroup,
   Select,
+  Skeleton,
   Stack,
   TextField,
   Tooltip,
@@ -958,6 +959,8 @@ export function SourceSelectionDialog({
     const remoteDisabled = scanTarget.type === 'remote' && !hasRemoteOptions
     const scanCompleted = scanResult !== null
     const nothingFound = !scanLoading && !scanError && scanCompleted && detections.length === 0
+    const awaitingFirstScan = !scanCompleted && !scanError
+    const showSkeleton = scanLoading || awaitingFirstScan
     const targetLabel =
       scanResult?.scan_target.label ??
       (scanTarget.type === 'local'
@@ -1154,7 +1157,40 @@ export function SourceSelectionDialog({
           </Stack>
         </Box>
 
-        {scanResult && scanResult.warnings.length > 0 && (
+        {showSkeleton && (
+          <>
+            <Skeleton
+              variant="rounded"
+              height={88}
+              sx={{ borderRadius: 1 }}
+              animation={scanLoading ? 'wave' : 'pulse'}
+            />
+            <Box
+              sx={{
+                display: 'grid',
+                gap: 1.25,
+                p: 0.75,
+                mx: -0.75,
+                gridTemplateColumns: {
+                  xs: 'repeat(2, minmax(0, 1fr))',
+                  sm: 'repeat(3, minmax(0, 1fr))',
+                },
+              }}
+            >
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton
+                  key={index}
+                  variant="rounded"
+                  height={140}
+                  sx={{ borderRadius: 1 }}
+                  animation={scanLoading ? 'wave' : 'pulse'}
+                />
+              ))}
+            </Box>
+          </>
+        )}
+
+        {!showSkeleton && scanResult && scanResult.warnings.length > 0 && (
           <Alert severity="warning">
             <Stack spacing={0.25}>
               {scanResult.warnings.map((warning, index) => (
@@ -1167,11 +1203,11 @@ export function SourceSelectionDialog({
           </Alert>
         )}
 
-        {scanError?.kind === 'ENDPOINT_MISSING' && (
+        {!showSkeleton && scanError?.kind === 'ENDPOINT_MISSING' && (
           <Alert severity="info">{t('backupPlans.sourceChooser.scanEndpointMissing')}</Alert>
         )}
 
-        {scanError?.kind === 'OTHER' && (
+        {!showSkeleton && scanError?.kind === 'OTHER' && (
           <Alert
             severity="warning"
             action={
@@ -1196,7 +1232,7 @@ export function SourceSelectionDialog({
           </Alert>
         )}
 
-        {nothingFound && (
+        {!showSkeleton && nothingFound && (
           <Alert severity="info">
             <Stack spacing={0.5}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -1236,7 +1272,7 @@ export function SourceSelectionDialog({
           </Alert>
         )}
 
-        {detections.length > 0 && (
+        {!showSkeleton && detections.length > 0 && (
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
               {t('backupPlans.sourceChooser.detectedSection')}
@@ -1265,7 +1301,7 @@ export function SourceSelectionDialog({
           </Box>
         )}
 
-        {remainingTemplates.length > 0 && (
+        {!showSkeleton && remainingTemplates.length > 0 && (
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
               {detections.length > 0
@@ -1447,7 +1483,7 @@ export function SourceSelectionDialog({
     <ResponsiveDialog
       open={open}
       onClose={onClose}
-      maxWidth="sm"
+      maxWidth="md"
       fullWidth
       footer={
         <DialogActions>

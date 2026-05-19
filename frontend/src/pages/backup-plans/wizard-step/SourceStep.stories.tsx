@@ -118,6 +118,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.summaryEmpty': 'No source selected yet',
   'backupPlans.sourceChooser.chooseSource': 'Choose source',
   'backupPlans.sourceChooser.change': 'Change',
+  'backupPlans.sourceChooser.edit': 'Edit',
   'backupPlans.sourceChooser.databaseTitle': 'Database scan',
   'backupPlans.sourceChooser.filesTitle': 'Files and folders',
   'backupPlans.sourceChooser.localSource': 'Local source',

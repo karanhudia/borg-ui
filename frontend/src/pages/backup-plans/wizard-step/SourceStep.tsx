@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Box, Button, Chip, Divider, Stack, TextField, Typography } from '@mui/material'
-import { ChevronDown, ChevronUp, HardDrive, Server } from 'lucide-react'
+import { alpha, Box, Button, Chip, Stack, TextField, Typography } from '@mui/material'
+import { ChevronDown, ChevronUp, Database, FolderOpen, HardDrive, Server } from 'lucide-react'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
 import { SourceSelectionDialog } from './SourceSelectionDialog'
@@ -65,7 +65,18 @@ export function SourceStep({
         rows={2}
         fullWidth
       />
-      <Box sx={{ borderTop: 1, borderBottom: 1, borderColor: 'divider', py: 2 }}>
+      <Box
+        sx={{
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 2,
+          bgcolor: (theme) =>
+            theme.palette.mode === 'dark'
+              ? alpha(theme.palette.common.white, 0.02)
+              : alpha(theme.palette.common.black, 0.015),
+          p: 2,
+        }}
+      >
         <Stack spacing={hasSources ? 1.5 : 0}>
           <Stack
             direction="row"
@@ -74,33 +85,51 @@ export function SourceStep({
             justifyContent="space-between"
             sx={{ minWidth: 0 }}
           >
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              flexWrap="wrap"
-              useFlexGap
-              sx={{ minWidth: 0 }}
-            >
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                {t('backupPlans.sourceChooser.summaryTitle')}
-              </Typography>
-              {hasSources ? (
-                <>
-                  <Chip size="small" label={sourceKindLabel} />
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={t('backupPlans.sourceChooser.pathCount', {
-                      count: sourcePaths.length,
-                    })}
-                  />
-                </>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  {t('backupPlans.sourceChooser.summaryEmpty')}
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  bgcolor: 'background.paper',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1.5,
+                  color: 'text.secondary',
+                  display: 'flex',
+                  flexShrink: 0,
+                  height: 36,
+                  justifyContent: 'center',
+                  width: 36,
+                }}
+              >
+                {isDatabaseSource ? <Database size={18} /> : <FolderOpen size={18} />}
+              </Box>
+              <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                  {t('backupPlans.sourceChooser.summaryTitle')}
                 </Typography>
-              )}
+                {hasSources ? (
+                  <Stack
+                    direction="row"
+                    spacing={0.75}
+                    flexWrap="wrap"
+                    useFlexGap
+                    sx={{ minWidth: 0 }}
+                  >
+                    <Chip size="small" label={sourceKindLabel} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={t('backupPlans.sourceChooser.pathCount', {
+                        count: sourcePaths.length,
+                      })}
+                    />
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    {t('backupPlans.sourceChooser.summaryEmpty')}
+                  </Typography>
+                )}
+              </Stack>
             </Stack>
             <Button
               variant="text"
@@ -109,12 +138,12 @@ export function SourceStep({
               sx={{ flexShrink: 0, textTransform: 'none', fontWeight: 500 }}
             >
               {hasSources
-                ? t('backupPlans.sourceChooser.change')
+                ? t('backupPlans.sourceChooser.edit')
                 : t('backupPlans.sourceChooser.chooseSource')}
             </Button>
           </Stack>
           {hasSources && (
-            <Stack spacing={1} divider={<Divider flexItem />}>
+            <Stack spacing={1}>
               {sourceLocations.map((location) => {
                 const groupKey = sourceLocationKey(location)
                 const isExpanded = expandedGroups[groupKey] ?? false
@@ -123,7 +152,16 @@ export function SourceStep({
                   setExpandedGroups((prev) => ({ ...prev, [groupKey]: !isExpanded }))
 
                 return (
-                  <Box key={groupKey}>
+                  <Box
+                    key={groupKey}
+                    sx={{
+                      bgcolor: 'background.paper',
+                      border: 1,
+                      borderColor: 'divider',
+                      borderRadius: 1.5,
+                      overflow: 'hidden',
+                    }}
+                  >
                     <Box
                       role="button"
                       tabIndex={0}
@@ -139,17 +177,15 @@ export function SourceStep({
                         display: 'flex',
                         alignItems: 'center',
                         gap: 1,
-                        py: 0.5,
-                        px: 0.5,
-                        mx: -0.5,
-                        borderRadius: 1,
+                        py: 1,
+                        px: 1.25,
                         cursor: 'pointer',
                         color: 'text.secondary',
                         transition: 'background-color 120ms ease',
                         '&:hover': { bgcolor: 'action.hover' },
                         '&:focus-visible': {
                           outline: (theme) => `2px solid ${theme.palette.primary.main}`,
-                          outlineOffset: 2,
+                          outlineOffset: -2,
                         },
                       }}
                     >
@@ -201,29 +237,31 @@ export function SourceStep({
                       )}
                     </Box>
                     {isExpanded && (
-                      <Stack spacing={0.25} sx={{ pl: 3, mt: 0.75 }}>
-                        {location.paths.map((path) => {
-                          const display = commonPrefix
-                            ? path.slice(commonPrefix.length) || path
-                            : path
-                          return (
-                            <Typography
-                              key={path}
-                              variant="body2"
-                              title={path}
-                              sx={{
-                                fontSize: '0.8125rem',
-                                color: 'text.primary',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {display}
-                            </Typography>
-                          )
-                        })}
-                      </Stack>
+                      <Box sx={{ borderTop: 1, borderColor: 'divider', px: 1.25, py: 1 }}>
+                        <Stack spacing={0.25} sx={{ pl: 3 }}>
+                          {location.paths.map((path) => {
+                            const display = commonPrefix
+                              ? path.slice(commonPrefix.length) || path
+                              : path
+                            return (
+                              <Typography
+                                key={path}
+                                variant="body2"
+                                title={path}
+                                sx={{
+                                  fontSize: '0.8125rem',
+                                  color: 'text.primary',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {display}
+                              </Typography>
+                            )
+                          })}
+                        </Stack>
+                      </Box>
                     )}
                   </Box>
                 )

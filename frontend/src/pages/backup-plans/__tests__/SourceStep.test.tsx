@@ -222,6 +222,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.readingFromLocal': 'Reading directly from this server',
   'backupPlans.sourceChooser.backToFiles': 'Back to files and folders',
   'backupPlans.sourceChooser.change': 'Change',
+  'backupPlans.sourceChooser.edit': 'Edit',
   'backupPlans.wizard.fileExplorer.sourceTitle': 'Select source paths',
 }
 
@@ -350,7 +351,7 @@ describe('SourceStep', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
 
-    expect(screen.getByRole('dialog')).toHaveAttribute('data-max-width', 'sm')
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-max-width', 'md')
     expect(await screen.findByText('Local source')).toBeInTheDocument()
     expect(screen.getByText('Remote machine')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /scan a database instead/i })).toBeInTheDocument()
@@ -370,7 +371,7 @@ describe('SourceStep', () => {
 
     expect(screen.getByText('Database scan')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /^change$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }))
     await screen.findByRole('button', { name: /scan a database instead/i })
     clickExistingTextButton(/local source/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
