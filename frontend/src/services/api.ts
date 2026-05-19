@@ -284,6 +284,30 @@ export interface SourceDiscoveryResponse {
   templates: SourceDiscoveryDatabase[]
 }
 
+export interface DatabaseScanRequest {
+  source_type: 'local' | 'remote'
+  source_ssh_connection_id: number | null
+  paths: string[]
+}
+
+export interface DatabaseScanWarning {
+  code: string
+  message: string
+  path: string | null
+}
+
+export interface DatabaseScanResponse {
+  scan_target: {
+    source_type: 'local' | 'remote'
+    source_ssh_connection_id: number | null
+    label: string
+  }
+  scanned_paths: string[]
+  detections: SourceDiscoveryDatabase[]
+  templates: SourceDiscoveryDatabase[]
+  warnings: DatabaseScanWarning[]
+}
+
 export const authAPI = {
   getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
   getOidcLoginUrl: (returnTo?: string) => {
@@ -885,6 +909,8 @@ export const scriptsAPI = {
 
 export const sourceDiscoveryAPI = {
   databases: () => api.get<SourceDiscoveryResponse>('/source-discovery/databases'),
+  scanDatabases: (body: DatabaseScanRequest) =>
+    api.post<DatabaseScanResponse>('/source-discovery/databases/scan', body),
 }
 
 export const mountsAPI = {

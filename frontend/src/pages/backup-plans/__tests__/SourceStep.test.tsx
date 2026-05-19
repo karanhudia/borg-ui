@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
 import { createInitialState } from '../state'
@@ -8,11 +8,13 @@ import { SourceStep } from '../wizard-step/SourceStep'
 
 const apiMocks = vi.hoisted(() => ({
   databases: vi.fn(),
+  scanDatabases: vi.fn(),
 }))
 
 vi.mock('../../../services/api', () => ({
   sourceDiscoveryAPI: {
     databases: apiMocks.databases,
+    scanDatabases: apiMocks.scanDatabases,
   },
 }))
 
@@ -210,12 +212,25 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.selectedSourceGroups': 'Selected source groups',
   'backupPlans.sourceChooser.removePath': 'Remove path',
   'backupPlans.sourceChooser.removeSourceGroup': 'Remove source group',
+  'backupPlans.sourceChooser.where': 'Where are the files?',
+  'backupPlans.sourceChooser.remoteMachine': 'Remote machine',
+  'backupPlans.sourceChooser.remoteMachineDescription': 'Pull from an SSH connection',
+  'backupPlans.sourceChooser.selectRemoteMachine': 'Select a remote machine',
+  'backupPlans.sourceChooser.noRemoteMachines': 'No SSH connections available',
+  'backupPlans.sourceChooser.showLessPaths': 'Show less',
+  'backupPlans.sourceChooser.scanDatabaseInstead': 'Scan a database instead',
+  'backupPlans.sourceChooser.readingFromLocal': 'Reading directly from this server',
+  'backupPlans.sourceChooser.backToFiles': 'Back to files and folders',
+  'backupPlans.sourceChooser.change': 'Change',
   'backupPlans.wizard.fileExplorer.sourceTitle': 'Select source paths',
 }
 
 const t = (key: string, options?: { count?: number }) => {
   if (key === 'backupPlans.sourceChooser.pathCount' && typeof options?.count === 'number') {
     return `${options.count} ${options.count === 1 ? 'path' : 'paths'}`
+  }
+  if (key === 'backupPlans.sourceChooser.showMorePaths' && typeof options?.count === 'number') {
+    return `Show ${options.count} more ${options.count === 1 ? 'path' : 'paths'}`
   }
   return translations[key] || key
 }
@@ -232,6 +247,19 @@ function clickExistingTextButton(name: string | RegExp) {
   const button = labels.map((label) => label.closest('button')).find(Boolean)
   expect(button).not.toBeNull()
   fireEvent.click(button as HTMLButtonElement)
+}
+
+function selectRemoteMachine(optionName: RegExp) {
+  const labels = screen.getAllByText(/^remote machine$/i)
+  const card = labels.map((label) => label.closest('button')).find(Boolean)
+  expect(card).not.toBeNull()
+  fireEvent.click(card as HTMLButtonElement)
+
+  const trigger = screen.getByRole('combobox', { name: /select a remote machine/i })
+  fireEvent.mouseDown(trigger)
+  const listbox = screen.getByRole('listbox')
+  const option = within(listbox).getByText(optionName)
+  fireEvent.click(option)
 }
 
 function renderSourceStep(overrides = {}) {
@@ -288,7 +316,23 @@ function StatefulSourceStep({
   )
 }
 
+const emptyScanResponse = {
+  scan_target: {
+    source_type: 'local' as const,
+    source_ssh_connection_id: null,
+    label: 'This Borg UI server',
+  },
+  scanned_paths: [] as string[],
+  detections: [] as never[],
+  templates: [] as never[],
+  warnings: [] as never[],
+}
+
 describe('SourceStep', () => {
+  beforeEach(() => {
+    apiMocks.scanDatabases.mockResolvedValue({ data: emptyScanResponse })
+  })
+
   afterEach(() => {
     vi.clearAllMocks()
   })
@@ -300,18 +344,18 @@ describe('SourceStep', () => {
     expect(screen.queryByTestId('wizard-data-source')).not.toBeInTheDocument()
   })
 
-  it('offers one files route and database scanning without showing planned containers', async () => {
+  it('opens straight into the path picker with an inline database link', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
     renderSourceStep()
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
 
     expect(screen.getByRole('dialog')).toHaveAttribute('data-max-width', 'sm')
-    expect(await screen.findByText('Files and folders')).toBeInTheDocument()
-    expect(screen.getByText('Database')).toBeInTheDocument()
+    expect(await screen.findByText('Local source')).toBeInTheDocument()
+    expect(screen.getByText('Remote machine')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /scan a database instead/i })).toBeInTheDocument()
     expect(screen.queryByText(/docker containers/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/planned/i)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /manual path/i })).not.toBeInTheDocument()
   })
 
   it('keeps a files and folders summary after selecting paths on a scripted plan', async () => {
@@ -326,8 +370,8 @@ describe('SourceStep', () => {
 
     expect(screen.getByText('Database scan')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    await clickTextButton(/files and folders/i)
+    fireEvent.click(screen.getByRole('button', { name: /^change$/i }))
+    await screen.findByRole('button', { name: /scan a database instead/i })
     clickExistingTextButton(/local source/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app-data' },
@@ -335,7 +379,8 @@ describe('SourceStep', () => {
     clickExistingTextButton(/add path/i)
     clickExistingTextButton(/use these paths/i)
 
-    expect(screen.getByText('/srv/app-data')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /local source/i }))
+    expect(screen.getByTitle('/srv/app-data')).toBeInTheDocument()
     expect(screen.getByText('Files and folders')).toBeInTheDocument()
     expect(screen.queryByText('Database scan')).not.toBeInTheDocument()
   })
@@ -365,10 +410,9 @@ describe('SourceStep', () => {
     render(<StatefulSourceStep sshConnections={sshConnections} />)
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    await clickTextButton(/files and folders/i)
 
     expect(await screen.findByText('This Borg UI server')).toBeInTheDocument()
-    expect(screen.getAllByText('Remote machine')).toHaveLength(2)
+    expect(screen.getByText('Remote machine')).toBeInTheDocument()
 
     clickExistingTextButton(/local source/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
@@ -376,13 +420,13 @@ describe('SourceStep', () => {
     })
     clickExistingTextButton(/add path/i)
 
-    clickExistingTextButton(/backup-a@server-a.example/i)
+    selectRemoteMachine(/backup-a@server-a.example/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/home/app/data' },
     })
     clickExistingTextButton(/add path/i)
 
-    clickExistingTextButton(/backup-b@server-b.example/i)
+    selectRemoteMachine(/backup-b@server-b.example/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/var/lib/service' },
     })
@@ -390,9 +434,12 @@ describe('SourceStep', () => {
 
     clickExistingTextButton(/use these paths/i)
 
-    expect(screen.getByText('/srv/app')).toBeInTheDocument()
-    expect(screen.getByText('/home/app/data')).toBeInTheDocument()
-    expect(screen.getByText('/var/lib/service')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /local source/i }))
+    fireEvent.click(screen.getByRole('button', { name: /backup-a@server-a.example/i }))
+    fireEvent.click(screen.getByRole('button', { name: /backup-b@server-b.example/i }))
+    expect(screen.getByTitle('/srv/app')).toBeInTheDocument()
+    expect(screen.getByTitle('/home/app/data')).toBeInTheDocument()
+    expect(screen.getByTitle('/var/lib/service')).toBeInTheDocument()
     expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
     expect(screen.getByText('backup-b@server-b.example')).toBeInTheDocument()
     expect(screen.getAllByText('1 path')).toHaveLength(3)
@@ -414,7 +461,7 @@ describe('SourceStep', () => {
     render(<StatefulSourceStep sshConnections={sshConnections} />)
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    await clickTextButton(/files and folders/i)
+    await screen.findByRole('button', { name: /scan a database instead/i })
 
     clickExistingTextButton(/local source/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
@@ -422,7 +469,7 @@ describe('SourceStep', () => {
     })
     clickExistingTextButton(/add path/i)
 
-    clickExistingTextButton(/backup-a@server-a.example/i)
+    selectRemoteMachine(/backup-a@server-a.example/i)
     clickExistingTextButton(/browse current source/i)
 
     const explorer = screen.getByTestId('file-explorer-dialog')
@@ -433,13 +480,21 @@ describe('SourceStep', () => {
     clickExistingTextButton(/select browsed path/i)
     clickExistingTextButton(/use these paths/i)
 
-    expect(screen.getByText('/srv/app')).toBeInTheDocument()
-    expect(screen.getByText('/selected/from-browser')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /local source/i }))
+    fireEvent.click(screen.getByRole('button', { name: /backup-a@server-a.example/i }))
+    expect(screen.getByTitle('/srv/app')).toBeInTheDocument()
+    expect(screen.getByTitle('/selected/from-browser')).toBeInTheDocument()
     expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
   }, 30000)
 
   it('applies database templates with code-editor script drafts', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.scanDatabases.mockResolvedValue({
+      data: {
+        ...emptyScanResponse,
+        templates: discoveryResponse.templates,
+      },
+    })
     const updateState = vi.fn()
     const onCreateScript = vi
       .fn()
@@ -449,8 +504,8 @@ describe('SourceStep', () => {
     renderSourceStep({ updateState, onCreateScript })
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    await clickTextButton(/database/i)
-    const postgresqlTemplate = await screen.findByText(/postgresql database/i)
+    await clickTextButton(/scan a database instead/i)
+    const postgresqlTemplate = await screen.findByText(/^postgresql$/i)
     fireEvent.click(postgresqlTemplate.closest('button') || postgresqlTemplate)
 
     expect(
