@@ -1815,7 +1815,7 @@ class NotificationService:
         db: Session, settings: List[NotificationSettings], title: str, body: str
     ) -> None:
         """
-        Send notification to multiple services (legacy).
+        Send plain-text notification body to multiple services (legacy).
 
         Args:
             db: Database session
@@ -1824,7 +1824,7 @@ class NotificationService:
             body: Notification body
         """
         for setting in settings:
-            await NotificationService._send_to_service(db, setting, title, body)
+            await NotificationService._send_to_service(db, setting, title, body, body)
 
     @staticmethod
     async def send_stale_backup_alert(
