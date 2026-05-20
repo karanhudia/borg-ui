@@ -465,7 +465,7 @@ const MonitoringReportsTab: React.FC = () => {
 
             {settings?.backup_reports_last_sent_at && (
               <Alert severity="info">
-                {t('monitoringReports.lastReport')} {' '}
+                {t('monitoringReports.lastReport')}{' '}
                 {new Date(settings.backup_reports_last_sent_at).toLocaleString()}
               </Alert>
             )}
