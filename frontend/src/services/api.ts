@@ -803,6 +803,21 @@ export interface AgentBackupJobCreate {
   secrets?: Record<string, unknown>
 }
 
+export interface AgentFilesystemItem {
+  name: string
+  path: string
+  type: 'directory' | 'file'
+  size: number
+  modified_at: number
+  hidden: boolean
+}
+
+export interface AgentFilesystemBrowseResponse {
+  current_path: string
+  parent_path: string | null
+  items: AgentFilesystemItem[]
+}
+
 export const managedAgentsAPI = {
   listAgents: () => api.get<AgentMachineResponse[]>('/managed-machines/agents'),
   revokeAgent: (agentId: number) => api.post(`/managed-machines/agents/${agentId}/revoke`),
@@ -819,6 +834,11 @@ export const managedAgentsAPI = {
     api.post<AgentJobResponse>(`/managed-machines/agent-jobs/${jobId}/cancel`),
   listJobLogs: (jobId: number) =>
     api.get<AgentJobLogEntryResponse[]>(`/managed-machines/agent-jobs/${jobId}/logs`),
+  browseFilesystem: (agentId: number, path = '/', includeHidden = false) =>
+    api.get<AgentFilesystemBrowseResponse>(
+      `/managed-machines/agents/${agentId}/filesystem/browse`,
+      { params: { path, include_hidden: includeHidden } }
+    ),
 }
 
 // Schedule API

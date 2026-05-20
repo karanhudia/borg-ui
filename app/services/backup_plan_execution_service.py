@@ -33,6 +33,7 @@ from app.database.models import (
 )
 from app.services.backup_service import backup_service
 from app.services.backup_plan_policy import evaluate_backup_plan_access
+from app.services.backup_route_planner import plan_repository_route
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     is_agent_executor,
@@ -782,12 +783,17 @@ class BackupPlanExecutionService:
             if not child or not repo:
                 return "failed"
 
+            route = plan_repository_route(repo, context.source_locations)
+            if not route.supported:
+                raise ValueError(route.reason_key or "Unsupported backup route")
+
             backup_job = BackupJob(
                 repository=repo.path,
                 repository_id=repo.id,
                 backup_plan_id=context.plan_id,
                 backup_plan_run_id=run_id,
                 status="pending",
+                route_strategy=route.strategy,
                 source_ssh_connection_id=(
                     context.source_ssh_connection_id
                     if context.source_type == "remote"
@@ -833,7 +839,11 @@ class BackupPlanExecutionService:
                     backup_job.id,
                     lambda: self._is_run_cancelled(run_id),
                 )
+                backup_job.route_strategy = route.strategy
+                db.commit()
             else:
+                backup_job.execution_mode = route.strategy or "local"
+                db.commit()
                 await backup_service.execute_backup(
                     backup_job.id,
                     repo.path,

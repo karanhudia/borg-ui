@@ -30,6 +30,7 @@ from app.services.backup_plan_policy import (
     require_backup_plan_feature_access,
 )
 from app.services.backup_plan_execution_service import backup_plan_execution_service
+from app.services.backup_route_planner import plan_repository_route
 from app.services.backup_progress_contract import serialize_backup_progress_details
 from app.services.repository_executor import repository_executor_type
 from app.utils.datetime_utils import serialize_datetime
@@ -391,6 +392,7 @@ def _serialize_backup_job(
         "maintenance_status": job.maintenance_status,
         "archive_name": job.archive_name,
         "execution_mode": job.execution_mode or "local",
+        "route_strategy": job.route_strategy,
         "progress_details": serialize_backup_progress_details(job, repo),
     }
 
@@ -557,7 +559,7 @@ def _validate_payload(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.nameRequired"},
         )
-    if payload.source_type not in {"local", "remote", "mixed"}:
+    if payload.source_type not in {"local", "remote", "agent", "mixed"}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.invalidSourceType"},
@@ -697,6 +699,17 @@ def _validate_payload(
             )
         check_repo_access(db, user, repo, "operator")
         repos.append(repo)
+
+        if link.enabled:
+            route = plan_repository_route(repo, source_locations)
+            if not route.supported:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "key": route.reason_key,
+                        "params": route.display_params,
+                    },
+                )
 
     clear_ids = set(payload.clear_legacy_source_repository_ids)
     if clear_ids - seen_ids:

@@ -15,8 +15,10 @@ import FileExplorerDialog from '../components/FileExplorerDialog'
 import { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
 import {
   backupPlansAPI,
+  managedAgentsAPI,
   repositoriesAPI,
   type RepositoryData,
+  type AgentMachineResponse,
   scriptsAPI,
   sshKeysAPI,
 } from '../services/api'
@@ -37,6 +39,7 @@ import {
   type LegacySourceRepositoryReview,
 } from './backup-plans/legacySourceSettings'
 import { BackupPlanHistoryDialog } from './backup-plans/PlanRunComponents'
+import { buildRoutePreviews } from './backup-plans/routePreview'
 import { formatRunStatus, isActiveRun } from './backup-plans/runStatus'
 import {
   createInitialBasicRepositoryState,
@@ -199,9 +202,12 @@ export default function BackupPlans() {
     } else if (groupBy === 'source') {
       const local = sorted.filter((p) => p.source_type === 'local')
       const remote = sorted.filter((p) => p.source_type === 'remote')
+      const agent = sorted.filter((p) => p.source_type === 'agent')
       if (local.length > 0) groups.push({ name: t('backupPlans.groups.localSource'), plans: local })
       if (remote.length > 0)
         groups.push({ name: t('backupPlans.groups.remoteSource'), plans: remote })
+      if (agent.length > 0)
+        groups.push({ name: t('backupPlans.sourceChooser.managedAgent'), plans: agent })
     }
 
     return { groups: groups.length > 0 ? groups : [{ name: null as string | null, plans: sorted }] }
@@ -222,6 +228,14 @@ export default function BackupPlans() {
     const connections = sshConnectionsData?.data?.connections
     return Array.isArray(connections) ? connections : []
   }, [sshConnectionsData])
+  const { data: agentMachinesData } = useQuery({
+    queryKey: ['managed-agents'],
+    queryFn: managedAgentsAPI.listAgents,
+  })
+  const agentMachines: AgentMachineResponse[] = useMemo(
+    () => agentMachinesData?.data || [],
+    [agentMachinesData]
+  )
   const { data: scriptsData, isLoading: loadingScripts } = useQuery({
     queryKey: ['scripts'],
     queryFn: () => scriptsAPI.list(),
@@ -608,6 +622,18 @@ export default function BackupPlans() {
       toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
       return
     }
+    const selectedRepositories = wizardState.repositoryIds
+      .map((repositoryId) => fullRepositories.find((repository) => repository.id === repositoryId))
+      .filter((repository): repository is Repository => Boolean(repository))
+    const unsupportedRoute = buildRoutePreviews(
+      selectedRepositories,
+      wizardState,
+      agentMachines
+    ).find((route) => !route.supported)
+    if (unsupportedRoute?.messageKey) {
+      toast.error(t(unsupportedRoute.messageKey, unsupportedRoute.messageParams))
+      return
+    }
 
     const legacyReviews = getLegacySourceRepositoryReviews(
       fullRepositories,
@@ -632,6 +658,7 @@ export default function BackupPlans() {
       basicRepositoryOpen={basicRepositoryOpen}
       fullRepositories={fullRepositories}
       repositories={repositories}
+      agentMachines={agentMachines}
       sshConnections={sshConnections}
       selectedSourceConnection={selectedSourceConnection}
       scripts={scripts}

@@ -442,16 +442,19 @@ class TestBackupPlanRoutes:
             {
                 "source_type": "local",
                 "source_ssh_connection_id": None,
+                "agent_machine_id": None,
                 "paths": ["/srv/app"],
             },
             {
                 "source_type": "remote",
                 "source_ssh_connection_id": source_a.id,
+                "agent_machine_id": None,
                 "paths": ["/home/app/data"],
             },
             {
                 "source_type": "remote",
                 "source_ssh_connection_id": source_b.id,
+                "agent_machine_id": None,
                 "paths": ["/var/lib/service"],
             },
         ]
@@ -485,6 +488,86 @@ class TestBackupPlanRoutes:
 
         plan = test_db.query(BackupPlan).filter(BackupPlan.id == body["id"]).one()
         assert json.loads(plan.source_locations) == source_locations
+
+    def test_create_plan_supports_agent_source_for_same_agent_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Pi Agent",
+            agent_id="agt_plan_pi",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = _create_repo(
+            test_db,
+            "Agent Repo",
+            "/repos/agent",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        source_locations = [
+            {
+                "source_type": "agent",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": agent.id,
+                "paths": ["/home/pi"],
+            }
+        ]
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                source_type="agent",
+                source_ssh_connection_id=None,
+                source_directories=["/home/pi"],
+                source_locations=source_locations,
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["source_type"] == "agent"
+        assert body["source_locations"] == source_locations
+
+    def test_create_plan_rejects_server_source_to_agent_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Pi Agent",
+            agent_id="agt_plan_reject",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = _create_repo(
+            test_db,
+            "Agent Repo",
+            "/repos/agent",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload([repo.id], source_directories=["/srv/project"]),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.backupPlans.serverSourceToAgentRepoUnsupported"
+        )
 
     def test_remote_source_requires_connection(
         self, test_client: TestClient, admin_headers, test_db
@@ -1576,7 +1659,18 @@ class TestBackupPlanRoutes:
             test_db,
             [repo],
             name="Agent Plan",
+            source_type="agent",
             source_directories=json.dumps(["/srv/project"]),
+            source_locations=json.dumps(
+                [
+                    {
+                        "source_type": "agent",
+                        "source_ssh_connection_id": None,
+                        "agent_machine_id": agent.id,
+                        "paths": ["/srv/project"],
+                    }
+                ]
+            ),
             exclude_patterns=json.dumps(["*.tmp"]),
         )
 
@@ -1620,11 +1714,66 @@ class TestBackupPlanRoutes:
             .one()
         )
         assert backup_job.execution_mode == "agent"
+        assert backup_job.route_strategy == "agent_direct"
         assert agent_job.agent_machine_id == agent.id
         assert agent_job.payload["backup"]["source_paths"] == ["/srv/project"]
         assert agent_job.payload["backup"]["exclude_patterns"] == ["*.tmp"]
         test_db.refresh(run)
         assert run.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_execute_plan_run_rejects_unsupported_route_before_backup_job(
+        self, test_db
+    ):
+        agent = AgentMachine(
+            name="Pi Agent",
+            agent_id="agt_plan_runtime_reject",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = _create_repo(
+            test_db,
+            "Agent Repo",
+            "/repos/agent",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            name="Unsupported Agent Plan",
+            source_type="local",
+            source_directories=json.dumps(["/srv/project"]),
+        )
+
+        with patch(
+            "app.services.backup_plan_execution_service.backup_service.execute_backup",
+            new_callable=AsyncMock,
+        ) as execute_backup:
+            await backup_plan_execution_service.execute_run(run.id)
+
+        execute_backup.assert_not_awaited()
+        assert (
+            test_db.query(BackupJob)
+            .filter(BackupJob.backup_plan_run_id == run.id)
+            .count()
+            == 0
+        )
+        child = (
+            test_db.query(BackupPlanRunRepository)
+            .filter(BackupPlanRunRepository.backup_plan_run_id == run.id)
+            .one()
+        )
+        assert child.status == "failed"
+        assert (
+            "backend.errors.backupPlans.serverSourceToAgentRepoUnsupported"
+            in child.error_message
+        )
 
     @pytest.mark.asyncio
     async def test_execute_plan_run_uses_remote_plan_source_settings(self, test_db):
@@ -2231,16 +2380,19 @@ class TestBackupPlanRoutes:
             {
                 "source_type": "local",
                 "source_ssh_connection_id": None,
+                "agent_machine_id": None,
                 "paths": ["/srv/app"],
             },
             {
                 "source_type": "remote",
                 "source_ssh_connection_id": source_a.id,
+                "agent_machine_id": None,
                 "paths": ["/home/app/data"],
             },
             {
                 "source_type": "remote",
                 "source_ssh_connection_id": source_b.id,
+                "agent_machine_id": None,
                 "paths": ["/var/lib/service"],
             },
         ]

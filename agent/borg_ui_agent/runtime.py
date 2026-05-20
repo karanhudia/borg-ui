@@ -10,6 +10,8 @@ from agent.borg_ui_agent.backup import execute_backup_create_job
 from agent.borg_ui_agent.borg import detect_borg_binaries, detect_platform
 from agent.borg_ui_agent.client import AgentClient
 from agent.borg_ui_agent.config import AgentConfig
+from agent.borg_ui_agent.filesystem import execute_filesystem_browse_job
+from agent.borg_ui_agent.repository_ops import execute_repository_operation_job
 
 DEFAULT_CAPABILITIES = [
     "jobs.poll",
@@ -18,10 +20,22 @@ DEFAULT_CAPABILITIES = [
     "logs.stream",
     "backup.create",
     "backup.cancel",
+    "filesystem.browse",
+    "repository.info",
+    "repository.list_archives",
+    "repository.check",
+    "repository.prune",
+    "repository.compact",
 ]
 
 JOB_HANDLERS = {
     "backup.create": execute_backup_create_job,
+    "filesystem.browse": execute_filesystem_browse_job,
+    "repository.info": execute_repository_operation_job,
+    "repository.list_archives": execute_repository_operation_job,
+    "repository.check": execute_repository_operation_job,
+    "repository.prune": execute_repository_operation_job,
+    "repository.compact": execute_repository_operation_job,
 }
 
 
@@ -39,6 +53,10 @@ def get_capabilities() -> list[str]:
 def get_job_handler(job_kind: str):
     if job_kind == "backup.create":
         return execute_backup_create_job
+    if job_kind == "filesystem.browse":
+        return execute_filesystem_browse_job
+    if job_kind.startswith("repository."):
+        return execute_repository_operation_job
     return JOB_HANDLERS.get(job_kind)
 
 

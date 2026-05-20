@@ -1,9 +1,10 @@
-export type SourceLocationKind = 'local' | 'remote'
+export type SourceLocationKind = 'local' | 'remote' | 'agent'
 export type SourceType = SourceLocationKind | 'mixed'
 
 export interface SourceLocation {
   source_type: SourceLocationKind
   source_ssh_connection_id?: number | null
+  agent_machine_id?: number | null
   paths: string[]
 }
 

@@ -76,14 +76,14 @@ export default function WizardStepLocation({
   onBrowsePath,
 }: WizardStepLocationProps) {
   const { t } = useTranslation()
+  const executionTarget = data.executionTarget ?? 'local'
+  const agentMachineId = data.agentMachineId ?? ''
+  const isAgentExecution = executionTarget === 'agent'
 
   // Disable SSH repository location if data source is remote (prevent remote-to-remote)
   // Only enforce this in edit mode when we know the data source
   const isRemoteLocationDisabled =
-    mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId
-  const executionTarget = data.executionTarget ?? 'local'
-  const agentMachineId = data.agentMachineId ?? ''
-  const isAgentExecution = executionTarget === 'agent'
+    isAgentExecution || (mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId)
 
   const handleLocationChange = (location: 'local' | 'ssh') => {
     if (location === 'ssh' && isRemoteLocationDisabled) {
@@ -228,137 +228,70 @@ export default function WizardStepLocation({
         />
       )}
 
-      {/* Execution Target Selection */}
-      <Box>
-        <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
+      {/* Repository Ownership Selection */}
+      <Box sx={{ display: 'flex', alignItems: { xs: 'stretch', sm: 'center' }, gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
+        <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
           {t('wizard.location.executionTargetLabel')}
         </Typography>
         <Box
           sx={{
             display: 'flex',
-            gap: 2,
-            p: 0.5,
-            m: -0.5,
-            flexDirection: { xs: 'column', sm: 'row' },
+            p: '3px',
+            bgcolor: 'action.hover',
+            borderRadius: '10px',
+            gap: '2px',
+            width: { xs: '100%', sm: 'auto' },
           }}
         >
-          <Card
-            variant="outlined"
-            sx={{
-              flex: 1,
-              border: executionTarget === 'local' ? 2 : 1,
-              borderColor: executionTarget === 'local' ? 'primary.main' : 'divider',
-              bgcolor:
-                executionTarget === 'local'
-                  ? (theme) => alpha(theme.palette.primary.main, 0.08)
-                  : 'background.paper',
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: executionTarget === 'local' ? 'translateY(-2px)' : 'none',
-              boxShadow:
-                executionTarget === 'local'
-                  ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                  : 'none',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: (theme) => `0 2px 6px ${alpha(theme.palette.text.primary, 0.08)}`,
-                borderColor: executionTarget === 'local' ? 'primary.main' : 'text.primary',
-              },
-            }}
-          >
-            <CardActionArea
-              onClick={() => onChange({ executionTarget: 'local', agentMachineId: '' })}
-              sx={{ p: 1 }}
-            >
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 44,
-                      height: 44,
-                      borderRadius: 3,
-                      bgcolor: executionTarget === 'local' ? 'primary.main' : 'action.hover',
-                      color: executionTarget === 'local' ? 'white' : 'text.secondary',
-                    }}
-                  >
-                    <Server size={24} />
-                  </Box>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      {t('wizard.location.executionTargetLocal')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('wizard.location.executionTargetLocalDesc')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-
-          <Card
-            variant="outlined"
-            sx={{
-              flex: 1,
-              border: executionTarget === 'agent' ? 2 : 1,
-              borderColor: executionTarget === 'agent' ? 'primary.main' : 'divider',
-              bgcolor:
-                executionTarget === 'agent'
-                  ? (theme) => alpha(theme.palette.primary.main, 0.08)
-                  : 'background.paper',
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: executionTarget === 'agent' ? 'translateY(-2px)' : 'none',
-              boxShadow:
-                executionTarget === 'agent'
-                  ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                  : 'none',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: (theme) => `0 2px 6px ${alpha(theme.palette.text.primary, 0.08)}`,
-                borderColor: executionTarget === 'agent' ? 'primary.main' : 'text.primary',
-              },
-            }}
-          >
-            <CardActionArea onClick={() => onChange({ executionTarget: 'agent' })} sx={{ p: 1 }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 44,
-                      height: 44,
-                      borderRadius: 3,
-                      bgcolor: executionTarget === 'agent' ? 'primary.main' : 'action.hover',
-                      color: executionTarget === 'agent' ? 'white' : 'text.secondary',
-                    }}
-                  >
-                    <Laptop size={24} />
-                  </Box>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      {t('wizard.location.managedAgent')}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('wizard.location.managedAgentDesc')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
+          {[
+            { value: 'local' as const, label: t('wizard.location.executionTargetLocal'), icon: Server },
+            { value: 'agent' as const, label: t('wizard.location.managedAgent'), icon: Laptop },
+          ].map((option) => {
+            const selected = executionTarget === option.value
+            const Icon = option.icon
+            return (
+              <ButtonBase
+                key={option.value}
+                onClick={() =>
+                  onChange(
+                    option.value === 'agent'
+                      ? {
+                          executionTarget: 'agent',
+                          repositoryLocation: 'local',
+                          repoSshConnectionId: '',
+                        }
+                      : { executionTarget: 'local', agentMachineId: '' }
+                  )
+                }
+                sx={{
+                  px: 1.5,
+                  py: 0.65,
+                  borderRadius: '8px',
+                  bgcolor: selected ? 'background.paper' : 'transparent',
+                  boxShadow: selected ? 1 : 0,
+                  fontWeight: selected ? 700 : 500,
+                  fontSize: '0.8rem',
+                  color: selected ? 'text.primary' : 'text.secondary',
+                  transition: 'background-color 0.15s ease, color 0.15s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  flex: { xs: 1, sm: '0 0 auto' },
+                }}
+              >
+                <Icon size={14} />
+                {option.label}
+              </ButtonBase>
+            )
+          })}
         </Box>
-      </Box>
-
-      {isAgentExecution && (
-        <>
-          {queueableAgents.length === 0 ? (
-            <Alert severity="warning">{t('wizard.location.noActiveManagedAgents')}</Alert>
+        {isAgentExecution &&
+          (queueableAgents.length === 0 ? (
+            <Alert severity="warning" sx={{ flex: 1 }}>
+              {t('wizard.location.noActiveManagedAgents')}
+            </Alert>
           ) : (
-            <FormControl fullWidth>
+            <FormControl sx={{ minWidth: { xs: '100%', sm: 260 }, flex: 1 }} size="small">
               <InputLabel id="managed-agent-select-label">
                 {t('wizard.location.managedAgentSelectLabel')}
               </InputLabel>
@@ -370,6 +303,13 @@ export default function WizardStepLocation({
                 onChange={(e) => {
                   const value = e.target.value
                   onChange({ agentMachineId: value ? Number(value) : '' })
+                }}
+                sx={{
+                  '& .MuiSelect-select': {
+                    display: 'flex',
+                    alignItems: 'center',
+                    minHeight: 28,
+                  },
                 }}
               >
                 {queueableAgents.map((agent) => (
@@ -387,9 +327,8 @@ export default function WizardStepLocation({
                 ))}
               </Select>
             </FormControl>
-          )}
-        </>
-      )}
+          ))}
+      </Box>
 
       {/* Location Selection Cards */}
       <Box>

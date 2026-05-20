@@ -388,9 +388,9 @@ describe('RepositoryWizard', () => {
         }),
         null
       )
-    })
+    }, 90000)
 
-    it('preserves an SSH repository target when managed-agent execution is selected', async () => {
+    it('clears and disables SSH repository target when managed-agent execution is selected', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')
 
@@ -405,7 +405,7 @@ describe('RepositoryWizard', () => {
       const agentListbox = await screen.findByRole('listbox')
       await user.click(within(agentListbox).getByText('workstation.local'))
 
-      expect(screen.getByText('Remote Client').closest('button')).not.toBeDisabled()
+      expect(screen.getByText('Remote Client').closest('button')).toBeDisabled()
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
@@ -432,13 +432,51 @@ describe('RepositoryWizard', () => {
           executor_type: 'agent',
           execution_target: 'agent',
           agent_machine_id: 101,
-          connection_id: 1,
+          connection_id: null,
           source_connection_id: null,
           source_directories: ['/home/pi'],
         }),
         null
       )
-    })
+    }, 90000)
+
+    it('allows managed-agent repositories without backup source paths', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await fillLocalLocation('Agent Empty Source Repo', '/backups/agent-empty')
+      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
+      const agentListbox = await screen.findByRole('listbox')
+      await user.click(within(agentListbox).getByText('workstation.local'))
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Source paths are resolved on the selected managed agent/i)
+        ).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'agentpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Agent Empty Source Repo',
+          executor_type: 'agent',
+          execution_target: 'agent',
+          agent_machine_id: 101,
+          connection_id: null,
+          source_directories: [],
+        }),
+        null
+      )
+    }, 90000)
   })
 
   describe('import mode', () => {

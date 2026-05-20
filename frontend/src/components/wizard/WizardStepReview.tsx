@@ -242,7 +242,9 @@ export default function WizardStepReview({
                 <Cloud size={12} style={{ opacity: 0.6 }} />
               )}
               <Typography variant="body2" fontSize="0.75rem">
-                {data.repositoryLocation === 'local'
+                {executionTarget === 'agent'
+                  ? t('wizard.review.repositoryPathOnSelectedAgent')
+                  : data.repositoryLocation === 'local'
                   ? t('wizard.review.borgUiServer')
                   : t('wizard.review.sshRemote')}
               </Typography>

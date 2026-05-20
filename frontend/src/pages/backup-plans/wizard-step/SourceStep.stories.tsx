@@ -122,6 +122,8 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseTitle': 'Database scan',
   'backupPlans.sourceChooser.filesTitle': 'Files and folders',
   'backupPlans.sourceChooser.localSource': 'Local source',
+  'backupPlans.sourceChooser.borgUiServer': 'Borg UI server',
+  'backupPlans.sourceChooser.agentFallback': 'Agent #{{id}}',
   'backupPlans.sourceChooser.localSourceDescription': 'This Borg UI server',
   'backupPlans.sourceChooser.sshSourceDescription': 'Remote machine',
   'backupPlans.sourceChooser.showLessPaths': 'Show less',
@@ -152,6 +154,8 @@ function renderStep({ wizardState }: RenderArgs) {
       <SourceStep
         wizardState={wizardState}
         sshConnections={sshConnections}
+        agentMachines={[]}
+        fullRepositories={[]}
         scripts={[]}
         loadingScripts={false}
         updateState={() => {}}

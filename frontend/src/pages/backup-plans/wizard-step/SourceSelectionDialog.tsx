@@ -34,6 +34,7 @@ import {
   FolderOpen,
   HardDrive,
   Info,
+  Laptop,
   Plus,
   RefreshCw,
   Server,
@@ -48,19 +49,22 @@ import CodeEditor from '../../../components/CodeEditor'
 import FileExplorerDialog from '../../../components/FileExplorerDialog'
 import ResponsiveDialog from '../../../components/ResponsiveDialog'
 import {
+  managedAgentsAPI,
+  type AgentFilesystemItem,
+  type AgentMachineResponse,
   sourceDiscoveryAPI,
   type DatabaseScanResponse,
   type SourceDiscoveryDatabase,
   type SourceDiscoveryResponse,
   type SourceDiscoveryScriptDraft,
 } from '../../../services/api'
-import type { SourceLocation, SourceType } from '../../../types'
+import type { Repository, SourceLocation, SourceType } from '../../../types'
 import type { ScriptOption, SSHConnection, WizardState } from '../types'
 import type { SourceScriptCreateInput } from './types'
 
 type SourceChoiceView = 'paths' | 'database' | 'database-detail'
 type ScriptMode = 'create' | 'reuse' | 'skip'
-type SourceKey = 'local' | `remote:${number}`
+type SourceKey = 'local' | `remote:${number}` | `agent:${number}`
 
 const DEFAULT_DB_SCAN_PATHS = [
   '/var/lib/postgresql',
@@ -94,6 +98,8 @@ interface SourceSelectionDialogProps {
   open: boolean
   wizardState: WizardState
   sshConnections: SSHConnection[]
+  agentMachines: AgentMachineResponse[]
+  fullRepositories: Repository[]
   scripts: ScriptOption[]
   loadingScripts: boolean
   onClose: () => void
@@ -222,6 +228,7 @@ function cleanLocations(locations: SourceLocation[]): SourceLocation[] {
       ...location,
       source_ssh_connection_id:
         location.source_type === 'remote' ? location.source_ssh_connection_id : null,
+      agent_machine_id: location.source_type === 'agent' ? location.agent_machine_id : null,
       paths: location.paths.map((path) => path.trim()).filter(Boolean),
     }))
     .filter((location) => location.paths.length > 0)
@@ -236,6 +243,7 @@ function locationsFromWizardState(wizardState: WizardState): SourceLocation[] {
       {
         source_type: 'remote',
         source_ssh_connection_id: Number(wizardState.sourceSshConnectionId),
+        agent_machine_id: null,
         paths: wizardState.sourceDirectories,
       },
     ]
@@ -244,24 +252,40 @@ function locationsFromWizardState(wizardState: WizardState): SourceLocation[] {
     {
       source_type: 'local',
       source_ssh_connection_id: null,
+      agent_machine_id: null,
       paths: wizardState.sourceDirectories,
     },
   ]
 }
 
 function locationKey(location: SourceLocation): SourceKey {
-  return location.source_type === 'remote' && location.source_ssh_connection_id
-    ? `remote:${location.source_ssh_connection_id}`
-    : 'local'
+  if (location.source_type === 'remote' && location.source_ssh_connection_id) {
+    return `remote:${location.source_ssh_connection_id}`
+  }
+  if (location.source_type === 'agent' && location.agent_machine_id) {
+    return `agent:${location.agent_machine_id}`
+  }
+  return 'local'
 }
 
 function locationForKey(
   sourceKey: SourceKey
-): Pick<SourceLocation, 'source_type' | 'source_ssh_connection_id'> {
+): Pick<SourceLocation, 'source_type' | 'source_ssh_connection_id' | 'agent_machine_id'> {
   if (sourceKey === 'local') {
-    return { source_type: 'local', source_ssh_connection_id: null }
+    return { source_type: 'local', source_ssh_connection_id: null, agent_machine_id: null }
   }
-  return { source_type: 'remote', source_ssh_connection_id: Number(sourceKey.split(':')[1]) }
+  if (sourceKey.startsWith('agent:')) {
+    return {
+      source_type: 'agent',
+      source_ssh_connection_id: null,
+      agent_machine_id: Number(sourceKey.split(':')[1]),
+    }
+  }
+  return {
+    source_type: 'remote',
+    source_ssh_connection_id: Number(sourceKey.split(':')[1]),
+    agent_machine_id: null,
+  }
 }
 
 function sourceTypeFromLocations(locations: SourceLocation[]): SourceType {
@@ -278,15 +302,224 @@ function sourceConnectionFromLocations(locations: SourceLocation[]): number | ''
 function sourceLocationLabel(
   location: SourceLocation,
   sshConnections: SSHConnection[],
+  agentMachines: AgentMachineResponse[],
   t: TFunction
 ) {
-  if (location.source_type === 'local') return t('backupPlans.sourceChooser.localSource')
+  if (location.source_type === 'local') return t('backupPlans.sourceChooser.borgUiServer')
+  if (location.source_type === 'agent') {
+    const agent = agentMachines.find((item) => item.id === location.agent_machine_id)
+    return agent?.hostname || agent?.name || t('backupPlans.sourceChooser.agentFallback', {
+      id: location.agent_machine_id,
+    })
+  }
   const connection = sshConnections.find((item) => item.id === location.source_ssh_connection_id)
   return connection
     ? `${connection.username}@${connection.host}`
     : t('backupPlans.wizard.review.connectionFallback', {
         id: location.source_ssh_connection_id,
       })
+}
+
+function selectedAgentRepositoryKey(
+  wizardState: WizardState,
+  fullRepositories: Repository[]
+): SourceKey | null {
+  const selectedRepositories = wizardState.repositoryIds
+    .map((id) => fullRepositories.find((repository) => repository.id === id))
+    .filter((repository): repository is Repository => Boolean(repository))
+  if (selectedRepositories.length !== 1) return null
+  const repository = selectedRepositories[0]
+  if (repository.executor_type !== 'agent' || !repository.agent_machine_id) return null
+  return `agent:${repository.agent_machine_id}`
+}
+
+function agentDisplayName(agent?: AgentMachineResponse | null) {
+  if (!agent) return ''
+  return agent.hostname || agent.name || `Agent #${agent.id}`
+}
+
+interface AgentFileExplorerDialogProps {
+  open: boolean
+  agent: AgentMachineResponse | null
+  onClose: () => void
+  onSelect: (paths: string[]) => void
+  t: TFunction
+}
+
+function AgentFileExplorerDialog({
+  open,
+  agent,
+  onClose,
+  onSelect,
+  t,
+}: AgentFileExplorerDialogProps) {
+  const [path, setPath] = useState('/')
+  const [items, setItems] = useState<AgentFilesystemItem[]>([])
+  const [parentPath, setParentPath] = useState<string | null>(null)
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadPath = (nextPath: string) => {
+    if (!agent) return
+    setLoading(true)
+    setError(null)
+    managedAgentsAPI
+      .browseFilesystem(agent.id, nextPath || '/', false)
+      .then((response) => {
+        setPath(response.data.current_path)
+        setParentPath(response.data.parent_path)
+        setItems(response.data.items)
+        setSelectedPaths([])
+      })
+      .catch((err) => {
+        const detail = err?.response?.data?.detail
+        setError(
+          typeof detail === 'string'
+            ? detail
+            : detail?.message || t('backupPlans.sourceChooser.agentBrowseFailed')
+        )
+      })
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    if (open) loadPath('/')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, agent?.id])
+
+  const togglePath = (itemPath: string) => {
+    setSelectedPaths((current) =>
+      current.includes(itemPath)
+        ? current.filter((pathValue) => pathValue !== itemPath)
+        : [...current, itemPath]
+    )
+  }
+
+  return (
+    <ResponsiveDialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      footer={
+        <DialogActions>
+          <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
+          <Button
+            variant="contained"
+            onClick={() => onSelect(selectedPaths)}
+            disabled={selectedPaths.length === 0}
+          >
+            {t('backupPlans.sourceChooser.selectPaths')}
+          </Button>
+        </DialogActions>
+      }
+    >
+      <DialogTitle sx={{ pb: 1 }}>
+        {t('backupPlans.sourceChooser.agentBrowseTitle', {
+          agent: agentDisplayName(agent),
+        })}
+      </DialogTitle>
+      <DialogContent sx={{ pt: 1 }}>
+        <Stack spacing={1.5}>
+          <Stack direction="row" spacing={1}>
+            <TextField
+              size="small"
+              label={t('backupPlans.sourceChooser.currentPath')}
+              value={path}
+              onChange={(event) => setPath(event.target.value)}
+              fullWidth
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  loadPath(path)
+                }
+              }}
+            />
+            <Button variant="outlined" onClick={() => loadPath(path)} disabled={loading}>
+              {loading ? t('backupPlans.sourceChooser.loading') : t('backupPlans.sourceChooser.openPath')}
+            </Button>
+          </Stack>
+          {error && <Alert severity="warning">{error}</Alert>}
+          <Paper variant="outlined" sx={{ borderRadius: 1, overflow: 'hidden' }}>
+            {parentPath && (
+              <Button
+                fullWidth
+                startIcon={<ArrowLeft size={14} />}
+                onClick={() => loadPath(parentPath)}
+                sx={{ justifyContent: 'flex-start', borderRadius: 0 }}
+              >
+                {t('backupPlans.sourceChooser.parentDirectory')}
+              </Button>
+            )}
+            {items.map((item) => {
+              const selected = selectedPaths.includes(item.path)
+              return (
+                <Box
+                  key={item.path}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() =>
+                    item.type === 'directory' ? loadPath(item.path) : togglePath(item.path)
+                  }
+	                  onKeyDown={(event) => {
+	                    if (event.key === 'Enter' || event.key === ' ') {
+	                      event.preventDefault()
+	                      if (item.type === 'directory') {
+	                        loadPath(item.path)
+	                      } else {
+	                        togglePath(item.path)
+	                      }
+	                    }
+	                  }}
+                  sx={{
+                    alignItems: 'center',
+                    bgcolor: selected ? 'action.selected' : 'background.paper',
+                    borderTop: 1,
+                    borderColor: 'divider',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    gap: 1,
+                    minHeight: 40,
+                    px: 1.25,
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
+                >
+                  {item.type === 'directory' ? <FolderOpen size={15} /> : <HardDrive size={15} />}
+                  <Typography variant="body2" sx={{ minWidth: 0 }} noWrap>
+                    {item.name}
+                  </Typography>
+                  <Box sx={{ flex: 1 }} />
+                  <Button
+                    size="small"
+                    variant={selected ? 'contained' : 'text'}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      togglePath(item.path)
+                    }}
+                  >
+                    {selected
+                      ? t('backupPlans.sourceChooser.selected')
+                      : t('backupPlans.sourceChooser.select')}
+                  </Button>
+                </Box>
+              )
+            })}
+            {!loading && items.length === 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 1.5 }}>
+                {t('backupPlans.sourceChooser.emptyDirectory')}
+              </Typography>
+            )}
+            {loading && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                <CircularProgress size={22} />
+              </Box>
+            )}
+          </Paper>
+        </Stack>
+      </DialogContent>
+    </ResponsiveDialog>
+  )
 }
 
 interface RepoStyleSourceCardProps {
@@ -380,6 +613,8 @@ export function SourceSelectionDialog({
   open,
   wizardState,
   sshConnections,
+  agentMachines,
+  fullRepositories,
   scripts,
   loadingScripts,
   onClose,
@@ -413,15 +648,18 @@ export function SourceSelectionDialog({
   const [sourcePath, setSourcePath] = useState('')
   const [draftSourceLocations, setDraftSourceLocations] = useState<SourceLocation[]>([])
   const [sourceExplorerOpen, setSourceExplorerOpen] = useState(false)
+  const [agentExplorerOpen, setAgentExplorerOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setView(initialView)
     const nextLocations = locationsFromWizardState(wizardState)
+    const defaultAgentKey = selectedAgentRepositoryKey(wizardState, fullRepositories)
     setDraftSourceLocations(nextLocations)
-    setSelectedSourceKey(nextLocations[0] ? locationKey(nextLocations[0]) : 'local')
+    setSelectedSourceKey(nextLocations[0] ? locationKey(nextLocations[0]) : defaultAgentKey || 'local')
     setSourcePath('')
     setSourceExplorerOpen(false)
+    setAgentExplorerOpen(false)
     setSelectedDatabase(null)
     setScriptMode('create')
     setPreExistingScriptId(wizardState.preBackupScriptId || '')
@@ -432,7 +670,7 @@ export function SourceSelectionDialog({
     setScanResult(null)
     setScanError(null)
     setFallbackTemplates([])
-  }, [open, wizardState, initialView])
+  }, [open, wizardState, initialView, fullRepositories])
 
   useEffect(() => {
     if (!open) return
@@ -614,9 +852,13 @@ export function SourceSelectionDialog({
   }
 
   const selectedSourceConnection =
-    selectedSourceKey === 'local'
+    !selectedSourceKey.startsWith('remote:')
       ? null
       : sshConnections.find((connection) => selectedSourceKey === `remote:${connection.id}`) || null
+  const selectedAgent =
+    selectedSourceKey.startsWith('agent:')
+      ? agentMachines.find((agent) => selectedSourceKey === `agent:${agent.id}`) || null
+      : null
 
   const selectedSourceExplorerSshConfig = selectedSourceConnection
     ? {
@@ -628,11 +870,21 @@ export function SourceSelectionDialog({
     : undefined
 
   const renderPaths = () => {
-    const sourceKind: 'local' | 'remote' = selectedSourceKey === 'local' ? 'local' : 'remote'
-    const selectedRemoteIdNum =
-      selectedSourceKey !== 'local' ? Number(selectedSourceKey.split(':')[1]) : 0
+    const sourceKind: 'local' | 'remote' | 'agent' = selectedSourceKey.startsWith('remote:')
+      ? 'remote'
+      : selectedSourceKey.startsWith('agent:')
+        ? 'agent'
+        : 'local'
+    const selectedRemoteIdNum = selectedSourceKey.startsWith('remote:')
+      ? Number(selectedSourceKey.split(':')[1])
+      : 0
+    const selectedAgentIdNum = selectedSourceKey.startsWith('agent:')
+      ? Number(selectedSourceKey.split(':')[1])
+      : 0
     const hasRemoteOptions = sshConnections.length > 0
+    const hasAgentOptions = agentMachines.length > 0
     const remoteDisabled = sourceKind === 'remote' && !hasRemoteOptions
+    const agentDisabled = sourceKind === 'agent' && !hasAgentOptions
 
     return (
       <Stack spacing={2}>
@@ -660,7 +912,7 @@ export function SourceSelectionDialog({
           <RepoStyleSourceCard
             selected={sourceKind === 'local'}
             icon={<HardDrive size={28} />}
-            title={t('backupPlans.sourceChooser.localSource')}
+            title={t('backupPlans.sourceChooser.borgUiServer')}
             description={t('backupPlans.sourceChooser.localSourceDescription')}
             onClick={() => setSelectedSourceKey('local')}
           />
@@ -682,6 +934,26 @@ export function SourceSelectionDialog({
                   ? selectedRemoteIdNum
                   : sshConnections[0].id
               setSelectedSourceKey(`remote:${targetId}`)
+            }}
+          />
+          <RepoStyleSourceCard
+            selected={sourceKind === 'agent'}
+            disabled={!hasAgentOptions}
+            icon={<Laptop size={28} />}
+            title={t('backupPlans.sourceChooser.managedAgent')}
+            description={
+              hasAgentOptions
+                ? t('backupPlans.sourceChooser.managedAgentDescription')
+                : t('backupPlans.sourceChooser.noManagedAgents')
+            }
+            onClick={() => {
+              if (!hasAgentOptions) return
+              const targetId =
+                selectedAgentIdNum &&
+                agentMachines.some((agent) => agent.id === selectedAgentIdNum)
+                  ? selectedAgentIdNum
+                  : agentMachines[0].id
+              setSelectedSourceKey(`agent:${targetId}`)
             }}
           />
         </Box>
@@ -734,6 +1006,49 @@ export function SourceSelectionDialog({
               ))}
             </Select>
           </FormControl>
+        ) : sourceKind === 'agent' && hasAgentOptions ? (
+          <FormControl fullWidth>
+            <InputLabel id="source-agent-machine-label">
+              {t('backupPlans.sourceChooser.selectManagedAgent')}
+            </InputLabel>
+            <Select
+              labelId="source-agent-machine-label"
+              value={selectedAgentIdNum || ''}
+              label={t('backupPlans.sourceChooser.selectManagedAgent')}
+              onChange={(event) => setSelectedSourceKey(`agent:${Number(event.target.value)}`)}
+            >
+              {agentMachines.map((agent) => (
+                <MenuItem key={agent.id} value={agent.id}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    sx={{ minWidth: 0, width: '100%' }}
+                  >
+                    <Laptop size={14} style={{ flexShrink: 0, opacity: 0.7 }} />
+                    <Typography variant="body2" noWrap>
+                      {agentDisplayName(agent)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      {agent.status}
+                    </Typography>
+                    {agent.status === 'online' && (
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: 'success.main',
+                          flexShrink: 0,
+                          ml: 'auto',
+                        }}
+                      />
+                    )}
+                  </Stack>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         ) : (
           <Box
             sx={{
@@ -749,11 +1064,13 @@ export function SourceSelectionDialog({
               minHeight: 56,
             }}
           >
-            <HardDrive size={14} />
+            {sourceKind === 'agent' ? <Laptop size={14} /> : <HardDrive size={14} />}
             <Typography variant="body2" color="text.secondary">
-              {remoteDisabled
-                ? t('backupPlans.sourceChooser.noRemoteMachines')
-                : t('backupPlans.sourceChooser.readingFromLocal')}
+              {agentDisabled
+                ? t('backupPlans.sourceChooser.noManagedAgents')
+                : remoteDisabled
+                  ? t('backupPlans.sourceChooser.noRemoteMachines')
+                  : t('backupPlans.sourceChooser.readingFromLocal')}
             </Typography>
           </Box>
         )}
@@ -765,7 +1082,7 @@ export function SourceSelectionDialog({
             onChange={(event) => setSourcePath(event.target.value)}
             size="small"
             fullWidth
-            disabled={remoteDisabled}
+            disabled={remoteDisabled || agentDisabled}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault()
@@ -777,7 +1094,7 @@ export function SourceSelectionDialog({
             variant="contained"
             startIcon={<Plus size={16} />}
             onClick={addSourcePath}
-            disabled={!sourcePath.trim() || remoteDisabled}
+            disabled={!sourcePath.trim() || remoteDisabled || agentDisabled}
             sx={{ flexShrink: 0 }}
           >
             {t('backupPlans.sourceChooser.addPath')}
@@ -785,8 +1102,14 @@ export function SourceSelectionDialog({
           <Button
             variant="outlined"
             startIcon={<FolderOpen size={16} />}
-            onClick={() => setSourceExplorerOpen(true)}
-            disabled={remoteDisabled}
+            onClick={() => {
+              if (sourceKind === 'agent') {
+                setAgentExplorerOpen(true)
+              } else {
+                setSourceExplorerOpen(true)
+              }
+            }}
+            disabled={remoteDisabled || agentDisabled}
             sx={{ flexShrink: 0 }}
           >
             {t('backupPlans.sourceChooser.browseCurrentSource')}
@@ -849,12 +1172,14 @@ export function SourceSelectionDialog({
                         >
                           {location.source_type === 'remote' ? (
                             <Server size={14} />
+                          ) : location.source_type === 'agent' ? (
+                            <Laptop size={14} />
                           ) : (
                             <HardDrive size={14} />
                           )}
                         </Box>
                         <Typography variant="subtitle2" noWrap sx={{ flexShrink: 0 }}>
-                          {sourceLocationLabel(location, sshConnections, t)}
+                          {sourceLocationLabel(location, sshConnections, agentMachines, t)}
                         </Typography>
                         <Typography variant="caption" sx={{ flexShrink: 0, opacity: 0.6 }}>
                           ·
@@ -912,12 +1237,14 @@ export function SourceSelectionDialog({
                             >
                               {location.source_type === 'remote' ? (
                                 <Server size={14} />
+                              ) : location.source_type === 'agent' ? (
+                                <Laptop size={14} />
                               ) : (
                                 <HardDrive size={14} />
                               )}
                             </Box>
                             <Typography variant="subtitle2" noWrap>
-                              {sourceLocationLabel(location, sshConnections, t)}
+                              {sourceLocationLabel(location, sshConnections, agentMachines, t)}
                             </Typography>
                             <Chip
                               size="small"
@@ -989,6 +1316,16 @@ export function SourceSelectionDialog({
           selectMode="both"
           showSshMountPoints={false}
         />
+        <AgentFileExplorerDialog
+          open={agentExplorerOpen}
+          agent={selectedAgent}
+          onClose={() => setAgentExplorerOpen(false)}
+          onSelect={(paths) => {
+            addPathsToSelectedSource(paths)
+            setAgentExplorerOpen(false)
+          }}
+          t={t}
+        />
       </Stack>
     )
   }
@@ -1008,7 +1345,7 @@ export function SourceSelectionDialog({
     const targetLabel =
       scanResult?.scan_target.label ??
       (scanTarget.type === 'local'
-        ? t('backupPlans.sourceChooser.localSource')
+        ? t('backupPlans.sourceChooser.borgUiServer')
         : t('backupPlans.sourceChooser.remoteMachine'))
 
     const addPath = () => {
@@ -1042,7 +1379,7 @@ export function SourceSelectionDialog({
             <RepoStyleSourceCard
               selected={scanTarget.type === 'local'}
               icon={<HardDrive size={28} />}
-              title={t('backupPlans.sourceChooser.localSource')}
+              title={t('backupPlans.sourceChooser.borgUiServer')}
               description={t('backupPlans.sourceChooser.localSourceDescription')}
               onClick={() => setScanTarget({ type: 'local', sshId: '' })}
             />

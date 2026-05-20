@@ -7,6 +7,7 @@ import {
   isRepositorySelectionOverLimit,
 } from '../../utils/backupPlanRepositorySelection'
 import { getLegacySourceRepositoryReviews } from '../backup-plans/legacySourceSettings'
+import { buildRoutePreviews } from '../backup-plans/routePreview'
 
 describe('BackupPlans API', () => {
   it('posts to the toggle endpoint for a backup plan', async () => {
@@ -177,7 +178,9 @@ describe('BackupPlans payload', () => {
     expect(payload.source_type).toBe('mixed')
     expect(payload.source_ssh_connection_id).toBeNull()
     expect(payload.source_directories).toEqual(['/srv/app', '/home/app/data', '/var/lib/service'])
-    expect(payload.source_locations).toEqual(sourceLocations)
+    expect(payload.source_locations).toEqual(
+      sourceLocations.map((location) => ({ ...location, agent_machine_id: null }))
+    )
   })
 
   it('preserves a disabled plan in the payload', () => {
@@ -334,6 +337,64 @@ describe('BackupPlans payload', () => {
     expect(payload.source_ssh_connection_id).toBe(42)
   })
 
+  it('keeps managed-agent source endpoint details in the payload', () => {
+    const payload = buildBackupPlanPayload({
+      name: 'Agent Plan',
+      description: '',
+      enabled: true,
+      sourceType: 'agent',
+      sourceSshConnectionId: '',
+      sourceDirectories: ['/srv/project'],
+      sourceLocations: [
+        {
+          source_type: 'agent',
+          source_ssh_connection_id: null,
+          agent_machine_id: 7,
+          paths: ['/srv/project'],
+        },
+      ],
+      excludePatterns: [],
+      repositoryIds: [10],
+      compression: 'lz4',
+      archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+      customFlags: '',
+      uploadRatelimitMb: '',
+      repositoryRunMode: 'series',
+      maxParallelRepositories: 1,
+      failureBehavior: 'continue',
+      scheduleEnabled: false,
+      cronExpression: '0 21 * * *',
+      timezone: 'UTC',
+      preBackupScriptId: null,
+      postBackupScriptId: null,
+      preBackupScriptParameters: {},
+      postBackupScriptParameters: {},
+      runRepositoryScripts: true,
+      runPruneAfter: false,
+      runCompactAfter: false,
+      runCheckAfter: false,
+      checkMaxDuration: 3600,
+      checkExtraFlags: '',
+      pruneKeepHourly: 0,
+      pruneKeepDaily: 7,
+      pruneKeepWeekly: 4,
+      pruneKeepMonthly: 6,
+      pruneKeepQuarterly: 0,
+      pruneKeepYearly: 1,
+    })
+
+    expect(payload.source_type).toBe('agent')
+    expect(payload.source_ssh_connection_id).toBeNull()
+    expect(payload.source_locations).toEqual([
+      {
+        source_type: 'agent',
+        source_ssh_connection_id: null,
+        agent_machine_id: 7,
+        paths: ['/srv/project'],
+      },
+    ])
+  })
+
   it('includes repository ids whose legacy source settings should be cleared', () => {
     const payload = buildBackupPlanPayload(
       {
@@ -421,5 +482,145 @@ describe('BackupPlans payload', () => {
     expect(payload.pre_backup_script_parameters).toEqual({ TARGET: 'database' })
     expect(payload.post_backup_script_parameters).toEqual({ STATUS_FILE: '/tmp/status' })
     expect(payload.run_repository_scripts).toBe(false)
+  })
+})
+
+describe('BackupPlans route preview', () => {
+  it('supports an agent source to the same agent-owned repository', () => {
+    const routes = buildRoutePreviews(
+      [
+        {
+          id: 10,
+          name: 'Agent Repo',
+          path: '/backups/agent',
+          executor_type: 'agent',
+          agent_machine_id: 7,
+        },
+      ],
+      {
+        name: 'Agent Plan',
+        description: '',
+        enabled: true,
+        sourceType: 'agent',
+        sourceSshConnectionId: '',
+        sourceDirectories: ['/srv/project'],
+        sourceLocations: [
+          {
+            source_type: 'agent',
+            source_ssh_connection_id: null,
+            agent_machine_id: 7,
+            paths: ['/srv/project'],
+          },
+        ],
+        excludePatterns: [],
+        repositoryIds: [10],
+        compression: 'lz4',
+        archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+        customFlags: '',
+        uploadRatelimitMb: '',
+        repositoryRunMode: 'series',
+        maxParallelRepositories: 1,
+        failureBehavior: 'continue',
+        scheduleEnabled: false,
+        cronExpression: '0 21 * * *',
+        timezone: 'UTC',
+        preBackupScriptId: null,
+        postBackupScriptId: null,
+        preBackupScriptParameters: {},
+        postBackupScriptParameters: {},
+        runRepositoryScripts: true,
+        runPruneAfter: false,
+        runCompactAfter: false,
+        runCheckAfter: false,
+        checkMaxDuration: 3600,
+        checkExtraFlags: '',
+        pruneKeepHourly: 0,
+        pruneKeepDaily: 7,
+        pruneKeepWeekly: 4,
+        pruneKeepMonthly: 6,
+        pruneKeepQuarterly: 0,
+        pruneKeepYearly: 1,
+      },
+      [
+        {
+          id: 7,
+          name: 'Agent A',
+          agent_id: 'agt_a',
+          status: 'online',
+          created_at: '',
+          updated_at: '',
+        },
+      ]
+    )
+
+    expect(routes[0]).toMatchObject({
+      supported: true,
+      strategy: 'agent_direct',
+      executor: 'agent',
+      agentMachineId: 7,
+    })
+  })
+
+  it('blocks Borg UI server sources to agent-owned repositories', () => {
+    const routes = buildRoutePreviews(
+      [
+        {
+          id: 10,
+          name: 'Agent Repo',
+          path: '/backups/agent',
+          executor_type: 'agent',
+          agent_machine_id: 7,
+        },
+      ],
+      {
+        name: 'Server Plan',
+        description: '',
+        enabled: true,
+        sourceType: 'local',
+        sourceSshConnectionId: '',
+        sourceDirectories: ['/srv/project'],
+        sourceLocations: [
+          {
+            source_type: 'local',
+            source_ssh_connection_id: null,
+            paths: ['/srv/project'],
+          },
+        ],
+        excludePatterns: [],
+        repositoryIds: [10],
+        compression: 'lz4',
+        archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+        customFlags: '',
+        uploadRatelimitMb: '',
+        repositoryRunMode: 'series',
+        maxParallelRepositories: 1,
+        failureBehavior: 'continue',
+        scheduleEnabled: false,
+        cronExpression: '0 21 * * *',
+        timezone: 'UTC',
+        preBackupScriptId: null,
+        postBackupScriptId: null,
+        preBackupScriptParameters: {},
+        postBackupScriptParameters: {},
+        runRepositoryScripts: true,
+        runPruneAfter: false,
+        runCompactAfter: false,
+        runCheckAfter: false,
+        checkMaxDuration: 3600,
+        checkExtraFlags: '',
+        pruneKeepHourly: 0,
+        pruneKeepDaily: 7,
+        pruneKeepWeekly: 4,
+        pruneKeepMonthly: 6,
+        pruneKeepQuarterly: 0,
+        pruneKeepYearly: 1,
+      },
+      []
+    )
+
+    expect(routes[0]).toMatchObject({
+      supported: false,
+      messageKey: 'backupPlans.routePreview.serverToAgentRepo',
+    })
   })
 })

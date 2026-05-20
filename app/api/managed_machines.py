@@ -17,6 +17,7 @@ from app.database.models import (
     AgentMachine,
     User,
 )
+from app.services.agent_filesystem_service import browse_agent_filesystem
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -318,6 +319,23 @@ async def create_agent_backup_job(
         job_id=job.id,
     )
     return job
+
+
+@router.get("/agents/{agent_machine_id}/filesystem/browse")
+async def browse_agent_machine_filesystem(
+    agent_machine_id: int,
+    path: str = "/",
+    include_hidden: bool = False,
+    _: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    return await browse_agent_filesystem(
+        db,
+        agent_machine_id,
+        path=path,
+        include_hidden=include_hidden,
+        timeout_seconds=15,
+    )
 
 
 @router.post(

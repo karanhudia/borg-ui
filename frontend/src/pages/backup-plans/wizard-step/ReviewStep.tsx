@@ -1,4 +1,4 @@
-import { Box, Stack, Typography } from '@mui/material'
+import { Alert, Box, Stack, Typography } from '@mui/material'
 import {
   CalendarClock,
   Code,
@@ -20,6 +20,7 @@ import {
   ReviewStatus,
 } from '../../../components/wizard/WizardReviewComponents'
 import type { Repository } from '../../../types'
+import { buildRoutePreviews, routeExecutorLabelKey } from '../routePreview'
 import { formatSshConnectionLabel, getPathBasename } from './helpers'
 import type { BackupPlanWizardStepProps } from './types'
 
@@ -29,22 +30,25 @@ const REVIEW_EMERALD = '#10b981'
 
 type ReviewStepProps = Pick<
   BackupPlanWizardStepProps,
-  'wizardState' | 'repositories' | 'selectedSourceConnection' | 'scripts' | 't'
+  'wizardState' | 'repositories' | 'agentMachines' | 'selectedSourceConnection' | 'scripts' | 't'
 >
 
 export function ReviewStep({
   wizardState,
   repositories,
+  agentMachines,
   selectedSourceConnection,
   scripts,
   t,
 }: ReviewStepProps) {
   const sourceLocationLabel =
-    wizardState.sourceType === 'remote'
+    wizardState.sourceType === 'agent'
+      ? t('backupPlans.sourceChooser.managedAgent')
+      : wizardState.sourceType === 'remote'
       ? t('backupPlans.wizard.review.remoteSource')
       : wizardState.sourceType === 'mixed'
         ? t('backupPlans.sourceChooser.mixedSources')
-        : t('backupPlans.wizard.review.localSource')
+        : t('backupPlans.sourceChooser.borgUiServer')
   const sourceConnectionLabel = selectedSourceConnection
     ? formatSshConnectionLabel(selectedSourceConnection)
     : wizardState.sourceSshConnectionId
@@ -57,6 +61,10 @@ export function ReviewStep({
   const selectedRepositories = wizardState.repositoryIds
     .map((repositoryId) => repositories.find((repository) => repository.id === repositoryId))
     .filter((repository): repository is Repository => Boolean(repository))
+  const routePreviews = buildRoutePreviews(selectedRepositories, wizardState, agentMachines)
+  const routePreviewByRepositoryId = new Map(
+    routePreviews.map((preview) => [preview.repository.id, preview])
+  )
   const visibleSourceDirectories = wizardState.sourceDirectories.slice(0, 6)
   const hiddenSourceDirectoryCount = Math.max(
     wizardState.sourceDirectories.length - visibleSourceDirectories.length,
@@ -243,48 +251,61 @@ export function ReviewStep({
               minWidth: 0,
             }}
           >
-            {selectedRepositories.map((repository) => (
-              <Box
-                key={repository.id}
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 0.125,
-                  minWidth: 0,
-                }}
-              >
-                <Typography
-                  variant="body2"
+            {selectedRepositories.map((repository) => {
+              const routePreview = routePreviewByRepositoryId.get(repository.id)
+              return (
+                <Box
+                  key={repository.id}
                   sx={{
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    color: 'text.primary',
-                    lineHeight: 1.35,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.375,
+                    minWidth: 0,
                   }}
-                  title={repository.name}
                 >
-                  {repository.name}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontFamily: 'monospace',
-                    fontSize: '0.68rem',
-                    color: 'text.disabled',
-                    lineHeight: 1.4,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                  title={repository.path}
-                >
-                  {repository.path}
-                </Typography>
-              </Box>
-            ))}
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      color: 'text.primary',
+                      lineHeight: 1.35,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                    title={repository.name}
+                  >
+                    {repository.name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontSize: '0.68rem',
+                      color: 'text.disabled',
+                      lineHeight: 1.4,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                    title={repository.path}
+                  >
+                    {repository.path}
+                  </Typography>
+                  {routePreview &&
+                    (routePreview.supported ? (
+                      <Typography variant="caption" color="text.secondary">
+                        {t(routeExecutorLabelKey(routePreview.executor))}
+                      </Typography>
+                    ) : (
+                      <Alert severity="warning" sx={{ py: 0, px: 1 }}>
+                        {t(routePreview.messageKey || '', routePreview.messageParams)}
+                      </Alert>
+                    ))}
+                </Box>
+              )
+            })}
           </Box>
         </ReviewSectionCard>
 

@@ -51,9 +51,12 @@ from app.services.repository_wipe_service import (
     repository_wipe_service,
 )
 from app.services.repository_executor import (
+    is_agent_executor,
     legacy_execution_target,
     normalize_executor_type,
+    queue_agent_repository_operation_job,
     repository_executor_type,
+    wait_for_agent_repository_operation_job,
 )
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.utils.datetime_utils import serialize_datetime
@@ -510,6 +513,32 @@ async def _run_repository_command_with_retries(
             raise HTTPException(status_code=500, detail={"key": failure_key})
 
 
+def _parse_agent_json_result(result: dict[str, Any]) -> dict[str, Any]:
+    data = result.get("data")
+    if isinstance(data, dict):
+        return data
+    stdout = result.get("stdout")
+    if isinstance(stdout, str) and stdout.strip():
+        try:
+            parsed = json.loads(stdout)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def _agent_prune_operation_payload(request: dict) -> dict[str, Any]:
+    return {
+        "keep_hourly": request.get("keep_hourly", 0),
+        "keep_daily": request.get("keep_daily", 7),
+        "keep_weekly": request.get("keep_weekly", 4),
+        "keep_monthly": request.get("keep_monthly", 6),
+        "keep_quarterly": request.get("keep_quarterly", 0),
+        "keep_yearly": request.get("keep_yearly", 1),
+        "dry_run": request.get("dry_run", False),
+    }
+
+
 # Helper function to get operation timeouts from DB settings (with fallback to config)
 def get_operation_timeouts(db: Session = None) -> dict:
     """
@@ -562,6 +591,14 @@ async def update_repository_stats(repository: Repository, db: Session) -> bool:
     Update the archive count and repository size stats by querying Borg.
     Returns True if successful, False otherwise.
     """
+    if is_agent_executor(repository):
+        logger.info(
+            "Skipping server-side stats refresh for agent-owned repository",
+            repository=repository.name,
+            repository_id=repository.id,
+        )
+        return True
+
     temp_key_file = None
     try:
         # Check system-wide bypass_lock_on_list setting
@@ -973,14 +1010,31 @@ def _require_queueable_agent(
     return agent
 
 
+def _reject_agent_repository_ssh_target(
+    *,
+    path: Optional[str],
+    connection_id: Optional[int],
+    execution_target: Optional[str],
+) -> None:
+    if (
+        connection_id
+        or (path or "").strip().startswith("ssh://")
+        or (execution_target or "").strip().lower() == "ssh"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.agentRepositorySshUnsupported"},
+        )
+
+
 def _validate_agent_repository_payload(
     repo_data: Union[RepositoryCreate, RepositoryImport], db: Session
 ) -> AgentMachine:
-    if repo_data.mode == "full" and not repo_data.source_directories:
-        raise HTTPException(
-            status_code=400,
-            detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
-        )
+    _reject_agent_repository_ssh_target(
+        path=repo_data.path,
+        connection_id=repo_data.connection_id,
+        execution_target=repo_data.execution_target,
+    )
 
     if repo_data.encryption in [
         "repokey",
@@ -1017,10 +1071,6 @@ def _create_agent_repository_record(
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.repo.pathRequired"},
-        )
-    if repo_data.connection_id:
-        repo_path = _build_repository_path_from_connection(
-            repo_path, repo_data.connection_id, db
         )
 
     if db.query(Repository).filter(Repository.name == repo_data.name).first():
@@ -1060,9 +1110,9 @@ def _create_agent_repository_record(
         passphrase=repo_data.passphrase,
         source_directories=source_directories_json,
         exclude_patterns=exclude_patterns_json,
-        connection_id=repo_data.connection_id,
+        connection_id=None,
         remote_path=repo_data.remote_path,
-        repository_type="ssh" if repo_path.startswith("ssh://") else "local",
+        repository_type="local",
         execution_target="agent",
         executor_type="agent",
         agent_machine_id=agent.id,
@@ -2147,11 +2197,38 @@ async def update_repository(
 
         # Store raw path first (will be reconstructed for SSH below)
         raw_path = None
+        update_data = repo_data.model_dump(exclude_unset=True)
         if repo_data.path is not None:
             raw_path = repo_data.path.strip()
 
+        target_executor_type = (
+            normalize_executor_type(
+                repo_data.executor_type if "executor_type" in update_data else None,
+                execution_target=repo_data.execution_target
+                if repo_data.execution_target is not None
+                else repository.execution_target,
+            )
+            if (
+                "executor_type" in update_data or repo_data.execution_target is not None
+            )
+            else repository_executor_type(repository)
+        )
+
+        target_connection_id = (
+            repo_data.connection_id
+            if "connection_id" in update_data
+            else repository.connection_id
+        )
+        target_path = raw_path if raw_path is not None else repository.path
+        if target_executor_type == "agent":
+            _reject_agent_repository_ssh_target(
+                path=target_path,
+                connection_id=target_connection_id,
+                execution_target=repo_data.execution_target,
+            )
+
         # Handle connection_id - allow null to clear (switch to local)
-        if "connection_id" in repo_data.model_dump(exclude_unset=True):
+        if "connection_id" in update_data:
             repository.connection_id = repo_data.connection_id
             # Clear legacy fields when switching repository type
             if repo_data.connection_id is None:
@@ -2168,13 +2245,11 @@ async def update_repository(
         # Reconstruct path if connection_id or path changed (similar to create endpoint logic)
         path_changed = False
         old_path = repository.path
-        if raw_path is not None or "connection_id" in repo_data.model_dump(
-            exclude_unset=True
-        ):
+        if raw_path is not None or "connection_id" in update_data:
             # Determine the final connection_id (use updated value or existing)
             final_connection_id = (
                 repo_data.connection_id
-                if "connection_id" in repo_data.model_dump(exclude_unset=True)
+                if "connection_id" in update_data
                 else repository.connection_id
             )
 
@@ -2329,7 +2404,6 @@ async def update_repository(
         if repo_data.compression is not None:
             repository.compression = repo_data.compression
 
-        update_data = repo_data.model_dump(exclude_unset=True)
         source_settings_changed = any(
             key in update_data
             for key in (
@@ -2432,13 +2506,7 @@ async def update_repository(
             "executor_type" in update_data or repo_data.execution_target is not None
         )
         if executor_changed:
-            executor_type = normalize_executor_type(
-                repo_data.executor_type if "executor_type" in update_data else None,
-                execution_target=repo_data.execution_target
-                if repo_data.execution_target is not None
-                else repository.execution_target,
-            )
-            if executor_type == "agent":
+            if target_executor_type == "agent":
                 requested_agent_id = (
                     repo_data.agent_machine_id
                     if "agent_machine_id" in update_data
@@ -2679,6 +2747,46 @@ async def check_repository(
             else None
         )
 
+        if is_agent_executor(repository):
+            ensure_no_running_job(
+                db,
+                CheckJob,
+                repo_id,
+                error_key="backend.errors.repo.checkAlreadyRunning",
+            )
+            check_job = create_maintenance_job(
+                db,
+                CheckJob,
+                repository,
+                extra_fields={
+                    "max_duration": max_duration,
+                    "extra_flags": check_extra_flags,
+                },
+            )
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.check",
+                operation={
+                    "max_duration": max_duration,
+                    "check_extra_flags": check_extra_flags,
+                },
+                maintenance_job_kind="check",
+                maintenance_job_id=check_job.id,
+            )
+            logger.info(
+                "Agent repository check job queued",
+                job_id=check_job.id,
+                agent_job_id=agent_job.id,
+                repository_id=repo_id,
+                user=current_user.username,
+            )
+            return {
+                "job_id": check_job.id,
+                "status": "pending",
+                "message": "backend.success.repo.checkJobStarted",
+            }
+
         check_job = start_background_maintenance_job(
             db,
             repository,
@@ -2798,6 +2906,39 @@ async def compact_repository(
         repository = get_repository_with_access(
             db, current_user, repo_id, required_role="operator"
         )
+        if is_agent_executor(repository):
+            ensure_no_running_job(
+                db,
+                CompactJob,
+                repo_id,
+                error_key="backend.errors.repo.compactAlreadyRunning",
+            )
+            compact_job = create_maintenance_job(
+                db,
+                CompactJob,
+                repository,
+                extra_fields={"scheduled_compact": False},
+            )
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.compact",
+                maintenance_job_kind="compact",
+                maintenance_job_id=compact_job.id,
+            )
+            logger.info(
+                "Agent repository compact job queued",
+                job_id=compact_job.id,
+                agent_job_id=agent_job.id,
+                repository_id=repo_id,
+                user=current_user.username,
+            )
+            return {
+                "job_id": compact_job.id,
+                "status": "pending",
+                "message": "backend.success.repo.compactJobStarted",
+            }
+
         compact_job = start_background_maintenance_job(
             db,
             repository,
@@ -2859,6 +3000,60 @@ async def prune_repository(
         keep_quarterly = request.get("keep_quarterly", 0)
         keep_yearly = request.get("keep_yearly", 1)
         dry_run = request.get("dry_run", False)
+
+        if is_agent_executor(repository):
+            prune_job = create_maintenance_job(
+                db,
+                PruneJob,
+                repository,
+                extra_fields={
+                    "scheduled_prune": False,
+                },
+            )
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.prune",
+                operation=_agent_prune_operation_payload(request),
+                maintenance_job_kind="prune",
+                maintenance_job_id=prune_job.id,
+            )
+            logger.info(
+                "Agent repository prune job queued",
+                job_id=prune_job.id,
+                agent_job_id=agent_job.id,
+                repository_id=repo_id,
+                dry_run=dry_run,
+                user=current_user.username,
+            )
+            if not dry_run:
+                return {
+                    "job_id": prune_job.id,
+                    "status": "pending",
+                    "message": "backend.success.repo.pruneJobStarted",
+                }
+
+            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+            db.refresh(prune_job)
+            if prune_job.status == "pending":
+                prune_job.status = "completed"
+                prune_job.completed_at = datetime.utcnow()
+                db.commit()
+                db.refresh(prune_job)
+            stdout_output = read_job_logs(prune_job, fallback_to_logs=True)
+            if not stdout_output:
+                stdout_output = str(result.get("stdout") or "")
+            return {
+                "job_id": prune_job.id,
+                "status": prune_job.status,
+                "dry_run": dry_run,
+                "prune_result": {
+                    "success": prune_job.status == "completed",
+                    "stdout": stdout_output,
+                    "stderr": prune_job.error_message
+                    or str(result.get("stderr") or ""),
+                },
+            }
 
         if not dry_run:
             prune_job = start_background_maintenance_job(
@@ -3297,6 +3492,32 @@ async def list_repository_archives(
 
     async def _operation():
         repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+        if is_agent_executor(repository):
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.list_archives",
+            )
+            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+            archives_data = _parse_agent_json_result(result)
+            archives = archives_data.get("archives", [])
+            archives = enrich_archives_with_backup_metadata(archives, repository, db)
+            logger.info(
+                "Agent repository archives listed successfully",
+                repo_id=repo_id,
+                agent_job_id=agent_job.id,
+                count=len(archives),
+            )
+            return {
+                "success": True,
+                "archives": archives,
+                "repository": {
+                    "id": repository.id,
+                    "name": repository.name,
+                    "path": repository.path,
+                },
+            }
+
         use_bypass_lock, source = _resolve_bypass_lock(
             repository, db, "bypass_lock_on_list"
         )
@@ -3358,6 +3579,29 @@ async def get_repository_info(
 
     async def _operation():
         repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+        if is_agent_executor(repository):
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind="repository.info",
+            )
+            result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+            info_data = _parse_agent_json_result(result)
+            logger.info(
+                "Agent repository info retrieved successfully",
+                repo_id=repo_id,
+                agent_job_id=agent_job.id,
+            )
+            return {
+                "success": True,
+                "info": {
+                    "repository": info_data.get("repository", {}),
+                    "cache": info_data.get("cache", {}),
+                    "encryption": info_data.get("encryption", {}),
+                },
+                "raw_output": info_data,
+            }
+
         use_bypass_lock, source = _resolve_bypass_lock(
             repository, db, "bypass_lock_on_info"
         )
@@ -3471,6 +3715,17 @@ async def get_repository_stats(
     repository: Repository, db: Session, bypass_lock: bool = False
 ) -> Dict[str, Any]:
     """Get repository statistics"""
+    if is_agent_executor(repository):
+        return {
+            "total_size": repository.total_size or "Unknown",
+            "compressed_size": "Unknown",
+            "deduplicated_size": "Unknown",
+            "archive_count": repository.archive_count or 0,
+            "last_modified": format_datetime(repository.updated_at),
+            "encryption": repository.encryption or "Unknown",
+            "executor": "agent",
+        }
+
     temp_key_file = None
     try:
         env, temp_key_file = _prepare_repository_borg_env(repository, db)

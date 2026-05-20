@@ -16,6 +16,9 @@ from app.database.models import (
     AgentJobLog,
     AgentMachine,
     BackupJob,
+    CheckJob,
+    CompactJob,
+    PruneJob,
     Repository,
 )
 from app.utils.datetime_utils import serialize_datetime
@@ -26,6 +29,11 @@ router = APIRouter(prefix="/api/agents", tags=["agents"])
 DEFAULT_AGENT_POLL_INTERVAL_SECONDS = 15
 FINAL_AGENT_JOB_STATUSES = {"completed", "failed", "canceled"}
 STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=15)
+REPOSITORY_OPERATION_JOB_MODELS = {
+    "check": CheckJob,
+    "compact": CompactJob,
+    "prune": PruneJob,
+}
 
 
 def _now_utc() -> datetime:
@@ -327,6 +335,71 @@ def _finish_linked_backup_job(
             repository.updated_at = _now_utc()
 
 
+def _get_repository_operation_job(agent_job: AgentJob, db: Session) -> Any | None:
+    payload = agent_job.payload or {}
+    operation = payload.get("operation") if isinstance(payload, dict) else None
+    maintenance_job = (
+        operation.get("maintenance_job") if isinstance(operation, dict) else None
+    )
+    if not isinstance(maintenance_job, dict):
+        return None
+
+    kind = str(maintenance_job.get("kind") or "")
+    job_id = maintenance_job.get("id")
+    model = REPOSITORY_OPERATION_JOB_MODELS.get(kind)
+    if not model or not job_id:
+        return None
+    return db.query(model).filter(model.id == int(job_id)).first()
+
+
+def _sync_repository_operation_progress(agent_job: AgentJob, db: Session) -> None:
+    operation_job = _get_repository_operation_job(agent_job, db)
+    if not operation_job:
+        return
+    if getattr(operation_job, "started_at", None) is None:
+        operation_job.started_at = agent_job.started_at or _now_utc()
+    operation_job.status = "running"
+    if hasattr(operation_job, "progress"):
+        operation_job.progress = int(agent_job.progress_percent or 0)
+    if hasattr(operation_job, "progress_message") and agent_job.current_file:
+        operation_job.progress_message = agent_job.current_file
+
+
+def _finish_linked_repository_operation_job(
+    agent_job: AgentJob,
+    db: Session,
+    *,
+    status_value: str,
+    completed_at: datetime,
+    error_message: Optional[str] = None,
+) -> None:
+    operation_job = _get_repository_operation_job(agent_job, db)
+    if not operation_job:
+        return
+
+    operation_job.status = status_value
+    if getattr(operation_job, "started_at", None) is None:
+        operation_job.started_at = agent_job.started_at or completed_at
+    operation_job.completed_at = completed_at
+    operation_job.error_message = error_message
+    operation_job.logs = _collect_agent_logs(agent_job, db)
+    operation_job.has_logs = bool(operation_job.logs)
+    if status_value == "completed" and hasattr(operation_job, "progress"):
+        operation_job.progress = 100
+
+    repository = (
+        db.query(Repository)
+        .filter(Repository.id == operation_job.repository_id)
+        .first()
+    )
+    if repository and status_value == "completed":
+        if isinstance(operation_job, CheckJob):
+            repository.last_check = completed_at
+        elif isinstance(operation_job, CompactJob):
+            repository.last_compact = completed_at
+        repository.updated_at = _now_utc()
+
+
 @router.post("/register", response_model=AgentRegisterResponse)
 async def register_agent(
     payload: AgentRegisterRequest,
@@ -510,6 +583,8 @@ async def start_job(
         backup_job.status = "running"
         if backup_job.started_at is None:
             backup_job.started_at = job.started_at
+    else:
+        _sync_repository_operation_progress(job, db)
     job.updated_at = now
     db.commit()
 
@@ -534,6 +609,8 @@ async def update_job_progress(
     if backup_job:
         backup_job.status = "running"
         _sync_backup_progress(job, backup_job)
+    else:
+        _sync_repository_operation_progress(job, db)
     job.updated_at = _now_utc()
     db.commit()
 
@@ -598,6 +675,12 @@ async def complete_job(
         status_value="completed",
         completed_at=job.completed_at,
     )
+    _finish_linked_repository_operation_job(
+        job,
+        db,
+        status_value="completed",
+        completed_at=job.completed_at,
+    )
     db.commit()
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
@@ -631,6 +714,13 @@ async def fail_job(
         completed_at=job.completed_at,
         error_message=payload.error_message,
     )
+    _finish_linked_repository_operation_job(
+        job,
+        db,
+        status_value="failed",
+        completed_at=job.completed_at,
+        error_message=payload.error_message,
+    )
     db.commit()
 
     return AgentJobStatusResponse(id=job.id, status=job.status)
@@ -652,6 +742,13 @@ async def mark_job_canceled(
     job.completed_at = _normalize_agent_timestamp(payload.completed_at)
     job.updated_at = now
     _finish_linked_backup_job(
+        job,
+        db,
+        status_value="cancelled",
+        completed_at=job.completed_at,
+        error_message="Agent job canceled",
+    )
+    _finish_linked_repository_operation_job(
         job,
         db,
         status_value="cancelled",

@@ -34,6 +34,7 @@ const t = ((key: string, options?: { defaultValue?: string; count?: number; id?:
     'backupPlans.status.manualOnly': 'Manual only',
     'backupPlans.status.localSource': 'Local source',
     'backupPlans.status.remoteSource': 'Remote source',
+    'backupPlans.sourceChooser.managedAgent': 'Managed agent',
     'backupPlans.status.enabled': 'Enabled',
     'backupPlans.status.disabled': 'Disabled',
     'backupPlans.status.clickToEnable': 'Click to enable',
@@ -190,5 +191,14 @@ describe('BackupPlansContent', () => {
     await user.click(screen.getByRole('button', { name: 'View repositories' }))
 
     expect(onViewRepositories).toHaveBeenCalledWith(basePlan.id)
+  })
+
+  it('labels managed-agent backup plan sources after save', () => {
+    renderContent({
+      backupPlans: [{ ...basePlan, source_type: 'agent' }],
+      processedPlans: { groups: [{ name: null, plans: [{ ...basePlan, source_type: 'agent' }] }] },
+    })
+
+    expect(screen.getByText('Managed agent')).toBeInTheDocument()
   })
 })

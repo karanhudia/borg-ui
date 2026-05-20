@@ -11,6 +11,7 @@ from agent.borg_ui_agent.backup import (
 from agent.borg_ui_agent.borg import detect_borg_binaries
 from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
 from agent.borg_ui_agent.config import AgentConfig, load_config, save_config
+from agent.borg_ui_agent.repository_ops import RepositoryOperationPayload
 from agent.borg_ui_agent.runtime import AgentRuntime, get_capabilities
 
 
@@ -407,6 +408,107 @@ def test_runtime_run_once_dispatches_registered_structured_handler(monkeypatch):
     assert handled_jobs[0][0]["id"] == 44
     assert handled_jobs[0][1] is client
     assert callable(handled_jobs[0][2])
+
+
+@pytest.mark.unit
+def test_runtime_advertises_and_dispatches_filesystem_browse(monkeypatch):
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.runtime.detect_platform",
+        lambda: {"hostname": "host", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.runtime.detect_borg_binaries", lambda: [])
+
+    handled_jobs = []
+
+    def fake_handler(job, client, *, should_cancel=None):
+        handled_jobs.append((job, client, should_cancel))
+        return SimpleNamespace(job_id=45, status="completed", message="browse complete")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.runtime.execute_filesystem_browse_job", fake_handler
+    )
+    assert "filesystem.browse" in get_capabilities()
+
+    client = FakeRuntimeClient(
+        [{"id": 45, "type": "filesystem", "payload": {"job_kind": "filesystem.browse"}}]
+    )
+    runtime = AgentRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        client=client,
+    )
+
+    result = runtime.run_once()
+
+    assert result.job_id == 45
+    assert result.status == "completed"
+    assert handled_jobs[0][0]["id"] == 45
+
+
+@pytest.mark.unit
+def test_runtime_advertises_and_dispatches_repository_operation(monkeypatch):
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.runtime.detect_platform",
+        lambda: {"hostname": "host", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.runtime.detect_borg_binaries", lambda: [])
+
+    handled_jobs = []
+
+    def fake_handler(job, client, *, should_cancel=None):
+        handled_jobs.append((job, client, should_cancel))
+        return SimpleNamespace(job_id=46, status="completed", message="info complete")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.runtime.execute_repository_operation_job", fake_handler
+    )
+    assert "repository.info" in get_capabilities()
+    assert "repository.prune" in get_capabilities()
+
+    client = FakeRuntimeClient(
+        [{"id": 46, "type": "repository", "payload": {"job_kind": "repository.info"}}]
+    )
+    runtime = AgentRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        client=client,
+    )
+
+    result = runtime.run_once()
+
+    assert result.job_id == 46
+    assert result.status == "completed"
+    assert handled_jobs[0][0]["id"] == 46
+
+
+@pytest.mark.unit
+def test_repository_operation_payload_builds_agent_local_commands():
+    info_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.info",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+        }
+    )
+    prune_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.prune",
+            "repository": {"path": "/agent/repo", "borg_version": 2},
+            "operation": {"keep_daily": 7, "dry_run": True},
+        }
+    )
+
+    assert info_payload.build_command() == ["borg", "info", "--json", "/agent/repo"]
+    assert prune_payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/repo",
+        "prune",
+        "--progress",
+        "--stats",
+        "--show-rc",
+        "--log-json",
+        "--keep-daily",
+        "7",
+        "--dry-run",
+    ]
 
 
 class FakeStdout:

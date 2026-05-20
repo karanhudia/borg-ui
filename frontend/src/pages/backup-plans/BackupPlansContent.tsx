@@ -327,6 +327,8 @@ export function BackupPlansContent({
                   const sourceTypeLabel =
                     plan.source_type === 'remote'
                       ? t('backupPlans.status.remoteSource')
+                      : plan.source_type === 'agent'
+                        ? t('backupPlans.sourceChooser.managedAgent')
                       : plan.source_type === 'mixed'
                         ? t('backupPlans.sourceChooser.mixedSources')
                         : t('backupPlans.status.localSource')
