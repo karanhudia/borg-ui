@@ -396,7 +396,15 @@ export default function WizardStepLocation({
         <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
           {t('wizard.location.whereToStore')}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            p: 0.5,
+            m: -0.5,
+            flexDirection: { xs: 'column', sm: 'row' },
+          }}
+        >
           <Card
             variant="outlined"
             sx={{
