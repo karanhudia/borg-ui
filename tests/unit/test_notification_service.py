@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from unittest.mock import patch
 from app.services.notification_service import notification_service
 from app.database.models import Repository, NotificationSettings
@@ -167,6 +168,67 @@ async def test_send_backup_warning_not_sent_without_warning_toggle(
     )
 
     apprise_instance.notify.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_send_stale_backup_alert_dispatches_plain_body_to_apprise(
+    test_db, mock_apprise
+):
+    setting = NotificationSettings(
+        name="Stale Backup Alert",
+        service_url="slack://token/channel",
+        enabled=True,
+        notify_on_stale_backup=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    stale_repository = SimpleNamespace(
+        name="Stale Repo",
+        mode="full",
+        path="/repos/stale",
+        reason="stale",
+        days_since_backup=5,
+    )
+
+    await notification_service.send_stale_backup_alert(
+        test_db, [stale_repository], stale_after_days=3
+    )
+
+    call_args = apprise_instance.notify.call_args[1]
+    assert call_args["title"] == "Backup monitoring alert: 1 stale repository"
+    assert "Stale Repo" in call_args["body"]
+    assert "/repos/stale" in call_args["body"]
+
+
+@pytest.mark.asyncio
+async def test_send_backup_report_dispatches_plain_body_to_apprise(
+    test_db, mock_apprise
+):
+    setting = NotificationSettings(
+        name="Backup Report",
+        service_url="slack://token/channel",
+        enabled=True,
+        notify_on_backup_report=True,
+    )
+    test_db.add(setting)
+    test_db.commit()
+
+    apprise_instance = mock_apprise.return_value
+    apprise_instance.add.return_value = True
+    apprise_instance.notify.return_value = True
+
+    await notification_service.send_backup_report(
+        test_db, "Borg UI backup report", "Plain report body"
+    )
+
+    call_args = apprise_instance.notify.call_args[1]
+    assert call_args["title"] == "Borg UI backup report"
+    assert call_args["body"] == "Plain report body"
 
 
 @pytest.mark.asyncio

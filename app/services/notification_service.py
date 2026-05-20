@@ -1815,7 +1815,7 @@ class NotificationService:
         db: Session, settings: List[NotificationSettings], title: str, body: str
     ) -> None:
         """
-        Send notification to multiple services (legacy).
+        Send plain-text notification body to multiple services (legacy).
 
         Args:
             db: Database session
@@ -1824,7 +1824,66 @@ class NotificationService:
             body: Notification body
         """
         for setting in settings:
-            await NotificationService._send_to_service(db, setting, title, body)
+            await NotificationService._send_to_service(db, setting, title, body, body)
+
+    @staticmethod
+    async def send_stale_backup_alert(
+        db: Session, stale_repositories: list, stale_after_days: int
+    ) -> None:
+        """Send a system alert when repositories have stale or missing backups."""
+        settings = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_stale_backup == True,
+            )
+            .all()
+        )
+
+        if not settings:
+            return
+
+        count = len(stale_repositories)
+        title = f"Backup monitoring alert: {count} stale repository"
+        if count != 1:
+            title += "ies"
+
+        lines = [
+            f"Borg UI found {count} repository records with no backup within {stale_after_days} day(s).",
+            "",
+            "Affected repositories:",
+        ]
+        for repository in stale_repositories:
+            if getattr(repository, "reason", "") == "never_backed_up":
+                freshness = "never backed up"
+            else:
+                freshness = (
+                    f"{repository.days_since_backup} day(s) since latest archive"
+                )
+            lines.append(
+                f"- {repository.name} ({repository.mode}): {freshness} - {repository.path}"
+            )
+
+        await NotificationService._send_to_services(
+            db, settings, title, "\n".join(lines)
+        )
+
+    @staticmethod
+    async def send_backup_report(db: Session, title: str, body: str) -> None:
+        """Send a scheduled or manual backup report through Apprise services."""
+        settings = (
+            db.query(NotificationSettings)
+            .filter(
+                NotificationSettings.enabled == True,
+                NotificationSettings.notify_on_backup_report == True,
+            )
+            .all()
+        )
+
+        if not settings:
+            return
+
+        await NotificationService._send_to_services(db, settings, title, body)
 
     @staticmethod
     async def send_restore_check_completion(

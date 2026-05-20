@@ -129,6 +129,7 @@
       "account": "Konto",
       "appearance": "Erscheinungsbild",
       "notifications": "Benachrichtigungen",
+      "monitoringReports": "Monitoring & Berichte",
       "preferences": "Einstellungen",
       "licensing": "Lizenzierung",
       "systemLabel": "System",
@@ -145,7 +146,8 @@
     "menu": {
       "accountAndSecurityDesc": "Profil, Passwort, 2FA, Passkeys",
       "appearanceDesc": "Design",
-      "notificationsDesc": "Benachrichtigungen & Einstellungen"
+      "notificationsDesc": "Benachrichtigungen & Einstellungen",
+      "monitoringReportsDesc": "Warnungen zu alten Backups, Berichte"
     },
     "versionInfo": "Versionsinformationen",
     "app": "App:",
@@ -2243,6 +2245,46 @@
     "statsRefreshCompleted": "Statistikaktualisierung abgeschlossen",
     "failedToStartStatsRefresh": "Statistikaktualisierung konnte nicht gestartet werden"
   },
+  "monitoringReports": {
+    "title": "Monitoring & Berichte",
+    "subtitle": "Konfiguriere Warnungen zu alten Backups und geplante Berichte zur Backup-Gesundheit",
+    "saving": "Speichert...",
+    "savedSuccessfully": "Monitoring- und Berichtseinstellungen erfolgreich gespeichert",
+    "failedToSave": "Monitoring- und Berichtseinstellungen konnten nicht gespeichert werden",
+    "alertsTitle": "Warnungen zu alten Backups",
+    "alertsDescription": "Erkennt Repositories, deren neuestes Archiv alter als das konfigurierte Alter ist, und sendet Warnungen uber Apprise.",
+    "enableMonitoring": "Monitoring fur alte Backups aktivieren",
+    "staleAfterDays": "Alt nach (Tagen)",
+    "staleAfterHelper": "Warnen, wenn das neueste Archiv so viele Tage alt ist.",
+    "checkIntervalHours": "Prufintervall (Stunden)",
+    "checkIntervalHelper": "Wie oft Borg UI die Repository-Aktualitat pruft.",
+    "cooldownHours": "Warnungs-Cooldown (Stunden)",
+    "cooldownHelper": "Mindestzeit zwischen wiederholten Warnungen zu alten Backups.",
+    "includeObserveRepos": "Observe-only-Repositories einschliessen",
+    "runCheckNow": "Prufung jetzt ausfuhren",
+    "monitoringRunComplete": "Monitoring-Prufung abgeschlossen. Alte Repositories: {{count}}",
+    "failedToRun": "Backup-Monitoring konnte nicht ausgefuhrt werden",
+    "lastChecked": "Zuletzt gepruft:",
+    "lastAlert": "Letzte Warnung:",
+    "reportsTitle": "Backup-Berichte",
+    "reportsDescription": "Sende regelmassige Zusammenfassungen zur Backup-Aktualitat, alten Repositories und aktuellen Backup-Aktivitaten.",
+    "enableReports": "Backup-Berichte aktivieren",
+    "frequency": "Haufigkeit",
+    "frequencyDaily": "Taglich",
+    "frequencyWeekly": "Wochentlich",
+    "frequencyMonthly": "Monatlich",
+    "hourUtc": "Stunde (UTC)",
+    "weekday": "Wochentag",
+    "monthday": "Tag des Monats",
+    "reportContent": "Berichtsinhalt",
+    "summary": "Zusammenfassung",
+    "staleRepositories": "Alte Repositories",
+    "recentActivity": "Aktuelle Backup-Aktivitat",
+    "sendReportNow": "Bericht jetzt senden",
+    "reportSent": "Backup-Bericht fur {{count}} Repositories gesendet",
+    "failedToSend": "Backup-Bericht konnte nicht gesendet werden",
+    "lastReport": "Letzter Bericht:"
+  },
   "notifications": {
     "title": "Benachrichtigungsdienste",
     "subtitle": "Konfiguriere Benachrichtigungsdienste für Sicherungs- und Wiederherstellungswarnungen",
@@ -2347,6 +2389,10 @@
       "failure": "Fehler",
       "schedulerErrors": "Zeitplaner-Fehler",
       "schedulerErrorsHelper": "Benachrichtigt, wenn der Zeitplaner eine Sicherung nicht starten kann (z.B. Systemfehler). Reguläre Sicherungsfehler werden oben behandelt.",
+      "staleBackupAlerts": "Warnungen zu alten Backups",
+      "staleBackupAlertsHelper": "Benachrichtigt, wenn Borg UI Repositories ohne aktuelles Archiv erkennt.",
+      "backupReports": "Backup-Berichte",
+      "backupReportsHelper": "Erhalt geplante oder manuelle Berichte zur Backup-Gesundheit.",
       "applyToRepositories": "Auf Repositories anwenden",
       "allRepositories": "Alle Repositories",
       "selectedRepositoriesOnly": "Nur ausgewählte Repositories",
@@ -2377,7 +2423,9 @@
         "restore": "Restore",
         "restoreCheck": "Restore Check",
         "check": "Check",
-        "schedule": "Schedule"
+        "schedule": "Schedule",
+        "monitoring": "Monitoring",
+        "reports": "Reports"
       },
       "events": {
         "start": "Start",
@@ -2385,7 +2433,9 @@
         "warning": "Warnung",
         "failure": "Failure",
         "off": "Off",
-        "errors": "Errors"
+        "errors": "Errors",
+        "staleBackup": "Alte Backups",
+        "reports": "Berichte"
       },
       "actions": {
         "sendTest": "Send test notification",

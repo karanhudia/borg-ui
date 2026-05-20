@@ -1102,6 +1102,28 @@ class SystemSettings(Base):
     dashboard_observe_freshness_critical_days = Column(
         Integer, default=7, nullable=False
     )
+    backup_monitoring_enabled = Column(Boolean, default=False, nullable=False)
+    backup_monitoring_stale_after_days = Column(Integer, default=3, nullable=False)
+    backup_monitoring_interval_hours = Column(Integer, default=24, nullable=False)
+    backup_monitoring_alert_cooldown_hours = Column(Integer, default=24, nullable=False)
+    backup_monitoring_include_observe_repos = Column(
+        Boolean, default=True, nullable=False
+    )
+    backup_monitoring_last_checked_at = Column(DateTime, nullable=True)
+    backup_monitoring_last_alert_sent_at = Column(DateTime, nullable=True)
+    backup_reports_enabled = Column(Boolean, default=False, nullable=False)
+    backup_reports_frequency = Column(String, default="weekly", nullable=False)
+    backup_reports_hour_utc = Column(Integer, default=8, nullable=False)
+    backup_reports_weekday = Column(Integer, default=0, nullable=False)
+    backup_reports_monthday = Column(Integer, default=1, nullable=False)
+    backup_reports_include_summary = Column(Boolean, default=True, nullable=False)
+    backup_reports_include_stale_repositories = Column(
+        Boolean, default=True, nullable=False
+    )
+    backup_reports_include_recent_activity = Column(
+        Boolean, default=True, nullable=False
+    )
+    backup_reports_last_sent_at = Column(DateTime, nullable=True)
     email_notifications = Column(Boolean, default=False)
     webhook_url = Column(String, nullable=True)
     auto_cleanup = Column(Boolean, default=False)
@@ -1364,6 +1386,8 @@ class NotificationSettings(Base):
     notify_on_check_failure = Column(Boolean, default=True, nullable=False)
     notify_on_restore_check_success = Column(Boolean, default=False, nullable=False)
     notify_on_restore_check_failure = Column(Boolean, default=True, nullable=False)
+    notify_on_stale_backup = Column(Boolean, default=True, nullable=False)
+    notify_on_backup_report = Column(Boolean, default=True, nullable=False)
 
     # Repository filtering
     monitor_all_repositories = Column(

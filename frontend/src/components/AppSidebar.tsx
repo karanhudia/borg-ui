@@ -28,6 +28,7 @@ import {
   Sliders,
   Wifi,
   ListChecks,
+  Activity,
 } from 'lucide-react'
 import api, { settingsAPI, backupPlansAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -108,6 +109,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Appearance: t('navigation.settings.appearance'),
       Preferences: t('navigation.settings.preferences'),
       Notifications: t('navigation.settings.notifications'),
+      'Monitoring & Reports': t('navigation.settings.monitoringReports'),
       MQTT: t('navigation.settings.mqtt'),
       Cache: t('navigation.settings.cache'),
       Logs: t('navigation.settings.logs'),
@@ -228,6 +230,11 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
                       ? [{ name: 'Licensing', href: '/settings/licensing', icon: SettingsIcon }]
                       : []),
                     { name: 'System', href: '/settings/system', icon: SettingsIcon },
+                    {
+                      name: 'Monitoring & Reports',
+                      href: '/settings/monitoring',
+                      icon: Activity,
+                    },
                     ...(showMqttNav && canManageMqtt
                       ? [{ name: 'MQTT', href: '/settings/mqtt', icon: Wifi }]
                       : []),
@@ -302,6 +309,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
         setExpandedMenus((prev) => ({ ...prev, Personal: true }))
       } else if (
         path.includes('/system') ||
+        path.includes('/monitoring') ||
         path.includes('/mqtt') ||
         path.includes('/cache') ||
         path.includes('/logs') ||
