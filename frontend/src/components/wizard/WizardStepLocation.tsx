@@ -233,7 +233,15 @@ export default function WizardStepLocation({
         <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
           {t('wizard.location.executionTargetLabel')}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            p: 0.5,
+            m: -0.5,
+            flexDirection: { xs: 'column', sm: 'row' },
+          }}
+        >
           <Card
             variant="outlined"
             sx={{
@@ -244,6 +252,17 @@ export default function WizardStepLocation({
                 executionTarget === 'local'
                   ? (theme) => alpha(theme.palette.primary.main, 0.08)
                   : 'background.paper',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: executionTarget === 'local' ? 'translateY(-2px)' : 'none',
+              boxShadow:
+                executionTarget === 'local'
+                  ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+                  : 'none',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: (theme) => `0 2px 6px ${alpha(theme.palette.text.primary, 0.08)}`,
+                borderColor: executionTarget === 'local' ? 'primary.main' : 'text.primary',
+              },
             }}
           >
             <CardActionArea
@@ -289,6 +308,17 @@ export default function WizardStepLocation({
                 executionTarget === 'agent'
                   ? (theme) => alpha(theme.palette.primary.main, 0.08)
                   : 'background.paper',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: executionTarget === 'agent' ? 'translateY(-2px)' : 'none',
+              boxShadow:
+                executionTarget === 'agent'
+                  ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+                  : 'none',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: (theme) => `0 2px 6px ${alpha(theme.palette.text.primary, 0.08)}`,
+                borderColor: executionTarget === 'agent' ? 'primary.main' : 'text.primary',
+              },
             }}
           >
             <CardActionArea onClick={() => onChange({ executionTarget: 'agent' })} sx={{ p: 1 }}>
@@ -345,13 +375,13 @@ export default function WizardStepLocation({
                 {queueableAgents.map((agent) => (
                   <MenuItem key={agent.id} value={String(agent.id)}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <Laptop size={16} />
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2">{agent.hostname || agent.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {agent.status}
-                        </Typography>
-                      </Box>
+                      <Laptop size={16} style={{ flexShrink: 0, opacity: 0.7 }} />
+                      <Typography variant="body2" noWrap>
+                        {agent.hostname || agent.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        · {agent.status}
+                      </Typography>
                     </Box>
                   </MenuItem>
                 ))}
