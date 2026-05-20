@@ -130,7 +130,7 @@ export const MultiRepositorySelector: React.FC<MultiRepositorySelectorProps> = (
         )}
         sx={{
           '& .MuiAutocomplete-inputRoot': {
-            minHeight: size === 'medium' ? 56 : 40,
+            height: size === 'medium' ? 56 : 40,
           },
         }}
         ListboxProps={{

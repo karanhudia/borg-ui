@@ -687,7 +687,7 @@ export function SourceSelectionDialog({
         </Box>
 
         {sourceKind === 'remote' && hasRemoteOptions ? (
-          <FormControl fullWidth>
+          <FormControl fullWidth sx={{ '& .MuiInputBase-root': { height: 56 } }}>
             <InputLabel id="source-remote-machine-label">
               {t('backupPlans.sourceChooser.selectRemoteMachine')}
             </InputLabel>
@@ -696,6 +696,7 @@ export function SourceSelectionDialog({
               value={selectedRemoteIdNum || ''}
               label={t('backupPlans.sourceChooser.selectRemoteMachine')}
               onChange={(event) => setSelectedSourceKey(`remote:${Number(event.target.value)}`)}
+              sx={{ '& .MuiSelect-select': { display: 'flex', alignItems: 'center' } }}
             >
               {sshConnections.map((connection) => (
                 <MenuItem key={connection.id} value={connection.id}>
@@ -746,7 +747,7 @@ export function SourceSelectionDialog({
               alignItems: 'center',
               gap: 1,
               px: 1.5,
-              minHeight: 56,
+              height: 56,
             }}
           >
             <HardDrive size={14} />
@@ -1069,7 +1070,7 @@ export function SourceSelectionDialog({
           </Box>
           <Box sx={{ mt: 2.5 }}>
             {scanTarget.type === 'remote' && hasRemoteOptions ? (
-              <FormControl fullWidth>
+              <FormControl fullWidth sx={{ '& .MuiInputBase-root': { height: 56 } }}>
                 <InputLabel id="scan-remote-target-label">
                   {t('backupPlans.sourceChooser.selectRemoteMachine')}
                 </InputLabel>
@@ -1080,6 +1081,7 @@ export function SourceSelectionDialog({
                   onChange={(event) =>
                     setScanTarget({ type: 'remote', sshId: Number(event.target.value) })
                   }
+                  sx={{ '& .MuiSelect-select': { display: 'flex', alignItems: 'center' } }}
                 >
                   {sshConnections.map((connection) => (
                     <MenuItem key={connection.id} value={connection.id}>
@@ -1105,7 +1107,7 @@ export function SourceSelectionDialog({
                   alignItems: 'center',
                   gap: 1,
                   px: 1.5,
-                  minHeight: 56,
+                  height: 56,
                 }}
               >
                 <HardDrive size={14} />
@@ -1534,7 +1536,7 @@ export function SourceSelectionDialog({
       fullWidth
       PaperProps={{
         sx: {
-          height: { xs: 'auto', md: 'min(720px, calc(100vh - 64px))' },
+          height: { xs: 'auto', md: 'min(860px, calc(100vh - 64px))' },
           display: 'flex',
           flexDirection: 'column',
         },
