@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.database.models import (
+    AgentJob,
+    AgentMachine,
     BackupJob,
     BackupPlan,
     BackupPlanRepository,
@@ -26,6 +28,7 @@ from app.database.models import (
     SSHConnection,
     UserRepositoryPermission,
 )
+from app.core.security import get_password_hash
 from app.services.backup_plan_execution_service import backup_plan_execution_service
 
 
@@ -1542,6 +1545,84 @@ class TestBackupPlanRoutes:
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
+        test_db.refresh(run)
+        assert run.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_execute_plan_run_routes_agent_repository_through_agent_job(
+        self, test_db
+    ):
+        agent = AgentMachine(
+            name="Pi Agent",
+            agent_id="agt_pi",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = _create_repo(
+            test_db,
+            "Agent Repo",
+            "/repos/agent",
+            executor_type="agent",
+            execution_target="local",
+            agent_machine_id=agent.id,
+            source_directories=json.dumps(["/repo/default"]),
+            compression="zstd",
+        )
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            name="Agent Plan",
+            source_directories=json.dumps(["/srv/project"]),
+            exclude_patterns=json.dumps(["*.tmp"]),
+        )
+
+        async def fake_wait_for_agent_job(
+            db, agent_job_id, backup_job_id, is_cancelled
+        ):
+            assert not is_cancelled()
+            backup_job = db.query(BackupJob).filter_by(id=backup_job_id).one()
+            backup_job.status = "completed"
+            backup_job.completed_at = datetime.utcnow()
+            backup_job.progress = 100
+            db.commit()
+            return "completed"
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.backup_service.execute_backup",
+                new_callable=AsyncMock,
+            ) as execute_backup,
+            patch(
+                "app.services.backup_plan_execution_service.wait_for_agent_backup_job",
+                side_effect=fake_wait_for_agent_job,
+                create=True,
+            ) as wait_for_agent_job,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        execute_backup.assert_not_awaited()
+        wait_for_agent_job.assert_awaited_once()
+        backup_job = (
+            test_db.query(BackupJob)
+            .filter(
+                BackupJob.backup_plan_run_id == run.id,
+                BackupJob.repository_id == repo.id,
+            )
+            .one()
+        )
+        agent_job = (
+            test_db.query(AgentJob)
+            .filter(AgentJob.backup_job_id == backup_job.id)
+            .one()
+        )
+        assert backup_job.execution_mode == "agent"
+        assert agent_job.agent_machine_id == agent.id
+        assert agent_job.payload["backup"]["source_paths"] == ["/srv/project"]
+        assert agent_job.payload["backup"]["exclude_patterns"] == ["*.tmp"]
         test_db.refresh(run)
         assert run.status == "completed"
 

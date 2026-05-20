@@ -417,8 +417,58 @@ class TestRepositoriesCreate:
         initialize.assert_not_awaited()
         repo = test_db.query(Repository).filter_by(name="Agent Repo").first()
         assert repo.execution_target == "agent"
+        assert repo.executor_type == "agent"
         assert repo.agent_machine_id == agent.id
         assert repo.path == "/agent/repo"
+
+    def test_create_agent_repository_preserves_ssh_target_axis(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Pi Agent",
+            agent_id="agt_pi",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        connection = SSHConnection(host="pi.local", username="borg", port=22)
+        test_db.add_all([agent, connection])
+        test_db.commit()
+        test_db.refresh(agent)
+        test_db.refresh(connection)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Pi Agent SSH Repo",
+                    "path": "/backups/pi",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/pi"],
+                    "executor_type": "agent",
+                    "execution_target": "local",
+                    "agent_machine_id": agent.id,
+                    "connection_id": connection.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        initialize.assert_not_awaited()
+        repo = test_db.query(Repository).filter_by(name="Pi Agent SSH Repo").one()
+        assert repo.executor_type == "agent"
+        assert repo.execution_target == "agent"
+        assert repo.agent_machine_id == agent.id
+        assert repo.connection_id == connection.id
+        assert repo.repository_type == "ssh"
+        assert repo.path == "ssh://borg@pi.local:22/backups/pi"
 
     def test_create_repository_missing_name(
         self, test_client: TestClient, admin_headers

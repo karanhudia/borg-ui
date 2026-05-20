@@ -58,6 +58,20 @@ function canViewLogs(job?: BackupJob | null): job is BackupJob {
   return Boolean(job && job.status !== 'pending' && (job.has_logs || job.status === 'running'))
 }
 
+function getTransportLabel(
+  runRepository: BackupPlanRunRepository,
+  t: (key: string) => string
+): string | null {
+  const executionMode = runRepository.backup_job?.execution_mode
+  if (executionMode === 'agent' || runRepository.repository?.executor_type === 'agent') {
+    return t('backupPlans.runsDialog.transport.agent')
+  }
+  if (executionMode || runRepository.repository?.executor_type === 'server') {
+    return t('backupPlans.runsDialog.transport.server')
+  }
+  return null
+}
+
 export type BackupPlanRunLogJob =
   | BackupJob
   | {
@@ -125,6 +139,11 @@ function getPrimaryRepositoryPath(run: BackupPlanRun): string {
   return getRepositoryPath(firstRepository)
 }
 
+function getPrimaryTransportLabel(run: BackupPlanRun, t: (key: string) => string): string | null {
+  const firstRepository = run.repositories[0]
+  return firstRepository ? getTransportLabel(firstRepository, t) : null
+}
+
 function getCurrentFile(run: BackupPlanRun): string | null {
   return (
     run.repositories.find(
@@ -148,6 +167,7 @@ function RepositoryRunRow({
   const statusLabel = t(`backupPlans.statuses.${runRepository.status}`, {
     defaultValue: formatRunStatus(runRepository.status),
   })
+  const transportLabel = getTransportLabel(runRepository, t)
 
   return (
     <Box
@@ -174,6 +194,7 @@ function RepositoryRunRow({
           </Box>
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
             <Chip size="small" label={statusLabel} color={runStatusColor(runRepository.status)} />
+            {transportLabel && <Chip size="small" variant="outlined" label={transportLabel} />}
             {job && (
               <Typography variant="caption" color="text.secondary">
                 {t('backupPlans.runsDialog.jobNumber', { id: job.id })}
@@ -594,6 +615,14 @@ export default function BackupPlanRunsPanel({
             repositoryPath={getPrimaryRepositoryPath(run)}
             withIcon={false}
           />
+          {getPrimaryTransportLabel(run, t) && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={getPrimaryTransportLabel(run, t)}
+              sx={{ mt: 0.5 }}
+            />
+          )}
           <Typography variant="caption" color="text.secondary" component="div">
             {t('backupPlans.runsPanel.repositoryProgress', {
               completed: getFinishedCount(run),

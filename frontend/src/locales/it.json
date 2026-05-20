@@ -899,7 +899,11 @@
       "postPlanScript": "Script post-piano",
       "exitCode": "Codice di uscita {{code}}",
       "scriptDuration": "{{seconds}}s",
-      "viewLogs": "Visualizza log"
+      "viewLogs": "Visualizza log",
+      "transport": {
+        "server": "Server",
+        "agent": "Agente"
+      }
     },
     "runsPanel": {
       "title": "Esecuzioni piani di backup",
@@ -1968,6 +1972,10 @@
     "scheduledById": "Pianificato (ID: {{id}})",
     "backupPlanByName": "Piano di backup: {{name}}",
     "manual": "Manuale",
+    "transport": {
+      "server": "Server",
+      "agent": "Agente"
+    },
     "toasts": {
       "authRequired": "Autenticazione richiesta",
       "downloadingLogs": "Download log in corso...",
@@ -2946,6 +2954,7 @@
     "dataSource": {
       "title": "Dove si trovano i dati di cui vuoi fare il backup?",
       "localDescription": "Backup dei dati da questo server (filesystem locali o montati)",
+      "agentLocalDescription": "Esegui il backup dei percorsi dal filesystem dell'agente gestito selezionato",
       "agentSourceInfo": "I percorsi sorgente vengono risolti sull'agente gestito selezionato.",
       "removeRemoteDirsFirst": "Rimuovi prima le directory remote per cambiare",
       "remoteToRemoteDisabledTooltip": "I backup da remoto a remoto non sono supportati. Seleziona un repository locale o usa la stessa macchina remota.",
@@ -2980,7 +2989,7 @@
       "noActiveManagedAgents": "Nessun agente gestito attivo registrato.",
       "managedAgentFilesystem": "Filesystem dell'agente gestito",
       "managedAgentFilesystemDesc": "Archivia i backup sull'agente gestito selezionato",
-      "agentSshDisabledInfo": "I repository con agente gestito usano percorsi sull'agente selezionato. Configura l'accesso SSH sull'agente stesso se il percorso del repository Borg usa SSH.",
+      "agentSshDisabledInfo": "L'esecuzione agente può usare un repository SSH quando l'agente selezionato ha le credenziali SSH necessarie. Borg UI mantiene la connessione SSH per la configurazione e non proxyzza i dati di backup.",
       "whereToStore": "Dove devono essere archiviati i backup?",
       "borgUiServerDesc": "Archivia i backup sull'archiviazione locale di questo server",
       "remoteClientDesc": "Archivia i backup su una macchina remota via SSH",

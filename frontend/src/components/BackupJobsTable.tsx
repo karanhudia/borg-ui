@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Box, Typography, Chip, Tooltip } from '@mui/material'
+import { Box, Typography, Chip, Tooltip, Stack } from '@mui/material'
 import {
   Eye,
   Download,
@@ -130,6 +130,16 @@ const getTypeColor = (
     default:
       return 'default'
   }
+}
+
+const getTransportLabel = (
+  executionMode: string | null | undefined,
+  t: (key: string) => string
+) => {
+  if (!executionMode) return null
+  return executionMode === 'agent'
+    ? t('backupJobsTable.transport.agent')
+    : t('backupJobsTable.transport.server')
 }
 
 export const BackupJobsTable = <T extends Job = Job>({
@@ -465,7 +475,15 @@ export const BackupJobsTable = <T extends Job = Job>({
       label: t('backupJobsTable.columns.status'),
       align: 'left',
       width: '180px',
-      render: (job: T) => <StatusBadge status={job.status} />,
+      render: (job: T) => {
+        const transportLabel = getTransportLabel(job.execution_mode, t)
+        return (
+          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+            <StatusBadge status={job.status} />
+            {transportLabel && <Chip size="small" variant="outlined" label={transportLabel} />}
+          </Stack>
+        )
+      },
     },
     {
       id: 'started_at',

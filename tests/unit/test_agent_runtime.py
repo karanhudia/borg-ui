@@ -131,6 +131,26 @@ def test_agent_client_register_and_authenticated_request_headers():
 
 
 @pytest.mark.unit
+def test_agent_client_retries_transient_report_failure():
+    session = FakeSession(
+        [
+            FakeResponse({"error": "busy"}, status_code=503, text="busy"),
+            FakeResponse({"id": 7, "status": "completed"}),
+        ]
+    )
+    client = AgentClient(
+        "https://borgui.example.com/",
+        agent_token="borgui_agent_secret",
+        session=session,
+    )
+
+    response = client.complete_job(7, result={"archive_name": "archive"})
+
+    assert response == {"id": 7, "status": "completed"}
+    assert [request["method"] for request in session.requests] == ["POST", "POST"]
+
+
+@pytest.mark.unit
 def test_backup_create_payload_builds_borg1_command():
     payload = BackupCreatePayload.from_job_payload(
         {
@@ -355,6 +375,40 @@ def test_runtime_run_once_dispatches_backup_create(monkeypatch):
     ]
 
 
+@pytest.mark.unit
+def test_runtime_run_once_dispatches_registered_structured_handler(monkeypatch):
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.runtime.detect_platform",
+        lambda: {"hostname": "host", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.runtime.detect_borg_binaries", lambda: [])
+
+    handled_jobs = []
+
+    def fake_handler(job, client, *, should_cancel=None):
+        handled_jobs.append((job, client, should_cancel))
+        return SimpleNamespace(job_id=44, status="completed", message="info complete")
+
+    import agent.borg_ui_agent.runtime as runtime_module
+
+    monkeypatch.setitem(runtime_module.JOB_HANDLERS, "repository.info", fake_handler)
+    client = FakeRuntimeClient(
+        [{"id": 44, "type": "repository", "payload": {"job_kind": "repository.info"}}]
+    )
+    runtime = AgentRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        client=client,
+    )
+
+    result = runtime.run_once()
+
+    assert result.job_id == 44
+    assert result.status == "completed"
+    assert handled_jobs[0][0]["id"] == 44
+    assert handled_jobs[0][1] is client
+    assert callable(handled_jobs[0][2])
+
+
 class FakeStdout:
     def __init__(self, lines):
         self.lines = lines
@@ -401,9 +455,16 @@ class BackupClient:
 def test_execute_backup_create_job_completes_successfully(monkeypatch):
     popen_calls = []
 
-    def fake_popen(cmd, stdout, stderr, text, env):
+    def fake_popen(cmd, stdout, stderr, text, env, **kwargs):
         popen_calls.append(
-            {"cmd": cmd, "stdout": stdout, "stderr": stderr, "text": text, "env": env}
+            {
+                "cmd": cmd,
+                "stdout": stdout,
+                "stderr": stderr,
+                "text": text,
+                "env": env,
+                "kwargs": kwargs,
+            }
         )
         return FakeProcess(
             [
@@ -434,6 +495,7 @@ def test_execute_backup_create_job_completes_successfully(monkeypatch):
     assert result.status == "completed"
     assert popen_calls[0]["cmd"][-2:] == ["/repo::archive", "/src"]
     assert popen_calls[0]["env"]["BORG_PASSPHRASE"] == "secret"
+    assert popen_calls[0]["kwargs"]["start_new_session"] is True
     assert any(call[0] == "send_progress" for call in client.calls)
     complete_call = [call for call in client.calls if call[0] == "complete_job"][0]
     assert complete_call[2]["archive_name"] == "archive"
@@ -524,6 +586,7 @@ def test_execute_backup_create_job_reports_spawn_failure(monkeypatch):
 class CancelableProcess(FakeProcess):
     def __init__(self, lines, return_code):
         super().__init__(lines, return_code)
+        self.pid = 4321
         self.terminated = False
 
     def terminate(self):
@@ -539,10 +602,16 @@ class CancelableProcess(FakeProcess):
 @pytest.mark.unit
 def test_execute_backup_create_job_cancels_running_process(monkeypatch):
     process = CancelableProcess(["first line\n", "second line\n"], -15)
+    killed_groups = []
 
     monkeypatch.setattr(
         "agent.borg_ui_agent.backup.subprocess.Popen",
         lambda *args, **kwargs: process,
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.backup.os.getpgid", lambda pid: 9876)
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.backup.os.killpg",
+        lambda pgid, sig: killed_groups.append((pgid, sig)),
     )
     client = BackupClient()
 
@@ -562,7 +631,8 @@ def test_execute_backup_create_job_cancels_running_process(monkeypatch):
 
     assert result.status == "canceled"
     assert result.return_code == -15
-    assert process.terminated is True
+    assert killed_groups
+    assert killed_groups[0][0] == 9876
     assert ("cancel_job", 11) in client.calls
 
 

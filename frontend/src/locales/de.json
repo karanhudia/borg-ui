@@ -899,7 +899,11 @@
       "postPlanScript": "Nach-Plan-Skript",
       "exitCode": "Exit-Code {{code}}",
       "scriptDuration": "{{seconds}}s",
-      "viewLogs": "Protokolle anzeigen"
+      "viewLogs": "Protokolle anzeigen",
+      "transport": {
+        "server": "Server",
+        "agent": "Agent"
+      }
     },
     "runsPanel": {
       "title": "Backup-Plan-Läufe",
@@ -1968,6 +1972,10 @@
     "scheduledById": "Geplant (ID: {{id}})",
     "backupPlanByName": "Backup-Plan: {{name}}",
     "manual": "Manuell",
+    "transport": {
+      "server": "Server",
+      "agent": "Agent"
+    },
     "toasts": {
       "authRequired": "Authentifizierung erforderlich",
       "downloadingLogs": "Protokolle werden heruntergeladen...",
@@ -2946,6 +2954,7 @@
     "dataSource": {
       "title": "Wo befinden sich die Daten, die du sichern möchtest?",
       "localDescription": "Daten von diesem Server sichern (lokale oder eingehängte Dateisysteme)",
+      "agentLocalDescription": "Pfade aus dem Dateisystem des ausgewählten verwalteten Agenten sichern",
       "agentSourceInfo": "Quellpfade werden auf dem ausgewählten verwalteten Agenten aufgelöst.",
       "removeRemoteDirsFirst": "Zuerst Remote-Verzeichnisse entfernen, um zu wechseln",
       "remoteToRemoteDisabledTooltip": "Remote-zu-Remote-Sicherungen werden nicht unterstützt. Wähle ein lokales Repository oder verwende dieselbe Remote-Maschine.",
@@ -2980,7 +2989,7 @@
       "noActiveManagedAgents": "Keine aktiven verwalteten Agenten registriert.",
       "managedAgentFilesystem": "Dateisystem des verwalteten Agenten",
       "managedAgentFilesystemDesc": "Backups auf dem ausgewählten verwalteten Agenten speichern",
-      "agentSshDisabledInfo": "Repositories mit verwaltetem Agenten verwenden Pfade auf dem ausgewählten Agenten. Konfiguriere den SSH-Zugriff auf dem Agenten selbst, wenn der Borg-Repository-Pfad SSH verwendet.",
+      "agentSshDisabledInfo": "Agent-Ausführung kann ein SSH-Repository verwenden, wenn der ausgewählte Agent die nötigen SSH-Zugangsdaten hat. Borg UI behält die SSH-Verbindung für die Konfiguration und leitet keine Backup-Daten weiter.",
       "whereToStore": "Wo sollen Sicherungen gespeichert werden?",
       "borgUiServerDesc": "Sicherungen im lokalen Speicher dieses Servers ablegen",
       "remoteClientDesc": "Sicherungen auf einer Remote-Maschine über SSH ablegen",

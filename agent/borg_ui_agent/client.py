@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Optional
 
 import requests
@@ -21,11 +22,15 @@ class AgentClient:
         *,
         session: Optional[requests.Session] = None,
         timeout_seconds: int = 30,
+        max_report_attempts: int = 3,
+        retry_backoff_seconds: float = 0.1,
     ):
         self.server_url = server_url.rstrip("/")
         self.agent_token = agent_token
         self.session = session or requests.Session()
         self.timeout_seconds = timeout_seconds
+        self.max_report_attempts = max(1, max_report_attempts)
+        self.retry_backoff_seconds = max(0.0, retry_backoff_seconds)
 
     @classmethod
     def from_config(
@@ -34,12 +39,16 @@ class AgentClient:
         *,
         session: Optional[requests.Session] = None,
         timeout_seconds: int = 30,
+        max_report_attempts: int = 3,
+        retry_backoff_seconds: float = 0.1,
     ) -> "AgentClient":
         return cls(
             config.server_url,
             agent_token=config.agent_token,
             session=session,
             timeout_seconds=timeout_seconds,
+            max_report_attempts=max_report_attempts,
+            retry_backoff_seconds=retry_backoff_seconds,
         )
 
     def register(
@@ -159,13 +168,30 @@ class AgentClient:
                 raise AgentClientError("Agent token is required for this request")
             headers[AGENT_AUTH_HEADER] = f"Bearer {self.agent_token}"
 
-        response = self.session.request(
-            method,
-            f"{self.server_url}{path}",
-            headers=headers,
-            json=json,
-            timeout=self.timeout_seconds,
-        )
+        last_error: Optional[BaseException] = None
+        response: Optional[requests.Response] = None
+        for attempt in range(self.max_report_attempts):
+            try:
+                response = self.session.request(
+                    method,
+                    f"{self.server_url}{path}",
+                    headers=headers,
+                    json=json,
+                    timeout=self.timeout_seconds,
+                )
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt < self.max_report_attempts - 1:
+                    time.sleep(self.retry_backoff_seconds)
+                    continue
+                raise AgentClientError(f"{method} {path} failed: {exc}") from exc
+
+            if response.status_code < 500 or attempt == self.max_report_attempts - 1:
+                break
+            time.sleep(self.retry_backoff_seconds)
+
+        if response is None:
+            raise AgentClientError(f"{method} {path} failed: {last_error}")
         if response.status_code >= 400:
             raise AgentClientError(
                 f"{method} {path} failed with HTTP {response.status_code}: {response.text}"

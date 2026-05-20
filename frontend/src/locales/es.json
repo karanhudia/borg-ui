@@ -899,7 +899,11 @@
       "postPlanScript": "Script posterior del plan",
       "exitCode": "Código de salida {{code}}",
       "scriptDuration": "{{seconds}}s",
-      "viewLogs": "Ver registros"
+      "viewLogs": "Ver registros",
+      "transport": {
+        "server": "Servidor",
+        "agent": "Agente"
+      }
     },
     "runsPanel": {
       "title": "Ejecuciones de planes de copia",
@@ -1968,6 +1972,10 @@
     "scheduledById": "Programado (ID: {{id}})",
     "backupPlanByName": "Plan de copia: {{name}}",
     "manual": "Manual",
+    "transport": {
+      "server": "Servidor",
+      "agent": "Agente"
+    },
     "toasts": {
       "authRequired": "Autenticación requerida",
       "downloadingLogs": "Descargando registros...",
@@ -2946,6 +2954,7 @@
     "dataSource": {
       "title": "¿Dónde están los datos que deseas respaldar?",
       "localDescription": "Respaldar datos de este servidor (sistemas de archivos locales o montados)",
+      "agentLocalDescription": "Respaldar rutas del sistema de archivos del agente gestionado seleccionado",
       "agentSourceInfo": "Las rutas de origen se resuelven en el agente gestionado seleccionado.",
       "removeRemoteDirsFirst": "Elimina los directorios remotos primero para cambiar",
       "remoteToRemoteDisabledTooltip": "Las copias de seguridad remotas a remotas no son compatibles. Selecciona un repositorio local o usa la misma máquina remota.",
@@ -2980,7 +2989,7 @@
       "noActiveManagedAgents": "No hay agentes gestionados activos inscritos.",
       "managedAgentFilesystem": "Sistema de archivos del agente gestionado",
       "managedAgentFilesystemDesc": "Almacenar copias de seguridad en el agente gestionado seleccionado",
-      "agentSshDisabledInfo": "Los repositorios con agente gestionado usan rutas del agente seleccionado. Configura el acceso SSH en el propio agente si la ruta del repositorio Borg usa SSH.",
+      "agentSshDisabledInfo": "La ejecución con agente puede usar un repositorio SSH cuando el agente seleccionado tiene las credenciales SSH necesarias. Borg UI conserva la conexión SSH para configuración y no redirige datos de backup.",
       "whereToStore": "¿Dónde deben almacenarse las copias de seguridad?",
       "borgUiServerDesc": "Almacenar copias de seguridad en el almacenamiento local de este servidor",
       "remoteClientDesc": "Almacenar copias de seguridad en una máquina remota mediante SSH",

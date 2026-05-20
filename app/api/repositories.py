@@ -50,6 +50,11 @@ from app.services.repository_wipe_service import (
     WipeValidationError,
     repository_wipe_service,
 )
+from app.services.repository_executor import (
+    legacy_execution_target,
+    normalize_executor_type,
+    repository_executor_type,
+)
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
@@ -784,6 +789,7 @@ class RepositoryCreate(BaseModel):
         None  # SSH connection ID for remote data source (pull-based backups)
     )
     execution_target: str = "local"  # local, ssh, agent
+    executor_type: Optional[str] = None  # server, agent
     agent_machine_id: Optional[int] = None  # Agent that executes backups
 
 
@@ -826,6 +832,7 @@ class RepositoryImport(BaseModel):
         None  # Content of borg keyfile for keyfile/keyfile-blake2 encryption
     )
     execution_target: str = "local"  # local, ssh, agent
+    executor_type: Optional[str] = None  # server, agent
     agent_machine_id: Optional[int] = None  # Agent that executes backups
 
 
@@ -858,6 +865,7 @@ class RepositoryUpdate(BaseModel):
         None  # SSH connection ID for remote data source
     )
     execution_target: Optional[str] = None  # local, ssh, agent
+    executor_type: Optional[str] = None  # server, agent
     agent_machine_id: Optional[int] = None  # Agent that executes backups
 
 
@@ -904,6 +912,42 @@ def _normalize_execution_target(value: Optional[str]) -> str:
             detail={"key": "backend.errors.repo.invalidExecutionTarget"},
         )
     return execution_target
+
+
+def _normalize_repository_executor(
+    repo_data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
+) -> str:
+    return normalize_executor_type(
+        getattr(repo_data, "executor_type", None),
+        execution_target=getattr(repo_data, "execution_target", None),
+    )
+
+
+def _strip_ssh_url_path(path: str) -> str:
+    if not path.startswith("ssh://"):
+        return path
+
+    import re
+
+    match = re.match(r"ssh://[^/]+(/.*)", path)
+    if match:
+        return match.group(1)
+    return path.split("/", 3)[-1] if "/" in path else path
+
+
+def _build_repository_path_from_connection(
+    raw_path: str, connection_id: int, db: Session
+) -> str:
+    connection_details = get_connection_details(connection_id, db)
+    repo_path = _strip_ssh_url_path(raw_path)
+    ssh_path_prefix = connection_details.get("ssh_path_prefix")
+    if ssh_path_prefix:
+        repo_path = apply_ssh_command_prefix(repo_path, ssh_path_prefix)
+    return (
+        f"ssh://{connection_details['username']}@"
+        f"{connection_details['host']}:{connection_details['port']}/"
+        f"{repo_path.lstrip('/')}"
+    )
 
 
 def _require_queueable_agent(
@@ -974,6 +1018,10 @@ def _create_agent_repository_record(
             status_code=400,
             detail={"key": "backend.errors.repo.pathRequired"},
         )
+    if repo_data.connection_id:
+        repo_path = _build_repository_path_from_connection(
+            repo_path, repo_data.connection_id, db
+        )
 
     if db.query(Repository).filter(Repository.name == repo_data.name).first():
         raise HTTPException(
@@ -987,11 +1035,19 @@ def _create_agent_repository_record(
             detail={"key": "backend.errors.repo.repositoryPathExists"},
         )
 
-    source_directories_json = (
-        json.dumps(repo_data.source_directories)
-        if repo_data.source_directories
-        else None
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
     )
+    source_directories_json = (
+        json.dumps(source_directories) if source_directories else None
+    )
+    source_locations_json = json.dumps(source_locations) if source_locations else None
     exclude_patterns_json = (
         json.dumps(repo_data.exclude_patterns) if repo_data.exclude_patterns else None
     )
@@ -1008,6 +1064,7 @@ def _create_agent_repository_record(
         remote_path=repo_data.remote_path,
         repository_type="ssh" if repo_path.startswith("ssh://") else "local",
         execution_target="agent",
+        executor_type="agent",
         agent_machine_id=agent.id,
         pre_backup_script=repo_data.pre_backup_script,
         post_backup_script=repo_data.post_backup_script,
@@ -1019,7 +1076,8 @@ def _create_agent_repository_record(
         mode=repo_data.mode,
         bypass_lock=repo_data.bypass_lock,
         custom_flags=repo_data.custom_flags,
-        source_ssh_connection_id=None,
+        source_ssh_connection_id=source_connection_id,
+        source_locations=source_locations_json,
         borg_version=repo_data.borg_version or 1,
     )
     db.add(repository)
@@ -1056,6 +1114,7 @@ def _create_agent_repository_record(
             "encryption": repository.encryption,
             "compression": repository.compression,
             "execution_target": repository.execution_target,
+            "executor_type": repository.executor_type,
             "agent_machine_id": repository.agent_machine_id,
         },
     }
@@ -1129,6 +1188,7 @@ async def get_repositories(
                     "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
                     "repository_type": repo.repository_type,
                     "execution_target": repo.execution_target or "local",
+                    "executor_type": repository_executor_type(repo),
                     "agent_machine_id": repo.agent_machine_id,
                     "host": repo.host,
                     "port": repo.port,
@@ -1184,8 +1244,9 @@ async def create_repository(
 ):
     """Create a new repository"""
     try:
+        executor_type = _normalize_repository_executor(repo_data)
         if _uses_borg2_payload(repo_data):
-            if _normalize_execution_target(repo_data.execution_target) == "agent":
+            if executor_type == "agent":
                 return _create_agent_repository_record(
                     repo_data, current_user, db, imported=False
                 )
@@ -1198,7 +1259,7 @@ async def create_repository(
             v2_payload = RepositoryV2Create(**repo_data.model_dump(exclude_none=True))
             return await create_repository_v2(v2_payload, current_user, db)
 
-        if _normalize_execution_target(repo_data.execution_target) == "agent":
+        if executor_type == "agent":
             return _create_agent_repository_record(
                 repo_data, current_user, db, imported=False
             )
@@ -1462,7 +1523,11 @@ async def create_repository(
             custom_flags=repo_data.custom_flags,
             source_ssh_connection_id=source_connection_id,
             source_locations=source_locations_json,
-            execution_target=_normalize_execution_target(repo_data.execution_target),
+            execution_target=legacy_execution_target(
+                executor_type="server",
+                repository_location="ssh" if repo_data.connection_id else "local",
+            ),
+            executor_type="server",
             agent_machine_id=None,
         )
 
@@ -1516,6 +1581,9 @@ async def create_repository(
                 "path": repository.path,
                 "encryption": repository.encryption,
                 "compression": repository.compression,
+                "execution_target": repository.execution_target,
+                "executor_type": repository.executor_type,
+                "agent_machine_id": repository.agent_machine_id,
             },
         }
     except HTTPException:
@@ -1536,8 +1604,9 @@ async def import_repository(
 ):
     """Import an existing Borg repository"""
     try:
+        executor_type = _normalize_repository_executor(repo_data)
         if _uses_borg2_payload(repo_data):
-            if _normalize_execution_target(repo_data.execution_target) == "agent":
+            if executor_type == "agent":
                 return _create_agent_repository_record(
                     repo_data, current_user, db, imported=True
                 )
@@ -1550,7 +1619,7 @@ async def import_repository(
             v2_payload = RepositoryV2Import(**repo_data.model_dump(exclude_none=True))
             return await import_repository_v2(v2_payload, current_user, db)
 
-        if _normalize_execution_target(repo_data.execution_target) == "agent":
+        if executor_type == "agent":
             return _create_agent_repository_record(
                 repo_data, current_user, db, imported=True
             )
@@ -1774,7 +1843,11 @@ async def import_repository(
             custom_flags=repo_data.custom_flags,
             source_ssh_connection_id=source_connection_id,
             source_locations=source_locations_json,
-            execution_target=_normalize_execution_target(repo_data.execution_target),
+            execution_target=legacy_execution_target(
+                executor_type="server",
+                repository_location="ssh" if repo_data.connection_id else "local",
+            ),
+            executor_type="server",
             agent_machine_id=None,
         )
 
@@ -1829,6 +1902,9 @@ async def import_repository(
                 "encryption": repository.encryption,
                 "compression": repository.compression,
                 "archive_count": repository.archive_count,
+                "execution_target": repository.execution_target,
+                "executor_type": repository.executor_type,
+                "agent_machine_id": repository.agent_machine_id,
             },
         }
     except HTTPException:
@@ -2011,6 +2087,7 @@ async def get_repository(
                 "encryption": repository.encryption,
                 "compression": repository.compression,
                 "execution_target": repository.execution_target or "local",
+                "executor_type": repository_executor_type(repository),
                 "agent_machine_id": repository.agent_machine_id,
                 "last_backup": format_datetime(repository.last_backup),
                 "total_size": repository.total_size,
@@ -2351,19 +2428,45 @@ async def update_repository(
         if repo_data.custom_flags is not None:
             repository.custom_flags = repo_data.custom_flags
 
-        if repo_data.execution_target is not None:
-            execution_target = _normalize_execution_target(repo_data.execution_target)
-            if execution_target == "agent":
-                agent = _require_queueable_agent(repo_data.agent_machine_id, db)
+        executor_changed = (
+            "executor_type" in update_data or repo_data.execution_target is not None
+        )
+        if executor_changed:
+            executor_type = normalize_executor_type(
+                repo_data.executor_type if "executor_type" in update_data else None,
+                execution_target=repo_data.execution_target
+                if repo_data.execution_target is not None
+                else repository.execution_target,
+            )
+            if executor_type == "agent":
+                requested_agent_id = (
+                    repo_data.agent_machine_id
+                    if "agent_machine_id" in update_data
+                    else repository.agent_machine_id
+                )
+                agent = _require_queueable_agent(requested_agent_id, db)
+                repository.executor_type = "agent"
                 repository.execution_target = "agent"
                 repository.agent_machine_id = agent.id
-                repository.source_ssh_connection_id = None
             else:
-                repository.execution_target = execution_target
+                repository.executor_type = "server"
+                repository.execution_target = legacy_execution_target(
+                    executor_type="server",
+                    repository_location="ssh" if repository.connection_id else "local",
+                )
                 repository.agent_machine_id = None
 
-        elif "agent_machine_id" in repo_data.model_dump(exclude_unset=True):
-            if (repository.execution_target or "local") != "agent":
+        elif (
+            "connection_id" in update_data
+            and repository_executor_type(repository) == "server"
+        ):
+            repository.execution_target = legacy_execution_target(
+                executor_type="server",
+                repository_location="ssh" if repository.connection_id else "local",
+            )
+
+        elif "agent_machine_id" in update_data:
+            if repository_executor_type(repository) != "agent":
                 raise HTTPException(
                     status_code=400,
                     detail={"key": "backend.errors.repo.invalidExecutionTarget"},

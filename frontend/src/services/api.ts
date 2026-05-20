@@ -69,6 +69,7 @@ export interface RepositoryData {
   exclude_patterns?: string[]
   repository_type?: string
   execution_target?: 'local' | 'ssh' | 'agent'
+  executor_type?: 'server' | 'agent'
   agent_machine_id?: number | null
   host?: string
   port?: number

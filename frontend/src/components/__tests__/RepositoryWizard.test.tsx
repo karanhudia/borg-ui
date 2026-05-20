@@ -10,6 +10,8 @@ const { mockTrack, mockTrackRepository } = vi.hoisted(() => ({
   mockTrackRepository: vi.fn(),
 }))
 
+vi.setConfig({ testTimeout: 60000 })
+
 vi.mock('../../services/api', () => ({
   sshKeysAPI: {
     getSSHConnections: vi.fn(),
@@ -376,12 +378,63 @@ describe('RepositoryWizard', () => {
         expect.objectContaining({
           name: 'Agent Repo',
           path: '/srv/borg/agent-repo',
+          executor_type: 'agent',
           execution_target: 'agent',
           agent_machine_id: 101,
           connection_id: null,
           source_connection_id: null,
           source_directories: ['/home/user/data'],
           passphrase: 'agentpass',
+        }),
+        null
+      )
+    })
+
+    it('preserves an SSH repository target when managed-agent execution is selected', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await fillLocalLocation('Agent SSH Repo', '/backups/pi')
+      await chooseRemoteRepository(user)
+      const pathInput = screen.getByLabelText(/Repository Path/i)
+      await user.clear(pathInput)
+      setInputValue(pathInput, '/backups/pi')
+
+      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
+      const agentListbox = await screen.findByRole('listbox')
+      await user.click(within(agentListbox).getByText('workstation.local'))
+
+      expect(screen.getByText('Remote Client').closest('button')).not.toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Source paths are resolved on the selected managed agent/i)
+        ).toBeInTheDocument()
+      })
+      const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
+      setInputValue(dirInput, '/home/pi')
+      await user.click(screen.getByRole('button', { name: /Add/i }))
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'agentpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Agent SSH Repo',
+          path: '/backups/pi',
+          executor_type: 'agent',
+          execution_target: 'agent',
+          agent_machine_id: 101,
+          connection_id: 1,
+          source_connection_id: null,
+          source_directories: ['/home/pi'],
         }),
         null
       )

@@ -137,6 +137,22 @@ describe('BackupJobsTable', () => {
       expect(screen.getByText('Started')).toBeInTheDocument()
       expect(screen.getByText('Duration')).toBeInTheDocument()
     })
+
+    it('displays managed-agent transport for agent backup jobs', () => {
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={[
+            {
+              ...mockJobs[0],
+              id: 44,
+              execution_mode: 'agent',
+            } as MockBackupJob & { execution_mode: 'agent' },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('Agent')).toBeInTheDocument()
+    })
   })
 
   describe('Empty State', () => {

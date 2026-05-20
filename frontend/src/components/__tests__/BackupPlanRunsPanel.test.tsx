@@ -199,4 +199,41 @@ describe('BackupPlanRunsPanel', () => {
 
     expect(onViewLogs).toHaveBeenCalledWith(expect.objectContaining({ id: 52 }))
   })
+
+  it('shows transport context on repository rows', () => {
+    const run = {
+      id: 15,
+      backup_plan_id: 3,
+      trigger: 'manual',
+      status: 'completed',
+      started_at: '2026-05-11T10:00:00Z',
+      completed_at: '2026-05-11T10:01:00Z',
+      repositories: [
+        {
+          id: 94,
+          repository_id: 10,
+          status: 'completed',
+          repository: {
+            id: 10,
+            name: 'Agent Repo',
+            path: '/repos/agent',
+            executor_type: 'agent',
+          },
+          backup_job: {
+            id: 53,
+            repository: '/repos/agent',
+            repository_id: 10,
+            status: 'completed',
+            execution_mode: 'agent',
+          },
+        },
+      ],
+    } satisfies BackupPlanRun
+
+    render(
+      <BackupPlanRunsPanel runs={[run]} plans={[plan]} onCancel={vi.fn()} onViewLogs={vi.fn()} />
+    )
+
+    expect(screen.getByText('Agent')).toBeInTheDocument()
+  })
 })

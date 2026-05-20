@@ -13,6 +13,7 @@ export interface Repository {
   path: string
   repository_type?: 'local' | 'ssh' | 'sftp'
   execution_target?: 'local' | 'ssh' | 'agent'
+  executor_type?: 'server' | 'agent'
   agent_machine_id?: number | null
   has_running_maintenance?: boolean
   borg_version?: number
@@ -83,6 +84,7 @@ export interface BackupJob {
   backup_plan_run_id?: number | null
   backup_plan_name?: string | null
   archive_name?: string | null
+  execution_mode?: 'local' | 'remote_ssh' | 'agent' | string
   progress_details?: {
     original_size: number
     compressed_size?: number

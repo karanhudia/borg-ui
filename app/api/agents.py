@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -24,6 +24,8 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
 DEFAULT_AGENT_POLL_INTERVAL_SECONDS = 15
+FINAL_AGENT_JOB_STATUSES = {"completed", "failed", "canceled"}
+STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=15)
 
 
 def _now_utc() -> datetime:
@@ -196,11 +198,61 @@ def _get_agent_job(job_id: int, current_agent: AgentMachine, db: Session) -> Age
 
 
 def _reject_final_job(job: AgentJob) -> None:
-    if job.status in ("completed", "failed", "canceled"):
+    if job.status in FINAL_AGENT_JOB_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.jobAlreadyFinished"},
         )
+
+
+def _job_activity_at(job: AgentJob) -> datetime:
+    for value in (job.updated_at, job.started_at, job.claimed_at, job.created_at):
+        if value is not None:
+            return _as_utc(value)
+    return _now_utc()
+
+
+def _is_terminal_backup_status(status_value: Optional[str]) -> bool:
+    return status_value in {
+        "completed",
+        "completed_with_warnings",
+        "failed",
+        "cancelled",
+    }
+
+
+def _requeue_stale_agent_jobs(
+    db: Session,
+    current_agent: AgentMachine,
+    *,
+    now: datetime,
+    running_job_ids: list[int],
+) -> None:
+    running_ids = set(running_job_ids)
+    stale_cutoff = now - STALE_AGENT_JOB_REQUEUE_AFTER
+    jobs = (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.agent_machine_id == current_agent.id,
+            AgentJob.status.in_(("claimed", "running", "cancel_requested")),
+        )
+        .all()
+    )
+    for job in jobs:
+        if job.id in running_ids:
+            continue
+        if _job_activity_at(job) > stale_cutoff:
+            continue
+
+        job.status = "queued"
+        job.claimed_at = None
+        job.started_at = None
+        job.updated_at = now
+
+        backup_job = _get_linked_backup_job(job, db)
+        if backup_job and not _is_terminal_backup_status(backup_job.status):
+            backup_job.status = "pending"
+            backup_job.error_message = None
 
 
 def _normalize_agent_timestamp(value: Optional[datetime]) -> datetime:
@@ -351,6 +403,12 @@ async def heartbeat(
     current_agent.status = "online"
     current_agent.last_seen_at = now
     current_agent.updated_at = now
+    _requeue_stale_agent_jobs(
+        db,
+        current_agent,
+        now=now,
+        running_job_ids=payload.running_job_ids,
+    )
     db.commit()
 
     cancel_job_ids = (
@@ -525,7 +583,8 @@ async def complete_job(
     db: Session = Depends(get_db),
 ):
     job = _get_agent_job(job_id, current_agent, db)
-    _reject_final_job(job)
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        return AgentJobStatusResponse(id=job.id, status=job.status)
 
     now = _now_utc()
     job.status = "completed"
@@ -552,7 +611,8 @@ async def fail_job(
     db: Session = Depends(get_db),
 ):
     job = _get_agent_job(job_id, current_agent, db)
-    _reject_final_job(job)
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        return AgentJobStatusResponse(id=job.id, status=job.status)
 
     result = {}
     if payload.return_code is not None:
@@ -584,7 +644,8 @@ async def mark_job_canceled(
     db: Session = Depends(get_db),
 ):
     job = _get_agent_job(job_id, current_agent, db)
-    _reject_final_job(job)
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        return AgentJobStatusResponse(id=job.id, status=job.status)
 
     now = _now_utc()
     job.status = "canceled"

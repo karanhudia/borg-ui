@@ -33,6 +33,12 @@ from app.database.models import (
 )
 from app.services.backup_service import backup_service
 from app.services.backup_plan_policy import evaluate_backup_plan_access
+from app.services.repository_executor import (
+    cancel_agent_backup_job,
+    is_agent_executor,
+    queue_agent_backup_job,
+    wait_for_agent_backup_job,
+)
 from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.utils.archive_names import build_archive_name
@@ -243,7 +249,10 @@ class BackupPlanExecutionService:
                 continue
 
             job = child.backup_job
-            if job and job.status == "running":
+            if job and job.execution_mode == "agent":
+                cancel_agent_backup_job(db, job, now=now)
+                cancelled_backup_jobs += 1
+            elif job and job.status == "running":
                 process_killed = await backup_service.cancel_backup(job.id)
                 if process_killed:
                     processes_terminated += 1
@@ -805,27 +814,47 @@ class BackupPlanExecutionService:
                 stable_series=getattr(repo, "borg_version", 1) == 2,
             )
 
-            await backup_service.execute_backup(
-                backup_job.id,
-                repo.path,
-                db,
-                archive_name=archive_name,
-                skip_hooks=not context.run_repository_scripts,
-                source_directories=context.source_directories,
-                source_ssh_connection_id=(
-                    context.source_ssh_connection_id
-                    if context.source_type == "remote"
-                    else None
-                ),
-                source_locations=context.source_locations,
-                exclude_patterns_override=context.exclude_patterns,
-                compression_override=repository_context.compression,
-                custom_flags_override=repository_context.custom_flags,
-                upload_ratelimit_kib=repository_context.upload_ratelimit_kib,
-            )
+            if is_agent_executor(repo):
+                agent_job = queue_agent_backup_job(
+                    db,
+                    backup_job,
+                    repo,
+                    archive_name=archive_name,
+                    source_directories=context.source_directories,
+                    source_locations=context.source_locations,
+                    exclude_patterns=context.exclude_patterns,
+                    compression=repository_context.compression,
+                    custom_flags=repository_context.custom_flags,
+                    upload_ratelimit_kib=repository_context.upload_ratelimit_kib,
+                )
+                final_status = await wait_for_agent_backup_job(
+                    db,
+                    agent_job.id,
+                    backup_job.id,
+                    lambda: self._is_run_cancelled(run_id),
+                )
+            else:
+                await backup_service.execute_backup(
+                    backup_job.id,
+                    repo.path,
+                    db,
+                    archive_name=archive_name,
+                    skip_hooks=not context.run_repository_scripts,
+                    source_directories=context.source_directories,
+                    source_ssh_connection_id=(
+                        context.source_ssh_connection_id
+                        if context.source_type == "remote"
+                        else None
+                    ),
+                    source_locations=context.source_locations,
+                    exclude_patterns_override=context.exclude_patterns,
+                    compression_override=repository_context.compression,
+                    custom_flags_override=repository_context.custom_flags,
+                    upload_ratelimit_kib=repository_context.upload_ratelimit_kib,
+                )
 
-            db.refresh(backup_job)
-            final_status = backup_job.status or "failed"
+                db.refresh(backup_job)
+                final_status = backup_job.status or "failed"
             if final_status in SUCCESS_BACKUP_STATUSES:
                 if self._is_run_cancelled(run_id):
                     child.status = "cancelled"

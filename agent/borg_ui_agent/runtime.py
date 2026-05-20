@@ -20,6 +20,10 @@ DEFAULT_CAPABILITIES = [
     "backup.cancel",
 ]
 
+JOB_HANDLERS = {
+    "backup.create": execute_backup_create_job,
+}
+
 
 @dataclass(frozen=True)
 class RunOnceResult:
@@ -30,6 +34,12 @@ class RunOnceResult:
 
 def get_capabilities() -> list[str]:
     return list(DEFAULT_CAPABILITIES)
+
+
+def get_job_handler(job_kind: str):
+    if job_kind == "backup.create":
+        return execute_backup_create_job
+    return JOB_HANDLERS.get(job_kind)
 
 
 class AgentRuntime:
@@ -63,8 +73,9 @@ class AgentRuntime:
 
         payload = job.get("payload") or {}
         job_kind = str(payload.get("job_kind") or job.get("type") or "")
-        if job_kind == "backup.create":
-            result = execute_backup_create_job(
+        handler = get_job_handler(job_kind)
+        if handler:
+            result = handler(
                 job,
                 self.client,
                 should_cancel=self._build_cancel_checker(job_id),
