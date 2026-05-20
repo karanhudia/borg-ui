@@ -13,6 +13,8 @@ from agent.borg_ui_agent.config import AgentConfig
 from agent.borg_ui_agent.filesystem import execute_filesystem_browse_job
 from agent.borg_ui_agent.repository_ops import execute_repository_operation_job
 
+DEFAULT_REPOSITORY_OPERATION_HANDLER = execute_repository_operation_job
+
 DEFAULT_CAPABILITIES = [
     "jobs.poll",
     "jobs.claim",
@@ -55,9 +57,12 @@ def get_job_handler(job_kind: str):
         return execute_backup_create_job
     if job_kind == "filesystem.browse":
         return execute_filesystem_browse_job
+    handler = JOB_HANDLERS.get(job_kind)
     if job_kind.startswith("repository."):
+        if handler is not None and handler is not DEFAULT_REPOSITORY_OPERATION_HANDLER:
+            return handler
         return execute_repository_operation_job
-    return JOB_HANDLERS.get(job_kind)
+    return handler
 
 
 class AgentRuntime:

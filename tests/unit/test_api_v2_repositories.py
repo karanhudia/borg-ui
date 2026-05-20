@@ -118,16 +118,19 @@ class TestV2RepositoryRoutes:
             {
                 "source_type": "local",
                 "source_ssh_connection_id": None,
+                "agent_machine_id": None,
                 "paths": ["/data/source-a"],
             },
             {
                 "source_type": "remote",
                 "source_ssh_connection_id": source_a.id,
+                "agent_machine_id": None,
                 "paths": ["/remote/source-b"],
             },
             {
                 "source_type": "remote",
                 "source_ssh_connection_id": source_b.id,
+                "agent_machine_id": None,
                 "paths": ["/remote/source-c"],
             },
         ]
