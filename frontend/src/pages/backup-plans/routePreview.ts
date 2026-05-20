@@ -82,7 +82,11 @@ export function buildRoutePreviews(
   return repositories.map((repository) => {
     const isAgentRepo = repository.executor_type === 'agent'
     const agentMachineId = repository.agent_machine_id ?? null
-    const executor: RouteExecutor = isAgentRepo ? 'agent' : repository.connection_id ? 'ssh' : 'server'
+    const executor: RouteExecutor = isAgentRepo
+      ? 'agent'
+      : repository.connection_id
+        ? 'ssh'
+        : 'server'
 
     if (hasAgentSources && hasNonAgentSources) {
       return unsupported(repository, executor, 'backupPlans.routePreview.mixedAgentSources')

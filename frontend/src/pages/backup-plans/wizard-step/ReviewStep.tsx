@@ -45,10 +45,10 @@ export function ReviewStep({
     wizardState.sourceType === 'agent'
       ? t('backupPlans.sourceChooser.managedAgent')
       : wizardState.sourceType === 'remote'
-      ? t('backupPlans.wizard.review.remoteSource')
-      : wizardState.sourceType === 'mixed'
-        ? t('backupPlans.sourceChooser.mixedSources')
-        : t('backupPlans.sourceChooser.borgUiServer')
+        ? t('backupPlans.wizard.review.remoteSource')
+        : wizardState.sourceType === 'mixed'
+          ? t('backupPlans.sourceChooser.mixedSources')
+          : t('backupPlans.sourceChooser.borgUiServer')
   const sourceConnectionLabel = selectedSourceConnection
     ? formatSshConnectionLabel(selectedSourceConnection)
     : wizardState.sourceSshConnectionId

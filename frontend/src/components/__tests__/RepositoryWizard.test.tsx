@@ -426,7 +426,6 @@ describe('RepositoryWizard', () => {
         null
       )
     }, 90000)
-
   })
 
   describe('import mode', () => {

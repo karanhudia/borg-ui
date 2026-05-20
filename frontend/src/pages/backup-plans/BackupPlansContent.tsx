@@ -329,9 +329,9 @@ export function BackupPlansContent({
                       ? t('backupPlans.status.remoteSource')
                       : plan.source_type === 'agent'
                         ? t('backupPlans.sourceChooser.managedAgent')
-                      : plan.source_type === 'mixed'
-                        ? t('backupPlans.sourceChooser.mixedSources')
-                        : t('backupPlans.status.localSource')
+                        : plan.source_type === 'mixed'
+                          ? t('backupPlans.sourceChooser.mixedSources')
+                          : t('backupPlans.status.localSource')
 
                   return (
                     <Stack key={plan.id} spacing={1.25}>

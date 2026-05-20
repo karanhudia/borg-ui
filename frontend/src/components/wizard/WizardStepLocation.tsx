@@ -229,7 +229,14 @@ export default function WizardStepLocation({
       )}
 
       {/* Repository Ownership Selection */}
-      <Box sx={{ display: 'flex', alignItems: { xs: 'stretch', sm: 'center' }, gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: 1.5,
+          flexDirection: { xs: 'column', sm: 'row' },
+        }}
+      >
         <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
           {t('wizard.location.executionTargetLabel')}
         </Typography>
@@ -244,7 +251,11 @@ export default function WizardStepLocation({
           }}
         >
           {[
-            { value: 'local' as const, label: t('wizard.location.executionTargetLocal'), icon: Server },
+            {
+              value: 'local' as const,
+              label: t('wizard.location.executionTargetLocal'),
+              icon: Server,
+            },
             { value: 'agent' as const, label: t('wizard.location.managedAgent'), icon: Laptop },
           ].map((option) => {
             const selected = executionTarget === option.value

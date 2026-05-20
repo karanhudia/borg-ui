@@ -308,9 +308,13 @@ function sourceLocationLabel(
   if (location.source_type === 'local') return t('backupPlans.sourceChooser.borgUiServer')
   if (location.source_type === 'agent') {
     const agent = agentMachines.find((item) => item.id === location.agent_machine_id)
-    return agent?.hostname || agent?.name || t('backupPlans.sourceChooser.agentFallback', {
-      id: location.agent_machine_id,
-    })
+    return (
+      agent?.hostname ||
+      agent?.name ||
+      t('backupPlans.sourceChooser.agentFallback', {
+        id: location.agent_machine_id,
+      })
+    )
   }
   const connection = sshConnections.find((item) => item.id === location.source_ssh_connection_id)
   return connection
@@ -437,7 +441,9 @@ function AgentFileExplorerDialog({
               }}
             />
             <Button variant="outlined" onClick={() => loadPath(path)} disabled={loading}>
-              {loading ? t('backupPlans.sourceChooser.loading') : t('backupPlans.sourceChooser.openPath')}
+              {loading
+                ? t('backupPlans.sourceChooser.loading')
+                : t('backupPlans.sourceChooser.openPath')}
             </Button>
           </Stack>
           {error && <Alert severity="warning">{error}</Alert>}
@@ -462,16 +468,16 @@ function AgentFileExplorerDialog({
                   onClick={() =>
                     item.type === 'directory' ? loadPath(item.path) : togglePath(item.path)
                   }
-	                  onKeyDown={(event) => {
-	                    if (event.key === 'Enter' || event.key === ' ') {
-	                      event.preventDefault()
-	                      if (item.type === 'directory') {
-	                        loadPath(item.path)
-	                      } else {
-	                        togglePath(item.path)
-	                      }
-	                    }
-	                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      if (item.type === 'directory') {
+                        loadPath(item.path)
+                      } else {
+                        togglePath(item.path)
+                      }
+                    }
+                  }}
                   sx={{
                     alignItems: 'center',
                     bgcolor: selected ? 'action.selected' : 'background.paper',
@@ -656,7 +662,9 @@ export function SourceSelectionDialog({
     const nextLocations = locationsFromWizardState(wizardState)
     const defaultAgentKey = selectedAgentRepositoryKey(wizardState, fullRepositories)
     setDraftSourceLocations(nextLocations)
-    setSelectedSourceKey(nextLocations[0] ? locationKey(nextLocations[0]) : defaultAgentKey || 'local')
+    setSelectedSourceKey(
+      nextLocations[0] ? locationKey(nextLocations[0]) : defaultAgentKey || 'local'
+    )
     setSourcePath('')
     setSourceExplorerOpen(false)
     setAgentExplorerOpen(false)
@@ -851,14 +859,12 @@ export function SourceSelectionDialog({
     onClose()
   }
 
-  const selectedSourceConnection =
-    !selectedSourceKey.startsWith('remote:')
-      ? null
-      : sshConnections.find((connection) => selectedSourceKey === `remote:${connection.id}`) || null
-  const selectedAgent =
-    selectedSourceKey.startsWith('agent:')
-      ? agentMachines.find((agent) => selectedSourceKey === `agent:${agent.id}`) || null
-      : null
+  const selectedSourceConnection = !selectedSourceKey.startsWith('remote:')
+    ? null
+    : sshConnections.find((connection) => selectedSourceKey === `remote:${connection.id}`) || null
+  const selectedAgent = selectedSourceKey.startsWith('agent:')
+    ? agentMachines.find((agent) => selectedSourceKey === `agent:${agent.id}`) || null
+    : null
 
   const selectedSourceExplorerSshConfig = selectedSourceConnection
     ? {
@@ -949,8 +955,7 @@ export function SourceSelectionDialog({
             onClick={() => {
               if (!hasAgentOptions) return
               const targetId =
-                selectedAgentIdNum &&
-                agentMachines.some((agent) => agent.id === selectedAgentIdNum)
+                selectedAgentIdNum && agentMachines.some((agent) => agent.id === selectedAgentIdNum)
                   ? selectedAgentIdNum
                   : agentMachines[0].id
               setSelectedSourceKey(`agent:${targetId}`)

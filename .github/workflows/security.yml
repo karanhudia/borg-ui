@@ -83,10 +83,14 @@ jobs:
           # - GHSA-wp53-j4wj-2cfg: python-multipart (fix requires Python 3.10+)
           # - GHSA-wj6h-64fc-37mp: ecdsa (no fix available)
           # - CVE-2026-4539: pygments (transitive via structlog, no fix released yet)
+          # - PYSEC-2025-183: PyJWT (latest release still affected, no fix released yet)
+          # - PYSEC-2026-89: Markdown (latest release still affected, no fix released yet)
           pip-audit -r requirements.txt \
             --ignore-vuln GHSA-wp53-j4wj-2cfg \
             --ignore-vuln GHSA-wj6h-64fc-37mp \
-            --ignore-vuln CVE-2026-4539
+            --ignore-vuln CVE-2026-4539 \
+            --ignore-vuln PYSEC-2025-183 \
+            --ignore-vuln PYSEC-2026-89
 
       - name: Generate pip-audit report
         if: always()

@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { alpha, Box, Button, Chip, Stack, TextField, Typography } from '@mui/material'
-import { ChevronDown, ChevronUp, Database, FolderOpen, HardDrive, Laptop, Server } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronUp,
+  Database,
+  FolderOpen,
+  HardDrive,
+  Laptop,
+  Server,
+} from 'lucide-react'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
 import { SourceSelectionDialog } from './SourceSelectionDialog'

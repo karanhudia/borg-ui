@@ -247,8 +247,8 @@ export default function WizardStepReview({
                 {executionTarget === 'agent'
                   ? t('wizard.review.repositoryPathOnSelectedAgent')
                   : data.repositoryLocation === 'local'
-                  ? t('wizard.review.borgUiServer')
-                  : t('wizard.review.sshRemote')}
+                    ? t('wizard.review.borgUiServer')
+                    : t('wizard.review.sshRemote')}
               </Typography>
             </Box>
           </ReviewAttrRow>

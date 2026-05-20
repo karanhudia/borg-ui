@@ -181,9 +181,10 @@ type Story = StoryObj
 export const ServerSourceToServerRepo: Story = {
   render: () =>
     renderReview(
-      stateWith([serverRepo.id], [
-        { source_type: 'local', source_ssh_connection_id: null, paths: ['/srv/app'] },
-      ]),
+      stateWith(
+        [serverRepo.id],
+        [{ source_type: 'local', source_ssh_connection_id: null, paths: ['/srv/app'] }]
+      ),
       [serverRepo]
     ),
 }
@@ -191,9 +192,10 @@ export const ServerSourceToServerRepo: Story = {
 export const SshSourceToSameSshRepo: Story = {
   render: () =>
     renderReview(
-      stateWith([sshRepo.id], [
-        { source_type: 'remote', source_ssh_connection_id: 11, paths: ['/srv/app'] },
-      ]),
+      stateWith(
+        [sshRepo.id],
+        [{ source_type: 'remote', source_ssh_connection_id: 11, paths: ['/srv/app'] }]
+      ),
       [sshRepo]
     ),
 }
@@ -201,14 +203,17 @@ export const SshSourceToSameSshRepo: Story = {
 export const AgentSourceToSameAgentRepo: Story = {
   render: () =>
     renderReview(
-      stateWith([agentRepoA.id], [
-        {
-          source_type: 'agent',
-          source_ssh_connection_id: null,
-          agent_machine_id: 31,
-          paths: ['/srv/app'],
-        },
-      ]),
+      stateWith(
+        [agentRepoA.id],
+        [
+          {
+            source_type: 'agent',
+            source_ssh_connection_id: null,
+            agent_machine_id: 31,
+            paths: ['/srv/app'],
+          },
+        ]
+      ),
       [agentRepoA]
     ),
 }
@@ -216,9 +221,10 @@ export const AgentSourceToSameAgentRepo: Story = {
 export const UnsupportedServerSourceToAgentRepo: Story = {
   render: () =>
     renderReview(
-      stateWith([agentRepoA.id], [
-        { source_type: 'local', source_ssh_connection_id: null, paths: ['/srv/app'] },
-      ]),
+      stateWith(
+        [agentRepoA.id],
+        [{ source_type: 'local', source_ssh_connection_id: null, paths: ['/srv/app'] }]
+      ),
       [agentRepoA]
     ),
 }
@@ -226,14 +232,17 @@ export const UnsupportedServerSourceToAgentRepo: Story = {
 export const UnsupportedDifferentAgentSource: Story = {
   render: () =>
     renderReview(
-      stateWith([agentRepoB.id], [
-        {
-          source_type: 'agent',
-          source_ssh_connection_id: null,
-          agent_machine_id: 31,
-          paths: ['/srv/app'],
-        },
-      ]),
+      stateWith(
+        [agentRepoB.id],
+        [
+          {
+            source_type: 'agent',
+            source_ssh_connection_id: null,
+            agent_machine_id: 31,
+            paths: ['/srv/app'],
+          },
+        ]
+      ),
       [agentRepoB]
     ),
 }
