@@ -126,6 +126,8 @@ export default function WizardStepReview({
       : null
   const isEncrypted = data.encryption !== 'none'
   const hasBackupSource = data.repositoryMode === 'full' && data.sourceDirs.length > 0
+  const hasPlanOwnedAgentSources =
+    data.repositoryMode === 'full' && executionTarget === 'agent' && data.sourceDirs.length === 0
   const hasBackupConfiguration =
     data.repositoryMode === 'full' &&
     (hasBackupSource || data.excludePatterns.length > 0 || Boolean(data.customFlags))
@@ -334,6 +336,23 @@ export default function WizardStepReview({
         </ReviewSectionCard>
 
         {/* DATA SOURCE - full mode only */}
+        {hasPlanOwnedAgentSources && (
+          <ReviewSectionCard
+            icon={<Info size={14} />}
+            label={t('wizard.review.planOwnedSources')}
+            accentColor={AMBER}
+          >
+            <ReviewAttrRow label={t('wizard.review.source')}>
+              <Typography variant="body2" fontSize="0.75rem" fontWeight={500}>
+                {t('wizard.review.backupPlans')}
+              </Typography>
+            </ReviewAttrRow>
+            <Typography variant="body2" color="text.secondary" fontSize="0.75rem">
+              {t('wizard.review.planOwnedSourcesDetail')}
+            </Typography>
+          </ReviewSectionCard>
+        )}
+
         {hasBackupSource && (
           <ReviewSectionCard
             icon={data.dataSource === 'local' ? <HardDrive size={14} /> : <Laptop size={14} />}

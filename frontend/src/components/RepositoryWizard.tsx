@@ -172,9 +172,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       repository?.pre_backup_script ||
       repository?.post_backup_script
     )
-  const showAgentBackupSourceStep =
-    wizardState.executionTarget === 'agent' && wizardState.repositoryMode === 'full'
-  const showSourceStep = showLegacyBackupSteps || showAgentBackupSourceStep
+  const showSourceStep = showLegacyBackupSteps
 
   // Step definitions
   const steps = useMemo(() => {
@@ -532,7 +530,12 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       case 'source':
         if (wizardState.executionTarget === 'agent' && wizardState.dataSource === 'remote')
           return false
-        if (wizardState.dataSource === 'remote' && !wizardState.sourceSshConnectionId) return false
+        if (
+          wizardState.executionTarget !== 'agent' &&
+          wizardState.dataSource === 'remote' &&
+          !wizardState.sourceSshConnectionId
+        )
+          return false
         return true
 
       case 'security':
@@ -706,7 +709,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             }}
             onBrowseSource={() => setShowSourceExplorer(true)}
             onBrowseRemoteSource={() => setShowRemoteSourceExplorer(true)}
-            sourceRequired={showAgentBackupSourceStep}
+            sourceRequired={false}
           />
         )
 

@@ -436,6 +436,52 @@ class TestRepositoriesCreate:
         assert repo.agent_machine_id == agent.id
         assert repo.path == "/agent/repo"
 
+    def test_create_agent_repository_without_source_paths(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_no_sources",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Repo Without Sources",
+                    "path": "/agent/repo-no-sources",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        initialize.assert_not_awaited()
+        repo = (
+            test_db.query(Repository).filter_by(name="Agent Repo Without Sources").one()
+        )
+        assert repo.execution_target == "agent"
+        assert repo.executor_type == "agent"
+        assert repo.agent_machine_id == agent.id
+        assert repo.source_directories is None
+        assert repo.source_locations is None
+        assert repo.source_ssh_connection_id is None
+
     def test_create_agent_repository_rejects_ssh_target_axis(
         self, test_client: TestClient, admin_headers, test_db
     ):

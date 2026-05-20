@@ -325,13 +325,14 @@ describe('RepositoryWizard', () => {
       })
     })
 
-    it('submits managed-agent execution target fields', async () => {
+    it('submits managed-agent execution target fields without repository source paths', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')
 
       await waitFor(() => {
         expect(screen.getByLabelText(/Repository Name/i)).toBeInTheDocument()
       })
+      expect(screen.queryByText('Source')).not.toBeInTheDocument()
 
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-repo')
@@ -348,19 +349,9 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       await waitFor(() => {
-        expect(
-          screen.getByText(/Source paths are resolved on the selected managed agent/i)
-        ).toBeInTheDocument()
+        expect(screen.getByText('Repository Key')).toBeInTheDocument()
       })
 
-      const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-      setInputValue(dirInput, '/home/user/data')
-      await user.click(screen.getByRole('button', { name: /Add/i }))
-      await user.click(screen.getByRole('button', { name: /Next/i }))
-
-      await waitFor(() => {
-        expect(screen.getByLabelText(/Remote Borg Path/i)).toBeInTheDocument()
-      })
       setInputValue(screen.getByLabelText(/^Passphrase/i), 'agentpass')
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
@@ -383,7 +374,8 @@ describe('RepositoryWizard', () => {
           agent_machine_id: 101,
           connection_id: null,
           source_connection_id: null,
-          source_directories: ['/home/user/data'],
+          source_directories: [],
+          source_locations: [],
           passphrase: 'agentpass',
         }),
         null
@@ -409,14 +401,8 @@ describe('RepositoryWizard', () => {
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
-        expect(
-          screen.getByText(/Source paths are resolved on the selected managed agent/i)
-        ).toBeInTheDocument()
+        expect(screen.getByText('Repository Key')).toBeInTheDocument()
       })
-      const dirInput = screen.getByPlaceholderText('/home/user/documents or /var/log/app.log')
-      setInputValue(dirInput, '/home/pi')
-      await user.click(screen.getByRole('button', { name: /Add/i }))
-      await user.click(screen.getByRole('button', { name: /Next/i }))
       setInputValue(screen.getByLabelText(/^Passphrase/i), 'agentpass')
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
@@ -434,7 +420,8 @@ describe('RepositoryWizard', () => {
           agent_machine_id: 101,
           connection_id: null,
           source_connection_id: null,
-          source_directories: ['/home/pi'],
+          source_directories: [],
+          source_locations: [],
         }),
         null
       )

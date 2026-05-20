@@ -365,6 +365,43 @@ class TestBackupStart:
         )
         assert agent_job.agent_machine_id == agent.id
 
+    def test_start_backup_for_agent_repository_without_sources_explains_plan_sources(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_no_sources",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        repo = Repository(
+            name="Agent Repo Without Sources",
+            path="/agent/repo-no-sources",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            execution_target="agent",
+            executor_type="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        response = test_client.post(
+            "/api/backup/start",
+            json={"repository": repo.path},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == {
+            "key": "backend.errors.repo.agentManualBackupRequiresPlanSources"
+        }
+
     def test_agent_completion_updates_linked_backup_job(
         self, test_client: TestClient, admin_headers, test_db
     ):
