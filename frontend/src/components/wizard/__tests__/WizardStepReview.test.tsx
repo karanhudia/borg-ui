@@ -143,6 +143,36 @@ describe('WizardStepReview', () => {
       expect(screen.getByText('Remote Client')).toBeInTheDocument()
     })
 
+    it('shows plan-owned source copy for managed-agent repositories without source paths', () => {
+      render(
+        <WizardStepReview
+          mode="create"
+          data={{
+            ...defaultData,
+            executionTarget: 'agent',
+            agentMachineId: 7,
+            sourceDirs: [],
+          }}
+          sshConnections={mockSshConnections}
+          agentMachines={[
+            {
+              id: 7,
+              name: 'Workstation',
+              hostname: 'workstation.local',
+              status: 'online',
+            },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('PLAN SOURCES')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'Source paths for managed-agent backups are configured on Backup Plans, not on the repository.'
+        )
+      ).toBeInTheDocument()
+    })
+
     it('shows directory count for local source', () => {
       render(
         <WizardStepReview mode="create" data={defaultData} sshConnections={mockSshConnections} />
