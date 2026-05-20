@@ -1,0 +1,479 @@
+import React, { useEffect, useMemo, useState } from 'react'
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CircularProgress,
+  Divider,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+} from '@mui/material'
+import { BellRing, FileText, Save, SearchCheck, Send } from 'lucide-react'
+import { toast } from 'react-hot-toast'
+import { useTranslation } from 'react-i18next'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+
+import { settingsAPI } from '../services/api'
+import type { SystemSettings } from '../services/api'
+import { useAnalytics } from '../hooks/useAnalytics'
+import { translateBackendKey } from '../utils/translateBackendKey'
+
+type ReportFrequency = 'daily' | 'weekly' | 'monthly'
+
+const WEEKDAYS = [
+  ['0', 'Monday'],
+  ['1', 'Tuesday'],
+  ['2', 'Wednesday'],
+  ['3', 'Thursday'],
+  ['4', 'Friday'],
+  ['5', 'Saturday'],
+  ['6', 'Sunday'],
+] as const
+
+const readBool = (value: unknown, fallback: boolean) =>
+  typeof value === 'boolean' ? value : fallback
+
+const readNumber = (value: unknown, fallback: number) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : fallback
+
+const readFrequency = (value: unknown): ReportFrequency =>
+  value === 'daily' || value === 'weekly' || value === 'monthly' ? value : 'weekly'
+
+const MonitoringReportsTab: React.FC = () => {
+  const { t } = useTranslation()
+  const queryClient = useQueryClient()
+  const { trackSystem, EventAction } = useAnalytics()
+
+  const [monitoringEnabled, setMonitoringEnabled] = useState(false)
+  const [staleAfterDays, setStaleAfterDays] = useState(3)
+  const [intervalHours, setIntervalHours] = useState(24)
+  const [cooldownHours, setCooldownHours] = useState(24)
+  const [includeObserveRepos, setIncludeObserveRepos] = useState(true)
+  const [reportsEnabled, setReportsEnabled] = useState(false)
+  const [reportFrequency, setReportFrequency] = useState<ReportFrequency>('weekly')
+  const [reportHourUtc, setReportHourUtc] = useState(8)
+  const [reportWeekday, setReportWeekday] = useState(0)
+  const [reportMonthday, setReportMonthday] = useState(1)
+  const [includeSummary, setIncludeSummary] = useState(true)
+  const [includeStaleRepositories, setIncludeStaleRepositories] = useState(true)
+  const [includeRecentActivity, setIncludeRecentActivity] = useState(true)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: async () => {
+      const response = await settingsAPI.getSystemSettings()
+      return response.data
+    },
+  })
+
+  const settings = data?.settings as SystemSettings | undefined
+
+  useEffect(() => {
+    if (!settings) return
+    setMonitoringEnabled(readBool(settings.backup_monitoring_enabled, false))
+    setStaleAfterDays(readNumber(settings.backup_monitoring_stale_after_days, 3))
+    setIntervalHours(readNumber(settings.backup_monitoring_interval_hours, 24))
+    setCooldownHours(readNumber(settings.backup_monitoring_alert_cooldown_hours, 24))
+    setIncludeObserveRepos(readBool(settings.backup_monitoring_include_observe_repos, true))
+    setReportsEnabled(readBool(settings.backup_reports_enabled, false))
+    setReportFrequency(readFrequency(settings.backup_reports_frequency))
+    setReportHourUtc(readNumber(settings.backup_reports_hour_utc, 8))
+    setReportWeekday(readNumber(settings.backup_reports_weekday, 0))
+    setReportMonthday(readNumber(settings.backup_reports_monthday, 1))
+    setIncludeSummary(readBool(settings.backup_reports_include_summary, true))
+    setIncludeStaleRepositories(readBool(settings.backup_reports_include_stale_repositories, true))
+    setIncludeRecentActivity(readBool(settings.backup_reports_include_recent_activity, true))
+  }, [settings])
+
+  const payload = useMemo<SystemSettings>(
+    () => ({
+      backup_monitoring_enabled: monitoringEnabled,
+      backup_monitoring_stale_after_days: staleAfterDays,
+      backup_monitoring_interval_hours: intervalHours,
+      backup_monitoring_alert_cooldown_hours: cooldownHours,
+      backup_monitoring_include_observe_repos: includeObserveRepos,
+      backup_reports_enabled: reportsEnabled,
+      backup_reports_frequency: reportFrequency,
+      backup_reports_hour_utc: reportHourUtc,
+      backup_reports_weekday: reportWeekday,
+      backup_reports_monthday: reportMonthday,
+      backup_reports_include_summary: includeSummary,
+      backup_reports_include_stale_repositories: includeStaleRepositories,
+      backup_reports_include_recent_activity: includeRecentActivity,
+    }),
+    [
+      monitoringEnabled,
+      staleAfterDays,
+      intervalHours,
+      cooldownHours,
+      includeObserveRepos,
+      reportsEnabled,
+      reportFrequency,
+      reportHourUtc,
+      reportWeekday,
+      reportMonthday,
+      includeSummary,
+      includeStaleRepositories,
+      includeRecentActivity,
+    ]
+  )
+
+  const validationError =
+    staleAfterDays < 1 ||
+    intervalHours < 1 ||
+    cooldownHours < 0 ||
+    reportHourUtc < 0 ||
+    reportHourUtc > 23 ||
+    reportWeekday < 0 ||
+    reportWeekday > 6 ||
+    reportMonthday < 1 ||
+    reportMonthday > 28
+
+  const saveMutation = useMutation({
+    mutationFn: () => settingsAPI.updateSystemSettings(payload),
+    onSuccess: async () => {
+      toast.success(t('monitoringReports.savedSuccessfully'))
+      await queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+      trackSystem(EventAction.EDIT, {
+        section: 'monitoring_reports',
+        monitoring_enabled: monitoringEnabled,
+        reports_enabled: reportsEnabled,
+        report_frequency: reportFrequency,
+      })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('monitoringReports.failedToSave')
+      )
+    },
+  })
+
+  const runMonitoringMutation = useMutation({
+    mutationFn: settingsAPI.runBackupMonitoring,
+    onSuccess: (response) => {
+      toast.success(
+        t('monitoringReports.monitoringRunComplete', {
+          count: response.data?.stale_count ?? 0,
+        })
+      )
+      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+      trackSystem(EventAction.START, { section: 'monitoring_reports', operation: 'run_check' })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('monitoringReports.failedToRun')
+      )
+    },
+  })
+
+  const sendReportMutation = useMutation({
+    mutationFn: settingsAPI.sendBackupReport,
+    onSuccess: (response) => {
+      toast.success(
+        t('monitoringReports.reportSent', {
+          count: response.data?.repository_count ?? 0,
+        })
+      )
+      queryClient.invalidateQueries({ queryKey: ['systemSettings'] })
+      trackSystem(EventAction.START, { section: 'monitoring_reports', operation: 'send_report' })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) || t('monitoringReports.failedToSend')
+      )
+    },
+  })
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', minHeight: 360, pt: 8 }}>
+        <CircularProgress />
+      </Box>
+    )
+  }
+
+  return (
+    <Box>
+      <Stack spacing={3}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1.5,
+          }}
+        >
+          <Box>
+            <Typography variant="h5" component="h1" fontWeight={700} gutterBottom>
+              {t('monitoringReports.title')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('monitoringReports.subtitle')}
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={saveMutation.isPending ? <CircularProgress size={16} /> : <Save size={16} />}
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending || validationError}
+          >
+            {saveMutation.isPending ? t('monitoringReports.saving') : t('systemSettings.save')}
+          </Button>
+        </Box>
+
+        <Card variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+          <Stack spacing={2.5}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <BellRing size={18} />
+              <Box>
+                <Typography variant="subtitle1" fontWeight={700}>
+                  {t('monitoringReports.alertsTitle')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('monitoringReports.alertsDescription')}
+                </Typography>
+              </Box>
+            </Box>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={monitoringEnabled}
+                  onChange={(event) => setMonitoringEnabled(event.target.checked)}
+                />
+              }
+              label={t('monitoringReports.enableMonitoring')}
+            />
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(180px, 1fr))' },
+                gap: 2,
+              }}
+            >
+              <TextField
+                label={t('monitoringReports.staleAfterDays')}
+                type="number"
+                value={staleAfterDays}
+                onChange={(event) => setStaleAfterDays(Number(event.target.value))}
+                inputProps={{ min: 1, max: 3650, step: 1 }}
+                error={staleAfterDays < 1}
+                helperText={t('monitoringReports.staleAfterHelper')}
+              />
+              <TextField
+                label={t('monitoringReports.checkIntervalHours')}
+                type="number"
+                value={intervalHours}
+                onChange={(event) => setIntervalHours(Number(event.target.value))}
+                inputProps={{ min: 1, max: 720, step: 1 }}
+                error={intervalHours < 1}
+                helperText={t('monitoringReports.checkIntervalHelper')}
+              />
+              <TextField
+                label={t('monitoringReports.cooldownHours')}
+                type="number"
+                value={cooldownHours}
+                onChange={(event) => setCooldownHours(Number(event.target.value))}
+                inputProps={{ min: 0, max: 720, step: 1 }}
+                error={cooldownHours < 0}
+                helperText={t('monitoringReports.cooldownHelper')}
+              />
+            </Box>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={includeObserveRepos}
+                  onChange={(event) => setIncludeObserveRepos(event.target.checked)}
+                />
+              }
+              label={t('monitoringReports.includeObserveRepos')}
+            />
+
+            <Button
+              variant="outlined"
+              startIcon={
+                runMonitoringMutation.isPending ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  <SearchCheck size={16} />
+                )
+              }
+              onClick={() => runMonitoringMutation.mutate()}
+              disabled={runMonitoringMutation.isPending}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              {t('monitoringReports.runCheckNow')}
+            </Button>
+
+            {(settings?.backup_monitoring_last_checked_at ||
+              settings?.backup_monitoring_last_alert_sent_at) && (
+              <Alert severity="info">
+                {settings?.backup_monitoring_last_checked_at &&
+                  `${t('monitoringReports.lastChecked')} ${new Date(
+                    settings.backup_monitoring_last_checked_at
+                  ).toLocaleString()}`}
+                {settings?.backup_monitoring_last_alert_sent_at &&
+                  ` ${t('monitoringReports.lastAlert')} ${new Date(
+                    settings.backup_monitoring_last_alert_sent_at
+                  ).toLocaleString()}`}
+              </Alert>
+            )}
+          </Stack>
+        </Card>
+
+        <Card variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+          <Stack spacing={2.5}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FileText size={18} />
+              <Box>
+                <Typography variant="subtitle1" fontWeight={700}>
+                  {t('monitoringReports.reportsTitle')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('monitoringReports.reportsDescription')}
+                </Typography>
+              </Box>
+            </Box>
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={reportsEnabled}
+                  onChange={(event) => setReportsEnabled(event.target.checked)}
+                />
+              }
+              label={t('monitoringReports.enableReports')}
+            />
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, minmax(150px, 1fr))' },
+                gap: 2,
+              }}
+            >
+              <FormControl>
+                <InputLabel id="backup-report-frequency-label">
+                  {t('monitoringReports.frequency')}
+                </InputLabel>
+                <Select
+                  labelId="backup-report-frequency-label"
+                  label={t('monitoringReports.frequency')}
+                  value={reportFrequency}
+                  onChange={(event) => setReportFrequency(event.target.value as ReportFrequency)}
+                >
+                  <MenuItem value="daily">{t('monitoringReports.frequencyDaily')}</MenuItem>
+                  <MenuItem value="weekly">{t('monitoringReports.frequencyWeekly')}</MenuItem>
+                  <MenuItem value="monthly">{t('monitoringReports.frequencyMonthly')}</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                label={t('monitoringReports.hourUtc')}
+                type="number"
+                value={reportHourUtc}
+                onChange={(event) => setReportHourUtc(Number(event.target.value))}
+                inputProps={{ min: 0, max: 23, step: 1 }}
+                error={reportHourUtc < 0 || reportHourUtc > 23}
+              />
+              <FormControl>
+                <InputLabel id="backup-report-weekday-label">
+                  {t('monitoringReports.weekday')}
+                </InputLabel>
+                <Select
+                  labelId="backup-report-weekday-label"
+                  label={t('monitoringReports.weekday')}
+                  value={String(reportWeekday)}
+                  onChange={(event) => setReportWeekday(Number(event.target.value))}
+                >
+                  {WEEKDAYS.map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                label={t('monitoringReports.monthday')}
+                type="number"
+                value={reportMonthday}
+                onChange={(event) => setReportMonthday(Number(event.target.value))}
+                inputProps={{ min: 1, max: 28, step: 1 }}
+                error={reportMonthday < 1 || reportMonthday > 28}
+              />
+            </Box>
+
+            <Divider />
+
+            <Stack spacing={0.5}>
+              <Typography variant="subtitle2" fontWeight={700}>
+                {t('monitoringReports.reportContent')}
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includeSummary}
+                    onChange={(event) => setIncludeSummary(event.target.checked)}
+                  />
+                }
+                label={t('monitoringReports.summary')}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includeStaleRepositories}
+                    onChange={(event) => setIncludeStaleRepositories(event.target.checked)}
+                  />
+                }
+                label={t('monitoringReports.staleRepositories')}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includeRecentActivity}
+                    onChange={(event) => setIncludeRecentActivity(event.target.checked)}
+                  />
+                }
+                label={t('monitoringReports.recentActivity')}
+              />
+            </Stack>
+
+            <Button
+              variant="outlined"
+              startIcon={
+                sendReportMutation.isPending ? <CircularProgress size={16} /> : <Send size={16} />
+              }
+              onClick={() => sendReportMutation.mutate()}
+              disabled={sendReportMutation.isPending}
+              sx={{ alignSelf: 'flex-start' }}
+            >
+              {t('monitoringReports.sendReportNow')}
+            </Button>
+
+            {settings?.backup_reports_last_sent_at && (
+              <Alert severity="info">
+                {t('monitoringReports.lastReport')} {' '}
+                {new Date(settings.backup_reports_last_sent_at).toLocaleString()}
+              </Alert>
+            )}
+          </Stack>
+        </Card>
+      </Stack>
+    </Box>
+  )
+}
+
+export default MonitoringReportsTab

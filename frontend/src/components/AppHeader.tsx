@@ -3,6 +3,7 @@ import { AppBar, Avatar, Box, IconButton, Popover, Toolbar, Typography } from '@
 import { alpha, useTheme as useMuiTheme } from '@mui/material/styles'
 import {
   Bell,
+  Activity,
   ChevronDown,
   ChevronRight,
   LogOut,
@@ -64,6 +65,9 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() || '')
     .join('')
+  const canManageSystemSettings = Boolean(
+    user?.global_permissions?.includes('settings.system.manage') || user?.role === 'admin'
+  )
 
   return (
     <AppBar
@@ -396,6 +400,19 @@ export default function AppHeader({ onToggleMobileMenu }: AppHeaderProps) {
                   desc: t('navigation.menu.notificationsDesc', 'Alerts & preferences'),
                   route: '/settings/notifications',
                 },
+                ...(canManageSystemSettings
+                  ? [
+                      {
+                        icon: Activity,
+                        label: t('navigation.settings.monitoringReports', 'Monitoring & Reports'),
+                        desc: t(
+                          'navigation.menu.monitoringReportsDesc',
+                          'Stale backup alerts, reports'
+                        ),
+                        route: '/settings/monitoring',
+                      },
+                    ]
+                  : []),
               ] as const
             ).map(({ icon: Icon, label, desc, route }) => (
               <Box
