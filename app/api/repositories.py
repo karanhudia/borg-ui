@@ -976,12 +976,6 @@ def _require_queueable_agent(
 def _validate_agent_repository_payload(
     repo_data: Union[RepositoryCreate, RepositoryImport], db: Session
 ) -> AgentMachine:
-    if repo_data.mode == "full" and not repo_data.source_directories:
-        raise HTTPException(
-            status_code=400,
-            detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
-        )
-
     if repo_data.encryption in [
         "repokey",
         "keyfile",

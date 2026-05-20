@@ -1569,7 +1569,6 @@ class TestBackupPlanRoutes:
             executor_type="agent",
             execution_target="local",
             agent_machine_id=agent.id,
-            source_directories=json.dumps(["/repo/default"]),
             compression="zstd",
         )
         _plan, run = _create_execution_plan(
@@ -1621,6 +1620,7 @@ class TestBackupPlanRoutes:
         )
         assert backup_job.execution_mode == "agent"
         assert agent_job.agent_machine_id == agent.id
+        assert repo.source_directories is None
         assert agent_job.payload["backup"]["source_paths"] == ["/srv/project"]
         assert agent_job.payload["backup"]["exclude_patterns"] == ["*.tmp"]
         test_db.refresh(run)

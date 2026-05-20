@@ -166,12 +166,18 @@ def validate_agent_backup_repository(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.agentNotQueueable"},
         )
-    if source_paths is None:
+    using_repository_sources = source_paths is None
+    if using_repository_sources:
         source_paths = decode_json_list(repository.source_directories)
     if not source_paths:
+        detail_key = (
+            "backend.errors.repo.agentManualBackupRequiresPlanSources"
+            if using_repository_sources
+            else "backend.errors.repo.atLeastOneSourceDirRequired"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"key": "backend.errors.repo.atLeastOneSourceDirRequired"},
+            detail={"key": detail_key},
         )
     return agent
 
