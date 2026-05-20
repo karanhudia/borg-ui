@@ -48,6 +48,8 @@ class NotificationSettingsCreate(BaseModel):
     notify_on_restore_check_success: bool = Field(default=False)
     notify_on_restore_check_failure: bool = Field(default=True)
     notify_on_schedule_failure: bool = Field(default=True)
+    notify_on_stale_backup: bool = Field(default=True)
+    notify_on_backup_report: bool = Field(default=True)
     monitor_all_repositories: bool = Field(
         default=True, description="If True, applies to all repositories"
     )
@@ -74,6 +76,8 @@ class NotificationSettingsUpdate(BaseModel):
     notify_on_restore_check_success: Optional[bool] = None
     notify_on_restore_check_failure: Optional[bool] = None
     notify_on_schedule_failure: Optional[bool] = None
+    notify_on_stale_backup: Optional[bool] = None
+    notify_on_backup_report: Optional[bool] = None
     monitor_all_repositories: Optional[bool] = None
     repository_ids: Optional[List[int]] = None
 
@@ -104,6 +108,8 @@ class NotificationSettingsResponse(BaseModel):
     notify_on_restore_check_success: bool
     notify_on_restore_check_failure: bool
     notify_on_schedule_failure: bool
+    notify_on_stale_backup: bool
+    notify_on_backup_report: bool
     monitor_all_repositories: bool
     repositories: List[RepositoryInfo]
     created_at: datetime

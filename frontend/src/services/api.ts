@@ -128,6 +128,22 @@ export interface SystemSettings {
   borg2_fast_browse_beta_enabled?: boolean
   mqtt_beta_enabled?: boolean
   managed_agents_beta_enabled?: boolean
+  backup_monitoring_enabled?: boolean
+  backup_monitoring_stale_after_days?: number
+  backup_monitoring_interval_hours?: number
+  backup_monitoring_alert_cooldown_hours?: number
+  backup_monitoring_include_observe_repos?: boolean
+  backup_monitoring_last_checked_at?: string | null
+  backup_monitoring_last_alert_sent_at?: string | null
+  backup_reports_enabled?: boolean
+  backup_reports_frequency?: 'daily' | 'weekly' | 'monthly'
+  backup_reports_hour_utc?: number
+  backup_reports_weekday?: number
+  backup_reports_monthday?: number
+  backup_reports_include_summary?: boolean
+  backup_reports_include_stale_repositories?: boolean
+  backup_reports_include_recent_activity?: boolean
+  backup_reports_last_sent_at?: string | null
   [key: string]: unknown
 }
 
@@ -473,6 +489,8 @@ export const settingsAPI = {
   getSystemSettings: () => api.get('/settings/system'),
   updateSystemSettings: (settings: SystemSettings) => api.put('/settings/system', settings),
   refreshAllStats: () => api.post('/settings/refresh-stats'),
+  runBackupMonitoring: () => api.post('/settings/backup-monitoring/run'),
+  sendBackupReport: () => api.post('/settings/backup-reports/send'),
 
   // User management
   getUsers: () => api.get('/settings/users'),

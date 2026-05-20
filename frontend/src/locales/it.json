@@ -129,6 +129,7 @@
       "account": "Account",
       "appearance": "Aspetto",
       "notifications": "Notifiche",
+      "monitoringReports": "Monitoraggio e report",
       "preferences": "Preferenze",
       "licensing": "Licenze",
       "systemLabel": "Sistema",
@@ -145,7 +146,8 @@
     "menu": {
       "accountAndSecurityDesc": "Profilo, password, 2FA, passkey",
       "appearanceDesc": "Tema",
-      "notificationsDesc": "Avvisi e preferenze"
+      "notificationsDesc": "Avvisi e preferenze",
+      "monitoringReportsDesc": "Avvisi backup obsoleti, report"
     },
     "versionInfo": "Info Versione",
     "app": "App:",
@@ -2268,6 +2270,46 @@
     "statsRefreshCompleted": "Aggiornamento statistiche completato",
     "failedToStartStatsRefresh": "Impossibile avviare l'aggiornamento delle statistiche"
   },
+  "monitoringReports": {
+    "title": "Monitoraggio e report",
+    "subtitle": "Configura avvisi per backup obsoleti e report programmati sullo stato dei backup",
+    "saving": "Salvataggio in corso...",
+    "savedSuccessfully": "Impostazioni di monitoraggio e report salvate con successo",
+    "failedToSave": "Impossibile salvare le impostazioni di monitoraggio e report",
+    "alertsTitle": "Avvisi backup obsoleti",
+    "alertsDescription": "Rileva repository il cui archivio più recente supera l'età configurata e invia avvisi tramite Apprise.",
+    "enableMonitoring": "Abilita monitoraggio backup obsoleti",
+    "staleAfterDays": "Obsoleto dopo (giorni)",
+    "staleAfterHelper": "Avvisa quando l'archivio più recente ha questo numero di giorni.",
+    "checkIntervalHours": "Intervallo controllo (ore)",
+    "checkIntervalHelper": "Quanto spesso Borg UI valuta la freschezza dei repository.",
+    "cooldownHours": "Cooldown avvisi (ore)",
+    "cooldownHelper": "Tempo minimo tra avvisi ripetuti per backup obsoleti.",
+    "includeObserveRepos": "Includi repository solo osservazione",
+    "runCheckNow": "Esegui controllo ora",
+    "monitoringRunComplete": "Controllo di monitoraggio completato. Repository obsoleti: {{count}}",
+    "failedToRun": "Impossibile eseguire il monitoraggio dei backup",
+    "lastChecked": "Ultimo controllo:",
+    "lastAlert": "Ultimo avviso:",
+    "reportsTitle": "Report backup",
+    "reportsDescription": "Invia riepiloghi periodici su freschezza dei backup, repository obsoleti e attività recente.",
+    "enableReports": "Abilita report backup",
+    "frequency": "Frequenza",
+    "frequencyDaily": "Giornaliera",
+    "frequencyWeekly": "Settimanale",
+    "frequencyMonthly": "Mensile",
+    "hourUtc": "Ora (UTC)",
+    "weekday": "Giorno della settimana",
+    "monthday": "Giorno del mese",
+    "reportContent": "Contenuto report",
+    "summary": "Riepilogo",
+    "staleRepositories": "Repository obsoleti",
+    "recentActivity": "Attività backup recente",
+    "sendReportNow": "Invia report ora",
+    "reportSent": "Report backup inviato per {{count}} repository",
+    "failedToSend": "Impossibile inviare il report backup",
+    "lastReport": "Ultimo report:"
+  },
   "notifications": {
     "title": "Servizi di Notifica",
     "subtitle": "Configura i servizi di notifica per avvisi di backup e ripristino",
@@ -2372,6 +2414,10 @@
       "failure": "Fallimento",
       "schedulerErrors": "Errori Pianificatore",
       "schedulerErrorsHelper": "Notifica quando il pianificatore non riesce ad avviare un backup (es., errori di sistema). I fallimenti normali del backup sono gestiti sopra.",
+      "staleBackupAlerts": "Avvisi backup obsoleti",
+      "staleBackupAlertsHelper": "Notifica quando Borg UI rileva repository senza un archivio recente.",
+      "backupReports": "Report backup",
+      "backupReportsHelper": "Riceve report programmati o manuali sullo stato dei backup.",
       "applyToRepositories": "Applica ai Repository",
       "allRepositories": "Tutti i Repository",
       "selectedRepositoriesOnly": "Solo Repository Selezionati",
@@ -2402,7 +2448,9 @@
         "restore": "Restore",
         "restoreCheck": "Restore Check",
         "check": "Check",
-        "schedule": "Schedule"
+        "schedule": "Schedule",
+        "monitoring": "Monitoring",
+        "reports": "Reports"
       },
       "events": {
         "start": "Start",
@@ -2410,7 +2458,9 @@
         "warning": "Avviso",
         "failure": "Failure",
         "off": "Off",
-        "errors": "Errors"
+        "errors": "Errors",
+        "staleBackup": "Backup obsoleti",
+        "reports": "Report"
       },
       "actions": {
         "sendTest": "Send test notification",

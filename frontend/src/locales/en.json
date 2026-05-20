@@ -129,6 +129,7 @@
       "account": "Account",
       "appearance": "Appearance",
       "notifications": "Notifications",
+      "monitoringReports": "Monitoring & Reports",
       "preferences": "Preferences",
       "licensing": "Licensing",
       "systemLabel": "System",
@@ -145,7 +146,8 @@
     "menu": {
       "accountAndSecurityDesc": "Profile, password, 2FA, passkeys",
       "appearanceDesc": "Theme",
-      "notificationsDesc": "Alerts & preferences"
+      "notificationsDesc": "Alerts & preferences",
+      "monitoringReportsDesc": "Stale backup alerts, reports"
     },
     "versionInfo": "Version Info",
     "app": "App:",
@@ -2268,6 +2270,46 @@
     "statsRefreshCompleted": "Stats refresh completed",
     "failedToStartStatsRefresh": "Failed to start stats refresh"
   },
+  "monitoringReports": {
+    "title": "Monitoring & Reports",
+    "subtitle": "Configure stale-backup alerts and scheduled backup health reports",
+    "saving": "Saving...",
+    "savedSuccessfully": "Monitoring and report settings saved successfully",
+    "failedToSave": "Failed to save monitoring and report settings",
+    "alertsTitle": "Stale Backup Alerts",
+    "alertsDescription": "Detect repositories whose newest archive is older than the configured age and send alerts through Apprise.",
+    "enableMonitoring": "Enable stale-backup monitoring",
+    "staleAfterDays": "Stale after (days)",
+    "staleAfterHelper": "Alert when the newest archive is this many days old.",
+    "checkIntervalHours": "Check interval (hours)",
+    "checkIntervalHelper": "How often Borg UI evaluates repository freshness.",
+    "cooldownHours": "Alert cooldown (hours)",
+    "cooldownHelper": "Minimum time between repeated stale-backup alerts.",
+    "includeObserveRepos": "Include observe-only repositories",
+    "runCheckNow": "Run check now",
+    "monitoringRunComplete": "Monitoring check complete. Stale repositories: {{count}}",
+    "failedToRun": "Failed to run backup monitoring",
+    "lastChecked": "Last checked:",
+    "lastAlert": "Last alert:",
+    "reportsTitle": "Backup Reports",
+    "reportsDescription": "Send periodic summaries of backup freshness, stale repositories, and recent backup activity.",
+    "enableReports": "Enable backup reports",
+    "frequency": "Frequency",
+    "frequencyDaily": "Daily",
+    "frequencyWeekly": "Weekly",
+    "frequencyMonthly": "Monthly",
+    "hourUtc": "Hour (UTC)",
+    "weekday": "Weekday",
+    "monthday": "Day of month",
+    "reportContent": "Report content",
+    "summary": "Summary",
+    "staleRepositories": "Stale repositories",
+    "recentActivity": "Recent backup activity",
+    "sendReportNow": "Send report now",
+    "reportSent": "Backup report sent for {{count}} repositories",
+    "failedToSend": "Failed to send backup report",
+    "lastReport": "Last report:"
+  },
   "notifications": {
     "title": "Notification Services",
     "subtitle": "Configure notification services for backup and restore alerts",
@@ -2372,6 +2414,10 @@
       "failure": "Failure",
       "schedulerErrors": "Scheduler Errors",
       "schedulerErrorsHelper": "Notifies when the scheduler fails to start a backup (e.g., system errors). Regular backup failures are handled above.",
+      "staleBackupAlerts": "Stale backup alerts",
+      "staleBackupAlertsHelper": "Notifies when Borg UI detects repositories with no recent archive.",
+      "backupReports": "Backup reports",
+      "backupReportsHelper": "Receives scheduled or manual backup health reports.",
       "applyToRepositories": "Apply To Repositories",
       "allRepositories": "All Repositories",
       "selectedRepositoriesOnly": "Selected Repositories Only",
@@ -2402,7 +2448,9 @@
         "restore": "Restore",
         "restoreCheck": "Restore Check",
         "check": "Check",
-        "schedule": "Schedule"
+        "schedule": "Schedule",
+        "monitoring": "Monitoring",
+        "reports": "Reports"
       },
       "events": {
         "start": "Start",
@@ -2410,7 +2458,9 @@
         "warning": "Warning",
         "failure": "Failure",
         "off": "Off",
-        "errors": "Errors"
+        "errors": "Errors",
+        "staleBackup": "Stale backups",
+        "reports": "Reports"
       },
       "actions": {
         "sendTest": "Send test notification",

@@ -129,6 +129,7 @@
       "account": "Cuenta",
       "appearance": "Apariencia",
       "notifications": "Notificaciones",
+      "monitoringReports": "Monitorización e informes",
       "preferences": "Preferencias",
       "licensing": "Licencias",
       "systemLabel": "Sistema",
@@ -145,7 +146,8 @@
     "menu": {
       "accountAndSecurityDesc": "Perfil, contraseña, 2FA, passkeys",
       "appearanceDesc": "Tema",
-      "notificationsDesc": "Alertas y preferencias"
+      "notificationsDesc": "Alertas y preferencias",
+      "monitoringReportsDesc": "Alertas de copias antiguas, informes"
     },
     "versionInfo": "Información de versión",
     "app": "App:",
@@ -2268,6 +2270,46 @@
     "statsRefreshCompleted": "Actualización de estadísticas completada",
     "failedToStartStatsRefresh": "Error al iniciar la actualización de estadísticas"
   },
+  "monitoringReports": {
+    "title": "Monitorización e informes",
+    "subtitle": "Configura alertas de copias antiguas e informes programados de salud de las copias",
+    "saving": "Guardando...",
+    "savedSuccessfully": "Configuración de monitorización e informes guardada correctamente",
+    "failedToSave": "Error al guardar la configuración de monitorización e informes",
+    "alertsTitle": "Alertas de copias antiguas",
+    "alertsDescription": "Detecta repositorios cuyo archivo más reciente supera la antigüedad configurada y envía alertas por Apprise.",
+    "enableMonitoring": "Habilitar monitorización de copias antiguas",
+    "staleAfterDays": "Antigua tras (días)",
+    "staleAfterHelper": "Alertar cuando el archivo más reciente tenga esta cantidad de días.",
+    "checkIntervalHours": "Intervalo de comprobación (horas)",
+    "checkIntervalHelper": "Frecuencia con la que Borg UI evalúa la frescura del repositorio.",
+    "cooldownHours": "Enfriamiento de alerta (horas)",
+    "cooldownHelper": "Tiempo mínimo entre alertas repetidas de copias antiguas.",
+    "includeObserveRepos": "Incluir repositorios solo de observación",
+    "runCheckNow": "Ejecutar comprobación ahora",
+    "monitoringRunComplete": "Comprobación de monitorización completada. Repositorios antiguos: {{count}}",
+    "failedToRun": "Error al ejecutar la monitorización de copias",
+    "lastChecked": "Última comprobación:",
+    "lastAlert": "Última alerta:",
+    "reportsTitle": "Informes de copias",
+    "reportsDescription": "Envía resúmenes periódicos de frescura de copias, repositorios antiguos y actividad reciente.",
+    "enableReports": "Habilitar informes de copias",
+    "frequency": "Frecuencia",
+    "frequencyDaily": "Diaria",
+    "frequencyWeekly": "Semanal",
+    "frequencyMonthly": "Mensual",
+    "hourUtc": "Hora (UTC)",
+    "weekday": "Día de la semana",
+    "monthday": "Día del mes",
+    "reportContent": "Contenido del informe",
+    "summary": "Resumen",
+    "staleRepositories": "Repositorios antiguos",
+    "recentActivity": "Actividad reciente de copias",
+    "sendReportNow": "Enviar informe ahora",
+    "reportSent": "Informe de copias enviado para {{count}} repositorios",
+    "failedToSend": "Error al enviar el informe de copias",
+    "lastReport": "Último informe:"
+  },
   "notifications": {
     "title": "Servicios de notificación",
     "subtitle": "Configura servicios de notificación para alertas de copia de seguridad y restauración",
@@ -2372,6 +2414,10 @@
       "failure": "Fallo",
       "schedulerErrors": "Errores del planificador",
       "schedulerErrorsHelper": "Notifica cuando el planificador no puede iniciar una copia (ej., errores del sistema). Los fallos regulares de copia se gestionan arriba.",
+      "staleBackupAlerts": "Alertas de copias antiguas",
+      "staleBackupAlertsHelper": "Notifica cuando Borg UI detecta repositorios sin un archivo reciente.",
+      "backupReports": "Informes de copias",
+      "backupReportsHelper": "Recibe informes programados o manuales de salud de las copias.",
       "applyToRepositories": "Aplicar a repositorios",
       "allRepositories": "Todos los repositorios",
       "selectedRepositoriesOnly": "Solo repositorios seleccionados",
@@ -2402,7 +2448,9 @@
         "restore": "Restore",
         "restoreCheck": "Restore Check",
         "check": "Check",
-        "schedule": "Schedule"
+        "schedule": "Schedule",
+        "monitoring": "Monitoring",
+        "reports": "Reports"
       },
       "events": {
         "start": "Start",
@@ -2410,7 +2458,9 @@
         "warning": "Advertencia",
         "failure": "Failure",
         "off": "Off",
-        "errors": "Errors"
+        "errors": "Errors",
+        "staleBackup": "Copias antiguas",
+        "reports": "Informes"
       },
       "actions": {
         "sendTest": "Send test notification",

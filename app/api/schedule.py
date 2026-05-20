@@ -2744,6 +2744,7 @@ async def check_scheduled_jobs():
             backup_plan_execution_service.dispatch_due_runs(db, now)
             await run_due_scheduled_checks(db, now)
             await run_due_scheduled_restore_checks(db, now)
+            await run_backup_monitoring_and_reports(db, now)
 
         except Exception as e:
             logger.error("Error in scheduled job checker", error=str(e))
@@ -2752,3 +2753,12 @@ async def check_scheduled_jobs():
 
         # Wait for 1 minute before next check
         await asyncio.sleep(60)
+
+
+async def run_backup_monitoring_and_reports(db: Session, now: datetime):
+    """Run configured backup monitoring and report dispatch from the shared scheduler."""
+    from app.services.backup_monitoring_service import (
+        run_backup_monitoring_and_reports as run_service,
+    )
+
+    return await run_service(db, now)
