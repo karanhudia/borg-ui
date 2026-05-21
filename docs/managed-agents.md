@@ -77,13 +77,65 @@ heartbeat.
 Linux systemd and macOS launchd templates are included in the repository under
 `agent/install/`.
 
-For Linux, edit `agent/install/systemd/borg-ui-agent.service` so `ExecStart`,
-`User`, `Group`, and the config path match the client machine. Then install it:
+### Linux systemd
+
+The default Linux unit expects a system user and group named `borg-ui-agent`:
+
+```bash
+sudo useradd --system --user-group --home-dir /var/lib/borg-ui-agent \
+  --create-home --shell /usr/sbin/nologin borg-ui-agent
+sudo install -d -o borg-ui-agent -g borg-ui-agent -m 0750 /etc/borg-ui-agent
+```
+
+Install the agent into the path used by
+`agent/install/systemd/borg-ui-agent.service`, then register the service config:
+
+```bash
+sudo install -d -m 0755 /opt/borg-ui-agent
+sudo python3.11 -m venv /opt/borg-ui-agent/.venv
+sudo /opt/borg-ui-agent/.venv/bin/pip install .
+sudo -u borg-ui-agent /opt/borg-ui-agent/.venv/bin/borg-ui-agent \
+  --config /etc/borg-ui-agent/config.toml \
+  register \
+  --server http://borg-ui-host:7879 \
+  --token borgui_enroll_example \
+  --name laptop
+```
+
+Validate the service setup before enabling it. This catches a missing or
+invalid service user/group before systemd reaches `status=217/USER`:
+
+```bash
+sudo /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check \
+  --user borg-ui-agent \
+  --group borg-ui-agent \
+  --exec /opt/borg-ui-agent/.venv/bin/borg-ui-agent \
+  --config /etc/borg-ui-agent/config.toml
+```
+
+Then install and start the unit:
 
 ```bash
 sudo cp agent/install/systemd/borg-ui-agent.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now borg-ui-agent
+```
+
+If you choose a different service user, group, binary path, or config path, edit
+the systemd unit and pass the same values to `service-check`.
+
+If `systemctl status borg-ui-agent` shows `status=217/USER` or
+`Failed at step USER`, systemd could not use the configured `User=` or `Group=`.
+Run:
+
+```bash
+getent passwd borg-ui-agent
+getent group borg-ui-agent
+sudo /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check \
+  --user borg-ui-agent \
+  --group borg-ui-agent \
+  --exec /opt/borg-ui-agent/.venv/bin/borg-ui-agent \
+  --config /etc/borg-ui-agent/config.toml
 ```
 
 For macOS, edit `agent/install/launchd/com.borg-ui.agent.plist` so the binary,

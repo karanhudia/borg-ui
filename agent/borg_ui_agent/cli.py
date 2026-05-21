@@ -14,6 +14,14 @@ from agent.borg_ui_agent.config import (
     save_config,
 )
 from agent.borg_ui_agent.runtime import AgentRuntime, get_capabilities
+from agent.borg_ui_agent.service_setup import (
+    DEFAULT_SERVICE_CONFIG,
+    DEFAULT_SERVICE_EXECUTABLE,
+    DEFAULT_SERVICE_GROUP,
+    DEFAULT_SERVICE_USER,
+    ServiceSetupError,
+    validate_service_setup,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,6 +41,22 @@ def build_parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run")
     run.add_argument("--poll-interval", type=int, default=15)
     run.add_argument("--max-iterations", type=int, default=None)
+
+    service_check = subparsers.add_parser("service-check")
+    service_check.add_argument("--user", default=DEFAULT_SERVICE_USER)
+    service_check.add_argument("--group", default=DEFAULT_SERVICE_GROUP)
+    service_check.add_argument(
+        "--exec",
+        dest="executable",
+        type=Path,
+        default=DEFAULT_SERVICE_EXECUTABLE,
+    )
+    service_check.add_argument(
+        "--config",
+        dest="service_config",
+        type=Path,
+        default=DEFAULT_SERVICE_CONFIG,
+    )
 
     return parser
 
@@ -109,6 +133,21 @@ def _run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _service_check(args: argparse.Namespace) -> int:
+    validate_service_setup(
+        user=args.user,
+        group=args.group,
+        executable_path=args.executable,
+        config_path=args.service_config,
+    )
+    print(
+        "borg-ui-agent service setup OK: "
+        f"user={args.user} group={args.group} "
+        f"exec={args.executable} config={args.service_config}"
+    )
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -123,7 +162,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             return _unregister(args)
         if args.command == "run":
             return _run(args)
-    except (AgentClientError, OSError, KeyError) as exc:
+        if args.command == "service-check":
+            return _service_check(args)
+    except (AgentClientError, OSError, KeyError, ServiceSetupError) as exc:
         parser.exit(1, f"borg-ui-agent: {exc}\n")
     parser.error(f"unknown command: {args.command}")
     return 2
