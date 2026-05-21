@@ -27,3 +27,11 @@ class TestSshPaths:
             apply_ssh_command_prefix("/volume1/share/komodo", "/volume1")
             == "/volume1/share/komodo"
         )
+
+    def test_apply_ssh_command_prefix_preserves_borg_slashdot_prefix(self):
+        assert apply_ssh_command_prefix("/xxx/yyy", "/.") == "/./xxx/yyy"
+        assert apply_ssh_command_prefix("/./xxx/yyy", "/.") == "/./xxx/yyy"
+
+    def test_apply_ssh_command_prefix_does_not_double_borg_slashdot_prefix(self):
+        assert apply_ssh_command_prefix("/xxx/yyy", "/./xxx") == "/./xxx/yyy"
+        assert apply_ssh_command_prefix("/xxx/yyy", "/./xxx/yyy") == "/./xxx/yyy"

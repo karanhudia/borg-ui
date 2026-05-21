@@ -29,6 +29,39 @@ def resolve_sshfs_source_path(path: str, default_path: Optional[str] = None) -> 
     return resolved_path
 
 
+def _normalize_command_path(path: str) -> str:
+    normalized_path = (path or "").strip() or "/"
+    if not normalized_path.startswith("/"):
+        normalized_path = f"/{normalized_path}"
+
+    if normalized_path == "/." or normalized_path.startswith("/./"):
+        tail = normalized_path[3:] if normalized_path.startswith("/./") else ""
+        if not tail:
+            return "/."
+
+        normalized_tail = posixpath.normpath(f"/{tail}").lstrip("/")
+        return f"/./{normalized_tail}" if normalized_tail else "/."
+
+    return posixpath.normpath(normalized_path)
+
+
+def _join_command_prefix(normalized_prefix: str, normalized_path: str) -> str:
+    tail = normalized_path.lstrip("/")
+    if not tail:
+        return normalized_prefix
+    if normalized_prefix == "/.":
+        return f"/./{tail}"
+    if normalized_prefix.startswith("/./"):
+        visible_prefix = f"/{normalized_prefix[3:]}"
+        if normalized_path == visible_prefix:
+            return normalized_prefix
+        if normalized_path.startswith(f"{visible_prefix}/"):
+            remainder = normalized_path[len(visible_prefix) :].lstrip("/")
+            return f"{normalized_prefix.rstrip('/')}/{remainder}"
+        return f"{normalized_prefix.rstrip('/')}/{tail}"
+    return posixpath.normpath(posixpath.join(normalized_prefix, tail))
+
+
 def apply_ssh_command_prefix(path: str, ssh_path_prefix: Optional[str] = None) -> str:
     """
     Apply an SSH-only command path prefix.
@@ -36,23 +69,18 @@ def apply_ssh_command_prefix(path: str, ssh_path_prefix: Optional[str] = None) -
     This is used for shell/Borg SSH commands and must not be used for SFTP or
     SSHFS source-path resolution.
     """
-    normalized_path = (path or "").strip() or "/"
-    if not normalized_path.startswith("/"):
-        normalized_path = f"/{normalized_path}"
-    normalized_path = posixpath.normpath(normalized_path)
+    normalized_path = _normalize_command_path(path)
 
     normalized_prefix = (ssh_path_prefix or "").strip()
     if not normalized_prefix:
         return normalized_path
-    if not normalized_prefix.startswith("/"):
-        normalized_prefix = f"/{normalized_prefix}"
-    normalized_prefix = posixpath.normpath(normalized_prefix)
+    normalized_prefix = _normalize_command_path(normalized_prefix)
 
     if normalized_path == normalized_prefix or normalized_path.startswith(
         f"{normalized_prefix}/"
     ):
         return normalized_path
+    if normalized_path.startswith("/./"):
+        return normalized_path
 
-    return posixpath.normpath(
-        posixpath.join(normalized_prefix, normalized_path.lstrip("/"))
-    )
+    return _join_command_prefix(normalized_prefix, normalized_path)
