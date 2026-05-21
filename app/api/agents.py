@@ -171,7 +171,7 @@ def _resolve_enrollment_token(raw_token: str, db: Session) -> AgentEnrollmentTok
             continue
         if token.revoked_at is not None or token.used_at is not None:
             raise _invalid_enrollment_token()
-        if _as_utc(token.expires_at) <= now:
+        if token.expires_at is not None and _as_utc(token.expires_at) <= now:
             raise _invalid_enrollment_token()
         return token
 

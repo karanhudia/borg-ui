@@ -23,10 +23,19 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material'
-import { File, ChevronRight, Home, Search, Archive, HardDrive, FolderPlus } from 'lucide-react'
+import {
+  File,
+  ChevronRight,
+  Home,
+  Search,
+  Archive,
+  HardDrive,
+  FolderPlus,
+  Laptop,
+} from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import api from '../services/api'
-import { sshKeysAPI } from '../services/api'
+import { managedAgentsAPI, sshKeysAPI } from '../services/api'
 import { useTranslation } from 'react-i18next'
 
 interface FileSystemItem {
@@ -60,6 +69,8 @@ interface SSHNetworkConfig {
   port: number
 }
 
+type FileExplorerConnectionType = 'local' | 'ssh' | 'agent'
+
 interface FileExplorerDialogProps {
   open: boolean
   onClose: () => void
@@ -67,7 +78,8 @@ interface FileExplorerDialogProps {
   title?: string
   initialPath?: string
   multiSelect?: boolean
-  connectionType?: 'local' | 'ssh'
+  connectionType?: FileExplorerConnectionType
+  agentId?: number
   sshConfig?: SSHNetworkConfig
   selectMode?: 'directories' | 'files' | 'both'
   showSshMountPoints?: boolean // Set to false to hide SSH mount points (e.g., when repo is SSH to prevent remote-to-remote)
@@ -82,6 +94,7 @@ export default function FileExplorerDialog({
   initialPath = '/',
   multiSelect = false,
   connectionType = 'local',
+  agentId,
   sshConfig,
   selectMode = 'directories',
   showSshMountPoints = true,
@@ -128,7 +141,7 @@ export default function FileExplorerDialog({
   }
 
   const loadDirectory = React.useCallback(
-    async (path: string, conn?: 'local' | 'ssh', config?: SSHNetworkConfig) => {
+    async (path: string, conn?: FileExplorerConnectionType, config?: SSHNetworkConfig) => {
       setLoading(true)
       setError(null)
 
@@ -144,6 +157,32 @@ export default function FileExplorerDialog({
       const useSshConfig = config !== undefined ? config : activeSshConfig
 
       try {
+        if (useConnectionType === 'agent') {
+          if (!agentId) {
+            setError(t('fileExplorer.selectAgentFirst', 'Select an agent before browsing.'))
+            setItems([])
+            return
+          }
+
+          const response = await managedAgentsAPI.browseFilesystem(agentId, path || '/', false)
+          setItems(
+            (response.data.items || []).map((item) => ({
+              name: item.name,
+              path: item.path,
+              is_directory: item.type === 'directory',
+              size: item.size,
+              modified: item.modified_at
+                ? new Date(item.modified_at * 1000).toISOString()
+                : undefined,
+              is_borg_repo: false,
+              permissions: item.hidden ? 'hidden' : undefined,
+            }))
+          )
+          setCurrentPath(response.data.current_path || path || '/')
+          setIsInsideLocalMount(false)
+          return
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const params: any = {
           path,
@@ -174,7 +213,7 @@ export default function FileExplorerDialog({
         setLoading(false)
       }
     },
-    [activeConnectionType, activeSshConfig, t]
+    [activeConnectionType, activeSshConfig, agentId, t]
   )
 
   // Initial load - only runs once when dialog opens
@@ -406,7 +445,15 @@ export default function FileExplorerDialog({
             <Typography variant="h6" fontWeight={600}>
               {title ?? t('dialogs.fileExplorer.selectDirectory')}
             </Typography>
-            {activeConnectionType === 'ssh' && activeSshConfig ? (
+            {activeConnectionType === 'agent' && agentId ? (
+              <Chip
+                icon={<Laptop size={14} />}
+                label={`Agent #${agentId}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
+            ) : activeConnectionType === 'ssh' && activeSshConfig ? (
               <Chip
                 label={`${activeSshConfig.username}@${activeSshConfig.host}`}
                 size="small"
@@ -500,20 +547,22 @@ export default function FileExplorerDialog({
                 },
               }}
             />
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FolderPlus size={16} />}
-              onClick={() => setShowCreateFolder(true)}
-              sx={{
-                flexShrink: 0,
-                whiteSpace: 'nowrap',
-                height: '35px',
-                minHeight: '35px',
-              }}
-            >
-              {t('fileExplorer.newFolder')}
-            </Button>
+            {activeConnectionType !== 'agent' && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FolderPlus size={16} />}
+                onClick={() => setShowCreateFolder(true)}
+                sx={{
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                  height: '35px',
+                  minHeight: '35px',
+                }}
+              >
+                {t('fileExplorer.newFolder')}
+              </Button>
+            )}
           </Box>
 
           {/* Error Display */}
