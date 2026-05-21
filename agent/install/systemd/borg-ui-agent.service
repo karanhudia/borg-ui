@@ -5,6 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Create and validate this account before enabling the unit:
+# /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check --user borg-ui-agent --group borg-ui-agent
 User=borg-ui-agent
 Group=borg-ui-agent
 ExecStart=/opt/borg-ui-agent/.venv/bin/borg-ui-agent --config /etc/borg-ui-agent/config.toml run
