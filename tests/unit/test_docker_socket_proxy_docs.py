@@ -17,3 +17,6 @@ def test_compose_file_points_hook_users_to_socket_proxy_option() -> None:
 
     assert "docker-socket-proxy" in compose
     assert "DOCKER_HOST=tcp://docker-socket-proxy:2375" in compose
+    assert "\n  docker-socket-proxy:" not in compose
+    assert "\n  # docker-socket-proxy:" in compose
+    assert "Uncomment this service" in compose
