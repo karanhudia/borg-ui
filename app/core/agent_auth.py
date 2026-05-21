@@ -36,7 +36,7 @@ def resolve_agent_from_token(token: Optional[str], db: Session) -> AgentMachine:
 
     for agent in candidates:
         if verify_password(token, agent.token_hash):
-            if agent.status in ("disabled", "revoked"):
+            if agent.status in ("disabled", "revoked", "deleted"):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail={"key": "backend.errors.agents.agentDisabled"},

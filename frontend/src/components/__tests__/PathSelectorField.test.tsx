@@ -11,16 +11,24 @@ vi.mock('../FileExplorerDialog', () => ({
     onSelect,
     multiSelect,
     selectMode,
+    connectionType,
+    agentId,
   }: {
     open: boolean
     onClose: () => void
     onSelect: (paths: string[]) => void
     multiSelect: boolean
     selectMode: string
+    connectionType?: string
+    agentId?: number
   }) => {
     if (!open) return null
     return (
-      <div data-testid="mock-file-explorer">
+      <div
+        data-testid="mock-file-explorer"
+        data-connection-type={connectionType}
+        data-agent-id={agentId || ''}
+      >
         <button
           data-testid="select-single"
           onClick={() => {
@@ -208,6 +216,27 @@ describe('PathSelectorField', () => {
       await user.click(screen.getByTitle('Browse filesystem'))
 
       expect(screen.getByText('selectMode: files')).toBeInTheDocument()
+    })
+
+    it('passes managed-agent browse props to FileExplorerDialog', async () => {
+      const user = userEvent.setup()
+      render(
+        <PathSelectorField
+          label="Path"
+          value=""
+          onChange={mockOnChange}
+          connectionType="agent"
+          agentId={101}
+        />
+      )
+
+      await user.click(screen.getByTitle('Browse filesystem'))
+
+      expect(screen.getByTestId('mock-file-explorer')).toHaveAttribute(
+        'data-connection-type',
+        'agent'
+      )
+      expect(screen.getByTestId('mock-file-explorer')).toHaveAttribute('data-agent-id', '101')
     })
 
     it('defaults selectMode to directories', async () => {

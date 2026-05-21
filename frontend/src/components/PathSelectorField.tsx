@@ -15,7 +15,8 @@ interface PathSelectorFieldProps {
   error?: boolean
   multiSelect?: boolean
   selectMode?: 'directories' | 'files' | 'both'
-  connectionType?: 'local' | 'ssh'
+  connectionType?: 'local' | 'ssh' | 'agent'
+  agentId?: number
   sshConfig?: {
     ssh_key_id: number
     host: string
@@ -38,6 +39,7 @@ export default function PathSelectorField({
   multiSelect = false,
   selectMode = 'directories',
   connectionType = 'local',
+  agentId,
   sshConfig,
   fullWidth = true,
   size = 'small',
@@ -93,6 +95,7 @@ export default function PathSelectorField({
         initialPath={value || '/'}
         multiSelect={multiSelect}
         connectionType={connectionType}
+        agentId={agentId}
         sshConfig={sshConfig}
         selectMode={selectMode}
       />

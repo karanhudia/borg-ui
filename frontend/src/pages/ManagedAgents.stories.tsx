@@ -6,7 +6,11 @@ import type {
   AgentJobResponse,
   AgentMachineResponse,
 } from '../services/api'
+import AddAgentDialog from './managed-agents/AddAgentDialog'
+import AgentInstallCommand from './managed-agents/AgentInstallCommand'
+import { buildAgentInstallCommand } from './managed-agents/agentInstallCommandText'
 import {
+  AgentDeleteConfirmationDialog,
   AgentList,
   AgentSetupGuide,
   AgentSetupHelpContent,
@@ -112,6 +116,11 @@ const tokens: AgentEnrollmentTokenSummary[] = [
 ]
 
 const agentsById = new Map(agents.map((agent) => [agent.id, agent]))
+const exampleCommand = buildAgentInstallCommand(
+  'https://borg-ui.example.com',
+  '<enrollment-token>',
+  '<machine-name>'
+)
 
 const meta = {
   title: 'Pages/ManagedAgents',
@@ -145,10 +154,7 @@ export const FleetOverview: Story = {
           <Chip label="2 machines / 1 active job" color="primary" variant="outlined" />
         </Stack>
 
-        <AgentSetupGuide
-          command="borg-ui-agent register --server https://borg-ui.example.com --token <enrollment-token> --name <machine-name>"
-          onCopy={() => {}}
-        />
+        <AgentSetupGuide command={exampleCommand} onCopy={() => {}} />
 
         <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
           <Box
@@ -193,7 +199,13 @@ export const FleetOverview: Story = {
           <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
             Fleet
           </Typography>
-          <AgentList agents={agents} onRevoke={() => {}} isRevoking={false} />
+          <AgentList
+            agents={agents}
+            onRevoke={() => {}}
+            onDelete={() => {}}
+            isRevoking={false}
+            isDeleting={false}
+          />
         </Box>
 
         <Divider />
@@ -235,12 +247,106 @@ export const SetupHelpDetails: Story = {
               Fresh-machine install, registration URL, and startup guidance
             </Typography>
           </Box>
-          <AgentSetupHelpContent
-            command="borg-ui-agent register --server https://borg-ui.example.com --token <enrollment-token> --name <machine-name>"
-            onCopy={() => {}}
-          />
+          <AgentSetupHelpContent command={exampleCommand} onCopy={() => {}} />
         </Stack>
       </Paper>
+    </Box>
+  ),
+}
+
+export const AddAgentPlatformStep: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AddAgentDialog
+        open
+        onClose={() => {}}
+        defaultServerUrl="https://borg-ui.example.com"
+        agents={agents}
+        onCreateToken={async () => ({
+          ...tokens[0],
+          token: 'borgui_enroll_example_token',
+          expires_at: '2026-05-28T12:00:00.000Z',
+        })}
+        creatingToken={false}
+        onCopy={() => {}}
+      />
+    </Box>
+  ),
+}
+
+export const AddAgentInstallCommandStep: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AddAgentDialog
+        open
+        initialStep={3}
+        initialAgentName="raspberry-pi"
+        initialCreatedToken={{
+          ...tokens[0],
+          token: 'borgui_enroll_example_token',
+          expires_at: '2026-05-28T12:00:00.000Z',
+        }}
+        onClose={() => {}}
+        defaultServerUrl="https://borg-ui.example.com"
+        agents={agents}
+        onCreateToken={async () => ({
+          ...tokens[0],
+          token: 'borgui_enroll_example_token',
+          expires_at: '2026-05-28T12:00:00.000Z',
+        })}
+        creatingToken={false}
+        onCopy={() => {}}
+      />
+    </Box>
+  ),
+}
+
+export const AddAgentWaitingForConnection: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <Paper variant="outlined" sx={{ maxWidth: 820, mx: 'auto', p: 3, borderRadius: 2 }}>
+        <AgentInstallCommand
+          serverUrl="https://borg-ui.example.com"
+          token="borgui_enroll_example_token"
+          agentName="workstation"
+          onCopy={() => {}}
+        />
+      </Paper>
+    </Box>
+  ),
+}
+
+export const AddAgentLocalhostWarning: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AddAgentDialog
+        open
+        initialStep={2}
+        onClose={() => {}}
+        defaultServerUrl="http://localhost:8083"
+        agents={agents}
+        onCreateToken={async () => ({
+          ...tokens[0],
+          token: 'borgui_enroll_example_token',
+          expires_at: '2026-05-28T12:00:00.000Z',
+        })}
+        creatingToken={false}
+        onCopy={() => {}}
+      />
+    </Box>
+  ),
+}
+
+export const DeleteConfirmation: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AgentDeleteConfirmationDialog
+        open
+        agent={agents[0]}
+        isDeleting={false}
+        onCancel={() => {}}
+        onConfirm={() => {}}
+      />
     </Box>
   ),
 }

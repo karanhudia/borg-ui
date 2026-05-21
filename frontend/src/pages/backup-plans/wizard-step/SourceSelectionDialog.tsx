@@ -49,8 +49,6 @@ import CodeEditor from '../../../components/CodeEditor'
 import FileExplorerDialog from '../../../components/FileExplorerDialog'
 import ResponsiveDialog from '../../../components/ResponsiveDialog'
 import {
-  managedAgentsAPI,
-  type AgentFilesystemItem,
   type AgentMachineResponse,
   sourceDiscoveryAPI,
   type DatabaseScanResponse,
@@ -342,192 +340,6 @@ function agentDisplayName(agent?: AgentMachineResponse | null) {
   return agent.hostname || agent.name || `Agent #${agent.id}`
 }
 
-interface AgentFileExplorerDialogProps {
-  open: boolean
-  agent: AgentMachineResponse | null
-  onClose: () => void
-  onSelect: (paths: string[]) => void
-  t: TFunction
-}
-
-function AgentFileExplorerDialog({
-  open,
-  agent,
-  onClose,
-  onSelect,
-  t,
-}: AgentFileExplorerDialogProps) {
-  const [path, setPath] = useState('/')
-  const [items, setItems] = useState<AgentFilesystemItem[]>([])
-  const [parentPath, setParentPath] = useState<string | null>(null)
-  const [selectedPaths, setSelectedPaths] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadPath = (nextPath: string) => {
-    if (!agent) return
-    setLoading(true)
-    setError(null)
-    managedAgentsAPI
-      .browseFilesystem(agent.id, nextPath || '/', false)
-      .then((response) => {
-        setPath(response.data.current_path)
-        setParentPath(response.data.parent_path)
-        setItems(response.data.items)
-        setSelectedPaths([])
-      })
-      .catch((err) => {
-        const detail = err?.response?.data?.detail
-        setError(
-          typeof detail === 'string'
-            ? detail
-            : detail?.message || t('backupPlans.sourceChooser.agentBrowseFailed')
-        )
-      })
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => {
-    if (open) loadPath('/')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, agent?.id])
-
-  const togglePath = (itemPath: string) => {
-    setSelectedPaths((current) =>
-      current.includes(itemPath)
-        ? current.filter((pathValue) => pathValue !== itemPath)
-        : [...current, itemPath]
-    )
-  }
-
-  return (
-    <ResponsiveDialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      footer={
-        <DialogActions>
-          <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
-          <Button
-            variant="contained"
-            onClick={() => onSelect(selectedPaths)}
-            disabled={selectedPaths.length === 0}
-          >
-            {t('backupPlans.sourceChooser.selectPaths')}
-          </Button>
-        </DialogActions>
-      }
-    >
-      <DialogTitle sx={{ pb: 1 }}>
-        {t('backupPlans.sourceChooser.agentBrowseTitle', {
-          agent: agentDisplayName(agent),
-        })}
-      </DialogTitle>
-      <DialogContent sx={{ pt: 1 }}>
-        <Stack spacing={1.5}>
-          <Stack direction="row" spacing={1}>
-            <TextField
-              size="small"
-              label={t('backupPlans.sourceChooser.currentPath')}
-              value={path}
-              onChange={(event) => setPath(event.target.value)}
-              fullWidth
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  loadPath(path)
-                }
-              }}
-            />
-            <Button variant="outlined" onClick={() => loadPath(path)} disabled={loading}>
-              {loading
-                ? t('backupPlans.sourceChooser.loading')
-                : t('backupPlans.sourceChooser.openPath')}
-            </Button>
-          </Stack>
-          {error && <Alert severity="warning">{error}</Alert>}
-          <Paper variant="outlined" sx={{ borderRadius: 1, overflow: 'hidden' }}>
-            {parentPath && (
-              <Button
-                fullWidth
-                startIcon={<ArrowLeft size={14} />}
-                onClick={() => loadPath(parentPath)}
-                sx={{ justifyContent: 'flex-start', borderRadius: 0 }}
-              >
-                {t('backupPlans.sourceChooser.parentDirectory')}
-              </Button>
-            )}
-            {items.map((item) => {
-              const selected = selectedPaths.includes(item.path)
-              return (
-                <Box
-                  key={item.path}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() =>
-                    item.type === 'directory' ? loadPath(item.path) : togglePath(item.path)
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      if (item.type === 'directory') {
-                        loadPath(item.path)
-                      } else {
-                        togglePath(item.path)
-                      }
-                    }
-                  }}
-                  sx={{
-                    alignItems: 'center',
-                    bgcolor: selected ? 'action.selected' : 'background.paper',
-                    borderTop: 1,
-                    borderColor: 'divider',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    gap: 1,
-                    minHeight: 40,
-                    px: 1.25,
-                    '&:hover': { bgcolor: 'action.hover' },
-                  }}
-                >
-                  {item.type === 'directory' ? <FolderOpen size={15} /> : <HardDrive size={15} />}
-                  <Typography variant="body2" sx={{ minWidth: 0 }} noWrap>
-                    {item.name}
-                  </Typography>
-                  <Box sx={{ flex: 1 }} />
-                  <Button
-                    size="small"
-                    variant={selected ? 'contained' : 'text'}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      togglePath(item.path)
-                    }}
-                  >
-                    {selected
-                      ? t('backupPlans.sourceChooser.selected')
-                      : t('backupPlans.sourceChooser.select')}
-                  </Button>
-                </Box>
-              )
-            })}
-            {!loading && items.length === 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 1.5 }}>
-                {t('backupPlans.sourceChooser.emptyDirectory')}
-              </Typography>
-            )}
-            {loading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                <CircularProgress size={22} />
-              </Box>
-            )}
-          </Paper>
-        </Stack>
-      </DialogContent>
-    </ResponsiveDialog>
-  )
-}
-
 interface RepoStyleSourceCardProps {
   selected: boolean
   disabled?: boolean
@@ -654,7 +466,6 @@ export function SourceSelectionDialog({
   const [sourcePath, setSourcePath] = useState('')
   const [draftSourceLocations, setDraftSourceLocations] = useState<SourceLocation[]>([])
   const [sourceExplorerOpen, setSourceExplorerOpen] = useState(false)
-  const [agentExplorerOpen, setAgentExplorerOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -667,7 +478,6 @@ export function SourceSelectionDialog({
     )
     setSourcePath('')
     setSourceExplorerOpen(false)
-    setAgentExplorerOpen(false)
     setSelectedDatabase(null)
     setScriptMode('create')
     setPreExistingScriptId(wizardState.preBackupScriptId || '')
@@ -1107,13 +917,7 @@ export function SourceSelectionDialog({
           <Button
             variant="outlined"
             startIcon={<FolderOpen size={16} />}
-            onClick={() => {
-              if (sourceKind === 'agent') {
-                setAgentExplorerOpen(true)
-              } else {
-                setSourceExplorerOpen(true)
-              }
-            }}
+            onClick={() => setSourceExplorerOpen(true)}
             disabled={remoteDisabled || agentDisabled}
             sx={{ flexShrink: 0 }}
           >
@@ -1316,20 +1120,13 @@ export function SourceSelectionDialog({
             selectedSourceConnection ? selectedSourceConnection.default_path || '/' : '/'
           }
           multiSelect
-          connectionType={selectedSourceConnection ? 'ssh' : 'local'}
+          connectionType={
+            sourceKind === 'agent' ? 'agent' : selectedSourceConnection ? 'ssh' : 'local'
+          }
+          agentId={selectedAgent?.id}
           sshConfig={selectedSourceExplorerSshConfig}
           selectMode="both"
           showSshMountPoints={false}
-        />
-        <AgentFileExplorerDialog
-          open={agentExplorerOpen}
-          agent={selectedAgent}
-          onClose={() => setAgentExplorerOpen(false)}
-          onSelect={(paths) => {
-            addPathsToSelectedSource(paths)
-            setAgentExplorerOpen(false)
-          }}
-          t={t}
         />
       </Stack>
     )

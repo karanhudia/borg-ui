@@ -30,7 +30,10 @@ def _now_utc() -> datetime:
 
 class AgentEnrollmentTokenCreate(BaseModel):
     name: str
-    expires_in_minutes: int = Field(default=60, ge=1, le=60 * 24 * 30)
+    expires_in_minutes: Optional[int] = Field(default=None, ge=1, le=60 * 24 * 30)
+    expires_in_hours: Optional[int] = Field(default=None, ge=1, le=24 * 30)
+    expires_in_days: Optional[int] = Field(default=None, ge=1, le=30)
+    expires_never: bool = False
 
 
 class AgentEnrollmentTokenCreated(BaseModel):
@@ -38,7 +41,7 @@ class AgentEnrollmentTokenCreated(BaseModel):
     name: str
     token: str
     token_prefix: str
-    expires_at: datetime
+    expires_at: Optional[datetime]
     created_at: datetime
 
     class Config:
@@ -49,7 +52,7 @@ class AgentEnrollmentTokenSummary(BaseModel):
     id: int
     name: str
     token_prefix: str
-    expires_at: datetime
+    expires_at: Optional[datetime]
     used_at: Optional[datetime] = None
     used_by_agent_id: Optional[int] = None
     revoked_at: Optional[datetime] = None
@@ -76,6 +79,7 @@ class AgentMachineResponse(BaseModel):
     last_error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    deleted_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -179,6 +183,41 @@ def _build_backup_job_payload(payload: AgentBackupJobCreate) -> dict[str, Any]:
     }
 
 
+def _enrollment_expires_at(
+    payload: AgentEnrollmentTokenCreate, now: datetime
+) -> Optional[datetime]:
+    provided_expiry_fields = [
+        payload.expires_in_minutes is not None,
+        payload.expires_in_hours is not None,
+        payload.expires_in_days is not None,
+        payload.expires_never,
+    ]
+    if sum(1 for is_provided in provided_expiry_fields if is_provided) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"key": "backend.errors.agents.enrollmentExpiryAmbiguous"},
+        )
+
+    if payload.expires_never:
+        return None
+
+    minutes = payload.expires_in_minutes
+    if payload.expires_in_hours is not None:
+        minutes = payload.expires_in_hours * 60
+    if payload.expires_in_days is not None:
+        minutes = payload.expires_in_days * 24 * 60
+    if minutes is None:
+        minutes = 60
+
+    if minutes < 5:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"key": "backend.errors.agents.enrollmentExpiryTooShort"},
+        )
+
+    return now + timedelta(minutes=minutes)
+
+
 @router.post(
     "/enrollment-tokens",
     response_model=AgentEnrollmentTokenCreated,
@@ -203,7 +242,7 @@ async def create_enrollment_token(
         token_hash=get_password_hash(raw_token),
         token_prefix=raw_token[:AGENT_TOKEN_PREFIX_LENGTH],
         created_by_user_id=current_user.id,
-        expires_at=now + timedelta(minutes=payload.expires_in_minutes),
+        expires_at=_enrollment_expires_at(payload, now),
         created_at=now,
     )
     db.add(token)
@@ -273,7 +312,12 @@ async def list_agent_machines(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
-    return db.query(AgentMachine).order_by(AgentMachine.name.asc()).all()
+    return (
+        db.query(AgentMachine)
+        .filter(AgentMachine.status != "deleted")
+        .order_by(AgentMachine.name.asc())
+        .all()
+    )
 
 
 @router.post(
@@ -293,7 +337,7 @@ async def create_agent_backup_job(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"key": "backend.errors.agents.agentNotFound"},
         )
-    if agent.status in ("disabled", "revoked"):
+    if agent.status in ("disabled", "revoked", "deleted"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"key": "backend.errors.agents.agentNotQueueable"},
@@ -359,6 +403,32 @@ async def revoke_agent_machine(
         db.commit()
         logger.info(
             "Agent machine revoked",
+            user=current_user.username,
+            agent_id=agent.agent_id,
+        )
+
+
+@router.delete("/agents/{agent_machine_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_agent_machine(
+    agent_machine_id: int,
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+
+    if agent.status != "deleted":
+        now = _now_utc()
+        agent.status = "deleted"
+        agent.deleted_at = now
+        agent.updated_at = now
+        db.commit()
+        logger.info(
+            "Agent machine deleted",
             user=current_user.username,
             agent_id=agent.agent_id,
         )

@@ -48,7 +48,28 @@ vi.mock('../ExcludePatternInput', () => ({
 }))
 
 vi.mock('../FileExplorerDialog', () => ({
-  default: () => null,
+  default: ({
+    open,
+    onSelect,
+    connectionType,
+    agentId,
+  }: {
+    open: boolean
+    onSelect: (paths: string[]) => void
+    connectionType?: string
+    agentId?: number
+  }) =>
+    open ? (
+      <div
+        data-testid="file-explorer-dialog"
+        data-connection-type={connectionType}
+        data-agent-id={agentId || ''}
+      >
+        <button type="button" onClick={() => onSelect(['/selected/from-browser'])}>
+          Select browsed path
+        </button>
+      </div>
+    ) : null,
 }))
 
 vi.mock('../AdvancedRepositoryOptions', () => ({
@@ -380,6 +401,38 @@ describe('RepositoryWizard', () => {
         }),
         null
       )
+    }, 90000)
+
+    it('enables repository path browsing after selecting a managed agent', async () => {
+      const user = userEvent.setup()
+      renderWizard('create')
+
+      await waitForLocationStep()
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Browse Repo')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg')
+
+      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
+      const agentListbox = await screen.findByRole('listbox')
+      await user.click(within(agentListbox).getByText('workstation.local'))
+
+      const browseButton = screen.getByTitle('Browse filesystem')
+      expect(browseButton).not.toBeDisabled()
+      await user.click(browseButton)
+
+      expect(screen.getByTestId('file-explorer-dialog')).toHaveAttribute(
+        'data-connection-type',
+        'agent'
+      )
+      expect(screen.getByTestId('file-explorer-dialog')).toHaveAttribute('data-agent-id', '101')
+
+      await user.click(
+        within(screen.getByTestId('file-explorer-dialog')).getByRole('button', {
+          name: /select browsed path/i,
+          hidden: true,
+        })
+      )
+      expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/selected/from-browser')
     }, 90000)
 
     it('clears and disables SSH repository target when managed-agent execution is selected', async () => {
