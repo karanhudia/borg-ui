@@ -2,14 +2,21 @@ from __future__ import annotations
 
 import calendar
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
+from croniter import croniter
 from sqlalchemy.orm import Session
 
 from app.database.models import BackupJob, Repository, SystemSettings
 from app.services.notification_service import NotificationService
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    get_container_timezone,
+    normalize_schedule_timezone,
+)
 
 
 DEFAULT_STALE_AFTER_DAYS = 3
@@ -19,6 +26,7 @@ DEFAULT_REPORT_FREQUENCY = "weekly"
 DEFAULT_REPORT_HOUR_UTC = 8
 DEFAULT_REPORT_WEEKDAY = 0
 DEFAULT_REPORT_MONTHDAY = 1
+DEFAULT_REPORT_CRON_EXPRESSION = "0 8 * * 1"
 REPORT_FREQUENCIES = {"daily", "weekly", "monthly"}
 
 
@@ -51,6 +59,12 @@ def _to_utc_naive(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value
     return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _to_utc_aware(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _normalize_now(now: Optional[datetime]) -> datetime:
@@ -207,27 +221,14 @@ async def run_backup_monitoring(
     }
 
 
-def _report_window_start(settings: SystemSettings, now: datetime) -> Optional[datetime]:
-    now_naive = _normalize_now(now)
+def _legacy_report_cron_expression(settings: SystemSettings) -> str:
     hour = settings.backup_reports_hour_utc
     if hour is None:
         hour = DEFAULT_REPORT_HOUR_UTC
-    if now_naive.hour < hour:
-        return None
 
     frequency = settings.backup_reports_frequency or DEFAULT_REPORT_FREQUENCY
     if frequency == "daily":
-        return datetime.combine(now_naive.date(), time(hour=hour))
-
-    if frequency == "weekly":
-        weekday = (
-            settings.backup_reports_weekday
-            if settings.backup_reports_weekday is not None
-            else DEFAULT_REPORT_WEEKDAY
-        )
-        if now_naive.weekday() != weekday:
-            return None
-        return datetime.combine(now_naive.date(), time(hour=hour))
+        return f"0 {hour} * * *"
 
     if frequency == "monthly":
         monthday = (
@@ -235,11 +236,46 @@ def _report_window_start(settings: SystemSettings, now: datetime) -> Optional[da
             if settings.backup_reports_monthday is not None
             else DEFAULT_REPORT_MONTHDAY
         )
-        if now_naive.day != monthday:
-            return None
-        return datetime.combine(now_naive.date(), time(hour=hour))
+        return f"0 {hour} {monthday} * *"
 
-    return None
+    weekday = (
+        settings.backup_reports_weekday
+        if settings.backup_reports_weekday is not None
+        else DEFAULT_REPORT_WEEKDAY
+    )
+    cron_weekday = (weekday + 1) % 7
+    return f"0 {hour} * * {cron_weekday}"
+
+
+def _report_cron_expression(settings: SystemSettings) -> str:
+    return (
+        getattr(settings, "backup_reports_cron_expression", None)
+        or _legacy_report_cron_expression(settings)
+        or DEFAULT_REPORT_CRON_EXPRESSION
+    )
+
+
+def _report_timezone(settings: SystemSettings) -> str:
+    return normalize_schedule_timezone(
+        getattr(settings, "backup_reports_timezone", None)
+        or get_container_timezone(DEFAULT_SCHEDULE_TIMEZONE)
+    )
+
+
+def _report_window_start(settings: SystemSettings, now: datetime) -> Optional[datetime]:
+    try:
+        schedule_timezone = _report_timezone(settings)
+        schedule_tz = ZoneInfo(schedule_timezone)
+        now_local = _to_utc_aware(now).astimezone(schedule_tz)
+        cron = croniter(
+            _report_cron_expression(settings), now_local + timedelta(seconds=1)
+        )
+        window_start = cron.get_prev(datetime)
+        if window_start.tzinfo is None:
+            window_start = window_start.replace(tzinfo=schedule_tz)
+        return _to_utc_naive(window_start)
+    except Exception:
+        return None
 
 
 def _report_activity_period_start(settings: SystemSettings, now: datetime) -> datetime:

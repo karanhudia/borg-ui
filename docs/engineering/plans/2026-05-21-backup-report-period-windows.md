@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make generated backup report activity match the configured daily, weekly, or monthly report period.
+**Goal:** Make generated backup report activity match the configured daily, weekly, or monthly report period, and make report delivery scheduling use the existing cron/timezone schedule picker pattern.
 
-**Architecture:** Keep the existing monitoring/report service boundary. Add a deterministic period-start helper in `app/services/backup_monitoring_service.py`, update `build_backup_report()` to use it, and cover the behavior with focused pytest tests.
+**Architecture:** Keep the existing monitoring/report service boundary. Add a deterministic period-start helper in `app/services/backup_monitoring_service.py`, update `build_backup_report()` to use it, add explicit report delivery cron/timezone settings, and cover the behavior with focused pytest and Vitest tests.
 
-**Tech Stack:** Python, FastAPI service layer, SQLAlchemy models, pytest.
+**Tech Stack:** Python, FastAPI service layer, SQLAlchemy models, pytest, React, MUI, Vitest, Storybook.
 
 ---
 
@@ -80,3 +80,22 @@ def test_build_backup_report_uses_daily_activity_window(db_session):
 - [ ] Run an app/API-level proof for manual report generation.
 - [ ] Update the Linear workpad with validation evidence.
 - [ ] Commit, push, open/update the PR with `.github/PULL_REQUEST_TEMPLATE.md`, add `symphony`, run PR feedback sweep, and move BOR-49 to Human Review only when checks are green.
+
+### Task 4: Address Report Delivery Schedule UI Review Feedback
+
+**Files:**
+- Modify: `app/api/settings.py`
+- Modify: `app/database/models.py`
+- Add: `app/database/migrations/112_add_backup_report_delivery_schedule.py`
+- Modify: `app/services/backup_monitoring_service.py`
+- Modify: `frontend/src/components/MonitoringReportsTab.tsx`
+- Modify: `frontend/src/components/MonitoringReportsTab.stories.tsx`
+- Add: `frontend/src/components/__tests__/MonitoringReportsTab.test.tsx`
+- Modify: locale files and `frontend/src/services/api.ts`
+
+- [ ] Add failing backend tests for report delivery cron/timezone defaults, persistence, validation, and due calculation.
+- [ ] Add failing frontend test proving the reports tab renders and saves the shared schedule picker values instead of the old UTC-hour controls.
+- [ ] Add model, migration, API validation, and service due-window support for `backup_reports_cron_expression` and `backup_reports_timezone`, defaulting new report settings from the container timezone before falling back to UTC.
+- [ ] Replace the old report schedule field cluster with "Report cadence" plus `SchedulePicker`.
+- [ ] Update locale keys, API typing, Storybook story data, and generated snapshots.
+- [ ] Run backend and frontend validation gates, then push and re-sweep PR feedback/checks.

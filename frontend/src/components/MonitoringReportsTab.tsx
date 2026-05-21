@@ -25,24 +25,19 @@ import { settingsAPI } from '../services/api'
 import type { SystemSettings } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
+import SchedulePicker from './SchedulePicker'
+import { getBrowserTimeZone } from '../utils/dateUtils'
 
 type ReportFrequency = 'daily' | 'weekly' | 'monthly'
-
-const WEEKDAYS = [
-  ['0', 'Monday'],
-  ['1', 'Tuesday'],
-  ['2', 'Wednesday'],
-  ['3', 'Thursday'],
-  ['4', 'Friday'],
-  ['5', 'Saturday'],
-  ['6', 'Sunday'],
-] as const
 
 const readBool = (value: unknown, fallback: boolean) =>
   typeof value === 'boolean' ? value : fallback
 
 const readNumber = (value: unknown, fallback: number) =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback
+
+const readString = (value: unknown, fallback: string) =>
+  typeof value === 'string' && value.trim() ? value : fallback
 
 const readFrequency = (value: unknown): ReportFrequency =>
   value === 'daily' || value === 'weekly' || value === 'monthly' ? value : 'weekly'
@@ -59,9 +54,8 @@ const MonitoringReportsTab: React.FC = () => {
   const [includeObserveRepos, setIncludeObserveRepos] = useState(true)
   const [reportsEnabled, setReportsEnabled] = useState(false)
   const [reportFrequency, setReportFrequency] = useState<ReportFrequency>('weekly')
-  const [reportHourUtc, setReportHourUtc] = useState(8)
-  const [reportWeekday, setReportWeekday] = useState(0)
-  const [reportMonthday, setReportMonthday] = useState(1)
+  const [reportCronExpression, setReportCronExpression] = useState('0 8 * * 1')
+  const [reportTimezone, setReportTimezone] = useState(getBrowserTimeZone())
   const [includeSummary, setIncludeSummary] = useState(true)
   const [includeStaleRepositories, setIncludeStaleRepositories] = useState(true)
   const [includeRecentActivity, setIncludeRecentActivity] = useState(true)
@@ -85,9 +79,8 @@ const MonitoringReportsTab: React.FC = () => {
     setIncludeObserveRepos(readBool(settings.backup_monitoring_include_observe_repos, true))
     setReportsEnabled(readBool(settings.backup_reports_enabled, false))
     setReportFrequency(readFrequency(settings.backup_reports_frequency))
-    setReportHourUtc(readNumber(settings.backup_reports_hour_utc, 8))
-    setReportWeekday(readNumber(settings.backup_reports_weekday, 0))
-    setReportMonthday(readNumber(settings.backup_reports_monthday, 1))
+    setReportCronExpression(readString(settings.backup_reports_cron_expression, '0 8 * * 1'))
+    setReportTimezone(readString(settings.backup_reports_timezone, getBrowserTimeZone()))
     setIncludeSummary(readBool(settings.backup_reports_include_summary, true))
     setIncludeStaleRepositories(readBool(settings.backup_reports_include_stale_repositories, true))
     setIncludeRecentActivity(readBool(settings.backup_reports_include_recent_activity, true))
@@ -102,9 +95,8 @@ const MonitoringReportsTab: React.FC = () => {
       backup_monitoring_include_observe_repos: includeObserveRepos,
       backup_reports_enabled: reportsEnabled,
       backup_reports_frequency: reportFrequency,
-      backup_reports_hour_utc: reportHourUtc,
-      backup_reports_weekday: reportWeekday,
-      backup_reports_monthday: reportMonthday,
+      backup_reports_cron_expression: reportCronExpression,
+      backup_reports_timezone: reportTimezone,
       backup_reports_include_summary: includeSummary,
       backup_reports_include_stale_repositories: includeStaleRepositories,
       backup_reports_include_recent_activity: includeRecentActivity,
@@ -117,9 +109,8 @@ const MonitoringReportsTab: React.FC = () => {
       includeObserveRepos,
       reportsEnabled,
       reportFrequency,
-      reportHourUtc,
-      reportWeekday,
-      reportMonthday,
+      reportCronExpression,
+      reportTimezone,
       includeSummary,
       includeStaleRepositories,
       includeRecentActivity,
@@ -130,12 +121,8 @@ const MonitoringReportsTab: React.FC = () => {
     staleAfterDays < 1 ||
     intervalHours < 1 ||
     cooldownHours < 0 ||
-    reportHourUtc < 0 ||
-    reportHourUtc > 23 ||
-    reportWeekday < 0 ||
-    reportWeekday > 6 ||
-    reportMonthday < 1 ||
-    reportMonthday > 28
+    !reportCronExpression.trim() ||
+    !reportTimezone.trim()
 
   const saveMutation = useMutation({
     mutationFn: () => settingsAPI.updateSystemSettings(payload),
@@ -359,20 +346,14 @@ const MonitoringReportsTab: React.FC = () => {
               label={t('monitoringReports.enableReports')}
             />
 
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, minmax(150px, 1fr))' },
-                gap: 2,
-              }}
-            >
-              <FormControl>
+            <Stack spacing={2}>
+              <FormControl fullWidth>
                 <InputLabel id="backup-report-frequency-label">
-                  {t('monitoringReports.frequency')}
+                  {t('monitoringReports.cadence')}
                 </InputLabel>
                 <Select
                   labelId="backup-report-frequency-label"
-                  label={t('monitoringReports.frequency')}
+                  label={t('monitoringReports.cadence')}
                   value={reportFrequency}
                   onChange={(event) => setReportFrequency(event.target.value as ReportFrequency)}
                 >
@@ -381,40 +362,27 @@ const MonitoringReportsTab: React.FC = () => {
                   <MenuItem value="monthly">{t('monitoringReports.frequencyMonthly')}</MenuItem>
                 </Select>
               </FormControl>
-              <TextField
-                label={t('monitoringReports.hourUtc')}
-                type="number"
-                value={reportHourUtc}
-                onChange={(event) => setReportHourUtc(Number(event.target.value))}
-                inputProps={{ min: 0, max: 23, step: 1 }}
-                error={reportHourUtc < 0 || reportHourUtc > 23}
+
+              <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+                {t('monitoringReports.cadenceHelper')}
+              </Typography>
+
+              <SchedulePicker
+                cronExpression={reportCronExpression}
+                timezone={reportTimezone}
+                onChange={(updates) => {
+                  if (updates.cronExpression !== undefined) {
+                    setReportCronExpression(updates.cronExpression)
+                  }
+                  if (updates.timezone !== undefined) {
+                    setReportTimezone(updates.timezone)
+                  }
+                }}
+                cronLabel={t('monitoringReports.deliverySchedule')}
+                cronHelperText={t('monitoringReports.deliveryScheduleHelper')}
+                timezoneLabel={t('monitoringReports.deliveryTimezone')}
               />
-              <FormControl>
-                <InputLabel id="backup-report-weekday-label">
-                  {t('monitoringReports.weekday')}
-                </InputLabel>
-                <Select
-                  labelId="backup-report-weekday-label"
-                  label={t('monitoringReports.weekday')}
-                  value={String(reportWeekday)}
-                  onChange={(event) => setReportWeekday(Number(event.target.value))}
-                >
-                  {WEEKDAYS.map(([value, label]) => (
-                    <MenuItem key={value} value={value}>
-                      {label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField
-                label={t('monitoringReports.monthday')}
-                type="number"
-                value={reportMonthday}
-                onChange={(event) => setReportMonthday(Number(event.target.value))}
-                inputProps={{ min: 1, max: 28, step: 1 }}
-                error={reportMonthday < 1 || reportMonthday > 28}
-              />
-            </Box>
+            </Stack>
 
             <Divider />
 

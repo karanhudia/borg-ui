@@ -223,6 +223,23 @@ def test_report_due_supports_daily_weekly_and_monthly_windows():
 
 
 @pytest.mark.unit
+def test_report_due_uses_configured_cron_and_timezone():
+    now = datetime(2026, 5, 18, 3, 46, tzinfo=timezone.utc)
+    settings = SystemSettings(
+        backup_reports_enabled=True,
+        backup_reports_frequency="weekly",
+        backup_reports_cron_expression="15 9 * * 1",
+        backup_reports_timezone="Asia/Kolkata",
+        backup_reports_last_sent_at=datetime(2026, 5, 11, 3, 45),
+    )
+
+    assert is_report_due(settings, now) is True
+
+    settings.backup_reports_last_sent_at = datetime(2026, 5, 18, 3, 45)
+    assert is_report_due(settings, now) is False
+
+
+@pytest.mark.unit
 def test_build_backup_report_respects_content_toggles(db_session):
     now = datetime(2026, 5, 20, 8, 30, tzinfo=timezone.utc)
     settings = SystemSettings(

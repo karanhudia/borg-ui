@@ -28,8 +28,9 @@ class TestSystemSettingsContracts:
         assert source is None
 
     def test_get_system_settings_creates_defaults_and_reports_timeout_sources(
-        self, test_client: TestClient, admin_headers, test_db
+        self, test_client: TestClient, admin_headers, test_db, monkeypatch
     ):
+        monkeypatch.setenv("TZ", "America/Chicago")
         response = test_client.get("/api/settings/system", headers=admin_headers)
 
         assert response.status_code == 200
@@ -51,6 +52,8 @@ class TestSystemSettingsContracts:
         assert settings["backup_monitoring_last_alert_sent_at"] is None
         assert settings["backup_reports_enabled"] is False
         assert settings["backup_reports_frequency"] == "weekly"
+        assert settings["backup_reports_cron_expression"] == "0 8 * * 1"
+        assert settings["backup_reports_timezone"] == "America/Chicago"
         assert settings["backup_reports_hour_utc"] == 8
         assert settings["backup_reports_weekday"] == 0
         assert settings["backup_reports_monthday"] == 1
@@ -140,6 +143,8 @@ class TestSystemSettingsContracts:
                     "backup_monitoring_include_observe_repos": False,
                     "backup_reports_enabled": True,
                     "backup_reports_frequency": "daily",
+                    "backup_reports_cron_expression": "30 18 * * *",
+                    "backup_reports_timezone": "Asia/Kolkata",
                     "backup_reports_hour_utc": 7,
                     "backup_reports_weekday": 2,
                     "backup_reports_monthday": 15,
@@ -159,6 +164,8 @@ class TestSystemSettingsContracts:
         assert settings.backup_monitoring_include_observe_repos is False
         assert settings.backup_reports_enabled is True
         assert settings.backup_reports_frequency == "daily"
+        assert settings.backup_reports_cron_expression == "30 18 * * *"
+        assert settings.backup_reports_timezone == "Asia/Kolkata"
         assert settings.backup_reports_hour_utc == 7
         assert settings.backup_reports_weekday == 2
         assert settings.backup_reports_monthday == 15
@@ -170,6 +177,8 @@ class TestSystemSettingsContracts:
         payload = readback.json()["settings"]
         assert payload["backup_monitoring_enabled"] is True
         assert payload["backup_reports_frequency"] == "daily"
+        assert payload["backup_reports_cron_expression"] == "30 18 * * *"
+        assert payload["backup_reports_timezone"] == "Asia/Kolkata"
         assert payload["backup_reports_include_recent_activity"] is False
 
     def test_update_system_settings_rejects_invalid_backup_monitoring_values(
@@ -200,6 +209,36 @@ class TestSystemSettingsContracts:
         assert (
             response.json()["detail"]["key"]
             == "backend.errors.settings.invalidBackupReportFrequency"
+        )
+
+    def test_update_system_settings_rejects_invalid_report_cron(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_reports_cron_expression": "not a cron"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.settings.invalidBackupReportSchedule"
+        )
+
+    def test_update_system_settings_rejects_invalid_report_timezone(
+        self, test_client: TestClient, admin_headers
+    ):
+        response = test_client.put(
+            "/api/settings/system",
+            json={"backup_reports_timezone": "Mars/Olympus"},
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]["key"]
+            == "backend.errors.schedule.invalidTimezone"
         )
 
     def test_run_backup_monitoring_endpoint_returns_service_result(
