@@ -56,8 +56,11 @@ services:
       # - /home/user:/home:rw
       # (also set: LOCAL_MOUNT_POINTS=/disk1,/home)
 
-      # Optional: Docker container management in backup scripts
-      # Required for stopping/starting containers during backups
+      # Optional: Docker container management in backup scripts.
+      # Direct socket access is simple but gives Borg UI broad host-level
+      # Docker control. For a reduced app-container surface, remove/comment
+      # this mount, start the docker-socket-proxy profile below, and set
+      # DOCKER_HOST=tcp://docker-socket-proxy:2375 in the app environment.
       # See: docs/docker-hooks.md
       - /var/run/docker.sock:/var/run/docker.sock:rw
 
@@ -83,6 +86,12 @@ services:
       # Sub-path for reverse proxy deployment (e.g., /borg-ui)
       # Leave empty or unset for root deployment. See docs/reverse-proxy.md for NGINX config.
       # - BASE_PATH=/borg-ui
+
+      # Docker socket proxy alternative for backup hook scripts:
+      # 1. Remove/comment the /var/run/docker.sock app volume above.
+      # 2. Start with: docker compose --profile docker-socket-proxy up -d
+      # 3. Uncomment this so hook scripts use the proxy instead of a socket mount.
+      # - DOCKER_HOST=tcp://docker-socket-proxy:2375
 
       # Borg operation timeouts in seconds (uncomment to customize for large repos)
       # Increase these for very large repositories with long cache build times
@@ -160,6 +169,35 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+
+    networks:
+      - borg_network
+
+  docker-socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:0.4.2
+    container_name: borg-docker-socket-proxy
+    profiles: ["docker-socket-proxy"]
+    restart: unless-stopped
+    privileged: true
+
+    # Keep this service internal to the Compose network. Do not publish port
+    # 2375 to the host or internet.
+    expose:
+      - "2375"
+
+    environment:
+      # Minimal permissions for typical hook scripts that run docker ps,
+      # docker stop/start, or docker restart. Disable anything your scripts
+      # do not need.
+      - CONTAINERS=1
+      - INFO=1
+      - POST=1
+      - ALLOW_START=1
+      - ALLOW_STOP=1
+      - ALLOW_RESTARTS=1
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
     networks:
       - borg_network

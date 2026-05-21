@@ -314,7 +314,7 @@ volumes:
   - /var/run/docker.sock:/var/run/docker.sock:rw
 ```
 
-This grants powerful host access to the Borg UI container. See [Docker Hooks](docker-hooks).
+This grants powerful host access to the Borg UI container. You can avoid mounting the socket into the app container by running a Docker socket proxy and setting `DOCKER_HOST=tcp://docker-socket-proxy:2375` for Borg UI instead. See [Docker Hooks](docker-hooks).
 
 ## Optional FUSE Access
 
