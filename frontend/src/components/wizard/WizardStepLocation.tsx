@@ -585,7 +585,7 @@ export default function WizardStepLocation({
                 size="small"
                 title={t('wizard.location.browseFilesystem')}
                 disabled={
-                  isAgentExecution ||
+                  (isAgentExecution && !data.agentMachineId) ||
                   (data.repositoryLocation === 'ssh' && !data.repoSshConnectionId)
                 }
               >

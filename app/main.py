@@ -33,6 +33,7 @@ from app.api import (
     metrics,
     tokens,
     permissions,
+    agent_installer,
     managed_machines,
     agents,
     source_discovery,
@@ -223,6 +224,7 @@ app.include_router(mounts.router)  # Mount management API
 
 app.include_router(tokens.router, prefix="/api")
 app.include_router(permissions.router, prefix="/api")
+app.include_router(agent_installer.router)
 app.include_router(managed_machines.router)
 app.include_router(agents.router)
 app.include_router(

@@ -18,7 +18,64 @@ This feature is currently behind the Managed CLI Agents beta switch.
 2. Enable Managed CLI Agents.
 3. Open Managed Agents from the Backup navigation group.
 
-## Install on a Client Machine
+## Add a Linux or Raspberry Pi Agent
+
+In Managed Agents, choose **Add Agent**. The wizard asks for:
+
+- platform: Linux/Raspberry Pi
+- agent name
+- enrollment token expiry: 1 hour, 24 hours, 7 days, 30 days, or Never
+- server URL reachable by the client machine
+
+The final step shows a one-line installer command:
+
+```bash
+curl -fsSL http://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
+  --server http://borg-ui-host:8083 \
+  --token borgui_enroll_example \
+  --name laptop
+```
+
+Run it on the machine that owns the files you want Borg to back up. The
+installer requires root or sudo, installs system dependencies, creates the
+`borg-ui-agent` system user, registers `/etc/borg-ui-agent/config.toml`, runs
+`service-check`, and enables the systemd service with
+`systemctl enable --now borg-ui-agent`.
+
+The machine appears in Managed Agents after registration and its first
+heartbeat. The wizard waits for that connection while the command is displayed.
+
+## Server URL and Localhost
+
+The `--server` value must be reachable from the client machine. If Borg UI and
+the agent run on the same machine, `localhost` is valid. If the agent runs on
+another machine, `localhost` points at that client machine, so use the Borg UI
+server host name, IP address, reverse-proxy URL, or HTTPS URL.
+
+The Add Agent wizard derives the backend URL from Borg UI's API URL. You can
+edit it before generating the command.
+
+## Enrollment Tokens and Agent Credentials
+
+Enrollment tokens are temporary setup credentials. They can expire after 1 hour,
+24 hours, 7 days, 30 days, or never expire. The default UI choice is 7 days.
+
+After enrollment, the agent receives and stores its own credential. Token expiry
+does not limit the enrolled agent lifetime. An enrolled agent keeps working until
+you revoke access, delete it from the fleet list, or unregister it on the client.
+
+## Revoke and Delete
+
+- **Revoke access** blocks the agent credential but keeps the machine visible for
+  history and troubleshooting.
+- **Delete agent** removes the machine from active fleet lists. Existing job and
+  log records remain readable. The local systemd service may still run on the
+  client until you stop, remove, or unregister it there.
+
+## Advanced Manual Setup
+
+The one-command installer is the default Linux/Raspberry Pi path. Manual setup
+is useful for development or troubleshooting.
 
 Run this on the machine that owns the files you want Borg to back up:
 
@@ -36,26 +93,14 @@ Verify the CLI:
 borg-ui-agent status
 ```
 
-## Register the Client
-
-In Borg UI, create an enrollment token from Managed Agents. Tokens are shown
-once, so copy the token or generated command before closing the dialog.
-
-Run the registration command on the client:
+Register manually:
 
 ```bash
 borg-ui-agent register \
-  --server http://borg-ui-host:7879 \
+  --server http://borg-ui-host:8083 \
   --token borgui_enroll_example \
   --name laptop
 ```
-
-The `--server` value must be reachable from the client machine. If Borg UI is
-running on the same machine as the agent, `http://localhost:7879` is valid. If
-the agent runs on another machine, `localhost` points at that client machine, so
-use the Borg UI server host name, IP address, reverse-proxy URL, or HTTPS URL.
-
-## Run the Agent
 
 Poll once:
 
@@ -69,17 +114,11 @@ Run continuously:
 borg-ui-agent run
 ```
 
-The machine appears in Managed Agents after registration and its first
-heartbeat.
+### Linux systemd Manual Service
 
-## Run on Startup
-
-Linux systemd and macOS launchd templates are included in the repository under
-`agent/install/`.
-
-### Linux systemd
-
-The default Linux unit expects a system user and group named `borg-ui-agent`:
+The installer creates and enables the systemd service automatically. For manual
+service setup, the default Linux unit expects a system user and group named
+`borg-ui-agent`:
 
 ```bash
 sudo useradd --system --user-group --home-dir /var/lib/borg-ui-agent \
@@ -148,3 +187,5 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/com.borg-ui.agent.plist
 
 Keep the agent config file readable only by the service user or local admin. It
 contains the agent credential used to authenticate with Borg UI.
+
+macOS and Windows one-command installers are not included in this phase.

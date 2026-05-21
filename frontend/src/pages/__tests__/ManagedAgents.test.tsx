@@ -8,6 +8,7 @@ import ManagedAgents, {
   JobsTable,
   TokensTable,
 } from '../ManagedAgents'
+import { isLocalAgentServerUrl, resolveAgentServerUrl } from '../managed-agents/agentServerUrl'
 import { renderWithProviders, userEvent } from '../../test/test-utils'
 import {
   AgentJobResponse,
@@ -29,6 +30,7 @@ vi.mock('../../services/api', () => ({
     createEnrollmentToken: vi.fn(),
     revokeEnrollmentToken: vi.fn(),
     revokeAgent: vi.fn(),
+    deleteAgent: vi.fn(),
     createBackupJob: vi.fn(),
     cancelJob: vi.fn(),
   },
@@ -70,10 +72,17 @@ describe('ManagedAgents', () => {
     expect(
       await screen.findByText(/Run this on a remote machine to register it/i)
     ).toBeInTheDocument()
-    expect(
-      screen.getByText(/borg-ui-agent register --server .* --token <enrollment-token>/)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/curl -fsSL .*\/agent\/install\.sh/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /setup help/i })).toBeInTheDocument()
+  })
+
+  it('derives backend server URLs for install commands', () => {
+    expect(resolveAgentServerUrl('http://192.168.0.29:8083/api', 'http://localhost:7879')).toBe(
+      'http://192.168.0.29:8083'
+    )
+    expect(resolveAgentServerUrl('/api', 'http://localhost:7879')).toBe('http://localhost:8083')
+    expect(resolveAgentServerUrl('/api', 'http://localhost:8093')).toBe('http://localhost:8093')
+    expect(isLocalAgentServerUrl('http://127.0.0.1:8083')).toBe(true)
   })
 
   it('opens from the shared system settings cache without redirecting to dashboard', async () => {
@@ -120,18 +129,18 @@ describe('ManagedAgents', () => {
 
     await user.click(screen.getByRole('button', { name: /setup help/i }))
 
-    expect(screen.getByText(/localhost:7879 is only correct when the agent/i)).toBeInTheDocument()
-    expect(screen.getByText(/Use systemd on Linux or launchd on macOS/i)).toBeInTheDocument()
+    expect(screen.getByText(/localhost only works when the agent/i)).toBeInTheDocument()
+    expect(screen.getByText(/enables systemd by default/i)).toBeInTheDocument()
 
+    await user.click(screen.getByLabelText('Copy install command'))
     await user.click(screen.getByLabelText('Copy install commands'))
-    await user.click(screen.getAllByLabelText('Copy setup command')[1])
-    await user.click(screen.getByLabelText('Copy run command'))
+    await user.click(screen.getByLabelText('Copy status command'))
     await user.click(screen.getByLabelText('Copy systemd commands'))
 
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('git clone'))
-    expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('borg-ui-agent run'))
+    expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('systemctl status'))
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('systemctl enable --now'))
-  })
+  }, 60000)
 
   it('renders setup help details as a standalone story surface', async () => {
     const user = userEvent.setup()
@@ -144,40 +153,69 @@ describe('ManagedAgents', () => {
       />
     )
 
-    expect(screen.getByText(/Run this on the machine that owns the files/i)).toBeInTheDocument()
-    expect(screen.getByText(/localhost:7879 is only correct when the agent/i)).toBeInTheDocument()
-    expect(screen.getByText(/Use systemd on Linux or launchd on macOS/i)).toBeInTheDocument()
+    expect(screen.getByText(/Run this on the Linux or Raspberry Pi machine/i)).toBeInTheDocument()
+    expect(screen.getByText(/localhost only works when the agent/i)).toBeInTheDocument()
+    expect(screen.getByText(/enables systemd by default/i)).toBeInTheDocument()
 
     await user.click(screen.getByLabelText('Copy install commands'))
 
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('git clone'))
   })
 
-  it('creates enrollment tokens from the top-level dialog', async () => {
+  it('creates enrollment tokens from the Add Agent wizard only after confirming details', async () => {
     const user = userEvent.setup()
     vi.mocked(managedAgentsAPI.createEnrollmentToken).mockResolvedValue({
-      data: { token: 'agent-token-secret' },
+      data: {
+        id: 1,
+        name: 'Client laptop',
+        token: 'agent-token-secret',
+        token_prefix: 'agent-token-secret',
+        expires_at: '2026-05-28T00:00:00.000Z',
+        created_at: '2026-05-21T00:00:00.000Z',
+      },
     } as AxiosResponse)
 
     renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
 
-    await user.click(await screen.findByRole('button', { name: /create enrollment token/i }))
-    const dialog = await screen.findByRole('dialog', { name: /create enrollment token/i })
-    await user.clear(screen.getByLabelText('Name'))
-    await user.type(screen.getByLabelText('Name'), 'Client laptop')
-    await user.clear(screen.getByLabelText('Expires In Minutes'))
-    await user.type(screen.getByLabelText('Expires In Minutes'), '120')
-    await user.click(screen.getByRole('button', { name: /^Create$/ }))
+    await user.click(await screen.findByRole('button', { name: /add agent/i }))
+    expect(managedAgentsAPI.createEnrollmentToken).not.toHaveBeenCalled()
+
+    await screen.findByRole('dialog', { name: /add agent/i })
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    await user.clear(screen.getByLabelText(/agent name/i))
+    await user.type(screen.getByLabelText(/agent name/i), 'Client laptop')
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    await user.clear(screen.getByLabelText(/server url/i))
+    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
+    await user.click(screen.getByRole('button', { name: /generate install command/i }))
 
     expect(vi.mocked(managedAgentsAPI.createEnrollmentToken).mock.calls[0][0]).toEqual({
       name: 'Client laptop',
-      expires_in_minutes: 120,
+      expires_in_days: 7,
     })
-    expect(await screen.findByText('agent-token-secret')).toBeInTheDocument()
-    expect(dialog).toHaveTextContent(
-      /borg-ui-agent register --server http:\/\/localhost:\d+ --token agent-token-secret --name <machine-name>/
-    )
-  })
+    expect(await screen.findByText(/waiting for agent to connect/i)).toBeInTheDocument()
+    expect(
+      screen.getByText((content) =>
+        [
+          'curl -fsSL http://192.168.0.29:8083/agent/install.sh',
+          '--token agent-token-secret',
+          '--name "Client laptop"',
+        ].every((part) => content.includes(part))
+      )
+    ).toBeInTheDocument()
+  }, 60000)
+
+  it('shows a localhost warning in the Add Agent wizard', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    await user.click(await screen.findByRole('button', { name: /add agent/i }))
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    await user.click(screen.getByRole('button', { name: /next/i }))
+
+    expect(screen.getByText(/localhost only works when the agent/i)).toBeInTheDocument()
+  }, 60000)
 
   it('renders populated agent cards and wires the revoke action', async () => {
     const user = userEvent.setup()
@@ -198,7 +236,17 @@ describe('ManagedAgents', () => {
       updated_at: '2026-05-18T10:00:00.000Z',
     } as AgentMachineResponse
 
-    renderWithProviders(<AgentList agents={[agent]} onRevoke={onRevoke} isRevoking={false} />)
+    const onDelete = vi.fn()
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        onRevoke={onRevoke}
+        onDelete={onDelete}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
 
     expect(screen.getByText('client-01')).toBeInTheDocument()
     expect(screen.getByText('agent-client-7')).toBeInTheDocument()
@@ -208,6 +256,39 @@ describe('ManagedAgents', () => {
 
     await user.click(screen.getByRole('button', { name: /revoke agent/i }))
     expect(onRevoke).toHaveBeenCalledWith(agent)
+  })
+
+  it('requires confirmation before deleting an agent', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn()
+    const agent = {
+      id: 7,
+      agent_id: 'agent-client-7',
+      name: 'client',
+      hostname: 'client-01',
+      status: 'online',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        onRevoke={vi.fn()}
+        onDelete={onDelete}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /delete agent/i }))
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(
+      screen.getByText(/removes it from the fleet list.*local service may still run/i)
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^delete agent$/i }))
+    expect(onDelete).toHaveBeenCalledWith(agent)
   })
 
   it('renders job rows with progress and action availability', async () => {

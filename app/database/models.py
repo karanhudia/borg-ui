@@ -93,6 +93,7 @@ class AgentMachine(Base):
     status = Column(String, default="pending", index=True, nullable=False)
     last_seen_at = Column(DateTime, nullable=True)
     last_error = Column(Text, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
@@ -107,7 +108,7 @@ class AgentEnrollmentToken(Base):
     created_by_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    expires_at = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
     used_at = Column(DateTime, nullable=True)
     used_by_agent_id = Column(
         Integer, ForeignKey("agent_machines.id", ondelete="SET NULL"), nullable=True

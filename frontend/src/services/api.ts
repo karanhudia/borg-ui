@@ -760,6 +760,7 @@ export interface AgentMachineResponse {
   status: string
   last_seen_at?: string | null
   last_error?: string | null
+  deleted_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -768,7 +769,7 @@ export interface AgentEnrollmentTokenSummary {
   id: number
   name: string
   token_prefix: string
-  expires_at: string
+  expires_at: string | null
   used_at?: string | null
   used_by_agent_id?: number | null
   revoked_at?: string | null
@@ -836,10 +837,19 @@ export interface AgentFilesystemBrowseResponse {
   items: AgentFilesystemItem[]
 }
 
+export interface AgentEnrollmentTokenCreate {
+  name: string
+  expires_in_minutes?: number
+  expires_in_hours?: number
+  expires_in_days?: number
+  expires_never?: boolean
+}
+
 export const managedAgentsAPI = {
   listAgents: () => api.get<AgentMachineResponse[]>('/managed-machines/agents'),
   revokeAgent: (agentId: number) => api.post(`/managed-machines/agents/${agentId}/revoke`),
-  createEnrollmentToken: (data: { name: string; expires_in_minutes: number }) =>
+  deleteAgent: (agentId: number) => api.delete(`/managed-machines/agents/${agentId}`),
+  createEnrollmentToken: (data: AgentEnrollmentTokenCreate) =>
     api.post<AgentEnrollmentTokenCreated>('/managed-machines/enrollment-tokens', data),
   listEnrollmentTokens: () =>
     api.get<AgentEnrollmentTokenSummary[]>('/managed-machines/enrollment-tokens'),
