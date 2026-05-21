@@ -35,6 +35,7 @@ from app.database.models import (
     SSHConnection,
     SystemSettings,
 )
+from app.api.repositories import _build_repository_path_from_connection
 
 
 def _discard_background_coro(coro):
@@ -68,6 +69,33 @@ def _base_repository_payload(**overrides):
     }
     payload.update(overrides)
     return payload
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("ssh_path_prefix", "raw_path", "expected_path"),
+    [
+        ("/.", "/xxx/yyy", "ssh://backup@rsync.example.com:22/./xxx/yyy"),
+        ("/./xxx", "/xxx/yyy", "ssh://backup@rsync.example.com:22/./xxx/yyy"),
+    ],
+)
+def test_build_repository_path_from_connection_preserves_borg_slashdot_prefix(
+    test_db, ssh_path_prefix, raw_path, expected_path
+):
+    connection = SSHConnection(
+        host="rsync.example.com",
+        username="backup",
+        port=22,
+        ssh_path_prefix=ssh_path_prefix,
+    )
+    test_db.add(connection)
+    test_db.commit()
+    test_db.refresh(connection)
+
+    assert (
+        _build_repository_path_from_connection(raw_path, connection.id, test_db)
+        == expected_path
+    )
 
 
 def _agent_machine_with_capabilities(*capabilities: str) -> AgentMachine:
