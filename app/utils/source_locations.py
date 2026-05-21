@@ -29,23 +29,55 @@ def normalize_source_locations(
                 continue
 
             location_type = str(location.get("source_type") or "").strip().lower()
-            if location_type not in {"local", "remote"}:
-                location_type = (
-                    "remote" if location.get("source_ssh_connection_id") else "local"
-                )
+            if location_type not in {"local", "remote", "agent"}:
+                if location.get("agent_machine_id") not in (None, ""):
+                    location_type = "agent"
+                elif location.get("source_ssh_connection_id") not in (None, ""):
+                    location_type = "remote"
+                else:
+                    location_type = "local"
 
             connection_id = location.get("source_ssh_connection_id")
+            agent_machine_id = location.get("agent_machine_id")
             if location_type == "local":
+                if connection_id not in (None, "") or agent_machine_id not in (
+                    None,
+                    "",
+                ):
+                    raise ValueError(
+                        "Local source locations cannot include endpoint ids"
+                    )
                 connection_id = None
+                agent_machine_id = None
             elif connection_id in ("", None):
-                raise ValueError("Remote source locations require an SSH connection")
+                if location_type == "remote":
+                    raise ValueError(
+                        "Remote source locations require an SSH connection"
+                    )
             else:
+                if location_type == "agent":
+                    raise ValueError(
+                        "Agent source locations cannot include an SSH connection"
+                    )
                 connection_id = int(connection_id)
+
+            if location_type == "remote":
+                if agent_machine_id not in (None, ""):
+                    raise ValueError(
+                        "Remote source locations cannot include an agent id"
+                    )
+                agent_machine_id = None
+            elif location_type == "agent":
+                if agent_machine_id in (None, ""):
+                    raise ValueError("Agent source locations require an agent machine")
+                agent_machine_id = int(agent_machine_id)
+                connection_id = None
 
             normalized.append(
                 {
                     "source_type": location_type,
                     "source_ssh_connection_id": connection_id,
+                    "agent_machine_id": agent_machine_id,
                     "paths": paths,
                 }
             )
@@ -71,6 +103,7 @@ def normalize_source_locations(
         {
             "source_type": legacy_type,
             "source_ssh_connection_id": connection_id,
+            "agent_machine_id": None,
             "paths": paths,
         }
     ]
@@ -95,6 +128,8 @@ def legacy_source_fields(
         location_type = location["source_type"]
         if location_type == "remote":
             return "remote", location["source_ssh_connection_id"], flattened
+        if location_type == "agent":
+            return "agent", None, flattened
         return "local", None, flattened
 
     return "mixed", None, flattened

@@ -14,6 +14,7 @@ export function BackupPlanWizardStep({
   basicRepositoryOpen,
   fullRepositories,
   repositories,
+  agentMachines,
   sshConnections,
   selectedSourceConnection,
   scripts,
@@ -41,6 +42,8 @@ export function BackupPlanWizardStep({
       <SourceStep
         wizardState={wizardState}
         sshConnections={sshConnections}
+        agentMachines={agentMachines}
+        fullRepositories={fullRepositories}
         scripts={scripts}
         loadingScripts={loadingScripts}
         updateState={updateState}
@@ -111,6 +114,7 @@ export function BackupPlanWizardStep({
     <ReviewStep
       wizardState={wizardState}
       repositories={repositories}
+      agentMachines={agentMachines}
       selectedSourceConnection={selectedSourceConnection}
       scripts={scripts}
       t={t}

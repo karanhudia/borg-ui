@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import datetime
 from typing import Any, Callable, Optional
 
@@ -13,6 +14,13 @@ from app.database.models import AgentJob, AgentMachine, BackupJob, Repository
 EXECUTOR_SERVER = "server"
 EXECUTOR_AGENT = "agent"
 TERMINAL_AGENT_STATUSES = {"completed", "failed", "canceled"}
+REPOSITORY_OPERATION_CAPABILITIES = {
+    "repository.info",
+    "repository.list_archives",
+    "repository.check",
+    "repository.prune",
+    "repository.compact",
+}
 
 
 def normalize_executor_type(
@@ -73,7 +81,13 @@ def _agent_source_paths(
         for location in source_locations:
             if not isinstance(location, dict):
                 continue
-            if location.get("source_type", "local") != "local":
+            source_type = location.get("source_type", "local")
+            if source_type == "agent":
+                if int(location.get("agent_machine_id") or 0) != int(
+                    repository.agent_machine_id or 0
+                ):
+                    raise ValueError("Agent execution requires same-agent source paths")
+            elif source_type != "local":
                 raise ValueError("Agent execution requires local source paths")
             paths.extend(
                 path
@@ -137,6 +151,45 @@ def build_agent_backup_payload(
     }
 
 
+def build_agent_repository_operation_payload(
+    repository: Repository,
+    job_kind: str,
+    *,
+    operation: Optional[dict[str, Any]] = None,
+    maintenance_job_kind: Optional[str] = None,
+    maintenance_job_id: Optional[int] = None,
+) -> dict[str, Any]:
+    if job_kind not in REPOSITORY_OPERATION_CAPABILITIES:
+        raise ValueError(f"Unsupported repository operation: {job_kind}")
+
+    repository_payload = {
+        "id": repository.id,
+        "path": repository.path,
+        "borg_version": repository.borg_version or 1,
+    }
+    if repository.remote_path:
+        repository_payload["remote_path"] = repository.remote_path
+
+    operation_payload = dict(operation or {})
+    if maintenance_job_kind and maintenance_job_id:
+        operation_payload["maintenance_job"] = {
+            "kind": maintenance_job_kind,
+            "id": maintenance_job_id,
+        }
+
+    secrets = {}
+    if repository.passphrase:
+        secrets["BORG_PASSPHRASE"] = {"value": repository.passphrase}
+
+    return {
+        "schema_version": 1,
+        "job_kind": job_kind,
+        "repository": repository_payload,
+        "operation": operation_payload,
+        "secrets": secrets,
+    }
+
+
 def validate_agent_backup_repository(
     db: Session, repository: Repository, *, source_paths: Optional[list[str]] = None
 ) -> AgentMachine:
@@ -180,6 +233,117 @@ def validate_agent_backup_repository(
             detail={"key": detail_key},
         )
     return agent
+
+
+def validate_agent_repository_operation(
+    db: Session, repository: Repository, *, job_kind: str
+) -> AgentMachine:
+    if not is_agent_executor(repository):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.repo.agentRepositoryRequired"},
+        )
+    if job_kind not in REPOSITORY_OPERATION_CAPABILITIES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.agents.unsupportedJobKind"},
+        )
+    if not repository.agent_machine_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"key": "backend.errors.agents.agentRequired"},
+        )
+
+    agent = (
+        db.query(AgentMachine)
+        .filter(AgentMachine.id == repository.agent_machine_id)
+        .first()
+    )
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+    if agent.status in ("disabled", "revoked"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"key": "backend.errors.agents.agentNotQueueable"},
+        )
+    capabilities = agent.capabilities or []
+    if job_kind not in capabilities:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "key": "backend.errors.agents.capabilityMissing",
+                "params": {"capability": job_kind},
+            },
+        )
+    return agent
+
+
+def queue_agent_repository_operation_job(
+    db: Session,
+    repository: Repository,
+    *,
+    job_kind: str,
+    operation: Optional[dict[str, Any]] = None,
+    maintenance_job_kind: Optional[str] = None,
+    maintenance_job_id: Optional[int] = None,
+) -> AgentJob:
+    agent = validate_agent_repository_operation(db, repository, job_kind=job_kind)
+    now = datetime.utcnow()
+    agent_job = AgentJob(
+        agent_machine_id=agent.id,
+        job_type="repository",
+        status="queued",
+        payload=build_agent_repository_operation_payload(
+            repository,
+            job_kind,
+            operation=operation,
+            maintenance_job_kind=maintenance_job_kind,
+            maintenance_job_id=maintenance_job_id,
+        ),
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(agent_job)
+    db.commit()
+    db.refresh(agent_job)
+    return agent_job
+
+
+async def wait_for_agent_repository_operation_job(
+    db: Session,
+    agent_job_id: int,
+    *,
+    timeout_seconds: int = 15,
+    poll_interval_seconds: float = 0.25,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        db.expire_all()
+        agent_job = db.query(AgentJob).filter(AgentJob.id == agent_job_id).first()
+        if not agent_job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"key": "backend.errors.agents.jobNotFound"},
+            )
+        if agent_job.status == "completed":
+            return agent_job.result or {}
+        if agent_job.status in TERMINAL_AGENT_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "key": "backend.errors.agents.repositoryOperationFailed",
+                    "message": agent_job.error_message,
+                },
+            )
+        await asyncio.sleep(poll_interval_seconds)
+
+    raise HTTPException(
+        status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+        detail={"key": "backend.errors.agents.repositoryOperationTimeout"},
+    )
 
 
 def queue_agent_backup_job(

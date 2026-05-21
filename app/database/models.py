@@ -520,6 +520,7 @@ class BackupJob(Base):
 
     # Remote backup execution
     execution_mode = Column(String, default="local")  # "local" or "remote_ssh"
+    route_strategy = Column(String, nullable=True)
     source_ssh_connection_id = Column(
         Integer, ForeignKey("ssh_connections.id"), nullable=True
     )  # SSH connection for remote execution

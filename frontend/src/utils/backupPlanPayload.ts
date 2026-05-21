@@ -55,12 +55,24 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
         return {
           source_type: 'remote' as const,
           source_ssh_connection_id: Number(connectionId),
+          agent_machine_id: null,
+          paths,
+        }
+      }
+      if (location.source_type === 'agent') {
+        const agentMachineId = location.agent_machine_id
+        if (!agentMachineId) return null
+        return {
+          source_type: 'agent' as const,
+          source_ssh_connection_id: null,
+          agent_machine_id: Number(agentMachineId),
           paths,
         }
       }
       return {
         source_type: 'local' as const,
         source_ssh_connection_id: null,
+        agent_machine_id: null,
         paths,
       }
     })
@@ -74,6 +86,7 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
       {
         source_type: 'remote',
         source_ssh_connection_id: Number(state.sourceSshConnectionId),
+        agent_machine_id: null,
         paths: state.sourceDirectories,
       },
     ]
@@ -83,6 +96,7 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
     {
       source_type: 'local',
       source_ssh_connection_id: null,
+      agent_machine_id: null,
       paths: state.sourceDirectories,
     },
   ]

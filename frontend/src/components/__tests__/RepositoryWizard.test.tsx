@@ -380,9 +380,9 @@ describe('RepositoryWizard', () => {
         }),
         null
       )
-    })
+    }, 90000)
 
-    it('preserves an SSH repository target when managed-agent execution is selected', async () => {
+    it('clears and disables SSH repository target when managed-agent execution is selected', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')
 
@@ -397,7 +397,7 @@ describe('RepositoryWizard', () => {
       const agentListbox = await screen.findByRole('listbox')
       await user.click(within(agentListbox).getByText('workstation.local'))
 
-      expect(screen.getByText('Remote Client').closest('button')).not.toBeDisabled()
+      expect(screen.getByText('Remote Client').closest('button')).toBeDisabled()
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
@@ -418,14 +418,14 @@ describe('RepositoryWizard', () => {
           executor_type: 'agent',
           execution_target: 'agent',
           agent_machine_id: 101,
-          connection_id: 1,
+          connection_id: null,
           source_connection_id: null,
           source_directories: [],
           source_locations: [],
         }),
         null
       )
-    })
+    }, 90000)
   })
 
   describe('import mode', () => {

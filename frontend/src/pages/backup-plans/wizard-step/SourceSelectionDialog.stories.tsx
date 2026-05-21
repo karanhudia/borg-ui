@@ -6,7 +6,8 @@ import MockAdapter from 'axios-mock-adapter'
 import api from '../../../services/api'
 import { SourceSelectionDialog } from './SourceSelectionDialog'
 import type { SSHConnection, WizardState } from '../types'
-import type { SourceDiscoveryDatabase } from '../../../services/api'
+import type { AgentMachineResponse, SourceDiscoveryDatabase } from '../../../services/api'
+import type { Repository } from '../../../types'
 import { createInitialState } from '../state'
 
 const sshConnections: SSHConnection[] = [
@@ -27,6 +28,37 @@ const sshConnections: SSHConnection[] = [
     ssh_key_id: 2,
     default_path: '/var/lib',
     status: 'connected',
+  },
+]
+
+const agentMachines: AgentMachineResponse[] = [
+  {
+    id: 31,
+    name: 'Build agent',
+    agent_id: 'agt_build',
+    hostname: 'build-agent.local',
+    os: 'linux',
+    arch: 'amd64',
+    agent_version: '0.1.0',
+    borg_versions: [],
+    capabilities: ['filesystem.browse'],
+    labels: {},
+    status: 'online',
+    last_seen_at: null,
+    last_error: null,
+    created_at: '2026-05-20T00:00:00Z',
+    updated_at: '2026-05-20T00:00:00Z',
+  },
+]
+
+const repositories: Repository[] = [
+  {
+    id: 101,
+    name: 'Agent repo',
+    path: '/backups/agent-repo',
+    executor_type: 'agent',
+    execution_target: 'agent',
+    agent_machine_id: 31,
   },
 ]
 
@@ -136,6 +168,29 @@ function useMockedDiscovery({ scanStatus = 'detected', legacyTemplates = true }:
         detail: 'Connection refused to user@server-a.example',
       })
     }
+    mock.onGet(/\/managed-machines\/agents\/31\/filesystem\/browse.*/).reply(200, {
+      success: true,
+      current_path: '/',
+      parent_path: null,
+      items: [
+        {
+          name: 'srv',
+          path: '/srv',
+          type: 'directory',
+          size: 0,
+          modified_at: 0,
+          hidden: false,
+        },
+        {
+          name: 'data.txt',
+          path: '/data.txt',
+          type: 'file',
+          size: 1024,
+          modified_at: 0,
+          hidden: false,
+        },
+      ],
+    })
 
     return () => {
       mock.restore()
@@ -191,9 +246,15 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.title': 'Choose backup source',
   'backupPlans.sourceChooser.where': 'Where are the files?',
   'backupPlans.sourceChooser.localSource': 'Local source',
+  'backupPlans.sourceChooser.borgUiServer': 'Borg UI server',
   'backupPlans.sourceChooser.localSourceDescription': 'This Borg UI server',
   'backupPlans.sourceChooser.remoteMachine': 'Remote machine',
   'backupPlans.sourceChooser.remoteMachineDescription': 'Pull from an SSH connection',
+  'backupPlans.sourceChooser.managedAgent': 'Managed agent',
+  'backupPlans.sourceChooser.managedAgentDescription': 'Read paths from an enrolled agent',
+  'backupPlans.sourceChooser.selectManagedAgent': 'Select a managed agent',
+  'backupPlans.sourceChooser.noManagedAgents': 'No managed agents available',
+  'backupPlans.sourceChooser.agentFallback': 'Agent #{{id}}',
   'backupPlans.sourceChooser.selectRemoteMachine': 'Select a remote machine',
   'backupPlans.sourceChooser.noRemoteMachines': 'No SSH connections available',
   'backupPlans.sourceChooser.readingFromLocal': 'Reading directly from this server',
@@ -220,6 +281,16 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.removePath': 'Remove path',
   'backupPlans.sourceChooser.removeSourceGroup': 'Remove source group',
   'backupPlans.sourceChooser.applyPaths': 'Use these paths',
+  'backupPlans.sourceChooser.selectPaths': 'Select paths',
+  'backupPlans.sourceChooser.currentPath': 'Current path',
+  'backupPlans.sourceChooser.agentBrowseTitle': 'Browse {{agent}}',
+  'backupPlans.sourceChooser.agentBrowseFailed': 'Could not browse this agent',
+  'backupPlans.sourceChooser.openPath': 'Open',
+  'backupPlans.sourceChooser.parentDirectory': 'Parent directory',
+  'backupPlans.sourceChooser.selected': 'Selected',
+  'backupPlans.sourceChooser.select': 'Select',
+  'backupPlans.sourceChooser.emptyDirectory': 'No visible files in this directory',
+  'backupPlans.sourceChooser.loading': 'Loading',
   'backupPlans.sourceChooser.summaryEmpty': 'No source selected yet',
   'backupPlans.sourceChooser.back': 'Back',
   'common.buttons.cancel': 'Cancel',
@@ -255,6 +326,8 @@ function DialogStory({ wizardState, mockOptions, initialView }: DialogStoryArgs)
         open
         wizardState={stableState}
         sshConnections={sshConnections}
+        agentMachines={agentMachines}
+        fullRepositories={repositories}
         scripts={[]}
         loadingScripts={false}
         updateState={() => {}}

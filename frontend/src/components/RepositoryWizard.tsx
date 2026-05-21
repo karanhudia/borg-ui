@@ -273,11 +273,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       name: repository.name || '',
       borgVersion: repoVersion,
       repositoryMode: repository.mode || 'full',
-      repositoryLocation: isSSH ? 'ssh' : 'local',
+      repositoryLocation: executionTarget === 'agent' ? 'local' : isSSH ? 'ssh' : 'local',
       executionTarget,
       agentMachineId: executionTarget === 'agent' ? repository.agent_machine_id || '' : '',
       path: repoPath,
-      repoSshConnectionId: repository.connection_id || '',
+      repoSshConnectionId: executionTarget === 'agent' ? '' : repository.connection_id || '',
       bypassLock: repository.bypass_lock || false,
       dataSource:
         executionTarget === 'agent' || !repository.source_ssh_connection_id ? 'local' : 'remote',
@@ -325,6 +325,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       if (effectiveExecutionTarget === 'agent') {
         nextUpdates.dataSource = 'local'
         nextUpdates.sourceSshConnectionId = ''
+        nextUpdates.repositoryLocation = 'local'
+        nextUpdates.repoSshConnectionId = ''
       } else if (nextUpdates.executionTarget === 'local') {
         nextUpdates.agentMachineId = ''
       }
@@ -526,6 +528,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         return true
 
       case 'source':
+        if (wizardState.executionTarget === 'agent' && wizardState.dataSource === 'remote')
+          return false
         if (
           wizardState.executionTarget !== 'agent' &&
           wizardState.dataSource === 'remote' &&
@@ -590,7 +594,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           ? wizardState.agentMachineId
           : null,
       // Connection IDs - single source of truth for SSH
-      connection_id: wizardState.repoSshConnectionId || null,
+      connection_id:
+        wizardState.executionTarget === 'agent' ? null : wizardState.repoSshConnectionId || null,
       source_connection_id:
         wizardState.executionTarget !== 'agent' &&
         wizardState.dataSource === 'remote' &&

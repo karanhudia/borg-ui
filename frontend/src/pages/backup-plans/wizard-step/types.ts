@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next'
 
 import type { PruneSettings } from '../../../components/PruneSettingsInput'
 import type { Repository } from '../../../types'
+import type { AgentMachineResponse } from '../../../services/api'
 import type { BasicRepositoryState, ScriptOption, SSHConnection, WizardState } from '../types'
 
 export interface BackupPlanWizardStepProps {
@@ -13,6 +14,7 @@ export interface BackupPlanWizardStepProps {
   basicRepositoryOpen: boolean
   fullRepositories: Repository[]
   repositories: Repository[]
+  agentMachines: AgentMachineResponse[]
   sshConnections: SSHConnection[]
   selectedSourceConnection: SSHConnection | null
   scripts: ScriptOption[]

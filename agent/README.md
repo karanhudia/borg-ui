@@ -111,5 +111,9 @@ The first implementation supports:
 - enrollment and heartbeat
 - polling and claiming jobs
 - `backup.create` using Borg 1 or Borg 2
+- `filesystem.browse` for source path selection from the central Borg UI
+- `repository.info`, `repository.list_archives`, `repository.check`,
+  `repository.prune`, and `repository.compact` for agent-owned local
+  repositories
 - log and progress upload
 - cancellation through heartbeat

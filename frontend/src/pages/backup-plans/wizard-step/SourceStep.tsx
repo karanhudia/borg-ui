@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { alpha, Box, Button, Chip, Stack, TextField, Typography } from '@mui/material'
-import { ChevronDown, ChevronUp, Database, FolderOpen, HardDrive, Server } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronUp,
+  Database,
+  FolderOpen,
+  HardDrive,
+  Laptop,
+  Server,
+} from 'lucide-react'
 
 import ExcludePatternInput from '../../../components/ExcludePatternInput'
 import { SourceSelectionDialog } from './SourceSelectionDialog'
@@ -14,6 +22,8 @@ type SourceStepProps = Pick<
   BackupPlanWizardStepProps,
   | 'wizardState'
   | 'sshConnections'
+  | 'agentMachines'
+  | 'fullRepositories'
   | 'scripts'
   | 'loadingScripts'
   | 'updateState'
@@ -25,6 +35,8 @@ type SourceStepProps = Pick<
 export function SourceStep({
   wizardState,
   sshConnections,
+  agentMachines,
+  fullRepositories,
   scripts,
   loadingScripts,
   updateState,
@@ -191,11 +203,13 @@ export function SourceStep({
                     >
                       {location.source_type === 'remote' ? (
                         <Server size={14} style={{ flexShrink: 0 }} />
+                      ) : location.source_type === 'agent' ? (
+                        <Laptop size={14} style={{ flexShrink: 0 }} />
                       ) : (
                         <HardDrive size={14} style={{ flexShrink: 0 }} />
                       )}
                       <Typography variant="caption" sx={{ fontWeight: 600, flexShrink: 0 }} noWrap>
-                        {sourceLocationLabel(location, sshConnections, t)}
+                        {sourceLocationLabel(location, sshConnections, agentMachines, t)}
                       </Typography>
                       <Typography variant="caption" sx={{ flexShrink: 0 }}>
                         ·
@@ -279,6 +293,8 @@ export function SourceStep({
         open={sourceDialogOpen}
         wizardState={wizardState}
         sshConnections={sshConnections}
+        agentMachines={agentMachines}
+        fullRepositories={fullRepositories}
         scripts={scripts}
         loadingScripts={loadingScripts}
         updateState={updateState}
@@ -291,6 +307,9 @@ export function SourceStep({
 }
 
 function sourceLocationKey(location: SourceLocation) {
+  if (location.source_type === 'agent') {
+    return `agent:${location.agent_machine_id || 'agent'}`
+  }
   return `${location.source_type}:${location.source_ssh_connection_id || 'local'}`
 }
 
@@ -340,9 +359,17 @@ function getWizardSourceLocations(wizardState: WizardState): SourceLocation[] {
 function sourceLocationLabel(
   location: SourceLocation,
   sshConnections: SSHConnection[],
+  agentMachines: SourceStepProps['agentMachines'],
   t: SourceStepProps['t']
 ) {
-  if (location.source_type === 'local') return t('backupPlans.sourceChooser.localSource')
+  if (location.source_type === 'local') return t('backupPlans.sourceChooser.borgUiServer')
+  if (location.source_type === 'agent') {
+    const agent = agentMachines.find((item) => item.id === location.agent_machine_id)
+    if (agent) return agent.hostname || agent.name
+    return t('backupPlans.sourceChooser.agentFallback', {
+      id: location.agent_machine_id,
+    })
+  }
   const connection = sshConnections.find((item) => item.id === location.source_ssh_connection_id)
   return connection
     ? `${connection.username}@${connection.host}`

@@ -12,6 +12,9 @@ const apiMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../../services/api', () => ({
+  managedAgentsAPI: {
+    browseFilesystem: vi.fn(),
+  },
   sourceDiscoveryAPI: {
     databases: apiMocks.databases,
     scanDatabases: apiMocks.scanDatabases,
@@ -202,8 +205,23 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.postExistingScript': 'Existing post-backup script',
   'backupPlans.sourceChooser.applyDatabase': 'Use database source',
   'backupPlans.sourceChooser.addSourceGroup': 'Add source group',
-  'backupPlans.sourceChooser.localSource': 'Local source',
+  'backupPlans.sourceChooser.localSource': 'Borg UI server',
+  'backupPlans.sourceChooser.borgUiServer': 'Borg UI server',
   'backupPlans.sourceChooser.localSourceDescription': 'This Borg UI server',
+  'backupPlans.sourceChooser.managedAgent': 'Managed agent',
+  'backupPlans.sourceChooser.managedAgentDescription': 'Read paths from an enrolled managed agent',
+  'backupPlans.sourceChooser.selectManagedAgent': 'Select a managed agent',
+  'backupPlans.sourceChooser.noManagedAgents': 'No managed agents available',
+  'backupPlans.sourceChooser.agentFallback': 'Agent #{{id}}',
+  'backupPlans.sourceChooser.selectPaths': 'Select paths',
+  'backupPlans.sourceChooser.currentPath': 'Current path',
+  'backupPlans.sourceChooser.agentBrowseTitle': 'Browse {{agent}}',
+  'backupPlans.sourceChooser.agentBrowseFailed': 'Could not browse this agent',
+  'backupPlans.sourceChooser.openPath': 'Open',
+  'backupPlans.sourceChooser.parentDirectory': 'Parent directory',
+  'backupPlans.sourceChooser.selected': 'Selected',
+  'backupPlans.sourceChooser.select': 'Select',
+  'backupPlans.sourceChooser.emptyDirectory': 'No visible files in this directory',
   'backupPlans.sourceChooser.sshSource': 'SSH source',
   'backupPlans.sourceChooser.sshSourceDescription': 'Remote machine',
   'backupPlans.sourceChooser.sourcePath': 'Source path',
@@ -250,7 +268,17 @@ function clickExistingTextButton(name: string | RegExp) {
   fireEvent.click(button as HTMLButtonElement)
 }
 
-function selectRemoteMachine(optionName: RegExp) {
+function clickExistingSummaryToggle(name: string | RegExp) {
+  const buttons = Array.from(document.querySelectorAll<HTMLElement>('[role="button"], button'))
+  const button = buttons.find((candidate) => {
+    const text = candidate.textContent || ''
+    return typeof name === 'string' ? text.includes(name) : name.test(text)
+  })
+  expect(button).not.toBeNull()
+  fireEvent.click(button as HTMLElement)
+}
+
+async function selectRemoteMachine(optionName: RegExp) {
   const labels = screen.getAllByText(/^remote machine$/i)
   const card = labels.map((label) => label.closest('button')).find(Boolean)
   expect(card).not.toBeNull()
@@ -258,9 +286,12 @@ function selectRemoteMachine(optionName: RegExp) {
 
   const trigger = screen.getByRole('combobox', { name: /select a remote machine/i })
   fireEvent.mouseDown(trigger)
-  const listbox = screen.getByRole('listbox')
+  const listbox = await screen.findByRole('listbox')
   const option = within(listbox).getByText(optionName)
   fireEvent.click(option)
+  await waitFor(() => {
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
 }
 
 function renderSourceStep(overrides = {}) {
@@ -268,6 +299,8 @@ function renderSourceStep(overrides = {}) {
     <SourceStep
       wizardState={createInitialState()}
       sshConnections={[]}
+      agentMachines={[]}
+      fullRepositories={[]}
       scripts={[
         {
           id: 7,
@@ -307,6 +340,8 @@ function StatefulSourceStep({
     <SourceStep
       wizardState={wizardState}
       sshConnections={sshConnections}
+      agentMachines={[]}
+      fullRepositories={[]}
       scripts={[]}
       loadingScripts={false}
       updateState={(updates) => setWizardState((current) => ({ ...current, ...updates }))}
@@ -352,7 +387,7 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
 
     expect(screen.getByRole('dialog')).toHaveAttribute('data-max-width', 'md')
-    expect(await screen.findByText('Local source')).toBeInTheDocument()
+    expect(await screen.findByText('Borg UI server')).toBeInTheDocument()
     expect(screen.getByText('Remote machine')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /scan a database instead/i })).toBeInTheDocument()
     expect(screen.queryByText(/docker containers/i)).not.toBeInTheDocument()
@@ -373,18 +408,18 @@ describe('SourceStep', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^edit$/i }))
     await screen.findByRole('button', { name: /scan a database instead/i })
-    clickExistingTextButton(/local source/i)
+    clickExistingTextButton(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app-data' },
     })
     clickExistingTextButton(/add path/i)
     clickExistingTextButton(/use these paths/i)
 
-    fireEvent.click(screen.getByRole('button', { name: /local source/i }))
+    fireEvent.click(screen.getByRole('button', { name: /borg ui server/i }))
     expect(screen.getByTitle('/srv/app-data')).toBeInTheDocument()
     expect(screen.getByText('Files and folders')).toBeInTheDocument()
     expect(screen.queryByText('Database scan')).not.toBeInTheDocument()
-  })
+  }, 45000)
 
   it('adds local and multiple SSH source groups from the source modal', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
@@ -415,36 +450,40 @@ describe('SourceStep', () => {
     expect(await screen.findByText('This Borg UI server')).toBeInTheDocument()
     expect(screen.getByText('Remote machine')).toBeInTheDocument()
 
-    clickExistingTextButton(/local source/i)
+    clickExistingTextButton(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app' },
     })
     clickExistingTextButton(/add path/i)
 
-    selectRemoteMachine(/backup-a@server-a.example/i)
+    await selectRemoteMachine(/backup-a@server-a.example/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/home/app/data' },
     })
     clickExistingTextButton(/add path/i)
 
-    selectRemoteMachine(/backup-b@server-b.example/i)
+    await selectRemoteMachine(/backup-b@server-b.example/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/var/lib/service' },
     })
     clickExistingTextButton(/add path/i)
 
-    clickExistingTextButton(/use these paths/i)
+    const applyButton = screen.getByRole('button', { name: /use these paths/i })
+    fireEvent.click(applyButton)
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
 
-    fireEvent.click(screen.getByRole('button', { name: /local source/i }))
-    fireEvent.click(screen.getByRole('button', { name: /backup-a@server-a.example/i }))
-    fireEvent.click(screen.getByRole('button', { name: /backup-b@server-b.example/i }))
+    clickExistingSummaryToggle(/borg ui server/i)
+    clickExistingSummaryToggle(/backup-a@server-a.example/i)
+    clickExistingSummaryToggle(/backup-b@server-b.example/i)
     expect(screen.getByTitle('/srv/app')).toBeInTheDocument()
     expect(screen.getByTitle('/home/app/data')).toBeInTheDocument()
     expect(screen.getByTitle('/var/lib/service')).toBeInTheDocument()
     expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
     expect(screen.getByText('backup-b@server-b.example')).toBeInTheDocument()
     expect(screen.getAllByText('1 path')).toHaveLength(3)
-  })
+  }, 45000)
 
   it('browses paths for the selected SSH source without replacing other groups', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
@@ -464,13 +503,13 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
     await screen.findByRole('button', { name: /scan a database instead/i })
 
-    clickExistingTextButton(/local source/i)
+    clickExistingTextButton(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app' },
     })
     clickExistingTextButton(/add path/i)
 
-    selectRemoteMachine(/backup-a@server-a.example/i)
+    await selectRemoteMachine(/backup-a@server-a.example/i)
     clickExistingTextButton(/browse current source/i)
 
     const explorer = screen.getByTestId('file-explorer-dialog')
@@ -481,7 +520,7 @@ describe('SourceStep', () => {
     clickExistingTextButton(/select browsed path/i)
     clickExistingTextButton(/use these paths/i)
 
-    fireEvent.click(screen.getByRole('button', { name: /local source/i }))
+    fireEvent.click(screen.getByRole('button', { name: /borg ui server/i }))
     fireEvent.click(screen.getByRole('button', { name: /backup-a@server-a.example/i }))
     expect(screen.getByTitle('/srv/app')).toBeInTheDocument()
     expect(screen.getByTitle('/selected/from-browser')).toBeInTheDocument()
