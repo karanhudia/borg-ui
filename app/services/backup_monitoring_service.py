@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 from typing import Optional
@@ -241,6 +242,25 @@ def _report_window_start(settings: SystemSettings, now: datetime) -> Optional[da
     return None
 
 
+def _report_activity_period_start(settings: SystemSettings, now: datetime) -> datetime:
+    now_naive = _normalize_now(now)
+    frequency = settings.backup_reports_frequency or DEFAULT_REPORT_FREQUENCY
+
+    if frequency == "daily":
+        return now_naive - timedelta(days=1)
+
+    if frequency == "monthly":
+        year = now_naive.year
+        month = now_naive.month - 1
+        if month == 0:
+            year -= 1
+            month = 12
+        day = min(now_naive.day, calendar.monthrange(year, month)[1])
+        return now_naive.replace(year=year, month=month, day=day)
+
+    return now_naive - timedelta(days=7)
+
+
 def is_report_due(
     settings: SystemSettings, now: datetime, *, force: bool = False
 ) -> bool:
@@ -275,10 +295,14 @@ def build_backup_report(
         or DEFAULT_STALE_AFTER_DAYS,
         include_observe_repos=settings.backup_monitoring_include_observe_repos,
     )
-    since = now_naive - timedelta(days=7)
+    period_start = _report_activity_period_start(settings, now_naive)
     recent_jobs = (
         db.query(BackupJob)
-        .filter(BackupJob.started_at.isnot(None), BackupJob.started_at >= since)
+        .filter(
+            BackupJob.started_at.isnot(None),
+            BackupJob.started_at >= period_start,
+            BackupJob.started_at <= now_naive,
+        )
         .order_by(BackupJob.started_at.desc())
         .limit(10)
         .all()
@@ -313,12 +337,16 @@ def build_backup_report(
 
     if settings.backup_reports_include_recent_activity:
         lines.append("Recent backup activity")
+        lines.append(
+            "Activity window: "
+            f"{serialize_datetime(period_start)} to {serialize_datetime(now_naive)}"
+        )
         if recent_jobs:
             for job in recent_jobs:
                 started_at = serialize_datetime(job.started_at)
                 lines.append(f"- {job.repository}: {job.status} at {started_at}")
         else:
-            lines.append("- No backup jobs started in the last 7 days")
+            lines.append("- No backup jobs started in this activity window")
         lines.append("")
 
     return BackupReport(
