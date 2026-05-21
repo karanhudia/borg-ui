@@ -1,10 +1,14 @@
 # Docker Hooks
 
-Borg UI can run pre-backup and post-backup scripts. If the Docker socket is mounted, those scripts can stop, start, inspect, or restart containers.
+Borg UI can run pre-backup and post-backup scripts. If the Docker CLI is configured inside the Borg UI container, those scripts can stop, start, inspect, or restart containers.
 
 Use this only when you need consistent backups of stateful containers.
 
 ## Enable Docker Access
+
+Use one of these patterns.
+
+### Direct Socket Mount
 
 Add the Docker socket to the Borg UI container:
 
@@ -15,9 +19,44 @@ volumes:
 
 This gives the Borg UI container control over the host Docker daemon. Treat it as host-level access.
 
+### Docker Socket Proxy
+
+To avoid mounting the Docker socket into the Borg UI app container, run a Docker socket proxy such as [Tecnativa/docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy) on the same Docker network and point the app container's Docker CLI at it:
+
+```yaml
+services:
+  app:
+    environment:
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+    # Remove the /var/run/docker.sock mount from the app service when using this.
+
+  docker-socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:0.4.2
+    profiles: ["docker-socket-proxy"]
+    restart: unless-stopped
+    privileged: true
+    environment:
+      - CONTAINERS=1
+      - INFO=1
+      - POST=1
+      - ALLOW_START=1
+      - ALLOW_STOP=1
+      - ALLOW_RESTARTS=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+```
+
+Start that profile with:
+
+```bash
+docker compose --profile docker-socket-proxy up -d
+```
+
+The proxy container still mounts the host socket, but Borg UI talks to the proxy over `DOCKER_HOST=tcp://docker-socket-proxy:2375` instead of mounting the socket directly. Keep the proxy on an internal Docker network only. Do not publish port `2375` to the host or internet.
+
 ## Docker CLI
 
-The socket exposes the Docker daemon, but scripts still need the `docker` command inside the Borg UI container.
+The socket or socket proxy exposes the Docker daemon, but scripts still need the `docker` command inside the Borg UI container.
 
 If a hook fails with `docker: command not found`, install `docker.io` from:
 
@@ -108,6 +147,8 @@ Then back up `/local/db-dumps`.
 ## Security Rules
 
 - Do not mount the Docker socket unless hooks need it.
+- Prefer a Docker socket proxy when hooks only need a limited Docker API surface.
+- If you use a socket proxy, expose only the API sections required by your scripts and keep port `2375` private to the Docker network.
 - Do not run unreviewed scripts.
 - Use repository-specific parameters for container names.
 - Keep scripts idempotent.
