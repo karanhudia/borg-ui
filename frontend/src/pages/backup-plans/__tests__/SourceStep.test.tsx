@@ -523,7 +523,8 @@ describe('SourceStep', () => {
     clickExistingTextButton(/add path/i)
 
     await selectRemoteMachine(/backup-a@server-a.example/i)
-    clickExistingTextButton(/browse current source/i)
+    expect(screen.queryByRole('button', { name: /browse current source/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('Browse filesystem'))
 
     const explorer = screen.getByTestId('file-explorer-dialog')
     expect(explorer).toHaveAttribute('data-connection-type', 'ssh')
@@ -559,7 +560,8 @@ describe('SourceStep', () => {
     await screen.findByRole('button', { name: /scan a database instead/i })
 
     clickExistingTextButton(/managed agent/i)
-    clickExistingTextButton(/browse current source/i)
+    expect(screen.queryByRole('button', { name: /browse current source/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('Browse filesystem'))
 
     const explorer = screen.getByTestId('file-explorer-dialog')
     expect(explorer).toHaveAttribute('data-connection-type', 'agent')

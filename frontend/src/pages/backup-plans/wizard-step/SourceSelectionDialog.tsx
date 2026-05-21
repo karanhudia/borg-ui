@@ -31,7 +31,6 @@ import {
 import {
   ArrowLeft,
   Database as DatabaseIcon,
-  FolderOpen,
   HardDrive,
   Info,
   Laptop,
@@ -46,7 +45,7 @@ import type { IconType } from 'react-icons'
 import type { TFunction } from 'i18next'
 
 import CodeEditor from '../../../components/CodeEditor'
-import FileExplorerDialog from '../../../components/FileExplorerDialog'
+import PathSelectorField from '../../../components/PathSelectorField'
 import ResponsiveDialog from '../../../components/ResponsiveDialog'
 import {
   type AgentMachineResponse,
@@ -465,7 +464,6 @@ export function SourceSelectionDialog({
   const [selectedSourceKey, setSelectedSourceKey] = useState<SourceKey>('local')
   const [sourcePath, setSourcePath] = useState('')
   const [draftSourceLocations, setDraftSourceLocations] = useState<SourceLocation[]>([])
-  const [sourceExplorerOpen, setSourceExplorerOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -477,7 +475,6 @@ export function SourceSelectionDialog({
       nextLocations[0] ? locationKey(nextLocations[0]) : defaultAgentKey || 'local'
     )
     setSourcePath('')
-    setSourceExplorerOpen(false)
     setSelectedDatabase(null)
     setScriptMode('create')
     setPreExistingScriptId(wizardState.preBackupScriptId || '')
@@ -676,7 +673,7 @@ export function SourceSelectionDialog({
     ? agentMachines.find((agent) => selectedSourceKey === `agent:${agent.id}`) || null
     : null
 
-  const selectedSourceExplorerSshConfig = selectedSourceConnection
+  const selectedSourceSshConfig = selectedSourceConnection
     ? {
         ssh_key_id: selectedSourceConnection.ssh_key_id,
         host: selectedSourceConnection.host,
@@ -890,14 +887,27 @@ export function SourceSelectionDialog({
           </Box>
         )}
 
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="stretch">
-          <TextField
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="flex-start">
+          <PathSelectorField
             label={t('backupPlans.sourceChooser.sourcePath')}
             value={sourcePath}
-            onChange={(event) => setSourcePath(event.target.value)}
+            onChange={setSourcePath}
             size="small"
             fullWidth
             disabled={remoteDisabled || agentDisabled}
+            initialPath={selectedSourceConnection ? selectedSourceConnection.default_path || '/' : '/'}
+            multiSelect
+            selectMode="both"
+            connectionType={
+              sourceKind === 'agent' ? 'agent' : selectedSourceConnection ? 'ssh' : 'local'
+            }
+            agentId={selectedAgent?.id}
+            sshConfig={selectedSourceSshConfig}
+            showSshMountPoints={false}
+            onSelectPaths={(paths) => {
+              addPathsToSelectedSource(paths)
+              setSourcePath('')
+            }}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault()
@@ -913,15 +923,6 @@ export function SourceSelectionDialog({
             sx={{ flexShrink: 0 }}
           >
             {t('backupPlans.sourceChooser.addPath')}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<FolderOpen size={16} />}
-            onClick={() => setSourceExplorerOpen(true)}
-            disabled={remoteDisabled || agentDisabled}
-            sx={{ flexShrink: 0 }}
-          >
-            {t('backupPlans.sourceChooser.browseCurrentSource')}
           </Button>
         </Stack>
 
@@ -1106,28 +1107,6 @@ export function SourceSelectionDialog({
             </Stack>
           )}
         </Box>
-
-        <FileExplorerDialog
-          key={`source-picker-${selectedSourceKey}`}
-          open={sourceExplorerOpen}
-          onClose={() => setSourceExplorerOpen(false)}
-          onSelect={(paths) => {
-            addPathsToSelectedSource(paths)
-            setSourceExplorerOpen(false)
-          }}
-          title={t('backupPlans.wizard.fileExplorer.sourceTitle')}
-          initialPath={
-            selectedSourceConnection ? selectedSourceConnection.default_path || '/' : '/'
-          }
-          multiSelect
-          connectionType={
-            sourceKind === 'agent' ? 'agent' : selectedSourceConnection ? 'ssh' : 'local'
-          }
-          agentId={selectedAgent?.id}
-          sshConfig={selectedSourceExplorerSshConfig}
-          selectMode="both"
-          showSshMountPoints={false}
-        />
       </Stack>
     )
   }

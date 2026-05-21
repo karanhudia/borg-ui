@@ -13,6 +13,7 @@ vi.mock('../FileExplorerDialog', () => ({
     selectMode,
     connectionType,
     agentId,
+    initialPath,
   }: {
     open: boolean
     onClose: () => void
@@ -21,6 +22,7 @@ vi.mock('../FileExplorerDialog', () => ({
     selectMode: string
     connectionType?: string
     agentId?: number
+    initialPath?: string
   }) => {
     if (!open) return null
     return (
@@ -28,6 +30,7 @@ vi.mock('../FileExplorerDialog', () => ({
         data-testid="mock-file-explorer"
         data-connection-type={connectionType}
         data-agent-id={agentId || ''}
+        data-initial-path={initialPath || ''}
       >
         <button
           data-testid="select-single"
@@ -198,6 +201,32 @@ describe('PathSelectorField', () => {
       await user.click(screen.getByTestId('select-multiple'))
 
       expect(mockOnChange).toHaveBeenCalledWith('/path/one,/path/two,/path/three')
+    })
+
+    it('can send selected paths directly to a caller-provided handler', async () => {
+      const user = userEvent.setup()
+      const mockOnSelectPaths = vi.fn()
+      render(
+        <PathSelectorField
+          label="Path"
+          value=""
+          onChange={mockOnChange}
+          multiSelect={true}
+          initialPath="/home/backup-a"
+          onSelectPaths={mockOnSelectPaths}
+        />
+      )
+
+      await user.click(screen.getByTitle('Browse filesystem'))
+      expect(screen.getByTestId('mock-file-explorer')).toHaveAttribute(
+        'data-initial-path',
+        '/home/backup-a'
+      )
+
+      await user.click(screen.getByTestId('select-multiple'))
+
+      expect(mockOnSelectPaths).toHaveBeenCalledWith(['/path/one', '/path/two', '/path/three'])
+      expect(mockOnChange).not.toHaveBeenCalled()
     })
 
     it('passes multiSelect prop to FileExplorerDialog', async () => {
