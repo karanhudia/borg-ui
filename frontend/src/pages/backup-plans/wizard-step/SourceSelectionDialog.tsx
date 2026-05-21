@@ -895,7 +895,9 @@ export function SourceSelectionDialog({
             size="small"
             fullWidth
             disabled={remoteDisabled || agentDisabled}
-            initialPath={selectedSourceConnection ? selectedSourceConnection.default_path || '/' : '/'}
+            initialPath={
+              selectedSourceConnection ? selectedSourceConnection.default_path || '/' : '/'
+            }
             multiSelect
             selectMode="both"
             connectionType={
