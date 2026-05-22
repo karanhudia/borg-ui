@@ -1,22 +1,24 @@
 import { Box, Button, Chip, Stack, Tooltip, Typography } from '@mui/material'
 import { CheckCircle, Copy, Loader2 } from 'lucide-react'
 import type { AgentMachineResponse } from '../../services/api'
-import { buildAgentInstallCommand } from './agentInstallCommandText'
+import { buildAgentInstallCommand, type BorgInstallMode } from './agentInstallCommandText'
 
 export default function AgentInstallCommand({
   serverUrl,
   token,
   agentName,
+  borgInstallMode = 'borg1',
   connectedAgent,
   onCopy,
 }: {
   serverUrl: string
   token: string
   agentName: string
+  borgInstallMode?: BorgInstallMode
   connectedAgent?: AgentMachineResponse | null
   onCopy: (value: string) => void
 }) {
-  const command = buildAgentInstallCommand(serverUrl, token, agentName)
+  const command = buildAgentInstallCommand(serverUrl, token, agentName, borgInstallMode)
 
   return (
     <Stack spacing={1.5}>

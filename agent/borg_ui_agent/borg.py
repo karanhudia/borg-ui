@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, Optional
 
 
@@ -13,9 +14,15 @@ class BorgBinary:
     major: int
     version: str
     path: str
+    install_source: str
 
     def to_api_payload(self) -> dict:
-        return {"major": self.major, "version": self.version, "path": self.path}
+        return {
+            "major": self.major,
+            "version": self.version,
+            "path": self.path,
+            "install_source": self.install_source,
+        }
 
 
 def detect_platform() -> dict:
@@ -32,6 +39,21 @@ def _parse_borg_version(output: str) -> Optional[tuple[int, str]]:
         return None
     version = match.group(0)
     return int(match.group(1)), version
+
+
+def _classify_install_source(path: str) -> str:
+    resolved_path = Path(path).resolve(strict=False)
+    installer_root = Path("/opt/borg-ui-agent").resolve(strict=False)
+
+    try:
+        if resolved_path.is_relative_to(installer_root):
+            return "borg-ui-installer"
+    except ValueError:
+        pass
+
+    if path.startswith(("/usr/bin/", "/usr/sbin/")):
+        return "system-package"
+    return "custom-path"
 
 
 def detect_borg_binaries(
@@ -61,6 +83,13 @@ def detect_borg_binaries(
         if not parsed:
             continue
         major, version = parsed
-        binaries.append(BorgBinary(major=major, version=version, path=path))
+        binaries.append(
+            BorgBinary(
+                major=major,
+                version=version,
+                path=path,
+                install_source=_classify_install_source(path),
+            )
+        )
 
     return binaries

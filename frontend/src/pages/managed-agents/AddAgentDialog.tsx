@@ -9,9 +9,13 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
+  FormLabel,
   InputLabel,
   MenuItem,
   Paper,
+  Radio,
+  RadioGroup,
   Select,
   Stack,
   TextField,
@@ -24,6 +28,7 @@ import type {
   AgentMachineResponse,
 } from '../../services/api'
 import AgentInstallCommand from './AgentInstallCommand'
+import type { BorgInstallMode } from './agentInstallCommandText'
 import { isLocalAgentServerUrl, normalizeAgentServerUrl } from './agentServerUrl'
 
 type WizardStep = 0 | 1 | 2 | 3
@@ -35,6 +40,33 @@ const expiryOptions: Array<{ value: ExpiryOption; label: string }> = [
   { value: '7d', label: '7 days' },
   { value: '30d', label: '30 days' },
   { value: 'never', label: 'Never' },
+]
+
+const borgInstallOptions: Array<{
+  value: BorgInstallMode
+  label: string
+  description: string
+}> = [
+  {
+    value: 'borg1',
+    label: 'Borg 1.x',
+    description: "Default. Installs or verifies Borg 1 as 'borg'.",
+  },
+  {
+    value: 'borg2',
+    label: 'Borg 2.x beta only',
+    description: "Advanced experimental option. Installs or verifies Borg 2 as 'borg2'.",
+  },
+  {
+    value: 'both',
+    label: 'Borg 1.x and Borg 2.x beta',
+    description: "Advanced experimental option. Keeps Borg 1 as 'borg' and Borg 2 as 'borg2'.",
+  },
+  {
+    value: 'skip',
+    label: 'Skip Borg install',
+    description: 'Use this when Borg is managed separately on the agent machine.',
+  },
 ]
 
 function expiryPayload(option: ExpiryOption): Omit<AgentEnrollmentTokenCreate, 'name'> {
@@ -83,6 +115,7 @@ export default function AddAgentDialog({
   initialStep = 0,
   initialAgentName = 'borg-ui-agent',
   initialCreatedToken = null,
+  initialBorgInstallMode = 'borg1',
 }: {
   open: boolean
   onClose: () => void
@@ -94,10 +127,12 @@ export default function AddAgentDialog({
   initialStep?: WizardStep
   initialAgentName?: string
   initialCreatedToken?: AgentEnrollmentTokenCreated | null
+  initialBorgInstallMode?: BorgInstallMode
 }) {
   const [step, setStep] = useState<WizardStep>(0)
   const [agentName, setAgentName] = useState(initialAgentName)
   const [expiry, setExpiry] = useState<ExpiryOption>('7d')
+  const [borgInstallMode, setBorgInstallMode] = useState<BorgInstallMode>(initialBorgInstallMode)
   const [serverUrl, setServerUrl] = useState(defaultServerUrl)
   const [createdToken, setCreatedToken] = useState<AgentEnrollmentTokenCreated | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -114,11 +149,20 @@ export default function AddAgentDialog({
     setStep(initialStep)
     setAgentName(initialAgentName)
     setExpiry('7d')
+    setBorgInstallMode(initialBorgInstallMode)
     setServerUrl(defaultServerUrl)
     setCreatedToken(initialCreatedToken)
     setError(null)
     setInitialAgentIds(new Set(agents.map((agent) => agent.id)))
-  }, [open, defaultServerUrl, agents, initialAgentName, initialCreatedToken, initialStep])
+  }, [
+    open,
+    defaultServerUrl,
+    agents,
+    initialAgentName,
+    initialCreatedToken,
+    initialStep,
+    initialBorgInstallMode,
+  ])
 
   const normalizedServerUrl = useMemo(() => {
     try {
@@ -226,6 +270,54 @@ export default function AddAgentDialog({
           ))}
         </Select>
       </FormControl>
+      <FormControl component="fieldset">
+        <FormLabel component="legend">Borg installation</FormLabel>
+        <RadioGroup
+          value={borgInstallMode}
+          onChange={(event) => setBorgInstallMode(event.target.value as BorgInstallMode)}
+          sx={{
+            mt: 1,
+            display: 'grid',
+            gap: 1,
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+          }}
+        >
+          {borgInstallOptions.map((option) => {
+            const selected = borgInstallMode === option.value
+            return (
+              <FormControlLabel
+                key={option.value}
+                value={option.value}
+                control={<Radio />}
+                label={
+                  <Stack spacing={0.35} sx={{ minWidth: 0 }}>
+                    <Typography fontWeight={700}>{option.label}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {option.description}
+                    </Typography>
+                  </Stack>
+                }
+                sx={{
+                  m: 0,
+                  p: 1.25,
+                  alignItems: 'flex-start',
+                  border: '1px solid',
+                  borderColor: selected ? 'primary.main' : 'divider',
+                  borderRadius: 1,
+                  bgcolor: selected ? 'action.hover' : 'background.paper',
+                  cursor: 'pointer',
+                  transition: 'border-color 180ms ease, background-color 180ms ease',
+                  '&:hover': {
+                    borderColor: selected ? 'primary.main' : 'text.secondary',
+                    bgcolor: 'action.hover',
+                  },
+                  '& .MuiFormControlLabel-label': { width: '100%' },
+                }}
+              />
+            )
+          })}
+        </RadioGroup>
+      </FormControl>
     </Stack>
   )
 
@@ -255,6 +347,7 @@ export default function AddAgentDialog({
         serverUrl={normalizedServerUrl}
         token={createdToken.token}
         agentName={agentName.trim()}
+        borgInstallMode={borgInstallMode}
         connectedAgent={connectedAgent}
         onCopy={onCopy}
       />
