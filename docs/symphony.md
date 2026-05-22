@@ -11,8 +11,8 @@ repository contract in `WORKFLOW.md` and the optional Codex skills in
 - Codex CLI with `codex app-server`
 - Linear personal API key exported as `LINEAR_API_KEY`
 - `mise` for the Elixir/Erlang versions recommended by Symphony
-- Linear project statuses: `Todo`, `In Progress`, `Human Review`, `Merging`,
-  `Rework`, and `Done`
+- Linear project statuses: `Todo`, `In Progress`, `Human Review`,
+  `Code Review Reply`, `Merging`, `Rework`, and `Done`
 
 The Borg UI Linear project is:
 
@@ -63,14 +63,16 @@ http://localhost:4000
 
 ## What Symphony Will Do
 
-- Poll the Borg UI Linear project for active `Todo`, `In Progress`, `Merging`,
-  and `Rework` issues.
+- Poll the Borg UI Linear project for active `Todo`, `In Progress`,
+  `Code Review Reply`, `Merging`, and `Rework` issues.
 - Create an isolated workspace under `~/code/borg-ui-symphony-workspaces`.
 - Clone Borg UI into the issue workspace.
 - Start `codex app-server` in the workspace.
 - Instruct Codex to keep a single `## Codex Workpad` comment on the Linear
   issue.
 - Move validated PR work to `Human Review`.
+- Address in-place PR feedback when a human moves an issue to
+  `Code Review Reply`.
 - Land approved work only after a human moves the issue to `Merging`.
 
 ## Borg UI Validation Policy

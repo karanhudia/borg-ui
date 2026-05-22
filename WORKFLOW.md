@@ -6,6 +6,7 @@ tracker:
   active_states:
     - Todo
     - In Progress
+    - Code Review Reply
     - Merging
     - Rework
   terminal_states:
@@ -130,6 +131,7 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
   - Special case: if a PR is already attached, treat as feedback/rework loop (run full PR feedback sweep, address or explicitly push back, revalidate, return to `Human Review`).
 - `In Progress` -> implementation actively underway.
 - `Human Review` -> PR is attached and validated; waiting on human approval.
+- `Code Review Reply` -> run code review reply flow.
 - `Merging` -> approved by human; execute the `land` skill flow (do not call `gh pr merge` directly).
 - `Rework` -> reviewer requested changes; planning + implementation required.
 - `Done` -> terminal state; no further action required.
@@ -144,6 +146,7 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
      - If PR is already attached, start by reviewing all open PR comments and deciding required changes vs explicit pushback responses.
    - `In Progress` -> continue execution flow from current scratchpad comment.
    - `Human Review` -> wait and poll for decision/review updates.
+   - `Code Review Reply` -> run code review reply flow.
    - `Merging` -> on entry, open and follow `.codex/skills/land/SKILL.md`; do not call `gh pr merge` directly.
    - `Rework` -> run rework flow.
    - `Done` -> do nothing and shut down.
@@ -269,7 +272,11 @@ Use this only when completion is blocked by missing required tools or missing au
 
 1. When the issue is in `Human Review`, do not code or change ticket content.
 2. Poll for updates as needed, including GitHub PR review comments from humans and bots.
-3. If review feedback requires changes, move the issue to `Rework` and follow the rework flow.
+3. If review feedback requires changes that can be addressed in the existing
+   PR, move the issue to `Code Review Reply` and follow the code review reply
+   flow.
+   - Use `Rework` only when the existing PR should be discarded and the work
+     should restart from `origin/main`.
 4. If approved, human moves the issue to `Merging`.
 5. When the issue is in `Merging`, open and follow `.codex/skills/land/SKILL.md`; do not call `gh pr merge` directly outside that skill.
 6. Start with the fast landing preflight for already-green PRs:
@@ -287,7 +294,32 @@ Use this only when completion is blocked by missing required tools or missing au
    appeared after Human Review, or the branch is updated during landing.
 8. After merge is complete, move the issue to `Done`.
 
-## Step 4: Rework handling
+## Step 4: Code Review Reply handling
+
+1. Code Review Reply keeps the existing PR, branch, and workpad. Do not close
+   the PR, remove the workpad, or create a fresh branch for this mode.
+2. Re-open and refresh the workpad, then add checklist items for each
+   actionable PR feedback item discovered during the sweep.
+3. Run the full PR feedback sweep protocol:
+   - Top-level PR comments: `gh pr view --comments`.
+   - Inline review comments:
+     `gh api repos/<owner>/<repo>/pulls/<pr>/comments`.
+   - Review summaries and states: `gh pr view --json reviews`.
+4. Classify every actionable human or bot comment as one of:
+   - address with a code/test/docs change;
+   - push back with an explicit, justified `[codex]` reply on the same thread.
+5. For inline review comments that require changes, reply inline before
+   changing code with the intended action, implement the fix, then reply again
+   with the fix details and commit SHA after pushing.
+6. Re-run validation appropriate to the changed scope and record the evidence
+   in the workpad.
+7. Push updates with the `push` skill, confirm the PR keeps the `symphony`
+   label, and repeat the PR feedback sweep until no actionable comments remain
+   and checks are green.
+8. Refresh the workpad so plan, acceptance criteria, validation, and handoff
+   notes reflect the latest commit. Then move the issue back to `Human Review`.
+
+## Step 5: Rework handling
 
 1. Treat `Rework` as a full approach reset, not incremental patching.
 2. Re-read the full issue body and all human comments; explicitly identify what will be done differently this attempt.
