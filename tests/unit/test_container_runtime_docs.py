@@ -5,9 +5,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_rootless_podman_permissions_are_documented() -> None:
-    installation = (ROOT / "docs" / "installation.md").read_text()
-    troubleshooting = (ROOT / "docs" / "troubleshooting.md").read_text()
-    configuration = (ROOT / "docs" / "configuration.md").read_text()
+    installation = (ROOT / "docs" / "installation.md").read_text(encoding="utf-8")
+    troubleshooting = (ROOT / "docs" / "troubleshooting.md").read_text(encoding="utf-8")
+    configuration = (ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
     combined_docs = "\n".join([installation, troubleshooting, configuration])
 
     assert "Rootless Podman" in installation
