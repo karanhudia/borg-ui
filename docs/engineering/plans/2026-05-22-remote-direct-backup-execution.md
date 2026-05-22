@@ -216,7 +216,7 @@ backup_job.execution_mode = execution_mode_for_route(route)
 backup_job.route_strategy = route.strategy
 ```
 
-Keep the later `backup_job.route_strategy = route.strategy` assignment harmless or remove the duplicate if it remains in the same branch.
+Remove any later duplicate `backup_job.route_strategy = route.strategy` assignment in the same branch after adding the replacement above. After this task, `route_strategy` should be assigned once for server-executed backup plan jobs, and `execution_mode` should be assigned only through `execution_mode_for_route(route)`.
 
 - [ ] **Step 4: Run related backup-plan tests**
 
@@ -325,6 +325,9 @@ REMOTE_EXECUTION_MODES = {"remote_ssh"}
 
 
 def _uses_remote_execution(job: BackupJob) -> bool:
+    # Keep the route_strategy fallback for old rows and in-memory tests where
+    # remote_direct was set before execution_mode was normalized to remote_ssh.
+    # This mirrors the frontend label fallback in Task 5.
     return (
         (job.execution_mode or "").strip().lower() in REMOTE_EXECUTION_MODES
         or (job.route_strategy or "").strip().lower() == "remote_direct"
@@ -366,10 +369,16 @@ Expected: PASS. The SSHFS preparation test proves non-remote-direct remote sourc
 
 - [ ] **Step 1: Add a helper for repository-stored source settings**
 
-In `app/services/backup_route_planner.py`, import:
+In `app/services/backup_route_planner.py`, extend the imports:
 
 ```python
+import json
+from typing import Any, TYPE_CHECKING
+
 from app.utils.source_locations import decode_source_locations
+
+if TYPE_CHECKING:
+    from app.database.models import BackupJob
 ```
 
 Add:
@@ -396,15 +405,13 @@ def source_locations_for_repository(repository: Repository) -> list[dict[str, An
     )
 ```
 
-Also add `import json` at the top.
-
 - [ ] **Step 2: Add a helper to stamp backup jobs**
 
 Add:
 
 ```python
 def apply_repository_route_to_backup_job(
-    backup_job: BackupJob, repository: Repository
+    backup_job: "BackupJob", repository: Repository
 ) -> None:
     route = plan_repository_route(repository, source_locations_for_repository(repository))
     if route.supported:
@@ -412,7 +419,7 @@ def apply_repository_route_to_backup_job(
         backup_job.execution_mode = execution_mode_for_route(route)
 ```
 
-Import `BackupJob` for the type annotation or omit the annotation if it creates a circular import.
+Keep the `BackupJob` annotation behind `TYPE_CHECKING` so runtime imports stay one-way while static readers still see the expected object shape.
 
 - [ ] **Step 3: Use the helper in manual backups**
 
