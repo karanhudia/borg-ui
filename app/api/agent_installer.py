@@ -121,11 +121,25 @@ install -d -o borg-ui-agent -g borg-ui-agent -m 0750 /var/lib/borg-ui-agent
 verify_borg_major() {
   local binary_name="$1"
   local expected_major="$2"
-  local binary_path output major
+  local binary_path
 
   binary_path="$(command -v "${binary_name}" 2>/dev/null || true)"
   if [[ -z "${binary_path}" ]]; then
     echo "Required Borg binary '${binary_name}' was not found." >&2
+    return 1
+  fi
+
+  verify_borg_path "${binary_path}" "${binary_name}" "${expected_major}"
+}
+
+verify_borg_path() {
+  local binary_path="$1"
+  local binary_name="$2"
+  local expected_major="$3"
+  local output major
+
+  if [[ ! -x "${binary_path}" ]]; then
+    echo "Required Borg binary '${binary_name}' was not executable at ${binary_path}." >&2
     return 1
   fi
 
@@ -162,6 +176,14 @@ install_borg2() {
     exit 1
   fi
 
+  if [[ -x "${BORG2_VENV}/bin/borg" ]]; then
+    echo "Existing Borg 2 virtualenv detected; linking without reinstalling."
+    verify_borg_path "${BORG2_VENV}/bin/borg" "borg2" "2"
+    ln -s "${BORG2_VENV}/bin/borg" "${BORG2_LINK}"
+    verify_borg_major "borg2" "2"
+    return
+  fi
+
   apt-get install -y \
     build-essential \
     libacl1-dev \
@@ -174,7 +196,7 @@ install_borg2() {
 
   python3 -m venv "${BORG2_VENV}"
   "${BORG2_VENV}/bin/python" -m pip install --upgrade pip wheel
-  "${BORG2_VENV}/bin/pip" install --pre "borgbackup>=2,<3"
+  "${BORG2_VENV}/bin/pip" install --pre "borgbackup>=2.0.0b1,<3"
   ln -s "${BORG2_VENV}/bin/borg" "${BORG2_LINK}"
   verify_borg_major "borg2" "2"
 }
