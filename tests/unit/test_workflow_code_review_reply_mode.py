@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -13,22 +15,30 @@ def squash(text: str) -> str:
 
 
 def workflow_active_states(workflow: str) -> list[str]:
-    front_matter = workflow.split("---", 2)[1]
-    states: list[str] = []
-    in_active_states = False
+    if not isinstance(workflow, str):
+        return []
 
-    for line in front_matter.splitlines():
-        stripped = line.strip()
-        if stripped == "active_states:":
-            in_active_states = True
-            continue
-        if in_active_states and stripped.startswith("- "):
-            states.append(stripped.removeprefix("- "))
-            continue
-        if in_active_states and stripped.endswith(":"):
-            break
+    parts = workflow.split("---", 2)
+    if len(parts) < 3:
+        return []
 
-    return states
+    front_matter = yaml.safe_load(parts[1]) or {}
+    tracker = front_matter.get("tracker", {})
+    states = tracker.get("active_states") if isinstance(tracker, dict) else None
+    if states is None:
+        states = front_matter.get("active_states", [])
+    if not isinstance(states, list):
+        return []
+
+    return [state for state in states if isinstance(state, str)]
+
+
+def test_workflow_active_states_handles_missing_front_matter():
+    assert workflow_active_states("no front matter") == []
+    assert workflow_active_states("---\nactive_states: In Progress\n---") == []
+    assert (
+        workflow_active_states("---\ntracker:\n  active_states: In Progress\n---") == []
+    )
 
 
 def test_workflow_polls_code_review_reply_mode():
