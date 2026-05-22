@@ -1277,7 +1277,18 @@ class BackupService:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+        except asyncio.TimeoutError as exc:
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+            raise RuntimeError(
+                f"Filesystem snapshot {action} timed out after 300 seconds"
+            ) from exc
         if process.returncode != 0:
             stderr_text = stderr.decode("utf-8", errors="replace").strip()
             stdout_text = stdout.decode("utf-8", errors="replace").strip()

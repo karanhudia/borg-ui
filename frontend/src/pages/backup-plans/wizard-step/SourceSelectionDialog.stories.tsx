@@ -287,6 +287,24 @@ const btrfsSnapshotState: WizardState = {
   ],
 }
 
+const zfsIncompleteSnapshotState: WizardState = {
+  ...createInitialState(),
+  sourceType: 'local',
+  sourceDirectories: ['/srv/app/uploads'],
+  sourceLocations: [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/srv/app/uploads'],
+      snapshot: {
+        provider: 'zfs',
+        recursive: false,
+      },
+    },
+  ],
+}
+
 const translations: Record<string, string> = {
   'backupPlans.sourceChooser.title': 'Choose backup source',
   'backupPlans.sourceChooser.where': 'Where are the files?',
@@ -313,6 +331,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.snapshotBtrfsStagingPath': 'Snapshot staging path',
   'backupPlans.sourceChooser.snapshotZfsDataset': 'ZFS dataset',
   'backupPlans.sourceChooser.snapshotZfsMountpoint': 'ZFS mountpoint',
+  'backupPlans.sourceChooser.snapshotZfsRequired': 'Required for zfs snapshots',
   'backupPlans.sourceChooser.snapshotRecursive': 'Recursive snapshot',
   'backupPlans.sourceChooser.snapshotToolAvailable': '{{command}} available',
   'backupPlans.sourceChooser.snapshotToolMissing': '{{command}} not found',
@@ -433,6 +452,23 @@ export const PathPickerWithBtrfsSnapshot: Story = {
       description: {
         story:
           'Local source group with btrfs snapshot staging enabled. The dialog shows host requirements, tool availability, and the staging path.',
+      },
+    },
+  },
+}
+
+export const PathPickerWithIncompleteZfsSnapshot: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={zfsIncompleteSnapshotState}
+      mockOptions={{ scanStatus: 'detected' }}
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Local source group with zfs snapshot mode selected but missing required dataset and mountpoint fields. The dialog shows inline validation and keeps Apply disabled.',
       },
     },
   },

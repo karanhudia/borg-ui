@@ -138,6 +138,11 @@ function snapshotFromDraft(draft: SnapshotDraft): SourceSnapshotConfig | undefin
   }
 }
 
+function isSnapshotDraftValid(draft: SnapshotDraft, sourceKey: SourceKey): boolean {
+  if (sourceKey !== 'local' || draft.provider !== 'zfs') return true
+  return Boolean(draft.dataset.trim() && draft.mountpoint.trim())
+}
+
 function classifyScanError(err: unknown): ScanErrorState {
   if (err && typeof err === 'object' && 'response' in err) {
     const response = (err as { response?: { status?: number; data?: { detail?: string } } })
@@ -789,7 +794,17 @@ export function SourceSelectionDialog({
   }
 
   const applyPaths = () => {
-    const sourceLocations = cleanLocations(draftSourceLocations)
+    const currentSnapshot =
+      selectedSourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
+    const sourceLocations = cleanLocations(
+      draftSourceLocations.map((location) => {
+        if (locationKey(location) !== selectedSourceKey) return location
+        return {
+          ...location,
+          ...(currentSnapshot ? { snapshot: currentSnapshot } : { snapshot: undefined }),
+        }
+      })
+    )
     updateState({
       sourceType: sourceTypeFromLocations(sourceLocations),
       sourceSshConnectionId: sourceConnectionFromLocations(sourceLocations),
@@ -835,6 +850,10 @@ export function SourceSelectionDialog({
       snapshotDraft.provider === 'none'
         ? null
         : snapshotCapabilities?.providers.find((provider) => provider.id === snapshotDraft.provider)
+    const zfsDatasetMissing =
+      sourceKind === 'local' && snapshotDraft.provider === 'zfs' && !snapshotDraft.dataset.trim()
+    const zfsMountpointMissing =
+      sourceKind === 'local' && snapshotDraft.provider === 'zfs' && !snapshotDraft.mountpoint.trim()
     const snapshotUnsupportedTargets = snapshotCapabilities?.unsupported_source_targets || [
       t('backupPlans.sourceChooser.snapshotLocalOnly'),
     ]
@@ -1159,6 +1178,12 @@ export function SourceSelectionDialog({
                       onChange={(event) => updateSnapshotDraft({ dataset: event.target.value })}
                       size="small"
                       fullWidth
+                      error={zfsDatasetMissing}
+                      helperText={
+                        zfsDatasetMissing
+                          ? t('backupPlans.sourceChooser.snapshotZfsRequired')
+                          : undefined
+                      }
                     />
                     <TextField
                       label={t('backupPlans.sourceChooser.snapshotZfsMountpoint')}
@@ -1166,6 +1191,12 @@ export function SourceSelectionDialog({
                       onChange={(event) => updateSnapshotDraft({ mountpoint: event.target.value })}
                       size="small"
                       fullWidth
+                      error={zfsMountpointMissing}
+                      helperText={
+                        zfsMountpointMissing
+                          ? t('backupPlans.sourceChooser.snapshotZfsRequired')
+                          : undefined
+                      }
                     />
                   </Stack>
                 )}
@@ -1962,7 +1993,10 @@ export function SourceSelectionDialog({
             <Button
               variant="contained"
               onClick={applyPaths}
-              disabled={cleanLocations(draftSourceLocations).length === 0}
+              disabled={
+                cleanLocations(draftSourceLocations).length === 0 ||
+                !isSnapshotDraftValid(snapshotDraft, selectedSourceKey)
+              }
             >
               {t('backupPlans.sourceChooser.applyPaths')}
             </Button>

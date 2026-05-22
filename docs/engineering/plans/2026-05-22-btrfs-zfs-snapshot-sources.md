@@ -8,7 +8,7 @@
 
 ---
 
-### Task 1: Snapshot Source Model And Templates
+## Task 1: Snapshot Source Model And Templates
 
 **Files:**
 - Modify: `app/utils/source_locations.py`
@@ -42,7 +42,7 @@ Create dataclasses for prepared snapshot records and command builders that quote
 Run: `pytest tests/unit/test_source_locations.py tests/unit/test_filesystem_snapshot_service.py -q`
 Expected: all tests pass.
 
-### Task 2: Backup Runtime Staging And Cleanup
+## Task 2: Backup Runtime Staging And Cleanup
 
 **Files:**
 - Modify: `app/services/backup_service.py`
@@ -74,7 +74,7 @@ Track prepared snapshots by job id and call cleanup from the existing `finally` 
 Run: `pytest tests/unit/test_backup_service.py tests/unit/test_source_locations.py tests/unit/test_filesystem_snapshot_service.py -q`
 Expected: all tests pass.
 
-### Task 3: API Capability Surface
+## Task 3: API Capability Surface
 
 **Files:**
 - Modify: `app/api/source_discovery.py`
@@ -93,7 +93,7 @@ Expose `sourceDiscoveryAPI.filesystemSnapshots()` and response types.
 
 Run the smallest relevant source-discovery test path or `pytest tests/unit/test_api_filesystem.py -q` if no dedicated source-discovery test exists.
 
-### Task 4: Source Picker UI
+## Task 4: Source Picker UI
 
 **Files:**
 - Modify: `frontend/src/types/index.ts`
@@ -122,7 +122,7 @@ Add local-only snapshot controls with labeled fields, provider chips, and host/t
 
 Run the targeted Vitest command for the changed test file.
 
-### Task 5: Storybook And Snapshots
+## Task 5: Storybook And Snapshots
 
 **Files:**
 - Modify: `frontend/src/pages/backup-plans/wizard-step/SourceSelectionDialog.stories.tsx`
@@ -138,7 +138,7 @@ Add a story for local btrfs/zfs snapshot configuration and a summary story showi
 Run: `cd frontend && npm run snapshots`
 Expected: updated screenshot files under `frontend/storybook-snapshots/`.
 
-### Task 6: Required Validation And Handoff
+## Task 6: Required Validation And Handoff
 
 **Files:**
 - `.github/PULL_REQUEST_TEMPLATE.md` for PR body reference only.

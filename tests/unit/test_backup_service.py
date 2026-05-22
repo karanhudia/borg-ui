@@ -775,6 +775,46 @@ class TestBackupService:
         ] == ["/srv/app"]
 
     @pytest.mark.asyncio
+    async def test_run_filesystem_snapshot_command_terminates_process_on_timeout(
+        self, backup_service
+    ):
+        mock_process = Mock()
+        mock_process.communicate = AsyncMock(return_value=(b"", b""))
+        mock_process.wait = AsyncMock(return_value=0)
+        mock_process.terminate = Mock()
+        mock_process.kill = Mock()
+
+        async def wait_for_mock(awaitable, timeout):
+            if timeout == 300:
+                awaitable.close()
+                raise asyncio.TimeoutError
+            return await awaitable
+
+        with (
+            patch(
+                "app.services.backup_service.asyncio.create_subprocess_exec",
+                return_value=mock_process,
+            ),
+            patch(
+                "app.services.backup_service.asyncio.wait_for",
+                side_effect=wait_for_mock,
+            ),
+        ):
+            with pytest.raises(
+                RuntimeError,
+                match="Filesystem snapshot create timed out after 300 seconds",
+            ):
+                await backup_service._run_filesystem_snapshot_command(
+                    ["btrfs", "subvolume", "snapshot", "/srv/app", "/snap/app"],
+                    job_id=42,
+                    action="create",
+                )
+
+        mock_process.terminate.assert_called_once()
+        mock_process.kill.assert_not_called()
+        mock_process.wait.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_execute_backup_parses_v1_json_progress(
         self, backup_service, test_db, tmp_path
     ):

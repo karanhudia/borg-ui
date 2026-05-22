@@ -746,6 +746,7 @@
       "snapshotBtrfsStagingPath": "Snapshot staging path",
       "snapshotZfsDataset": "ZFS dataset",
       "snapshotZfsMountpoint": "ZFS mountpoint",
+      "snapshotZfsRequired": "Required for zfs snapshots",
       "snapshotRecursive": "Recursive snapshot",
       "snapshotToolAvailable": "{{command}} available",
       "snapshotToolMissing": "{{command}} not found",

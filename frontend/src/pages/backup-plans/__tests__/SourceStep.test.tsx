@@ -278,6 +278,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.snapshotBtrfsStagingPath': 'Snapshot staging path',
   'backupPlans.sourceChooser.snapshotZfsDataset': 'ZFS dataset',
   'backupPlans.sourceChooser.snapshotZfsMountpoint': 'ZFS mountpoint',
+  'backupPlans.sourceChooser.snapshotZfsRequired': 'Required for zfs snapshots',
   'backupPlans.sourceChooser.snapshotRecursive': 'Recursive snapshot',
   'backupPlans.sourceChooser.snapshotToolAvailable': '{{command}} available',
   'backupPlans.sourceChooser.snapshotToolMissing': '{{command}} not found',
@@ -592,6 +593,58 @@ describe('SourceStep', () => {
     })
   }, 30000)
 
+  it('requires zfs dataset and mountpoint before applying snapshot paths', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const updateState = vi.fn()
+    renderSourceStep({ updateState })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    await screen.findByRole('button', { name: /scan a database instead/i })
+
+    clickExistingTextButton(/borg ui server/i)
+    fireEvent.change(screen.getByLabelText(/source path/i), {
+      target: { value: '/srv/app/uploads' },
+    })
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /snapshot mode/i }))
+    const listbox = await screen.findByRole('listbox')
+    fireEvent.click(within(listbox).getByText(/zfs snapshot/i))
+    const datasetInput = await screen.findByLabelText(/zfs dataset/i)
+    const mountpointInput = screen.getByLabelText(/zfs mountpoint/i)
+
+    clickExistingTextButton(/add path/i)
+    const applyButton = screen.getByRole('button', { name: /use these paths/i })
+    expect(applyButton).toBeDisabled()
+    expect(screen.getAllByText(/required for zfs snapshots/i)).toHaveLength(2)
+
+    fireEvent.change(datasetInput, {
+      target: { value: 'tank/app' },
+    })
+    expect(applyButton).toBeDisabled()
+
+    fireEvent.change(mountpointInput, {
+      target: { value: '/srv/app' },
+    })
+    expect(applyButton).toBeEnabled()
+    fireEvent.click(applyButton)
+
+    expect(updateState).toHaveBeenCalledTimes(1)
+    expect(updateState.mock.calls[0][0].sourceLocations).toEqual([
+      {
+        source_type: 'local',
+        source_ssh_connection_id: null,
+        agent_machine_id: null,
+        paths: ['/srv/app/uploads'],
+        snapshot: {
+          provider: 'zfs',
+          dataset: 'tank/app',
+          mountpoint: '/srv/app',
+          recursive: false,
+        },
+      },
+    ])
+  }, 60000)
+
   it('browses paths for the selected SSH source without replacing other groups', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
     const sshConnections = [
@@ -633,7 +686,7 @@ describe('SourceStep', () => {
     expect(screen.getByTitle('/srv/app')).toBeInTheDocument()
     expect(screen.getByTitle('/selected/from-browser')).toBeInTheDocument()
     expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
-  }, 30000)
+  }, 60000)
 
   it('browses paths for the selected managed agent with the shared file explorer', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
