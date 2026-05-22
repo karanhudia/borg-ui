@@ -18,11 +18,11 @@ This feature is currently behind the Managed CLI Agents beta switch.
 2. Enable Managed CLI Agents.
 3. Open Managed Agents from the Backup navigation group.
 
-## Add a Linux or Raspberry Pi Agent
+## Add a Linux Agent
 
 In Managed Agents, choose **Add Agent**. The wizard asks for:
 
-- platform: Linux/Raspberry Pi
+- platform: Linux
 - agent name
 - enrollment token expiry: 1 hour, 24 hours, 7 days, 30 days, or Never
 - server URL reachable by the client machine
@@ -74,8 +74,8 @@ you revoke access, delete it from the fleet list, or unregister it on the client
 
 ## Advanced Manual Setup
 
-The one-command installer is the default Linux/Raspberry Pi path. Manual setup
-is useful for development or troubleshooting.
+The one-command installer is the default Linux path. Manual setup is useful for
+development or troubleshooting.
 
 Run this on the machine that owns the files you want Borg to back up:
 

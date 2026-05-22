@@ -12,6 +12,7 @@ def test_agent_installer_script_is_public_and_token_free(test_client: TestClient
     assert "systemctl enable --now borg-ui-agent" in response.text
     assert "service-check" in response.text
     assert "borgui_enroll_" not in response.text
+    assert "Raspberry Pi" not in response.text
 
 
 def test_agent_installer_script_supports_borg_install_modes(test_client: TestClient):

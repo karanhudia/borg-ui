@@ -101,7 +101,7 @@ OS_ID="${ID:-}"
 OS_ID_LIKE="${ID_LIKE:-}"
 OS_FAMILY="${OS_ID} ${OS_ID_LIKE}"
 if [[ "${OS_FAMILY}" != *debian* && "${OS_FAMILY}" != *ubuntu* && "${OS_FAMILY}" != *raspbian* ]]; then
-  echo "This installer currently supports Debian, Ubuntu, and Raspberry Pi OS." >&2
+  echo "This installer currently supports Debian-family Linux distributions." >&2
   exit 1
 fi
 

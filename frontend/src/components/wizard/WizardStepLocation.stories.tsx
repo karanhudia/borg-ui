@@ -5,12 +5,12 @@ import WizardStepLocation from './WizardStepLocation'
 const sshConnections = [
   {
     id: 1,
-    host: 'pi.local',
+    host: 'media-node.local',
     username: 'backup',
     port: 22,
     ssh_key_id: 10,
     default_path: '/srv/borg/repositories',
-    mount_point: '/mnt/pi',
+    mount_point: '/mnt/media-node',
     status: 'connected',
   },
 ]
@@ -18,8 +18,8 @@ const sshConnections = [
 const agentMachines = [
   {
     id: 7,
-    name: 'Raspberry Pi',
-    hostname: 'pi.local',
+    name: 'Media Node',
+    hostname: 'media-node.local',
     status: 'online',
   },
 ]
@@ -40,7 +40,7 @@ export const AgentExecutionWithSshRepository: Story = {
   args: {
     mode: 'create',
     data: {
-      name: 'Pi Media',
+      name: 'Media Node Repository',
       borgVersion: 2,
       repositoryMode: 'full',
       repositoryLocation: 'ssh',

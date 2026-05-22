@@ -5,7 +5,7 @@ Borg UI server. It registers with Borg UI, stores an agent credential locally,
 polls for queued work, runs Borg on the local machine, and streams logs and
 progress back to the server.
 
-## One-Command Linux/Raspberry Pi Install
+## One-Command Linux Install
 
 In Borg UI, open Managed Agents and choose **Add Agent**. The wizard creates a
 temporary enrollment token and shows a command like:
@@ -14,11 +14,11 @@ temporary enrollment token and shows a command like:
 curl -fsSL http://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
   --server http://borg-ui-host:8083 \
   --token borgui_enroll_example \
-  --name raspberry-pi
+  --name media-node
 ```
 
-Run it on the Linux or Raspberry Pi OS machine that owns the files Borg should
-back up. The installer:
+Run it on the Linux machine that owns the files Borg should back up. The
+installer:
 
 - installs `python3`, `python3-venv`, `python3-pip`, `git`, `curl`, and
   `borgbackup`
@@ -190,8 +190,7 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/com.borg-ui.agent.plist
 ```
 
 Review the template before enabling it. The current one-command installer is
-Linux/Raspberry Pi only; macOS and Windows installers are not included in this
-phase.
+Linux only; macOS and Windows installers are not included in this phase.
 
 ## Current Job Support
 
