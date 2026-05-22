@@ -71,6 +71,16 @@ interface SSHNetworkConfig {
 
 type FileExplorerConnectionType = 'local' | 'ssh' | 'agent'
 
+interface BrowseCacheEntry {
+  currentPath: string
+  items: FileSystemItem[]
+  isInsideLocalMount: boolean
+}
+
+function getAgentBrowseCacheKey(agentId: number, path: string, includeHidden: boolean) {
+  return `agent:${agentId}:${includeHidden ? 'hidden' : 'visible'}:${path || '/'}`
+}
+
 interface FileExplorerDialogProps {
   open: boolean
   onClose: () => void
@@ -122,6 +132,7 @@ export default function FileExplorerDialog({
 
   // Track if initial load has been done to prevent re-triggering
   const initialLoadDone = useRef(false)
+  const browseCache = useRef(new Map<string, BrowseCacheEntry>())
 
   // Responsive dialog
   const theme = useTheme()
@@ -142,7 +153,6 @@ export default function FileExplorerDialog({
 
   const loadDirectory = React.useCallback(
     async (path: string, conn?: FileExplorerConnectionType, config?: SSHNetworkConfig) => {
-      setLoading(true)
       setError(null)
 
       // Update state if new connection params provided
@@ -155,6 +165,8 @@ export default function FileExplorerDialog({
 
       const useConnectionType = conn !== undefined ? conn : activeConnectionType
       const useSshConfig = config !== undefined ? config : activeSshConfig
+      const requestedPath = path || '/'
+      const includeHidden = false
 
       try {
         if (useConnectionType === 'agent') {
@@ -164,25 +176,54 @@ export default function FileExplorerDialog({
             return
           }
 
-          const response = await managedAgentsAPI.browseFilesystem(agentId, path || '/', false)
-          setItems(
-            (response.data.items || []).map((item) => ({
-              name: item.name,
-              path: item.path,
-              is_directory: item.type === 'directory',
-              size: item.size,
-              modified: item.modified_at
-                ? new Date(item.modified_at * 1000).toISOString()
-                : undefined,
-              is_borg_repo: false,
-              permissions: item.hidden ? 'hidden' : undefined,
-            }))
+          const cachedEntry = browseCache.current.get(
+            getAgentBrowseCacheKey(agentId, requestedPath, includeHidden)
           )
-          setCurrentPath(response.data.current_path || path || '/')
+          if (cachedEntry) {
+            setItems(cachedEntry.items)
+            setCurrentPath(cachedEntry.currentPath)
+            setIsInsideLocalMount(cachedEntry.isInsideLocalMount)
+            return
+          }
+
+          setLoading(true)
+          const response = await managedAgentsAPI.browseFilesystem(
+            agentId,
+            requestedPath,
+            includeHidden
+          )
+          const agentItems = (response.data.items || []).map((item) => ({
+            name: item.name,
+            path: item.path,
+            is_directory: item.type === 'directory',
+            size: item.size,
+            modified: item.modified_at
+              ? new Date(item.modified_at * 1000).toISOString()
+              : undefined,
+            is_borg_repo: false,
+            permissions: item.hidden ? 'hidden' : undefined,
+          }))
+          const currentAgentPath = response.data.current_path || requestedPath
+          const entry = {
+            currentPath: currentAgentPath,
+            items: agentItems,
+            isInsideLocalMount: false,
+          }
+          browseCache.current.set(
+            getAgentBrowseCacheKey(agentId, requestedPath, includeHidden),
+            entry
+          )
+          browseCache.current.set(
+            getAgentBrowseCacheKey(agentId, currentAgentPath, includeHidden),
+            entry
+          )
+          setItems(agentItems)
+          setCurrentPath(currentAgentPath)
           setIsInsideLocalMount(false)
           return
         }
 
+        setLoading(true)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const params: any = {
           path,
@@ -240,9 +281,14 @@ export default function FileExplorerDialog({
     // Reset when dialog closes
     if (!open) {
       initialLoadDone.current = false
+      browseCache.current.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialPath, connectionType, sshConfig])
+
+  useEffect(() => {
+    browseCache.current.clear()
+  }, [agentId, connectionType])
 
   const handleItemClick = (item: FileSystemItem) => {
     if (item.is_mount_point && item.ssh_connection) {

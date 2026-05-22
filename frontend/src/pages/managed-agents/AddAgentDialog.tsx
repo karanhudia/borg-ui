@@ -154,7 +154,7 @@ export default function AddAgentDialog({
   const renderPlatformStep = () => (
     <Stack spacing={1.5}>
       <Typography color="text.secondary">
-        Choose the client platform. Linux and Raspberry Pi OS are available in this phase.
+        Choose the client platform. Linux is available in this phase.
       </Typography>
       <Box
         sx={{
@@ -175,7 +175,7 @@ export default function AddAgentDialog({
           <Stack spacing={1}>
             <Stack direction="row" spacing={1} alignItems="center">
               <Server size={18} />
-              <Typography fontWeight={700}>Linux / Raspberry Pi</Typography>
+              <Typography fontWeight={700}>Linux</Typography>
             </Stack>
             <Chip size="small" color="primary" label="Selected" sx={{ alignSelf: 'flex-start' }} />
           </Stack>

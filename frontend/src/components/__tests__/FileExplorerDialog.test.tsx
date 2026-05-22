@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { AxiosResponse } from 'axios'
 import { renderWithProviders } from '../../test/test-utils'
 import FileExplorerDialog from '../FileExplorerDialog'
 import api from '../../services/api'
-import { sshKeysAPI } from '../../services/api'
+import {
+  managedAgentsAPI,
+  sshKeysAPI,
+  type AgentFilesystemBrowseResponse,
+} from '../../services/api'
 
 // Mock the API
 vi.mock('../../services/api', () => ({
@@ -14,6 +19,9 @@ vi.mock('../../services/api', () => ({
   },
   sshKeysAPI: {
     getSSHConnections: vi.fn(),
+  },
+  managedAgentsAPI: {
+    browseFilesystem: vi.fn(),
   },
 }))
 
@@ -79,9 +87,27 @@ describe('FileExplorerDialog', () => {
     config: {} as any,
   }
 
+  const makeAgentBrowseResponse = (
+    data: AgentFilesystemBrowseResponse
+  ): AxiosResponse<AgentFilesystemBrowseResponse> =>
+    ({
+      data,
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {} as AxiosResponse<AgentFilesystemBrowseResponse>['config'],
+    }) as AxiosResponse<AgentFilesystemBrowseResponse>
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(api.get).mockResolvedValue(mockDirectoryResponse)
+    vi.mocked(managedAgentsAPI.browseFilesystem).mockResolvedValue(
+      makeAgentBrowseResponse({
+        current_path: '/home/user',
+        parent_path: '/home',
+        items: [],
+      })
+    )
     vi.mocked(sshKeysAPI.getSSHConnections).mockResolvedValue(mockSSHConnectionsResponse)
   })
 
@@ -307,6 +333,71 @@ describe('FileExplorerDialog', () => {
           path: '/home',
         }),
       })
+    })
+
+    it('reuses cached agent directory results when returning through breadcrumbs', async () => {
+      const user = userEvent.setup()
+
+      vi.mocked(managedAgentsAPI.browseFilesystem)
+        .mockResolvedValueOnce(
+          makeAgentBrowseResponse({
+            current_path: '/home/user',
+            parent_path: '/home',
+            items: [
+              {
+                name: 'Documents',
+                path: '/home/user/Documents',
+                type: 'directory',
+                size: 0,
+                modified_at: 1_764_500_000,
+                hidden: false,
+              },
+            ],
+          })
+        )
+        .mockResolvedValueOnce(
+          makeAgentBrowseResponse({
+            current_path: '/home/user/Documents',
+            parent_path: '/home/user',
+            items: [],
+          })
+        )
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          initialPath="/home/user"
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Documents')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText('Documents'))
+
+      await waitFor(() => {
+        expect(screen.getByText('No items found')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByText('user'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Documents')).toBeInTheDocument()
+      })
+
+      expect(managedAgentsAPI.browseFilesystem).toHaveBeenCalledTimes(2)
+      expect(managedAgentsAPI.browseFilesystem).toHaveBeenNthCalledWith(1, 42, '/home/user', false)
+      expect(managedAgentsAPI.browseFilesystem).toHaveBeenNthCalledWith(
+        2,
+        42,
+        '/home/user/Documents',
+        false
+      )
     })
   })
 

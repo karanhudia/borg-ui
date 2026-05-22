@@ -280,7 +280,7 @@ export const AddAgentInstallCommandStep: Story = {
       <AddAgentDialog
         open
         initialStep={3}
-        initialAgentName="raspberry-pi"
+        initialAgentName="media-node"
         initialCreatedToken={{
           ...tokens[0],
           token: 'borgui_enroll_example_token',

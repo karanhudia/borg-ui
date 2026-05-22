@@ -153,7 +153,8 @@ describe('ManagedAgents', () => {
       />
     )
 
-    expect(screen.getByText(/Run this on the Linux or Raspberry Pi machine/i)).toBeInTheDocument()
+    expect(screen.getByText(/Run this on the Linux machine/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Raspberry\s+Pi/i)).not.toBeInTheDocument()
     expect(screen.getByText(/localhost only works when the agent/i)).toBeInTheDocument()
     expect(screen.getByText(/enables systemd by default/i)).toBeInTheDocument()
 

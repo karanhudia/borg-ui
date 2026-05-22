@@ -12,7 +12,7 @@ const agentMachines = [
 ]
 
 const managedAgentPlanSourcesData: WizardReviewData = {
-  name: 'Pi Media Repository',
+  name: 'Media Node Repository',
   borgVersion: 2,
   repositoryMode: 'full',
   repositoryLocation: 'ssh',
@@ -50,7 +50,7 @@ export const ManagedAgentPlanSources: Story = {
     sshConnections: [
       {
         id: 1,
-        host: 'pi.local',
+        host: 'media-node.local',
         username: 'backup',
         port: 22,
         ssh_key_id: 10,

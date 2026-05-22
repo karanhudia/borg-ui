@@ -461,8 +461,8 @@ export function AgentSetupHelpContent({
           1. Run the Linux installer
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 1 }}>
-          Run this on the Linux or Raspberry Pi machine that owns the files Borg should back up. The
-          installer installs dependencies, registers the agent, and enables the systemd service.
+          Run this on the Linux machine that owns the files Borg should back up. The installer
+          installs dependencies, registers the agent, and enables the systemd service.
         </Typography>
         <CopyableCodeBlock
           value={command}
@@ -571,9 +571,18 @@ function CopyableCodeBlock({
             top: 8,
             right: 8,
             border: '1px solid',
-            borderColor: 'divider',
-            bgcolor: 'background.paper',
-            '&:hover': { bgcolor: 'background.default' },
+            color: 'primary.main',
+            borderColor: (theme) => alpha(theme.palette.primary.main, 0.45),
+            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+            '&:hover': {
+              borderColor: 'primary.main',
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.14),
+            },
+            '&:focus-visible': {
+              outline: '2px solid',
+              outlineColor: 'primary.main',
+              outlineOffset: 2,
+            },
           }}
         >
           <Copy size={16} />
