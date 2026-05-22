@@ -199,6 +199,20 @@ class TestAgentRegistrationAndHeartbeat:
 
         assert response.status_code == 401
 
+    def test_never_expiring_enrollment_token_registers_agent(
+        self, test_client: TestClient, admin_headers
+    ):
+        enrollment = test_client.post(
+            "/api/managed-machines/enrollment-tokens",
+            json={"name": "permanent enrollment", "expires_never": True},
+            headers=admin_headers,
+        )
+        assert enrollment.status_code == 201
+
+        registered = _register_agent(test_client, enrollment.json()["token"])
+
+        assert registered["agent_id"].startswith("agt_")
+
     def test_heartbeat_updates_agent_status(
         self, test_client: TestClient, test_db, admin_headers
     ):
@@ -388,6 +402,29 @@ class TestAgentJobTransport:
         )
 
         assert response.status_code == 409
+
+    def test_deleted_agent_cannot_poll_jobs(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        _create_agent_job(test_db, agent)
+
+        delete = test_client.delete(
+            f"/api/managed-machines/agents/{agent.id}",
+            headers=admin_headers,
+        )
+        assert delete.status_code == 204
+
+        response = test_client.get(
+            "/api/agents/jobs/poll",
+            headers=_agent_headers(registered["agent_token"]),
+        )
+
+        assert response.status_code == 403
 
     def test_poll_only_returns_queued_jobs_for_authenticated_agent(
         self, test_client: TestClient, test_db, admin_headers

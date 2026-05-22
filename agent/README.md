@@ -5,10 +5,50 @@ Borg UI server. It registers with Borg UI, stores an agent credential locally,
 polls for queued work, runs Borg on the local machine, and streams logs and
 progress back to the server.
 
-## Install From This Repository
+## One-Command Linux/Raspberry Pi Install
 
-On a fresh client machine, clone Borg UI and install the agent package into a
-virtual environment:
+In Borg UI, open Managed Agents and choose **Add Agent**. The wizard creates a
+temporary enrollment token and shows a command like:
+
+```bash
+curl -fsSL http://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
+  --server http://borg-ui-host:8083 \
+  --token borgui_enroll_example \
+  --name raspberry-pi
+```
+
+Run it on the Linux or Raspberry Pi OS machine that owns the files Borg should
+back up. The installer:
+
+- installs `python3`, `python3-venv`, `python3-pip`, `git`, `curl`, and
+  `borgbackup`
+- creates the `borg-ui-agent` system user
+- installs the agent into `/opt/borg-ui-agent/.venv`
+- registers `/etc/borg-ui-agent/config.toml`
+- validates the service configuration
+- enables and starts `borg-ui-agent` with systemd
+
+Use the Borg UI URL that the client machine can reach. `localhost` is only
+correct when the agent runs on the same machine as Borg UI. For a remote client,
+use the Borg UI server's host name, IP address, reverse-proxy URL, or HTTPS URL.
+
+Enrollment tokens are temporary setup credentials. After registration, the agent
+stores its own credential and keeps working until access is revoked or the agent
+is deleted from Borg UI.
+
+## Revoke, Delete, and Unregister
+
+- **Revoke access** blocks the agent credential but keeps the machine visible for
+  history and troubleshooting.
+- **Delete agent** removes the machine from the active fleet list. The local
+  systemd service may still exist on the client until you remove or unregister
+  it there.
+- `borg-ui-agent unregister` removes local credentials from the client machine.
+
+## Advanced Manual Install
+
+Manual setup is useful for development or troubleshooting. On a fresh client
+machine, clone Borg UI and install the agent package into a virtual environment:
 
 ```bash
 git clone https://github.com/karanhudia/borg-ui.git
@@ -24,20 +64,14 @@ Verify the CLI:
 borg-ui-agent status
 ```
 
-## Register
-
-Create an enrollment token in Borg UI, then run:
+Create an enrollment token in Borg UI, then register manually:
 
 ```bash
 borg-ui-agent register \
-  --server http://borg-ui-host:7879 \
+  --server http://borg-ui-host:8083 \
   --token borgui_enroll_example \
   --name laptop
 ```
-
-Use the Borg UI URL that the client machine can reach. `localhost:7879` is only
-correct when the agent runs on the same machine as Borg UI. For a remote client,
-use the Borg UI server's host name, IP address, or HTTPS URL.
 
 The agent writes a protected config file containing the server URL, agent ID,
 and agent token.
@@ -49,8 +83,6 @@ Default config paths:
 | Linux | `~/.config/borg-ui-agent/config.toml` |
 | macOS | `~/Library/Application Support/borg-ui-agent/config.toml` |
 | Windows | `%ProgramData%\borg-ui-agent\config.toml` |
-
-## Run
 
 Poll once:
 
@@ -64,31 +96,18 @@ Run continuously:
 borg-ui-agent run
 ```
 
-For a quick manual proof, start with `borg-ui-agent once` to poll for one job,
-then use `borg-ui-agent run` for continuous polling.
-
 Use a custom config path:
 
 ```bash
 borg-ui-agent --config /etc/borg-ui-agent/config.toml run
 ```
 
-Unregister the agent and remove local credentials:
+### Linux systemd Manual Service
 
-```bash
-borg-ui-agent unregister
-```
-
-## Service Templates
-
-Linux systemd and macOS launchd templates are available under `agent/install/`.
-Adjust paths to match the virtual environment and config location used on the
-target machine.
-
-### Linux systemd
-
-The default Linux unit runs as a dedicated system user and group named
-`borg-ui-agent`. Create that account before installing or enabling the unit:
+The one-command installer handles systemd automatically. If you are repairing a
+manual install, the default Linux unit runs as a dedicated system user and group
+named `borg-ui-agent`. Create that account before installing or enabling the
+unit:
 
 ```bash
 sudo useradd --system --user-group --home-dir /var/lib/borg-ui-agent \
@@ -170,9 +189,9 @@ sudo cp agent/install/launchd/com.borg-ui.agent.plist /Library/LaunchDaemons/
 sudo launchctl bootstrap system /Library/LaunchDaemons/com.borg-ui.agent.plist
 ```
 
-Review the template before enabling it. The default Linux service assumes the
-agent is installed under `/opt/borg-ui-agent/.venv`, runs as
-`borg-ui-agent:borg-ui-agent`, and uses `/etc/borg-ui-agent/config.toml`.
+Review the template before enabling it. The current one-command installer is
+Linux/Raspberry Pi only; macOS and Windows installers are not included in this
+phase.
 
 ## Current Job Support
 

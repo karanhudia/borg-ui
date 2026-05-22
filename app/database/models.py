@@ -15,6 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database.database import Base
+from app.utils.schedule_time import get_container_timezone
 
 
 # Helper function for timezone-aware UTC timestamps
@@ -93,6 +94,7 @@ class AgentMachine(Base):
     status = Column(String, default="pending", index=True, nullable=False)
     last_seen_at = Column(DateTime, nullable=True)
     last_error = Column(Text, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utc_now, nullable=False)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
@@ -107,7 +109,7 @@ class AgentEnrollmentToken(Base):
     created_by_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    expires_at = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
     used_at = Column(DateTime, nullable=True)
     used_by_agent_id = Column(
         Integer, ForeignKey("agent_machines.id", ondelete="SET NULL"), nullable=True
@@ -1114,6 +1116,10 @@ class SystemSettings(Base):
     backup_monitoring_last_alert_sent_at = Column(DateTime, nullable=True)
     backup_reports_enabled = Column(Boolean, default=False, nullable=False)
     backup_reports_frequency = Column(String, default="weekly", nullable=False)
+    backup_reports_cron_expression = Column(String, default="0 8 * * 1", nullable=False)
+    backup_reports_timezone = Column(
+        String, default=get_container_timezone, nullable=False
+    )
     backup_reports_hour_utc = Column(Integer, default=8, nullable=False)
     backup_reports_weekday = Column(Integer, default=0, nullable=False)
     backup_reports_monthday = Column(Integer, default=1, nullable=False)

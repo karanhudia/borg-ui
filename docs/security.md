@@ -41,7 +41,7 @@ volumes:
   - /var/run/docker.sock:/var/run/docker.sock:rw
 ```
 
-Do not mount it for normal backups.
+Do not mount it for normal backups. If hook scripts only need limited Docker container actions, prefer a Docker socket proxy and set Borg UI's Docker CLI endpoint with `DOCKER_HOST=tcp://docker-socket-proxy:2375`.
 
 ## Authentication Modes
 

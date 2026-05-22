@@ -14,6 +14,8 @@ const sampleSettings: SystemSettings = {
   backup_monitoring_last_alert_sent_at: '2026-05-15T08:30:00.000Z',
   backup_reports_enabled: true,
   backup_reports_frequency: 'weekly',
+  backup_reports_cron_expression: '15 9 * * 1',
+  backup_reports_timezone: 'Asia/Kolkata',
   backup_reports_hour_utc: 9,
   backup_reports_weekday: 0,
   backup_reports_monthday: 1,

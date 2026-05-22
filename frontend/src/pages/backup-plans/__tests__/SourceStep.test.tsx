@@ -98,13 +98,15 @@ vi.mock('../../../components/FileExplorerDialog', () => ({
     connectionType,
     initialPath,
     sshConfig,
+    agentId,
   }: {
     open: boolean
     onSelect: (paths: string[]) => void
     title?: string
-    connectionType?: 'local' | 'ssh'
+    connectionType?: 'local' | 'ssh' | 'agent'
     initialPath?: string
     sshConfig?: { host: string }
+    agentId?: number
   }) =>
     open ? (
       <div
@@ -114,6 +116,7 @@ vi.mock('../../../components/FileExplorerDialog', () => ({
         data-connection-type={connectionType}
         data-initial-path={initialPath}
         data-ssh-host={sshConfig?.host || ''}
+        data-agent-id={agentId || ''}
       >
         <button type="button" onClick={() => onSelect(['/selected/from-browser'])}>
           Select browsed path
@@ -321,6 +324,7 @@ function renderSourceStep(overrides = {}) {
 function StatefulSourceStep({
   initialState = createInitialState(),
   sshConnections = [],
+  agentMachines = [],
 }: {
   initialState?: ReturnType<typeof createInitialState>
   sshConnections?: Array<{
@@ -333,6 +337,15 @@ function StatefulSourceStep({
     mount_point?: string
     status: string
   }>
+  agentMachines?: Array<{
+    id: number
+    name: string
+    agent_id: string
+    hostname?: string | null
+    status: string
+    created_at: string
+    updated_at: string
+  }>
 }) {
   const [wizardState, setWizardState] = useState(initialState)
 
@@ -340,7 +353,7 @@ function StatefulSourceStep({
     <SourceStep
       wizardState={wizardState}
       sshConnections={sshConnections}
-      agentMachines={[]}
+      agentMachines={agentMachines}
       fullRepositories={[]}
       scripts={[]}
       loadingScripts={false}
@@ -510,7 +523,8 @@ describe('SourceStep', () => {
     clickExistingTextButton(/add path/i)
 
     await selectRemoteMachine(/backup-a@server-a.example/i)
-    clickExistingTextButton(/browse current source/i)
+    expect(screen.queryByRole('button', { name: /browse current source/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('Browse filesystem'))
 
     const explorer = screen.getByTestId('file-explorer-dialog')
     expect(explorer).toHaveAttribute('data-connection-type', 'ssh')
@@ -525,6 +539,39 @@ describe('SourceStep', () => {
     expect(screen.getByTitle('/srv/app')).toBeInTheDocument()
     expect(screen.getByTitle('/selected/from-browser')).toBeInTheDocument()
     expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
+  }, 30000)
+
+  it('browses paths for the selected managed agent with the shared file explorer', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const agentMachines = [
+      {
+        id: 77,
+        name: 'pi',
+        agent_id: 'agt_pi',
+        hostname: 'pi.local',
+        status: 'online',
+        created_at: '2026-05-21T00:00:00.000Z',
+        updated_at: '2026-05-21T00:00:00.000Z',
+      },
+    ]
+    render(<StatefulSourceStep agentMachines={agentMachines} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    await screen.findByRole('button', { name: /scan a database instead/i })
+
+    clickExistingTextButton(/managed agent/i)
+    expect(screen.queryByRole('button', { name: /browse current source/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTitle('Browse filesystem'))
+
+    const explorer = screen.getByTestId('file-explorer-dialog')
+    expect(explorer).toHaveAttribute('data-connection-type', 'agent')
+    expect(explorer).toHaveAttribute('data-agent-id', '77')
+
+    clickExistingTextButton(/select browsed path/i)
+    clickExistingTextButton(/use these paths/i)
+
+    fireEvent.click(screen.getByRole('button', { name: /pi.local/i }))
+    expect(screen.getByTitle('/selected/from-browser')).toBeInTheDocument()
   }, 30000)
 
   it('applies database templates with code-editor script drafts', async () => {

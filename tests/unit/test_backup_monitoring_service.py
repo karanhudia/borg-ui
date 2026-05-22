@@ -223,6 +223,23 @@ def test_report_due_supports_daily_weekly_and_monthly_windows():
 
 
 @pytest.mark.unit
+def test_report_due_uses_configured_cron_and_timezone():
+    now = datetime(2026, 5, 18, 3, 46, tzinfo=timezone.utc)
+    settings = SystemSettings(
+        backup_reports_enabled=True,
+        backup_reports_frequency="weekly",
+        backup_reports_cron_expression="15 9 * * 1",
+        backup_reports_timezone="Asia/Kolkata",
+        backup_reports_last_sent_at=datetime(2026, 5, 11, 3, 45),
+    )
+
+    assert is_report_due(settings, now) is True
+
+    settings.backup_reports_last_sent_at = datetime(2026, 5, 18, 3, 45)
+    assert is_report_due(settings, now) is False
+
+
+@pytest.mark.unit
 def test_build_backup_report_respects_content_toggles(db_session):
     now = datetime(2026, 5, 20, 8, 30, tzinfo=timezone.utc)
     settings = SystemSettings(
@@ -256,6 +273,78 @@ def test_build_backup_report_respects_content_toggles(db_session):
     assert "Repositories: 1" in report.body
     assert "Stale" in report.body
     assert "Recent backup activity" in report.body
+
+
+@pytest.mark.unit
+def test_build_backup_report_uses_daily_activity_window(db_session):
+    now = datetime(2026, 5, 20, 8, 30, tzinfo=timezone.utc)
+    settings = SystemSettings(
+        backup_reports_frequency="daily",
+        backup_reports_include_summary=False,
+        backup_reports_include_stale_repositories=False,
+        backup_reports_include_recent_activity=True,
+    )
+    db_session.add(settings)
+    db_session.add_all(
+        [
+            BackupJob(
+                repository="/repos/recent",
+                status="completed",
+                started_at=now - timedelta(hours=3),
+                completed_at=now - timedelta(hours=2),
+            ),
+            BackupJob(
+                repository="/repos/old",
+                status="completed",
+                started_at=now - timedelta(days=2),
+                completed_at=now - timedelta(days=2) + timedelta(hours=1),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    report = build_backup_report(db_session, settings, now)
+
+    assert report.recent_backup_count == 1
+    assert "/repos/recent" in report.body
+    assert "/repos/old" not in report.body
+    assert "Activity window:" in report.body
+
+
+@pytest.mark.unit
+def test_build_backup_report_uses_monthly_activity_window(db_session):
+    now = datetime(2026, 5, 20, 8, 30, tzinfo=timezone.utc)
+    settings = SystemSettings(
+        backup_reports_frequency="monthly",
+        backup_reports_include_summary=False,
+        backup_reports_include_stale_repositories=False,
+        backup_reports_include_recent_activity=True,
+    )
+    db_session.add(settings)
+    db_session.add_all(
+        [
+            BackupJob(
+                repository="/repos/inside-window",
+                status="completed",
+                started_at=datetime(2026, 4, 20, 9, 0, tzinfo=timezone.utc),
+                completed_at=datetime(2026, 4, 20, 10, 0, tzinfo=timezone.utc),
+            ),
+            BackupJob(
+                repository="/repos/outside-window",
+                status="completed",
+                started_at=datetime(2026, 4, 19, 8, 30, tzinfo=timezone.utc),
+                completed_at=datetime(2026, 4, 19, 9, 30, tzinfo=timezone.utc),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    report = build_backup_report(db_session, settings, now)
+
+    assert report.recent_backup_count == 1
+    assert "/repos/inside-window" in report.body
+    assert "/repos/outside-window" not in report.body
+    assert "2026-04-20T08:30:00+00:00 to 2026-05-20T08:30:00+00:00" in report.body
 
 
 @pytest.mark.unit

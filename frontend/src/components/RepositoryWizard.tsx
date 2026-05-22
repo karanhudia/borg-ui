@@ -870,7 +870,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
       {/* File Explorer Dialogs */}
       <FileExplorerDialog
-        key={`path-explorer-${wizardState.repositoryLocation}-${wizardState.repoSshConnectionId}`}
+        key={`path-explorer-${wizardState.executionTarget}-${wizardState.repositoryLocation}-${wizardState.repoSshConnectionId}-${wizardState.agentMachineId}`}
         open={showPathExplorer}
         onClose={() => setShowPathExplorer(false)}
         onSelect={(paths) => {
@@ -881,15 +881,29 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         }}
         title={t('repositoryWizard.fileExplorer.selectRepoPath')}
         initialPath={
-          wizardState.repositoryLocation === 'ssh' && wizardState.repoSshConnectionId
+          wizardState.path ||
+          (wizardState.repositoryLocation === 'ssh' && wizardState.repoSshConnectionId
             ? sshConnections.find((c) => c.id === wizardState.repoSshConnectionId)?.default_path ||
               '/'
-            : '/'
+            : '/')
         }
         multiSelect={false}
-        connectionType={wizardState.repositoryLocation === 'local' ? 'local' : 'ssh'}
+        connectionType={
+          wizardState.executionTarget === 'agent'
+            ? 'agent'
+            : wizardState.repositoryLocation === 'local'
+              ? 'local'
+              : 'ssh'
+        }
+        agentId={
+          wizardState.executionTarget === 'agent' && wizardState.agentMachineId
+            ? Number(wizardState.agentMachineId)
+            : undefined
+        }
         sshConfig={
-          wizardState.repositoryLocation === 'ssh' && wizardState.repoSshConnectionId
+          wizardState.executionTarget !== 'agent' &&
+          wizardState.repositoryLocation === 'ssh' &&
+          wizardState.repoSshConnectionId
             ? (() => {
                 const conn = sshConnections.find((c) => c.id === wizardState.repoSshConnectionId)
                 return conn

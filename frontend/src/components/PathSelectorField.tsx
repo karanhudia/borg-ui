@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type KeyboardEventHandler, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TextField, IconButton, InputAdornment } from '@mui/material'
 import FolderOpen from '@mui/icons-material/FolderOpen'
@@ -15,13 +15,18 @@ interface PathSelectorFieldProps {
   error?: boolean
   multiSelect?: boolean
   selectMode?: 'directories' | 'files' | 'both'
-  connectionType?: 'local' | 'ssh'
+  initialPath?: string
+  onSelectPaths?: (paths: string[]) => void
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>
+  connectionType?: 'local' | 'ssh' | 'agent'
+  agentId?: number
   sshConfig?: {
     ssh_key_id: number
     host: string
     username: string
     port: number
   }
+  showSshMountPoints?: boolean
   fullWidth?: boolean
   size?: 'small' | 'medium'
 }
@@ -37,8 +42,13 @@ export default function PathSelectorField({
   error = false,
   multiSelect = false,
   selectMode = 'directories',
+  initialPath,
+  onSelectPaths,
+  onKeyDown,
   connectionType = 'local',
+  agentId,
   sshConfig,
+  showSshMountPoints,
   fullWidth = true,
   size = 'small',
 }: PathSelectorFieldProps) {
@@ -58,6 +68,7 @@ export default function PathSelectorField({
         disabled={disabled}
         required={required}
         error={error}
+        onKeyDown={onKeyDown}
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
@@ -80,7 +91,11 @@ export default function PathSelectorField({
         onClose={() => setShowFileExplorer(false)}
         onSelect={(paths) => {
           if (paths.length > 0) {
-            onChange(multiSelect ? paths.join(',') : paths[0])
+            if (onSelectPaths) {
+              onSelectPaths(paths)
+            } else {
+              onChange(multiSelect ? paths.join(',') : paths[0])
+            }
           }
         }}
         title={
@@ -90,11 +105,13 @@ export default function PathSelectorField({
               ? t('pathSelectorField.selectFile')
               : t('pathSelectorField.selectPath')
         }
-        initialPath={value || '/'}
+        initialPath={initialPath || value || '/'}
         multiSelect={multiSelect}
         connectionType={connectionType}
+        agentId={agentId}
         sshConfig={sshConfig}
         selectMode={selectMode}
+        showSshMountPoints={showSshMountPoints}
       />
     </>
   )

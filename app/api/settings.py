@@ -4,6 +4,7 @@ from typing import Optional
 from datetime import datetime, timezone
 import secrets
 import structlog
+from croniter import croniter
 
 from app.database.database import get_db
 from app.database.models import User, Repository, SystemSettings
@@ -27,6 +28,12 @@ from app.core.borg import BorgInterface
 from app.config import get_runtime_app_version, settings as app_settings
 from app.services.cache_service import archive_cache
 from app.utils.datetime_utils import serialize_datetime
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    InvalidScheduleTimezone,
+    get_container_timezone,
+    normalize_schedule_timezone,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["settings"], dependencies=[Depends(authorize_request)])
@@ -61,6 +68,7 @@ MAX_BACKUP_MONITORING_INTERVAL_HOURS = 24 * 30
 MAX_BACKUP_REPORT_HOUR_UTC = 23
 MAX_BACKUP_REPORT_MONTHDAY = 28
 VALID_BACKUP_REPORT_FREQUENCIES = {"daily", "weekly", "monthly"}
+DEFAULT_BACKUP_REPORT_CRON_EXPRESSION = "0 8 * * 1"
 DASHBOARD_HEALTH_THRESHOLD_PAIRS = (
     ("dashboard_backup_warning_days", "dashboard_backup_critical_days"),
     ("dashboard_check_warning_days", "dashboard_check_critical_days"),
@@ -119,6 +127,19 @@ def get_effective_dashboard_health_threshold(
     if value is not None:
         return value
     return DEFAULT_DASHBOARD_HEALTH_THRESHOLDS[field_name]
+
+
+def _validate_report_cron_expression(cron_expression: str) -> None:
+    try:
+        croniter(cron_expression, datetime.now(timezone.utc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.settings.invalidBackupReportSchedule",
+                "params": {"field": "backup_reports_cron_expression"},
+            },
+        ) from exc
 
 
 # Pydantic models for request/response
@@ -209,6 +230,8 @@ class SystemSettingsUpdate(BaseModel):
     backup_monitoring_include_observe_repos: Optional[bool] = None
     backup_reports_enabled: Optional[bool] = None
     backup_reports_frequency: Optional[str] = None
+    backup_reports_cron_expression: Optional[str] = None
+    backup_reports_timezone: Optional[str] = None
     backup_reports_hour_utc: Optional[int] = None
     backup_reports_weekday: Optional[int] = None
     backup_reports_monthday: Optional[int] = None
@@ -431,6 +454,10 @@ async def get_system_settings(
                 "backup_reports_enabled": settings.backup_reports_enabled,
                 "backup_reports_frequency": settings.backup_reports_frequency
                 or "weekly",
+                "backup_reports_cron_expression": settings.backup_reports_cron_expression
+                or DEFAULT_BACKUP_REPORT_CRON_EXPRESSION,
+                "backup_reports_timezone": settings.backup_reports_timezone
+                or get_container_timezone(DEFAULT_SCHEDULE_TIMEZONE),
                 "backup_reports_hour_utc": settings.backup_reports_hour_utc
                 if settings.backup_reports_hour_utc is not None
                 else 8,
@@ -628,6 +655,23 @@ async def update_system_settings(
                         },
                     },
                 )
+        if settings_update.backup_reports_cron_expression is not None:
+            _validate_report_cron_expression(
+                settings_update.backup_reports_cron_expression
+            )
+        if settings_update.backup_reports_timezone is not None:
+            try:
+                settings_update.backup_reports_timezone = normalize_schedule_timezone(
+                    settings_update.backup_reports_timezone
+                )
+            except InvalidScheduleTimezone as exc:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "key": "backend.errors.schedule.invalidTimezone",
+                        "params": {"error": str(exc)},
+                    },
+                ) from exc
         if settings_update.backup_reports_hour_utc is not None and (
             settings_update.backup_reports_hour_utc < 0
             or settings_update.backup_reports_hour_utc > MAX_BACKUP_REPORT_HOUR_UTC
@@ -816,6 +860,12 @@ async def update_system_settings(
             settings.backup_reports_enabled = settings_update.backup_reports_enabled
         if settings_update.backup_reports_frequency is not None:
             settings.backup_reports_frequency = settings_update.backup_reports_frequency
+        if settings_update.backup_reports_cron_expression is not None:
+            settings.backup_reports_cron_expression = (
+                settings_update.backup_reports_cron_expression
+            )
+        if settings_update.backup_reports_timezone is not None:
+            settings.backup_reports_timezone = settings_update.backup_reports_timezone
         if settings_update.backup_reports_hour_utc is not None:
             settings.backup_reports_hour_utc = settings_update.backup_reports_hour_utc
         if settings_update.backup_reports_weekday is not None:
