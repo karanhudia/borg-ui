@@ -28,6 +28,7 @@ from app.api.maintenance_jobs import create_started_maintenance_job
 from app.services.notification_service import notification_service
 from app.services.check_scheduler import run_due_scheduled_checks
 from app.services.restore_check_scheduler import run_due_scheduled_restore_checks
+from app.services.backup_route_planner import apply_repository_route_to_backup_job
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.archive_names import build_archive_name
 from app.utils.schedule_time import (
@@ -1601,6 +1602,7 @@ async def run_scheduled_job_now(
                     timezone.utc
                 ),  # Explicit timestamp to prevent NULL
             )
+            apply_repository_route_to_backup_job(backup_job, repo)
             db.add(backup_job)
             db.commit()
             db.refresh(backup_job)
@@ -2617,6 +2619,7 @@ def _dispatch_due_scheduled_job(
             scheduled_job_id=job.id,
             created_at=datetime.now(timezone.utc),
         )
+        apply_repository_route_to_backup_job(backup_job, repo)
         db.add(backup_job)
         db.commit()
         db.refresh(backup_job)

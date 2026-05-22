@@ -33,7 +33,10 @@ from app.database.models import (
 )
 from app.services.backup_service import backup_service
 from app.services.backup_plan_policy import evaluate_backup_plan_access
-from app.services.backup_route_planner import plan_repository_route
+from app.services.backup_route_planner import (
+    execution_mode_for_route,
+    plan_repository_route,
+)
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     is_agent_executor,
@@ -842,7 +845,7 @@ class BackupPlanExecutionService:
                 backup_job.route_strategy = route.strategy
                 db.commit()
             else:
-                backup_job.execution_mode = route.strategy or "local"
+                backup_job.execution_mode = execution_mode_for_route(route)
                 db.commit()
                 await backup_service.execute_backup(
                     backup_job.id,

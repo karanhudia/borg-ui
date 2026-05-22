@@ -930,6 +930,7 @@
       "viewLogs": "Ver registros",
       "transport": {
         "server": "Servidor",
+        "remoteSsh": "Remote SSH",
         "agent": "Agente"
       }
     },
@@ -2002,6 +2003,7 @@
     "manual": "Manual",
     "transport": {
       "server": "Servidor",
+      "remoteSsh": "Remote SSH",
       "agent": "Agente"
     },
     "toasts": {

@@ -1814,6 +1814,60 @@ class TestBackupPlanRoutes:
         assert backup_job.source_ssh_connection_id == source_connection.id
 
     @pytest.mark.asyncio
+    async def test_execute_plan_run_uses_remote_direct_for_same_ssh_source_and_repo(
+        self, test_db
+    ):
+        source_connection = _create_ssh_connection(
+            test_db,
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        repo.repository_type = "ssh"
+        repo.connection_id = source_connection.id
+        test_db.commit()
+        test_db.refresh(repo)
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            source_type="remote",
+            source_ssh_connection_id=source_connection.id,
+            source_directories=json.dumps(["/var/lib/docker/volumes/app"]),
+            source_locations=json.dumps(
+                [
+                    {
+                        "source_type": "remote",
+                        "source_ssh_connection_id": source_connection.id,
+                        "agent_machine_id": None,
+                        "paths": ["/var/lib/docker/volumes/app"],
+                    }
+                ]
+            ),
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            assert job.route_strategy == "remote_direct"
+            assert job.execution_mode == "remote_ssh"
+            assert job.source_ssh_connection_id == source_connection.id
+            assert kwargs["source_ssh_connection_id"] == source_connection.id
+            assert kwargs["source_directories"] == ["/var/lib/docker/volumes/app"]
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with patch(
+            "app.services.backup_plan_execution_service.backup_service.execute_backup",
+            side_effect=fake_execute_backup,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        backup_job = test_db.query(BackupJob).filter_by(backup_plan_run_id=run.id).one()
+        assert backup_job.route_strategy == "remote_direct"
+        assert backup_job.execution_mode == "remote_ssh"
+
+    @pytest.mark.asyncio
     async def test_execute_plan_run_wraps_repositories_with_plan_scripts(self, test_db):
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         pre_script = _create_script(test_db, "Prepare Source")

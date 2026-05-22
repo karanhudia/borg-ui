@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from app.database.models import Repository
 from app.services.repository_executor import EXECUTOR_AGENT, repository_executor_type
+from app.utils.source_locations import decode_source_locations
+
+if TYPE_CHECKING:
+    from app.database.models import BackupJob
 
 
 @dataclass(frozen=True)
@@ -175,3 +180,48 @@ def plan_repository_route(
         agent_machine_id=None,
         display_params={"repository": _repository_name(repository)},
     )
+
+
+def execution_mode_for_route(route: BackupRoutePlan) -> str:
+    if route.executor == EXECUTOR_AGENT:
+        return EXECUTOR_AGENT
+    if route.strategy == "remote_direct":
+        return "remote_ssh"
+    return "local"
+
+
+def source_locations_for_repository(repository: Repository) -> list[dict[str, Any]]:
+    source_directories = []
+    raw_sources = getattr(repository, "source_directories", None)
+    if raw_sources:
+        if isinstance(raw_sources, list):
+            source_directories = raw_sources
+        else:
+            try:
+                source_directories = json.loads(raw_sources)
+            except (TypeError, json.JSONDecodeError):
+                source_directories = []
+    return decode_source_locations(
+        getattr(repository, "source_locations", None),
+        source_type="remote"
+        if getattr(repository, "source_ssh_connection_id", None)
+        else "local",
+        source_ssh_connection_id=getattr(repository, "source_ssh_connection_id", None),
+        source_directories=source_directories,
+    )
+
+
+def apply_repository_route_to_backup_job(
+    backup_job: "BackupJob", repository: Repository
+) -> None:
+    source_locations = source_locations_for_repository(repository)
+    route = plan_repository_route(repository, source_locations)
+    if not route.supported:
+        return
+
+    backup_job.route_strategy = route.strategy
+    backup_job.execution_mode = execution_mode_for_route(route)
+
+    remote_connection_ids = _remote_connection_ids(source_locations)
+    if len(remote_connection_ids) == 1:
+        backup_job.source_ssh_connection_id = next(iter(remote_connection_ids))

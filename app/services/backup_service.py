@@ -40,6 +40,14 @@ from app.utils.ssh_utils import (
 
 logger = structlog.get_logger()
 
+REMOTE_EXECUTION_MODES = {"remote_ssh", "remote_direct"}
+
+
+def _uses_remote_execution(job: BackupJob) -> bool:
+    return (job.execution_mode or "").strip().lower() in REMOTE_EXECUTION_MODES or (
+        job.route_strategy or ""
+    ).strip().lower() == "remote_direct"
+
 
 class BackupService:
     """Service for executing backups with real-time log streaming"""
@@ -1393,7 +1401,7 @@ class BackupService:
                     job_name = scheduled_job.name
 
             # Check if this is a remote backup
-            if job.execution_mode == "remote_ssh":
+            if _uses_remote_execution(job):
                 logger.info("Delegating to remote backup service", job_id=job_id)
                 from app.services.remote_backup_service import remote_backup_service
 

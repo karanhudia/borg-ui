@@ -86,6 +86,7 @@ export interface BackupJob {
   backup_plan_name?: string | null
   archive_name?: string | null
   execution_mode?: 'local' | 'remote_ssh' | 'agent' | string
+  route_strategy?: string | null
   progress_details?: {
     original_size: number
     compressed_size?: number

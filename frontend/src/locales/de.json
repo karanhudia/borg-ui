@@ -930,6 +930,7 @@
       "viewLogs": "Protokolle anzeigen",
       "transport": {
         "server": "Server",
+        "remoteSsh": "Remote SSH",
         "agent": "Agent"
       }
     },
@@ -2002,6 +2003,7 @@
     "manual": "Manuell",
     "transport": {
       "server": "Server",
+      "remoteSsh": "Remote SSH",
       "agent": "Agent"
     },
     "toasts": {

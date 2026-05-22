@@ -34,6 +34,7 @@ export interface Job {
   maintenance_status?: string | null
   scheduled_job_id?: number | null
   execution_mode?: string | null
+  route_strategy?: string | null
   progress_details?: unknown
 }
 
