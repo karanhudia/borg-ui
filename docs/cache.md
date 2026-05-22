@@ -10,6 +10,13 @@ Borg UI uses caching to make repeated archive browsing faster.
 
 The first browse of a large archive can still be slow because Borg has to list archive contents. After that, cached results can be served much faster.
 
+There are two separate caches involved in normal Docker deployments:
+
+- Borg UI archive cache: Redis or the in-memory fallback used by archive browsing.
+- Borg files cache: Borg's own cache under `/home/borg/.cache/borg`, used by `borg create` to avoid reprocessing unchanged files during backups.
+
+Redis does not make backup creation faster. If backup jobs are slow after a container pull or restart, troubleshoot the Borg files cache and source mounts first.
+
 ## Backends
 
 Borg UI supports:
@@ -145,3 +152,25 @@ Check which container restarted. The default Redis setup has no disk persistence
 ### Slow first browse
 
 Expected for very large archives. Cache helps repeated browsing; it does not remove the initial Borg listing cost.
+
+### Slow first backup after a pull or restart
+
+`docker compose pull` does not remove Docker volumes or bind mounts by itself. A backup that is slow only for the first run after a container update usually means Borg could not fully reuse its files cache for that run.
+
+Check these items:
+
+- Keep `/home/borg/.cache/borg` mounted to persistent storage. A named volume such as `borg_cache:/home/borg/.cache/borg` or a stable host bind mount such as `./cache:/home/borg/.cache/borg` is fine.
+- Keep source directories mounted at the same container paths. Borg's files cache uses absolute filenames, so changing `/local/photos` to `/photos`, or moving the same host path between container paths, can make a later backup behave like a first scan.
+- Make sure the cache is writable by the configured `PUID` and `PGID`. Permission problems can prevent Borg from updating or reading cache state.
+- If the source path is an SSHFS, FUSE, network, or removable-drive mount with unstable inode numbers, Borg's default files-cache mode can treat unchanged files as modified. In that case, set repository custom Borg flags to a mode that ignores inode numbers, for example `--files-cache=mtime,size`. Use this only when you understand the reduced change-detection safety for that filesystem.
+- After an image update that changes the bundled Borg version, the first backup may need extra cache validation or rebuild work. Later runs should speed up again if the cache volume and source mount paths stay stable.
+
+Useful checks from the Docker host:
+
+```bash
+docker exec borg-web-ui sh -lc 'id borg && ls -ld /home/borg/.cache/borg'
+docker exec borg-web-ui sh -lc 'find /home/borg/.cache/borg -maxdepth 2 -type f | head'
+docker compose ps redis
+```
+
+If Redis restarted, archive browsing cache is cold, but that should not by itself slow `borg create` backup jobs.
