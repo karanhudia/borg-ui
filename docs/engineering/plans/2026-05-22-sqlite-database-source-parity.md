@@ -37,7 +37,7 @@
   - Add a SQLite mock template to `SourceSelectionDialog.stories.tsx`.
   - Update the database detected story description from four to five templates.
   - Run the required frontend checks and snapshots.
-- [ ] Final verification and handoff.
+- [x] Final verification and handoff.
   - Run backend lint/format checks required for backend changes.
   - Run frontend validation required for the story/snapshot change.
   - Commit, push, link the PR to Linear, sweep PR feedback/checks, then move BOR-54 to Human Review.

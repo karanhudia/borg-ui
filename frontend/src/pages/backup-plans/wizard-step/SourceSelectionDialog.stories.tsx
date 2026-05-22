@@ -124,6 +124,8 @@ const sqliteTemplate: SourceDiscoveryDatabase = {
   backup_strategy: 'online_backup',
   source_directories: ['/var/tmp/borg-ui/database-dumps/sqlite'],
   client_commands: ['sqlite3'],
+  documentation_url: 'https://www.sqlite.org/backup.html',
+  notes: ['Uses the SQLite Online Backup API through sqlite3 .backup.'],
   script_drafts: {
     pre_backup: {
       name: 'Prepare SQLite backup',
