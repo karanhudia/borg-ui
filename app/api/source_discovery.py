@@ -28,7 +28,9 @@ DEFAULT_DATABASE_SCAN_PATHS_BY_ENGINE = {
     "mysql": ["/var/lib/mysql"],
     "mongodb": ["/var/lib/mongodb"],
     "redis": ["/var/lib/redis"],
+    "sqlite": ["/var/lib/sqlite", "/var/lib/sqlite3"],
 }
+SQLITE_DATABASE_SUFFIXES = {".db", ".sqlite", ".sqlite3"}
 
 
 class SourceTypeOption(BaseModel):
@@ -105,6 +107,7 @@ class PathProbe:
     mysql_directory: bool = False
     wired_tiger_file: bool = False
     redis_dump_file: bool = False
+    sqlite_database_file: bool = False
 
 
 def _script(content: str) -> str:
@@ -321,6 +324,64 @@ def _redis_template() -> DatabaseCandidate:
     )
 
 
+def _sqlite_template() -> DatabaseCandidate:
+    dump_dir = "/var/tmp/borg-ui/database-dumps/sqlite"
+    return DatabaseCandidate(
+        id="sqlite",
+        engine="SQLite",
+        display_name="SQLite database",
+        backup_strategy="online_backup",
+        source_directories=[dump_dir],
+        client_commands=["sqlite3"],
+        documentation_url="https://www.sqlite.org/backup.html",
+        notes=[
+            "Uses the SQLite Online Backup API through sqlite3 .backup.",
+            "Set SQLITE_DATABASE_PATH to the source database file.",
+            "Set SQLITE_DATABASE_NAME when the staged backup filename should be customized.",
+        ],
+        script_drafts=DatabaseScriptDrafts(
+            pre_backup=ScriptDraft(
+                name="Prepare SQLite backup",
+                description="Create a consistent SQLite backup before Borg starts.",
+                timeout=300,
+                content=_script(
+                    f"""
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+
+                    DUMP_DIR="${{BORG_UI_DB_DUMP_DIR:-{dump_dir}}}"
+                    SQLITE_DATABASE_PATH="${{SQLITE_DATABASE_PATH:-}}"
+                    SQLITE_DATABASE_NAME="${{SQLITE_DATABASE_NAME:-database.sqlite3}}"
+
+                    if [[ -z "$SQLITE_DATABASE_PATH" ]]; then
+                      echo "Set SQLITE_DATABASE_PATH to the SQLite database file." >&2
+                      exit 2
+                    fi
+
+                    if [[ ! -f "$SQLITE_DATABASE_PATH" ]]; then
+                      echo "SQLite database file not found: $SQLITE_DATABASE_PATH" >&2
+                      exit 2
+                    fi
+
+                    mkdir -p "$DUMP_DIR"
+                    rm -f "$DUMP_DIR/$SQLITE_DATABASE_NAME"
+
+                    sqlite3 "$SQLITE_DATABASE_PATH" <<SQL
+                    .backup '$DUMP_DIR/$SQLITE_DATABASE_NAME'
+                    SQL
+                    """
+                ),
+            ),
+            post_backup=ScriptDraft(
+                name="Clean SQLite backup",
+                description="Remove transient SQLite backup files after Borg captures them.",
+                timeout=120,
+                content=_cleanup_script(dump_dir),
+            ),
+        ),
+    )
+
+
 def _source_types() -> list[SourceTypeOption]:
     return [
         SourceTypeOption(
@@ -351,6 +412,7 @@ def _templates() -> list[DatabaseCandidate]:
         _mysql_template(),
         _postgresql_template(),
         _redis_template(),
+        _sqlite_template(),
     ]
 
 
@@ -423,6 +485,8 @@ def _path_probe_matches_template(template_id: str, probe: PathProbe) -> bool:
         return basename in {"mongodb", "mongo"} or probe.wired_tiger_file
     if template_id == "redis":
         return basename == "redis" or probe.redis_dump_file
+    if template_id == "sqlite":
+        return basename in {"sqlite", "sqlite3"} or probe.sqlite_database_file
     return False
 
 
@@ -438,6 +502,9 @@ def _local_path_probe(path: str) -> tuple[PathProbe, ScanWarning | None]:
         probe.mysql_directory = (candidate / "mysql").is_dir()
         probe.wired_tiger_file = (candidate / "WiredTiger").exists()
         probe.redis_dump_file = (candidate / "dump.rdb").exists()
+        probe.sqlite_database_file = (
+            candidate.is_file() and candidate.suffix.lower() in SQLITE_DATABASE_SUFFIXES
+        )
         return probe, None
     except PermissionError:
         return probe, ScanWarning(
@@ -596,6 +663,13 @@ def _build_remote_probe_script(paths: list[str], commands: set[str]) -> str:
                     f"if test -e {quoted_path}/dump.rdb; then "
                     f"printf 'FILE\\t%s\\tdump.rdb\\t1\\n' {quoted_path}; fi"
                 ),
+                (
+                    f"case {quoted_path} in "
+                    f"*.db|*.sqlite|*.sqlite3) "
+                    f"if test -f {quoted_path}; then "
+                    f"printf 'FILE\\t%s\\tSQLITE_DB\\t1\\n' {quoted_path}; fi ;; "
+                    f"esac"
+                ),
             ]
         )
 
@@ -669,6 +743,8 @@ def _parse_remote_probe_output(
                 probe.wired_tiger_file = True
             elif file_name == "dump.rdb":
                 probe.redis_dump_file = True
+            elif file_name == "SQLITE_DB":
+                probe.sqlite_database_file = True
         elif record_type == "DIR" and len(parts) >= 4:
             path, directory_name = parts[1], parts[2]
             probe = probes_by_path.get(path)
