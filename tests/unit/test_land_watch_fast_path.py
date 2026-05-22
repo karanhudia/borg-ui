@@ -24,6 +24,7 @@ def pr_info(
     head_sha="abc1234",
     mergeable="MERGEABLE",
     merge_state="CLEAN",
+    review_decision="APPROVED",
 ):
     return land_watch.PrInfo(
         number=22,
@@ -31,6 +32,7 @@ def pr_info(
         head_sha=head_sha,
         mergeable=mergeable,
         merge_state=merge_state,
+        review_decision=review_decision,
     )
 
 
@@ -136,6 +138,28 @@ def test_fast_path_requires_full_validation_when_merge_state_is_not_clean():
     decision = green_decision(pr=pr_info(mergeable="MERGEABLE", merge_state="BLOCKED"))
 
     assert_requires_full_validation(decision, "PR merge state is BLOCKED")
+
+
+def test_fast_path_requires_explicit_admin_bypass_for_review_required():
+    decision = green_decision(
+        pr=pr_info(merge_state="BLOCKED", review_decision="REVIEW_REQUIRED")
+    )
+
+    assert_requires_full_validation(decision, "PR merge state is BLOCKED")
+
+
+def test_fast_path_allows_review_required_when_admin_bypass_is_explicitly_allowed():
+    decision = green_decision(
+        pr=pr_info(merge_state="BLOCKED", review_decision="REVIEW_REQUIRED"),
+        allow_review_required_admin_bypass=True,
+    )
+
+    assert decision.can_fast_path is True
+    assert decision.requires_admin_bypass is True
+    assert decision.admin_bypass_reason == (
+        "GitHub review requirement satisfied by Linear Merging"
+    )
+    assert decision.reasons == []
 
 
 def test_fast_path_requires_full_validation_when_merge_state_is_missing():
