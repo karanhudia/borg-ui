@@ -16,6 +16,7 @@ export default defineConfig({
   title: 'Borg Web UI',
   description: 'A modern web interface for Borg Backup management',
   cleanUrls: true,
+  srcExclude: ['engineering/**', 'superpowers/**'],
   lastUpdated: true,
   appearance: 'dark',
   head: [['link', { rel: 'icon', href: withBase('/favicon.png') }]],
@@ -75,6 +76,7 @@ export default defineConfig({
       {
         text: 'Operations',
         items: [
+          { text: 'Troubleshooting', link: '/troubleshooting' },
           { text: 'Disaster Recovery', link: '/disaster-recovery' },
           { text: 'Export and Import', link: '/export-import' },
           { text: 'Script Parameters', link: '/script-parameters' },

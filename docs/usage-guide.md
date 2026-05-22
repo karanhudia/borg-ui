@@ -269,18 +269,10 @@ Admins can delete supported job entries and associated log files. This removes U
 
 ## Troubleshooting
 
-### Permission denied
+Common path, permission, lock, and archive-browsing issues are covered on the
+[Troubleshooting](troubleshooting) page:
 
-Set `PUID` and `PGID` to match the host user that owns the mounted files.
-
-### Path not found
-
-Check the Docker volume mapping and use the container path, not the host path.
-
-### Repository locked
-
-Do not break locks blindly. First confirm no backup, restore, check, prune, compact, mount, or external Borg process is using the repository.
-
-### Slow archive browsing
-
-The first browse of a large archive can be slow. Make sure Redis is running and see [Cache](cache).
+- [Permission denied](troubleshooting#permission-denied)
+- [Path not found](troubleshooting#path-not-found)
+- [Repository locked](troubleshooting#repository-locked)
+- [Slow archive browsing](troubleshooting#slow-archive-browsing)
