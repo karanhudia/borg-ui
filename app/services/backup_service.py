@@ -24,6 +24,10 @@ from app.services.restore_check_canary import (
     should_include_restore_canary,
     to_restore_canary_archive_source_path,
 )
+from app.services.filesystem_snapshot_service import (
+    PreparedFilesystemSnapshot,
+    build_filesystem_snapshot_plans,
+)
 from app.utils.ssh_paths import resolve_sshfs_source_path
 from app.utils.source_locations import (
     decode_source_locations,
@@ -51,6 +55,7 @@ class BackupService:
         self.error_msgids = {}  # Track error message IDs by job_id
         self.log_buffers = {}  # Track in-memory log buffers by job_id (for running jobs)
         self.ssh_mounts = {}  # Track SSH mount IDs by job_id: {job_id: [mount_id, ...]}
+        self.filesystem_snapshots = {}  # Track btrfs/zfs snapshots by job_id
 
     def _resolve_grouped_source_paths(
         self, db: Session, source_locations: list[dict]
@@ -1264,6 +1269,108 @@ class BackupService:
         # Remove from tracking
         del self.ssh_mounts[job_id]
 
+    async def _run_filesystem_snapshot_command(
+        self, command: list[str], *, job_id: int, action: str
+    ) -> None:
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+        if process.returncode != 0:
+            stderr_text = stderr.decode("utf-8", errors="replace").strip()
+            stdout_text = stdout.decode("utf-8", errors="replace").strip()
+            message = stderr_text or stdout_text or f"exit {process.returncode}"
+            raise RuntimeError(f"Filesystem snapshot {action} failed: {message}")
+        logger.info(
+            "Filesystem snapshot command completed",
+            job_id=job_id,
+            action=action,
+            command=command,
+        )
+
+    async def _prepare_filesystem_snapshots(
+        self,
+        source_paths: list[str],
+        source_locations: list[dict],
+        job_id: int,
+    ) -> tuple[list[str], list[PreparedFilesystemSnapshot]]:
+        snapshot_plans = build_filesystem_snapshot_plans(
+            source_locations,
+            job_id=job_id,
+        )
+        if not snapshot_plans:
+            return source_paths, []
+
+        created: list[PreparedFilesystemSnapshot] = []
+        for plan in snapshot_plans:
+            if plan.provider == "btrfs":
+                Path(plan.backup_path).parent.mkdir(parents=True, exist_ok=True)
+            for command in plan.create_commands:
+                await self._run_filesystem_snapshot_command(
+                    command,
+                    job_id=job_id,
+                    action="create",
+                )
+            created.append(plan)
+            self.filesystem_snapshots[job_id] = list(created)
+
+        source_to_snapshot_path = {
+            plan.source_path: plan.backup_path for plan in snapshot_plans
+        }
+        prepared_source_paths = [
+            source_to_snapshot_path.get(source_path, source_path)
+            for source_path in source_paths
+        ]
+        logger.info(
+            "Prepared filesystem snapshot source paths",
+            job_id=job_id,
+            snapshot_count=len(created),
+            source_count=len(source_paths),
+        )
+        return prepared_source_paths, created
+
+    async def _cleanup_filesystem_snapshots(self, job_id: int) -> None:
+        snapshot_plans = self.filesystem_snapshots.pop(job_id, [])
+        if not snapshot_plans:
+            return
+
+        for plan in reversed(snapshot_plans):
+            for command in plan.cleanup_commands:
+                try:
+                    await self._run_filesystem_snapshot_command(
+                        command,
+                        job_id=job_id,
+                        action="cleanup",
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Filesystem snapshot cleanup command failed",
+                        job_id=job_id,
+                        provider=plan.provider,
+                        source_path=plan.source_path,
+                        command=command,
+                        error=str(e),
+                    )
+
+        cleanup_paths = list(
+            dict.fromkeys(
+                path for plan in snapshot_plans for path in plan.cleanup_paths
+            )
+        )
+        cleanup_paths.sort(key=len, reverse=True)
+        for cleanup_path in cleanup_paths:
+            try:
+                shutil.rmtree(cleanup_path, ignore_errors=True)
+            except Exception as e:
+                logger.warning(
+                    "Filesystem snapshot staging cleanup failed",
+                    job_id=job_id,
+                    path=cleanup_path,
+                    error=str(e),
+                )
+
     def _resolve_backup_command_paths(
         self,
         processed_source_paths: list[str],
@@ -1510,6 +1617,7 @@ class BackupService:
             exclude_patterns = []  # Default no exclusions
             compression = "lz4"  # Default compression
             router = None
+            normalized_locations = None
             using_source_override = (
                 source_directories is not None or source_locations is not None
             )
@@ -1554,6 +1662,24 @@ class BackupService:
                         )
                     elif using_source_override:
                         source_dirs = source_directories or []
+                    elif repo_record.source_locations:
+                        stored_source_dirs = []
+                        if repo_record.source_directories:
+                            try:
+                                stored_source_dirs = json.loads(
+                                    repo_record.source_directories
+                                )
+                            except json.JSONDecodeError:
+                                stored_source_dirs = []
+                        normalized_locations = decode_source_locations(
+                            repo_record.source_locations,
+                            source_ssh_connection_id=repo_record.source_ssh_connection_id,
+                            source_directories=stored_source_dirs,
+                        )
+                        source_dirs = flatten_source_locations(normalized_locations)
+                        source_paths = self._resolve_grouped_source_paths(
+                            db, normalized_locations
+                        )
                     elif repo_record.source_directories:
                         try:
                             source_dirs = json.loads(repo_record.source_directories)
@@ -1585,6 +1711,13 @@ class BackupService:
                     if source_locations is not None:
                         logger.info(
                             "Using grouped source locations",
+                            repository=repository,
+                            source_locations=normalized_locations,
+                            source_directories=source_paths,
+                        )
+                    elif normalized_locations is not None:
+                        logger.info(
+                            "Using stored grouped source locations",
                             repository=repository,
                             source_locations=normalized_locations,
                             source_directories=source_paths,
@@ -1679,6 +1812,16 @@ class BackupService:
                         repository_id=repo_record.id,
                         canary_path=str(canary_path),
                     )
+
+            if normalized_locations is not None:
+                (
+                    source_paths,
+                    _snapshot_plans,
+                ) = await self._prepare_filesystem_snapshots(
+                    source_paths,
+                    normalized_locations,
+                    job_id,
+                )
 
             # Use repository path as-is (already contains full SSH URL for SSH repos)
             actual_repository_path = repository
@@ -3043,6 +3186,15 @@ class BackupService:
                 del self.error_msgids[job_id]
 
             # Clean up SSH mounts (unmount all SSHFS mounts for this job)
+            try:
+                await self._cleanup_filesystem_snapshots(job_id)
+            except Exception as e:
+                logger.error(
+                    "Failed to cleanup filesystem snapshots",
+                    job_id=job_id,
+                    error=str(e),
+                )
+
             try:
                 await self._cleanup_ssh_mounts(job_id)
             except Exception as e:

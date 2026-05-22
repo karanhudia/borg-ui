@@ -183,6 +183,72 @@ describe('BackupPlans payload', () => {
     )
   })
 
+  it('preserves local filesystem snapshot metadata in source locations', () => {
+    const payload = buildBackupPlanPayload({
+      name: 'Snapshot Plan',
+      description: '',
+      enabled: true,
+      sourceType: 'local',
+      sourceSshConnectionId: '',
+      sourceDirectories: ['/srv/app'],
+      sourceLocations: [
+        {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          agent_machine_id: null,
+          paths: ['/srv/app'],
+          snapshot: {
+            provider: 'btrfs',
+            staging_path: '/var/tmp/borg-ui/snapshots',
+            recursive: false,
+          },
+        },
+      ],
+      excludePatterns: [],
+      repositoryIds: [10],
+      compression: 'lz4',
+      archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+      customFlags: '',
+      uploadRatelimitMb: '',
+      repositoryRunMode: 'series',
+      maxParallelRepositories: 1,
+      failureBehavior: 'continue',
+      scheduleEnabled: false,
+      cronExpression: '0 21 * * *',
+      timezone: 'UTC',
+      preBackupScriptId: null,
+      postBackupScriptId: null,
+      preBackupScriptParameters: {},
+      postBackupScriptParameters: {},
+      runRepositoryScripts: true,
+      runPruneAfter: false,
+      runCompactAfter: false,
+      runCheckAfter: false,
+      checkMaxDuration: 3600,
+      checkExtraFlags: '',
+      pruneKeepHourly: 0,
+      pruneKeepDaily: 7,
+      pruneKeepWeekly: 4,
+      pruneKeepMonthly: 6,
+      pruneKeepQuarterly: 0,
+      pruneKeepYearly: 1,
+    })
+
+    expect(payload.source_locations).toEqual([
+      {
+        source_type: 'local',
+        source_ssh_connection_id: null,
+        agent_machine_id: null,
+        paths: ['/srv/app'],
+        snapshot: {
+          provider: 'btrfs',
+          staging_path: '/var/tmp/borg-ui/snapshots',
+          recursive: false,
+        },
+      },
+    ])
+  })
+
   it('preserves a disabled plan in the payload', () => {
     const payload = buildBackupPlanPayload({
       name: 'Disabled Plan',

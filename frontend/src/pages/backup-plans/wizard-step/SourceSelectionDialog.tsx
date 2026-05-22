@@ -6,6 +6,7 @@ import {
   Card,
   CardActionArea,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
   DialogActions,
@@ -49,19 +50,23 @@ import PathSelectorField from '../../../components/PathSelectorField'
 import ResponsiveDialog from '../../../components/ResponsiveDialog'
 import {
   type AgentMachineResponse,
+  type FilesystemSnapshotCapabilitiesResponse,
   sourceDiscoveryAPI,
   type DatabaseScanResponse,
   type SourceDiscoveryDatabase,
   type SourceDiscoveryResponse,
   type SourceDiscoveryScriptDraft,
 } from '../../../services/api'
-import type { Repository, SourceLocation, SourceType } from '../../../types'
+import type { Repository, SourceLocation, SourceSnapshotConfig, SourceType } from '../../../types'
 import type { ScriptOption, SSHConnection, WizardState } from '../types'
 import type { SourceScriptCreateInput } from './types'
 
 type SourceChoiceView = 'paths' | 'database' | 'database-detail'
 type ScriptMode = 'create' | 'reuse' | 'skip'
 type SourceKey = 'local' | `remote:${number}` | `agent:${number}`
+type SnapshotProviderDraft = 'none' | 'btrfs' | 'zfs'
+
+const DEFAULT_SNAPSHOT_STAGING_PATH = '/var/tmp/borg-ui/snapshots'
 
 const DEFAULT_DB_SCAN_PATHS = [
   '/var/lib/postgresql',
@@ -75,6 +80,62 @@ type ScanErrorKind = 'ENDPOINT_MISSING' | 'OTHER'
 interface ScanErrorState {
   kind: ScanErrorKind
   detail: string | null
+}
+
+interface SnapshotDraft {
+  provider: SnapshotProviderDraft
+  stagingPath: string
+  dataset: string
+  mountpoint: string
+  recursive: boolean
+}
+
+const emptySnapshotDraft = (): SnapshotDraft => ({
+  provider: 'none',
+  stagingPath: DEFAULT_SNAPSHOT_STAGING_PATH,
+  dataset: '',
+  mountpoint: '',
+  recursive: false,
+})
+
+function snapshotDraftFromLocation(location?: SourceLocation | null): SnapshotDraft {
+  if (!location?.snapshot) return emptySnapshotDraft()
+  if (location.snapshot.provider === 'btrfs') {
+    return {
+      provider: 'btrfs',
+      stagingPath: location.snapshot.staging_path || DEFAULT_SNAPSHOT_STAGING_PATH,
+      dataset: '',
+      mountpoint: '',
+      recursive: Boolean(location.snapshot.recursive),
+    }
+  }
+  return {
+    provider: 'zfs',
+    stagingPath: DEFAULT_SNAPSHOT_STAGING_PATH,
+    dataset: location.snapshot.dataset || '',
+    mountpoint: location.snapshot.mountpoint || '',
+    recursive: Boolean(location.snapshot.recursive),
+  }
+}
+
+function snapshotFromDraft(draft: SnapshotDraft): SourceSnapshotConfig | undefined {
+  if (draft.provider === 'none') return undefined
+  if (draft.provider === 'btrfs') {
+    return {
+      provider: 'btrfs',
+      staging_path: draft.stagingPath.trim() || DEFAULT_SNAPSHOT_STAGING_PATH,
+      recursive: draft.recursive,
+    }
+  }
+  const dataset = draft.dataset.trim()
+  const mountpoint = draft.mountpoint.trim()
+  if (!dataset || !mountpoint) return undefined
+  return {
+    provider: 'zfs',
+    dataset,
+    mountpoint,
+    recursive: draft.recursive,
+  }
 }
 
 function classifyScanError(err: unknown): ScanErrorState {
@@ -221,13 +282,20 @@ function scriptPayload(draft: SourceDiscoveryScriptDraft, name: string): SourceS
 
 function cleanLocations(locations: SourceLocation[]): SourceLocation[] {
   return locations
-    .map((location) => ({
-      ...location,
-      source_ssh_connection_id:
-        location.source_type === 'remote' ? location.source_ssh_connection_id : null,
-      agent_machine_id: location.source_type === 'agent' ? location.agent_machine_id : null,
-      paths: location.paths.map((path) => path.trim()).filter(Boolean),
-    }))
+    .map((location) => {
+      const paths = location.paths.map((path) => path.trim()).filter(Boolean)
+      const cleaned: SourceLocation = {
+        source_type: location.source_type,
+        source_ssh_connection_id:
+          location.source_type === 'remote' ? location.source_ssh_connection_id : null,
+        agent_machine_id: location.source_type === 'agent' ? location.agent_machine_id : null,
+        paths,
+      }
+      if (location.source_type === 'local' && location.snapshot) {
+        cleaned.snapshot = location.snapshot
+      }
+      return cleaned
+    })
     .filter((location) => location.paths.length > 0)
 }
 
@@ -455,6 +523,8 @@ export function SourceSelectionDialog({
   const [scanPaths, setScanPaths] = useState<string[]>(DEFAULT_DB_SCAN_PATHS)
   const [scanPathDraft, setScanPathDraft] = useState('')
   const [fallbackTemplates, setFallbackTemplates] = useState<SourceDiscoveryDatabase[]>([])
+  const [snapshotCapabilities, setSnapshotCapabilities] =
+    useState<FilesystemSnapshotCapabilitiesResponse | null>(null)
   const scanRequestId = useRef(0)
   const [selectedDatabase, setSelectedDatabase] = useState<SourceDiscoveryDatabase | null>(null)
   const [scriptMode, setScriptMode] = useState<ScriptMode>('create')
@@ -468,6 +538,7 @@ export function SourceSelectionDialog({
   const [selectedSourceKey, setSelectedSourceKey] = useState<SourceKey>('local')
   const [sourcePath, setSourcePath] = useState('')
   const [draftSourceLocations, setDraftSourceLocations] = useState<SourceLocation[]>([])
+  const [snapshotDraft, setSnapshotDraft] = useState<SnapshotDraft>(() => emptySnapshotDraft())
 
   useEffect(() => {
     if (!open) return
@@ -475,9 +546,9 @@ export function SourceSelectionDialog({
     const nextLocations = locationsFromWizardState(wizardState)
     const defaultAgentKey = selectedAgentRepositoryKey(wizardState, fullRepositories)
     setDraftSourceLocations(nextLocations)
-    setSelectedSourceKey(
-      nextLocations[0] ? locationKey(nextLocations[0]) : defaultAgentKey || 'local'
-    )
+    const nextSourceKey = nextLocations[0] ? locationKey(nextLocations[0]) : defaultAgentKey || 'local'
+    setSelectedSourceKey(nextSourceKey)
+    setSnapshotDraft(snapshotDraftFromLocation(nextLocations.find((location) => locationKey(location) === nextSourceKey)))
     setSourcePath('')
     setSelectedDatabase(null)
     setScriptMode('create')
@@ -506,6 +577,55 @@ export function SourceSelectionDialog({
       active = false
     }
   }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    sourceDiscoveryAPI
+      .filesystemSnapshots()
+      .then((response) => {
+        if (active) {
+          setSnapshotCapabilities(response.data)
+          setSnapshotDraft((current) =>
+            current.provider === 'btrfs' && current.stagingPath === DEFAULT_SNAPSHOT_STAGING_PATH
+              ? { ...current, stagingPath: response.data.default_staging_path }
+              : current
+          )
+        }
+      })
+      .catch(() => {
+        if (active) setSnapshotCapabilities(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [open])
+
+  const selectSourceKey = (sourceKey: SourceKey) => {
+    setSelectedSourceKey(sourceKey)
+    const existing = draftSourceLocations.find((location) => locationKey(location) === sourceKey)
+    setSnapshotDraft(snapshotDraftFromLocation(existing))
+  }
+
+  const updateSnapshotDraft = (updates: Partial<SnapshotDraft>) => {
+    setSnapshotDraft((current) => {
+      const next = { ...current, ...updates }
+      if (selectedSourceKey === 'local') {
+        const snapshot = snapshotFromDraft(next)
+        setDraftSourceLocations((locations) =>
+          locations.map((location) =>
+            locationKey(location) === selectedSourceKey
+              ? {
+                  ...location,
+                  ...(snapshot ? { snapshot } : { snapshot: undefined }),
+                }
+              : location
+          )
+        )
+      }
+      return next
+    })
+  }
 
   const runDatabaseScan = (immediate = false) => {
     if (!open) return
@@ -611,6 +731,8 @@ export function SourceSelectionDialog({
     const nextPaths = paths.map((path) => path.trim()).filter(Boolean)
     if (nextPaths.length === 0) return
     const locationBase = locationForKey(selectedSourceKey)
+    const snapshot =
+      selectedSourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
 
     setDraftSourceLocations((current) => {
       const existingIndex = current.findIndex(
@@ -622,6 +744,7 @@ export function SourceSelectionDialog({
           {
             ...locationBase,
             paths: Array.from(new Set(nextPaths)),
+            ...(snapshot ? { snapshot } : {}),
           },
         ]
       }
@@ -631,6 +754,7 @@ export function SourceSelectionDialog({
         return {
           ...location,
           paths: Array.from(new Set([...location.paths, ...nextPaths])),
+          ...(snapshot ? { snapshot } : { snapshot: undefined }),
         }
       })
     })
@@ -702,6 +826,13 @@ export function SourceSelectionDialog({
     const hasAgentOptions = agentMachines.length > 0
     const remoteDisabled = sourceKind === 'remote' && !hasRemoteOptions
     const agentDisabled = sourceKind === 'agent' && !hasAgentOptions
+    const selectedSnapshotCapability =
+      snapshotDraft.provider === 'none'
+        ? null
+        : snapshotCapabilities?.providers.find((provider) => provider.id === snapshotDraft.provider)
+    const snapshotUnsupportedTargets = snapshotCapabilities?.unsupported_source_targets || [
+      t('backupPlans.sourceChooser.snapshotLocalOnly'),
+    ]
 
     return (
       <Stack spacing={2}>
@@ -731,7 +862,7 @@ export function SourceSelectionDialog({
             icon={<HardDrive size={28} />}
             title={t('backupPlans.sourceChooser.borgUiServer')}
             description={t('backupPlans.sourceChooser.localSourceDescription')}
-            onClick={() => setSelectedSourceKey('local')}
+            onClick={() => selectSourceKey('local')}
           />
           <RepoStyleSourceCard
             selected={sourceKind === 'remote'}
@@ -750,7 +881,7 @@ export function SourceSelectionDialog({
                 sshConnections.some((connection) => connection.id === selectedRemoteIdNum)
                   ? selectedRemoteIdNum
                   : sshConnections[0].id
-              setSelectedSourceKey(`remote:${targetId}`)
+              selectSourceKey(`remote:${targetId}`)
             }}
           />
           <RepoStyleSourceCard
@@ -769,7 +900,7 @@ export function SourceSelectionDialog({
                 selectedAgentIdNum && agentMachines.some((agent) => agent.id === selectedAgentIdNum)
                   ? selectedAgentIdNum
                   : agentMachines[0].id
-              setSelectedSourceKey(`agent:${targetId}`)
+              selectSourceKey(`agent:${targetId}`)
             }}
           />
         </Box>
@@ -783,7 +914,7 @@ export function SourceSelectionDialog({
               labelId="source-remote-machine-label"
               value={selectedRemoteIdNum || ''}
               label={t('backupPlans.sourceChooser.selectRemoteMachine')}
-              onChange={(event) => setSelectedSourceKey(`remote:${Number(event.target.value)}`)}
+              onChange={(event) => selectSourceKey(`remote:${Number(event.target.value)}`)}
               sx={{
                 height: 56,
                 '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
@@ -835,7 +966,7 @@ export function SourceSelectionDialog({
               labelId="source-agent-machine-label"
               value={selectedAgentIdNum || ''}
               label={t('backupPlans.sourceChooser.selectManagedAgent')}
-              onChange={(event) => setSelectedSourceKey(`agent:${Number(event.target.value)}`)}
+              onChange={(event) => selectSourceKey(`agent:${Number(event.target.value)}`)}
               sx={{
                 height: 56,
                 '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
@@ -940,6 +1071,126 @@ export function SourceSelectionDialog({
           </Button>
         </Stack>
 
+        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1, bgcolor: 'background.paper' }}>
+          <Stack spacing={1.25}>
+            {sourceKind === 'local' ? (
+              <>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="snapshot-mode-label">
+                    {t('backupPlans.sourceChooser.snapshotMode')}
+                  </InputLabel>
+                  <Select
+                    labelId="snapshot-mode-label"
+                    value={snapshotDraft.provider}
+                    label={t('backupPlans.sourceChooser.snapshotMode')}
+                    onChange={(event) =>
+                      updateSnapshotDraft({
+                        provider: event.target.value as SnapshotProviderDraft,
+                      })
+                    }
+                  >
+                    <MenuItem value="none">
+                      {t('backupPlans.sourceChooser.snapshotModeNone')}
+                    </MenuItem>
+                    <MenuItem value="btrfs">
+                      {t('backupPlans.sourceChooser.snapshotModeBtrfs')}
+                    </MenuItem>
+                    <MenuItem value="zfs">
+                      {t('backupPlans.sourceChooser.snapshotModeZfs')}
+                    </MenuItem>
+                  </Select>
+                </FormControl>
+
+                {snapshotDraft.provider !== 'none' && (
+                  <Alert severity={selectedSnapshotCapability?.available ? 'info' : 'warning'}>
+                    <Stack spacing={0.75}>
+                      <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {t('backupPlans.sourceChooser.snapshotRequirementsTitle')}
+                        </Typography>
+                        {selectedSnapshotCapability && (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={t(
+                              selectedSnapshotCapability.available
+                                ? 'backupPlans.sourceChooser.snapshotToolAvailable'
+                                : 'backupPlans.sourceChooser.snapshotToolMissing',
+                              { command: selectedSnapshotCapability.command }
+                            )}
+                          />
+                        )}
+                      </Stack>
+                      {(selectedSnapshotCapability?.requirements || []).map((requirement) => (
+                        <Typography key={requirement} variant="caption">
+                          {requirement}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  </Alert>
+                )}
+
+                {snapshotDraft.provider === 'btrfs' && (
+                  <TextField
+                    label={t('backupPlans.sourceChooser.snapshotBtrfsStagingPath')}
+                    value={snapshotDraft.stagingPath}
+                    onChange={(event) => updateSnapshotDraft({ stagingPath: event.target.value })}
+                    size="small"
+                    fullWidth
+                  />
+                )}
+
+                {snapshotDraft.provider === 'zfs' && (
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                    <TextField
+                      label={t('backupPlans.sourceChooser.snapshotZfsDataset')}
+                      value={snapshotDraft.dataset}
+                      onChange={(event) => updateSnapshotDraft({ dataset: event.target.value })}
+                      size="small"
+                      fullWidth
+                    />
+                    <TextField
+                      label={t('backupPlans.sourceChooser.snapshotZfsMountpoint')}
+                      value={snapshotDraft.mountpoint}
+                      onChange={(event) => updateSnapshotDraft({ mountpoint: event.target.value })}
+                      size="small"
+                      fullWidth
+                    />
+                  </Stack>
+                )}
+
+                {snapshotDraft.provider !== 'none' && (
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={snapshotDraft.recursive}
+                        onChange={(event) =>
+                          updateSnapshotDraft({ recursive: event.target.checked })
+                        }
+                        size="small"
+                      />
+                    }
+                    label={t('backupPlans.sourceChooser.snapshotRecursive')}
+                  />
+                )}
+              </>
+            ) : (
+              <Alert severity="info">
+                <Stack spacing={0.5}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {t('backupPlans.sourceChooser.snapshotLocalOnly')}
+                  </Typography>
+                  {snapshotUnsupportedTargets.map((target) => (
+                    <Typography key={target} variant="caption">
+                      {target}
+                    </Typography>
+                  ))}
+                </Stack>
+              </Alert>
+            )}
+          </Stack>
+        </Paper>
+
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
             {t('backupPlans.sourceChooser.selectedSourceGroups')}
@@ -1005,6 +1256,15 @@ export function SourceSelectionDialog({
                         <Typography variant="subtitle2" noWrap sx={{ flexShrink: 0 }}>
                           {sourceLocationLabel(location, sshConnections, agentMachines, t)}
                         </Typography>
+                        {location.snapshot && (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={t('backupPlans.sourceChooser.snapshotChip', {
+                              provider: location.snapshot.provider,
+                            })}
+                          />
+                        )}
                         <Typography variant="caption" sx={{ flexShrink: 0, opacity: 0.6 }}>
                           ·
                         </Typography>
@@ -1077,6 +1337,15 @@ export function SourceSelectionDialog({
                                 count: location.paths.length,
                               })}
                             />
+                            {location.snapshot && (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label={t('backupPlans.sourceChooser.snapshotChip', {
+                                  provider: location.snapshot.provider,
+                                })}
+                              />
+                            )}
                           </Stack>
                           <Tooltip title={t('backupPlans.sourceChooser.removeSourceGroup')}>
                             <IconButton

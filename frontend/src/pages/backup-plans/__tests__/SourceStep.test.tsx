@@ -9,6 +9,7 @@ import { SourceStep } from '../wizard-step/SourceStep'
 const apiMocks = vi.hoisted(() => ({
   databases: vi.fn(),
   scanDatabases: vi.fn(),
+  filesystemSnapshots: vi.fn(),
 }))
 
 vi.mock('../../../services/api', () => ({
@@ -18,6 +19,7 @@ vi.mock('../../../services/api', () => ({
   sourceDiscoveryAPI: {
     databases: apiMocks.databases,
     scanDatabases: apiMocks.scanDatabases,
+    filesystemSnapshots: apiMocks.filesystemSnapshots,
   },
 }))
 
@@ -180,6 +182,31 @@ const discoveryResponse = {
   ],
 }
 
+const filesystemSnapshotCapabilities = {
+  providers: [
+    {
+      id: 'btrfs',
+      label: 'btrfs read-only subvolume snapshot',
+      command: 'btrfs',
+      available: true,
+      requirements: ['The selected path must be a btrfs subvolume visible to the Borg UI server.'],
+    },
+    {
+      id: 'zfs',
+      label: 'zfs dataset snapshot',
+      command: 'zfs',
+      available: false,
+      requirements: ['The selected path must live under the configured zfs dataset mountpoint.'],
+    },
+  ],
+  supported_source_types: ['local'],
+  unsupported_source_targets: [
+    'Remote SSH sources are not supported because snapshot commands must run on the source host.',
+    'Managed-agent sources are not supported in this server-side snapshot flow.',
+  ],
+  default_staging_path: '/var/tmp/borg-ui/snapshots',
+}
+
 const translations: Record<string, string> = {
   'backupPlans.wizard.fields.planName': 'Plan name',
   'backupPlans.wizard.fields.description': 'Description',
@@ -241,6 +268,20 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.showLessPaths': 'Show less',
   'backupPlans.sourceChooser.scanDatabaseInstead': 'Scan a database instead',
   'backupPlans.sourceChooser.readingFromLocal': 'Reading directly from this server',
+  'backupPlans.sourceChooser.snapshotMode': 'Snapshot mode',
+  'backupPlans.sourceChooser.snapshotModeNone': 'No filesystem snapshot',
+  'backupPlans.sourceChooser.snapshotModeBtrfs': 'btrfs snapshot',
+  'backupPlans.sourceChooser.snapshotModeZfs': 'zfs snapshot',
+  'backupPlans.sourceChooser.snapshotRequirementsTitle': 'Host requirements',
+  'backupPlans.sourceChooser.snapshotLocalOnly':
+    'Snapshots are only available for Borg UI server paths.',
+  'backupPlans.sourceChooser.snapshotBtrfsStagingPath': 'Snapshot staging path',
+  'backupPlans.sourceChooser.snapshotZfsDataset': 'ZFS dataset',
+  'backupPlans.sourceChooser.snapshotZfsMountpoint': 'ZFS mountpoint',
+  'backupPlans.sourceChooser.snapshotRecursive': 'Recursive snapshot',
+  'backupPlans.sourceChooser.snapshotToolAvailable': '{{command}} available',
+  'backupPlans.sourceChooser.snapshotToolMissing': '{{command}} not found',
+  'backupPlans.sourceChooser.snapshotChip': '{{provider}} snapshot',
   'backupPlans.sourceChooser.backToFiles': 'Back to files and folders',
   'backupPlans.sourceChooser.change': 'Change',
   'backupPlans.sourceChooser.edit': 'Edit',
@@ -254,7 +295,9 @@ const t = (key: string, options?: { count?: number }) => {
   if (key === 'backupPlans.sourceChooser.showMorePaths' && typeof options?.count === 'number') {
     return `Show ${options.count} more ${options.count === 1 ? 'path' : 'paths'}`
   }
-  return translations[key] || key
+  return (translations[key] || key)
+    .replace('{{command}}', String((options as { command?: string } | undefined)?.command ?? ''))
+    .replace('{{provider}}', String((options as { provider?: string } | undefined)?.provider ?? ''))
 }
 
 async function clickTextButton(name: string | RegExp) {
@@ -380,6 +423,7 @@ const emptyScanResponse = {
 describe('SourceStep', () => {
   beforeEach(() => {
     apiMocks.scanDatabases.mockResolvedValue({ data: emptyScanResponse })
+    apiMocks.filesystemSnapshots.mockResolvedValue({ data: filesystemSnapshotCapabilities })
   })
 
   afterEach(() => {
@@ -497,6 +541,56 @@ describe('SourceStep', () => {
     expect(screen.getByText('backup-b@server-b.example')).toBeInTheDocument()
     expect(screen.getAllByText('1 path')).toHaveLength(3)
   }, 45000)
+
+  it('applies btrfs snapshot metadata for a local source group', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const updateState = vi.fn()
+    renderSourceStep({ updateState })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    await screen.findByRole('button', { name: /scan a database instead/i })
+
+    clickExistingTextButton(/borg ui server/i)
+    fireEvent.change(screen.getByLabelText(/source path/i), {
+      target: { value: '/srv/app' },
+    })
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /snapshot mode/i }))
+    const listbox = await screen.findByRole('listbox')
+    fireEvent.click(within(listbox).getByText(/btrfs snapshot/i))
+    await waitFor(() => {
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
+
+    expect(screen.getByText(/host requirements/i)).toBeInTheDocument()
+    expect(screen.getByText(/btrfs available/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/snapshot staging path/i)).toHaveValue(
+      '/var/tmp/borg-ui/snapshots'
+    )
+
+    clickExistingTextButton(/add path/i)
+    clickExistingTextButton(/use these paths/i)
+
+    await waitFor(() => {
+      expect(updateState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceLocations: [
+            {
+              source_type: 'local',
+              source_ssh_connection_id: null,
+              agent_machine_id: null,
+              paths: ['/srv/app'],
+              snapshot: {
+                provider: 'btrfs',
+                staging_path: '/var/tmp/borg-ui/snapshots',
+                recursive: false,
+              },
+            },
+          ],
+        })
+      )
+    })
+  }, 30000)
 
   it('browses paths for the selected SSH source without replacing other groups', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })

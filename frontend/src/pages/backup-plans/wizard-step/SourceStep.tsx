@@ -219,6 +219,16 @@ export function SourceStep({
                           count: location.paths.length,
                         })}
                       </Typography>
+                      {location.snapshot && (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={t('backupPlans.sourceChooser.snapshotChip', {
+                            provider: location.snapshot.provider,
+                          })}
+                          sx={{ height: 20, flexShrink: 0 }}
+                        />
+                      )}
                       {commonPrefix && (
                         <>
                           <Typography variant="caption" sx={{ flexShrink: 0 }}>
