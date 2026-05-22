@@ -1,4 +1,5 @@
 import { Box, Button, Chip, Stack, Tooltip, Typography } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { CheckCircle, Copy, Loader2 } from 'lucide-react'
 import type { AgentMachineResponse } from '../../services/api'
 import { buildAgentInstallCommand } from './agentInstallCommandText'
@@ -67,7 +68,18 @@ export default function AgentInstallCommand({
               width: 32,
               height: 32,
               p: 0,
-              bgcolor: 'background.paper',
+              color: 'primary.main',
+              borderColor: (theme) => alpha(theme.palette.primary.main, 0.45),
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+              '&:hover': {
+                borderColor: 'primary.main',
+                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.14),
+              },
+              '&:focus-visible': {
+                outline: '2px solid',
+                outlineColor: 'primary.main',
+                outlineOffset: 2,
+              },
             }}
           >
             <Copy size={15} />
@@ -75,8 +87,8 @@ export default function AgentInstallCommand({
         </Tooltip>
       </Box>
       <Typography variant="body2" color="text.secondary">
-        Run the command on the Linux or Raspberry Pi machine. The installer registers the agent and
-        enables the systemd service by default.
+        Run the command on the Linux machine. The installer registers the agent and enables the
+        systemd service by default.
       </Typography>
     </Stack>
   )
