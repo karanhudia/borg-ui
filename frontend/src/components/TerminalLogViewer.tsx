@@ -41,6 +41,15 @@ interface TerminalLogViewerProps {
 const JSON_TOKEN_REGEX =
   /("(?:[^"\\]|\\.)*")\s*(?=:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false|null)\b|([{}[\],:])/g
 
+function formatJsonStringTokenForDisplay(token: string): string {
+  try {
+    const value = JSON.parse(token)
+    return typeof value === 'string' ? JSON.stringify(value) : token
+  } catch {
+    return token
+  }
+}
+
 function colorizeJsonLine(content: string): React.ReactNode {
   const trimmed = content.trim()
   if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return content
@@ -68,7 +77,7 @@ function colorizeJsonLine(content: string): React.ReactNode {
       // lookahead colon) without colour so spacing is preserved exactly.
       parts.push(
         <span key={match.index} style={{ color: '#9cdcfe' }}>
-          {key}
+          {formatJsonStringTokenForDisplay(key)}
         </span>
       )
       const trailingSpace = fullMatch.slice(key.length)
@@ -76,7 +85,7 @@ function colorizeJsonLine(content: string): React.ReactNode {
     } else if (stringVal) {
       parts.push(
         <span key={match.index} style={{ color: '#ce9178' }}>
-          {stringVal}
+          {formatJsonStringTokenForDisplay(stringVal)}
         </span>
       )
     } else if (num) {
