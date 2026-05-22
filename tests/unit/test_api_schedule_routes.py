@@ -70,11 +70,15 @@ class TestScheduleRouteContracts:
     def test_upcoming_jobs_returns_enabled_jobs_sorted_and_filtered(
         self, test_client: TestClient, admin_headers, test_db
     ):
+        outside_window_hour = (datetime.now(timezone.utc).hour + 2) % 24
         soon = _create_schedule(
             test_db, "Soon", cron_expression="*/15 * * * *", repository="/repos/a"
         )
         _create_schedule(
-            test_db, "Tomorrow", cron_expression="0 0 * * *", repository="/repos/b"
+            test_db,
+            "Outside Window",
+            cron_expression=f"0 {outside_window_hour} * * *",
+            repository="/repos/b",
         )
         disabled = _create_schedule(
             test_db, "Disabled", cron_expression="*/10 * * * *", repository="/repos/c"
@@ -90,7 +94,7 @@ class TestScheduleRouteContracts:
         body = response.json()
         names = [job["name"] for job in body["upcoming_jobs"]]
         assert "Soon" in names
-        assert "Tomorrow" not in names
+        assert "Outside Window" not in names
         assert "Disabled" not in names
         assert body["upcoming_jobs"] == sorted(
             body["upcoming_jobs"], key=lambda item: item["next_run"]

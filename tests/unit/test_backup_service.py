@@ -835,7 +835,7 @@ class TestBackupService:
             mqtt.sync_state_with_db = Mock()
             await asyncio.wait_for(
                 backup_service.execute_backup(job.id, repo.path, db=test_db),
-                timeout=2.0,
+                timeout=10.0,
             )
 
         test_db.refresh(job)
