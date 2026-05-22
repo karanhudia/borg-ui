@@ -41,6 +41,11 @@ What they mean:
 - `/home/borg/.cache/borg`: Borg cache. Keep it for performance.
 - `/local`: host data exposed to Borg UI for local backups and repositories.
 
+Borg UI may update ownership for app-managed paths such as `/data`, `/backups`,
+`/home/borg`, and Borg's cache. It does not chown source bind mounts such as
+`/local`; make sure the configured runtime user can read the host source path
+before starting backups.
+
 If you mount a different container path, update `LOCAL_MOUNT_POINTS`.
 
 Example:

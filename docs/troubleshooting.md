@@ -67,6 +67,17 @@ Set `PUID` and `PGID` to match the host user that should own restored files and
 write backup repositories. Also confirm the host path is mounted read/write
 when Borg UI needs to write to it.
 
+For rootless Podman, if a source bind mount such as `/local` appears as
+`root:nogroup` and the default non-root `borg` user cannot read it, set
+`PUID=0` and `PGID=0`. In rootless Podman, container root maps to the host user
+running `podman`, not to host root. If SELinux is enforcing, add `:Z` to private
+bind mounts or `:z` to shared bind mounts.
+
+Borg UI does not chown source bind mounts such as `/local`. Changing ownership
+from inside the container can modify user data on the host and can fail for
+read-only mounts. Fix access with host permissions, runtime UID/GID mapping, or
+the rootless Podman `PUID=0` / `PGID=0` mode above.
+
 ### Path not found
 
 Check the Docker volume mapping and use the container path, not the host path.
