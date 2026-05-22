@@ -361,10 +361,11 @@ docker compose up -d
 
 Do not delete `borg_data` or `borg_cache` unless you intentionally want to remove application state or Borg cache data.
 
-If the first backup after an image pull or container recreate is slower than later backups, check the Borg files cache and source mount stability. Pulling the image does not erase mounted cache data, but Borg may need to rebuild or revalidate cache entries when the cache mount is missing, permissions changed, source paths changed, inode numbers are unstable, or the bundled Borg version changed. See [Slow first backup after a pull or restart](cache#slow-first-backup-after-a-pull-or-restart).
+If the first backup after an image pull or container recreate is slower than later backups, see [Slow first backup after a pull or restart](troubleshooting#slow-first-backup-after-a-pull-or-restart).
 
 ## Next
 
 - [Usage Guide](usage-guide)
 - [Configuration](configuration)
+- [Troubleshooting](troubleshooting)
 - [Security](security)

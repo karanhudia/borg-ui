@@ -57,8 +57,7 @@ The proxy container still mounts the host socket, but Borg UI talks to the proxy
 ## Docker CLI
 
 The socket or socket proxy exposes the Docker daemon, but scripts still need the `docker` command inside the Borg UI container.
-
-If a hook fails with `docker: command not found`, install `docker.io` from:
+Install `docker.io` from:
 
 ```text
 Settings > System > Packages
@@ -126,8 +125,6 @@ if docker ps -a --format '{{.Names}}' | grep -qx "$container"; then
 fi
 ```
 
-Use a post-backup hook that runs on failure as well as success if the pre-backup hook stops a service.
-
 ## Safer Pattern
 
 Prefer application-native dump commands when possible.
@@ -154,8 +151,21 @@ Then back up `/local/db-dumps`.
 - Keep scripts idempotent.
 - Make post-backup cleanup run on failure.
 
+## Troubleshooting
+
+### docker: command not found
+
+Install `docker.io` from Settings > System > Packages, or use a custom image
+that includes the Docker CLI.
+
+### Container stays stopped after a backup failure
+
+Use a post-backup hook that runs on failure as well as success if the pre-backup
+hook stops a service.
+
 ## Related
 
+- [Troubleshooting](troubleshooting)
 - [Script Parameters](script-parameters)
 - [Installation](installation)
 - [Security](security)
