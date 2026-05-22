@@ -361,10 +361,11 @@ function RepoStyleSourceCard({
       variant="outlined"
       sx={{
         flex: 1,
-        border: selected ? 2 : 1,
+        border: 1,
         borderColor: selected ? 'primary.main' : 'divider',
         boxShadow: selected
-          ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+          ? (theme) =>
+              `inset 0 0 0 1px ${theme.palette.primary.main}, 0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
           : 'none',
         bgcolor: selected ? (theme) => alpha(theme.palette.primary.main, 0.08) : 'background.paper',
         opacity: disabled ? 0.5 : 1,
@@ -374,7 +375,10 @@ function RepoStyleSourceCard({
         '&:hover': !disabled
           ? {
               transform: 'translateY(-2px)',
-              boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
+              boxShadow: selected
+                ? (theme) =>
+                    `inset 0 0 0 1px ${theme.palette.primary.main}, 0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+                : (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
               borderColor: selected ? 'primary.main' : 'text.primary',
             }
           : {},
@@ -771,7 +775,7 @@ export function SourceSelectionDialog({
         </Box>
 
         {sourceKind === 'remote' && hasRemoteOptions ? (
-          <FormControl fullWidth>
+          <FormControl fullWidth sx={{ height: 56 }}>
             <InputLabel id="source-remote-machine-label">
               {t('backupPlans.sourceChooser.selectRemoteMachine')}
             </InputLabel>
@@ -780,6 +784,10 @@ export function SourceSelectionDialog({
               value={selectedRemoteIdNum || ''}
               label={t('backupPlans.sourceChooser.selectRemoteMachine')}
               onChange={(event) => setSelectedSourceKey(`remote:${Number(event.target.value)}`)}
+              sx={{
+                height: 56,
+                '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
+              }}
             >
               {sshConnections.map((connection) => (
                 <MenuItem key={connection.id} value={connection.id}>
@@ -819,7 +827,7 @@ export function SourceSelectionDialog({
             </Select>
           </FormControl>
         ) : sourceKind === 'agent' && hasAgentOptions ? (
-          <FormControl fullWidth>
+          <FormControl fullWidth sx={{ height: 56 }}>
             <InputLabel id="source-agent-machine-label">
               {t('backupPlans.sourceChooser.selectManagedAgent')}
             </InputLabel>
@@ -828,6 +836,10 @@ export function SourceSelectionDialog({
               value={selectedAgentIdNum || ''}
               label={t('backupPlans.sourceChooser.selectManagedAgent')}
               onChange={(event) => setSelectedSourceKey(`agent:${Number(event.target.value)}`)}
+              sx={{
+                height: 56,
+                '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
+              }}
             >
               {agentMachines.map((agent) => (
                 <MenuItem key={agent.id} value={agent.id}>
@@ -873,7 +885,7 @@ export function SourceSelectionDialog({
               alignItems: 'center',
               gap: 1,
               px: 1.5,
-              minHeight: 56,
+              height: 56,
             }}
           >
             {sourceKind === 'agent' ? <Laptop size={14} /> : <HardDrive size={14} />}
@@ -1189,7 +1201,7 @@ export function SourceSelectionDialog({
           </Box>
           <Box sx={{ mt: 2.5 }}>
             {scanTarget.type === 'remote' && hasRemoteOptions ? (
-              <FormControl fullWidth>
+              <FormControl fullWidth sx={{ height: 56 }}>
                 <InputLabel id="scan-remote-target-label">
                   {t('backupPlans.sourceChooser.selectRemoteMachine')}
                 </InputLabel>
@@ -1200,6 +1212,10 @@ export function SourceSelectionDialog({
                   onChange={(event) =>
                     setScanTarget({ type: 'remote', sshId: Number(event.target.value) })
                   }
+                  sx={{
+                    height: 56,
+                    '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
+                  }}
                 >
                   {sshConnections.map((connection) => (
                     <MenuItem key={connection.id} value={connection.id}>
@@ -1225,7 +1241,7 @@ export function SourceSelectionDialog({
                   alignItems: 'center',
                   gap: 1,
                   px: 1.5,
-                  minHeight: 56,
+                  height: 56,
                 }}
               >
                 <HardDrive size={14} />
@@ -1654,7 +1670,7 @@ export function SourceSelectionDialog({
       fullWidth
       PaperProps={{
         sx: {
-          height: { xs: 'auto', md: 'min(720px, calc(100vh - 64px))' },
+          height: { xs: 'auto', md: 'min(860px, calc(100vh - 64px))' },
           display: 'flex',
           flexDirection: 'column',
         },
