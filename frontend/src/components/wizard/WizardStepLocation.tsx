@@ -235,6 +235,7 @@ export default function WizardStepLocation({
           alignItems: { xs: 'stretch', sm: 'center' },
           gap: 1.5,
           flexDirection: { xs: 'column', sm: 'row' },
+          minHeight: { sm: 40 },
         }}
       >
         <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
@@ -319,7 +320,6 @@ export default function WizardStepLocation({
                   '& .MuiSelect-select': {
                     display: 'flex',
                     alignItems: 'center',
-                    minHeight: 28,
                   },
                 }}
               >
@@ -341,171 +341,172 @@ export default function WizardStepLocation({
           ))}
       </Box>
 
-      {/* Location Selection Cards */}
-      <Box>
-        <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
-          {t('wizard.location.whereToStore')}
-        </Typography>
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 2,
-            p: 0.5,
-            m: -0.5,
-            flexDirection: { xs: 'column', sm: 'row' },
-          }}
-        >
-          <Card
-            variant="outlined"
+      {/* Location Selection Cards — hidden in agent mode (only filesystem storage supported) */}
+      {!isAgentExecution && (
+        <Box>
+          <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
+            {t('wizard.location.whereToStore')}
+          </Typography>
+          <Box
             sx={{
-              flex: 1,
-              border: data.repositoryLocation === 'local' ? 2 : 1,
-              borderColor: data.repositoryLocation === 'local' ? 'primary.main' : 'divider',
-              boxShadow:
-                data.repositoryLocation === 'local'
-                  ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                  : 'none',
-              bgcolor:
-                data.repositoryLocation === 'local'
-                  ? (theme) => alpha(theme.palette.primary.main, 0.08)
-                  : 'background.paper',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: data.repositoryLocation === 'local' ? 'translateY(-2px)' : 'none',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-                borderColor: data.repositoryLocation === 'local' ? 'primary.main' : 'text.primary',
-              },
+              display: 'flex',
+              gap: 2,
+              p: 0.5,
+              m: -0.5,
+              flexDirection: { xs: 'column', sm: 'row' },
             }}
           >
-            <CardActionArea onClick={() => handleLocationChange('local')} sx={{ p: 1 }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 48,
-                      height: 48,
-                      borderRadius: 3,
-                      bgcolor:
-                        data.repositoryLocation === 'local' ? 'primary.main' : 'action.hover',
-                      color: data.repositoryLocation === 'local' ? 'white' : 'text.secondary',
-                      transition: 'all 0.3s ease',
-                      boxShadow:
-                        data.repositoryLocation === 'local'
-                          ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
-                          : 'none',
-                    }}
-                  >
-                    <Server size={28} />
-                  </Box>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      {isAgentExecution
-                        ? t('wizard.location.managedAgentFilesystem')
-                        : t('wizard.borgUiServer')}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.8125rem' }}
-                    >
-                      {isAgentExecution
-                        ? t('wizard.location.managedAgentFilesystemDesc')
-                        : t('wizard.location.borgUiServerDesc')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-
-          <Card
-            variant="outlined"
-            sx={{
-              flex: 1,
-              border: data.repositoryLocation === 'ssh' ? 2 : 1,
-              borderColor: data.repositoryLocation === 'ssh' ? 'primary.main' : 'divider',
-              boxShadow:
-                data.repositoryLocation === 'ssh'
-                  ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                  : 'none',
-              bgcolor:
-                data.repositoryLocation === 'ssh'
-                  ? (theme) => alpha(theme.palette.primary.main, 0.08)
-                  : 'background.paper',
-              opacity: isRemoteLocationDisabled ? 0.5 : 1,
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: data.repositoryLocation === 'ssh' ? 'translateY(-2px)' : 'none',
-              '&:hover': !isRemoteLocationDisabled
-                ? {
-                    transform: 'translateY(-2px)',
-                    boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-                    borderColor:
-                      data.repositoryLocation === 'ssh' ? 'primary.main' : 'text.primary',
-                  }
-                : {},
-            }}
-          >
-            <CardActionArea
-              onClick={() => handleLocationChange('ssh')}
-              disabled={isRemoteLocationDisabled}
-              sx={{ p: 1 }}
+            <Card
+              variant="outlined"
+              sx={{
+                flex: 1,
+                border: data.repositoryLocation === 'local' ? 2 : 1,
+                borderColor: data.repositoryLocation === 'local' ? 'primary.main' : 'divider',
+                boxShadow:
+                  data.repositoryLocation === 'local'
+                    ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+                    : 'none',
+                bgcolor:
+                  data.repositoryLocation === 'local'
+                    ? (theme) => alpha(theme.palette.primary.main, 0.08)
+                    : 'background.paper',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transform: data.repositoryLocation === 'local' ? 'translateY(-2px)' : 'none',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
+                  borderColor:
+                    data.repositoryLocation === 'local' ? 'primary.main' : 'text.primary',
+                },
+              }}
             >
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 48,
-                      height: 48,
-                      borderRadius: 3,
-                      bgcolor: data.repositoryLocation === 'ssh' ? 'primary.main' : 'action.hover',
-                      color: data.repositoryLocation === 'ssh' ? 'white' : 'text.secondary',
-                      transition: 'all 0.3s ease',
-                      boxShadow:
-                        data.repositoryLocation === 'ssh'
-                          ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
-                          : 'none',
-                    }}
-                  >
-                    <Cloud size={28} />
-                  </Box>
-                  <Box>
-                    <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      {t('wizard.remoteClient')}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.8125rem' }}
+              <CardActionArea onClick={() => handleLocationChange('local')} sx={{ p: 1 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 48,
+                        height: 48,
+                        borderRadius: 3,
+                        bgcolor:
+                          data.repositoryLocation === 'local' ? 'primary.main' : 'action.hover',
+                        color: data.repositoryLocation === 'local' ? 'white' : 'text.secondary',
+                        transition: 'all 0.3s ease',
+                        boxShadow:
+                          data.repositoryLocation === 'local'
+                            ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
+                            : 'none',
+                      }}
                     >
-                      {t('wizard.location.remoteClientDesc')}
-                    </Typography>
+                      <Server size={28} />
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                        {t('wizard.borgUiServer')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ fontSize: '0.8125rem' }}
+                      >
+                        {t('wizard.location.borgUiServerDesc')}
+                      </Typography>
+                    </Box>
                   </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-        </Box>
+                </CardContent>
+              </CardActionArea>
+            </Card>
 
-        {/* Warning when remote location is disabled due to remote data source */}
-        {isRemoteLocationDisabled && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-            <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
-            {t('wizard.location.remoteDisabledInfo')}
-          </Typography>
-        )}
-        {isAgentExecution && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-            {t('wizard.location.agentSshDisabledInfo')}
-          </Typography>
-        )}
-      </Box>
+            <Card
+              variant="outlined"
+              sx={{
+                flex: 1,
+                border: data.repositoryLocation === 'ssh' ? 2 : 1,
+                borderColor: data.repositoryLocation === 'ssh' ? 'primary.main' : 'divider',
+                boxShadow:
+                  data.repositoryLocation === 'ssh'
+                    ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+                    : 'none',
+                bgcolor:
+                  data.repositoryLocation === 'ssh'
+                    ? (theme) => alpha(theme.palette.primary.main, 0.08)
+                    : 'background.paper',
+                opacity: isRemoteLocationDisabled ? 0.5 : 1,
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transform: data.repositoryLocation === 'ssh' ? 'translateY(-2px)' : 'none',
+                '&:hover': !isRemoteLocationDisabled
+                  ? {
+                      transform: 'translateY(-2px)',
+                      boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
+                      borderColor:
+                        data.repositoryLocation === 'ssh' ? 'primary.main' : 'text.primary',
+                    }
+                  : {},
+              }}
+            >
+              <CardActionArea
+                onClick={() => handleLocationChange('ssh')}
+                disabled={isRemoteLocationDisabled}
+                sx={{ p: 1 }}
+              >
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 48,
+                        height: 48,
+                        borderRadius: 3,
+                        bgcolor:
+                          data.repositoryLocation === 'ssh' ? 'primary.main' : 'action.hover',
+                        color: data.repositoryLocation === 'ssh' ? 'white' : 'text.secondary',
+                        transition: 'all 0.3s ease',
+                        boxShadow:
+                          data.repositoryLocation === 'ssh'
+                            ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
+                            : 'none',
+                      }}
+                    >
+                      <Cloud size={28} />
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                        {t('wizard.remoteClient')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ fontSize: '0.8125rem' }}
+                      >
+                        {t('wizard.location.remoteClientDesc')}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </CardActionArea>
+            </Card>
+          </Box>
+
+          {/* Warning when remote location is disabled due to remote data source */}
+          {isRemoteLocationDisabled && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+              <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
+              {t('wizard.location.remoteDisabledInfo')}
+            </Typography>
+          )}
+        </Box>
+      )}
+
+      {isAgentExecution && (
+        <Typography variant="body2" color="text.secondary">
+          {t('wizard.location.agentStorageNote')}
+        </Typography>
+      )}
 
       {/* SSH Connection Selection */}
       {data.repositoryLocation === 'ssh' && (
