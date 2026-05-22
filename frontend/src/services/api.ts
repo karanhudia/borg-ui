@@ -137,6 +137,8 @@ export interface SystemSettings {
   backup_monitoring_last_alert_sent_at?: string | null
   backup_reports_enabled?: boolean
   backup_reports_frequency?: 'daily' | 'weekly' | 'monthly'
+  backup_reports_cron_expression?: string
+  backup_reports_timezone?: string
   backup_reports_hour_utc?: number
   backup_reports_weekday?: number
   backup_reports_monthday?: number
