@@ -102,11 +102,19 @@ if preflight_json=$(python3 .codex/skills/land/land_watch.py --preflight --json 
     if [ "$mergeable" = "MERGEABLE" ] && [ "$merge_state" = "BLOCKED" ] && [ "$review_decision" = "REVIEW_REQUIRED" ]; then
       merge_args+=(--admin)
       gh pr merge "${merge_args[@]}"
-      exit 0
+      merge_rc=$?
+      if [ "$merge_rc" -eq 0 ]; then
+        exit 0
+      fi
+      exit "$merge_rc"
     fi
   elif [ "$mergeable" = "MERGEABLE" ] && { [ "$merge_state" = "CLEAN" ] || [ "$merge_state" = "HAS_HOOKS" ]; }; then
     gh pr merge "${merge_args[@]}"
-    exit 0
+    merge_rc=$?
+    if [ "$merge_rc" -eq 0 ]; then
+      exit 0
+    fi
+    exit "$merge_rc"
   fi
 fi
 
