@@ -201,6 +201,45 @@ describe('ManagedAgents', () => {
           'curl -fsSL http://192.168.0.29:8083/agent/install.sh',
           '--token agent-token-secret',
           '--name "Client laptop"',
+          '--borg-version 1',
+        ].every((part) => content.includes(part))
+      )
+    ).toBeInTheDocument()
+  }, 60000)
+
+  it('generates Borg 2 beta installer commands from the Add Agent wizard', async () => {
+    const user = userEvent.setup()
+    vi.mocked(managedAgentsAPI.createEnrollmentToken).mockResolvedValue({
+      data: {
+        id: 1,
+        name: 'Borg 2 client',
+        token: 'agent-token-secret',
+        token_prefix: 'agent-token-secret',
+        expires_at: '2026-05-28T00:00:00.000Z',
+        created_at: '2026-05-21T00:00:00.000Z',
+      },
+    } as AxiosResponse)
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    await user.click(await screen.findByRole('button', { name: /add agent/i }))
+    await screen.findByRole('dialog', { name: /add agent/i })
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    await user.click(screen.getByRole('radio', { name: /borg 2\.x beta only/i }))
+    await user.clear(screen.getByLabelText(/agent name/i))
+    await user.type(screen.getByLabelText(/agent name/i), 'Borg 2 client')
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    await user.clear(screen.getByLabelText(/server url/i))
+    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
+    await user.click(screen.getByRole('button', { name: /generate install command/i }))
+
+    expect(
+      screen.getByText((content) =>
+        [
+          'curl -fsSL http://192.168.0.29:8083/agent/install.sh',
+          '--token agent-token-secret',
+          '--name "Borg 2 client"',
+          '--borg-version 2',
         ].every((part) => content.includes(part))
       )
     ).toBeInTheDocument()
@@ -257,6 +296,34 @@ describe('ManagedAgents', () => {
 
     await user.click(screen.getByRole('button', { name: /revoke agent/i }))
     expect(onRevoke).toHaveBeenCalledWith(agent)
+  })
+
+  it('warns when an agent has no usable Borg binary', () => {
+    const agent = {
+      id: 7,
+      agent_id: 'agent-client-7',
+      name: 'client',
+      hostname: 'client-01',
+      os: 'linux',
+      arch: 'arm64',
+      agent_version: '0.4.0',
+      borg_versions: [],
+      status: 'online',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    expect(screen.getByText(/No usable Borg binary reported/i)).toBeInTheDocument()
   })
 
   it('requires confirmation before deleting an agent', async () => {

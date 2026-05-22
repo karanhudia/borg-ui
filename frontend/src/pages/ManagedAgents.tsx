@@ -110,6 +110,15 @@ function extractBackendMessage(error: unknown, fallback: string): string {
   return translateBackendKey(getApiErrorDetail(error)) || fallback
 }
 
+function formatBorgBinary(binary: Record<string, unknown>): string {
+  const version = typeof binary.version === 'string' ? binary.version : null
+  const path = typeof binary.path === 'string' ? binary.path : null
+  const installSource = typeof binary.install_source === 'string' ? binary.install_source : null
+  const label = version || path || 'borg'
+
+  return installSource ? `${label} (${installSource})` : label
+}
+
 export default function ManagedAgents() {
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
@@ -688,11 +697,9 @@ export function AgentList({
       >
         {agents.map((agent) => {
           const accent = getAgentStatusAccent(agent.status)
-          const borgValue = agent.borg_versions?.length
-            ? agent.borg_versions
-                .map((binary) => String(binary.version || binary.path || 'borg'))
-                .join(', ')
-            : '—'
+          const borgVersions = agent.borg_versions ?? []
+          const hasUsableBorg = borgVersions.length > 0
+          const borgValue = hasUsableBorg ? borgVersions.map(formatBorgBinary).join(', ') : 'None'
           const stats = [
             { label: 'OS', value: [agent.os, agent.arch].filter(Boolean).join(' / ') || '—' },
             { label: 'Agent', value: agent.agent_version || '—' },
@@ -872,6 +879,28 @@ export function AgentList({
                       {agent.last_error}
                     </Typography>
                   </Box>
+                )}
+
+                {!hasUsableBorg && (
+                  <Alert
+                    severity="warning"
+                    icon={<AlertTriangle size={16} />}
+                    sx={{
+                      mb: 1.5,
+                      borderRadius: 1.5,
+                      border: '1px solid',
+                      borderColor: alpha(theme.palette.warning.main, 0.28),
+                      '& .MuiAlert-icon': { alignItems: 'center' },
+                    }}
+                  >
+                    <Typography variant="body2" fontWeight={700}>
+                      No usable Borg binary reported
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Install Borg on this agent or regenerate the setup command with Borg
+                      installation enabled.
+                    </Typography>
+                  </Alert>
                 )}
 
                 <Box

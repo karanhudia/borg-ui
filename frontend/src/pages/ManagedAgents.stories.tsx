@@ -274,6 +274,27 @@ export const AddAgentPlatformStep: Story = {
   ),
 }
 
+export const AddAgentBorgOptionsStep: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AddAgentDialog
+        open
+        initialStep={1}
+        onClose={() => {}}
+        defaultServerUrl="https://borg-ui.example.com"
+        agents={agents}
+        onCreateToken={async () => ({
+          ...tokens[0],
+          token: 'borgui_enroll_example_token',
+          expires_at: '2026-05-28T12:00:00.000Z',
+        })}
+        creatingToken={false}
+        onCopy={() => {}}
+      />
+    </Box>
+  ),
+}
+
 export const AddAgentInstallCommandStep: Story = {
   render: () => (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>

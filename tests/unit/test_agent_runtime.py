@@ -84,8 +84,18 @@ def test_detect_borg_binaries(monkeypatch):
     detected = detect_borg_binaries()
 
     assert [binary.to_api_payload() for binary in detected] == [
-        {"major": 1, "version": "1.2.8", "path": "/usr/bin/borg"},
-        {"major": 2, "version": "2.0.0b10", "path": "/usr/local/bin/borg2"},
+        {
+            "major": 1,
+            "version": "1.2.8",
+            "path": "/usr/bin/borg",
+            "install_source": "system-package",
+        },
+        {
+            "major": 2,
+            "version": "2.0.0b10",
+            "path": "/usr/local/bin/borg2",
+            "install_source": "custom-path",
+        },
     ]
 
 
