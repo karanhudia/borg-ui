@@ -546,9 +546,15 @@ export function SourceSelectionDialog({
     const nextLocations = locationsFromWizardState(wizardState)
     const defaultAgentKey = selectedAgentRepositoryKey(wizardState, fullRepositories)
     setDraftSourceLocations(nextLocations)
-    const nextSourceKey = nextLocations[0] ? locationKey(nextLocations[0]) : defaultAgentKey || 'local'
+    const nextSourceKey = nextLocations[0]
+      ? locationKey(nextLocations[0])
+      : defaultAgentKey || 'local'
     setSelectedSourceKey(nextSourceKey)
-    setSnapshotDraft(snapshotDraftFromLocation(nextLocations.find((location) => locationKey(location) === nextSourceKey)))
+    setSnapshotDraft(
+      snapshotDraftFromLocation(
+        nextLocations.find((location) => locationKey(location) === nextSourceKey)
+      )
+    )
     setSourcePath('')
     setSelectedDatabase(null)
     setScriptMode('create')
@@ -731,8 +737,7 @@ export function SourceSelectionDialog({
     const nextPaths = paths.map((path) => path.trim()).filter(Boolean)
     if (nextPaths.length === 0) return
     const locationBase = locationForKey(selectedSourceKey)
-    const snapshot =
-      selectedSourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
+    const snapshot = selectedSourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
 
     setDraftSourceLocations((current) => {
       const existingIndex = current.findIndex(
@@ -1104,7 +1109,13 @@ export function SourceSelectionDialog({
                 {snapshotDraft.provider !== 'none' && (
                   <Alert severity={selectedSnapshotCapability?.available ? 'info' : 'warning'}>
                     <Stack spacing={0.75}>
-                      <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+                      <Stack
+                        direction="row"
+                        spacing={0.75}
+                        alignItems="center"
+                        useFlexGap
+                        flexWrap="wrap"
+                      >
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {t('backupPlans.sourceChooser.snapshotRequirementsTitle')}
                         </Typography>
