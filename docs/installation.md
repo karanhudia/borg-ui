@@ -290,6 +290,44 @@ LOCAL_STORAGE_PATH=/mnt/usb-drive
 TZ=America/Chicago
 ```
 
+### Rootless Podman
+
+Rootless Podman maps container users differently from Docker. In a typical
+rootless Podman container, UID 0 inside the container maps to the host user
+running `podman`, while non-root container users map to a subordinate UID/GID
+range. If a bind-mounted source such as `/local` appears as `root:nogroup` in
+the container and the default `borg` user cannot read it, run Borg UI as
+container root:
+
+```bash
+podman run -d \
+  --name borg-web-ui \
+  -p 8081:8081 \
+  -e PUID=0 \
+  -e PGID=0 \
+  -e REDIS_HOST=disabled \
+  -v borg_data:/data \
+  -v borg_cache:/home/borg/.cache/borg \
+  -v "$HOME/ofl-w:/local:ro,Z" \
+  -v "$HOME/bk:/backups:rw,Z" \
+  ainullcode/borg-ui:latest
+```
+
+With rootless Podman, `PUID=0` and `PGID=0` mean container root, not host root.
+That container root is mapped back to the user that started Podman, so it can
+read that user's bind-mounted files without giving the container host-root
+privileges.
+
+Use `:Z` for private SELinux labels, or `:z` if the same host path is shared
+with multiple containers. Omit the label option on hosts that do not use
+SELinux.
+
+Do not fix source path access by changing ownership of `/local` from inside
+the container. Borg UI does not chown source bind mounts such as `/local`
+because they are user data, may be read-only, and may be shared with other host
+processes. It only adjusts ownership for app-managed paths such as `/data`,
+`/backups`, `/home/borg`, and Borg's cache.
+
 ## Redis
 
 Redis is used as an archive-browsing cache. It is not required for backups or restores.
