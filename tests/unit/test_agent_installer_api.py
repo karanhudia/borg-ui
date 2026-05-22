@@ -27,6 +27,28 @@ def test_agent_installer_script_supports_borg_install_modes(test_client: TestCli
     assert 'verify_borg_major "borg2" "2"' in response.text
 
 
+def test_agent_installer_script_allows_borg2_prereleases(test_client: TestClient):
+    response = test_client.get("/agent/install.sh")
+
+    assert (
+        '"${BORG2_VENV}/bin/pip" install --pre "borgbackup>=2.0.0b1,<3"'
+        in response.text
+    )
+    assert '"borgbackup>=2,<3"' not in response.text
+
+
+def test_agent_installer_script_reuses_existing_borg2_venv(
+    test_client: TestClient,
+):
+    response = test_client.get("/agent/install.sh")
+
+    assert 'if [[ -x "${BORG2_VENV}/bin/borg" ]]; then' in response.text
+    assert "Existing Borg 2 virtualenv detected; linking without reinstalling." in (
+        response.text
+    )
+    assert 'ln -s "${BORG2_VENV}/bin/borg" "${BORG2_LINK}"' in response.text
+
+
 def test_agent_installer_script_keeps_agent_ref_separate_from_os_release(
     test_client: TestClient,
 ):

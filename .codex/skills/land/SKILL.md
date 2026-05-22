@@ -14,6 +14,9 @@ description:
 - Keep CI green and fix failures when they occur.
 - Use a fast path for already-green PRs whose head SHA matches the Human Review
   handoff.
+- Treat Linear `Merging` as the human approval signal for
+  `reviewDecision=REVIEW_REQUIRED` only when the fast-path preflight is run with
+  the explicit admin-bypass flag and reports that bypass is required.
 - Squash-merge the PR once checks pass.
 - Do not yield to the user until the PR is merged; keep the watcher loop running
   unless the fast path proves the full watcher is unnecessary or landing is
@@ -32,13 +35,14 @@ description:
 2. Read the workpad final handoff notes and find the exact line:
    `Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>`.
 3. Run the fast-path preflight:
-   `python3 .codex/skills/land/land_watch.py --preflight --handoff-note '<handoff note>'`.
+   `python3 .codex/skills/land/land_watch.py --preflight --json --allow-review-required-admin-bypass --handoff-note '<handoff note>'`.
 4. If the preflight exits `0`, skip full local validation and the full watcher
    loop for this already-green PR. The preflight has confirmed the head SHA is
-   unchanged since Human Review, mergeability is clean, checks are green, and no
-   new human/Codex feedback appeared since Human Review. Squash-merge with the
-   PR title/body after one final `gh pr view --json mergeable,mergeStateStatus`
-   check still reports a clean merge state.
+   unchanged since Human Review, checks are green, and no new human/Codex
+   feedback appeared since Human Review. Squash-merge with the PR title/body
+   after one final `gh pr view --json mergeable,mergeStateStatus,reviewDecision`
+   check still reports either a clean merge state or the exact
+   `BLOCKED + REVIEW_REQUIRED` state that requires administrator bypass.
 5. If the preflight exits `6`, fails, or reports missing/uncertain data, use the
    conservative fallback below.
 6. Conservative fallback: confirm the Borg UI validation gauntlet is green
@@ -85,12 +89,32 @@ handoff_note='Human Review handoff: head=<sha>; at=<timestamp>; validation=<comm
 
 # Fast path for already-green PRs. If this exits 0, skip local validation and
 # the full watcher loop. If it exits 6 or errors, use the conservative fallback.
-if python3 .codex/skills/land/land_watch.py --preflight --handoff-note "$handoff_note"; then
+if preflight_json=$(python3 .codex/skills/land/land_watch.py --preflight --json --allow-review-required-admin-bypass --handoff-note "$handoff_note"); then
+  requires_admin_bypass=$(
+    printf '%s' "$preflight_json" |
+      python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("requires_admin_bypass") else "false")'
+  )
   mergeable=$(gh pr view --json mergeable -q .mergeable)
   merge_state=$(gh pr view --json mergeStateStatus -q .mergeStateStatus)
-  if [ "$mergeable" = "MERGEABLE" ] && { [ "$merge_state" = "CLEAN" ] || [ "$merge_state" = "HAS_HOOKS" ]; }; then
-    gh pr merge --squash --subject "$pr_title" --body "$pr_body"
-    exit 0
+  review_decision=$(gh pr view --json reviewDecision -q .reviewDecision)
+  merge_args=(--squash --subject "$pr_title" --body "$pr_body")
+  if [ "$requires_admin_bypass" = "true" ]; then
+    if [ "$mergeable" = "MERGEABLE" ] && [ "$merge_state" = "BLOCKED" ] && [ "$review_decision" = "REVIEW_REQUIRED" ]; then
+      merge_args+=(--admin)
+      gh pr merge "${merge_args[@]}"
+      merge_rc=$?
+      if [ "$merge_rc" -eq 0 ]; then
+        exit 0
+      fi
+      exit "$merge_rc"
+    fi
+  elif [ "$mergeable" = "MERGEABLE" ] && { [ "$merge_state" = "CLEAN" ] || [ "$merge_state" = "HAS_HOOKS" ]; }; then
+    gh pr merge "${merge_args[@]}"
+    merge_rc=$?
+    if [ "$merge_rc" -eq 0 ]; then
+      exit 0
+    fi
+    exit "$merge_rc"
   fi
 fi
 
@@ -146,7 +170,7 @@ For already-green PRs, the preflight command checks current GitHub state instead
 of repeating local validation:
 
 ```
-python3 .codex/skills/land/land_watch.py --preflight --handoff-note "$handoff_note"
+python3 .codex/skills/land/land_watch.py --preflight --json --allow-review-required-admin-bypass --handoff-note "$handoff_note"
 ```
 
 The handoff note must come from the workpad final handoff notes:
@@ -155,7 +179,7 @@ The handoff note must come from the workpad final handoff notes:
 Human Review handoff: head=<PR head SHA>; at=<ISO-8601 timestamp>; validation=<commands>
 ```
 
-The fast path is allowed only when all of these are true:
+The normal fast path is allowed only when all of these are true:
 
 - The current PR head SHA matches the Human Review handoff SHA.
 - Mergeability is `MERGEABLE` and merge state is `CLEAN` or `HAS_HOOKS`.
@@ -165,9 +189,18 @@ The fast path is allowed only when all of these are true:
   Codex review issue comments, or Codex inline comments appeared after the
   Human Review handoff timestamp.
 
+The review-required administrator-bypass fast path is allowed only when the
+same head/check/feedback requirements pass, the preflight was run with
+`--allow-review-required-admin-bypass`, mergeability is `MERGEABLE`, merge state
+is `BLOCKED`, and `reviewDecision` is `REVIEW_REQUIRED`. In that case the
+preflight JSON includes `"requires_admin_bypass": true`; merge with
+`gh pr merge --admin`. If GitHub rejects the admin merge, record the missing
+merge permission or branch-policy error in the workpad as the landing blocker.
+
 Exit codes:
 
-- 0: Fast path ready; skip full local validation and full watcher mode.
+- 0: Fast path ready; skip full local validation and full watcher mode. Check
+  the JSON `requires_admin_bypass` field before choosing merge arguments.
 - 6: Full validation required; use the conservative fallback.
 
 ## Async Watch Helper
@@ -205,6 +238,8 @@ Exit codes:
 - If all jobs fail with corrupted npm lockfile errors on the merge commit, the
   remediation is to fetch latest `origin/main`, merge, force-push, and rerun CI.
 - If mergeability is `UNKNOWN`, wait and re-check.
+- If `gh pr merge --admin` fails, do not retry normal merge. Record the exact
+  permission or branch-policy error in the workpad as the landing blocker.
 - Do not merge while review comments (human or Codex review) are outstanding.
 - Codex review jobs retry on failure and are non-blocking; use the presence of
   `## Codex Review — <persona>` issue comments (not job status) as the signal
