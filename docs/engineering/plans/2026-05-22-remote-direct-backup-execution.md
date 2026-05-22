@@ -26,6 +26,16 @@ Product answer:
 - `Repository.remote_path` is not the source-host wrapper path. It maps to Borg's repository-side remote path. Source-host wrappers should use `SSHConnection.borg_binary_path`.
 - Repository and plan scripts currently execute in the Borg UI control-plane environment. Full source-host pre/post hook execution is a separate feature unless the hook is implemented through the source-host Borg wrapper.
 
+Remote execution metrics model:
+
+- Borg UI still owns the backup job. The Borg UI server creates and stores the same `BackupJob` row before starting any work.
+- The remote machine only runs the Borg command over SSH. It does not own Borg UI job state, the database row, Prometheus metrics, dashboard history, or UI polling state.
+- `RemoteBackupService` starts an SSH subprocess from the Borg UI server, runs `borg create` on the source host, and streams the remote command's stdout and stderr back through that SSH process.
+- As that stream arrives, Borg UI parses Borg's JSON/stats/progress output and writes updates onto the same `BackupJob` row: status, start/end timestamps, progress, progress percent when measurable, original/compressed/deduplicated sizes, file count, error text, and logs.
+- Existing dashboard, job-history, and Prometheus metrics continue reading from `BackupJob` and `Repository` tables. The metrics consumers do not need to know whether Borg ran locally, through SSHFS pull mode, or directly on the source host.
+- If the SSH command exits non-zero or drops, Borg UI marks the job failed with the SSH/Borg error. If Borg exits successfully, Borg UI marks the same job completed and records the final stats.
+- The implementation must not invent precise live percentages when Borg does not provide enough information. It should preserve accurate phase/status messages and final byte/file stats, and only compute a percentage from known totals such as `total_expected_size`.
+
 ---
 
 ### Task 1: Add Route Execution Helpers
@@ -355,6 +365,23 @@ pytest tests/unit/test_backup_service.py::TestBackupService::test_execute_backup
 ```
 
 Expected: PASS. The SSHFS preparation test proves non-remote-direct remote sources still use pull mode.
+
+- [ ] **Step 5: Prove remote execution still updates job metrics**
+
+Add or extend remote-backup service tests so a remote SSH backup writes to the same `BackupJob` row used by dashboards, job history, and Prometheus metrics. Cover at least:
+
+- `status`, `started_at`, and `completed_at` are updated on success and failure.
+- streamed Borg JSON/stats fields update `original_size`, `compressed_size`, `deduplicated_size`, and `nfiles`.
+- `progress` and `progress_percent` are updated only when the service has a known total such as `total_expected_size`; otherwise the UI should rely on phase/status text and final stats.
+- stderr or command failure output is retained as job error/log evidence.
+
+Suggested focused tests:
+
+```bash
+pytest tests/unit/test_remote_backup_service.py tests/unit/test_api_metrics.py -q
+```
+
+Expected: PASS. The remote service tests prove source-host execution still persists job telemetry, and the metrics tests prove the existing metrics endpoint continues reading those persisted `BackupJob` fields.
 
 ---
 
@@ -727,6 +754,7 @@ In the running app:
 5. Confirm the job row shows `Remote SSH`.
 6. Confirm job details show `route_strategy = remote_direct` in API output.
 7. Confirm logs or service traces show `RemoteBackupService` executing SSH, not SSHFS mount preparation.
+8. Confirm the job status/progress API and `/metrics` endpoint still reflect the same backup job after the remote command completes.
 
 - [ ] **Step 3: Clean temporary runtime state**
 
@@ -742,6 +770,6 @@ Remove any local test SSH connection, repository, or backup plan records created
 
 ## Self-Review
 
-- Spec coverage: Covers the GitHub issue answer, the confirmed route mismatch, direct remote execution, wrapper semantics, UI labeling, docs, and validation.
+- Spec coverage: Covers the GitHub issue answer, the confirmed route mismatch, direct remote execution, job telemetry/metrics flow, wrapper semantics, UI labeling, docs, and validation.
 - Placeholder scan: No unresolved placeholders remain.
 - Type consistency: Uses existing `BackupRoutePlan.strategy`, `BackupJob.route_strategy`, `BackupJob.execution_mode`, `SSHConnection.borg_binary_path`, and `Repository.remote_path` names.
