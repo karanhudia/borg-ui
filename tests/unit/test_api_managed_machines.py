@@ -2,6 +2,10 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
+from app.core.agent_constants import (
+    AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
+    DEFAULT_AGENT_POLL_INTERVAL_SECONDS,
+)
 from app.core.security import get_password_hash
 from app.database.models import AgentJob, AgentJobLog, AgentMachine
 
@@ -136,7 +140,35 @@ def test_agent_filesystem_browse_endpoint_returns_browse_result(
         "parent_path": None,
         "items": [],
     }
-    assert calls == [(agent.id, "/home/pi", True, 15)]
+    assert calls == [
+        (agent.id, "/home/pi", True, AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS)
+    ]
+
+
+def test_agent_filesystem_browse_endpoint_waits_longer_than_default_agent_poll_interval(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    agent = _agent(test_db)
+    calls = []
+
+    async def fake_browse(
+        db, agent_machine_id, *, path, include_hidden, timeout_seconds=15
+    ):
+        calls.append((agent_machine_id, path, include_hidden, timeout_seconds))
+        return {"current_path": path, "parent_path": None, "items": []}
+
+    monkeypatch.setattr(
+        "app.api.managed_machines.browse_agent_filesystem",
+        fake_browse,
+    )
+
+    response = test_client.get(
+        f"/api/managed-machines/agents/{agent.id}/filesystem/browse?path=/home/pi",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert calls[0][3] > DEFAULT_AGENT_POLL_INTERVAL_SECONDS
 
 
 def test_delete_agent_hides_it_from_list_and_keeps_job_logs(

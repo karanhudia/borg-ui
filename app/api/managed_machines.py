@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 import structlog
 
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
+from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
 from app.core.security import get_current_admin_user, get_password_hash
 from app.database.database import get_db
 from app.database.models import (
@@ -378,7 +379,7 @@ async def browse_agent_machine_filesystem(
         agent_machine_id,
         path=path,
         include_hidden=include_hidden,
-        timeout_seconds=15,
+        timeout_seconds=AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
     )
 
 

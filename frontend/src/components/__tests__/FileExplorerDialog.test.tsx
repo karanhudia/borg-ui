@@ -263,6 +263,36 @@ describe('FileExplorerDialog', () => {
       })
     })
 
+    it('shows localized agent browse timeout errors', async () => {
+      vi.mocked(managedAgentsAPI.browseFilesystem).mockRejectedValue({
+        response: {
+          status: 504,
+          data: {
+            detail: {
+              key: 'backend.errors.agents.filesystemBrowseTimeout',
+            },
+          },
+        },
+      })
+
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          initialPath="/home/user"
+        />
+      )
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Agent filesystem browsing timed out. Try again in a few seconds.')
+        ).toBeInTheDocument()
+      })
+    })
+
     it('shows empty state when directory has no items', async () => {
       vi.mocked(api.get).mockResolvedValue(mockEmptyDirectoryResponse)
 
