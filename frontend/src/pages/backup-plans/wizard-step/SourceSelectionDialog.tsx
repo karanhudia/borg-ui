@@ -118,7 +118,10 @@ function snapshotDraftFromLocation(location?: SourceLocation | null): SnapshotDr
   }
 }
 
-function snapshotFromDraft(draft: SnapshotDraft): SourceSnapshotConfig | undefined {
+function snapshotFromDraft(
+  draft: SnapshotDraft,
+  previousSnapshot?: SourceSnapshotConfig
+): SourceSnapshotConfig | undefined {
   if (draft.provider === 'none') return undefined
   if (draft.provider === 'btrfs') {
     return {
@@ -129,7 +132,9 @@ function snapshotFromDraft(draft: SnapshotDraft): SourceSnapshotConfig | undefin
   }
   const dataset = draft.dataset.trim()
   const mountpoint = draft.mountpoint.trim()
-  if (!dataset || !mountpoint) return undefined
+  if (!dataset || !mountpoint) {
+    return previousSnapshot?.provider === 'zfs' ? previousSnapshot : undefined
+  }
   return {
     provider: 'zfs',
     dataset,
@@ -358,6 +363,37 @@ function locationForKey(
   }
 }
 
+function snapshotDraftsFromLocations(locations: SourceLocation[]): Record<string, SnapshotDraft> {
+  return Object.fromEntries(
+    locations.map((location) => [locationKey(location), snapshotDraftFromLocation(location)])
+  )
+}
+
+function draftForLocation(
+  location: SourceLocation,
+  draftsBySourceKey: Record<string, SnapshotDraft>,
+  selectedSourceKey: SourceKey,
+  selectedDraft: SnapshotDraft
+): SnapshotDraft {
+  const key = locationKey(location)
+  if (key === selectedSourceKey) return selectedDraft
+  return draftsBySourceKey[key] || snapshotDraftFromLocation(location)
+}
+
+function areSnapshotDraftsValid(
+  locations: SourceLocation[],
+  draftsBySourceKey: Record<string, SnapshotDraft>,
+  selectedSourceKey: SourceKey,
+  selectedDraft: SnapshotDraft
+): boolean {
+  return locations.every((location) =>
+    isSnapshotDraftValid(
+      draftForLocation(location, draftsBySourceKey, selectedSourceKey, selectedDraft),
+      locationKey(location)
+    )
+  )
+}
+
 function sourceTypeFromLocations(locations: SourceLocation[]): SourceType {
   if (locations.length === 0) return 'local'
   if (locations.length > 1) return 'mixed'
@@ -543,22 +579,28 @@ export function SourceSelectionDialog({
   const [selectedSourceKey, setSelectedSourceKey] = useState<SourceKey>('local')
   const [sourcePath, setSourcePath] = useState('')
   const [draftSourceLocations, setDraftSourceLocations] = useState<SourceLocation[]>([])
+  const [snapshotDraftsBySourceKey, setSnapshotDraftsBySourceKey] = useState<
+    Record<string, SnapshotDraft>
+  >({})
   const [snapshotDraft, setSnapshotDraft] = useState<SnapshotDraft>(() => emptySnapshotDraft())
 
   useEffect(() => {
     if (!open) return
     setView(initialView)
     const nextLocations = locationsFromWizardState(wizardState)
+    const nextSnapshotDrafts = snapshotDraftsFromLocations(nextLocations)
     const defaultAgentKey = selectedAgentRepositoryKey(wizardState, fullRepositories)
     setDraftSourceLocations(nextLocations)
+    setSnapshotDraftsBySourceKey(nextSnapshotDrafts)
     const nextSourceKey = nextLocations[0]
       ? locationKey(nextLocations[0])
       : defaultAgentKey || 'local'
     setSelectedSourceKey(nextSourceKey)
     setSnapshotDraft(
-      snapshotDraftFromLocation(
-        nextLocations.find((location) => locationKey(location) === nextSourceKey)
-      )
+      nextSnapshotDrafts[nextSourceKey] ||
+        snapshotDraftFromLocation(
+          nextLocations.find((location) => locationKey(location) === nextSourceKey)
+        )
     )
     setSourcePath('')
     setSelectedDatabase(null)
@@ -615,23 +657,26 @@ export function SourceSelectionDialog({
   const selectSourceKey = (sourceKey: SourceKey) => {
     setSelectedSourceKey(sourceKey)
     const existing = draftSourceLocations.find((location) => locationKey(location) === sourceKey)
-    setSnapshotDraft(snapshotDraftFromLocation(existing))
+    setSnapshotDraft(snapshotDraftsBySourceKey[sourceKey] || snapshotDraftFromLocation(existing))
   }
 
   const updateSnapshotDraft = (updates: Partial<SnapshotDraft>) => {
     setSnapshotDraft((current) => {
       const next = { ...current, ...updates }
+      setSnapshotDraftsBySourceKey((drafts) => ({
+        ...drafts,
+        [selectedSourceKey]: next,
+      }))
       if (selectedSourceKey === 'local') {
-        const snapshot = snapshotFromDraft(next)
         setDraftSourceLocations((locations) =>
-          locations.map((location) =>
-            locationKey(location) === selectedSourceKey
-              ? {
-                  ...location,
-                  ...(snapshot ? { snapshot } : { snapshot: undefined }),
-                }
-              : location
-          )
+          locations.map((location) => {
+            if (locationKey(location) !== selectedSourceKey) return location
+            const snapshot = snapshotFromDraft(next, location.snapshot)
+            return {
+              ...location,
+              ...(snapshot ? { snapshot } : { snapshot: undefined }),
+            }
+          })
         )
       }
       return next
@@ -742,13 +787,14 @@ export function SourceSelectionDialog({
     const nextPaths = paths.map((path) => path.trim()).filter(Boolean)
     if (nextPaths.length === 0) return
     const locationBase = locationForKey(selectedSourceKey)
-    const snapshot = selectedSourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
 
     setDraftSourceLocations((current) => {
       const existingIndex = current.findIndex(
         (location) => locationKey(location) === selectedSourceKey
       )
       if (existingIndex === -1) {
+        const snapshot =
+          selectedSourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
         return [
           ...current,
           {
@@ -761,6 +807,10 @@ export function SourceSelectionDialog({
 
       return current.map((location, index) => {
         if (index !== existingIndex) return location
+        const snapshot =
+          selectedSourceKey === 'local'
+            ? snapshotFromDraft(snapshotDraft, location.snapshot)
+            : undefined
         return {
           ...location,
           paths: Array.from(new Set([...location.paths, ...nextPaths])),
@@ -794,14 +844,19 @@ export function SourceSelectionDialog({
   }
 
   const applyPaths = () => {
-    const currentSnapshot =
-      selectedSourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
     const sourceLocations = cleanLocations(
       draftSourceLocations.map((location) => {
-        if (locationKey(location) !== selectedSourceKey) return location
+        if (location.source_type !== 'local') return location
+        const draft = draftForLocation(
+          location,
+          snapshotDraftsBySourceKey,
+          selectedSourceKey,
+          snapshotDraft
+        )
+        const snapshot = snapshotFromDraft(draft, location.snapshot)
         return {
           ...location,
-          ...(currentSnapshot ? { snapshot: currentSnapshot } : { snapshot: undefined }),
+          ...(snapshot ? { snapshot } : { snapshot: undefined }),
         }
       })
     )
@@ -1995,7 +2050,12 @@ export function SourceSelectionDialog({
               onClick={applyPaths}
               disabled={
                 cleanLocations(draftSourceLocations).length === 0 ||
-                !isSnapshotDraftValid(snapshotDraft, selectedSourceKey)
+                !areSnapshotDraftsValid(
+                  draftSourceLocations,
+                  snapshotDraftsBySourceKey,
+                  selectedSourceKey,
+                  snapshotDraft
+                )
               }
             >
               {t('backupPlans.sourceChooser.applyPaths')}

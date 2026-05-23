@@ -749,14 +749,14 @@ class TestBackupService:
         source_locations = [
             {
                 "source_type": "local",
-                "paths": ["/srv/app", "/srv/logs"],
+                "paths": ["/srv/app"],
                 "snapshot": {
                     "provider": "btrfs",
                     "staging_path": str(tmp_path / "snapshots"),
                 },
             }
         ]
-        run_snapshot_command = AsyncMock(side_effect=[None, RuntimeError("boom")])
+        run_snapshot_command = AsyncMock(side_effect=RuntimeError("boom"))
 
         with patch.object(
             backup_service,

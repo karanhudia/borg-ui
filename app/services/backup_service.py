@@ -1318,14 +1318,14 @@ class BackupService:
         for plan in snapshot_plans:
             if plan.provider == "btrfs":
                 Path(plan.backup_path).parent.mkdir(parents=True, exist_ok=True)
+            created.append(plan)
+            self.filesystem_snapshots[job_id] = list(created)
             for command in plan.create_commands:
                 await self._run_filesystem_snapshot_command(
                     command,
                     job_id=job_id,
                     action="create",
                 )
-            created.append(plan)
-            self.filesystem_snapshots[job_id] = list(created)
 
         source_to_snapshot_path = {
             plan.source_path: plan.backup_path for plan in snapshot_plans

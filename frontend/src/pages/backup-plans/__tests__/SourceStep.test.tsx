@@ -645,6 +645,92 @@ describe('SourceStep', () => {
     ])
   }, 60000)
 
+  it('keeps an existing zfs snapshot from being dropped while switching sources', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const updateState = vi.fn()
+    const sshConnections = [
+      {
+        id: 11,
+        host: 'server-a.example',
+        username: 'backup-a',
+        port: 22,
+        ssh_key_id: 1,
+        default_path: '/home/backup-a',
+        status: 'connected',
+      },
+    ]
+    const initialState = {
+      ...createInitialState(),
+      sourceDirectories: ['/srv/app/uploads', '/home/app/data'],
+      sourceLocations: [
+        {
+          source_type: 'local' as const,
+          source_ssh_connection_id: null,
+          agent_machine_id: null,
+          paths: ['/srv/app/uploads'],
+          snapshot: {
+            provider: 'zfs' as const,
+            dataset: 'tank/app',
+            mountpoint: '/srv/app',
+            recursive: false,
+          },
+        },
+        {
+          source_type: 'remote' as const,
+          source_ssh_connection_id: 11,
+          agent_machine_id: null,
+          paths: ['/home/app/data'],
+        },
+      ],
+    }
+    renderSourceStep({
+      wizardState: initialState,
+      sshConnections,
+      updateState,
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /edit/i }))
+    await screen.findByRole('button', { name: /scan a database instead/i })
+
+    expect(screen.getByLabelText(/zfs dataset/i)).toHaveValue('tank/app')
+    fireEvent.change(screen.getByLabelText(/zfs dataset/i), {
+      target: { value: '' },
+    })
+
+    await selectRemoteMachine(/backup-a@server-a.example/i)
+    expect(screen.getByRole('button', { name: /use these paths/i })).toBeDisabled()
+
+    clickExistingTextButton(/borg ui server/i)
+    fireEvent.change(screen.getByLabelText(/zfs dataset/i), {
+      target: { value: 'tank/app' },
+    })
+    const applyButton = screen.getByRole('button', { name: /use these paths/i })
+    expect(applyButton).toBeEnabled()
+    fireEvent.click(applyButton)
+
+    expect(updateState).toHaveBeenCalledTimes(1)
+    expect(updateState.mock.calls[0][0].sourceLocations).toEqual([
+      {
+        source_type: 'local',
+        source_ssh_connection_id: null,
+        agent_machine_id: null,
+        paths: ['/srv/app/uploads'],
+        snapshot: {
+          provider: 'zfs',
+          dataset: 'tank/app',
+          mountpoint: '/srv/app',
+          recursive: false,
+        },
+      },
+      {
+        source_type: 'remote',
+        source_ssh_connection_id: 11,
+        agent_machine_id: null,
+        paths: ['/home/app/data'],
+      },
+    ])
+  }, 60000)
+
   it('browses paths for the selected SSH source without replacing other groups', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
     const sshConnections = [
