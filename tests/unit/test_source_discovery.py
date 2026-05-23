@@ -38,7 +38,7 @@ class TestSourceDiscovery:
         body = response.json()
 
         templates = {template["id"]: template for template in body["templates"]}
-        assert set(templates) == {"mongodb", "mysql", "postgresql", "redis"}
+        assert set(templates) == {"mongodb", "mysql", "postgresql", "redis", "sqlite"}
 
         postgresql = templates["postgresql"]
         assert postgresql["engine"] == "PostgreSQL"
@@ -47,6 +47,33 @@ class TestSourceDiscovery:
         ]
         assert postgresql["backup_strategy"] == "logical_dump"
         assert postgresql["documentation_url"].startswith("https://www.postgresql.org/")
+
+    def test_sqlite_template_stages_backup_with_parameters(
+        self, test_client, admin_headers
+    ):
+        response = test_client.get(
+            "/api/source-discovery/databases", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+
+        sqlite = next(
+            template for template in body["templates"] if template["id"] == "sqlite"
+        )
+        assert sqlite["engine"] == "SQLite"
+        assert sqlite["source_directories"] == [
+            "/var/tmp/borg-ui/database-dumps/sqlite"
+        ]
+        assert sqlite["client_commands"] == ["sqlite3"]
+        assert sqlite["backup_strategy"] == "online_backup"
+
+        pre_backup = sqlite["script_drafts"]["pre_backup"]["content"]
+        post_backup = sqlite["script_drafts"]["post_backup"]["content"]
+        assert "sqlite3" in pre_backup
+        assert "SQLITE_DATABASE_PATH" in pre_backup
+        assert "/var/tmp/borg-ui/database-dumps/sqlite" in pre_backup
+        assert "/var/tmp/borg-ui/database-dumps/sqlite" in post_backup
 
     def test_database_templates_include_editable_script_drafts(
         self, test_client, admin_headers
@@ -192,6 +219,28 @@ class TestSourceDiscovery:
         assert body["detections"][0]["detected"] is True
         assert body["detections"][0]["detection_source"] == str(postgresql_data_dir)
 
+    def test_database_scan_detects_local_sqlite_file(
+        self, test_client, admin_headers, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(source_discovery, "which", lambda command: None)
+        sqlite_db = tmp_path / "app.sqlite3"
+        sqlite_db.write_bytes(b"SQLite format 3\x00")
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": [str(sqlite_db)],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        detections = response.json()["detections"]
+        assert [detection["id"] for detection in detections] == ["sqlite"]
+        assert detections[0]["detection_source"] == str(sqlite_db)
+
     def test_database_scan_detects_cli_when_path_probe_is_negative(
         self, test_client, admin_headers, tmp_path, monkeypatch
     ):
@@ -242,6 +291,7 @@ class TestSourceDiscovery:
             "mysql",
             "postgresql",
             "redis",
+            "sqlite",
         }
         assert all(template["detected"] is False for template in body["templates"])
 
@@ -277,10 +327,13 @@ class TestSourceDiscovery:
                         "FILE\t/srv/postgresql\tPG_VERSION\t1",
                         "PATH\t/srv/cache\t1",
                         "FILE\t/srv/cache\tdump.rdb\t1",
+                        "PATH\t/srv/app.db\t1",
+                        "FILE\t/srv/app.db\tSQLITE_DB\t1",
                         "COMMAND\tpg_dump\t0",
                         "COMMAND\tmysqldump\t0",
                         "COMMAND\tmongodump\t0",
                         "COMMAND\tredis-cli\t0",
+                        "COMMAND\tsqlite3\t0",
                     ]
                 ),
                 stderr="",
@@ -298,7 +351,7 @@ class TestSourceDiscovery:
             json={
                 "source_type": "remote",
                 "source_ssh_connection_id": connection.id,
-                "paths": ["/srv/postgresql", "/srv/cache"],
+                "paths": ["/srv/postgresql", "/srv/cache", "/srv/app.db"],
             },
             headers=admin_headers,
         )
@@ -310,12 +363,17 @@ class TestSourceDiscovery:
             "source_ssh_connection_id": connection.id,
             "label": "backup@example.test",
         }
-        assert body["scanned_paths"] == ["/srv/postgresql", "/srv/cache"]
+        assert body["scanned_paths"] == [
+            "/srv/postgresql",
+            "/srv/cache",
+            "/srv/app.db",
+        ]
         assert body["warnings"] == []
         detections = {detection["id"]: detection for detection in body["detections"]}
-        assert set(detections) == {"postgresql", "redis"}
+        assert set(detections) == {"postgresql", "redis", "sqlite"}
         assert detections["postgresql"]["detection_source"] == "/srv/postgresql"
         assert detections["redis"]["detection_source"] == "/srv/cache"
+        assert detections["sqlite"]["detection_source"] == "/srv/app.db"
 
     def test_database_scan_remote_connection_failure_returns_warning_body(
         self, test_client, admin_headers, test_db, monkeypatch
@@ -374,4 +432,5 @@ class TestSourceDiscovery:
             "mysql",
             "postgresql",
             "redis",
+            "sqlite",
         }

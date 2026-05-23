@@ -116,7 +116,41 @@ const redisTemplate: SourceDiscoveryDatabase = {
   client_commands: ['redis-cli'],
 }
 
-const allTemplates = [postgresqlTemplate, mysqlTemplate, mongoTemplate, redisTemplate]
+const sqliteTemplate: SourceDiscoveryDatabase = {
+  ...postgresqlTemplate,
+  id: 'sqlite',
+  engine: 'SQLite',
+  display_name: 'SQLite database',
+  backup_strategy: 'online_backup',
+  source_directories: ['/var/tmp/borg-ui/database-dumps/sqlite'],
+  client_commands: ['sqlite3'],
+  documentation_url: 'https://www.sqlite.org/backup.html',
+  notes: ['Uses the SQLite Online Backup API through sqlite3 .backup.'],
+  script_drafts: {
+    pre_backup: {
+      name: 'Prepare SQLite backup',
+      description: 'Create a consistent SQLite backup.',
+      content:
+        '#!/usr/bin/env bash\nset -euo pipefail\nsqlite3 "$SQLITE_DATABASE_PATH" ".backup /var/tmp/borg-ui/database-dumps/sqlite/database.sqlite3"\n',
+      timeout: 300,
+    },
+    post_backup: {
+      name: 'Clean SQLite backup',
+      description: 'Remove transient SQLite backup files.',
+      content:
+        '#!/usr/bin/env bash\nset -euo pipefail\nrm -rf /var/tmp/borg-ui/database-dumps/sqlite\n',
+      timeout: 120,
+    },
+  },
+}
+
+const allTemplates = [
+  postgresqlTemplate,
+  mysqlTemplate,
+  mongoTemplate,
+  redisTemplate,
+  sqliteTemplate,
+]
 
 const legacyDiscoveryResponse = {
   source_types: [],
@@ -395,11 +429,42 @@ interface DialogStoryArgs {
   wizardState: WizardState
   mockOptions: MockOptions
   initialView?: 'paths' | 'database' | 'database-detail'
+  scrollToText?: string
 }
 
-function DialogStory({ wizardState, mockOptions, initialView }: DialogStoryArgs) {
+function DialogStory({ wizardState, mockOptions, initialView, scrollToText }: DialogStoryArgs) {
   useMockedDiscovery(mockOptions)
   const stableState = useMemo(() => wizardState, [wizardState])
+
+  useEffect(() => {
+    if (!scrollToText) return undefined
+
+    let timeout: number | undefined
+    let attempts = 0
+
+    const scrollToMatch = () => {
+      const match = Array.from(
+        document.querySelectorAll<HTMLElement>('button, [role="button"]')
+      ).find((element) => element.textContent?.includes(scrollToText))
+
+      if (match) {
+        match.scrollIntoView({ block: 'center' })
+        return
+      }
+
+      attempts += 1
+      if (attempts < 60) {
+        timeout = window.setTimeout(scrollToMatch, 50)
+      }
+    }
+
+    timeout = window.setTimeout(scrollToMatch, 50)
+
+    return () => {
+      if (timeout) window.clearTimeout(timeout)
+    }
+  }, [scrollToText])
+
   return (
     <Box sx={{ width: 1, height: '100vh', position: 'relative' }}>
       <SourceSelectionDialog
@@ -494,13 +559,14 @@ export const DatabaseScanDetected: Story = {
       wizardState={emptyWizardState}
       mockOptions={{ scanStatus: 'detected' }}
       initialView="database"
+      scrollToText="SQLite"
     />
   ),
   parameters: {
     docs: {
       description: {
         story:
-          'Open the Database view from "Scan a database instead". Mocked endpoint returns two detected engines plus all four templates.',
+          'Open the Database view from "Scan a database instead". Mocked endpoint returns two detected engines plus all five templates, including SQLite.',
       },
     },
   },
