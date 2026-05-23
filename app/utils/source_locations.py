@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from app.services.filesystem_snapshot_service import normalize_snapshot_config
+
 SourceLocation = dict[str, Any]
 
 
@@ -73,14 +75,20 @@ def normalize_source_locations(
                 agent_machine_id = int(agent_machine_id)
                 connection_id = None
 
-            normalized.append(
-                {
-                    "source_type": location_type,
-                    "source_ssh_connection_id": connection_id,
-                    "agent_machine_id": agent_machine_id,
-                    "paths": paths,
-                }
+            normalized_location = {
+                "source_type": location_type,
+                "source_ssh_connection_id": connection_id,
+                "agent_machine_id": agent_machine_id,
+                "paths": paths,
+            }
+            snapshot = normalize_snapshot_config(
+                location.get("snapshot"),
+                source_type=location_type,
             )
+            if snapshot:
+                normalized_location["snapshot"] = snapshot
+
+            normalized.append(normalized_location)
         return normalized
 
     paths = clean_source_paths(source_directories)

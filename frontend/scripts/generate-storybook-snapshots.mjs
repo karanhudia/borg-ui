@@ -196,7 +196,7 @@ async function captureStorySnapshots(stories, baseUrl) {
     let lastError
 
     for (let attempt = 1; attempt <= 5; attempt += 1) {
-      const browser = await chromium.launch()
+      const browser = await chromium.launch({ channel: 'chromium' })
       const context = await browser.newContext({
         deviceScaleFactor: 1,
         locale: 'en-US',

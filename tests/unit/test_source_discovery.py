@@ -104,6 +104,29 @@ class TestSourceDiscovery:
             assert "set -euo pipefail" in post_backup["content"]
             assert template["source_directories"][0] in post_backup["content"]
 
+    def test_filesystem_snapshot_capabilities_report_host_tools(
+        self, test_client, admin_headers, monkeypatch
+    ):
+        monkeypatch.setattr(
+            source_discovery,
+            "which",
+            lambda command: f"/usr/sbin/{command}" if command == "btrfs" else None,
+        )
+
+        response = test_client.get(
+            "/api/source-discovery/filesystem-snapshots", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        providers = {provider["id"]: provider for provider in body["providers"]}
+        assert providers["btrfs"]["available"] is True
+        assert providers["btrfs"]["command"] == "btrfs"
+        assert providers["zfs"]["available"] is False
+        assert providers["zfs"]["command"] == "zfs"
+        assert body["supported_source_types"] == ["local"]
+        assert "Remote SSH" in body["unsupported_source_targets"][0]
+
     def test_database_scan_rejects_empty_paths(self, test_client, admin_headers):
         response = test_client.post(
             "/api/source-discovery/databases/scan",

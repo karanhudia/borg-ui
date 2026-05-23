@@ -327,6 +327,21 @@ export interface DatabaseScanResponse {
   warnings: DatabaseScanWarning[]
 }
 
+export interface FilesystemSnapshotProviderCapability {
+  id: 'btrfs' | 'zfs'
+  label: string
+  command: string
+  available: boolean
+  requirements: string[]
+}
+
+export interface FilesystemSnapshotCapabilitiesResponse {
+  providers: FilesystemSnapshotProviderCapability[]
+  supported_source_types: Array<'local'>
+  unsupported_source_targets: string[]
+  default_staging_path: string
+}
+
 export const authAPI = {
   getAuthConfig: () => api.get<AuthConfigResponse>('/auth/config'),
   getOidcLoginUrl: (returnTo?: string) => {
@@ -962,6 +977,8 @@ export const sourceDiscoveryAPI = {
   databases: () => api.get<SourceDiscoveryResponse>('/source-discovery/databases'),
   scanDatabases: (body: DatabaseScanRequest) =>
     api.post<DatabaseScanResponse>('/source-discovery/databases/scan', body),
+  filesystemSnapshots: () =>
+    api.get<FilesystemSnapshotCapabilitiesResponse>('/source-discovery/filesystem-snapshots'),
 }
 
 export const mountsAPI = {

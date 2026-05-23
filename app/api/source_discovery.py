@@ -17,6 +17,7 @@ from app.config import settings
 from app.core.security import get_current_user
 from app.database.database import get_db
 from app.database.models import SSHConnection, SSHKey, User
+from app.services.filesystem_snapshot_service import DEFAULT_SNAPSHOT_STAGING_ROOT
 from app.utils.ssh_utils import write_ssh_key_to_tempfile
 
 router = APIRouter()
@@ -39,6 +40,21 @@ class SourceTypeOption(BaseModel):
     description: str
     status: str
     disabled: bool = False
+
+
+class FilesystemSnapshotProviderCapability(BaseModel):
+    id: str
+    label: str
+    command: str
+    available: bool
+    requirements: list[str]
+
+
+class FilesystemSnapshotCapabilitiesResponse(BaseModel):
+    providers: list[FilesystemSnapshotProviderCapability]
+    supported_source_types: list[str]
+    unsupported_source_targets: list[str]
+    default_staging_path: str
 
 
 class ScriptDraft(BaseModel):
@@ -402,6 +418,33 @@ def _source_types() -> list[SourceTypeOption]:
             description="Container scanning will use the same source chooser later.",
             status="planned",
             disabled=True,
+        ),
+    ]
+
+
+def _filesystem_snapshot_provider_capabilities() -> list[
+    FilesystemSnapshotProviderCapability
+]:
+    return [
+        FilesystemSnapshotProviderCapability(
+            id="btrfs",
+            label="btrfs read-only subvolume snapshot",
+            command="btrfs",
+            available=which("btrfs") is not None,
+            requirements=[
+                "The selected path must be a btrfs subvolume visible to the Borg UI server.",
+                "The Borg UI runtime user needs permission to create and delete read-only subvolume snapshots.",
+            ],
+        ),
+        FilesystemSnapshotProviderCapability(
+            id="zfs",
+            label="zfs dataset snapshot",
+            command="zfs",
+            available=which("zfs") is not None,
+            requirements=[
+                "The selected path must live under the configured zfs dataset mountpoint.",
+                "The Borg UI runtime user needs permission to create and destroy zfs snapshots.",
+            ],
         ),
     ]
 
@@ -864,6 +907,24 @@ async def _scan_remote_database_paths(
         detections=detections,
         templates=templates,
         warnings=[],
+    )
+
+
+@router.get(
+    "/filesystem-snapshots", response_model=FilesystemSnapshotCapabilitiesResponse
+)
+async def discover_filesystem_snapshot_capabilities(
+    current_user: User = Depends(get_current_user),
+) -> FilesystemSnapshotCapabilitiesResponse:
+    del current_user
+    return FilesystemSnapshotCapabilitiesResponse(
+        providers=_filesystem_snapshot_provider_capabilities(),
+        supported_source_types=["local"],
+        unsupported_source_targets=[
+            "Remote SSH sources are not supported because snapshot commands must run on the source host.",
+            "Managed-agent sources are not supported in this server-side snapshot flow.",
+        ],
+        default_staging_path=DEFAULT_SNAPSHOT_STAGING_ROOT,
     )
 
 

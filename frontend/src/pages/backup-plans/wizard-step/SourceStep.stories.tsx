@@ -110,6 +110,27 @@ const databaseDumpState: WizardState = {
   postBackupScriptId: 102,
 }
 
+const btrfsSnapshotState: WizardState = {
+  ...createInitialState(),
+  name: 'Btrfs app snapshot',
+  description: 'Read-only btrfs snapshot of application data.',
+  sourceType: 'local',
+  sourceDirectories: ['/srv/app'],
+  sourceLocations: [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/srv/app'],
+      snapshot: {
+        provider: 'btrfs',
+        staging_path: '/var/tmp/borg-ui/snapshots',
+        recursive: false,
+      },
+    },
+  ],
+}
+
 const translations: Record<string, string> = {
   'backupPlans.wizard.fields.planName': 'Plan name',
   'backupPlans.wizard.fields.description': 'Description',
@@ -126,6 +147,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.agentFallback': 'Agent #{{id}}',
   'backupPlans.sourceChooser.localSourceDescription': 'This Borg UI server',
   'backupPlans.sourceChooser.sshSourceDescription': 'Remote machine',
+  'backupPlans.sourceChooser.snapshotChip': '{{provider}} snapshot',
   'backupPlans.sourceChooser.showLessPaths': 'Show less',
   'backupPlans.sourceChooser.inPrefix': 'in',
   'backupPlans.wizard.review.connectionFallback': 'Connection #{{id}}',
@@ -141,7 +163,9 @@ const t = (key: string, options?: Record<string, unknown>) => {
     return `Show ${count} more ${count === 1 ? 'path' : 'paths'}`
   }
   const template = translations[key] || key
-  return template.replace('{{id}}', String(options?.id ?? ''))
+  return template
+    .replace('{{id}}', String(options?.id ?? ''))
+    .replace('{{provider}}', String(options?.provider ?? ''))
 }
 
 interface RenderArgs {
@@ -192,4 +216,8 @@ export const MixedSourceGroups: Story = {
 
 export const DatabaseDumpSource: Story = {
   render: () => renderStep({ wizardState: databaseDumpState }),
+}
+
+export const BtrfsSnapshotSource: Story = {
+  render: () => renderStep({ wizardState: btrfsSnapshotState }),
 }

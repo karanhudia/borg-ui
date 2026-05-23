@@ -158,6 +158,31 @@ const legacyDiscoveryResponse = {
   templates: allTemplates,
 }
 
+const filesystemSnapshotCapabilities = {
+  providers: [
+    {
+      id: 'btrfs',
+      label: 'btrfs read-only subvolume snapshot',
+      command: 'btrfs',
+      available: true,
+      requirements: ['The selected path must be a btrfs subvolume visible to the Borg UI server.'],
+    },
+    {
+      id: 'zfs',
+      label: 'zfs dataset snapshot',
+      command: 'zfs',
+      available: false,
+      requirements: ['The selected path must live under the configured zfs dataset mountpoint.'],
+    },
+  ],
+  supported_source_types: ['local'],
+  unsupported_source_targets: [
+    'Remote SSH sources are not supported because snapshot commands must run on the source host.',
+    'Managed-agent sources are not supported in this server-side snapshot flow.',
+  ],
+  default_staging_path: '/var/tmp/borg-ui/snapshots',
+}
+
 const detectedScanResponse = {
   scan_target: {
     source_type: 'local' as const,
@@ -190,6 +215,7 @@ function useMockedDiscovery({ scanStatus = 'detected', legacyTemplates = true }:
     if (legacyTemplates) {
       mock.onGet('/source-discovery/databases').reply(200, legacyDiscoveryResponse)
     }
+    mock.onGet('/source-discovery/filesystem-snapshots').reply(200, filesystemSnapshotCapabilities)
 
     if (scanStatus === 'detected') {
       mock.onPost('/source-discovery/databases/scan').reply(200, detectedScanResponse)
@@ -276,6 +302,43 @@ const mixedSinglePathState: WizardState = {
   ],
 }
 
+const btrfsSnapshotState: WizardState = {
+  ...createInitialState(),
+  sourceType: 'local',
+  sourceDirectories: ['/srv/app'],
+  sourceLocations: [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/srv/app'],
+      snapshot: {
+        provider: 'btrfs',
+        staging_path: '/var/tmp/borg-ui/snapshots',
+        recursive: false,
+      },
+    },
+  ],
+}
+
+const zfsIncompleteSnapshotState: WizardState = {
+  ...createInitialState(),
+  sourceType: 'local',
+  sourceDirectories: ['/srv/app/uploads'],
+  sourceLocations: [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/srv/app/uploads'],
+      snapshot: {
+        provider: 'zfs',
+        recursive: false,
+      },
+    },
+  ],
+}
+
 const translations: Record<string, string> = {
   'backupPlans.sourceChooser.title': 'Choose backup source',
   'backupPlans.sourceChooser.where': 'Where are the files?',
@@ -292,6 +355,21 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.selectRemoteMachine': 'Select a remote machine',
   'backupPlans.sourceChooser.noRemoteMachines': 'No SSH connections available',
   'backupPlans.sourceChooser.readingFromLocal': 'Reading directly from this server',
+  'backupPlans.sourceChooser.snapshotMode': 'Snapshot mode',
+  'backupPlans.sourceChooser.snapshotModeNone': 'No filesystem snapshot',
+  'backupPlans.sourceChooser.snapshotModeBtrfs': 'btrfs snapshot',
+  'backupPlans.sourceChooser.snapshotModeZfs': 'zfs snapshot',
+  'backupPlans.sourceChooser.snapshotRequirementsTitle': 'Host requirements',
+  'backupPlans.sourceChooser.snapshotLocalOnly':
+    'Snapshots are only available for Borg UI server paths.',
+  'backupPlans.sourceChooser.snapshotBtrfsStagingPath': 'Snapshot staging path',
+  'backupPlans.sourceChooser.snapshotZfsDataset': 'ZFS dataset',
+  'backupPlans.sourceChooser.snapshotZfsMountpoint': 'ZFS mountpoint',
+  'backupPlans.sourceChooser.snapshotZfsRequired': 'Required for zfs snapshots',
+  'backupPlans.sourceChooser.snapshotRecursive': 'Recursive snapshot',
+  'backupPlans.sourceChooser.snapshotToolAvailable': '{{command}} available',
+  'backupPlans.sourceChooser.snapshotToolMissing': '{{command}} not found',
+  'backupPlans.sourceChooser.snapshotChip': '{{provider}} snapshot',
   'backupPlans.sourceChooser.scanDatabaseInstead': 'Scan a database instead',
   'backupPlans.sourceChooser.databaseBackupTitle': 'Add database backup',
   'backupPlans.sourceChooser.scanTarget': 'Scan where?',
@@ -342,7 +420,9 @@ const t = (key: string, options?: Record<string, unknown>) => {
   if (key === 'backupPlans.sourceChooser.nothingFoundTitle') {
     return `No databases found on ${options?.target ?? 'target'}`
   }
-  return translations[key] || key
+  return (translations[key] || key)
+    .replace('{{command}}', String(options?.command ?? ''))
+    .replace('{{provider}}', String(options?.provider ?? ''))
 }
 
 interface DialogStoryArgs {
@@ -426,6 +506,37 @@ export const PathPickerWithLocalSelections: Story = {
   render: () => (
     <DialogStory wizardState={localPathsState} mockOptions={{ scanStatus: 'detected' }} />
   ),
+}
+
+export const PathPickerWithBtrfsSnapshot: Story = {
+  render: () => (
+    <DialogStory wizardState={btrfsSnapshotState} mockOptions={{ scanStatus: 'detected' }} />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Local source group with btrfs snapshot staging enabled. The dialog shows host requirements, tool availability, and the staging path.',
+      },
+    },
+  },
+}
+
+export const PathPickerWithIncompleteZfsSnapshot: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={zfsIncompleteSnapshotState}
+      mockOptions={{ scanStatus: 'detected' }}
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Local source group with zfs snapshot mode selected but missing required dataset and mountpoint fields. The dialog shows inline validation and keeps Apply disabled.',
+      },
+    },
+  },
 }
 
 export const PathPickerMixedSinglePathGroups: Story = {

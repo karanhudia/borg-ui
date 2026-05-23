@@ -65,6 +65,102 @@ def test_flatten_agent_source_locations_preserves_compatibility():
     assert legacy_source_fields(locations) == ("agent", None, ["/home/user", "/etc"])
 
 
+def test_normalize_local_btrfs_snapshot_location_preserves_config():
+    locations = normalize_source_locations(
+        [
+            {
+                "source_type": "local",
+                "paths": ["/srv/app"],
+                "snapshot": {
+                    "provider": "btrfs",
+                    "staging_path": " /var/tmp/borg-ui/snapshots ",
+                    "recursive": True,
+                    "ignored": "value",
+                },
+            }
+        ]
+    )
+
+    assert locations == [
+        {
+            "source_type": "local",
+            "source_ssh_connection_id": None,
+            "agent_machine_id": None,
+            "paths": ["/srv/app"],
+            "snapshot": {
+                "provider": "btrfs",
+                "staging_path": "/var/tmp/borg-ui/snapshots",
+                "recursive": True,
+            },
+        }
+    ]
+
+
+def test_normalize_local_zfs_snapshot_location_requires_dataset_and_mountpoint():
+    locations = normalize_source_locations(
+        [
+            {
+                "source_type": "local",
+                "paths": ["/srv/app/uploads"],
+                "snapshot": {
+                    "provider": "zfs",
+                    "dataset": " tank/app ",
+                    "mountpoint": " /srv/app ",
+                },
+            }
+        ]
+    )
+
+    assert locations[0]["snapshot"] == {
+        "provider": "zfs",
+        "dataset": "tank/app",
+        "mountpoint": "/srv/app",
+        "recursive": False,
+    }
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        {
+            "source_type": "remote",
+            "source_ssh_connection_id": 1,
+            "paths": ["/srv/app"],
+            "snapshot": {"provider": "btrfs"},
+        },
+        {
+            "source_type": "agent",
+            "agent_machine_id": 1,
+            "paths": ["/srv/app"],
+            "snapshot": {
+                "provider": "zfs",
+                "dataset": "tank/app",
+                "mountpoint": "/srv/app",
+            },
+        },
+    ],
+)
+def test_snapshot_locations_must_be_local(location):
+    with pytest.raises(ValueError, match="Snapshot source locations require local"):
+        normalize_source_locations([location])
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        {"provider": "xfs"},
+        {"provider": "btrfs", "staging_path": "relative/path"},
+        {"provider": "zfs", "dataset": "", "mountpoint": "/srv/app"},
+        {"provider": "zfs", "dataset": "tank/app", "mountpoint": "relative/path"},
+    ],
+)
+def test_snapshot_locations_reject_invalid_config(snapshot):
+    with pytest.raises(ValueError, match="snapshot"):
+        normalize_source_locations(
+            [{"source_type": "local", "paths": ["/srv/app"], "snapshot": snapshot}]
+        )
+
+
 def test_infers_agent_source_location_from_agent_machine_id():
     assert normalize_source_locations(
         [{"agent_machine_id": 4, "paths": ["/data"]}]

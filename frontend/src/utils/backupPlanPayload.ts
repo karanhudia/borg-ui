@@ -1,4 +1,4 @@
-import type { BackupPlanData, SourceLocation, SourceType } from '../types'
+import type { BackupPlanData, SourceLocation, SourceSnapshotConfig, SourceType } from '../types'
 
 export interface BackupPlanPayloadState {
   name: string
@@ -45,6 +45,29 @@ function mbToKib(value: string): number | null {
 }
 
 function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation[] {
+  const normalizeSnapshot = (location: SourceLocation): SourceSnapshotConfig | undefined => {
+    if (location.source_type !== 'local' || !location.snapshot) return undefined
+    if (location.snapshot.provider === 'btrfs') {
+      return {
+        provider: 'btrfs',
+        staging_path: location.snapshot.staging_path?.trim() || '/var/tmp/borg-ui/snapshots',
+        recursive: Boolean(location.snapshot.recursive),
+      }
+    }
+    if (location.snapshot.provider === 'zfs') {
+      const dataset = location.snapshot.dataset?.trim()
+      const mountpoint = location.snapshot.mountpoint?.trim()
+      if (!dataset || !mountpoint) return undefined
+      return {
+        provider: 'zfs',
+        dataset,
+        mountpoint,
+        recursive: Boolean(location.snapshot.recursive),
+      }
+    }
+    return undefined
+  }
+
   const grouped: SourceLocation[] = (state.sourceLocations || [])
     .map<SourceLocation | null>((location) => {
       const paths = location.paths.map((path) => path.trim()).filter(Boolean)
@@ -69,11 +92,13 @@ function normalizeSourceLocations(state: BackupPlanPayloadState): SourceLocation
           paths,
         }
       }
+      const snapshot = normalizeSnapshot(location)
       return {
         source_type: 'local' as const,
         source_ssh_connection_id: null,
         agent_machine_id: null,
         paths,
+        ...(snapshot ? { snapshot } : {}),
       }
     })
     .filter((location): location is SourceLocation => location !== null)
