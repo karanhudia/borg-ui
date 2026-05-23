@@ -151,27 +151,12 @@ class RemoteBackupService:
             job.completed_at = datetime.utcnow()
             db.commit()
 
-            if job.status == "completed":
-                await notification_service.send_backup_success(
-                    db,
-                    repository.name,
-                    archive_name,
-                    stats={
-                        "original_size": job.original_size,
-                        "compressed_size": job.compressed_size,
-                        "deduplicated_size": job.deduplicated_size,
-                    },
-                    completion_time=job.completed_at,
-                    started_at=job.started_at,
-                    nfiles=job.nfiles,
-                )
-            else:
-                await notification_service.send_backup_failure(
-                    db,
-                    repository.name,
-                    job.error_message,
-                    job_id=job_id,
-                )
+            await self._send_completion_notification(
+                db=db,
+                job=job,
+                repository=repository,
+                archive_name=archive_name,
+            )
 
             return result
 
@@ -194,6 +179,44 @@ class RemoteBackupService:
             raise
         finally:
             db.close()
+
+    async def _send_completion_notification(
+        self,
+        db: Session,
+        job: BackupJob,
+        repository: Repository,
+        archive_name: str,
+    ) -> None:
+        try:
+            if job.status == "completed":
+                await notification_service.send_backup_success(
+                    db,
+                    repository.name,
+                    archive_name,
+                    stats={
+                        "original_size": job.original_size,
+                        "compressed_size": job.compressed_size,
+                        "deduplicated_size": job.deduplicated_size,
+                    },
+                    completion_time=job.completed_at,
+                    started_at=job.started_at,
+                    nfiles=job.nfiles,
+                )
+            else:
+                await notification_service.send_backup_failure(
+                    db,
+                    repository.name,
+                    job.error_message,
+                    job_id=job.id,
+                )
+        except Exception as e:
+            logger.warning(
+                "Remote backup notification failed",
+                job_id=job.id,
+                status=job.status,
+                error=str(e),
+                exc_info=True,
+            )
 
     async def _build_remote_command(
         self,

@@ -98,7 +98,8 @@ ssh://u123456@u123456.your-storagebox.de:23/./backup-repo
 When a backup plan uses an SSH source and an SSH repository on the same SSH
 connection, Borg UI runs `borg create` on that remote machine and sends data
 directly to the repository. This avoids SSHFS pull mode and keeps high-I/O
-source reads on the Docker host.
+source reads on the remote/source host where the data resides instead of the
+Borg UI Docker host.
 
 Use the connection's Borg binary path when the source host needs a wrapper
 script, for example to pause Docker containers before Borg starts and resume

@@ -142,6 +142,41 @@ async def test_execute_remote_backup_updates_same_job_row_and_uses_source_borg_w
 
 
 @pytest.mark.asyncio
+async def test_execute_remote_backup_keeps_completed_status_when_success_notification_fails(
+    test_db, monkeypatch
+):
+    connection, repository, job = _remote_entities(test_db)
+    service = RemoteBackupService()
+    connection_id = connection.id
+    repository_id = repository.id
+    job_id = job.id
+
+    async def fake_execute_ssh_command(*args, **kwargs):
+        return {"success": True, "returncode": 0, "stdout": "{}", "stderr": ""}
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_execute_ssh_command", fake_execute_ssh_command)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.notification_service.send_backup_success",
+        AsyncMock(side_effect=RuntimeError("notification failed")),
+    )
+
+    result = await service.execute_remote_backup(
+        job_id=job_id,
+        source_ssh_connection_id=connection_id,
+        repository_id=repository_id,
+        source_paths=["/var/lib/docker/volumes/app"],
+    )
+
+    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    assert result["success"] is True
+    assert job.status == "completed"
+    assert job.error_message is None
+
+
+@pytest.mark.asyncio
 async def test_execute_remote_backup_records_failure_on_same_job_row(
     test_db, monkeypatch
 ):
@@ -180,6 +215,47 @@ async def test_execute_remote_backup_records_failure_on_same_job_row(
     assert result["success"] is False
     assert job.status == "failed"
     assert job.completed_at is not None
+    assert job.error_message == "Remote backup failed with exit code 2"
+
+
+@pytest.mark.asyncio
+async def test_execute_remote_backup_keeps_failed_status_when_failure_notification_fails(
+    test_db, monkeypatch
+):
+    connection, repository, job = _remote_entities(test_db)
+    service = RemoteBackupService()
+    connection_id = connection.id
+    repository_id = repository.id
+    job_id = job.id
+
+    async def fake_execute_ssh_command(*args, **kwargs):
+        return {
+            "success": False,
+            "returncode": 2,
+            "stdout": "",
+            "stderr": "changed file",
+            "error": "Remote backup failed with exit code 2",
+        }
+
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.SessionLocal", lambda: test_db
+    )
+    monkeypatch.setattr(service, "_execute_ssh_command", fake_execute_ssh_command)
+    monkeypatch.setattr(
+        "app.services.remote_backup_service.notification_service.send_backup_failure",
+        AsyncMock(side_effect=RuntimeError("notification failed")),
+    )
+
+    result = await service.execute_remote_backup(
+        job_id=job_id,
+        source_ssh_connection_id=connection_id,
+        repository_id=repository_id,
+        source_paths=["/var/lib/docker/volumes/app"],
+    )
+
+    job = test_db.query(BackupJob).filter(BackupJob.id == job_id).one()
+    assert result["success"] is False
+    assert job.status == "failed"
     assert job.error_message == "Remote backup failed with exit code 2"
 
 
