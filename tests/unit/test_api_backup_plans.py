@@ -1868,6 +1868,88 @@ class TestBackupPlanRoutes:
         assert backup_job.execution_mode == "remote_ssh"
 
     @pytest.mark.asyncio
+    async def test_execute_multi_repository_plan_routes_each_repository(self, test_db):
+        source_connection = _create_ssh_connection(
+            test_db,
+            host="source.example",
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        other_connection = _create_ssh_connection(
+            test_db,
+            host="other.example",
+            is_backup_source=True,
+        )
+        direct_repo = _create_repo(
+            test_db,
+            "Direct",
+            "/repos/direct",
+            connection_id=source_connection.id,
+        )
+        direct_repo.repository_type = "ssh"
+        fallback_repo = _create_repo(
+            test_db,
+            "Fallback",
+            "ssh://borg@other.example/repos/fallback",
+            connection_id=other_connection.id,
+        )
+        fallback_repo.repository_type = "ssh"
+        test_db.commit()
+        _plan, run = _create_execution_plan(
+            test_db,
+            [direct_repo, fallback_repo],
+            source_type="remote",
+            source_ssh_connection_id=source_connection.id,
+            source_directories=json.dumps(["/srv/app"]),
+            source_locations=json.dumps(
+                [
+                    {
+                        "source_type": "remote",
+                        "source_ssh_connection_id": source_connection.id,
+                        "agent_machine_id": None,
+                        "paths": ["/srv/app"],
+                    }
+                ]
+            ),
+        )
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            assert job.source_ssh_connection_id == source_connection.id
+            assert kwargs["source_ssh_connection_id"] == source_connection.id
+            assert kwargs["source_locations"] == [
+                {
+                    "source_type": "remote",
+                    "source_ssh_connection_id": source_connection.id,
+                    "agent_machine_id": None,
+                    "paths": ["/srv/app"],
+                }
+            ]
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with patch(
+            "app.services.backup_plan_execution_service.backup_service.execute_backup",
+            side_effect=fake_execute_backup,
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        jobs = {
+            job.repository_id: job
+            for job in test_db.query(BackupJob)
+            .filter_by(backup_plan_run_id=run.id)
+            .all()
+        }
+        assert jobs[direct_repo.id].route_strategy == "remote_direct"
+        assert jobs[direct_repo.id].execution_mode == "remote_ssh"
+        assert (
+            jobs[fallback_repo.id].route_strategy == "server_sshfs_pull_then_borg_ssh"
+        )
+        assert jobs[fallback_repo.id].execution_mode == "local"
+
+    @pytest.mark.asyncio
     async def test_execute_plan_run_wraps_repositories_with_plan_scripts(self, test_db):
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         pre_script = _create_script(test_db, "Prepare Source")

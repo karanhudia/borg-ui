@@ -132,6 +132,27 @@ def test_execution_mode_for_route(repository, sources, expected_execution_mode):
 
 
 @pytest.mark.parametrize(
+    "sources,expected_strategy,expected_execution_mode",
+    [
+        ([ssh_source(3), ssh_source(3)], "remote_direct", "remote_ssh"),
+        (
+            [ssh_source(3), ssh_source(4)],
+            "server_sshfs_pull_then_borg_ssh",
+            "local",
+        ),
+    ],
+)
+def test_remote_direct_requires_all_remote_sources_on_repository_connection(
+    sources, expected_strategy, expected_execution_mode
+):
+    route = plan_repository_route(repo(repository_type="ssh", connection_id=3), sources)
+
+    assert route.supported is True
+    assert route.strategy == expected_strategy
+    assert execution_mode_for_route(route) == expected_execution_mode
+
+
+@pytest.mark.parametrize(
     "repository,sources,reason_key",
     [
         (
