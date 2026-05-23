@@ -384,6 +384,10 @@ class TestScheduleRouteContracts:
         monkeypatch.setattr(
             "app.api.schedule.asyncio.create_task", lambda task: FakeTask()
         )
+        monkeypatch.setattr(
+            "app.api.schedule._track_scheduled_backup_task",
+            lambda *args, **kwargs: None,
+        )
 
         run_key = _dispatch_due_scheduled_job(
             test_db, schedule, datetime.now(timezone.utc)

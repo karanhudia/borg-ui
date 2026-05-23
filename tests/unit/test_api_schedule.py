@@ -447,6 +447,7 @@ class TestScheduleRunNow:
                 new=lambda *args, **kwargs: object(),
             ),
             patch("app.api.schedule.asyncio.create_task"),
+            patch("app.api.schedule._track_scheduled_backup_task"),
         ):
             response = test_client.post(
                 f"/api/schedule/{schedule.id}/run-now", headers=admin_headers
