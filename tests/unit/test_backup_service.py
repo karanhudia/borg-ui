@@ -749,6 +749,38 @@ class TestBackupService:
         source_locations = [
             {
                 "source_type": "local",
+                "paths": ["/srv/app", "/srv/logs"],
+                "snapshot": {
+                    "provider": "btrfs",
+                    "staging_path": str(tmp_path / "snapshots"),
+                },
+            }
+        ]
+        run_snapshot_command = AsyncMock(side_effect=[None, RuntimeError("boom")])
+
+        with patch.object(
+            backup_service,
+            "_run_filesystem_snapshot_command",
+            run_snapshot_command,
+        ):
+            with pytest.raises(RuntimeError, match="boom"):
+                await backup_service._prepare_filesystem_snapshots(
+                    ["/srv/app", "/srv/logs"],
+                    source_locations,
+                    job_id=42,
+                )
+
+        assert [
+            snapshot.source_path for snapshot in backup_service.filesystem_snapshots[42]
+        ] == ["/srv/app", "/srv/logs"]
+
+    @pytest.mark.asyncio
+    async def test_prepare_filesystem_snapshots_tracks_current_plan_when_first_create_fails(
+        self, backup_service, tmp_path
+    ):
+        source_locations = [
+            {
+                "source_type": "local",
                 "paths": ["/srv/app"],
                 "snapshot": {
                     "provider": "btrfs",
@@ -765,7 +797,7 @@ class TestBackupService:
         ):
             with pytest.raises(RuntimeError, match="boom"):
                 await backup_service._prepare_filesystem_snapshots(
-                    ["/srv/app", "/srv/logs"],
+                    ["/srv/app"],
                     source_locations,
                     job_id=42,
                 )
