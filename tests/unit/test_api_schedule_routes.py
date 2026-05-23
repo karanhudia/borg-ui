@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
+import app.api.schedule as schedule_api
 from app.database.models import (
     BackupJob,
     BackupPlan,
@@ -12,6 +13,15 @@ from app.database.models import (
     ScheduledJobRepository,
     SSHConnection,
 )
+
+
+class _FixedDateTime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        fixed = cls(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        if tz is None:
+            return fixed.replace(tzinfo=None)
+        return fixed.astimezone(tz)
 
 
 def _create_repo(test_db, name: str, path: str) -> Repository:
@@ -68,9 +78,14 @@ class TestScheduleRouteContracts:
         assert job["repository_ids"] == [repo_b.id, repo_a.id]
 
     def test_upcoming_jobs_returns_enabled_jobs_sorted_and_filtered(
-        self, test_client: TestClient, admin_headers, test_db
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        monkeypatch: pytest.MonkeyPatch,
     ):
-        outside_window_hour = (datetime.now(timezone.utc).hour + 2) % 24
+        monkeypatch.setattr(schedule_api, "datetime", _FixedDateTime)
+        outside_window_hour = (_FixedDateTime.now(timezone.utc).hour + 2) % 24
         soon = _create_schedule(
             test_db, "Soon", cron_expression="*/15 * * * *", repository="/repos/a"
         )
