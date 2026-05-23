@@ -944,6 +944,7 @@
       "viewLogs": "Ver registros",
       "transport": {
         "server": "Servidor",
+        "remoteSsh": "SSH remoto",
         "agent": "Agente"
       }
     },
@@ -2016,6 +2017,7 @@
     "manual": "Manual",
     "transport": {
       "server": "Servidor",
+      "remoteSsh": "SSH remoto",
       "agent": "Agente"
     },
     "toasts": {

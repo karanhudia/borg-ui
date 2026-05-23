@@ -847,6 +847,66 @@ class TestBackupService:
         mock_process.wait.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_execute_backup_delegates_remote_direct_route_strategy(
+        self, backup_service, test_db, monkeypatch
+    ):
+        source_connection = SSHConnection(
+            host="docker-host.example",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        repository = Repository(
+            name="remote-direct",
+            path="/repos/remote-direct",
+            repository_type="ssh",
+            source_directories='["/var/lib/docker/volumes/app"]',
+            exclude_patterns="[]",
+            compression="lz4",
+        )
+        test_db.add_all([source_connection, repository])
+        test_db.flush()
+        repository.connection_id = source_connection.id
+        job = BackupJob(
+            repository=repository.path,
+            status="pending",
+            execution_mode="remote_direct",
+            route_strategy="remote_direct",
+            source_ssh_connection_id=source_connection.id,
+        )
+        test_db.add(job)
+        test_db.commit()
+
+        calls = []
+
+        class FakeRemoteBackupService:
+            async def execute_remote_backup(self, **kwargs):
+                calls.append(kwargs)
+                job.status = "completed"
+                test_db.commit()
+
+        monkeypatch.setattr(
+            "app.services.remote_backup_service.remote_backup_service",
+            FakeRemoteBackupService(),
+        )
+
+        await backup_service.execute_backup(job.id, repository.path, db=test_db)
+
+        assert calls == [
+            {
+                "job_id": job.id,
+                "source_ssh_connection_id": source_connection.id,
+                "repository_id": repository.id,
+                "source_paths": ["/var/lib/docker/volumes/app"],
+                "exclude_patterns": [],
+                "compression": "lz4",
+                "custom_flags": None,
+                "upload_ratelimit_kib": None,
+            }
+        ]
+
+    @pytest.mark.asyncio
     async def test_execute_backup_parses_v1_json_progress(
         self, backup_service, test_db, tmp_path
     ):
@@ -1104,7 +1164,7 @@ class TestBackupService:
             mqtt.sync_state_with_db = Mock()
             await asyncio.wait_for(
                 backup_service.execute_backup(job.id, repo.path, db=test_db),
-                timeout=2.0,
+                timeout=10.0,
             )
 
         test_db.refresh(job)

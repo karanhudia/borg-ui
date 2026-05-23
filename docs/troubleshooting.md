@@ -12,6 +12,13 @@ troubleshooting sections for that feature.
 
 ## Docker and Backup Performance
 
+### Remote source backups still use SSHFS
+
+Remote source backups use SSHFS pull mode unless the source SSH connection and
+the SSH repository connection are the same. Different SSH source/repository
+pairs still run on the Borg UI server and may see warnings when active files
+change during backup.
+
 ### Slow first backup after a pull or restart
 
 `docker compose pull` and container recreates do not remove Docker volumes or

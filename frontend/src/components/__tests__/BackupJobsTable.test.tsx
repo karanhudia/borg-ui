@@ -153,6 +153,26 @@ describe('BackupJobsTable', () => {
 
       expect(screen.getByText('Agent')).toBeInTheDocument()
     })
+
+    it('displays remote SSH transport for remote-direct backup jobs', () => {
+      renderWithProviders(
+        <BackupJobsTable
+          jobs={[
+            {
+              ...mockJobs[0],
+              id: 45,
+              execution_mode: 'remote_ssh',
+              route_strategy: 'remote_direct',
+            } as MockBackupJob & {
+              execution_mode: 'remote_ssh'
+              route_strategy: 'remote_direct'
+            },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('Remote SSH')).toBeInTheDocument()
+    })
   })
 
   describe('Empty State', () => {

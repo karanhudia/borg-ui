@@ -11,6 +11,7 @@ from app.database.models import (
     Repository,
     ScheduledJob,
     ScheduledJobRepository,
+    SSHConnection,
 )
 
 
@@ -84,11 +85,15 @@ class TestScheduleRouteContracts:
         monkeypatch: pytest.MonkeyPatch,
     ):
         monkeypatch.setattr(schedule_api, "datetime", _FixedDateTime)
+        outside_window_hour = (_FixedDateTime.now(timezone.utc).hour + 2) % 24
         soon = _create_schedule(
             test_db, "Soon", cron_expression="*/15 * * * *", repository="/repos/a"
         )
         _create_schedule(
-            test_db, "Tomorrow", cron_expression="0 0 * * *", repository="/repos/b"
+            test_db,
+            "Outside Window",
+            cron_expression=f"0 {outside_window_hour} * * *",
+            repository="/repos/b",
         )
         disabled = _create_schedule(
             test_db, "Disabled", cron_expression="*/10 * * * *", repository="/repos/c"
@@ -104,7 +109,7 @@ class TestScheduleRouteContracts:
         body = response.json()
         names = [job["name"] for job in body["upcoming_jobs"]]
         assert "Soon" in names
-        assert "Tomorrow" not in names
+        assert "Outside Window" not in names
         assert "Disabled" not in names
         assert body["upcoming_jobs"] == sorted(
             body["upcoming_jobs"], key=lambda item: item["next_run"]
@@ -334,6 +339,65 @@ class TestScheduleRouteContracts:
             response.json()["detail"]["key"]
             == "backend.errors.schedule.noRepositoriesConfigured"
         )
+
+    def test_dispatch_due_schedule_uses_remote_direct_for_same_ssh_source_and_repo(
+        self, test_db, monkeypatch
+    ):
+        from app.api.schedule import _dispatch_due_scheduled_job
+
+        connection = SSHConnection(
+            host="docker-host.example",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        test_db.add(connection)
+        test_db.flush()
+        repo = Repository(
+            name="Remote Direct Repo",
+            path="/repos/remote-direct",
+            encryption="none",
+            repository_type="ssh",
+            connection_id=connection.id,
+            source_ssh_connection_id=connection.id,
+            source_directories='["/var/lib/docker/volumes/app"]',
+        )
+        test_db.add(repo)
+        test_db.flush()
+        schedule = _create_schedule(
+            test_db,
+            "Due Remote Direct",
+            repository=repo.path,
+            repository_id=repo.id,
+        )
+
+        monkeypatch.setattr(
+            "app.api.schedule.execute_scheduled_backup_with_maintenance",
+            lambda *args, **kwargs: object(),
+        )
+
+        class FakeTask:
+            def add_done_callback(self, callback):
+                self.callback = callback
+
+        monkeypatch.setattr(
+            "app.api.schedule.asyncio.create_task", lambda task: FakeTask()
+        )
+        monkeypatch.setattr(
+            "app.api.schedule._track_scheduled_backup_task",
+            lambda *args, **kwargs: None,
+        )
+
+        run_key = _dispatch_due_scheduled_job(
+            test_db, schedule, datetime.now(timezone.utc)
+        )
+
+        assert run_key == f"backup:{test_db.query(BackupJob).one().id}"
+        backup_job = test_db.query(BackupJob).one()
+        assert backup_job.route_strategy == "remote_direct"
+        assert backup_job.execution_mode == "remote_ssh"
+        assert backup_job.source_ssh_connection_id == connection.id
 
     def test_validate_cron_returns_preview_for_valid_expression(
         self, test_client: TestClient, admin_headers

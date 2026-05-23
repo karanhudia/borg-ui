@@ -236,4 +236,42 @@ describe('BackupPlanRunsPanel', () => {
 
     expect(screen.getByText('Agent')).toBeInTheDocument()
   })
+
+  it('shows remote SSH transport for remote-direct repository rows', () => {
+    const run = {
+      id: 16,
+      backup_plan_id: 3,
+      trigger: 'manual',
+      status: 'completed',
+      started_at: '2026-05-11T10:00:00Z',
+      completed_at: '2026-05-11T10:01:00Z',
+      repositories: [
+        {
+          id: 95,
+          repository_id: 11,
+          status: 'completed',
+          repository: {
+            id: 11,
+            name: 'Remote Repo',
+            path: '/repos/remote',
+            executor_type: 'server',
+          },
+          backup_job: {
+            id: 54,
+            repository: '/repos/remote',
+            repository_id: 11,
+            status: 'completed',
+            execution_mode: 'remote_ssh',
+            route_strategy: 'remote_direct',
+          },
+        },
+      ],
+    } satisfies BackupPlanRun
+
+    render(
+      <BackupPlanRunsPanel runs={[run]} plans={[plan]} onCancel={vi.fn()} onViewLogs={vi.fn()} />
+    )
+
+    expect(screen.getByText('Remote SSH')).toBeInTheDocument()
+  })
 })

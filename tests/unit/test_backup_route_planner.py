@@ -2,7 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.backup_route_planner import plan_repository_route
+from app.services.backup_route_planner import (
+    execution_mode_for_route,
+    plan_repository_route,
+)
 
 
 def repo(**overrides):
@@ -92,6 +95,61 @@ def test_plan_repository_route_supported_matrix(
     assert route.executor == executor
     assert route.agent_machine_id == agent_machine_id
     assert route.reason_key is None
+
+
+@pytest.mark.parametrize(
+    "repository,sources,expected_execution_mode",
+    [
+        (repo(), [local_source()], "local"),
+        (
+            repo(repository_type="ssh", connection_id=2, path="ssh://borg@host/repo"),
+            [local_source()],
+            "local",
+        ),
+        (repo(), [ssh_source(3)], "local"),
+        (
+            repo(repository_type="ssh", connection_id=3),
+            [ssh_source(3)],
+            "remote_ssh",
+        ),
+        (
+            repo(repository_type="ssh", connection_id=4),
+            [ssh_source(3)],
+            "local",
+        ),
+        (
+            repo(executor_type="agent", execution_target="agent", agent_machine_id=10),
+            [agent_source(10)],
+            "agent",
+        ),
+    ],
+)
+def test_execution_mode_for_route(repository, sources, expected_execution_mode):
+    route = plan_repository_route(repository, sources)
+
+    assert route.supported is True
+    assert execution_mode_for_route(route) == expected_execution_mode
+
+
+@pytest.mark.parametrize(
+    "sources,expected_strategy,expected_execution_mode",
+    [
+        ([ssh_source(3), ssh_source(3)], "remote_direct", "remote_ssh"),
+        (
+            [ssh_source(3), ssh_source(4)],
+            "server_sshfs_pull_then_borg_ssh",
+            "local",
+        ),
+    ],
+)
+def test_remote_direct_requires_all_remote_sources_on_repository_connection(
+    sources, expected_strategy, expected_execution_mode
+):
+    route = plan_repository_route(repo(repository_type="ssh", connection_id=3), sources)
+
+    assert route.supported is True
+    assert route.strategy == expected_strategy
+    assert execution_mode_for_route(route) == expected_execution_mode
 
 
 @pytest.mark.parametrize(

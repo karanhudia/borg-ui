@@ -14,6 +14,7 @@ from app.database.models import (
     BackupJob,
     PruneJob,
     CompactJob,
+    SSHConnection,
 )
 from datetime import datetime
 import json
@@ -38,8 +39,11 @@ class TestBackupStart:
         test_db.commit()
         test_db.refresh(repo)
 
-        with patch(
-            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+        with (
+            patch(
+                "app.api.backup.backup_service.execute_backup", return_value=object()
+            ),
+            patch("app.api.backup.asyncio.create_task"),
         ):
             response = test_client.post(
                 "/api/backup/start",
@@ -317,6 +321,45 @@ class TestBackupStart:
         assert agent_job.payload["secrets"] == {
             "BORG_PASSPHRASE": {"value": "repo-secret"}
         }
+
+    def test_start_backup_uses_remote_direct_for_same_ssh_source_and_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        connection = SSHConnection(
+            host="docker-host.example",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        test_db.add(connection)
+        test_db.flush()
+        repo = Repository(
+            name="Remote Direct Repo",
+            path="/repos/remote-direct",
+            encryption="none",
+            repository_type="ssh",
+            connection_id=connection.id,
+            source_ssh_connection_id=connection.id,
+            source_directories=json.dumps(["/var/lib/docker/volumes/app"]),
+        )
+        test_db.add(repo)
+        test_db.commit()
+
+        with patch(
+            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+        ):
+            response = test_client.post(
+                "/api/backup/start",
+                json={"repository": repo.path},
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).one()
+        assert backup_job.route_strategy == "remote_direct"
+        assert backup_job.execution_mode == "remote_ssh"
+        assert backup_job.source_ssh_connection_id == connection.id
 
     def test_start_backup_routes_agent_repository_by_executor_type(
         self, test_client: TestClient, admin_headers, test_db
@@ -654,7 +697,11 @@ class TestBackupStatus:
     ):
         """Test getting backup status returns 200"""
         job = BackupJob(
-            repository="/test/repo", status="running", started_at=datetime.now()
+            repository="/test/repo",
+            status="running",
+            started_at=datetime.now(),
+            execution_mode="remote_ssh",
+            route_strategy="remote_direct",
         )
         test_db.add(job)
         test_db.commit()
@@ -667,6 +714,8 @@ class TestBackupStatus:
         assert response.status_code == 200
         data = response.json()
         assert "status" in data or "job" in data
+        assert data["execution_mode"] == "remote_ssh"
+        assert data["route_strategy"] == "remote_direct"
 
     def test_get_backup_status_omits_unsupported_borg2_progress_fields(
         self, test_client: TestClient, admin_headers, test_db
@@ -682,6 +731,8 @@ class TestBackupStatus:
             repository=repo.path,
             status="running",
             started_at=datetime.now(),
+            execution_mode="remote_ssh",
+            route_strategy="remote_direct",
             original_size=1024,
             compressed_size=512,
             deduplicated_size=256,
@@ -716,6 +767,8 @@ class TestBackupStatus:
             repository=repo.path,
             status="running",
             started_at=datetime.now(),
+            execution_mode="remote_ssh",
+            route_strategy="remote_direct",
             original_size=1024,
             compressed_size=512,
             deduplicated_size=256,
@@ -730,7 +783,8 @@ class TestBackupStatus:
         payload_job = next(
             item for item in response.json()["jobs"] if item["id"] == job.id
         )
-        assert payload_job["execution_mode"] == "local"
+        assert payload_job["execution_mode"] == "remote_ssh"
+        assert payload_job["route_strategy"] == "remote_direct"
         progress = payload_job["progress_details"]
         assert progress["compressed_size"] == 512
         assert progress["deduplicated_size"] == 256

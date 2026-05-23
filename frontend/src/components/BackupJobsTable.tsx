@@ -134,12 +134,19 @@ const getTypeColor = (
 
 const getTransportLabel = (
   executionMode: string | null | undefined,
+  routeStrategy: string | null | undefined,
   t: (key: string) => string
 ) => {
+  if (executionMode === 'agent') return t('backupJobsTable.transport.agent')
+  if (
+    executionMode === 'remote_ssh' ||
+    executionMode === 'remote_direct' ||
+    routeStrategy === 'remote_direct'
+  ) {
+    return t('backupJobsTable.transport.remoteSsh')
+  }
   if (!executionMode) return null
-  return executionMode === 'agent'
-    ? t('backupJobsTable.transport.agent')
-    : t('backupJobsTable.transport.server')
+  return t('backupJobsTable.transport.server')
 }
 
 export const BackupJobsTable = <T extends Job = Job>({
@@ -476,7 +483,7 @@ export const BackupJobsTable = <T extends Job = Job>({
       align: 'left',
       width: '180px',
       render: (job: T) => {
-        const transportLabel = getTransportLabel(job.execution_mode, t)
+        const transportLabel = getTransportLabel(job.execution_mode, job.route_strategy, t)
         return (
           <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
             <StatusBadge status={job.status} />

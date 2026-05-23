@@ -26,6 +26,7 @@ from app.core.security import (
 )
 from app.services.backup_service import backup_service
 from app.services.backup_progress_contract import serialize_backup_progress_details
+from app.services.backup_route_planner import apply_repository_route_to_backup_job
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     get_agent_job_for_backup,
@@ -227,6 +228,8 @@ async def _start_backup_impl(
             if repo_record
             else None,
         )
+        if repo_record is not None and not is_agent_executor(repo_record):
+            apply_repository_route_to_backup_job(backup_job, repo_record)
         db.add(backup_job)
         db.commit()
         db.refresh(backup_job)
@@ -371,6 +374,7 @@ async def get_all_backup_jobs(
                     ),
                     "archive_name": getattr(job, "archive_name", None),
                     "execution_mode": job.execution_mode or "local",
+                    "route_strategy": job.route_strategy,
                     "progress_details": serialize_backup_progress_details(
                         job,
                         _get_job_repository(db, job.repository),
@@ -427,6 +431,7 @@ async def get_backup_status(
                 else "manual"
             ),
             "progress_details": serialize_backup_progress_details(job, repo),
+            "route_strategy": job.route_strategy,
         }
     except Exception as e:
         logger.error("Failed to get backup status", error=str(e))

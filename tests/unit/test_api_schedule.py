@@ -5,7 +5,9 @@ Each test verifies ONE specific expected outcome.
 
 import pytest
 from fastapi.testclient import TestClient
-from app.database.models import Repository, ScheduledJob
+from unittest.mock import patch
+
+from app.database.models import BackupJob, Repository, ScheduledJob, SSHConnection
 from tests.unit.helpers import assert_auth_required
 
 
@@ -405,6 +407,61 @@ class TestScheduleRunNow:
         response = test_client.post("/api/schedule/1/run-now")
 
         assert response.status_code == 401
+
+    def test_run_schedule_now_uses_remote_direct_for_same_ssh_source_and_repo(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        connection = SSHConnection(
+            host="docker-host.example",
+            username="backup",
+            port=22,
+            is_backup_source=True,
+            borg_binary_path="/usr/local/bin/borg-wrapper",
+        )
+        test_db.add(connection)
+        test_db.flush()
+        repo = Repository(
+            name="Remote Direct Repo",
+            path="/repos/remote-direct",
+            encryption="none",
+            repository_type="ssh",
+            connection_id=connection.id,
+            source_ssh_connection_id=connection.id,
+            source_directories='["/var/lib/docker/volumes/app"]',
+        )
+        test_db.add(repo)
+        test_db.flush()
+        schedule = ScheduledJob(
+            repository=repo.path,
+            repository_id=repo.id,
+            cron_expression="0 2 * * *",
+            enabled=True,
+            name="Daily Remote Direct",
+        )
+        test_db.add(schedule)
+        test_db.commit()
+
+        with (
+            patch(
+                "app.api.schedule.execute_scheduled_backup_with_maintenance",
+                new=lambda *args, **kwargs: object(),
+            ),
+            patch("app.api.schedule.asyncio.create_task"),
+            patch("app.api.schedule._track_scheduled_backup_task"),
+        ):
+            response = test_client.post(
+                f"/api/schedule/{schedule.id}/run-now", headers=admin_headers
+            )
+
+        assert response.status_code == 200
+        backup_job = (
+            test_db.query(BackupJob)
+            .filter(BackupJob.scheduled_job_id == schedule.id)
+            .one()
+        )
+        assert backup_job.route_strategy == "remote_direct"
+        assert backup_job.execution_mode == "remote_ssh"
+        assert backup_job.source_ssh_connection_id == connection.id
 
 
 @pytest.mark.unit

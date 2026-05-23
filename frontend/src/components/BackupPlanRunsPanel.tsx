@@ -63,8 +63,16 @@ function getTransportLabel(
   t: (key: string) => string
 ): string | null {
   const executionMode = runRepository.backup_job?.execution_mode
+  const routeStrategy = runRepository.backup_job?.route_strategy
   if (executionMode === 'agent' || runRepository.repository?.executor_type === 'agent') {
     return t('backupPlans.runsDialog.transport.agent')
+  }
+  if (
+    executionMode === 'remote_ssh' ||
+    executionMode === 'remote_direct' ||
+    routeStrategy === 'remote_direct'
+  ) {
+    return t('backupPlans.runsDialog.transport.remoteSsh')
   }
   if (executionMode || runRepository.repository?.executor_type === 'server') {
     return t('backupPlans.runsDialog.transport.server')
