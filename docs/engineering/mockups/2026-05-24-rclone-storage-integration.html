@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Borg UI Rclone Storage Mockup</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --surface-muted: #f1f5f9;
+        --line: #d8e0ea;
+        --line-strong: #9fb0c3;
+        --text: #0f172a;
+        --muted: #64748b;
+        --blue: #2563eb;
+        --blue-soft: #eff6ff;
+        --green: #059669;
+        --green-soft: #ecfdf5;
+        --amber: #b45309;
+        --amber-soft: #fffbeb;
+        --red: #dc2626;
+        --red-soft: #fef2f2;
+        --shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.45;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 236px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        background: #111827;
+        color: #cbd5e1;
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+
+      .brand {
+        color: #fff;
+        font-weight: 700;
+        letter-spacing: 0;
+        font-size: 17px;
+      }
+
+      .nav {
+        display: grid;
+        gap: 4px;
+      }
+
+      .nav a {
+        color: #cbd5e1;
+        text-decoration: none;
+        padding: 9px 10px;
+        border-radius: 8px;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .nav a.active {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      .nav-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        border: 2px solid currentColor;
+        flex: 0 0 auto;
+      }
+
+      main {
+        min-width: 0;
+        padding: 26px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+
+      .subtle {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      button,
+      .button {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-weight: 650;
+        font-size: 14px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+      }
+
+      .button.primary {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff;
+      }
+
+      .shell {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .wizard-head {
+        border-bottom: 1px solid var(--line);
+        padding: 18px 20px;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .steps {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .step {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 9px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .step.active {
+        color: var(--blue);
+        background: var(--blue-soft);
+        border-color: #bfdbfe;
+      }
+
+      .step.done {
+        color: var(--green);
+        background: var(--green-soft);
+        border-color: #bbf7d0;
+      }
+
+      .wizard-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        min-height: 680px;
+      }
+
+      .wizard-body {
+        padding: 20px;
+        display: grid;
+        gap: 22px;
+        align-content: start;
+      }
+
+      .side-panel {
+        border-left: 1px solid var(--line);
+        background: #fbfdff;
+        padding: 20px;
+        display: grid;
+        align-content: start;
+        gap: 18px;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .section-title h2 {
+        font-size: 16px;
+      }
+
+      .location-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .option {
+        min-height: 132px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        border-radius: 8px;
+        padding: 14px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+
+      .option.selected {
+        border-color: var(--blue);
+        background: var(--blue-soft);
+        box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.15);
+      }
+
+      .option-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        background: var(--surface-muted);
+        color: var(--muted);
+        font-weight: 800;
+      }
+
+      .option.selected .option-icon {
+        background: var(--blue);
+        color: #fff;
+      }
+
+      .option h3 {
+        font-size: 14px;
+      }
+
+      .option p {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .field.full {
+        grid-column: 1 / -1;
+      }
+
+      label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #334155;
+      }
+
+      input,
+      select,
+      output.readonly {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 11px;
+        background: #fff;
+        color: var(--text);
+        font: inherit;
+        font-size: 14px;
+      }
+
+      .helper {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .segmented {
+        border: 1px solid var(--line);
+        background: var(--surface-muted);
+        border-radius: 8px;
+        padding: 3px;
+        display: inline-grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        width: 100%;
+        gap: 3px;
+      }
+
+      .segment {
+        text-align: center;
+        border: 0;
+        border-radius: 6px;
+        padding: 8px 6px;
+        background: transparent;
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .segment.active {
+        background: #fff;
+        color: var(--text);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+      }
+
+      .segment:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+
+      output.readonly {
+        display: block;
+      }
+
+      .notice {
+        border: 1px solid #fed7aa;
+        background: var(--amber-soft);
+        color: #7c2d12;
+        border-radius: 8px;
+        padding: 12px;
+        font-size: 13px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .notice.info {
+        border-color: #bfdbfe;
+        background: var(--blue-soft);
+        color: #1e3a8a;
+      }
+
+      .status-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .status-row {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 11px 12px;
+        background: #fff;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .status-row strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .status-row span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 2px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-weight: 700;
+        border: 1px solid var(--line);
+        white-space: nowrap;
+      }
+
+      .chip.green {
+        background: var(--green-soft);
+        border-color: #bbf7d0;
+        color: var(--green);
+      }
+
+      .chip.blue {
+        background: var(--blue-soft);
+        border-color: #bfdbfe;
+        color: var(--blue);
+      }
+
+      .chip.amber {
+        background: var(--amber-soft);
+        border-color: #fde68a;
+        color: var(--amber);
+      }
+
+      .route {
+        display: grid;
+        gap: 8px;
+      }
+
+      .route-item {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        padding: 10px;
+        display: flex;
+        gap: 9px;
+        align-items: center;
+      }
+
+      .route-index {
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: var(--surface-muted);
+        display: grid;
+        place-items: center;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 800;
+        flex: 0 0 auto;
+      }
+
+      .route-item strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .route-item span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 1px;
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .summary .status-row {
+        display: block;
+      }
+
+      .repo-card {
+        margin-top: 22px;
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .repo-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: start;
+      }
+
+      .repo-head h2 {
+        font-size: 16px;
+      }
+
+      .repo-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .button.small {
+        padding: 7px 9px;
+        font-size: 12px;
+      }
+
+      .mono {
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", Menlo, ui-monospace,
+          monospace;
+      }
+
+      @media (max-width: 1180px) {
+        .location-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .wizard-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .side-panel {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+      }
+
+      @media (max-width: 760px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          display: none;
+        }
+
+        main {
+          padding: 16px;
+        }
+
+        .topbar,
+        .wizard-head,
+        .repo-head {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .toolbar,
+        .repo-actions {
+          width: 100%;
+        }
+
+        .toolbar .button,
+        .repo-actions .button {
+          justify-content: center;
+          flex: 1;
+        }
+
+        .location-grid,
+        .form-grid,
+        .summary {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">Borg UI</div>
+        <nav class="nav" aria-label="Main">
+          <a href="#"><span class="nav-dot"></span>Dashboard</a>
+          <a href="#"><span class="nav-dot"></span>Backup Plans</a>
+          <a class="active" href="#"
+            ><span class="nav-dot"></span>Repositories</a
+          >
+          <a href="#"><span class="nav-dot"></span>Remote Machines</a>
+          <a href="#"><span class="nav-dot"></span>Managed Agents</a>
+          <a href="#"><span class="nav-dot"></span>Settings</a>
+        </nav>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <h1>Repositories</h1>
+            <p class="subtle">
+              Storage targets, archive health, and maintenance
+            </p>
+          </div>
+          <div class="toolbar">
+            <button class="button">Import existing</button>
+            <button class="button primary">New repository</button>
+          </div>
+        </header>
+
+        <section class="shell" aria-label="Create repository wizard">
+          <div class="wizard-head">
+            <div>
+              <h2>Create repository</h2>
+              <p class="subtle">Production App Archives</p>
+            </div>
+            <div class="steps" aria-label="Wizard steps">
+              <span class="step done">1 Basics</span>
+              <span class="step active">2 Location</span>
+              <span class="step">3 Security</span>
+              <span class="step">4 Review</span>
+            </div>
+          </div>
+
+          <div class="wizard-grid">
+            <div class="wizard-body">
+              <section>
+                <div class="section-title">
+                  <h2>Repository location</h2>
+                  <span class="chip blue">Pro feature</span>
+                </div>
+                <div class="location-grid">
+                  <article class="option">
+                    <div class="option-icon">B</div>
+                    <h3>Borg UI server</h3>
+                    <p>
+                      Use a filesystem path mounted into the Borg UI container.
+                    </p>
+                  </article>
+                  <article class="option">
+                    <div class="option-icon">S</div>
+                    <h3>Remote machine</h3>
+                    <p>Store the Borg repository on an SSH-connected host.</p>
+                  </article>
+                  <article class="option">
+                    <div class="option-icon">A</div>
+                    <h3>Managed agent</h3>
+                    <p>
+                      Run Borg on a registered agent and use its local path.
+                    </p>
+                  </article>
+                  <article class="option selected">
+                    <div class="option-icon">R</div>
+                    <h3>Cloud storage</h3>
+                    <p>Mirror a local Borg cache to an rclone remote.</p>
+                  </article>
+                </div>
+              </section>
+
+              <section>
+                <div class="section-title">
+                  <h2>Rclone target</h2>
+                  <span class="chip green">Remote tested</span>
+                </div>
+                <div class="form-grid">
+                  <div class="field">
+                    <label for="remote">Remote</label>
+                    <select id="remote">
+                      <option>prod-s3 - Amazon S3 compatible</option>
+                    </select>
+                    <p class="helper">
+                      Uses the managed rclone config stored under /data/rclone.
+                    </p>
+                  </div>
+                  <div class="field">
+                    <label for="provider">Provider</label>
+                    <input id="provider" value="S3-compatible storage" />
+                  </div>
+                  <div class="field full">
+                    <label for="remote-path"
+                      >Remote repository path inside remote</label
+                    >
+                    <input
+                      id="remote-path"
+                      class="mono"
+                      value="borg-ui/repositories/production-app"
+                    />
+                    <p class="helper">
+                      Stored as a path inside the selected remote. Full target:
+                      prod-s3:borg-ui/repositories/production-app.
+                    </p>
+                  </div>
+                  <div class="field full">
+                    <label for="cache-path">Local Borg cache path</label>
+                    <output id="cache-path" class="readonly mono"
+                      >/data/rclone-cache/repositories/production-app</output
+                    >
+                    <p class="helper">
+                      Server-derived path. Borg reads and writes here before
+                      Borg UI mirrors to rclone.
+                    </p>
+                  </div>
+                  <div class="field full">
+                    <label>Sync policy</label>
+                    <div
+                      class="segmented"
+                      role="group"
+                      aria-label="Sync policy"
+                    >
+                      <button
+                        type="button"
+                        class="segment active"
+                        aria-pressed="true"
+                      >
+                        After Borg job
+                      </button>
+                      <button
+                        type="button"
+                        class="segment"
+                        aria-pressed="false"
+                      >
+                        Manual
+                      </button>
+                      <button
+                        type="button"
+                        class="segment"
+                        aria-pressed="false"
+                      >
+                        Scheduled
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="notice info">
+                <strong>Storage flow</strong>
+                <span>
+                  Borg writes to the local cache. Borg UI runs rclone sync only
+                  after the Borg transaction is closed.
+                </span>
+              </div>
+
+              <section>
+                <div class="section-title">
+                  <h2>Review route</h2>
+                  <span class="chip amber">Cache needs 1.2 TB free</span>
+                </div>
+                <div class="summary">
+                  <div class="status-row">
+                    <strong>Repository path</strong>
+                    <span class="mono"
+                      >/data/rclone-cache/repositories/production-app</span
+                    >
+                  </div>
+                  <div class="status-row">
+                    <strong>Rclone target</strong>
+                    <span class="mono"
+                      >prod-s3:borg-ui/repositories/production-app</span
+                    >
+                  </div>
+                  <div class="status-row">
+                    <strong>Operation mode</strong>
+                    <span>Local Borg cache with remote mirror</span>
+                  </div>
+                  <div class="status-row">
+                    <strong>Recovery</strong>
+                    <span
+                      >Hydrate cache from remote, then run Borg operations
+                      locally</span
+                    >
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <aside class="side-panel" aria-label="Route preview">
+              <section>
+                <div class="section-title">
+                  <h2>Route preview</h2>
+                </div>
+                <div class="route">
+                  <div class="route-item">
+                    <div class="route-index">1</div>
+                    <div>
+                      <strong>Sources</strong>
+                      <span>/srv/app, /etc/borg-ui</span>
+                    </div>
+                  </div>
+                  <div class="route-item">
+                    <div class="route-index">2</div>
+                    <div>
+                      <strong>Borg UI server</strong>
+                      <span>Runs borg create against the local cache</span>
+                    </div>
+                  </div>
+                  <div class="route-item">
+                    <div class="route-index">3</div>
+                    <div>
+                      <strong>Local cache</strong>
+                      <span class="mono"
+                        >/data/rclone-cache/repositories/production-app</span
+                      >
+                    </div>
+                  </div>
+                  <div class="route-item">
+                    <div class="route-index">4</div>
+                    <div>
+                      <strong>Rclone sync</strong>
+                      <span>Runs after Borg exits successfully</span>
+                    </div>
+                  </div>
+                  <div class="route-item">
+                    <div class="route-index">5</div>
+                    <div>
+                      <strong>Remote mirror</strong>
+                      <span class="mono"
+                        >prod-s3:borg-ui/repositories/production-app</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <div class="section-title">
+                  <h2>Preflight</h2>
+                </div>
+                <div class="status-list">
+                  <div class="status-row">
+                    <div>
+                      <strong>Rclone binary</strong>
+                      <span>/usr/bin/rclone</span>
+                    </div>
+                    <span class="chip green">Ready</span>
+                  </div>
+                  <div class="status-row">
+                    <div>
+                      <strong>Remote path</strong>
+                      <span>Borg UI-owned prefix</span>
+                    </div>
+                    <span class="chip green">Safe</span>
+                  </div>
+                  <div class="status-row">
+                    <div>
+                      <strong>Last remote test</strong>
+                      <span>24 May 2026, 10:42</span>
+                    </div>
+                    <span class="chip green">Passed</span>
+                  </div>
+                </div>
+              </section>
+
+              <div class="notice">
+                <strong>Sync failure</strong>
+                <span>
+                  A successful Borg backup can finish with a warning if the
+                  mirror fails. The repository remains pending until the next
+                  successful sync.
+                </span>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="repo-card" aria-label="Repository card state">
+          <div class="repo-head">
+            <div>
+              <h2>Production App Archives</h2>
+              <p class="subtle mono">
+                /data/rclone-cache/repositories/production-app
+              </p>
+            </div>
+            <div class="repo-actions">
+              <button class="button small">Run backup</button>
+              <button class="button small">Run sync now</button>
+              <button class="button small">Hydrate cache</button>
+            </div>
+          </div>
+          <div class="summary">
+            <div class="status-row">
+              <strong>Storage</strong>
+              <span><span class="chip blue">Rclone mirror</span></span>
+            </div>
+            <div class="status-row">
+              <strong>Sync state</strong>
+              <span><span class="chip green">Synced 12 minutes ago</span></span>
+            </div>
+            <div class="status-row">
+              <strong>Remote target</strong>
+              <span class="mono"
+                >prod-s3:borg-ui/repositories/production-app</span
+              >
+            </div>
+            <div class="status-row">
+              <strong>Last backup</strong>
+              <span>Completed with remote mirror verified</span>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
