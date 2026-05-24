@@ -42,6 +42,28 @@ const sampleRepository: Repository = {
   next_run: '2026-05-17T02:00:00.000Z',
 }
 
+const rcloneRepository: Repository = {
+  ...sampleRepository,
+  id: 43,
+  name: 'Cloud Mirror Repository',
+  path: '/data/rclone-cache/repositories/43',
+  repository_type: 'rclone',
+  storage_backend: 'rclone',
+  rclone_storage: {
+    repository_id: 43,
+    backend: 'rclone',
+    rclone_remote_id: 3,
+    rclone_remote_name: 'local-test',
+    rclone_remote_path: 'borg-ui/production',
+    rclone_target: 'local-test:borg-ui/production',
+    cache_path: '/data/rclone-cache/repositories/43',
+    cache_present: true,
+    sync_policy: 'after_success',
+    sync_status: 'current',
+    last_synced_at: '2026-05-15T16:35:00.000Z',
+  },
+}
+
 const noop = () => {}
 const canDo = (_action: RepoAction) => true
 const defaultArgs = {
@@ -76,6 +98,70 @@ type Story = StoryObj<typeof meta>
 
 export const Default: Story = {
   args: defaultArgs,
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const RcloneSynced: Story = {
+  args: {
+    ...defaultArgs,
+    repository: rcloneRepository,
+    onRcloneSync: noop,
+    onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const RcloneFailed: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...rcloneRepository,
+      id: 44,
+      name: 'Failed Cloud Mirror',
+      rclone_storage: {
+        ...rcloneRepository.rclone_storage!,
+        repository_id: 44,
+        sync_policy: 'manual',
+        sync_status: 'failed',
+        last_sync_error: 'remote local-test unavailable',
+      },
+    },
+    onRcloneSync: noop,
+    onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const RcloneHydrationRequired: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...rcloneRepository,
+      id: 45,
+      name: 'Imported Cloud Mirror',
+      rclone_storage: {
+        ...rcloneRepository.rclone_storage!,
+        repository_id: 45,
+        cache_present: false,
+        sync_status: 'pending',
+        last_synced_at: null,
+      },
+    },
+    onRcloneSync: noop,
+    onRcloneHydrate: noop,
+  },
   render: (args) => (
     <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
       <RepositoryCard {...args} />

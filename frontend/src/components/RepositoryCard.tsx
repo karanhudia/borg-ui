@@ -15,6 +15,9 @@ import {
   Archive,
   HardDrive,
   Clock,
+  Cloud,
+  CloudDownload,
+  CloudUpload,
   ScanSearch,
   RefreshCw,
   ClipboardList,
@@ -41,6 +44,8 @@ interface RepositoryCardProps {
   onBackupNow: () => void
   onViewArchives: () => void
   onCreateBackupPlan?: () => void
+  onRcloneSync?: () => void
+  onRcloneHydrate?: () => void
   getCompressionLabel: (compression: string) => string
   canManageRepository?: boolean
   canDo: (action: RepoAction) => boolean
@@ -72,6 +77,8 @@ export default function RepositoryCard({
   onBackupNow,
   onViewArchives,
   onCreateBackupPlan,
+  onRcloneSync,
+  onRcloneHydrate,
   getCompressionLabel,
   canManageRepository = false,
   canDo,
@@ -92,6 +99,9 @@ export default function RepositoryCard({
   const hasManualBackupSources = Boolean(repository.source_directories?.length)
   const canCreatePlan = Boolean(onCreateBackupPlan) && canDo('backup') && repository.mode === 'full'
   const canRunLegacyBackup = canDo('backup') && repository.mode === 'full' && hasManualBackupSources
+  const rcloneStorage = repository.rclone_storage
+  const rcloneOperationRunning =
+    rcloneStorage?.sync_status === 'syncing' || rcloneStorage?.sync_status === 'hydrating'
 
   const [elapsedTime, setElapsedTime] = useState('')
 
@@ -170,7 +180,92 @@ export default function RepositoryCard({
           },
         ]
       : []),
+    ...(rcloneStorage
+      ? [
+          {
+            label: t('repositoryCard.rcloneMirror'),
+            value:
+              rcloneStorage.rclone_remote_name && rcloneStorage.rclone_remote_path
+                ? `${rcloneStorage.rclone_remote_name}:${rcloneStorage.rclone_remote_path}`
+                : rcloneStorage.rclone_target || rcloneStorage.rclone_remote_path,
+            tooltip: rcloneStorage.rclone_target || rcloneStorage.rclone_remote_path,
+          },
+        ]
+      : []),
   ]
+
+  const rcloneStatusBadge = (() => {
+    if (!rcloneStorage) return null
+
+    const failed = rcloneStorage.sync_status === 'failed'
+    const cacheMissing = rcloneStorage.cache_present === false
+    const status = cacheMissing ? 'cache_missing' : rcloneStorage.sync_status
+    const lastSyncedTitle = rcloneStorage.last_synced_at
+      ? t('repositoryCard.rcloneLastSynced', {
+          when: formatDateTimeFull(rcloneStorage.last_synced_at),
+        })
+      : ''
+
+    const byStatus: Record<
+      string,
+      { label: string; color: string; bg: string; border: string; title: string }
+    > = {
+      current: {
+        label: t('repositoryCard.rcloneSynced'),
+        color: theme.palette.success.main,
+        bg: alpha(theme.palette.success.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.success.main, isDark ? 0.32 : 0.24),
+        title: lastSyncedTitle,
+      },
+      pending: {
+        label: t('repositoryCard.rclonePending'),
+        color: theme.palette.warning.main,
+        bg: alpha(theme.palette.warning.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.warning.main, isDark ? 0.34 : 0.24),
+        title: lastSyncedTitle,
+      },
+      syncing: {
+        label: t('repositoryCard.rcloneSyncing'),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.info.main, isDark ? 0.34 : 0.24),
+        title: rcloneStorage.rclone_target || '',
+      },
+      failed: {
+        label: t('repositoryCard.rcloneFailed'),
+        color: theme.palette.error.main,
+        bg: alpha(theme.palette.error.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.error.main, isDark ? 0.34 : 0.24),
+        title: rcloneStorage.last_sync_error
+          ? t('repositoryCard.rcloneError', { message: rcloneStorage.last_sync_error })
+          : '',
+      },
+      hydrating: {
+        label: t('repositoryCard.rcloneHydrating'),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.info.main, isDark ? 0.34 : 0.24),
+        title: rcloneStorage.rclone_target || '',
+      },
+      cache_missing: {
+        label: t('repositoryCard.rcloneHydrationRequired'),
+        color: theme.palette.warning.main,
+        bg: alpha(theme.palette.warning.main, isDark ? 0.12 : 0.09),
+        border: alpha(theme.palette.warning.main, isDark ? 0.34 : 0.24),
+        title: rcloneStorage.rclone_target || '',
+      },
+    }
+
+    return (
+      byStatus[status] || {
+        label: status,
+        color: theme.palette.text.secondary,
+        bg: alpha(theme.palette.text.secondary, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.text.secondary, isDark ? 0.28 : 0.2),
+        title: failed ? rcloneStorage.last_sync_error || '' : rcloneStorage.rclone_target || '',
+      }
+    )
+  })()
 
   const scheduleBadge = (() => {
     if (!repository.has_schedule) return null
@@ -325,6 +420,34 @@ export default function RepositoryCard({
                   />
                 )}
                 <BorgVersionChip borgVersion={repository.borg_version} />
+                {rcloneStatusBadge && (
+                  <Tooltip title={rcloneStatusBadge.title} arrow>
+                    <Chip
+                      icon={<Cloud size={12} />}
+                      label={rcloneStatusBadge.label}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        maxWidth: { xs: 140, sm: 180 },
+                        bgcolor: rcloneStatusBadge.bg,
+                        color: rcloneStatusBadge.color,
+                        border: '1px solid',
+                        borderColor: rcloneStatusBadge.border,
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        '& .MuiChip-icon': {
+                          ml: 0.75,
+                          color: 'inherit',
+                        },
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )}
               </Box>
             </Box>
 
@@ -652,6 +775,37 @@ export default function RepositoryCard({
                   </IconButton>
                 </span>
               </Tooltip>
+            )}
+
+            {rcloneStorage && canDo('maintenance') && (
+              <>
+                <Tooltip title={t('repositoryCard.buttons.rcloneSync')} arrow>
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={onRcloneSync}
+                      aria-label={t('repositoryCard.buttons.rcloneSync')}
+                      disabled={!onRcloneSync || isMaintenanceRunning || rcloneOperationRunning}
+                      sx={coloredIconBtnSx('info')}
+                    >
+                      <CloudUpload size={16} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title={t('repositoryCard.buttons.rcloneHydrate')} arrow>
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={onRcloneHydrate}
+                      aria-label={t('repositoryCard.buttons.rcloneHydrate')}
+                      disabled={!onRcloneHydrate || isMaintenanceRunning || rcloneOperationRunning}
+                      sx={coloredIconBtnSx('primary')}
+                    >
+                      <CloudDownload size={16} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </>
             )}
 
             {/* Destructive repository actions — separated with a vertical rule */}

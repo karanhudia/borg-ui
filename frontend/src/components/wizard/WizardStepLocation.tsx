@@ -46,12 +46,29 @@ export interface LocationStepData {
   name: string
   borgVersion?: 1 | 2
   repositoryMode: 'full' | 'observe'
-  repositoryLocation: 'local' | 'ssh'
+  repositoryLocation: 'local' | 'ssh' | 'rclone'
   executionTarget?: 'local' | 'agent'
   agentMachineId?: number | ''
   path: string
   repoSshConnectionId: number | ''
   bypassLock: boolean
+  rcloneRemoteId?: number | ''
+  rcloneRemotePath?: string
+  rcloneSyncPolicy?: 'after_success' | 'manual' | 'scheduled'
+  rcloneExtraFlags?: string
+}
+
+interface RcloneRemote {
+  id: number
+  name: string
+  provider: string
+  last_test_status?: string | null
+}
+
+interface RcloneStatus {
+  available: boolean
+  version?: string | null
+  error?: string | null
 }
 
 interface WizardStepLocationProps {
@@ -59,6 +76,8 @@ interface WizardStepLocationProps {
   data: LocationStepData
   sshConnections: SSHConnection[]
   agentMachines?: AgentMachine[]
+  rcloneRemotes?: RcloneRemote[]
+  rcloneStatus?: RcloneStatus | null
   dataSource?: 'local' | 'remote' // Data source from step 2
   sourceSshConnectionId?: number | '' // Source SSH connection ID
   onChange: (data: Partial<LocationStepData>) => void
@@ -70,6 +89,8 @@ export default function WizardStepLocation({
   data,
   sshConnections,
   agentMachines = [],
+  rcloneRemotes = [],
+  rcloneStatus = null,
   dataSource,
   sourceSshConnectionId,
   onChange,
@@ -85,13 +106,14 @@ export default function WizardStepLocation({
   const isRemoteLocationDisabled =
     isAgentExecution || (mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId)
 
-  const handleLocationChange = (location: 'local' | 'ssh') => {
+  const handleLocationChange = (location: 'local' | 'ssh' | 'rclone') => {
     if (location === 'ssh' && isRemoteLocationDisabled) {
       return // Don't allow switching to SSH if data source is remote
     }
     onChange({
       repositoryLocation: location,
-      repoSshConnectionId: '',
+      repoSshConnectionId: location === 'ssh' ? data.repoSshConnectionId : '',
+      path: location === 'rclone' ? data.rcloneRemotePath || data.path : data.path,
     })
   }
 
@@ -490,6 +512,70 @@ export default function WizardStepLocation({
                 </CardContent>
               </CardActionArea>
             </Card>
+
+            <Card
+              variant="outlined"
+              sx={{
+                flex: 1,
+                border: data.repositoryLocation === 'rclone' ? 2 : 1,
+                borderColor: data.repositoryLocation === 'rclone' ? 'primary.main' : 'divider',
+                boxShadow:
+                  data.repositoryLocation === 'rclone'
+                    ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
+                    : 'none',
+                bgcolor:
+                  data.repositoryLocation === 'rclone'
+                    ? (theme) => alpha(theme.palette.primary.main, 0.08)
+                    : 'background.paper',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transform: data.repositoryLocation === 'rclone' ? 'translateY(-2px)' : 'none',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
+                  borderColor:
+                    data.repositoryLocation === 'rclone' ? 'primary.main' : 'text.primary',
+                },
+              }}
+            >
+              <CardActionArea onClick={() => handleLocationChange('rclone')} sx={{ p: 1 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 48,
+                        height: 48,
+                        borderRadius: 3,
+                        bgcolor:
+                          data.repositoryLocation === 'rclone' ? 'primary.main' : 'action.hover',
+                        color: data.repositoryLocation === 'rclone' ? 'white' : 'text.secondary',
+                        transition: 'all 0.3s ease',
+                        boxShadow:
+                          data.repositoryLocation === 'rclone'
+                            ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
+                            : 'none',
+                      }}
+                    >
+                      <Cloud size={28} />
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                        {t('wizard.location.rcloneStorage')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ fontSize: '0.8125rem' }}
+                      >
+                        {t('wizard.location.rcloneStorageDesc')}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </CardActionArea>
+            </Card>
           </Box>
 
           {/* Warning when remote location is disabled due to remote data source */}
@@ -566,36 +652,147 @@ export default function WizardStepLocation({
         </>
       )}
 
+      {data.repositoryLocation === 'rclone' && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {rcloneStatus && !rcloneStatus.available && (
+            <Alert severity="warning">
+              {rcloneStatus.error || t('wizard.location.rcloneUnavailable')}
+            </Alert>
+          )}
+          <FormControl fullWidth disabled={rcloneStatus?.available === false}>
+            <InputLabel id="rclone-remote-label">
+              {t('wizard.location.rcloneRemoteLabel')}
+            </InputLabel>
+            <Select
+              labelId="rclone-remote-label"
+              id="rclone-remote"
+              value={
+                data.rcloneRemoteId === '' || data.rcloneRemoteId == null
+                  ? ''
+                  : String(data.rcloneRemoteId)
+              }
+              label={t('wizard.location.rcloneRemoteLabel')}
+              onChange={(e) => {
+                const value = e.target.value
+                onChange({ rcloneRemoteId: value ? Number(value) : '' })
+              }}
+            >
+              {rcloneRemotes.map((remote) => (
+                <MenuItem key={remote.id} value={String(remote.id)}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                    <Cloud size={16} />
+                    <Typography variant="body2">{remote.name}</Typography>
+                    <Chip
+                      size="small"
+                      label={remote.provider}
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: '0.65rem' }}
+                    />
+                    {remote.last_test_status && (
+                      <Typography variant="caption" color="text.secondary">
+                        {remote.last_test_status}
+                      </Typography>
+                    )}
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {rcloneRemotes.length === 0 && (
+            <Alert severity="info">{t('wizard.location.rcloneNoRemotes')}</Alert>
+          )}
+
+          <TextField
+            label={t('wizard.location.rcloneRemotePathLabel')}
+            value={data.rcloneRemotePath || ''}
+            onChange={(e) => {
+              onChange({ rcloneRemotePath: e.target.value, path: e.target.value })
+            }}
+            placeholder="borg-ui/repositories/app"
+            required
+            fullWidth
+            helperText={t('wizard.location.rcloneRemotePathHelper')}
+          />
+
+          <TextField
+            label={t('wizard.location.rcloneCachePreviewLabel')}
+            value="/data/rclone-cache/repositories/<repository-id>"
+            fullWidth
+            InputProps={{ readOnly: true }}
+            helperText={t('wizard.location.rcloneCachePreviewHelper')}
+          />
+
+          <FormControl fullWidth>
+            <InputLabel id="rclone-sync-policy-label">
+              {t('wizard.location.rcloneSyncPolicyLabel')}
+            </InputLabel>
+            <Select
+              labelId="rclone-sync-policy-label"
+              id="rclone-sync-policy"
+              value={data.rcloneSyncPolicy || 'after_success'}
+              label={t('wizard.location.rcloneSyncPolicyLabel')}
+              onChange={(e) =>
+                onChange({
+                  rcloneSyncPolicy: e.target.value as 'after_success' | 'manual' | 'scheduled',
+                })
+              }
+            >
+              <MenuItem value="after_success">
+                {t('wizard.location.rcloneSyncAfterSuccess')}
+              </MenuItem>
+              <MenuItem value="manual">{t('wizard.location.rcloneSyncManual')}</MenuItem>
+              <MenuItem value="scheduled">{t('wizard.location.rcloneSyncScheduled')}</MenuItem>
+            </Select>
+          </FormControl>
+
+          <TextField
+            label={t('wizard.location.rcloneExtraFlagsLabel')}
+            value={data.rcloneExtraFlags || ''}
+            onChange={(e) => onChange({ rcloneExtraFlags: e.target.value })}
+            placeholder="--fast-list"
+            fullWidth
+            helperText={t('wizard.location.rcloneExtraFlagsHelper')}
+          />
+
+          <Alert severity="info" icon={<Cloud size={18} />}>
+            {t('wizard.location.rcloneRoutePreview')}
+          </Alert>
+        </Box>
+      )}
+
       {/* Path Input */}
-      <TextField
-        label={t('wizard.location.repositoryPathLabel')}
-        value={data.path}
-        onChange={(e) => onChange({ path: e.target.value })}
-        placeholder={
-          data.repositoryLocation === 'local' ? '/backups/my-repo' : '/path/on/remote/server'
-        }
-        required
-        fullWidth
-        helperText={t('wizard.location.repositoryPathHelper')}
-        InputProps={{
-          endAdornment: (
-            <InputAdornment position="end">
-              <IconButton
-                onClick={onBrowsePath}
-                edge="end"
-                size="small"
-                title={t('wizard.location.browseFilesystem')}
-                disabled={
-                  (isAgentExecution && !data.agentMachineId) ||
-                  (data.repositoryLocation === 'ssh' && !data.repoSshConnectionId)
-                }
-              >
-                <FolderOpenIcon fontSize="small" />
-              </IconButton>
-            </InputAdornment>
-          ),
-        }}
-      />
+      {data.repositoryLocation !== 'rclone' && (
+        <TextField
+          label={t('wizard.location.repositoryPathLabel')}
+          value={data.path}
+          onChange={(e) => onChange({ path: e.target.value })}
+          placeholder={
+            data.repositoryLocation === 'local' ? '/backups/my-repo' : '/path/on/remote/server'
+          }
+          required
+          fullWidth
+          helperText={t('wizard.location.repositoryPathHelper')}
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={onBrowsePath}
+                  edge="end"
+                  size="small"
+                  title={t('wizard.location.browseFilesystem')}
+                  disabled={
+                    (isAgentExecution && !data.agentMachineId) ||
+                    (data.repositoryLocation === 'ssh' && !data.repoSshConnectionId)
+                  }
+                >
+                  <FolderOpenIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+      )}
     </Box>
   )
 }

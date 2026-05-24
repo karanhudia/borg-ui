@@ -31,6 +31,20 @@ const managedAgentPlanSourcesData: WizardReviewData = {
   remotePath: '/usr/local/bin/borg2',
 }
 
+const rcloneReviewData: WizardReviewData = {
+  ...managedAgentPlanSourcesData,
+  name: 'Cloud Mirror Repository',
+  repositoryLocation: 'rclone',
+  executionTarget: 'local',
+  agentMachineId: '',
+  path: 'borg-ui/production',
+  repoSshConnectionId: '',
+  dataSource: 'local',
+  sourceDirs: ['/srv/app', '/etc/borg-ui'],
+  rcloneRemotePath: 'borg-ui/production',
+  rcloneSyncPolicy: 'after_success',
+}
+
 const meta = {
   title: 'Components/Wizard/Repository Review',
   component: WizardStepReview,
@@ -57,6 +71,20 @@ export const ManagedAgentPlanSources: Story = {
         default_path: '/srv/borg',
       },
     ],
+    agentMachines,
+  },
+  render: (args) => (
+    <Box sx={{ width: 760, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepReview {...args} />
+    </Box>
+  ),
+}
+
+export const RcloneStorage: Story = {
+  args: {
+    mode: 'create',
+    data: rcloneReviewData,
+    sshConnections: [],
     agentMachines,
   },
   render: (args) => (

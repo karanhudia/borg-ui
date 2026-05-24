@@ -39,3 +39,16 @@ def test_settings_environment():
 
     assert settings.environment is not None
     assert settings.app_name == "Borg Web UI"
+
+
+@pytest.mark.unit
+def test_rclone_settings_default_values():
+    """Test rclone storage settings have safe production defaults."""
+    settings = Settings()
+
+    assert settings.rclone_config_root == "/data/rclone"
+    assert settings.rclone_cache_root == "/data/rclone-cache"
+    assert settings.rclone_sync_timeout == 14400
+    assert settings.rclone_hydrate_timeout == 14400
+    assert settings.rclone_default_transfers == 4
+    assert settings.rclone_default_checkers == 8

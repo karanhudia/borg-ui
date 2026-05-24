@@ -375,6 +375,12 @@ class Repository(Base):
 
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="repositories")
+    storage = relationship(
+        "RepositoryStorage",
+        back_populates="repository",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
 
 
 class SSHKey(Base):
@@ -453,6 +459,77 @@ class SSHConnection(Base):
 
     # Relationships
     ssh_key = relationship("SSHKey", back_populates="connections")
+
+
+class RcloneRemote(Base):
+    __tablename__ = "rclone_remotes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    provider = Column(String, nullable=False)
+    config_source = Column(String, default="managed", nullable=False)
+    config_path = Column(String, nullable=True)
+    redacted_config = Column(JSON, nullable=True)
+    last_tested_at = Column(DateTime, nullable=True)
+    last_test_status = Column(String, default="unknown", nullable=False)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    storages = relationship("RepositoryStorage", back_populates="rclone_remote")
+
+
+class RepositoryStorage(Base):
+    __tablename__ = "repository_storage"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    backend = Column(String, default="local", nullable=False)
+    rclone_remote_id = Column(
+        Integer, ForeignKey("rclone_remotes.id", ondelete="SET NULL"), nullable=True
+    )
+    rclone_remote_path = Column(String, nullable=True)
+    cache_path = Column(String, nullable=True)
+    sync_policy = Column(String, default="after_success", nullable=False)
+    sync_direction = Column(String, default="cache_to_remote", nullable=False)
+    sync_status = Column(String, default="pending", nullable=False)
+    last_synced_at = Column(DateTime, nullable=True)
+    last_hydrated_at = Column(DateTime, nullable=True)
+    last_remote_check_at = Column(DateTime, nullable=True)
+    last_sync_error = Column(Text, nullable=True)
+    extra_flags = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, nullable=False)
+
+    repository = relationship("Repository", back_populates="storage")
+    rclone_remote = relationship("RcloneRemote", back_populates="storages")
+
+
+class RcloneSyncJob(Base):
+    __tablename__ = "rclone_sync_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(
+        Integer,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    direction = Column(String, nullable=False)
+    status = Column(String, default="pending", nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    bytes_transferred = Column(BigInteger, nullable=True)
+    files_transferred = Column(Integer, nullable=True)
+    log_path = Column(String, nullable=True)
+    error_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utc_now, nullable=False)
 
 
 class Configuration(Base):

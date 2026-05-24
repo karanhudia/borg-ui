@@ -19,6 +19,7 @@ from app.services.notification_service import notification_service
 from app.services.script_executor import execute_script
 from app.services.script_library_executor import ScriptLibraryExecutor
 from app.services.mqtt_service import mqtt_service
+from app.services.rclone_repository_service import rclone_repository_service
 from app.services.restore_check_canary import (
     ensure_restore_canary,
     should_include_restore_canary,
@@ -283,6 +284,46 @@ class BackupService:
                 "scripts_failed": 0 if result["success"] else 1,
                 "using_library": False,
             }
+
+    async def _sync_rclone_after_borg(
+        self,
+        db: Session,
+        repo_record: Repository | None,
+        job: BackupJob,
+    ) -> bool:
+        if (
+            not repo_record
+            or not repo_record.storage
+            or repo_record.storage.backend != "rclone"
+        ):
+            return True
+        if repo_record.storage.sync_policy != "after_success":
+            repo_record.storage.sync_status = "pending"
+            db.commit()
+            return True
+
+        status = await rclone_repository_service.sync_repository(db, repo_record)
+        if status.get("sync_status") == "current":
+            return True
+
+        job.status = "completed_with_warnings"
+        job.error_message = json.dumps(
+            {
+                "key": "backend.errors.rclone.syncFailedAfterBackup",
+                "params": {
+                    "error": status.get("last_sync_error")
+                    or "rclone sync failed after Borg completed"
+                },
+            }
+        )
+        db.commit()
+        logger.warning(
+            "Rclone sync failed after successful Borg backup",
+            job_id=job.id,
+            repository_id=repo_record.id,
+            error=status.get("last_sync_error"),
+        )
+        return False
 
     def rotate_logs(self, db: Session = None):
         """
@@ -2626,6 +2667,7 @@ class BackupService:
                 )
                 # Update repository statistics after successful backup
                 await self._update_repository_stats(db, repository, env)
+                await self._sync_rclone_after_borg(db, repo_record, job)
 
                 # Run post-backup hooks (script library or inline)
                 post_hook_failed = False
@@ -2732,6 +2774,7 @@ class BackupService:
                 )
                 # Update repository statistics even with warnings
                 await self._update_repository_stats(db, repository, env)
+                await self._sync_rclone_after_borg(db, repo_record, job)
 
                 # Run post-backup hooks even with warnings (script library or inline)
                 post_hook_failed = False

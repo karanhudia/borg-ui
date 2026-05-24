@@ -30,6 +30,8 @@ interface RepositoryGroupsProps {
   onBackupNow: (repository: Repository) => void
   onViewArchives: (repository: Repository) => void
   onCreateBackupPlan: (repository: Repository) => void
+  onRcloneSync: (repository: Repository) => void
+  onRcloneHydrate: (repository: Repository) => void
   getCompressionLabel: (compression: string) => string
   onJobCompleted: (repositoryId: number) => void
 }
@@ -54,6 +56,8 @@ export function RepositoryGroups({
   onBackupNow,
   onViewArchives,
   onCreateBackupPlan,
+  onRcloneSync,
+  onRcloneHydrate,
   getCompressionLabel,
   onJobCompleted,
 }: RepositoryGroupsProps) {
@@ -172,6 +176,8 @@ export function RepositoryGroups({
                 onBackupNow={() => onBackupNow(repository)}
                 onViewArchives={() => onViewArchives(repository)}
                 onCreateBackupPlan={() => onCreateBackupPlan(repository)}
+                onRcloneSync={() => onRcloneSync(repository)}
+                onRcloneHydrate={() => onRcloneHydrate(repository)}
                 getCompressionLabel={getCompressionLabel}
                 canManageRepository={canManageRepositoriesGlobally}
                 canDo={(action) => canDo(repository.id, action)}

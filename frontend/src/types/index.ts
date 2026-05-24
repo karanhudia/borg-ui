@@ -22,7 +22,8 @@ export interface Repository {
   id: number
   name: string
   path: string
-  repository_type?: 'local' | 'ssh' | 'sftp'
+  repository_type?: 'local' | 'ssh' | 'sftp' | 'rclone'
+  storage_backend?: 'local' | 'ssh' | 'agent_local' | 'rclone'
   execution_target?: 'local' | 'ssh' | 'agent'
   executor_type?: 'server' | 'agent'
   agent_machine_id?: number | null
@@ -55,7 +56,26 @@ export interface Repository {
   next_run?: string | null
   has_keyfile?: boolean
   source_ssh_connection_id?: number | null
+  rclone_storage?: RcloneStorage | null
   [key: string]: unknown
+}
+
+export interface RcloneStorage {
+  repository_id: number
+  backend: 'rclone'
+  rclone_remote_id: number
+  rclone_remote_name?: string | null
+  rclone_remote_path: string
+  rclone_target?: string | null
+  cache_path?: string | null
+  cache_present?: boolean
+  sync_policy: 'after_success' | 'manual' | 'scheduled'
+  sync_status: 'current' | 'pending' | 'syncing' | 'failed' | 'hydrating' | string
+  last_synced_at?: string | null
+  last_hydrated_at?: string | null
+  last_remote_check_at?: string | null
+  last_sync_error?: string | null
+  extra_flags?: string[]
 }
 
 export interface Archive {

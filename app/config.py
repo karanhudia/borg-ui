@@ -163,6 +163,14 @@ class Settings(BaseSettings):
     )
     scan_timeout_seconds: int = 15  # Source discovery database scan timeout
 
+    # Rclone-backed repository storage
+    rclone_config_root: str = "/data/rclone"
+    rclone_cache_root: str = "/data/rclone-cache"
+    rclone_sync_timeout: int = 14400
+    rclone_hydrate_timeout: int = 14400
+    rclone_default_transfers: int = 4
+    rclone_default_checkers: int = 8
+
     # Health check settings
     health_check_interval: int = 30
     health_check_timeout: int = 10

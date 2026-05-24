@@ -37,7 +37,20 @@ const defaultData = {
   path: '',
   repoSshConnectionId: '' as number | '',
   bypassLock: false,
+  rcloneRemoteId: '' as number | '',
+  rcloneRemotePath: '',
+  rcloneSyncPolicy: 'after_success' as const,
+  rcloneExtraFlags: '',
 }
+
+const mockRcloneRemotes = [
+  {
+    id: 10,
+    name: 'prod-s3',
+    provider: 's3',
+    last_test_status: 'connected',
+  },
+]
 
 describe('WizardStepLocation', () => {
   describe('Create Mode', () => {
@@ -75,6 +88,8 @@ describe('WizardStepLocation', () => {
           mode="create"
           data={defaultData}
           sshConnections={[]}
+          rcloneRemotes={mockRcloneRemotes}
+          rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
           onChange={vi.fn()}
           onBrowsePath={vi.fn()}
         />
@@ -82,6 +97,32 @@ describe('WizardStepLocation', () => {
 
       expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
       expect(screen.getByText('Remote Client')).toBeInTheDocument()
+      expect(screen.getByText('Cloud storage (rclone)')).toBeInTheDocument()
+    })
+
+    it('shows rclone remote controls and route preview when cloud storage is selected', () => {
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={{
+            ...defaultData,
+            repositoryLocation: 'rclone',
+            rcloneRemoteId: 10,
+            rcloneRemotePath: 'borg-ui/repositories/app',
+          }}
+          sshConnections={[]}
+          rcloneRemotes={mockRcloneRemotes}
+          rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
+          onChange={vi.fn()}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('prod-s3')).toBeInTheDocument()
+      expect(screen.getByLabelText(/Relative Remote Path/i)).toHaveValue('borg-ui/repositories/app')
+      expect(
+        screen.getByText(/Borg UI server -> local cache -> rclone sync -> remote/i)
+      ).toBeInTheDocument()
     })
 
     it('does NOT show Repository Mode selector in create mode', () => {

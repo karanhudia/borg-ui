@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, Mock, vi } from 'vitest'
 import RepositoryWizard from '../RepositoryWizard'
-import { managedAgentsAPI, sshKeysAPI } from '../../services/api'
+import { managedAgentsAPI, rcloneAPI, sshKeysAPI } from '../../services/api'
 
 const { mockTrack, mockTrackRepository } = vi.hoisted(() => ({
   mockTrack: vi.fn(),
@@ -18,6 +18,10 @@ vi.mock('../../services/api', () => ({
   },
   managedAgentsAPI: {
     listAgents: vi.fn(),
+  },
+  rcloneAPI: {
+    getStatus: vi.fn(),
+    listRemotes: vi.fn(),
   },
 }))
 
@@ -136,6 +140,15 @@ const mockManagedAgents = [
   },
 ]
 
+const mockRcloneRemotes = [
+  {
+    id: 10,
+    name: 'prod-s3',
+    provider: 's3',
+    last_test_status: 'connected',
+  },
+]
+
 const createQueryClient = () =>
   new QueryClient({
     defaultOptions: {
@@ -242,6 +255,12 @@ describe('RepositoryWizard', () => {
     })
     ;(managedAgentsAPI.listAgents as Mock).mockResolvedValue({
       data: mockManagedAgents,
+    })
+    ;(rcloneAPI.getStatus as Mock).mockResolvedValue({
+      data: { available: true, version: 'rclone v1.66.0', error: null },
+    })
+    ;(rcloneAPI.listRemotes as Mock).mockResolvedValue({
+      data: { remotes: mockRcloneRemotes },
     })
   })
 
@@ -401,6 +420,49 @@ describe('RepositoryWizard', () => {
         }),
         null
       )
+    }, 90000)
+
+    it('submits rclone storage fields from the cloud storage option', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await fillLocalLocation('Cloud Repo', '/ignored/client/path')
+      await user.click(screen.getByText('Cloud storage (rclone)').closest('button')!)
+
+      await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
+      const remoteListbox = await screen.findByRole('listbox')
+      await user.click(within(remoteListbox).getByText('prod-s3'))
+      setInputValue(screen.getByLabelText(/Relative Remote Path/i), 'borg-ui/repositories/app')
+
+      expect(
+        screen.getByText(/Borg UI server -> local cache -> rclone sync -> remote/i)
+      ).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Repository Key')).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'cloudpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Cloud Repo',
+            storage_backend: 'rclone',
+            rclone_remote_id: 10,
+            rclone_remote_path: 'borg-ui/repositories/app',
+            rclone_sync_policy: 'after_success',
+            path: 'borg-ui/repositories/app',
+            connection_id: null,
+          }),
+          null
+        )
+      })
     }, 90000)
 
     it('enables repository path browsing after selecting a managed agent', async () => {

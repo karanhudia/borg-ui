@@ -47,7 +47,7 @@ export interface WizardReviewData {
   name: string
   borgVersion?: 1 | 2
   repositoryMode: 'full' | 'observe'
-  repositoryLocation: 'local' | 'ssh'
+  repositoryLocation: 'local' | 'ssh' | 'rclone'
   executionTarget?: 'local' | 'agent'
   agentMachineId?: number | ''
   path: string
@@ -61,6 +61,8 @@ export interface WizardReviewData {
   excludePatterns: string[]
   customFlags: string
   remotePath: string
+  rcloneRemotePath?: string
+  rcloneSyncPolicy?: 'after_success' | 'manual' | 'scheduled'
 }
 
 interface WizardStepReviewProps {
@@ -248,7 +250,9 @@ export default function WizardStepReview({
                   ? t('wizard.review.repositoryPathOnSelectedAgent')
                   : data.repositoryLocation === 'local'
                     ? t('wizard.review.borgUiServer')
-                    : t('wizard.review.sshRemote')}
+                    : data.repositoryLocation === 'rclone'
+                      ? t('wizard.review.rcloneStorage')
+                      : t('wizard.review.sshRemote')}
               </Typography>
             </Box>
           </ReviewAttrRow>
@@ -279,6 +283,26 @@ export default function WizardStepReview({
           <ReviewAttrRow label={t('wizard.review.path')}>
             <ReviewCodePill>{data.path || t('wizard.review.notSet')}</ReviewCodePill>
           </ReviewAttrRow>
+
+          {data.repositoryLocation === 'rclone' && (
+            <>
+              <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
+                <Typography variant="body2" fontSize="0.75rem">
+                  {t('wizard.location.rcloneRoutePreview')}
+                </Typography>
+              </ReviewAttrRow>
+              <ReviewAttrRow label={t('wizard.review.rcloneRemotePath')}>
+                <ReviewCodePill>
+                  {data.rcloneRemotePath || t('wizard.review.notSet')}
+                </ReviewCodePill>
+              </ReviewAttrRow>
+              <ReviewAttrRow label={t('wizard.review.rcloneSyncPolicy')}>
+                <Typography variant="body2" fontSize="0.75rem">
+                  {data.rcloneSyncPolicy || 'after_success'}
+                </Typography>
+              </ReviewAttrRow>
+            </>
+          )}
         </ReviewSectionCard>
 
         {/* SECURITY */}

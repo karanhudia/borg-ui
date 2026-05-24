@@ -9,11 +9,15 @@ import structlog
 import os
 import asyncio
 import json
+import shutil
+import uuid
 
 from app.database.database import get_db, SessionLocal
 from app.database.models import (
     User,
     Repository,
+    RepositoryStorage,
+    RcloneRemote,
     AgentMachine,
     CheckJob,
     CompactJob,
@@ -59,6 +63,11 @@ from app.services.repository_executor import (
     wait_for_agent_repository_operation_job,
 )
 from app.services.repository_command_lock import run_serialized_repository_command
+from app.services.rclone_repository_service import (
+    VALID_SYNC_POLICIES,
+    normalize_extra_flags,
+    rclone_repository_service,
+)
 from app.utils.datetime_utils import serialize_datetime
 from app.utils.schedule_time import (
     DEFAULT_SCHEDULE_TIMEZONE,
@@ -828,6 +837,12 @@ class RepositoryCreate(BaseModel):
     execution_target: str = "local"  # local, ssh, agent
     executor_type: Optional[str] = None  # server, agent
     agent_machine_id: Optional[int] = None  # Agent that executes backups
+    storage_backend: str = "local"  # local, ssh, agent_local, rclone
+    rclone_remote_id: Optional[int] = None
+    rclone_remote_path: Optional[str] = None
+    rclone_sync_policy: str = "after_success"
+    rclone_extra_flags: Optional[List[str]] = None
+    rclone_cache_path: Optional[str] = None
 
 
 class RepositoryImport(BaseModel):
@@ -871,6 +886,12 @@ class RepositoryImport(BaseModel):
     execution_target: str = "local"  # local, ssh, agent
     executor_type: Optional[str] = None  # server, agent
     agent_machine_id: Optional[int] = None  # Agent that executes backups
+    storage_backend: str = "local"  # local, ssh, agent_local, rclone
+    rclone_remote_id: Optional[int] = None
+    rclone_remote_path: Optional[str] = None
+    rclone_sync_policy: str = "after_success"
+    rclone_extra_flags: Optional[List[str]] = None
+    rclone_cache_path: Optional[str] = None
 
 
 class RepositoryUpdate(BaseModel):
@@ -904,6 +925,12 @@ class RepositoryUpdate(BaseModel):
     execution_target: Optional[str] = None  # local, ssh, agent
     executor_type: Optional[str] = None  # server, agent
     agent_machine_id: Optional[int] = None  # Agent that executes backups
+    storage_backend: Optional[str] = None
+    rclone_remote_id: Optional[int] = None
+    rclone_remote_path: Optional[str] = None
+    rclone_sync_policy: Optional[str] = None
+    rclone_extra_flags: Optional[List[str]] = None
+    rclone_cache_path: Optional[str] = None
 
 
 class RepositoryInfo(BaseModel):
@@ -924,6 +951,87 @@ class RepositoryInfo(BaseModel):
 def _uses_borg2_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
     requested_version = getattr(data, "borg_version", 1) or 1
     return requested_version == 2 or data.encryption in V2_ONLY_ENCRYPTION_MODES
+
+
+def _is_rclone_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
+    return (getattr(data, "storage_backend", "local") or "local") == "rclone"
+
+
+def _validate_rclone_payload(
+    data: Union[RepositoryCreate, RepositoryImport],
+    db: Session,
+) -> RcloneRemote:
+    if getattr(data, "rclone_cache_path", None):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.cachePathServerOwned"},
+        )
+    if _normalize_repository_executor(data) == "agent":
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.agentUnsupported"},
+        )
+    if data.connection_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.sshConnectionUnsupported"},
+        )
+    if not data.rclone_remote_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.remoteRequired"},
+        )
+    if not data.rclone_remote_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.remotePathRequired"},
+        )
+    if data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+        )
+    remote = (
+        db.query(RcloneRemote).filter(RcloneRemote.id == data.rclone_remote_id).first()
+    )
+    if not remote:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.rclone.remoteNotFound"},
+        )
+    try:
+        normalize_extra_flags(data.rclone_extra_flags)
+        rclone_repository_service.build_storage(
+            repository_id=1,
+            remote_id=remote.id,
+            remote_path=data.rclone_remote_path,
+            sync_policy=data.rclone_sync_policy,
+            extra_flags=data.rclone_extra_flags,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidPayload", "message": str(exc)},
+        ) from exc
+    return remote
+
+
+def _serialize_rclone_storage(
+    repository: Repository, db: Session
+) -> Optional[Dict[str, Any]]:
+    storage = (
+        db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+    )
+    if not storage or storage.backend != "rclone":
+        return None
+    remote = (
+        db.query(RcloneRemote)
+        .filter(RcloneRemote.id == storage.rclone_remote_id)
+        .first()
+    )
+    return rclone_repository_service.serialize_status(repository, storage, remote)
 
 
 def _require_borg2_feature(db: Session) -> None:
@@ -1170,6 +1278,248 @@ def _create_agent_repository_record(
     }
 
 
+def _validate_repository_name_available(name: str, db: Session) -> None:
+    existing_repo = db.query(Repository).filter(Repository.name == name).first()
+    if existing_repo:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryNameExists"},
+        )
+
+
+def _repository_common_values(
+    repo_data: Union[RepositoryCreate, RepositoryImport],
+) -> dict[str, Any]:
+    return {
+        "name": repo_data.name,
+        "encryption": repo_data.encryption,
+        "compression": repo_data.compression,
+        "passphrase": repo_data.passphrase,
+        "connection_id": None,
+        "remote_path": repo_data.remote_path,
+        "pre_backup_script": repo_data.pre_backup_script,
+        "post_backup_script": repo_data.post_backup_script,
+        "hook_timeout": repo_data.hook_timeout,
+        "pre_hook_timeout": repo_data.pre_hook_timeout,
+        "post_hook_timeout": repo_data.post_hook_timeout,
+        "continue_on_hook_failure": repo_data.continue_on_hook_failure,
+        "skip_on_hook_failure": repo_data.skip_on_hook_failure,
+        "mode": repo_data.mode,
+        "bypass_lock": repo_data.bypass_lock,
+        "custom_flags": repo_data.custom_flags,
+        "execution_target": "local",
+        "executor_type": "server",
+        "agent_machine_id": None,
+        "repository_type": "rclone",
+        "borg_version": repo_data.borg_version or 1,
+    }
+
+
+async def _create_rclone_repository_record(
+    repo_data: RepositoryCreate,
+    current_user: User,
+    db: Session,
+):
+    _validate_rclone_payload(repo_data, db)
+    _validate_repository_name_available(repo_data.name, db)
+
+    valid_encryption_modes = {
+        "repokey",
+        "keyfile",
+        "repokey-blake2",
+        "keyfile-blake2",
+        "none",
+    }
+    if repo_data.encryption not in valid_encryption_modes:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+        )
+    if repo_data.encryption != "none" and not (repo_data.passphrase or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.repo.encryptedPassphraseRequired",
+                "params": {"mode": repo_data.encryption},
+            },
+        )
+
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
+    )
+    exclude_patterns_json = (
+        json.dumps(repo_data.exclude_patterns) if repo_data.exclude_patterns else None
+    )
+    repository = Repository(
+        path=f"__rclone_pending__/{uuid.uuid4()}",
+        source_directories=json.dumps(source_directories)
+        if source_directories
+        else None,
+        source_locations=json.dumps(source_locations) if source_locations else None,
+        exclude_patterns=exclude_patterns_json,
+        source_ssh_connection_id=source_connection_id,
+        **_repository_common_values(repo_data),
+    )
+    db.add(repository)
+    db.flush()
+    storage = rclone_repository_service.build_storage(
+        repository_id=repository.id,
+        remote_id=repo_data.rclone_remote_id,
+        remote_path=repo_data.rclone_remote_path,
+        sync_policy=repo_data.rclone_sync_policy,
+        extra_flags=repo_data.rclone_extra_flags,
+    )
+    repository.path = storage.cache_path
+    db.add(storage)
+
+    try:
+        os.makedirs(storage.cache_path, exist_ok=True)
+        init_result = await initialize_borg_repository(
+            storage.cache_path,
+            repo_data.encryption,
+            repo_data.passphrase,
+            None,
+            None,
+        )
+        if not init_result["success"]:
+            raise HTTPException(
+                status_code=500,
+                detail={"key": "backend.errors.repo.failedToInitializeRepository"},
+            )
+        db.commit()
+        db.refresh(repository)
+        if repo_data.rclone_sync_policy == "after_success":
+            await rclone_repository_service.sync_repository(db, repository)
+    except HTTPException:
+        db.rollback()
+        shutil.rmtree(storage.cache_path, ignore_errors=True)
+        raise
+    except Exception:
+        db.commit()
+        db.refresh(repository)
+        storage.sync_status = "failed"
+        storage.last_sync_error = "rclone initial sync failed"
+        db.commit()
+
+    logger.info(
+        "Rclone repository created",
+        name=repository.name,
+        path=repository.path,
+        user=current_user.username,
+    )
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryCreated",
+        "repository": {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "storage_backend": "rclone",
+            "rclone_storage": _serialize_rclone_storage(repository, db),
+        },
+    }
+
+
+async def _import_rclone_repository_record(
+    repo_data: RepositoryImport,
+    current_user: User,
+    db: Session,
+):
+    _validate_rclone_payload(repo_data, db)
+    _validate_repository_name_available(repo_data.name, db)
+
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
+    )
+    repository = Repository(
+        path=f"__rclone_pending__/{uuid.uuid4()}",
+        source_directories=json.dumps(source_directories)
+        if source_directories
+        else None,
+        source_locations=json.dumps(source_locations) if source_locations else None,
+        exclude_patterns=json.dumps(repo_data.exclude_patterns)
+        if repo_data.exclude_patterns
+        else None,
+        source_ssh_connection_id=source_connection_id,
+        archive_count=0,
+        **_repository_common_values(repo_data),
+    )
+    db.add(repository)
+    db.flush()
+    storage = rclone_repository_service.build_storage(
+        repository_id=repository.id,
+        remote_id=repo_data.rclone_remote_id,
+        remote_path=repo_data.rclone_remote_path,
+        sync_policy=repo_data.rclone_sync_policy,
+        extra_flags=repo_data.rclone_extra_flags,
+    )
+    repository.path = storage.cache_path
+    db.add(storage)
+    db.commit()
+    db.refresh(repository)
+
+    await rclone_repository_service.hydrate_repository(db, repository)
+    verify_result = await verify_existing_repository(
+        repository.path,
+        repo_data.passphrase,
+        None,
+        None,
+        repo_data.bypass_lock,
+    )
+    if not verify_result["success"]:
+        storage.sync_status = "failed"
+        storage.last_sync_error = (
+            verify_result.get("error") or "Borg verification failed"
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.failedToVerifyRepository"},
+        )
+
+    repo_info = verify_result.get("info", {})
+    repository.encryption = repo_info.get("encryption", {}).get(
+        "mode", repo_data.encryption
+    )
+    db.commit()
+    db.refresh(repository)
+
+    logger.info(
+        "Rclone repository imported",
+        name=repository.name,
+        path=repository.path,
+        user=current_user.username,
+    )
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryImported",
+        "repository": {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "archive_count": repository.archive_count,
+            "storage_backend": "rclone",
+            "rclone_storage": _serialize_rclone_storage(repository, db),
+        },
+    }
+
+
 @router.get("/")
 async def get_repositories(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -1219,63 +1569,65 @@ async def get_repositories(
             schedule_summary = _get_repository_schedule_summary(repo.id, db)
             source_directories = _decode_json_list_field(repo.source_directories)
 
-            repo_list.append(
-                {
-                    "id": repo.id,
-                    "name": repo.name,
-                    "path": repo.path,
-                    "encryption": repo.encryption,
-                    "compression": repo.compression,
-                    "source_directories": source_directories,
-                    "source_locations": decode_source_locations(
-                        repo.source_locations,
-                        source_type="remote"
-                        if repo.source_ssh_connection_id
-                        else "local",
-                        source_ssh_connection_id=repo.source_ssh_connection_id,
-                        source_directories=source_directories,
-                    ),
-                    "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
-                    "repository_type": repo.repository_type,
-                    "execution_target": repo.execution_target or "local",
-                    "executor_type": repository_executor_type(repo),
-                    "agent_machine_id": repo.agent_machine_id,
-                    "host": repo.host,
-                    "port": repo.port,
-                    "username": repo.username,
-                    "ssh_key_id": repo.ssh_key_id,
-                    "remote_path": repo.remote_path,
-                    "last_backup": format_datetime(repo.last_backup),
-                    "last_check": format_datetime(repo.last_check),
-                    "last_compact": format_datetime(repo.last_compact),
-                    "total_size": repo.total_size,
-                    "archive_count": repo.archive_count,
-                    "created_at": format_datetime(repo.created_at),
-                    "updated_at": format_datetime(repo.updated_at),
-                    "pre_backup_script": repo.pre_backup_script,
-                    "post_backup_script": repo.post_backup_script,
-                    "pre_backup_script_parameters": repo.pre_backup_script_parameters,
-                    "post_backup_script_parameters": repo.post_backup_script_parameters,
-                    "hook_timeout": repo.hook_timeout,
-                    "pre_hook_timeout": repo.pre_hook_timeout,
-                    "post_hook_timeout": repo.post_hook_timeout,
-                    "continue_on_hook_failure": repo.continue_on_hook_failure,
-                    "skip_on_hook_failure": repo.skip_on_hook_failure,
-                    "mode": repo.mode
-                    or "full",  # Default to "full" for backward compatibility
-                    "bypass_lock": repo.bypass_lock or False,
-                    "custom_flags": repo.custom_flags,
-                    "has_running_maintenance": has_check or has_compact or has_prune,
-                    "has_schedule": schedule_summary["has_schedule"],
-                    "schedule_enabled": schedule_summary["schedule_enabled"],
-                    "schedule_name": schedule_summary["schedule_name"],
-                    "schedule_timezone": schedule_summary["schedule_timezone"],
-                    "next_run": schedule_summary["next_run"],
-                    "has_keyfile": repo.has_keyfile or False,
-                    "source_ssh_connection_id": repo.source_ssh_connection_id,
-                    "borg_version": repo.borg_version or 1,
-                }
-            )
+            repo_payload = {
+                "id": repo.id,
+                "name": repo.name,
+                "path": repo.path,
+                "encryption": repo.encryption,
+                "compression": repo.compression,
+                "source_directories": source_directories,
+                "source_locations": decode_source_locations(
+                    repo.source_locations,
+                    source_type="remote" if repo.source_ssh_connection_id else "local",
+                    source_ssh_connection_id=repo.source_ssh_connection_id,
+                    source_directories=source_directories,
+                ),
+                "exclude_patterns": _decode_json_list_field(repo.exclude_patterns),
+                "repository_type": repo.repository_type,
+                "execution_target": repo.execution_target or "local",
+                "executor_type": repository_executor_type(repo),
+                "agent_machine_id": repo.agent_machine_id,
+                "host": repo.host,
+                "port": repo.port,
+                "username": repo.username,
+                "ssh_key_id": repo.ssh_key_id,
+                "remote_path": repo.remote_path,
+                "last_backup": format_datetime(repo.last_backup),
+                "last_check": format_datetime(repo.last_check),
+                "last_compact": format_datetime(repo.last_compact),
+                "total_size": repo.total_size,
+                "archive_count": repo.archive_count,
+                "created_at": format_datetime(repo.created_at),
+                "updated_at": format_datetime(repo.updated_at),
+                "pre_backup_script": repo.pre_backup_script,
+                "post_backup_script": repo.post_backup_script,
+                "pre_backup_script_parameters": repo.pre_backup_script_parameters,
+                "post_backup_script_parameters": repo.post_backup_script_parameters,
+                "hook_timeout": repo.hook_timeout,
+                "pre_hook_timeout": repo.pre_hook_timeout,
+                "post_hook_timeout": repo.post_hook_timeout,
+                "continue_on_hook_failure": repo.continue_on_hook_failure,
+                "skip_on_hook_failure": repo.skip_on_hook_failure,
+                "mode": repo.mode
+                or "full",  # Default to "full" for backward compatibility
+                "bypass_lock": repo.bypass_lock or False,
+                "custom_flags": repo.custom_flags,
+                "has_running_maintenance": has_check or has_compact or has_prune,
+                "has_schedule": schedule_summary["has_schedule"],
+                "schedule_enabled": schedule_summary["schedule_enabled"],
+                "schedule_name": schedule_summary["schedule_name"],
+                "schedule_timezone": schedule_summary["schedule_timezone"],
+                "next_run": schedule_summary["next_run"],
+                "has_keyfile": repo.has_keyfile or False,
+                "source_ssh_connection_id": repo.source_ssh_connection_id,
+                "borg_version": repo.borg_version or 1,
+            }
+            rclone_storage = _serialize_rclone_storage(repo, db)
+            if rclone_storage:
+                repo_payload["storage_backend"] = "rclone"
+                repo_payload["rclone_storage"] = rclone_storage
+                repo_payload["repository_type"] = "rclone"
+            repo_list.append(repo_payload)
 
         return {"success": True, "repositories": repo_list}
     except Exception as e:
@@ -1295,6 +1647,8 @@ async def create_repository(
     """Create a new repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        if _is_rclone_payload(repo_data):
+            return await _create_rclone_repository_record(repo_data, current_user, db)
         if _uses_borg2_payload(repo_data):
             if executor_type == "agent":
                 return _create_agent_repository_record(
@@ -1655,6 +2009,8 @@ async def import_repository(
     """Import an existing Borg repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        if _is_rclone_payload(repo_data):
+            return await _import_rclone_repository_record(repo_data, current_user, db)
         if _uses_borg2_payload(repo_data):
             if executor_type == "agent":
                 return _create_agent_repository_record(
@@ -1967,6 +2323,68 @@ async def import_repository(
         )
 
 
+@router.get("/{repo_id}/rclone/status")
+async def get_repository_rclone_status(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    repository = _load_repository_with_access(repo_id, current_user, db, "viewer")
+    try:
+        return _serialize_rclone_storage(repository, db) or {}
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidStorage", "message": str(exc)},
+        ) from exc
+
+
+@router.post("/{repo_id}/rclone/sync")
+async def sync_repository_rclone(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    repository = _load_repository_with_access(repo_id, current_user, db, "operator")
+
+    async def _operation():
+        try:
+            return await rclone_repository_service.sync_repository(db, repository)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.rclone.invalidStorage",
+                    "message": str(exc),
+                },
+            ) from exc
+
+    return await run_serialized_repository_command(repo_id, _operation, scope="rclone")
+
+
+@router.post("/{repo_id}/rclone/hydrate")
+async def hydrate_repository_rclone(
+    repo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    repository = _load_repository_with_access(repo_id, current_user, db, "operator")
+
+    async def _operation():
+        try:
+            return await rclone_repository_service.hydrate_repository(db, repository)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.rclone.invalidStorage",
+                    "message": str(exc),
+                },
+            ) from exc
+
+    return await run_serialized_repository_command(repo_id, _operation, scope="rclone")
+
+
 @router.post("/{repo_id}/keyfile")
 async def upload_keyfile(
     repo_id: int, keyfile: UploadFile = File(...), db: Session = Depends(get_db)
@@ -2128,30 +2546,37 @@ async def get_repository(
         # Get repository statistics
         stats = await get_repository_stats(repository, db, bypass_lock=use_bypass_lock)
 
+        repository_payload = {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "execution_target": repository.execution_target or "local",
+            "executor_type": repository_executor_type(repository),
+            "agent_machine_id": repository.agent_machine_id,
+            "last_backup": format_datetime(repository.last_backup),
+            "total_size": repository.total_size,
+            "archive_count": repository.archive_count,
+            "created_at": format_datetime(repository.created_at),
+            "updated_at": format_datetime(repository.updated_at),
+            "has_keyfile": repository.has_keyfile or False,
+            "source_ssh_connection_id": repository.source_ssh_connection_id,
+            "source_directories": _decode_json_list_field(
+                repository.source_directories
+            ),
+            "source_locations": _repository_source_locations(repository),
+            "stats": stats,
+        }
+        rclone_storage = _serialize_rclone_storage(repository, db)
+        if rclone_storage:
+            repository_payload["storage_backend"] = "rclone"
+            repository_payload["rclone_storage"] = rclone_storage
+            repository_payload["repository_type"] = "rclone"
+
         return {
             "success": True,
-            "repository": {
-                "id": repository.id,
-                "name": repository.name,
-                "path": repository.path,
-                "encryption": repository.encryption,
-                "compression": repository.compression,
-                "execution_target": repository.execution_target or "local",
-                "executor_type": repository_executor_type(repository),
-                "agent_machine_id": repository.agent_machine_id,
-                "last_backup": format_datetime(repository.last_backup),
-                "total_size": repository.total_size,
-                "archive_count": repository.archive_count,
-                "created_at": format_datetime(repository.created_at),
-                "updated_at": format_datetime(repository.updated_at),
-                "has_keyfile": repository.has_keyfile or False,
-                "source_ssh_connection_id": repository.source_ssh_connection_id,
-                "source_directories": _decode_json_list_field(
-                    repository.source_directories
-                ),
-                "source_locations": _repository_source_locations(repository),
-                "stats": stats,
-            },
+            "repository": repository_payload,
         }
     except HTTPException:
         raise
