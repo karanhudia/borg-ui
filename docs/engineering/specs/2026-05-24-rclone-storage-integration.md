@@ -35,7 +35,7 @@ This means:
 1. Borg always reads and writes a normal local filesystem repository under a
    persistent Borg UI cache root.
 2. After successful Borg writes, Borg UI runs an rclone mirror job from that
-   local repository directory to the configured remote path.
+   local repository directory to the configured rclone target.
 3. For restore, browse, check, prune, and compact, Borg UI uses the local cache
    when it is present and marked current. If the cache is missing or stale, Borg
    UI hydrates it from the remote first.
@@ -106,8 +106,9 @@ Add explicit rclone storage records instead of overloading SSH fields:
 - `repository_storage`
   - `repository_id`
   - `backend`: `local`, `ssh`, `agent_local`, or `rclone`
-  - `rclone_remote_id`
-  - `rclone_remote_path`
+  - `rclone_remote_id`: selected `rclone_remotes.id`
+  - `rclone_remote_path`: relative path inside the remote, without a
+    `remote:` prefix
   - `cache_path`
   - `sync_policy`: `after_success`, `manual`, or `scheduled`
   - `sync_direction`: always `cache_to_remote` for normal operations
@@ -122,13 +123,24 @@ Keep `repositories.path` as the Borg path that existing Borg services use. For
 rclone repositories, this should be the local cache path. The new storage row
 describes where the repository is mirrored.
 
+Canonical target shape:
+
+- Persist `rclone_remote_id` as the configured remote identifier.
+- Persist `rclone_remote_path` as a relative path such as
+  `borg-ui/repositories/app`.
+- Compose the full rclone target only inside backend command builders by
+  resolving the remote name and joining `<remote_name>:<rclone_remote_path>`.
+- API responses may include a derived, read-only `rclone_target` preview such
+  as `prod-s3:borg-ui/repositories/app`, but clients must not submit that full
+  URI back as `rclone_remote_path`.
+
 ## Runtime Flow
 
 ### Create New Rclone Repository
 
 1. User selects "Cloud storage (rclone)" in the repository location step.
 2. User picks an existing rclone remote or creates/imports one.
-3. User enters a remote path such as `prod-s3:borg-ui/repositories/app`.
+3. User enters a relative remote path such as `borg-ui/repositories/app`.
 4. Borg UI derives a local cache path such as
    `/data/rclone-cache/repositories/<repository-id>`.
 5. Borg UI runs `borg init` against the local cache path.
@@ -138,9 +150,10 @@ describes where the repository is mirrored.
 
 ### Import Existing Rclone Repository
 
-1. User selects an rclone remote and remote path.
-2. Borg UI validates the remote path by listing the Borg repository files
-   (`README`, `config`, `data/`) through rclone.
+1. User selects an rclone remote and relative remote path.
+2. Borg UI composes the full rclone target server-side and validates it by
+   listing the Borg repository files (`README`, `config`, `data/`) through
+   rclone.
 3. Borg UI hydrates a local cache from the remote into a job-scoped temporary
    cache directory.
 4. Borg UI runs `borg info` or `borg2 repo-info` on the hydrated cache using
@@ -179,10 +192,11 @@ successful hydration.
 ### Sync Command Choice
 
 Use `rclone sync` for repository mirrors after a successful Borg transaction so
-the remote path exactly matches the local Borg repository tree. Use `rclone copy`
-only for non-destructive diagnostics or future migration helpers. Because sync
-can delete remote files that are absent locally, Borg UI must require an empty
-or verified Borg-owned remote path before enabling normal sync.
+the composed rclone target exactly matches the local Borg repository tree. Use
+`rclone copy` only for non-destructive diagnostics or future migration helpers.
+Because sync can delete remote files that are absent locally, Borg UI must
+require an empty or verified Borg-owned relative remote path before enabling
+normal sync.
 
 ## Backend Design
 
@@ -257,7 +271,7 @@ When rclone is selected, the wizard shows:
 
 - Remote selector with test status.
 - Provider badge and remote name.
-- Remote path field with browse action.
+- Relative remote path field with browse action.
 - Local cache path preview, editable by advanced users.
 - Sync policy selector:
   - Sync after successful Borg job (default)
@@ -276,7 +290,7 @@ Show a route preview:
 Review must call out:
 
 - Local cache path.
-- Remote path.
+- Relative remote path and derived full rclone target preview.
 - Last remote test status.
 - Whether sync is automatic or manual.
 - Local disk requirement: cache should be sized for the full repository.

@@ -662,14 +662,17 @@
                     <input id="provider" value="S3-compatible storage" />
                   </div>
                   <div class="field full">
-                    <label for="remote-path">Remote repository path</label>
+                    <label for="remote-path"
+                      >Remote repository path inside remote</label
+                    >
                     <input
                       id="remote-path"
                       class="mono"
-                      value="prod-s3:borg-ui/repositories/production-app"
+                      value="borg-ui/repositories/production-app"
                     />
                     <p class="helper">
-                      This path is reserved for one Borg repository mirror.
+                      Stored as a path inside the selected remote. Full target:
+                      prod-s3:borg-ui/repositories/production-app.
                     </p>
                   </div>
                   <div class="field full">
@@ -720,7 +723,7 @@
                     >
                   </div>
                   <div class="status-row">
-                    <strong>Rclone mirror</strong>
+                    <strong>Rclone target</strong>
                     <span class="mono"
                       >prod-s3:borg-ui/repositories/production-app</span
                     >
@@ -853,7 +856,7 @@
               <span><span class="chip green">Synced 12 minutes ago</span></span>
             </div>
             <div class="status-row">
-              <strong>Remote</strong>
+              <strong>Remote target</strong>
               <span class="mono"
                 >prod-s3:borg-ui/repositories/production-app</span
               >

@@ -57,8 +57,10 @@ rclone CLI wrappers, React/Vite/MUI, Vitest, Storybook screenshots.
 - [ ] Create `rclone_remotes` with fields for name, provider, config source,
       config path, redacted config, test status, timestamps, and error text.
 - [ ] Create `repository_storage` with fields for repository id, backend,
-      rclone remote id, remote path, cache path, sync policy, sync status, last
-      sync/hydrate/check timestamps, last error, and extra flags.
+      rclone remote id, relative remote path, cache path, sync policy, sync
+      status, last sync/hydrate/check timestamps, last error, and extra flags.
+- [ ] Store `rclone_remote_path` as a relative path only and expose any full
+      `<remote_name>:<relative_path>` value as a derived read-only preview.
 - [ ] Create `rclone_sync_jobs` with repository id, direction, status,
       started/completed timestamps, bytes/files counters, log path, and error text.
 - [ ] Add SQLAlchemy relationships from `Repository` to storage metadata.
@@ -112,6 +114,8 @@ rclone CLI wrappers, React/Vite/MUI, Vitest, Storybook screenshots.
 - [ ] Write tests for cache path derivation under `RCLONE_CACHE_ROOT`.
 - [ ] Write tests that reject non-empty remote paths unless they are verified
       Borg repositories or Borg UI-owned paths.
+- [ ] Write tests that command builders compose the full rclone target from
+      `rclone_remote_id` plus relative `rclone_remote_path`.
 - [ ] Write create-flow tests: local Borg init succeeds, initial sync succeeds,
       storage status becomes `current`.
 - [ ] Write import-flow tests: remote Borg repository hydrates into a temp cache,
@@ -137,7 +141,9 @@ rclone CLI wrappers, React/Vite/MUI, Vitest, Storybook screenshots.
 - [ ] Add request fields for `storage_backend`, `rclone_remote_id`,
       `rclone_remote_path`, `rclone_cache_path`, `rclone_sync_policy`, and
       `rclone_extra_flags`.
-- [ ] Add response serialization for rclone storage metadata.
+- [ ] Add response serialization for rclone storage metadata, including a
+      derived `rclone_target` preview while keeping submitted
+      `rclone_remote_path` relative.
 - [ ] Route create/import payloads with `storage_backend: "rclone"` through
       `RcloneRepositoryService`.
 - [ ] Preserve existing local, SSH, and agent repository behavior.
@@ -207,8 +213,9 @@ rclone CLI wrappers, React/Vite/MUI, Vitest, Storybook screenshots.
       storage fields.
 - [ ] Add the "Cloud storage (rclone)" location option beside Borg UI server,
       SSH remote, and managed agent.
-- [ ] Add remote selector, remote path field, browse action, local cache path
-      preview, sync policy selector, and advanced flags section.
+- [ ] Add remote selector, relative remote path field, browse action, derived
+      target preview, local cache path preview, sync policy selector, and
+      advanced flags section.
 - [ ] Show unavailable state when `GET /api/rclone/status` reports missing
       binary.
 - [ ] Update review to show route:
@@ -306,6 +313,6 @@ rclone CLI wrappers, React/Vite/MUI, Vitest, Storybook screenshots.
   docs, smoke validation, and handoff.
 - Placeholder scan: no task relies on undefined files or open-ended "handle
   errors" steps without tests.
-- Type consistency: `storage_backend`, rclone remote metadata, cache path,
-  remote path, sync policy, and sync status are used consistently across
-  backend, frontend, and docs.
+- Type consistency: `storage_backend`, rclone remote metadata, relative remote
+  path, derived target preview, cache path, sync policy, and sync status are
+  used consistently across backend, frontend, and docs.
