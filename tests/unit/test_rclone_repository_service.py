@@ -3,6 +3,7 @@ import pytest
 from app.database.models import Repository, RepositoryStorage, RcloneRemote
 from app.services.rclone_repository_service import (
     RcloneRepositoryService,
+    normalize_extra_flags,
     normalize_rclone_relative_path,
 )
 from app.services.rclone_service import RcloneCommandResult
@@ -24,6 +25,15 @@ def test_normalize_rclone_relative_path_accepts_safe_relative_paths():
 def test_normalize_rclone_relative_path_rejects_unsafe_paths(value):
     with pytest.raises(ValueError):
         normalize_rclone_relative_path(value)
+
+
+@pytest.mark.unit
+def test_normalize_extra_flags_preserves_quoted_values():
+    assert normalize_extra_flags('--exclude "dir with spaces/**" --fast-list') == [
+        "--exclude",
+        "dir with spaces/**",
+        "--fast-list",
+    ]
 
 
 @pytest.mark.unit

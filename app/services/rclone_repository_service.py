@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import tempfile
 from datetime import datetime, timezone
@@ -34,7 +35,7 @@ def normalize_extra_flags(value: Any) -> list[str]:
     if value is None:
         return []
     if isinstance(value, str):
-        return [part for part in value.split() if part]
+        return [part for part in shlex.split(value) if part]
     if isinstance(value, list):
         return [str(part) for part in value if str(part).strip()]
     raise ValueError("rclone extra flags must be a list or string")

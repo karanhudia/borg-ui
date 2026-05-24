@@ -568,7 +568,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       case 'location':
         if (!wizardState.name.trim()) return false
         if (wizardState.repositoryLocation === 'rclone') {
-          if (rcloneStatus?.available === false) return false
+          if (rcloneStatus?.available !== true) return false
           if (!wizardState.rcloneRemoteId || !wizardState.rcloneRemotePath.trim()) return false
           return true
         }

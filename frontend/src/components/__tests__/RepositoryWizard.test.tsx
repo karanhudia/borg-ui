@@ -467,6 +467,24 @@ describe('RepositoryWizard', () => {
       })
     }, 90000)
 
+    it('requires confirmed rclone availability before continuing cloud setup', async () => {
+      const user = userEvent.setup()
+      ;(rcloneAPI.getStatus as Mock).mockResolvedValue({
+        data: { version: null, error: null },
+      })
+
+      renderWizard('create')
+
+      await fillLocalLocation('Cloud Repo', '/ignored/client/path')
+      await user.click(screen.getByText('Cloud storage (rclone)').closest('button')!)
+      await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
+      const remoteListbox = await screen.findByRole('listbox')
+      await user.click(within(remoteListbox).getByText('prod-s3'))
+      setInputValue(screen.getByLabelText(/Relative Remote Path/i), 'borg-ui/repositories/app')
+
+      expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
+    }, 90000)
+
     it('enables repository path browsing after selecting a managed agent', async () => {
       const user = userEvent.setup()
       renderWizard('create')
