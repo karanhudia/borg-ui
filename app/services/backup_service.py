@@ -306,24 +306,49 @@ class BackupService:
         if status.get("sync_status") == "current":
             return True
 
+        sync_error = (
+            status.get("last_sync_error") or "rclone sync failed after Borg completed"
+        )
         job.status = "completed_with_warnings"
-        job.error_message = json.dumps(
-            {
-                "key": "backend.errors.rclone.syncFailedAfterBackup",
-                "params": {
-                    "error": status.get("last_sync_error")
-                    or "rclone sync failed after Borg completed"
-                },
-            }
+        job.error_message = self._merge_rclone_sync_warning(
+            job.error_message, sync_error
         )
         db.commit()
         logger.warning(
             "Rclone sync failed after successful Borg backup",
             job_id=job.id,
             repository_id=repo_record.id,
-            error=status.get("last_sync_error"),
+            error=sync_error,
         )
         return False
+
+    def _merge_rclone_sync_warning(
+        self, existing_error_message: str | None, sync_error: str
+    ) -> str:
+        rclone_warning = {
+            "key": "backend.errors.rclone.syncFailedAfterBackup",
+            "params": {"error": sync_error},
+        }
+        if not existing_error_message:
+            return json.dumps(rclone_warning)
+
+        try:
+            existing_payload = json.loads(existing_error_message)
+        except (TypeError, json.JSONDecodeError):
+            rclone_warning["params"]["previous_error"] = existing_error_message
+            return json.dumps(rclone_warning)
+
+        if not isinstance(existing_payload, dict):
+            rclone_warning["params"]["previous_error"] = existing_payload
+            return json.dumps(rclone_warning)
+
+        params = existing_payload.get("params")
+        if not isinstance(params, dict):
+            params = {}
+        params["rclone_error"] = sync_error
+        params["rclone_key"] = "backend.errors.rclone.syncFailedAfterBackup"
+        existing_payload["params"] = params
+        return json.dumps(existing_payload)
 
     def rotate_logs(self, db: Session = None):
         """
@@ -2667,7 +2692,10 @@ class BackupService:
                 )
                 # Update repository statistics after successful backup
                 await self._update_repository_stats(db, repository, env)
-                await self._sync_rclone_after_borg(db, repo_record, job)
+                rclone_sync_ok = await self._sync_rclone_after_borg(
+                    db, repo_record, job
+                )
+                backup_result_for_hooks = "success" if rclone_sync_ok else "warning"
 
                 # Run post-backup hooks (script library or inline)
                 post_hook_failed = False
@@ -2681,7 +2709,7 @@ class BackupService:
                         db=db,
                         repo_record=repo_record,
                         hook_type="post-backup",
-                        backup_result="success",
+                        backup_result=backup_result_for_hooks,
                         job_id=job_id,
                     )
 
@@ -2728,26 +2756,39 @@ class BackupService:
                             "Failed to send backup failure notification", error=str(e)
                         )
                 else:
-                    # Send success notification if everything succeeded
+                    # Send notification after successful Borg and optional rclone mirror.
                     try:
                         stats = {
                             "original_size": job.original_size,
                             "compressed_size": job.compressed_size,
                             "deduplicated_size": job.deduplicated_size,
                         }
-                        await notification_service.send_backup_success(
-                            db,
-                            repository,
-                            archive_name,
-                            stats,
-                            job.completed_at,
-                            job_name,
-                            started_at=job.started_at,
-                            nfiles=job.nfiles,
-                        )
+                        if backup_result_for_hooks == "warning":
+                            await notification_service.send_backup_warning(
+                                db,
+                                repository,
+                                archive_name,
+                                job.error_message,
+                                stats,
+                                job.completed_at,
+                                job_name,
+                                started_at=job.started_at,
+                                nfiles=job.nfiles,
+                            )
+                        else:
+                            await notification_service.send_backup_success(
+                                db,
+                                repository,
+                                archive_name,
+                                stats,
+                                job.completed_at,
+                                job_name,
+                                started_at=job.started_at,
+                                nfiles=job.nfiles,
+                            )
                     except Exception as e:
                         logger.warning(
-                            "Failed to send backup success notification", error=str(e)
+                            "Failed to send backup notification", error=str(e)
                         )
 
             elif actual_returncode == 1 or (100 <= actual_returncode <= 127):

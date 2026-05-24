@@ -1,16 +1,10 @@
 """Add rclone-backed repository storage tables."""
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 
 def _table_exists(db, table_name: str) -> bool:
-    result = db.execute(
-        text(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = :table_name"
-        ),
-        {"table_name": table_name},
-    )
-    return result.first() is not None
+    return inspect(db.get_bind()).has_table(table_name)
 
 
 def upgrade(db):
@@ -107,4 +101,10 @@ def upgrade(db):
 
 
 def downgrade(db):
+    if _table_exists(db, "rclone_sync_jobs"):
+        db.execute(text("DROP TABLE rclone_sync_jobs"))
+    if _table_exists(db, "repository_storage"):
+        db.execute(text("DROP TABLE repository_storage"))
+    if _table_exists(db, "rclone_remotes"):
+        db.execute(text("DROP TABLE rclone_remotes"))
     db.commit()

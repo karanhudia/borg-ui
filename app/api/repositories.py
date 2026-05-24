@@ -957,6 +957,16 @@ def _is_rclone_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
     return (getattr(data, "storage_backend", "local") or "local") == "rclone"
 
 
+def _reject_unsupported_rclone_borg2(
+    data: Union[RepositoryCreate, RepositoryImport],
+) -> None:
+    if _is_rclone_payload(data) and _uses_borg2_payload(data):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.borgV2Unsupported"},
+        )
+
+
 def _validate_rclone_payload(
     data: Union[RepositoryCreate, RepositoryImport],
     db: Session,
@@ -1014,6 +1024,26 @@ def _validate_rclone_payload(
             detail={"key": "backend.errors.rclone.invalidPayload", "message": str(exc)},
         ) from exc
     return remote
+
+
+def _discard_rclone_repository_record(
+    db: Session,
+    repository: Repository,
+    storage: RepositoryStorage,
+) -> None:
+    repository_id = repository.id
+    cache_path = storage.cache_path
+    db.rollback()
+    if repository_id is not None:
+        db.query(RepositoryStorage).filter(
+            RepositoryStorage.repository_id == repository_id
+        ).delete(synchronize_session=False)
+        db.query(Repository).filter(Repository.id == repository_id).delete(
+            synchronize_session=False
+        )
+        db.commit()
+    if cache_path:
+        shutil.rmtree(cache_path, ignore_errors=True)
 
 
 def _serialize_rclone_storage(
@@ -1397,15 +1427,22 @@ async def _create_rclone_repository_record(
         if repo_data.rclone_sync_policy == "after_success":
             await rclone_repository_service.sync_repository(db, repository)
     except HTTPException:
-        db.rollback()
-        shutil.rmtree(storage.cache_path, ignore_errors=True)
+        _discard_rclone_repository_record(db, repository, storage)
         raise
-    except Exception:
-        db.commit()
-        db.refresh(repository)
-        storage.sync_status = "failed"
-        storage.last_sync_error = "rclone initial sync failed"
-        db.commit()
+    except Exception as exc:
+        _discard_rclone_repository_record(db, repository, storage)
+        logger.error(
+            "Unexpected rclone repository create failure",
+            name=repo_data.name,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.repo.failedToCreateRepository",
+                "message": str(exc) or exc.__class__.__name__,
+            },
+        ) from exc
 
     logger.info(
         "Rclone repository created",
@@ -1469,34 +1506,62 @@ async def _import_rclone_repository_record(
     )
     repository.path = storage.cache_path
     db.add(storage)
-    db.commit()
-    db.refresh(repository)
+    db.flush()
 
-    await rclone_repository_service.hydrate_repository(db, repository)
-    verify_result = await verify_existing_repository(
-        repository.path,
-        repo_data.passphrase,
-        None,
-        None,
-        repo_data.bypass_lock,
-    )
-    if not verify_result["success"]:
-        storage.sync_status = "failed"
-        storage.last_sync_error = (
-            verify_result.get("error") or "Borg verification failed"
+    try:
+        hydrate_status = await rclone_repository_service.hydrate_repository(
+            db, repository
+        )
+        if hydrate_status.get("sync_status") != "current":
+            storage.sync_status = "failed"
+            storage.last_sync_error = (
+                hydrate_status.get("last_sync_error") or "rclone hydrate failed"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.failedToImportRepository"},
+            )
+
+        verify_result = await verify_existing_repository(
+            repository.path,
+            repo_data.passphrase,
+            None,
+            None,
+            repo_data.bypass_lock,
+        )
+        if not verify_result["success"]:
+            storage.sync_status = "failed"
+            storage.last_sync_error = (
+                verify_result.get("error") or "Borg verification failed"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.failedToVerifyRepository"},
+            )
+
+        repo_info = verify_result.get("info", {})
+        repository.encryption = repo_info.get("encryption", {}).get(
+            "mode", repo_data.encryption
         )
         db.commit()
-        raise HTTPException(
-            status_code=400,
-            detail={"key": "backend.errors.repo.failedToVerifyRepository"},
+        db.refresh(repository)
+    except HTTPException:
+        _discard_rclone_repository_record(db, repository, storage)
+        raise
+    except Exception as exc:
+        _discard_rclone_repository_record(db, repository, storage)
+        logger.error(
+            "Unexpected rclone repository import failure",
+            name=repo_data.name,
+            error=str(exc),
         )
-
-    repo_info = verify_result.get("info", {})
-    repository.encryption = repo_info.get("encryption", {}).get(
-        "mode", repo_data.encryption
-    )
-    db.commit()
-    db.refresh(repository)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.repo.failedToImportRepository",
+                "message": str(exc) or exc.__class__.__name__,
+            },
+        ) from exc
 
     logger.info(
         "Rclone repository imported",
@@ -1647,6 +1712,7 @@ async def create_repository(
     """Create a new repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        _reject_unsupported_rclone_borg2(repo_data)
         if _is_rclone_payload(repo_data):
             return await _create_rclone_repository_record(repo_data, current_user, db)
         if _uses_borg2_payload(repo_data):
@@ -2009,6 +2075,7 @@ async def import_repository(
     """Import an existing Borg repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        _reject_unsupported_rclone_borg2(repo_data)
         if _is_rclone_payload(repo_data):
             return await _import_rclone_repository_record(repo_data, current_user, db)
         if _uses_borg2_payload(repo_data):

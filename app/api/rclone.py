@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ from app.services.rclone_service import RcloneUnavailable, rclone_service
 
 router = APIRouter(tags=["rclone"], dependencies=[Depends(authorize_request)])
 
+RCLONE_REMOTE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
 
 class RcloneRemoteCreate(BaseModel):
     name: str
@@ -31,6 +34,34 @@ class RcloneRemoteCreate(BaseModel):
 def _require_admin(user: User) -> None:
     if not user.is_admin:
         raise HTTPException(status_code=403, detail={"key": "backend.errors.forbidden"})
+
+
+def _normalize_remote_name(name: str) -> str:
+    normalized = name.strip()
+    if (
+        not normalized
+        or normalized in {".", ".."}
+        or ".." in normalized
+        or "/" in normalized
+        or "\\" in normalized
+        or not RCLONE_REMOTE_NAME_RE.fullmatch(normalized)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidRemoteName"},
+        )
+    return normalized
+
+
+def _managed_config_path(config_root: Path, remote_name: str) -> Path:
+    root = config_root.resolve()
+    config_path = (root / f"{remote_name}.conf").resolve()
+    if config_path.parent != root:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidRemoteName"},
+        )
+    return config_path
 
 
 def _serialize_remote(remote: RcloneRemote) -> dict[str, Any]:
@@ -74,7 +105,8 @@ async def create_remote(
     db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
-    existing = db.query(RcloneRemote).filter(RcloneRemote.name == payload.name).first()
+    remote_name = _normalize_remote_name(payload.name)
+    existing = db.query(RcloneRemote).filter(RcloneRemote.name == remote_name).first()
     if existing:
         raise HTTPException(
             status_code=409, detail={"key": "backend.errors.rclone.remoteExists"}
@@ -84,15 +116,14 @@ async def create_remote(
     if payload.config_source == "managed":
         config_root = Path(settings.rclone_config_root)
         config_root.mkdir(parents=True, exist_ok=True)
-        config_path = str(config_root / f"{payload.name}.conf")
+        config_file = _managed_config_path(config_root, remote_name)
+        config_path = str(config_file)
         config_body = payload.redacted_config or {"type": payload.provider}
-        Path(config_path).write_text(
-            json.dumps(config_body, indent=2), encoding="utf-8"
-        )
-        Path(config_path).chmod(0o600)
+        config_file.write_text(json.dumps(config_body, indent=2), encoding="utf-8")
+        config_file.chmod(0o600)
 
     remote = RcloneRemote(
-        name=payload.name.strip(),
+        name=remote_name,
         provider=payload.provider.strip(),
         config_source=payload.config_source,
         config_path=config_path,

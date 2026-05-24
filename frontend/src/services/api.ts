@@ -10,6 +10,7 @@ import type {
   RepositoryWipeExecuteRequest,
   RepositoryWipeJob,
   RepositoryWipePreviewRequest,
+  RcloneStorage,
   SourceLocation,
 } from '../types'
 
@@ -123,22 +124,14 @@ export interface RcloneRemote {
   last_error?: string | null
 }
 
-export interface RcloneStorage {
-  repository_id: number
-  backend: 'rclone'
-  rclone_remote_id: number
-  rclone_remote_name?: string | null
-  rclone_remote_path: string
-  rclone_target?: string | null
-  cache_path?: string | null
-  cache_present?: boolean
-  sync_policy: 'after_success' | 'manual' | 'scheduled'
-  sync_status: 'current' | 'pending' | 'syncing' | 'failed' | 'hydrating' | string
-  last_synced_at?: string | null
-  last_hydrated_at?: string | null
-  last_remote_check_at?: string | null
-  last_sync_error?: string | null
-  extra_flags?: string[]
+export type { RcloneStorage } from '../types'
+
+export interface CreateRcloneRemoteRequest {
+  name: string
+  provider: string
+  config_source?: string
+  config_path?: string | null
+  redacted_config?: Record<string, unknown> | null
 }
 
 export interface SystemSettings {
@@ -747,7 +740,8 @@ export const repositoriesAPI = {
 export const rcloneAPI = {
   getStatus: () => api.get<RcloneStatus>('/rclone/status'),
   listRemotes: () => api.get<{ remotes: RcloneRemote[] }>('/rclone/remotes'),
-  createRemote: (data: Partial<RcloneRemote>) => api.post<RcloneRemote>('/rclone/remotes', data),
+  createRemote: (data: CreateRcloneRemoteRequest) =>
+    api.post<RcloneRemote>('/rclone/remotes', data),
   testRemote: (id: number) => api.post(`/rclone/remotes/${id}/test`),
   browseRemote: (id: number, path?: string) =>
     api.get(`/rclone/remotes/${id}/browse`, { params: { path } }),

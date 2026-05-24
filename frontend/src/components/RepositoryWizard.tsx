@@ -233,36 +233,41 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
   // Load selectable remote execution targets.
   const loadWizardData = async () => {
-    try {
-      const connectionsRes = await sshKeysAPI.getSSHConnections()
-      const connections = connectionsRes.data?.connections || []
+    const [connectionsRes, agentsRes, statusRes, remotesRes] = await Promise.allSettled([
+      sshKeysAPI.getSSHConnections(),
+      managedAgentsAPI.listAgents(),
+      rcloneAPI.getStatus(),
+      rcloneAPI.listRemotes(),
+    ])
+
+    if (connectionsRes.status === 'fulfilled') {
+      const connections = connectionsRes.value.data?.connections || []
       setSshConnections(Array.isArray(connections) ? connections : [])
-    } catch (error) {
-      console.error('Failed to load SSH data:', error)
+    } else {
+      console.error('Failed to load SSH data:', connectionsRes.reason)
       setSshConnections([])
     }
 
-    try {
-      const agentsRes = await managedAgentsAPI.listAgents()
-      setAgentMachines(Array.isArray(agentsRes.data) ? agentsRes.data : [])
-    } catch (error) {
-      console.error('Failed to load managed agents:', error)
+    if (agentsRes.status === 'fulfilled') {
+      setAgentMachines(Array.isArray(agentsRes.value.data) ? agentsRes.value.data : [])
+    } else {
+      console.error('Failed to load managed agents:', agentsRes.reason)
       setAgentMachines([])
     }
 
-    try {
-      const statusRes = await rcloneAPI.getStatus()
-      setRcloneStatus(statusRes.data)
-    } catch (error) {
-      console.error('Failed to load rclone status:', error)
+    if (statusRes.status === 'fulfilled') {
+      setRcloneStatus(statusRes.value.data)
+    } else {
+      console.error('Failed to load rclone status:', statusRes.reason)
       setRcloneStatus({ available: false, error: 'Unable to load rclone status' })
     }
 
-    try {
-      const remotesRes = await rcloneAPI.listRemotes()
-      setRcloneRemotes(Array.isArray(remotesRes.data?.remotes) ? remotesRes.data.remotes : [])
-    } catch (error) {
-      console.error('Failed to load rclone remotes:', error)
+    if (remotesRes.status === 'fulfilled') {
+      setRcloneRemotes(
+        Array.isArray(remotesRes.value.data?.remotes) ? remotesRes.value.data.remotes : []
+      )
+    } else {
+      console.error('Failed to load rclone remotes:', remotesRes.reason)
       setRcloneRemotes([])
     }
   }
@@ -608,6 +613,15 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   }
 
   const handleSubmit = async () => {
+    const storageBackend =
+      wizardState.executionTarget === 'agent'
+        ? 'agent_local'
+        : wizardState.repositoryLocation === 'rclone'
+          ? 'rclone'
+          : wizardState.repositoryLocation === 'ssh'
+            ? 'ssh'
+            : 'local'
+
     const data: RepositoryData = {
       name: wizardState.name,
       borg_version: wizardState.borgVersion,
@@ -642,7 +656,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         wizardState.executionTarget === 'agent' && wizardState.agentMachineId
           ? wizardState.agentMachineId
           : null,
-      storage_backend: wizardState.repositoryLocation === 'rclone' ? 'rclone' : 'local',
+      storage_backend: storageBackend,
       rclone_remote_id:
         wizardState.repositoryLocation === 'rclone' && wizardState.rcloneRemoteId
           ? wizardState.rcloneRemoteId

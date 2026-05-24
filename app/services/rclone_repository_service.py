@@ -196,13 +196,18 @@ class RcloneRepositoryService:
             return self.serialize_status(repository, storage, remote)
         now = datetime.now(timezone.utc)
         if result.success:
-            if os.path.exists(storage.cache_path):
-                shutil.rmtree(storage.cache_path)
-            os.replace(temp_dir, storage.cache_path)
-            repository.path = storage.cache_path
-            storage.sync_status = "current"
-            storage.last_hydrated_at = now
-            storage.last_sync_error = None
+            try:
+                if os.path.exists(storage.cache_path):
+                    shutil.rmtree(storage.cache_path)
+                os.replace(temp_dir, storage.cache_path)
+                repository.path = storage.cache_path
+                storage.sync_status = "current"
+                storage.last_hydrated_at = now
+                storage.last_sync_error = None
+            except Exception as exc:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                storage.sync_status = "failed"
+                storage.last_sync_error = _exception_message(exc)
         else:
             shutil.rmtree(temp_dir, ignore_errors=True)
             storage.sync_status = "failed"

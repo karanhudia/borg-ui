@@ -355,6 +355,7 @@ describe('RepositoryWizard', () => {
           expect.objectContaining({
             name: 'Remote Repo',
             path: '/offsite/repo',
+            storage_backend: 'ssh',
             connection_id: 1,
             source_connection_id: null,
             source_directories: [],
@@ -411,6 +412,7 @@ describe('RepositoryWizard', () => {
           path: '/srv/borg/agent-repo',
           executor_type: 'agent',
           execution_target: 'agent',
+          storage_backend: 'agent_local',
           agent_machine_id: 101,
           connection_id: null,
           source_connection_id: null,
@@ -535,6 +537,7 @@ describe('RepositoryWizard', () => {
           path: '/backups/pi',
           executor_type: 'agent',
           execution_target: 'agent',
+          storage_backend: 'agent_local',
           agent_machine_id: 101,
           connection_id: null,
           source_connection_id: null,

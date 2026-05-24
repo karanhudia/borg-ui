@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import WizardStepLocation from '../WizardStepLocation'
@@ -123,6 +123,31 @@ describe('WizardStepLocation', () => {
       expect(
         screen.getByText(/Borg UI server -> local cache -> rclone sync -> remote/i)
       ).toBeInTheDocument()
+    })
+
+    it('does not allow cloud storage selection when rclone is unavailable', () => {
+      const onChange = vi.fn()
+
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={defaultData}
+          sshConnections={[]}
+          rcloneRemotes={mockRcloneRemotes}
+          rcloneStatus={{ available: false, error: 'rclone binary not found' }}
+          onChange={onChange}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      const rcloneCard = screen.getByText('Cloud storage (rclone)').closest('button')
+      expect(rcloneCard).toBeDisabled()
+
+      fireEvent.click(rcloneCard!)
+
+      expect(onChange).not.toHaveBeenCalledWith(
+        expect.objectContaining({ repositoryLocation: 'rclone' })
+      )
     })
 
     it('does NOT show Repository Mode selector in create mode', () => {

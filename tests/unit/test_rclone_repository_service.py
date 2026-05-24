@@ -5,6 +5,7 @@ from app.services.rclone_repository_service import (
     RcloneRepositoryService,
     normalize_rclone_relative_path,
 )
+from app.services.rclone_service import RcloneCommandResult
 
 
 @pytest.mark.unit
@@ -97,6 +98,18 @@ class _ExplodingRcloneService:
         raise RuntimeError("rclone timed out")
 
 
+class _SuccessfulRcloneService:
+    async def sync(self, *args, **kwargs):
+        return RcloneCommandResult(
+            success=True,
+            return_code=0,
+            stdout="",
+            stderr="",
+            command=["rclone", "sync"],
+            redacted_command="rclone sync <path> <path>",
+        )
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_sync_repository_persists_failure_when_rclone_raises(
@@ -128,6 +141,45 @@ async def test_sync_repository_persists_failure_when_rclone_raises(
     assert status["sync_status"] == "failed"
     assert storage.sync_status == "failed"
     assert storage.last_sync_error == "rclone timed out"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_hydrate_repository_persists_failure_when_cache_swap_fails(
+    db_session, tmp_path, monkeypatch
+):
+    cache_path = tmp_path / "cache" / "repositories" / "9"
+    cache_path.mkdir(parents=True)
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=str(cache_path), encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=str(cache_path),
+        sync_policy="after_success",
+        sync_status="pending",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+
+    def raise_swap_error(*args, **kwargs):
+        raise RuntimeError("cache swap failed")
+
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.os.replace", raise_swap_error
+    )
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"), service=_SuccessfulRcloneService()
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    db_session.refresh(storage)
+    assert status["sync_status"] == "failed"
+    assert storage.sync_status == "failed"
+    assert storage.last_sync_error == "cache swap failed"
 
 
 @pytest.mark.unit

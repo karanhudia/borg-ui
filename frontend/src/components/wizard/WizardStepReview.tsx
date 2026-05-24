@@ -88,6 +88,17 @@ export default function WizardStepReview({
   const { t } = useTranslation()
   const [showPassphrase, setShowPassphrase] = useState(false)
   const executionTarget = data.executionTarget ?? 'local'
+  const getRcloneSyncPolicyLabel = () => {
+    switch (data.rcloneSyncPolicy || 'after_success') {
+      case 'manual':
+        return t('wizard.location.rcloneSyncManual')
+      case 'scheduled':
+        return t('wizard.location.rcloneSyncScheduled')
+      case 'after_success':
+      default:
+        return t('wizard.location.rcloneSyncAfterSuccess')
+    }
+  }
 
   const getSourceSshConnection = () => {
     if (data.dataSource !== 'remote' || !data.sourceSshConnectionId) return null
@@ -298,7 +309,7 @@ export default function WizardStepReview({
               </ReviewAttrRow>
               <ReviewAttrRow label={t('wizard.review.rcloneSyncPolicy')}>
                 <Typography variant="body2" fontSize="0.75rem">
-                  {data.rcloneSyncPolicy || 'after_success'}
+                  {getRcloneSyncPolicyLabel()}
                 </Typography>
               </ReviewAttrRow>
             </>

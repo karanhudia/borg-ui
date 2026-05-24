@@ -105,10 +105,14 @@ export default function WizardStepLocation({
   // Only enforce this in edit mode when we know the data source
   const isRemoteLocationDisabled =
     isAgentExecution || (mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId)
+  const isRcloneAvailable = rcloneStatus?.available !== false
 
   const handleLocationChange = (location: 'local' | 'ssh' | 'rclone') => {
     if (location === 'ssh' && isRemoteLocationDisabled) {
       return // Don't allow switching to SSH if data source is remote
+    }
+    if (location === 'rclone' && !isRcloneAvailable) {
+      return
     }
     onChange({
       repositoryLocation: location,
@@ -527,17 +531,32 @@ export default function WizardStepLocation({
                   data.repositoryLocation === 'rclone'
                     ? (theme) => alpha(theme.palette.primary.main, 0.08)
                     : 'background.paper',
+                opacity: isRcloneAvailable ? 1 : 0.6,
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                transform: data.repositoryLocation === 'rclone' ? 'translateY(-2px)' : 'none',
+                transform:
+                  data.repositoryLocation === 'rclone' && isRcloneAvailable
+                    ? 'translateY(-2px)'
+                    : 'none',
                 '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
+                  transform: isRcloneAvailable ? 'translateY(-2px)' : 'none',
+                  boxShadow: isRcloneAvailable
+                    ? (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`
+                    : 'none',
                   borderColor:
-                    data.repositoryLocation === 'rclone' ? 'primary.main' : 'text.primary',
+                    data.repositoryLocation === 'rclone' || !isRcloneAvailable
+                      ? data.repositoryLocation === 'rclone'
+                        ? 'primary.main'
+                        : 'divider'
+                      : 'text.primary',
                 },
               }}
             >
-              <CardActionArea onClick={() => handleLocationChange('rclone')} sx={{ p: 1 }}>
+              <CardActionArea
+                onClick={() => handleLocationChange('rclone')}
+                disabled={!isRcloneAvailable}
+                aria-disabled={!isRcloneAvailable}
+                sx={{ p: 1 }}
+              >
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
                     <Box
@@ -659,7 +678,7 @@ export default function WizardStepLocation({
               {rcloneStatus.error || t('wizard.location.rcloneUnavailable')}
             </Alert>
           )}
-          <FormControl fullWidth disabled={rcloneStatus?.available === false}>
+          <FormControl fullWidth disabled={!isRcloneAvailable}>
             <InputLabel id="rclone-remote-label">
               {t('wizard.location.rcloneRemoteLabel')}
             </InputLabel>
@@ -712,6 +731,7 @@ export default function WizardStepLocation({
             placeholder="borg-ui/repositories/app"
             required
             fullWidth
+            disabled={!isRcloneAvailable}
             helperText={t('wizard.location.rcloneRemotePathHelper')}
           />
 
@@ -719,11 +739,12 @@ export default function WizardStepLocation({
             label={t('wizard.location.rcloneCachePreviewLabel')}
             value="/data/rclone-cache/repositories/<repository-id>"
             fullWidth
+            disabled={!isRcloneAvailable}
             InputProps={{ readOnly: true }}
             helperText={t('wizard.location.rcloneCachePreviewHelper')}
           />
 
-          <FormControl fullWidth>
+          <FormControl fullWidth disabled={!isRcloneAvailable}>
             <InputLabel id="rclone-sync-policy-label">
               {t('wizard.location.rcloneSyncPolicyLabel')}
             </InputLabel>
@@ -752,6 +773,7 @@ export default function WizardStepLocation({
             onChange={(e) => onChange({ rcloneExtraFlags: e.target.value })}
             placeholder="--fast-list"
             fullWidth
+            disabled={!isRcloneAvailable}
             helperText={t('wizard.location.rcloneExtraFlagsHelper')}
           />
 
