@@ -304,7 +304,8 @@
       }
 
       input,
-      select {
+      select,
+      output.readonly {
         width: 100%;
         border: 1px solid var(--line);
         border-radius: 8px;
@@ -333,17 +334,29 @@
 
       .segment {
         text-align: center;
+        border: 0;
         border-radius: 6px;
         padding: 8px 6px;
+        background: transparent;
         font-size: 12px;
         color: var(--muted);
         font-weight: 700;
+        cursor: default;
       }
 
       .segment.active {
         background: #fff;
         color: var(--text);
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+      }
+
+      .segment:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+
+      output.readonly {
+        display: block;
       }
 
       .notice {
@@ -677,14 +690,12 @@
                   </div>
                   <div class="field full">
                     <label for="cache-path">Local Borg cache path</label>
-                    <input
-                      id="cache-path"
-                      class="mono"
-                      value="/data/rclone-cache/repositories/production-app"
-                    />
+                    <output id="cache-path" class="readonly mono"
+                      >/data/rclone-cache/repositories/production-app</output
+                    >
                     <p class="helper">
-                      Borg reads and writes here before Borg UI mirrors to
-                      rclone.
+                      Server-derived path. Borg reads and writes here before
+                      Borg UI mirrors to rclone.
                     </p>
                   </div>
                   <div class="field full">
@@ -694,9 +705,27 @@
                       role="group"
                       aria-label="Sync policy"
                     >
-                      <div class="segment active">After Borg job</div>
-                      <div class="segment">Manual</div>
-                      <div class="segment">Scheduled</div>
+                      <button
+                        type="button"
+                        class="segment active"
+                        aria-pressed="true"
+                      >
+                        After Borg job
+                      </button>
+                      <button
+                        type="button"
+                        class="segment"
+                        aria-pressed="false"
+                      >
+                        Manual
+                      </button>
+                      <button
+                        type="button"
+                        class="segment"
+                        aria-pressed="false"
+                      >
+                        Scheduled
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -109,7 +109,7 @@ Add explicit rclone storage records instead of overloading SSH fields:
   - `rclone_remote_id`: selected `rclone_remotes.id`
   - `rclone_remote_path`: relative path inside the remote, without a
     `remote:` prefix
-  - `cache_path`
+  - `cache_path`: server-derived path under `RCLONE_CACHE_ROOT`
   - `sync_policy`: `after_success`, `manual`, or `scheduled`
   - `sync_direction`: always `cache_to_remote` for normal operations
   - `sync_status`: `current`, `pending`, `syncing`, `failed`, `hydrating`
@@ -133,6 +133,9 @@ Canonical target shape:
 - API responses may include a derived, read-only `rclone_target` preview such
   as `prod-s3:borg-ui/repositories/app`, but clients must not submit that full
   URI back as `rclone_remote_path`.
+- Derive `cache_path` server-side from `RCLONE_CACHE_ROOT` and repository
+  identity. Clients must not submit a custom cache path in create or import
+  requests.
 
 ## Runtime Flow
 
@@ -272,7 +275,7 @@ When rclone is selected, the wizard shows:
 - Remote selector with test status.
 - Provider badge and remote name.
 - Relative remote path field with browse action.
-- Local cache path preview, editable by advanced users.
+- Server-derived, read-only local cache path preview.
 - Sync policy selector:
   - Sync after successful Borg job (default)
   - Manual sync
