@@ -112,25 +112,42 @@ async def create_remote(
             status_code=409, detail={"key": "backend.errors.rclone.remoteExists"}
         )
 
-    config_path = payload.config_path
-    if payload.config_source == "managed":
-        config_root = Path(settings.rclone_config_root)
-        config_root.mkdir(parents=True, exist_ok=True)
-        config_file = _managed_config_path(config_root, remote_name)
-        config_path = str(config_file)
-        config_body = payload.redacted_config or {"type": payload.provider}
-        config_file.write_text(json.dumps(config_body, indent=2), encoding="utf-8")
-        config_file.chmod(0o600)
-
+    provider = payload.provider.strip()
     remote = RcloneRemote(
         name=remote_name,
-        provider=payload.provider.strip(),
+        provider=provider,
         config_source=payload.config_source,
-        config_path=config_path,
+        config_path=payload.config_path,
         redacted_config=payload.redacted_config,
     )
     db.add(remote)
-    db.commit()
+
+    config_file: Path | None = None
+    try:
+        db.flush()
+        if payload.config_source == "managed":
+            config_root = Path(settings.rclone_config_root)
+            config_root.mkdir(parents=True, exist_ok=True)
+            config_file = _managed_config_path(config_root, remote_name)
+            remote.config_path = str(config_file)
+            config_body = payload.redacted_config or {"type": provider}
+            config_file.write_text(json.dumps(config_body, indent=2), encoding="utf-8")
+            config_file.chmod(0o600)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        if config_file is not None:
+            config_file.unlink(missing_ok=True)
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "key": "backend.errors.rclone.failedToCreateRemote",
+                "message": str(exc) or exc.__class__.__name__,
+            },
+        ) from exc
+
     db.refresh(remote)
     return _serialize_remote(remote)
 

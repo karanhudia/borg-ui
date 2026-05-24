@@ -2746,15 +2746,8 @@ class BackupService:
 
                 # Send notification after post-hook completes
                 if post_hook_failed:
-                    # Send failure notification if post-hook failed
-                    try:
-                        await notification_service.send_backup_failure(
-                            db, repository, job.error_message, job_id, job_name
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to send backup failure notification", error=str(e)
-                        )
+                    # The shared epilogue sends the failure notification once.
+                    pass
                 else:
                     # Send notification after successful Borg and optional rclone mirror.
                     try:
@@ -2868,15 +2861,8 @@ class BackupService:
 
                 # Send notification after post-hook completes (for warning case)
                 if post_hook_failed:
-                    # Send failure notification if post-hook failed
-                    try:
-                        await notification_service.send_backup_failure(
-                            db, repository, job.error_message, job_id, job_name
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to send backup failure notification", error=str(e)
-                        )
+                    # The shared epilogue sends the failure notification once.
+                    pass
                 else:
                     # Send warning notification (backup completed with warnings but post-hook succeeded)
                     try:

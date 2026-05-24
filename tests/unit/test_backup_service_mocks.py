@@ -605,6 +605,79 @@ async def test_execute_backup_uses_rclone_sync_failure_for_hooks_and_notificatio
 
 
 @pytest.mark.asyncio
+async def test_execute_backup_post_hook_failure_sends_single_failure_notification(
+    backup_service_fixture, mock_db_session
+):
+    job_id = 47
+    repo = Repository(
+        id=1,
+        path="/backups/repo",
+        source_directories='["/data"]',
+        compression="lz4",
+    )
+    job = BackupJob(id=job_id, status="pending")
+    mock_db_session.query.side_effect = _make_execute_query_side_effect(job, repo)
+
+    mock_process = AsyncMock()
+    mock_process.returncode = 0
+    mock_process.stdout = AsyncMock()
+    mock_process.stdout.__aiter__.return_value = iter([])
+
+    pre_hook_result = {
+        "success": True,
+        "execution_logs": [],
+        "scripts_executed": 0,
+        "scripts_failed": 0,
+        "using_library": False,
+    }
+    post_hook_result = {
+        "success": False,
+        "execution_logs": ["post hook failed"],
+        "scripts_executed": 1,
+        "scripts_failed": 1,
+        "using_library": False,
+    }
+    execute_hooks = AsyncMock(side_effect=[pre_hook_result, post_hook_result])
+    notifications = _notification_service_mock()
+
+    with (
+        patch("app.services.backup_service.SessionLocal", return_value=mock_db_session),
+        patch(
+            "app.services.backup_service.BorgRouter.validate_local_repository_access",
+            return_value=None,
+        ),
+        patch.object(backup_service_fixture, "_execute_hooks", execute_hooks),
+        patch.object(
+            backup_service_fixture,
+            "_prepare_source_paths",
+            new=AsyncMock(return_value=(["/data"], [])),
+        ),
+        patch.object(
+            backup_service_fixture,
+            "_calculate_and_update_size_background",
+            new=AsyncMock(),
+        ),
+        patch.object(backup_service_fixture, "_update_archive_stats", new=AsyncMock()),
+        patch.object(
+            backup_service_fixture, "_update_repository_stats", new=AsyncMock()
+        ),
+        patch(
+            "app.services.backup_service.asyncio.create_subprocess_exec",
+            return_value=mock_process,
+        ),
+        patch("app.services.backup_service.notification_service", notifications),
+        patch("app.services.backup_service.mqtt_service") as mqtt,
+    ):
+        mqtt.sync_state_with_db = Mock()
+        await backup_service_fixture.execute_backup(
+            job_id, repo.path, db=mock_db_session
+        )
+
+    assert job.status == "failed"
+    notifications.send_backup_failure.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_pre_backup_inline_script_failure_skips_when_flag_set(
     backup_service_fixture, mock_db_session
 ):

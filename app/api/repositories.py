@@ -66,6 +66,7 @@ from app.services.repository_command_lock import run_serialized_repository_comma
 from app.services.rclone_repository_service import (
     VALID_SYNC_POLICIES,
     normalize_extra_flags,
+    normalize_rclone_relative_path,
     rclone_repository_service,
 )
 from app.utils.datetime_utils import serialize_datetime
@@ -2690,7 +2691,104 @@ async def update_repository(
         # Store raw path first (will be reconstructed for SSH below)
         raw_path = None
         update_data = repo_data.model_dump(exclude_unset=True)
-        if repo_data.path is not None:
+        existing_rclone_storage = (
+            db.query(RepositoryStorage)
+            .filter(RepositoryStorage.repository_id == repository.id)
+            .first()
+        )
+        rclone_update_fields = {
+            "storage_backend",
+            "rclone_remote_id",
+            "rclone_remote_path",
+            "rclone_sync_policy",
+            "rclone_extra_flags",
+            "rclone_cache_path",
+        }
+        requested_rclone_updates = rclone_update_fields.intersection(update_data)
+        if requested_rclone_updates:
+            storage = existing_rclone_storage
+            if not storage or storage.backend != "rclone":
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.updateUnsupported"},
+                )
+            if "rclone_cache_path" in update_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.cachePathServerOwned"},
+                )
+            if (
+                "storage_backend" in update_data
+                and repo_data.storage_backend != "rclone"
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.updateUnsupported"},
+                )
+            if "rclone_remote_id" in update_data:
+                if not repo_data.rclone_remote_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remoteRequired"},
+                    )
+                remote = (
+                    db.query(RcloneRemote)
+                    .filter(RcloneRemote.id == repo_data.rclone_remote_id)
+                    .first()
+                )
+                if not remote:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={"key": "backend.errors.rclone.remoteNotFound"},
+                    )
+                storage.rclone_remote_id = remote.id
+            if "rclone_remote_path" in update_data:
+                if not repo_data.rclone_remote_path:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remotePathRequired"},
+                    )
+                try:
+                    storage.rclone_remote_path = normalize_rclone_relative_path(
+                        repo_data.rclone_remote_path
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.rclone.invalidPayload",
+                            "message": str(exc),
+                        },
+                    ) from exc
+            if "rclone_sync_policy" in update_data:
+                if repo_data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+                    )
+                storage.sync_policy = repo_data.rclone_sync_policy
+            if "rclone_extra_flags" in update_data:
+                try:
+                    storage.extra_flags = normalize_extra_flags(
+                        repo_data.rclone_extra_flags
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.rclone.invalidPayload",
+                            "message": str(exc),
+                        },
+                    ) from exc
+
+        if (
+            existing_rclone_storage
+            and existing_rclone_storage.backend == "rclone"
+            and "path" in update_data
+        ):
+            update_data.pop("path")
+
+        if "path" in update_data and repo_data.path is not None:
             raw_path = repo_data.path.strip()
 
         target_executor_type = (

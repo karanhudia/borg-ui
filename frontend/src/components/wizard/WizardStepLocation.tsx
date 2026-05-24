@@ -726,7 +726,7 @@ export default function WizardStepLocation({
             label={t('wizard.location.rcloneRemotePathLabel')}
             value={data.rcloneRemotePath || ''}
             onChange={(e) => {
-              onChange({ rcloneRemotePath: e.target.value, path: e.target.value })
+              onChange({ rcloneRemotePath: e.target.value })
             }}
             placeholder="borg-ui/repositories/app"
             required

@@ -125,6 +125,36 @@ describe('WizardStepLocation', () => {
       ).toBeInTheDocument()
     })
 
+    it('keeps filesystem repository path separate when editing rclone remote path', () => {
+      const onChange = vi.fn()
+
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={{
+            ...defaultData,
+            repositoryLocation: 'rclone',
+            path: '/backups/local-repo',
+            rcloneRemoteId: 10,
+            rcloneRemotePath: '',
+          }}
+          sshConnections={[]}
+          rcloneRemotes={mockRcloneRemotes}
+          rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
+          onChange={onChange}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      fireEvent.change(screen.getByLabelText(/Relative Remote Path/i), {
+        target: { value: 'borg-ui/repositories/app' },
+      })
+
+      expect(onChange).toHaveBeenCalledWith({
+        rcloneRemotePath: 'borg-ui/repositories/app',
+      })
+    })
+
     it('does not allow cloud storage selection when rclone is unavailable', () => {
       const onChange = vi.fn()
 

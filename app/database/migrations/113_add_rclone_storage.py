@@ -14,8 +14,16 @@ def _id_primary_key(db) -> str:
     return "id INTEGER PRIMARY KEY"
 
 
+def _timestamp_type(db) -> str:
+    dialect_name = db.get_bind().dialect.name
+    if dialect_name == "postgresql":
+        return "TIMESTAMP"
+    return "DATETIME"
+
+
 def upgrade(db):
     id_primary_key = _id_primary_key(db)
+    timestamp_type = _timestamp_type(db)
     if not _table_exists(db, "rclone_remotes"):
         db.execute(
             text(
@@ -27,11 +35,11 @@ def upgrade(db):
                     config_source VARCHAR NOT NULL DEFAULT 'managed',
                     config_path VARCHAR,
                     redacted_config JSON,
-                    last_tested_at DATETIME,
+                    last_tested_at {timestamp_type},
                     last_test_status VARCHAR NOT NULL DEFAULT 'unknown',
                     last_error TEXT,
-                    created_at DATETIME NOT NULL,
-                    updated_at DATETIME NOT NULL
+                    created_at {timestamp_type} NOT NULL,
+                    updated_at {timestamp_type} NOT NULL
                 )
                 """
             )
@@ -53,13 +61,13 @@ def upgrade(db):
                     sync_policy VARCHAR NOT NULL DEFAULT 'after_success',
                     sync_direction VARCHAR NOT NULL DEFAULT 'cache_to_remote',
                     sync_status VARCHAR NOT NULL DEFAULT 'pending',
-                    last_synced_at DATETIME,
-                    last_hydrated_at DATETIME,
-                    last_remote_check_at DATETIME,
+                    last_synced_at {timestamp_type},
+                    last_hydrated_at {timestamp_type},
+                    last_remote_check_at {timestamp_type},
                     last_sync_error TEXT,
                     extra_flags JSON,
-                    created_at DATETIME NOT NULL,
-                    updated_at DATETIME NOT NULL,
+                    created_at {timestamp_type} NOT NULL,
+                    updated_at {timestamp_type} NOT NULL,
                     FOREIGN KEY(repository_id) REFERENCES repositories(id) ON DELETE CASCADE,
                     FOREIGN KEY(rclone_remote_id) REFERENCES rclone_remotes(id) ON DELETE SET NULL
                 )
@@ -85,13 +93,13 @@ def upgrade(db):
                     repository_id INTEGER NOT NULL,
                     direction VARCHAR NOT NULL,
                     status VARCHAR NOT NULL DEFAULT 'pending',
-                    started_at DATETIME,
-                    completed_at DATETIME,
+                    started_at {timestamp_type},
+                    completed_at {timestamp_type},
                     bytes_transferred BIGINT,
                     files_transferred INTEGER,
                     log_path VARCHAR,
                     error_text TEXT,
-                    created_at DATETIME NOT NULL,
+                    created_at {timestamp_type} NOT NULL,
                     FOREIGN KEY(repository_id) REFERENCES repositories(id) ON DELETE CASCADE
                 )
                 """
