@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 import structlog
 
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH, get_current_agent
+from app.core.agent_constants import DEFAULT_AGENT_POLL_INTERVAL_SECONDS
 from app.core.security import get_password_hash, verify_password
 from app.database.database import get_db
 from app.database.models import (
@@ -26,7 +27,6 @@ from app.utils.datetime_utils import serialize_datetime
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
-DEFAULT_AGENT_POLL_INTERVAL_SECONDS = 15
 FINAL_AGENT_JOB_STATUSES = {"completed", "failed", "canceled"}
 STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=15)
 REPOSITORY_OPERATION_JOB_MODELS = {
