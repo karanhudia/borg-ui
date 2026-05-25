@@ -53,6 +53,16 @@ def _normalize_remote_name(name: str) -> str:
     return normalized
 
 
+def _normalize_provider(provider: str) -> str:
+    normalized = provider.strip()
+    if not normalized:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidProvider"},
+        )
+    return normalized
+
+
 def _managed_config_path(config_root: Path, remote_name: str) -> Path:
     root = config_root.resolve()
     config_path = (root / f"{remote_name}.conf").resolve()
@@ -112,7 +122,7 @@ async def create_remote(
             status_code=409, detail={"key": "backend.errors.rclone.remoteExists"}
         )
 
-    provider = payload.provider.strip()
+    provider = _normalize_provider(payload.provider)
     remote = RcloneRemote(
         name=remote_name,
         provider=provider,
@@ -142,10 +152,7 @@ async def create_remote(
             raise
         raise HTTPException(
             status_code=500,
-            detail={
-                "key": "backend.errors.rclone.failedToCreateRemote",
-                "message": str(exc) or exc.__class__.__name__,
-            },
+            detail={"key": "backend.errors.rclone.failedToCreateRemote"},
         ) from exc
 
     db.refresh(remote)

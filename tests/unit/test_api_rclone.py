@@ -102,6 +102,25 @@ def test_create_and_list_rclone_remote(
 
 
 @pytest.mark.unit
+def test_create_rclone_remote_rejects_blank_provider(
+    test_client: TestClient, admin_headers
+):
+    response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "prod-s3",
+            "provider": "   ",
+            "config_source": "managed",
+            "redacted_config": {"type": "s3", "provider": "AWS"},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == {"key": "backend.errors.rclone.invalidProvider"}
+
+
+@pytest.mark.unit
 def test_create_managed_rclone_remote_removes_config_file_on_commit_failure(
     test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
 ):
@@ -130,6 +149,9 @@ def test_create_managed_rclone_remote_removes_config_file_on_commit_failure(
     )
 
     assert response.status_code == 500
+    assert response.json()["detail"] == {
+        "key": "backend.errors.rclone.failedToCreateRemote"
+    }
     assert not (config_root / "prod-s3.conf").exists()
 
 
