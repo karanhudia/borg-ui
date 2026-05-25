@@ -632,6 +632,21 @@ def test_rclone_storage_migration_downgrade_drops_created_tables():
 
 
 @pytest.mark.unit
+def test_rclone_storage_migration_runs_with_connection():
+    migration = importlib.import_module(
+        "app.database.migrations.113_add_rclone_storage"
+    )
+    engine = create_engine("sqlite:///:memory:")
+
+    with engine.connect() as connection:
+        migration.upgrade(connection)
+        inspector = inspect(engine)
+        assert inspector.has_table("rclone_remotes")
+        assert inspector.has_table("repository_storage")
+        assert inspector.has_table("rclone_sync_jobs")
+
+
+@pytest.mark.unit
 def test_rclone_storage_migration_uses_postgresql_identity_columns():
     migration = importlib.import_module(
         "app.database.migrations.113_add_rclone_storage"

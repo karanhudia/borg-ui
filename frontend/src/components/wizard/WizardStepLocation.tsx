@@ -21,6 +21,7 @@ import {
 } from '@mui/material'
 import { Server, Cloud, Laptop } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
+import type { SxProps, Theme } from '@mui/material/styles'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../PlanGate'
 
@@ -124,6 +125,60 @@ export default function WizardStepLocation({
   const queueableAgents = agentMachines.filter(
     (agent) => agent.status !== 'revoked' && agent.status !== 'disabled'
   )
+  const locationCardSx = (selected: boolean, disabled = false): SxProps<Theme> => ({
+    flex: 1,
+    minWidth: 0,
+    border: '1px solid',
+    borderColor: selected ? 'primary.main' : 'divider',
+    boxShadow: selected
+      ? (theme: Theme) =>
+          `0 0 0 1px ${alpha(theme.palette.primary.main, 0.34)}, 0 2px 8px ${alpha(theme.palette.primary.main, 0.12)}`
+      : 'none',
+    bgcolor: selected
+      ? (theme: Theme) => alpha(theme.palette.primary.main, 0.07)
+      : 'background.paper',
+    opacity: disabled ? 0.56 : 1,
+    transition: 'border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease',
+    '&:hover': disabled
+      ? {}
+      : {
+          borderColor: selected ? 'primary.main' : 'text.secondary',
+          boxShadow: (theme: Theme) =>
+            selected
+              ? `0 0 0 1px ${alpha(theme.palette.primary.main, 0.4)}, 0 3px 10px ${alpha(theme.palette.primary.main, 0.14)}`
+              : `0 2px 8px ${alpha(theme.palette.text.primary, 0.08)}`,
+        },
+  })
+  const locationActionSx: SxProps<Theme> = { p: 1.25, height: '100%', alignItems: 'stretch' }
+  const locationContentSx: SxProps<Theme> = {
+    p: 0,
+    width: '100%',
+    '&:last-child': { pb: 0 },
+  }
+  const locationIconSx = (selected: boolean): SxProps<Theme> => ({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 1.5,
+    flexShrink: 0,
+    bgcolor: selected ? 'primary.main' : 'action.hover',
+    color: selected ? 'white' : 'text.secondary',
+    transition: 'background-color 180ms ease, color 180ms ease, box-shadow 180ms ease',
+    boxShadow: selected
+      ? (theme: Theme) => `0 2px 8px ${alpha(theme.palette.primary.main, 0.26)}`
+      : 'none',
+  })
+  const locationTitleSx: SxProps<Theme> = { fontSize: '0.95rem', lineHeight: 1.25, fontWeight: 700 }
+  const locationDescSx: SxProps<Theme> = {
+    fontSize: '0.76rem',
+    lineHeight: 1.35,
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+  }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -382,62 +437,18 @@ export default function WizardStepLocation({
               flexDirection: { xs: 'column', sm: 'row' },
             }}
           >
-            <Card
-              variant="outlined"
-              sx={{
-                flex: 1,
-                border: data.repositoryLocation === 'local' ? 2 : 1,
-                borderColor: data.repositoryLocation === 'local' ? 'primary.main' : 'divider',
-                boxShadow:
-                  data.repositoryLocation === 'local'
-                    ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                    : 'none',
-                bgcolor:
-                  data.repositoryLocation === 'local'
-                    ? (theme) => alpha(theme.palette.primary.main, 0.08)
-                    : 'background.paper',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                transform: data.repositoryLocation === 'local' ? 'translateY(-2px)' : 'none',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-                  borderColor:
-                    data.repositoryLocation === 'local' ? 'primary.main' : 'text.primary',
-                },
-              }}
-            >
-              <CardActionArea onClick={() => handleLocationChange('local')} sx={{ p: 1 }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 48,
-                        height: 48,
-                        borderRadius: 3,
-                        bgcolor:
-                          data.repositoryLocation === 'local' ? 'primary.main' : 'action.hover',
-                        color: data.repositoryLocation === 'local' ? 'white' : 'text.secondary',
-                        transition: 'all 0.3s ease',
-                        boxShadow:
-                          data.repositoryLocation === 'local'
-                            ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
-                            : 'none',
-                      }}
-                    >
-                      <Server size={28} />
+            <Card variant="outlined" sx={locationCardSx(data.repositoryLocation === 'local')}>
+              <CardActionArea onClick={() => handleLocationChange('local')} sx={locationActionSx}>
+                <CardContent sx={locationContentSx}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                    <Box sx={locationIconSx(data.repositoryLocation === 'local')}>
+                      <Server size={20} />
                     </Box>
-                    <Box>
-                      <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle2" sx={locationTitleSx}>
                         {t('wizard.borgUiServer')}
                       </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ fontSize: '0.8125rem' }}
-                      >
+                      <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
                         {t('wizard.location.borgUiServerDesc')}
                       </Typography>
                     </Box>
@@ -448,67 +459,23 @@ export default function WizardStepLocation({
 
             <Card
               variant="outlined"
-              sx={{
-                flex: 1,
-                border: data.repositoryLocation === 'ssh' ? 2 : 1,
-                borderColor: data.repositoryLocation === 'ssh' ? 'primary.main' : 'divider',
-                boxShadow:
-                  data.repositoryLocation === 'ssh'
-                    ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                    : 'none',
-                bgcolor:
-                  data.repositoryLocation === 'ssh'
-                    ? (theme) => alpha(theme.palette.primary.main, 0.08)
-                    : 'background.paper',
-                opacity: isRemoteLocationDisabled ? 0.5 : 1,
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                transform: data.repositoryLocation === 'ssh' ? 'translateY(-2px)' : 'none',
-                '&:hover': !isRemoteLocationDisabled
-                  ? {
-                      transform: 'translateY(-2px)',
-                      boxShadow: (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-                      borderColor:
-                        data.repositoryLocation === 'ssh' ? 'primary.main' : 'text.primary',
-                    }
-                  : {},
-              }}
+              sx={locationCardSx(data.repositoryLocation === 'ssh', isRemoteLocationDisabled)}
             >
               <CardActionArea
                 onClick={() => handleLocationChange('ssh')}
                 disabled={isRemoteLocationDisabled}
-                sx={{ p: 1 }}
+                sx={locationActionSx}
               >
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 48,
-                        height: 48,
-                        borderRadius: 3,
-                        bgcolor:
-                          data.repositoryLocation === 'ssh' ? 'primary.main' : 'action.hover',
-                        color: data.repositoryLocation === 'ssh' ? 'white' : 'text.secondary',
-                        transition: 'all 0.3s ease',
-                        boxShadow:
-                          data.repositoryLocation === 'ssh'
-                            ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
-                            : 'none',
-                      }}
-                    >
-                      <Cloud size={28} />
+                <CardContent sx={locationContentSx}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                    <Box sx={locationIconSx(data.repositoryLocation === 'ssh')}>
+                      <Cloud size={20} />
                     </Box>
-                    <Box>
-                      <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle2" sx={locationTitleSx}>
                         {t('wizard.remoteClient')}
                       </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ fontSize: '0.8125rem' }}
-                      >
+                      <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
                         {t('wizard.location.remoteClientDesc')}
                       </Typography>
                     </Box>
@@ -519,75 +486,24 @@ export default function WizardStepLocation({
 
             <Card
               variant="outlined"
-              sx={{
-                flex: 1,
-                border: data.repositoryLocation === 'rclone' ? 2 : 1,
-                borderColor: data.repositoryLocation === 'rclone' ? 'primary.main' : 'divider',
-                boxShadow:
-                  data.repositoryLocation === 'rclone'
-                    ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                    : 'none',
-                bgcolor:
-                  data.repositoryLocation === 'rclone'
-                    ? (theme) => alpha(theme.palette.primary.main, 0.08)
-                    : 'background.paper',
-                opacity: isRcloneAvailable ? 1 : 0.6,
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                transform:
-                  data.repositoryLocation === 'rclone' && isRcloneAvailable
-                    ? 'translateY(-2px)'
-                    : 'none',
-                '&:hover': {
-                  transform: isRcloneAvailable ? 'translateY(-2px)' : 'none',
-                  boxShadow: isRcloneAvailable
-                    ? (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`
-                    : 'none',
-                  borderColor:
-                    data.repositoryLocation === 'rclone' || !isRcloneAvailable
-                      ? data.repositoryLocation === 'rclone'
-                        ? 'primary.main'
-                        : 'divider'
-                      : 'text.primary',
-                },
-              }}
+              sx={locationCardSx(data.repositoryLocation === 'rclone', !isRcloneAvailable)}
             >
               <CardActionArea
                 onClick={() => handleLocationChange('rclone')}
                 disabled={!isRcloneAvailable}
                 aria-disabled={!isRcloneAvailable}
-                sx={{ p: 1 }}
+                sx={locationActionSx}
               >
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: 48,
-                        height: 48,
-                        borderRadius: 3,
-                        bgcolor:
-                          data.repositoryLocation === 'rclone' ? 'primary.main' : 'action.hover',
-                        color: data.repositoryLocation === 'rclone' ? 'white' : 'text.secondary',
-                        transition: 'all 0.3s ease',
-                        boxShadow:
-                          data.repositoryLocation === 'rclone'
-                            ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
-                            : 'none',
-                      }}
-                    >
-                      <Cloud size={28} />
+                <CardContent sx={locationContentSx}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                    <Box sx={locationIconSx(data.repositoryLocation === 'rclone')}>
+                      <Cloud size={20} />
                     </Box>
-                    <Box>
-                      <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle2" sx={locationTitleSx}>
                         {t('wizard.location.rcloneStorage')}
                       </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ fontSize: '0.8125rem' }}
-                      >
+                      <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
                         {t('wizard.location.rcloneStorageDesc')}
                       </Typography>
                     </Box>
