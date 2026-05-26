@@ -16,10 +16,11 @@ import {
   IconButton,
   alpha,
   ButtonBase,
+  Button,
   Tooltip,
   Chip,
 } from '@mui/material'
-import { Server, Cloud, Laptop } from 'lucide-react'
+import { Server, Cloud, Laptop, Plus } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import type { SxProps, Theme } from '@mui/material/styles'
 import { useTranslation } from 'react-i18next'
@@ -83,6 +84,7 @@ interface WizardStepLocationProps {
   sourceSshConnectionId?: number | '' // Source SSH connection ID
   onChange: (data: Partial<LocationStepData>) => void
   onBrowsePath: () => void
+  onAddRcloneRemote?: () => void
 }
 
 export default function WizardStepLocation({
@@ -96,6 +98,7 @@ export default function WizardStepLocation({
   sourceSshConnectionId,
   onChange,
   onBrowsePath,
+  onAddRcloneRemote,
 }: WizardStepLocationProps) {
   const { t } = useTranslation()
   const executionTarget = data.executionTarget ?? 'local'
@@ -594,45 +597,65 @@ export default function WizardStepLocation({
               {rcloneStatus.error || t('wizard.location.rcloneUnavailable')}
             </Alert>
           )}
-          <FormControl fullWidth disabled={!isRcloneAvailable}>
-            <InputLabel id="rclone-remote-label">
-              {t('wizard.location.rcloneRemoteLabel')}
-            </InputLabel>
-            <Select
-              labelId="rclone-remote-label"
-              id="rclone-remote"
-              value={
-                data.rcloneRemoteId === '' || data.rcloneRemoteId == null
-                  ? ''
-                  : String(data.rcloneRemoteId)
-              }
-              label={t('wizard.location.rcloneRemoteLabel')}
-              onChange={(e) => {
-                const value = e.target.value
-                onChange({ rcloneRemoteId: value ? Number(value) : '' })
-              }}
-            >
-              {rcloneRemotes.map((remote) => (
-                <MenuItem key={remote.id} value={String(remote.id)}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                    <Cloud size={16} />
-                    <Typography variant="body2">{remote.name}</Typography>
-                    <Chip
-                      size="small"
-                      label={remote.provider}
-                      variant="outlined"
-                      sx={{ height: 20, fontSize: '0.65rem' }}
-                    />
-                    {remote.last_test_status && (
-                      <Typography variant="caption" color="text.secondary">
-                        {remote.last_test_status}
-                      </Typography>
-                    )}
-                  </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto' },
+              gap: 1,
+              alignItems: 'start',
+            }}
+          >
+            <FormControl fullWidth disabled={!isRcloneAvailable}>
+              <InputLabel id="rclone-remote-label">
+                {t('wizard.location.rcloneRemoteLabel')}
+              </InputLabel>
+              <Select
+                labelId="rclone-remote-label"
+                id="rclone-remote"
+                value={
+                  data.rcloneRemoteId === '' || data.rcloneRemoteId == null
+                    ? ''
+                    : String(data.rcloneRemoteId)
+                }
+                label={t('wizard.location.rcloneRemoteLabel')}
+                onChange={(e) => {
+                  const value = e.target.value
+                  onChange({ rcloneRemoteId: value ? Number(value) : '' })
+                }}
+              >
+                {rcloneRemotes.map((remote) => (
+                  <MenuItem key={remote.id} value={String(remote.id)}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+                      <Cloud size={16} />
+                      <Typography variant="body2">{remote.name}</Typography>
+                      <Chip
+                        size="small"
+                        label={remote.provider}
+                        variant="outlined"
+                        sx={{ height: 20, fontSize: '0.65rem' }}
+                      />
+                      {remote.last_test_status && (
+                        <Typography variant="caption" color="text.secondary">
+                          {remote.last_test_status}
+                        </Typography>
+                      )}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {onAddRcloneRemote && (
+              <Button
+                variant="outlined"
+                startIcon={<Plus size={16} />}
+                onClick={onAddRcloneRemote}
+                disabled={!isRcloneAvailable}
+                sx={{ minHeight: 56, whiteSpace: 'nowrap' }}
+              >
+                {t('wizard.location.rcloneAddRemote')}
+              </Button>
+            )}
+          </Box>
 
           {rcloneRemotes.length === 0 && (
             <Alert severity="info">{t('wizard.location.rcloneNoRemotes')}</Alert>

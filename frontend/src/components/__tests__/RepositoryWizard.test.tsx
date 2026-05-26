@@ -22,6 +22,7 @@ vi.mock('../../services/api', () => ({
   rcloneAPI: {
     getStatus: vi.fn(),
     listRemotes: vi.fn(),
+    createRemote: vi.fn(),
   },
 }))
 
@@ -262,6 +263,9 @@ describe('RepositoryWizard', () => {
     ;(rcloneAPI.listRemotes as Mock).mockResolvedValue({
       data: { remotes: mockRcloneRemotes },
     })
+    ;(rcloneAPI.createRemote as Mock).mockResolvedValue({
+      data: { id: 42, name: 'local-test', provider: 'local', last_test_status: null },
+    })
   })
 
   describe('create mode', () => {
@@ -464,6 +468,36 @@ describe('RepositoryWizard', () => {
           }),
           null
         )
+      })
+    }, 90000)
+
+    it('adds and selects a rclone remote from the cloud storage option', async () => {
+      const user = userEvent.setup()
+      ;(rcloneAPI.listRemotes as Mock).mockResolvedValue({
+        data: { remotes: [] },
+      })
+
+      renderWizard('create')
+
+      await fillLocalLocation('Cloud Repo', '/ignored/client/path')
+      await user.click(screen.getByText('Cloud storage (rclone)').closest('button')!)
+      await user.click(screen.getByRole('button', { name: /Add remote/i }))
+
+      setInputValue(screen.getByLabelText(/Remote name/i), 'local-test')
+      setInputValue(screen.getByLabelText(/^Provider/i), 'local')
+      setInputValue(screen.getByLabelText(/Config JSON/i), '{"type":"local"}')
+      await user.click(screen.getByRole('button', { name: /Create remote/i }))
+
+      await waitFor(() => {
+        expect(rcloneAPI.createRemote).toHaveBeenCalledWith({
+          name: 'local-test',
+          provider: 'local',
+          config_source: 'managed',
+          redacted_config: { type: 'local' },
+        })
+      })
+      await waitFor(() => {
+        expect(screen.getByText('local-test')).toBeInTheDocument()
       })
     }, 90000)
 

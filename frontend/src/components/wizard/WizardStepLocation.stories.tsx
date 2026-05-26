@@ -76,6 +76,7 @@ const rcloneStoryArgs = {
   sourceSshConnectionId: '' as const,
   onChange: () => {},
   onBrowsePath: () => {},
+  onAddRcloneRemote: () => {},
 }
 
 export const AgentExecutionWithSshRepository: Story = {
@@ -120,6 +121,23 @@ export const RcloneUnavailable: Story = {
     ...rcloneStoryArgs,
     rcloneRemotes: [],
     rcloneStatus: { available: false, error: 'rclone binary was not found on PATH' },
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}
+
+export const RcloneEmptyWithAddRemote: Story = {
+  args: {
+    ...rcloneStoryArgs,
+    data: {
+      ...rcloneStoryArgs.data,
+      rcloneRemoteId: '',
+      rcloneRemotePath: '',
+    },
+    rcloneRemotes: [],
   },
   render: (args) => (
     <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>

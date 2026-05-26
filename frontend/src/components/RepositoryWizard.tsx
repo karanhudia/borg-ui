@@ -4,6 +4,7 @@ import { DialogActions, Box, Button, CircularProgress } from '@mui/material'
 import { FolderOpen, Database, Shield, Settings, CheckCircle } from 'lucide-react'
 import {
   WizardDialog,
+  RcloneRemoteDialog,
   WizardStepLocation,
   WizardStepDataSource,
   WizardStepSecurity,
@@ -13,8 +14,15 @@ import {
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
 import { managedAgentsAPI, rcloneAPI, sshKeysAPI, RepositoryData } from '../services/api'
-import type { AgentMachineResponse, RcloneRemote, RcloneStatus } from '../services/api'
+import type {
+  AgentMachineResponse,
+  CreateRcloneRemoteRequest,
+  RcloneRemote,
+  RcloneStatus,
+} from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { getApiErrorDetail } from '../utils/apiErrors'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import type { SourceLocation } from '../types'
 
 interface Repository extends RepositoryData {
@@ -164,6 +172,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const [agentMachines, setAgentMachines] = useState<AgentMachineResponse[]>([])
   const [rcloneStatus, setRcloneStatus] = useState<RcloneStatus | null>(null)
   const [rcloneRemotes, setRcloneRemotes] = useState<RcloneRemote[]>([])
+  const [showRcloneRemoteDialog, setShowRcloneRemoteDialog] = useState(false)
+  const [isCreatingRcloneRemote, setIsCreatingRcloneRemote] = useState(false)
+  const [rcloneRemoteCreateError, setRcloneRemoteCreateError] = useState<string | null>(null)
 
   // File explorer states
   const [showPathExplorer, setShowPathExplorer] = useState(false)
@@ -711,6 +722,31 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     }
   }
 
+  const handleCreateRcloneRemote = async (data: CreateRcloneRemoteRequest) => {
+    setIsCreatingRcloneRemote(true)
+    setRcloneRemoteCreateError(null)
+    try {
+      const response = await rcloneAPI.createRemote(data)
+      const remote = response.data
+      setRcloneRemotes((prev) =>
+        [...prev.filter((item) => item.id !== remote.id), remote].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        )
+      )
+      handleStateChange({
+        repositoryLocation: 'rclone',
+        rcloneRemoteId: remote.id,
+      })
+      setShowRcloneRemoteDialog(false)
+    } catch (error) {
+      setRcloneRemoteCreateError(
+        translateBackendKey(getApiErrorDetail(error)) || t('wizard.location.rcloneCreateFailed')
+      )
+    } finally {
+      setIsCreatingRcloneRemote(false)
+    }
+  }
+
   // Render current step content
   const renderStepContent = () => {
     const currentStepKey = steps[activeStep]?.key
@@ -762,6 +798,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               }
             }}
             onBrowsePath={() => setShowPathExplorer(true)}
+            onAddRcloneRemote={() => {
+              setRcloneRemoteCreateError(null)
+              setShowRcloneRemoteDialog(true)
+            }}
           />
         )
 
@@ -959,6 +999,18 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       >
         {renderStepContent()}
       </WizardDialog>
+
+      <RcloneRemoteDialog
+        open={showRcloneRemoteDialog}
+        isCreating={isCreatingRcloneRemote}
+        error={rcloneRemoteCreateError}
+        onClose={() => {
+          if (!isCreatingRcloneRemote) {
+            setShowRcloneRemoteDialog(false)
+          }
+        }}
+        onCreate={handleCreateRcloneRemote}
+      />
 
       {/* File Explorer Dialogs */}
       <FileExplorerDialog
