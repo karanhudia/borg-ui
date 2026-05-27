@@ -109,6 +109,22 @@ The first browse of a large archive can be slow because Borg has to list archive
 contents. Make sure Redis is running for repeated browsing and see
 [Cache](cache).
 
+### Archive browsing fails with "Line limit exceeded"
+
+When an archive contains more entries than Borg UI's safety limit, logs can show
+messages such as `Line limit exceeded, terminating command`,
+`Archive too large for safe browsing`, or an HTTP `413` response from an
+archive browse endpoint.
+
+An administrator can raise the limit in
+Settings > System > Archive Browsing Limits, or by opening `/settings/system`
+directly and updating `Max Files to Load`. If the archive also needs more memory
+to build the file tree, increase `Max Memory (MB)` there as well.
+
+Increase these values gradually. Very large archives can require substantial
+RAM, and setting the limits too high can cause the Borg UI server to run out of
+memory. For more detail, see [Configuration](configuration#archive-browsing-limits).
+
 ## More Troubleshooting
 
 - [Authentication and SSO](authentication#troubleshooting)

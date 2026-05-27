@@ -147,6 +147,28 @@ Priority for UI-managed timeout settings:
 2. environment variable
 3. built-in default
 
+## Archive Browsing Limits
+
+Admins can change archive browsing safety limits in
+Settings > System > Archive Browsing Limits, or by opening `/settings/system`
+directly.
+
+Use these settings when browsing a very large archive fails with an archive
+size or line-limit error. `Max Files to Load` controls how many archive entries
+Borg UI will read before stopping the `borg list` process. `Max Memory (MB)`
+limits the estimated memory used while building the archive browser response.
+
+Defaults and allowed ranges:
+
+| Setting | Default | Allowed range |
+| --- | --- | --- |
+| Max Files to Load | `1,000,000` | `100,000` to `50,000,000` |
+| Max Memory (MB) | `1,024` | `100` to `16,384` |
+
+Raise these values only when the server has enough RAM for the archive being
+browsed. Very high limits can make Borg UI use much more memory while it builds
+the file tree.
+
 ## System Packages
 
 Admins can install extra system packages from Settings > System > Packages.
