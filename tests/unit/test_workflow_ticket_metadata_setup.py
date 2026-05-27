@@ -37,14 +37,21 @@ def test_metadata_bootstrap_updates_title_description_and_labels():
     assert "create the missing label" in normalized
 
 
-def test_todo_startup_sequence_includes_metadata_before_state_move():
+def test_todo_metadata_bootstrap_runs_once_before_status_routing():
     workflow = read("WORKFLOW.md")
     normalized = squash(workflow)
 
     assert (
-        "For `Todo` tickets, do startup sequencing in this exact order: - run "
-        "the Linear metadata bootstrap - `update_issue(..., state: "
-        '"In Progress")`'
+        "If the current state is `Todo`, `In Progress`, `Code Review Reply`, or "
+        "`Rework`, run the Linear metadata bootstrap before routing."
+    ) in normalized
+    assert (
+        "`Todo` -> immediately move to `In Progress`, then ensure bootstrap "
+        "workpad comment exists"
+    ) in normalized
+    assert (
+        "For `Todo` tickets, do startup sequencing in this exact order: - "
+        '`update_issue(..., state: "In Progress")`'
     ) in normalized
 
 
