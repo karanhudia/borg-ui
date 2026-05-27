@@ -10,6 +10,7 @@ These instructions apply to the entire repository.
 - Save durable specs and implementation plans under `docs/engineering/specs/` and `docs/engineering/plans/` with dated, slugged filenames such as `YYYY-MM-DD-feature-name.md`.
 - Keep process proportional: small mechanical fixes can use a concise inline plan plus targeted tests or verification instead of a full written spec.
 - Do not create generic `design.md` files by default; use feature-specific specs only when a written spec is warranted.
+- When sidebar tabs, navigation groups, or the main user flow change, update the relevant user docs in the same change so navigation guidance stays current.
 
 ## UI Workflow
 
