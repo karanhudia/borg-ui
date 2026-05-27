@@ -112,6 +112,22 @@ describe('WizardStepReview', () => {
 
       expect(screen.getByText('SSH Remote')).toBeInTheDocument()
     })
+
+    it('shows localized rclone sync policy labels', () => {
+      const rcloneData = {
+        ...defaultData,
+        repositoryLocation: 'rclone' as const,
+        rcloneRemotePath: 'borg-ui/repositories/app',
+        rcloneSyncPolicy: 'manual' as const,
+      }
+
+      render(
+        <WizardStepReview mode="create" data={rcloneData} sshConnections={mockSshConnections} />
+      )
+
+      expect(screen.getByText('Manual sync')).toBeInTheDocument()
+      expect(screen.queryByText('manual')).not.toBeInTheDocument()
+    })
   })
 
   describe('Data Source Section', () => {

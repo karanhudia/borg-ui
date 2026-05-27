@@ -4,6 +4,7 @@ import { DialogActions, Box, Button, CircularProgress } from '@mui/material'
 import { FolderOpen, Database, Shield, Settings, CheckCircle } from 'lucide-react'
 import {
   WizardDialog,
+  RcloneRemoteDialog,
   WizardStepLocation,
   WizardStepDataSource,
   WizardStepSecurity,
@@ -12,9 +13,16 @@ import {
   WizardStepReview,
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
-import { managedAgentsAPI, sshKeysAPI, RepositoryData } from '../services/api'
-import type { AgentMachineResponse } from '../services/api'
+import { managedAgentsAPI, rcloneAPI, sshKeysAPI, RepositoryData } from '../services/api'
+import type {
+  AgentMachineResponse,
+  CreateRcloneRemoteRequest,
+  RcloneRemote,
+  RcloneStatus,
+} from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
+import { getApiErrorDetail } from '../utils/apiErrors'
+import { translateBackendKey } from '../utils/translateBackendKey'
 import type { SourceLocation } from '../types'
 
 interface Repository extends RepositoryData {
@@ -58,12 +66,16 @@ interface WizardState {
   name: string
   borgVersion: 1 | 2
   repositoryMode: 'full' | 'observe'
-  repositoryLocation: 'local' | 'ssh'
+  repositoryLocation: 'local' | 'ssh' | 'rclone'
   executionTarget: 'local' | 'agent'
   agentMachineId: number | ''
   path: string
   repoSshConnectionId: number | ''
   bypassLock: boolean
+  rcloneRemoteId: number | ''
+  rcloneRemotePath: string
+  rcloneSyncPolicy: 'after_success' | 'manual' | 'scheduled'
+  rcloneExtraFlags: string
   // Data source step
   dataSource: 'local' | 'remote'
   sourceSshConnectionId: number | ''
@@ -95,6 +107,10 @@ const createInitialState = (): WizardState => ({
   path: '',
   repoSshConnectionId: '',
   bypassLock: false,
+  rcloneRemoteId: '',
+  rcloneRemotePath: '',
+  rcloneSyncPolicy: 'after_success',
+  rcloneExtraFlags: '',
   dataSource: 'local',
   sourceSshConnectionId: '',
   sourceDirs: [],
@@ -154,6 +170,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   const [wizardState, setWizardState] = useState<WizardState>(() => createInitialState())
   const [sshConnections, setSshConnections] = useState<SSHConnection[]>([])
   const [agentMachines, setAgentMachines] = useState<AgentMachineResponse[]>([])
+  const [rcloneStatus, setRcloneStatus] = useState<RcloneStatus | null>(null)
+  const [rcloneRemotes, setRcloneRemotes] = useState<RcloneRemote[]>([])
+  const [showRcloneRemoteDialog, setShowRcloneRemoteDialog] = useState(false)
+  const [isCreatingRcloneRemote, setIsCreatingRcloneRemote] = useState(false)
+  const [rcloneRemoteCreateError, setRcloneRemoteCreateError] = useState<string | null>(null)
 
   // File explorer states
   const [showPathExplorer, setShowPathExplorer] = useState(false)
@@ -223,21 +244,42 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
   // Load selectable remote execution targets.
   const loadWizardData = async () => {
-    try {
-      const connectionsRes = await sshKeysAPI.getSSHConnections()
-      const connections = connectionsRes.data?.connections || []
+    const [connectionsRes, agentsRes, statusRes, remotesRes] = await Promise.allSettled([
+      sshKeysAPI.getSSHConnections(),
+      managedAgentsAPI.listAgents(),
+      rcloneAPI.getStatus(),
+      rcloneAPI.listRemotes(),
+    ])
+
+    if (connectionsRes.status === 'fulfilled') {
+      const connections = connectionsRes.value.data?.connections || []
       setSshConnections(Array.isArray(connections) ? connections : [])
-    } catch (error) {
-      console.error('Failed to load SSH data:', error)
+    } else {
+      console.error('Failed to load SSH data:', connectionsRes.reason)
       setSshConnections([])
     }
 
-    try {
-      const agentsRes = await managedAgentsAPI.listAgents()
-      setAgentMachines(Array.isArray(agentsRes.data) ? agentsRes.data : [])
-    } catch (error) {
-      console.error('Failed to load managed agents:', error)
+    if (agentsRes.status === 'fulfilled') {
+      setAgentMachines(Array.isArray(agentsRes.value.data) ? agentsRes.value.data : [])
+    } else {
+      console.error('Failed to load managed agents:', agentsRes.reason)
       setAgentMachines([])
+    }
+
+    if (statusRes.status === 'fulfilled') {
+      setRcloneStatus(statusRes.value.data)
+    } else {
+      console.error('Failed to load rclone status:', statusRes.reason)
+      setRcloneStatus({ available: false, error: 'Unable to load rclone status' })
+    }
+
+    if (remotesRes.status === 'fulfilled') {
+      setRcloneRemotes(
+        Array.isArray(remotesRes.value.data?.remotes) ? remotesRes.value.data.remotes : []
+      )
+    } else {
+      console.error('Failed to load rclone remotes:', remotesRes.reason)
+      setRcloneRemotes([])
     }
   }
 
@@ -263,6 +305,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         ? !!repository.connection_id // Trust connection_id if it exists
         : repository.repository_type === 'ssh' || (repository.path || '').startsWith('ssh://') // Legacy fallback
 
+    const isRclone =
+      repository.storage_backend === 'rclone' ||
+      repository.repository_type === 'rclone' ||
+      Boolean(repository.rclone_storage)
     const repoVersion = (repository.borg_version === 2 ? 2 : 1) as 1 | 2
     const executionTarget =
       repository.executor_type === 'agent' || repository.execution_target === 'agent'
@@ -273,12 +319,21 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       name: repository.name || '',
       borgVersion: repoVersion,
       repositoryMode: repository.mode || 'full',
-      repositoryLocation: executionTarget === 'agent' ? 'local' : isSSH ? 'ssh' : 'local',
+      repositoryLocation:
+        executionTarget === 'agent' ? 'local' : isRclone ? 'rclone' : isSSH ? 'ssh' : 'local',
       executionTarget,
       agentMachineId: executionTarget === 'agent' ? repository.agent_machine_id || '' : '',
       path: repoPath,
       repoSshConnectionId: executionTarget === 'agent' ? '' : repository.connection_id || '',
       bypassLock: repository.bypass_lock || false,
+      rcloneRemoteId: Number(repository.rclone_storage?.rclone_remote_id || '') || '',
+      rcloneRemotePath: String(repository.rclone_storage?.rclone_remote_path || ''),
+      rcloneSyncPolicy:
+        (repository.rclone_storage?.sync_policy as 'after_success' | 'manual' | 'scheduled') ||
+        'after_success',
+      rcloneExtraFlags: Array.isArray(repository.rclone_storage?.extra_flags)
+        ? repository.rclone_storage.extra_flags.join(' ')
+        : '',
       dataSource:
         executionTarget === 'agent' || !repository.source_ssh_connection_id ? 'local' : 'remote',
       sourceSshConnectionId:
@@ -327,6 +382,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         nextUpdates.sourceSshConnectionId = ''
         nextUpdates.repositoryLocation = 'local'
         nextUpdates.repoSshConnectionId = ''
+        nextUpdates.rcloneRemoteId = ''
       } else if (nextUpdates.executionTarget === 'local') {
         nextUpdates.agentMachineId = ''
       }
@@ -521,7 +577,13 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
     switch (currentStepKey) {
       case 'location':
-        if (!wizardState.name.trim() || !wizardState.path.trim()) return false
+        if (!wizardState.name.trim()) return false
+        if (wizardState.repositoryLocation === 'rclone') {
+          if (rcloneStatus?.available !== true) return false
+          if (!wizardState.rcloneRemoteId || !wizardState.rcloneRemotePath.trim()) return false
+          return true
+        }
+        if (!wizardState.path.trim()) return false
         if (wizardState.executionTarget === 'agent' && !wizardState.agentMachineId) return false
         if (wizardState.repositoryLocation === 'ssh' && !wizardState.repoSshConnectionId)
           return false
@@ -562,11 +624,23 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   }
 
   const handleSubmit = async () => {
+    const storageBackend =
+      wizardState.executionTarget === 'agent'
+        ? 'agent_local'
+        : wizardState.repositoryLocation === 'rclone'
+          ? 'rclone'
+          : wizardState.repositoryLocation === 'ssh'
+            ? 'ssh'
+            : 'local'
+
     const data: RepositoryData = {
       name: wizardState.name,
       borg_version: wizardState.borgVersion,
       mode: wizardState.repositoryMode,
-      path: wizardState.path,
+      path:
+        wizardState.repositoryLocation === 'rclone'
+          ? wizardState.rcloneRemotePath
+          : wizardState.path,
       encryption: wizardState.encryption,
       passphrase: wizardState.passphrase,
       compression: wizardState.compression,
@@ -593,9 +667,26 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         wizardState.executionTarget === 'agent' && wizardState.agentMachineId
           ? wizardState.agentMachineId
           : null,
+      storage_backend: storageBackend,
+      rclone_remote_id:
+        wizardState.repositoryLocation === 'rclone' && wizardState.rcloneRemoteId
+          ? wizardState.rcloneRemoteId
+          : null,
+      rclone_remote_path:
+        wizardState.repositoryLocation === 'rclone' ? wizardState.rcloneRemotePath : null,
+      rclone_sync_policy:
+        wizardState.repositoryLocation === 'rclone'
+          ? wizardState.rcloneSyncPolicy
+          : 'after_success',
+      rclone_extra_flags:
+        wizardState.repositoryLocation === 'rclone'
+          ? wizardState.rcloneExtraFlags.split(/\s+/).filter(Boolean)
+          : [],
       // Connection IDs - single source of truth for SSH
       connection_id:
-        wizardState.executionTarget === 'agent' ? null : wizardState.repoSshConnectionId || null,
+        wizardState.executionTarget === 'agent' || wizardState.repositoryLocation === 'rclone'
+          ? null
+          : wizardState.repoSshConnectionId || null,
       source_connection_id:
         wizardState.executionTarget !== 'agent' &&
         wizardState.dataSource === 'remote' &&
@@ -631,6 +722,31 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     }
   }
 
+  const handleCreateRcloneRemote = async (data: CreateRcloneRemoteRequest) => {
+    setIsCreatingRcloneRemote(true)
+    setRcloneRemoteCreateError(null)
+    try {
+      const response = await rcloneAPI.createRemote(data)
+      const remote = response.data
+      setRcloneRemotes((prev) =>
+        [...prev.filter((item) => item.id !== remote.id), remote].sort((a, b) =>
+          a.name.localeCompare(b.name)
+        )
+      )
+      handleStateChange({
+        repositoryLocation: 'rclone',
+        rcloneRemoteId: remote.id,
+      })
+      setShowRcloneRemoteDialog(false)
+    } catch (error) {
+      setRcloneRemoteCreateError(
+        translateBackendKey(getApiErrorDetail(error)) || t('wizard.location.rcloneCreateFailed')
+      )
+    } finally {
+      setIsCreatingRcloneRemote(false)
+    }
+  }
+
   // Render current step content
   const renderStepContent = () => {
     const currentStepKey = steps[activeStep]?.key
@@ -650,13 +766,23 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               path: wizardState.path,
               repoSshConnectionId: wizardState.repoSshConnectionId,
               bypassLock: wizardState.bypassLock,
+              rcloneRemoteId: wizardState.rcloneRemoteId,
+              rcloneRemotePath: wizardState.rcloneRemotePath,
+              rcloneSyncPolicy: wizardState.rcloneSyncPolicy,
+              rcloneExtraFlags: wizardState.rcloneExtraFlags,
             }}
             sshConnections={sshConnections}
             agentMachines={agentMachines}
+            rcloneStatus={rcloneStatus}
+            rcloneRemotes={rcloneRemotes}
             dataSource={wizardState.dataSource}
             sourceSshConnectionId={wizardState.sourceSshConnectionId}
             onChange={(updates) => {
-              if (typeof updates.path === 'string') {
+              if (
+                typeof updates.path === 'string' &&
+                updates.repositoryLocation === undefined &&
+                wizardState.repositoryLocation !== 'rclone'
+              ) {
                 handlePathChange(updates.path)
                 return
               }
@@ -672,6 +798,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               }
             }}
             onBrowsePath={() => setShowPathExplorer(true)}
+            onAddRcloneRemote={() => {
+              setRcloneRemoteCreateError(null)
+              setShowRcloneRemoteDialog(true)
+            }}
           />
         )
 
@@ -797,6 +927,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               excludePatterns: wizardState.excludePatterns,
               customFlags: wizardState.customFlags,
               remotePath: wizardState.remotePath,
+              rcloneRemotePath: wizardState.rcloneRemotePath,
+              rcloneSyncPolicy: wizardState.rcloneSyncPolicy,
             }}
             sshConnections={sshConnections}
             agentMachines={agentMachines}
@@ -867,6 +999,18 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       >
         {renderStepContent()}
       </WizardDialog>
+
+      <RcloneRemoteDialog
+        open={showRcloneRemoteDialog}
+        isCreating={isCreatingRcloneRemote}
+        error={rcloneRemoteCreateError}
+        onClose={() => {
+          if (!isCreatingRcloneRemote) {
+            setShowRcloneRemoteDialog(false)
+          }
+        }}
+        onCreate={handleCreateRcloneRemote}
+      />
 
       {/* File Explorer Dialogs */}
       <FileExplorerDialog

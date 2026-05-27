@@ -34,7 +34,7 @@ export interface DataSourceStepData {
 }
 
 interface WizardStepDataSourceProps {
-  repositoryLocation: 'local' | 'ssh'
+  repositoryLocation: 'local' | 'ssh' | 'rclone'
   executionTarget?: 'local' | 'agent'
   repoSshConnectionId: number | ''
   repositoryMode: 'full' | 'observe'

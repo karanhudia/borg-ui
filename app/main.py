@@ -20,6 +20,7 @@ from app.api import (
     settings as settings_api,
     events,
     repositories,
+    rclone,
     ssh_keys,
     system,
     filesystem,
@@ -207,6 +208,7 @@ app.include_router(events.router, prefix="/api/events", tags=["Events"])
 app.include_router(
     repositories.router, prefix="/api/repositories", tags=["Repositories"]
 )
+app.include_router(rclone.router, prefix="/api/rclone", tags=["Rclone"])
 app.include_router(ssh_keys.router, prefix="/api/ssh-keys", tags=["SSH Keys"])
 app.include_router(system.router, prefix="/api/system", tags=["System"])
 app.include_router(filesystem.router, prefix="/api/filesystem", tags=["Filesystem"])

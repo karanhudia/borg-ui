@@ -861,6 +861,79 @@ describe('RepositoryCard', () => {
     })
   })
 
+  describe('Rclone Storage', () => {
+    it('renders rclone sync status, target, and mirror actions', () => {
+      const rcloneRepository = {
+        ...mockRepository,
+        repository_type: 'rclone' as const,
+        storage_backend: 'rclone' as const,
+        path: '/data/rclone-cache/repositories/1',
+        rclone_storage: {
+          repository_id: 1,
+          backend: 'rclone' as const,
+          rclone_remote_id: 10,
+          rclone_remote_name: 'local-test',
+          rclone_remote_path: 'borg-ui/app',
+          rclone_target: 'local-test:borg-ui/app',
+          cache_path: '/data/rclone-cache/repositories/1',
+          cache_present: true,
+          sync_policy: 'after_success' as const,
+          sync_status: 'current',
+          last_synced_at: '2024-01-20T10:30:00Z',
+        },
+      }
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={rcloneRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onRcloneSync={vi.fn()}
+          onRcloneHydrate={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Synced')).toBeInTheDocument()
+      expect(screen.getByText('local-test:borg-ui/app')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Sync cloud mirror/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Hydrate local cache/i })).toBeInTheDocument()
+    })
+
+    it('renders failed rclone sync state clearly', () => {
+      const rcloneRepository = {
+        ...mockRepository,
+        repository_type: 'rclone' as const,
+        storage_backend: 'rclone' as const,
+        rclone_storage: {
+          repository_id: 1,
+          backend: 'rclone' as const,
+          rclone_remote_id: 10,
+          rclone_remote_name: 'local-test',
+          rclone_remote_path: 'borg-ui/app',
+          rclone_target: 'local-test:borg-ui/app',
+          cache_present: true,
+          sync_policy: 'manual' as const,
+          sync_status: 'failed',
+          last_sync_error: 'remote unavailable',
+        },
+      }
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={rcloneRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Sync failed')).toBeInTheDocument()
+    })
+  })
+
   describe('Progress Display', () => {
     it('displays progress information when jobs are running', () => {
       const startTime = new Date('2024-01-20T10:00:00Z').toISOString()

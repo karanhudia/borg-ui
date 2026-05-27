@@ -11,6 +11,7 @@ import BackupPlans from './pages/BackupPlans'
 import Archives from './pages/Archives'
 import Schedule from './pages/Schedule'
 import Repositories from './pages/Repositories'
+import CloudStorage from './pages/CloudStorage'
 import SSHConnectionsSingleKey from './pages/SSHConnectionsSingleKey'
 import ManagedAgents from './pages/ManagedAgents'
 import Activity from './pages/Activity'
@@ -190,6 +191,14 @@ function App() {
           element={
             <ProtectedRoute requiredTab="repositories">
               <Repositories />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/cloud-storage"
+          element={
+            <ProtectedRoute requiredTab="repositories">
+              <CloudStorage />
             </ProtectedRoute>
           }
         />

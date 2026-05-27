@@ -45,6 +45,7 @@ const TERMINAL_WIPE_STATUSES = new Set([
   'failed_partial',
   'cancelled',
 ])
+type RcloneRepositoryAction = 'sync' | 'hydrate'
 
 function parseBackupPlanFilterId(value: string | null): number | null {
   if (!value) return null
@@ -435,6 +436,37 @@ export default function Repositories() {
     },
   })
 
+  const rcloneRepositoryMutation = useMutation({
+    mutationFn: ({
+      repository,
+      action,
+    }: {
+      repository: Repository
+      action: RcloneRepositoryAction
+    }) =>
+      action === 'sync'
+        ? repositoriesAPI.syncRcloneRepository(repository.id)
+        : repositoriesAPI.hydrateRcloneRepository(repository.id),
+    onSuccess: (_response, variables) => {
+      toast.success(
+        variables.action === 'sync'
+          ? t('repositories.toasts.rcloneSyncCompleted')
+          : t('repositories.toasts.rcloneHydrateCompleted')
+      )
+      queryClient.invalidateQueries({ queryKey: ['repositories'] })
+      queryClient.invalidateQueries({ queryKey: ['app-repositories'] })
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    onError: (error: any, variables) => {
+      toast.error(
+        translateBackendKey(error.response?.data?.detail) ||
+          (variables.action === 'sync'
+            ? t('repositories.toasts.rcloneSyncFailed')
+            : t('repositories.toasts.rcloneHydrateFailed'))
+      )
+    },
+  })
+
   // Event handlers
   const handleDeleteRepository = (repository: Repository) => {
     if (window.confirm(`Are you sure you want to delete repository "${repository.name}"?`)) {
@@ -513,6 +545,14 @@ export default function Repositories() {
     setWipingRepository(repository)
     setWipePreview(null)
     setWipeJob(null)
+  }
+
+  const handleRcloneSync = (repository: Repository) => {
+    rcloneRepositoryMutation.mutate({ repository, action: 'sync' })
+  }
+
+  const handleRcloneHydrate = (repository: Repository) => {
+    rcloneRepositoryMutation.mutate({ repository, action: 'hydrate' })
   }
 
   const handleCloseWipeDialog = () => {
@@ -791,6 +831,8 @@ export default function Repositories() {
         onBackupNow={handleBackupNow}
         onViewArchives={handleViewArchives}
         onCreateBackupPlan={handleCreateBackupPlan}
+        onRcloneSync={handleRcloneSync}
+        onRcloneHydrate={handleRcloneHydrate}
         getCompressionLabel={getCompressionLabel}
         onJobCompleted={handleJobCompleted}
       />

@@ -47,7 +47,7 @@ export interface WizardReviewData {
   name: string
   borgVersion?: 1 | 2
   repositoryMode: 'full' | 'observe'
-  repositoryLocation: 'local' | 'ssh'
+  repositoryLocation: 'local' | 'ssh' | 'rclone'
   executionTarget?: 'local' | 'agent'
   agentMachineId?: number | ''
   path: string
@@ -61,6 +61,8 @@ export interface WizardReviewData {
   excludePatterns: string[]
   customFlags: string
   remotePath: string
+  rcloneRemotePath?: string
+  rcloneSyncPolicy?: 'after_success' | 'manual' | 'scheduled'
 }
 
 interface WizardStepReviewProps {
@@ -86,6 +88,17 @@ export default function WizardStepReview({
   const { t } = useTranslation()
   const [showPassphrase, setShowPassphrase] = useState(false)
   const executionTarget = data.executionTarget ?? 'local'
+  const getRcloneSyncPolicyLabel = () => {
+    switch (data.rcloneSyncPolicy || 'after_success') {
+      case 'manual':
+        return t('wizard.location.rcloneSyncManual')
+      case 'scheduled':
+        return t('wizard.location.rcloneSyncScheduled')
+      case 'after_success':
+      default:
+        return t('wizard.location.rcloneSyncAfterSuccess')
+    }
+  }
 
   const getSourceSshConnection = () => {
     if (data.dataSource !== 'remote' || !data.sourceSshConnectionId) return null
@@ -248,7 +261,9 @@ export default function WizardStepReview({
                   ? t('wizard.review.repositoryPathOnSelectedAgent')
                   : data.repositoryLocation === 'local'
                     ? t('wizard.review.borgUiServer')
-                    : t('wizard.review.sshRemote')}
+                    : data.repositoryLocation === 'rclone'
+                      ? t('wizard.review.rcloneStorage')
+                      : t('wizard.review.sshRemote')}
               </Typography>
             </Box>
           </ReviewAttrRow>
@@ -279,6 +294,26 @@ export default function WizardStepReview({
           <ReviewAttrRow label={t('wizard.review.path')}>
             <ReviewCodePill>{data.path || t('wizard.review.notSet')}</ReviewCodePill>
           </ReviewAttrRow>
+
+          {data.repositoryLocation === 'rclone' && (
+            <>
+              <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
+                <Typography variant="body2" fontSize="0.75rem">
+                  {t('wizard.location.rcloneRoutePreview')}
+                </Typography>
+              </ReviewAttrRow>
+              <ReviewAttrRow label={t('wizard.review.rcloneRemotePath')}>
+                <ReviewCodePill>
+                  {data.rcloneRemotePath || t('wizard.review.notSet')}
+                </ReviewCodePill>
+              </ReviewAttrRow>
+              <ReviewAttrRow label={t('wizard.review.rcloneSyncPolicy')}>
+                <Typography variant="body2" fontSize="0.75rem">
+                  {getRcloneSyncPolicyLabel()}
+                </Typography>
+              </ReviewAttrRow>
+            </>
+          )}
         </ReviewSectionCard>
 
         {/* SECURITY */}

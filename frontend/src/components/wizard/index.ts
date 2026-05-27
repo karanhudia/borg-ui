@@ -9,6 +9,7 @@ export { default as WizardStepRepositoryAdvanced } from './WizardStepRepositoryA
 export { default as WizardStepBackupConfig } from './WizardStepBackupConfig'
 export { default as WizardStepReview } from './WizardStepReview'
 export { default as BackupFlowPreview } from './BackupFlowPreview'
+export { default as RcloneRemoteDialog } from './RcloneRemoteDialog'
 
 // Restore Wizard Steps
 export { default as WizardStepRestoreFiles } from './WizardStepRestoreFiles'
@@ -23,6 +24,7 @@ export type { RepositoryEncryptionData } from './RepositoryEncryptionFields'
 export type { RepositoryAdvancedStepData } from './WizardStepRepositoryAdvanced'
 export type { BackupConfigStepData } from './WizardStepBackupConfig'
 export type { WizardReviewData } from './WizardStepReview'
+export type { RcloneRemoteCreateInput } from './RcloneRemoteDialog'
 
 // Restore Wizard Types
 export type { RestoreFilesStepData } from './WizardStepRestoreFiles'

@@ -10,6 +10,7 @@ import type {
   RepositoryWipeExecuteRequest,
   RepositoryWipeJob,
   RepositoryWipePreviewRequest,
+  RcloneStorage,
   SourceLocation,
 } from '../types'
 
@@ -68,6 +69,7 @@ export interface RepositoryData {
   source_locations?: SourceLocation[]
   exclude_patterns?: string[]
   repository_type?: string
+  storage_backend?: 'local' | 'ssh' | 'agent_local' | 'rclone'
   execution_target?: 'local' | 'ssh' | 'agent'
   executor_type?: 'server' | 'agent'
   agent_machine_id?: number | null
@@ -88,6 +90,11 @@ export interface RepositoryData {
   skip_on_hook_failure?: boolean
   passphrase?: string
   mode?: 'full' | 'observe'
+  rclone_remote_id?: number | null
+  rclone_remote_path?: string | null
+  rclone_sync_policy?: 'after_success' | 'manual' | 'scheduled'
+  rclone_extra_flags?: string[] | null
+  rclone_storage?: RcloneStorage | null
   custom_flags?: string | null
   check_extra_flags?: string | null
   bypass_lock?: boolean
@@ -98,6 +105,34 @@ export interface RepositoryData {
   next_run?: string | null
   // Allow other properties for flexibility
   [key: string]: unknown
+}
+
+export interface RcloneStatus {
+  available: boolean
+  version?: string | null
+  error?: string | null
+}
+
+export interface RcloneRemote {
+  id: number
+  name: string
+  provider: string
+  usage_count?: number
+  config_source?: string
+  config_path?: string | null
+  redacted_config?: Record<string, unknown> | null
+  last_test_status?: string | null
+  last_error?: string | null
+}
+
+export type { RcloneStorage } from '../types'
+
+export interface CreateRcloneRemoteRequest {
+  name: string
+  provider: string
+  config_source?: string
+  config_path?: string | null
+  redacted_config?: Record<string, unknown> | null
 }
 
 export interface SystemSettings {
@@ -674,6 +709,9 @@ export const repositoriesAPI = {
   getRepositoryStats: (id: number) => api.get(`/repositories/${id}/stats`),
   listRepositoryArchives: (id: number) => api.get(`/repositories/${id}/archives`),
   getRepositoryInfo: (id: number) => api.get(`/repositories/${id}/info`),
+  syncRcloneRepository: (id: number) => api.post(`/repositories/${id}/rclone/sync`),
+  hydrateRcloneRepository: (id: number) => api.post(`/repositories/${id}/rclone/hydrate`),
+  getRcloneStatus: (id: number) => api.get(`/repositories/${id}/rclone/status`),
   // Check/Compact job management
   getCheckJobStatus: (jobId: number) => api.get(`/repositories/check-jobs/${jobId}`),
   getRepositoryCheckJobs: (id: number, limit?: number, scheduledOnly: boolean = false) =>
@@ -698,6 +736,19 @@ export const repositoriesAPI = {
     api.put(`/repositories/${id}/restore-check-schedule`, data),
   list: () => api.get('/repositories/'),
   startCheck: (id: number, data: ApiData) => api.post(`/repositories/${id}/check`, data),
+}
+
+export const rcloneAPI = {
+  getStatus: () => api.get<RcloneStatus>('/rclone/status'),
+  listRemotes: () => api.get<{ remotes: RcloneRemote[] }>('/rclone/remotes'),
+  createRemote: (data: CreateRcloneRemoteRequest) =>
+    api.post<RcloneRemote>('/rclone/remotes', data),
+  updateRemote: (id: number, data: CreateRcloneRemoteRequest) =>
+    api.put<RcloneRemote>(`/rclone/remotes/${id}`, data),
+  deleteRemote: (id: number) => api.delete<void>(`/rclone/remotes/${id}`),
+  testRemote: (id: number) => api.post(`/rclone/remotes/${id}/test`),
+  browseRemote: (id: number, path?: string) =>
+    api.get(`/rclone/remotes/${id}/browse`, { params: { path } }),
 }
 
 export const backupPlansAPI = {

@@ -19,7 +19,7 @@ interface CommandPreviewProps {
   repositoryPath: string
   borgVersion?: 1 | 2
   archiveName?: string
-  repositoryLocation?: 'local' | 'ssh'
+  repositoryLocation?: 'local' | 'ssh' | 'rclone'
   host?: string
   username?: string
   port?: number
@@ -136,6 +136,8 @@ export default function CommandPreview({
   let fullRepoPath = repositoryPath || '/path/to/repository'
   if (repositoryLocation === 'ssh' && host && username) {
     fullRepoPath = `ssh://${username}@${host}:${port}${repositoryPath.startsWith('/') ? '' : '/'}${repositoryPath}`
+  } else if (repositoryLocation === 'rclone') {
+    fullRepoPath = '/data/rclone-cache/repositories/<repository-id>'
   }
 
   const remotePathFlag = remotePath ? `--remote-path ${remotePath} ` : ''
