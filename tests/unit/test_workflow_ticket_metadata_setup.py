@@ -48,7 +48,21 @@ def test_metadata_bootstrap_derives_specific_description_from_original_request()
         "from the original request"
     ) in lower_combined
     assert "do not use generic boilerplate acceptance criteria" in lower_combined
-    assert "collapsed `<details>` appendix or block quote" in lower_combined
+    assert "markdown block quote appendix" in lower_combined
+    assert "collapsed `<details>` appendix" not in lower_combined
+    assert "literal `<details>` markup" in lower_combined
+
+
+def test_spec_names_generic_boilerplate_example():
+    spec = read(
+        "docs/engineering/specs/2026-05-27-symphony-linear-ticket-metadata-bootstrap.md"
+    )
+    normalized = squash(spec)
+
+    assert (
+        "generic lines such as 'the title and labels clearly identify the work'"
+    ) in normalized
+    assert "see `WORKFLOW.md` for concrete examples" in normalized
 
 
 def test_metadata_bootstrap_defers_todo_workpad_note_until_workpad_exists():

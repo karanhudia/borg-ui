@@ -26,9 +26,11 @@ bootstrap before normal implementation work:
 - rewrite the description into durable sections that preserve original intent,
   acceptance criteria, validation requirements, and important constraints;
 - derive the problem, desired outcome, and acceptance criteria from the rough
-  request and linked context instead of using repeated generic boilerplate;
-- preserve the raw original request in a collapsed or quoted appendix so the
-  rewritten ticket body leads with actionable work;
+  request and linked context instead of using repeated generic boilerplate
+  (generic lines such as 'the title and labels clearly identify the work'); see
+  `WORKFLOW.md` for concrete examples;
+- preserve the raw original request in a Markdown block quote appendix so the
+  rewritten ticket body leads with actionable work in Linear;
 - choose an appropriate type label from the existing labels when possible;
 - create and apply an additional label when the existing label set is
   insufficient for a clear workflow or domain classification;

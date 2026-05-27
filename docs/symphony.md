@@ -89,11 +89,12 @@ adding durable sections for the problem, desired outcome, acceptance criteria,
 validation, and any important notes. Codex must derive the `Problem`, `Desired
 outcome`, and `Acceptance criteria` from the original request rather than using
 generic boilerplate acceptance criteria. The original request remains available
-for audit in a collapsed `<details>` appendix or block quote so the rewritten
-ticket body stays focused on the actionable work. Labeling uses existing `Bug`,
-`Feature`, and `Improvement` labels when they fit, and creates a missing label
-when the existing label set is insufficient for filtering the issue by type or
-domain.
+for audit in a Markdown block quote appendix so the rewritten ticket body stays
+focused on the actionable work. Codex should not use literal `<details>` markup
+in Linear descriptions because Linear can show those tags as visible text.
+Labeling uses existing `Bug`, `Feature`, and `Improvement` labels when they fit,
+and creates a missing label when the existing label set is insufficient for
+filtering the issue by type or domain.
 
 BOR-70 includes a one-time BOR-70 previous-ticket backfill: previous Borg UI
 project tickets should be updated with the same title, description, and label

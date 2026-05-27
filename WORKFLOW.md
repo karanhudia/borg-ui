@@ -162,8 +162,10 @@ terminal state.
    original request, linked issue/PR context, and existing ticket comments. Do
    not use generic boilerplate acceptance criteria such as "the title and labels
    clearly identify the work" unless that is the actual user-requested outcome.
-   Preserve the raw original request in a collapsed `<details>` appendix or
-   block quote so it remains available for audit without dominating the ticket.
+   Preserve the raw original request in a Markdown block quote appendix so it
+   remains available for audit without dominating the ticket. Do not use literal
+   `<details>` markup in Linear descriptions; Linear can show those tags as
+   visible text instead of collapsing them.
 4. Preserve every substantive requirement, constraint, and ticket-authored
    `Validation`, `Test Plan`, or `Testing` section. Do not weaken acceptance
    criteria while rewriting rough text.
