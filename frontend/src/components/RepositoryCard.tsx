@@ -30,6 +30,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { Repository } from '../types'
 import type { RepoAction } from '../hooks/usePermissions'
+import OperationalCard from './OperationalCard'
 
 interface RepositoryCardProps {
   repository: Repository
@@ -348,29 +349,10 @@ export default function RepositoryCard({
   }
 
   return (
-    <Box
-      sx={{
-        position: 'relative',
-        borderRadius: 2,
-        bgcolor: 'background.paper',
-        overflow: 'hidden',
-        maxWidth: '100%',
-        minWidth: 0,
-        boxShadow: isMaintenanceRunning
-          ? `0 0 0 1px ${alpha(ACCENT_RUNNING, 0.4)}, 0 4px 16px ${alpha('#000', 0.2)}, 0 2px 6px ${alpha(ACCENT_RUNNING, 0.1)}`
-          : isDark
-            ? `0 0 0 1px ${alpha('#fff', 0.08)}, 0 4px 16px ${alpha('#000', 0.25)}`
-            : `0 0 0 1px ${alpha('#000', 0.08)}, 0 2px 8px ${alpha('#000', 0.07)}`,
-        transition: 'all 200ms cubic-bezier(0.16,1,0.3,1)',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: isMaintenanceRunning
-            ? `0 0 0 1px ${alpha(ACCENT_RUNNING, 0.55)}, 0 8px 24px ${alpha('#000', 0.28)}, 0 4px 12px ${alpha(ACCENT_RUNNING, 0.15)}`
-            : isDark
-              ? `0 0 0 1px ${alpha(ACCENT_IDLE, 0.4)}, 0 8px 24px ${alpha('#000', 0.3)}, 0 2px 8px ${alpha(ACCENT_IDLE, 0.1)}`
-              : `0 0 0 1px ${alpha(ACCENT_IDLE, 0.3)}, 0 8px 24px ${alpha('#000', 0.12)}, 0 2px 8px ${alpha(ACCENT_IDLE, 0.08)}`,
-        },
-      }}
+    <OperationalCard
+      isActive={isMaintenanceRunning}
+      idleAccent={ACCENT_IDLE}
+      activeAccent={ACCENT_RUNNING}
     >
       {/* Subtle ambient glow — only visible when maintenance is running */}
       {isMaintenanceRunning && (
@@ -964,6 +946,6 @@ export default function RepositoryCard({
           </Box>
         )}
       </Box>
-    </Box>
+    </OperationalCard>
   )
 }

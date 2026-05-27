@@ -212,6 +212,128 @@ def test_create_managed_rclone_remote_removes_config_file_on_commit_failure(
 
 
 @pytest.mark.unit
+def test_update_rclone_remote_renames_managed_config_section(
+    test_client: TestClient, admin_headers, tmp_path, monkeypatch
+):
+    config_root = tmp_path / "rclone"
+    monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
+
+    create_response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "prod-s3",
+            "provider": "s3",
+            "config_source": "managed",
+            "redacted_config": {"type": "s3", "provider": "AWS"},
+        },
+    )
+    remote_id = create_response.json()["id"]
+
+    response = test_client.put(
+        f"/api/rclone/remotes/{remote_id}",
+        headers=admin_headers,
+        json={
+            "name": "archive-b2",
+            "provider": "b2",
+            "redacted_config": {"type": "b2", "account": "redacted"},
+        },
+    )
+
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["name"] == "archive-b2"
+    assert updated["provider"] == "b2"
+    config_body = (config_root / "rclone.conf").read_text(encoding="utf-8")
+    assert "[prod-s3]" not in config_body
+    assert "[archive-b2]" in config_body
+    assert "type = b2" in config_body
+    assert "account = redacted" in config_body
+
+
+@pytest.mark.unit
+def test_update_rclone_remote_rejects_duplicate_name(
+    test_client: TestClient, admin_headers, test_db
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    other = RcloneRemote(name="archive-b2", provider="b2", config_source="managed")
+    test_db.add_all([remote, other])
+    test_db.commit()
+    test_db.refresh(remote)
+
+    response = test_client.put(
+        f"/api/rclone/remotes/{remote.id}",
+        headers=admin_headers,
+        json={"name": " archive-b2 "},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {"key": "backend.errors.rclone.remoteExists"}
+
+
+@pytest.mark.unit
+def test_delete_rclone_remote_removes_managed_config_section(
+    test_client: TestClient, admin_headers, tmp_path, monkeypatch
+):
+    config_root = tmp_path / "rclone"
+    monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
+    create_response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "prod-s3",
+            "provider": "s3",
+            "config_source": "managed",
+            "redacted_config": {"type": "s3", "provider": "AWS"},
+        },
+    )
+    remote_id = create_response.json()["id"]
+
+    response = test_client.delete(
+        f"/api/rclone/remotes/{remote_id}", headers=admin_headers
+    )
+
+    assert response.status_code == 204
+    response = test_client.get("/api/rclone/remotes", headers=admin_headers)
+    assert response.json()["remotes"] == []
+    assert not (config_root / "rclone.conf").exists()
+
+
+@pytest.mark.unit
+def test_delete_rclone_remote_rejects_used_remote(
+    test_client: TestClient, admin_headers, test_db
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(
+        name="Photos", path="/cache/repositories/1", encryption="none"
+    )
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    test_db.add(
+        RepositoryStorage(
+            repository_id=repository.id,
+            backend="rclone",
+            rclone_remote_id=remote.id,
+            rclone_remote_path="borg-ui/photos",
+            cache_path="/cache/repositories/1",
+            sync_policy="after_success",
+            sync_status="current",
+        )
+    )
+    test_db.commit()
+
+    response = test_client.delete(
+        f"/api/rclone/remotes/{remote.id}", headers=admin_headers
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {"key": "backend.errors.rclone.remoteInUse"}
+    assert test_db.query(RcloneRemote).filter(RcloneRemote.id == remote.id).one()
+
+
+@pytest.mark.unit
 def test_test_remote_updates_status(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):

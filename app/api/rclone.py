@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -15,7 +15,7 @@ from app.config import settings
 from app.core.authorization import authorize_request
 from app.core.security import get_current_user
 from app.database.database import get_db
-from app.database.models import RcloneRemote, User
+from app.database.models import RepositoryStorage, RcloneRemote, User
 from app.services.rclone_repository_service import normalize_rclone_relative_path
 from app.services.rclone_service import RcloneUnavailable, rclone_service
 
@@ -29,6 +29,13 @@ class RcloneRemoteCreate(BaseModel):
     provider: str
     config_source: str = "managed"
     config_path: str | None = None
+    redacted_config: dict[str, Any] | None = None
+
+
+class RcloneRemoteUpdate(BaseModel):
+    name: str | None = None
+    provider: str | None = None
+    config_source: str | None = None
     redacted_config: dict[str, Any] | None = None
 
 
@@ -143,6 +150,50 @@ def _remove_managed_remote_config(config_path: Path, remote_name: str) -> None:
         config_path.unlink(missing_ok=True)
 
 
+def _replace_managed_remote_config(
+    config_path: Path,
+    *,
+    old_remote_name: str,
+    remote_name: str,
+    provider: str,
+    redacted_config: dict[str, Any] | None,
+) -> None:
+    parser = _load_config(config_path)
+    if old_remote_name != remote_name:
+        parser.remove_section(old_remote_name)
+    if not parser.has_section(remote_name):
+        parser.add_section(remote_name)
+    for key, value in _managed_config_values(provider, redacted_config).items():
+        parser.set(remote_name, key, value)
+    _write_config_file(config_path, parser)
+
+
+def _restore_managed_config(
+    config_path: Path, parser: configparser.ConfigParser
+) -> None:
+    if parser.sections():
+        _write_config_file(config_path, parser)
+    else:
+        config_path.unlink(missing_ok=True)
+
+
+def _managed_config_path_for_remote(remote: RcloneRemote) -> Path:
+    if remote.config_path:
+        return Path(remote.config_path)
+    return _managed_config_path(Path(settings.rclone_config_root))
+
+
+def _remote_usage_count(db: Session, remote_id: int) -> int:
+    return (
+        db.query(RepositoryStorage)
+        .filter(
+            RepositoryStorage.backend == "rclone",
+            RepositoryStorage.rclone_remote_id == remote_id,
+        )
+        .count()
+    )
+
+
 def _serialize_remote(remote: RcloneRemote) -> dict[str, Any]:
     return {
         "id": remote.id,
@@ -234,6 +285,130 @@ async def create_remote(
 
     db.refresh(remote)
     return _serialize_remote(remote)
+
+
+@router.put("/remotes/{remote_id}")
+async def update_remote(
+    remote_id: int,
+    payload: RcloneRemoteUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin(current_user)
+    remote = db.query(RcloneRemote).filter(RcloneRemote.id == remote_id).first()
+    if not remote:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.rclone.remoteNotFound"}
+        )
+    if (
+        payload.config_source is not None
+        and payload.config_source != remote.config_source
+    ):
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.rclone.updateUnsupported"}
+        )
+
+    remote_name = (
+        _normalize_remote_name(payload.name)
+        if payload.name is not None
+        else remote.name
+    )
+    if remote_name != remote.name:
+        existing = (
+            db.query(RcloneRemote)
+            .filter(RcloneRemote.name == remote_name, RcloneRemote.id != remote.id)
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=409, detail={"key": "backend.errors.rclone.remoteExists"}
+            )
+    provider = (
+        _normalize_provider(payload.provider)
+        if payload.provider is not None
+        else remote.provider
+    )
+    redacted_config = (
+        payload.redacted_config
+        if payload.redacted_config is not None
+        else remote.redacted_config
+    )
+
+    config_file: Path | None = None
+    original_parser: configparser.ConfigParser | None = None
+    wrote_config = False
+    old_remote_name = remote.name
+    try:
+        if remote.config_source == "managed":
+            config_file = _managed_config_path_for_remote(remote)
+            original_parser = _load_config(config_file)
+            _replace_managed_remote_config(
+                config_file,
+                old_remote_name=old_remote_name,
+                remote_name=remote_name,
+                provider=provider,
+                redacted_config=redacted_config,
+            )
+            wrote_config = True
+            remote.config_path = str(config_file)
+
+        remote.name = remote_name
+        remote.provider = provider
+        remote.redacted_config = redacted_config
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        if config_file is not None and original_parser is not None and wrote_config:
+            _restore_managed_config(config_file, original_parser)
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.rclone.failedToUpdateRemote"},
+        ) from exc
+
+    db.refresh(remote)
+    return _serialize_remote(remote)
+
+
+@router.delete("/remotes/{remote_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_remote(
+    remote_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin(current_user)
+    remote = db.query(RcloneRemote).filter(RcloneRemote.id == remote_id).first()
+    if not remote:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.rclone.remoteNotFound"}
+        )
+    if _remote_usage_count(db, remote.id):
+        raise HTTPException(
+            status_code=409, detail={"key": "backend.errors.rclone.remoteInUse"}
+        )
+
+    config_file: Path | None = None
+    original_parser: configparser.ConfigParser | None = None
+    wrote_config = False
+    try:
+        if remote.config_source == "managed":
+            config_file = _managed_config_path_for_remote(remote)
+            original_parser = _load_config(config_file)
+            _remove_managed_remote_config(config_file, remote.name)
+            wrote_config = True
+        db.delete(remote)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        if config_file is not None and original_parser is not None and wrote_config:
+            _restore_managed_config(config_file, original_parser)
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.rclone.failedToDeleteRemote"},
+        ) from exc
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/remotes/{remote_id}/test")

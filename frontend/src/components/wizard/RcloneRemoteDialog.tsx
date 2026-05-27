@@ -22,6 +22,8 @@ export interface RcloneRemoteCreateInput {
 
 interface RcloneRemoteDialogProps {
   open: boolean
+  mode?: 'create' | 'edit'
+  initialRemote?: RcloneRemoteCreateInput | null
   isCreating?: boolean
   error?: string | null
   disablePortal?: boolean
@@ -40,8 +42,13 @@ const parseConfig = (value: string, provider: string): Record<string, unknown> =
   return parsed as Record<string, unknown>
 }
 
+const formatConfigJson = (value: Record<string, unknown> | null | undefined, provider: string) =>
+  JSON.stringify(value && Object.keys(value).length ? value : { type: provider }, null, 2)
+
 export default function RcloneRemoteDialog({
   open,
+  mode = 'create',
+  initialRemote = null,
   isCreating = false,
   error = null,
   disablePortal = false,
@@ -55,13 +62,33 @@ export default function RcloneRemoteDialog({
   const [localError, setLocalError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!open) {
-      setName('')
-      setProvider('local')
-      setConfigJson('{\n  "type": "local"\n}')
-      setLocalError(null)
-    }
+    if (!open) return
+    const nextProvider = initialRemote?.provider || 'local'
+    setName(initialRemote?.name || '')
+    setProvider(nextProvider)
+    setConfigJson(formatConfigJson(initialRemote?.redacted_config, nextProvider))
+    setLocalError(null)
+  }, [initialRemote, open])
+
+  useEffect(() => {
+    if (open) return
+    setName('')
+    setProvider('local')
+    setConfigJson('{\n  "type": "local"\n}')
+    setLocalError(null)
   }, [open])
+
+  useEffect(() => {
+    if (mode !== 'create') return
+    try {
+      const current = parseConfig(configJson, provider)
+      if (!current.type || current.type === 'local') {
+        setConfigJson(formatConfigJson({ ...current, type: provider }, provider))
+      }
+    } catch {
+      return
+    }
+  }, [configJson, mode, provider])
 
   const handleSubmit = async () => {
     const remoteName = name.trim()
@@ -102,7 +129,9 @@ export default function RcloneRemoteDialog({
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Cloud size={18} />
-        {t('wizard.location.rcloneAddRemoteTitle')}
+        {mode === 'edit'
+          ? t('wizard.location.rcloneEditRemoteTitle')
+          : t('wizard.location.rcloneAddRemoteTitle')}
       </DialogTitle>
       <DialogContent sx={{ display: 'grid', gap: 2, pt: 1 }}>
         {(localError || error) && <Alert severity="error">{localError || error}</Alert>}
@@ -151,8 +180,12 @@ export default function RcloneRemoteDialog({
           }
         >
           {isCreating
-            ? t('wizard.location.rcloneCreatingRemote')
-            : t('wizard.location.rcloneCreateRemote')}
+            ? mode === 'edit'
+              ? t('wizard.location.rcloneSavingRemote')
+              : t('wizard.location.rcloneCreatingRemote')
+            : mode === 'edit'
+              ? t('wizard.location.rcloneSaveRemote')
+              : t('wizard.location.rcloneCreateRemote')}
         </Button>
       </DialogActions>
     </Dialog>

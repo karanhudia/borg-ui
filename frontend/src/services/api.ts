@@ -743,6 +743,9 @@ export const rcloneAPI = {
   listRemotes: () => api.get<{ remotes: RcloneRemote[] }>('/rclone/remotes'),
   createRemote: (data: CreateRcloneRemoteRequest) =>
     api.post<RcloneRemote>('/rclone/remotes', data),
+  updateRemote: (id: number, data: CreateRcloneRemoteRequest) =>
+    api.put<RcloneRemote>(`/rclone/remotes/${id}`, data),
+  deleteRemote: (id: number) => api.delete<void>(`/rclone/remotes/${id}`),
   testRemote: (id: number) => api.post(`/rclone/remotes/${id}/test`),
   browseRemote: (id: number, path?: string) =>
     api.get(`/rclone/remotes/${id}/browse`, { params: { path } }),
