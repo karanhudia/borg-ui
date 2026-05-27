@@ -93,6 +93,15 @@ For Hetzner Storage Box-style paths, keep the provider-specific path syntax:
 ssh://u123456@u123456.your-storagebox.de:23/./backup-repo
 ```
 
+For BorgBase, repository URLs commonly use `/./repo`:
+
+```text
+ssh://abcd@abcd.repo.borgbase.com/./repo
+```
+
+Use `/./repo` as the Remote Machine default path and repository path. Do not
+shorten it to `/repo`. See [Provider Guides](provider-guides).
+
 ## Remote Direct Backups
 
 When a backup plan uses an SSH source and an SSH repository on the same SSH

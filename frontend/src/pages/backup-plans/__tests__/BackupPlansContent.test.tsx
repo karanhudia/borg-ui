@@ -119,7 +119,6 @@ function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlan
     setSortBy: vi.fn(),
     groupBy: 'none',
     setGroupBy: vi.fn(),
-    isDark: false,
     startingPlanId: null,
     highlightedPlanId: null,
     canUseMultiRepository: true,

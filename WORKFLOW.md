@@ -79,7 +79,9 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
 
 ## Default posture
 
-- Start by determining the ticket's current status, then follow the matching flow for that status.
+- Start by determining the ticket's current status, running the Linear
+  metadata bootstrap when the state allows it, then following the matching flow
+  for that status.
 - Start every task by opening the tracking workpad comment and bringing it up to date before doing new implementation work.
 - Spend extra effort up front on planning and verification design before implementation.
 - Reproduce first: always confirm the current behavior/issue signal before changing code so the fix target is explicit.
@@ -136,11 +138,83 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
 - `Rework` -> reviewer requested changes; planning + implementation required.
 - `Done` -> terminal state; no further action required.
 
+## Linear Metadata Bootstrap
+
+Run this before ordinary implementation work for `Todo`, `In Progress`,
+`Code Review Reply`, and `Rework` issues. Do not run it for `Backlog`,
+`Human Review`, `Merging`, `Done`, `Duplicate`, `Canceled`, or any other
+terminal state.
+
+1. Fetch the issue title, description, labels, comments, project, team, and
+   available team labels.
+2. Rewrite the Linear issue title into a concise, outcome-oriented title that
+   a future engineer can understand without reading the original rough intake.
+   Do not include the Linear identifier in the title; Linear already displays
+   it.
+3. Rewrite the Linear issue description into durable Markdown using the
+   relevant sections for the issue:
+   - `Problem`
+   - `Desired outcome`
+   - `Acceptance criteria`
+   - `Validation`
+   - `Notes` when needed to preserve important context
+   Derive the `Problem`, `Desired outcome`, and `Acceptance criteria` from the
+   original request, linked issue/PR context, and existing ticket comments. Do
+   not use generic boilerplate acceptance criteria such as "the title and labels
+   clearly identify the work" unless that is the actual user-requested outcome.
+   Preserve the raw original request in a Markdown block quote appendix so it
+   remains available for audit without dominating the ticket. Do not use literal
+   `<details>` markup in Linear descriptions; Linear can show those tags as
+   visible text instead of collapsing them.
+4. Preserve every substantive requirement, constraint, and ticket-authored
+   `Validation`, `Test Plan`, or `Testing` section. Do not weaken acceptance
+   criteria while rewriting rough text.
+5. Classify labels before implementation:
+   - Use existing type labels when they fit: `Bug` for regressions or broken
+     behavior, `Feature` for new capability, and `Improvement` for workflow,
+     documentation, polish, performance, reliability, or maintainability work.
+   - Add a clear domain label when useful for future filtering, for example
+     `Symphony`, `Frontend`, `Backend`, `Documentation`, `Infrastructure`,
+     `Security`, `Managed Agents`, or `Backup/Restore`.
+   - If an appropriate label does not exist, create the missing label with
+     `issueLabelCreate`, then apply it.
+6. Update Linear with `issueUpdate`, setting the rewritten `title`,
+   rewritten `description`, and either `labelIds` or `addedLabelIds` as
+   appropriate. Use `addedLabelIds` when preserving existing labels, and
+   `labelIds` only when replacing the full label set is intentional.
+7. If a workpad already exists, record the metadata bootstrap note immediately
+   with the title chosen, labels applied or created, and any skipped field with
+   the reason. For `Todo`, defer this note until after the `## Codex Workpad`
+   comment is created during the Todo startup sequence.
+
+### BOR-70 previous-ticket backfill
+
+For BOR-70 only, complete a one-time backfill before moving the issue to
+`Human Review`:
+
+1. Query previous Borg UI project tickets, excluding BOR-70 and any issue that
+   Linear reports as uneditable or inaccessible.
+2. Apply the same title, description, and label policy from the Linear metadata
+   bootstrap to each previous ticket, including request-specific problem,
+   outcome, and acceptance criteria. Do not replace rough descriptions with a
+   repeated generic template.
+3. Create missing labels with `issueLabelCreate` when needed, then apply them
+   with `issueUpdate` using `addedLabelIds` unless a full replacement is
+   explicitly safer.
+4. Do not change issue state, assignee, comments, attachments, PR links,
+   project, milestone, or workpad content while backfilling previous tickets.
+5. Record updated, skipped, and failed counts in the BOR-70 workpad. For every
+   skipped or failed issue, record the identifier and concise reason.
+
 ## Step 0: Determine current ticket state and route
 
 1. Fetch the issue by explicit ticket ID.
 2. Read the current state.
-3. Route to the matching flow:
+3. If the current state is `Todo`, `In Progress`, `Code Review Reply`, or
+   `Rework`, run the Linear metadata bootstrap before routing. If the state is
+   `Backlog`, `Human Review`, `Merging`, `Done`, `Duplicate`, or `Canceled`,
+   skip metadata changes and route directly.
+4. Route to the matching flow:
    - `Backlog` -> do not modify issue content/state; stop and wait for human to move it to `Todo`.
    - `Todo` -> immediately move to `In Progress`, then ensure bootstrap workpad comment exists (create if missing), then start execution flow.
      - If PR is already attached, start by reviewing all open PR comments and deciding required changes vs explicit pushback responses.
@@ -150,14 +224,14 @@ The agent should be able to talk to Linear, either via a configured Linear MCP s
    - `Merging` -> on entry, open and follow `.codex/skills/land/SKILL.md`; do not call `gh pr merge` directly.
    - `Rework` -> run rework flow.
    - `Done` -> do nothing and shut down.
-4. Check whether a PR already exists for the current branch and whether it is closed.
+5. Check whether a PR already exists for the current branch and whether it is closed.
    - If a branch PR exists and is `CLOSED` or `MERGED`, treat prior branch work as non-reusable for this run.
    - Create a fresh branch from `origin/main` and restart execution flow as a new attempt.
-5. For `Todo` tickets, do startup sequencing in this exact order:
+6. For `Todo` tickets, do startup sequencing in this exact order:
    - `update_issue(..., state: "In Progress")`
    - find/create `## Codex Workpad` bootstrap comment
    - only then begin analysis/planning/implementation work.
-6. Add a short comment if state and issue content are inconsistent, then proceed with the safest flow.
+7. Add a short comment if state and issue content are inconsistent, then proceed with the safest flow.
 
 ## Step 1: Start/continue execution (Todo or In Progress)
 
@@ -356,7 +430,9 @@ Use this only when completion is blocked by missing required tools or missing au
 - If the branch PR is already closed/merged, do not reuse that branch or prior implementation state for continuation.
 - For closed/merged branch PRs, create a new branch from `origin/main` and restart from reproduction/planning as if starting fresh.
 - If issue state is `Backlog`, do not modify it; wait for human to move to `Todo`.
-- Do not edit the issue body/description for planning or progress tracking.
+- Do not edit the issue body/description for planning or progress tracking;
+  only the Linear metadata bootstrap may rewrite issue title/description as
+  explicit ticket metadata work.
 - Use exactly one persistent workpad comment (`## Codex Workpad`) per issue.
 - If comment editing is unavailable in-session, use the update script. Only report blocked if both MCP editing and script-based editing are unavailable.
 - Temporary proof edits are allowed only for local verification and must be reverted before commit.
