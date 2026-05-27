@@ -107,6 +107,27 @@ export const AgentExecutionWithSshRepository: Story = {
   ),
 }
 
+export const FilesystemDestinations: Story = {
+  args: {
+    ...rcloneStoryArgs,
+    data: {
+      ...rcloneStoryArgs.data,
+      name: 'Local Media Repository',
+      borgVersion: 1,
+      repositoryLocation: 'local',
+      path: '/srv/borg/media',
+      rcloneRemoteId: '',
+      rcloneRemotePath: '',
+      rcloneExtraFlags: '',
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}
+
 export const RcloneRepository: Story = {
   args: rcloneStoryArgs,
   render: (args) => (

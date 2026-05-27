@@ -433,7 +433,7 @@ describe('RepositoryWizard', () => {
       const { onSubmit } = renderWizard('create')
 
       await fillLocalLocation('Cloud Repo', '/ignored/client/path')
-      await user.click(screen.getByText('Cloud storage (rclone)').closest('button')!)
+      await user.click(screen.getByRole('tab', { name: /Cloud sources/i }))
 
       await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
       const remoteListbox = await screen.findByRole('listbox')
@@ -480,7 +480,7 @@ describe('RepositoryWizard', () => {
       renderWizard('create')
 
       await fillLocalLocation('Cloud Repo', '/ignored/client/path')
-      await user.click(screen.getByText('Cloud storage (rclone)').closest('button')!)
+      await user.click(screen.getByRole('tab', { name: /Cloud sources/i }))
       await user.click(screen.getByRole('button', { name: /Add remote/i }))
 
       setInputValue(screen.getByLabelText(/Remote name/i), 'local-test')
@@ -510,7 +510,7 @@ describe('RepositoryWizard', () => {
       renderWizard('create')
 
       await fillLocalLocation('Cloud Repo', '/ignored/client/path')
-      await user.click(screen.getByText('Cloud storage (rclone)').closest('button')!)
+      await user.click(screen.getByRole('tab', { name: /Cloud sources/i }))
       await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
       const remoteListbox = await screen.findByRole('listbox')
       await user.click(within(remoteListbox).getByText('prod-s3'))

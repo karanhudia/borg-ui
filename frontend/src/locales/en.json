@@ -3105,6 +3105,8 @@
       "managedAgentFilesystem": "Managed Agent Filesystem",
       "agentStorageNote": "Backups will be stored on the selected agent's filesystem.",
       "whereToStore": "Where should backups be stored?",
+      "filesystemDestinations": "Filesystem destinations",
+      "cloudSources": "Cloud sources",
       "borgUiServerDesc": "Store backups on this server's local storage",
       "remoteClientDesc": "Store backups on a remote machine via SSH",
       "rcloneStorage": "Cloud storage (rclone)",

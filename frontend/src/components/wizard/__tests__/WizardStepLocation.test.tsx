@@ -82,7 +82,7 @@ describe('WizardStepLocation', () => {
       expect(screen.getByLabelText(/Repository Path/i)).toBeInTheDocument()
     })
 
-    it('renders location selection cards', () => {
+    it('renders destination tabs with filesystem options first', () => {
       render(
         <WizardStepLocation
           mode="create"
@@ -95,9 +95,42 @@ describe('WizardStepLocation', () => {
         />
       )
 
+      expect(screen.getByRole('tab', { name: 'Filesystem destinations' })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+      expect(screen.getByRole('tab', { name: 'Cloud sources' })).toHaveAttribute(
+        'aria-selected',
+        'false'
+      )
       expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
       expect(screen.getByText('Remote Client')).toBeInTheDocument()
-      expect(screen.getByText('Cloud storage (rclone)')).toBeInTheDocument()
+      expect(screen.queryByText('Cloud storage (rclone)')).not.toBeInTheDocument()
+    })
+
+    it('switches to rclone storage from the Cloud sources tab', async () => {
+      const user = userEvent.setup()
+      const onChange = vi.fn()
+
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={defaultData}
+          sshConnections={[]}
+          rcloneRemotes={mockRcloneRemotes}
+          rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
+          onChange={onChange}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      await user.click(screen.getByRole('tab', { name: 'Cloud sources' }))
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repositoryLocation: 'rclone',
+        })
+      )
     })
 
     it('shows rclone remote controls and route preview when cloud storage is selected', () => {
@@ -155,7 +188,7 @@ describe('WizardStepLocation', () => {
       })
     })
 
-    it('does not allow cloud storage selection when rclone is unavailable', () => {
+    it('does not allow cloud source selection when rclone is unavailable', () => {
       const onChange = vi.fn()
 
       render(
@@ -170,10 +203,10 @@ describe('WizardStepLocation', () => {
         />
       )
 
-      const rcloneCard = screen.getByText('Cloud storage (rclone)').closest('button')
-      expect(rcloneCard).toBeDisabled()
+      const cloudTab = screen.getByRole('tab', { name: 'Cloud sources' })
+      expect(cloudTab).toBeDisabled()
 
-      fireEvent.click(rcloneCard!)
+      fireEvent.click(cloudTab)
 
       expect(onChange).not.toHaveBeenCalledWith(
         expect.objectContaining({ repositoryLocation: 'rclone' })

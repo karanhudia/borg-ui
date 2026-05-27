@@ -3105,6 +3105,8 @@
       "managedAgentFilesystem": "Sistema de archivos del agente gestionado",
       "agentStorageNote": "Las copias de seguridad se almacenarán en el sistema de archivos del agente seleccionado.",
       "whereToStore": "¿Dónde deben almacenarse las copias de seguridad?",
+      "filesystemDestinations": "Destinos de sistema de archivos",
+      "cloudSources": "Fuentes cloud",
       "borgUiServerDesc": "Almacenar copias de seguridad en el almacenamiento local de este servidor",
       "remoteClientDesc": "Almacenar copias de seguridad en una máquina remota mediante SSH",
       "rcloneStorage": "Almacenamiento cloud (rclone)",
