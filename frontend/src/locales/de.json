@@ -101,7 +101,9 @@
     "appName": "Borg UI",
     "sections": {
       "dashboard": "DASHBOARD",
-      "backup": "SICHERUNG",
+      "hosts": "HOSTS",
+      "targets": "ZIELE",
+      "backups": "SICHERUNGEN",
       "settings": "EINSTELLUNGEN"
     },
     "items": {
@@ -110,7 +112,7 @@
       "remoteMachines": "Remote-Maschinen",
       "managedAgents": "Managed Agents",
       "cloudStorage": "Cloud-Speicher",
-      "backupPlans": "Backup-Pläne",
+      "backupPlans": "Pläne",
       "repositories": "Repositories",
       "backup": "Manuelles Backup",
       "archives": "Archive",
