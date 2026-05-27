@@ -84,8 +84,8 @@ describe('CloudStorage', () => {
     expect(within(card).getAllByText('connected').length).toBeGreaterThan(0)
     expect(within(card).getByText('2 repositories')).toBeInTheDocument()
     expect(
-      screen.queryByText('Manage reusable rclone remotes for repository mirrors.')
-    ).not.toBeInTheDocument()
+      screen.getByText('Manage reusable rclone remotes for repository mirrors.')
+    ).toBeInTheDocument()
 
     expect(within(card).getByRole('button', { name: /Test connection/i })).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: /Browse remote/i })).toBeInTheDocument()

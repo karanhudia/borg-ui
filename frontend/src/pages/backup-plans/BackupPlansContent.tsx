@@ -1,22 +1,13 @@
 import type { Dispatch, SetStateAction } from 'react'
-import {
-  alpha,
-  Box,
-  Button,
-  Divider,
-  InputBase,
-  MenuItem,
-  Select,
-  Stack,
-  Typography,
-} from '@mui/material'
-import SearchIcon from '@mui/icons-material/Search'
+import { Box, Button, Divider, Stack, Typography } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import { ListChecks, Plus } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import EmptyStateCard from '../../components/EmptyStateCard'
 import ActiveBackupPlanRunCard from '../../components/ActiveBackupPlanRunCard'
+import PageHeader from '../../components/PageHeader'
+import ListToolbar from '../../components/ListToolbar'
 import { type BackupPlanRunLogJob } from '../../components/BackupPlanRunsPanel'
 import type { BackupPlan, BackupPlanRun } from '../../types'
 import { BackupPlanCardSkeleton } from './BackupPlanCardSkeleton'
@@ -39,7 +30,6 @@ interface BackupPlansContentProps {
   setSortBy: Dispatch<SetStateAction<string>>
   groupBy: string
   setGroupBy: Dispatch<SetStateAction<string>>
-  isDark: boolean
   startingPlanId: number | null
   highlightedPlanId: number | null
   canUseMultiRepository: boolean
@@ -72,7 +62,6 @@ export function BackupPlansContent({
   setSortBy,
   groupBy,
   setGroupBy,
-  isDark,
   startingPlanId,
   highlightedPlanId,
   canUseMultiRepository,
@@ -94,27 +83,11 @@ export function BackupPlansContent({
 }: BackupPlansContentProps) {
   return (
     <>
-      {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            justifyContent: 'space-between',
-            alignItems: { xs: 'stretch', md: 'flex-start' },
-            gap: 2,
-            mb: 2,
-          }}
-        >
-          <Box sx={{ flex: 1, mr: { md: 2 } }}>
-            <Typography variant="h4" fontWeight={600} gutterBottom>
-              {t('backupPlans.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              {t('backupPlans.subtitle')}
-            </Typography>
-          </Box>
-          {backupPlans.length > 0 && (
+      <PageHeader
+        title={t('backupPlans.title')}
+        subtitle={t('backupPlans.subtitle')}
+        actions={
+          backupPlans.length > 0 ? (
             <Button
               variant="contained"
               startIcon={<Plus size={18} />}
@@ -123,124 +96,69 @@ export function BackupPlansContent({
             >
               {t('backupPlans.actions.create')}
             </Button>
-          )}
-        </Box>
-      </Box>
+          ) : null
+        }
+      />
 
-      {/* Search / Sort / Group bar */}
       {(loadingPlans || backupPlans.length > 0) && (
-        <Box
-          sx={{
-            mb: 3,
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 1.5,
-            alignItems: 'center',
-          }}
-        >
-          <Box
-            sx={{
-              flex: '1 1 100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              px: 1.5,
-              height: 40,
-              borderRadius: 1.5,
-              border: '1px solid',
-              borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
-              bgcolor: isDark ? alpha('#fff', 0.04) : alpha('#000', 0.02),
-              '&:focus-within': {
-                borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
-              },
-            }}
-          >
-            <SearchIcon sx={{ fontSize: 16, color: 'text.disabled', flexShrink: 0 }} />
-            <InputBase
-              placeholder={t('backupPlans.search', {
-                defaultValue: 'Search backup plans...',
-              })}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{ flex: 1, fontSize: '0.875rem', minWidth: 0 }}
-            />
-          </Box>
-
-          <Select
-            size="small"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            sx={{
-              flex: 1,
-              minWidth: 180,
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              borderRadius: 1.5,
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
-              },
-              '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
-              },
-            }}
-          >
-            <MenuItem value="name-asc">
-              {t('backupPlans.sort.nameAZ', { defaultValue: 'Name A → Z' })}
-            </MenuItem>
-            <MenuItem value="name-desc">
-              {t('backupPlans.sort.nameZA', { defaultValue: 'Name Z → A' })}
-            </MenuItem>
-            <MenuItem value="last-run-recent">
-              {t('backupPlans.sort.lastRunRecent', {
+        <ListToolbar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder={t('backupPlans.search', {
+            defaultValue: 'Search backup plans...',
+          })}
+          sortValue={sortBy}
+          onSortChange={setSortBy}
+          sortOptions={[
+            {
+              value: 'name-asc',
+              label: t('backupPlans.sort.nameAZ', { defaultValue: 'Name A → Z' }),
+            },
+            {
+              value: 'name-desc',
+              label: t('backupPlans.sort.nameZA', { defaultValue: 'Name Z → A' }),
+            },
+            {
+              value: 'last-run-recent',
+              label: t('backupPlans.sort.lastRunRecent', {
                 defaultValue: 'Last run (most recent)',
-              })}
-            </MenuItem>
-            <MenuItem value="last-run-oldest">
-              {t('backupPlans.sort.lastRunOldest', { defaultValue: 'Last run (oldest)' })}
-            </MenuItem>
-            <MenuItem value="next-run-soonest">
-              {t('backupPlans.sort.nextRunSoonest', { defaultValue: 'Next run (soonest)' })}
-            </MenuItem>
-            <MenuItem value="created-newest">
-              {t('backupPlans.sort.createdNewest', { defaultValue: 'Created (newest)' })}
-            </MenuItem>
-            <MenuItem value="created-oldest">
-              {t('backupPlans.sort.createdOldest', { defaultValue: 'Created (oldest)' })}
-            </MenuItem>
-          </Select>
-
-          <Select
-            size="small"
-            value={groupBy}
-            onChange={(e) => setGroupBy(e.target.value)}
-            sx={{
-              flex: 1,
-              minWidth: 140,
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              borderRadius: 1.5,
-              '& .MuiOutlinedInput-notchedOutline': {
-                borderColor: isDark ? alpha('#fff', 0.1) : alpha('#000', 0.12),
-              },
-              '&:hover .MuiOutlinedInput-notchedOutline': {
-                borderColor: isDark ? alpha('#fff', 0.2) : alpha('#000', 0.25),
-              },
-            }}
-          >
-            <MenuItem value="none">
-              {t('backupPlans.group.none', { defaultValue: 'No grouping' })}
-            </MenuItem>
-            <MenuItem value="status">
-              {t('backupPlans.group.status', { defaultValue: 'By status' })}
-            </MenuItem>
-            <MenuItem value="schedule">
-              {t('backupPlans.group.schedule', { defaultValue: 'By schedule' })}
-            </MenuItem>
-            <MenuItem value="source">
-              {t('backupPlans.group.source', { defaultValue: 'By source' })}
-            </MenuItem>
-          </Select>
-        </Box>
+              }),
+            },
+            {
+              value: 'last-run-oldest',
+              label: t('backupPlans.sort.lastRunOldest', { defaultValue: 'Last run (oldest)' }),
+            },
+            {
+              value: 'next-run-soonest',
+              label: t('backupPlans.sort.nextRunSoonest', { defaultValue: 'Next run (soonest)' }),
+            },
+            {
+              value: 'created-newest',
+              label: t('backupPlans.sort.createdNewest', { defaultValue: 'Created (newest)' }),
+            },
+            {
+              value: 'created-oldest',
+              label: t('backupPlans.sort.createdOldest', { defaultValue: 'Created (oldest)' }),
+            },
+          ]}
+          groupValue={groupBy}
+          onGroupChange={setGroupBy}
+          groupOptions={[
+            { value: 'none', label: t('backupPlans.group.none', { defaultValue: 'No grouping' }) },
+            {
+              value: 'status',
+              label: t('backupPlans.group.status', { defaultValue: 'By status' }),
+            },
+            {
+              value: 'schedule',
+              label: t('backupPlans.group.schedule', { defaultValue: 'By schedule' }),
+            },
+            {
+              value: 'source',
+              label: t('backupPlans.group.source', { defaultValue: 'By source' }),
+            },
+          ]}
+        />
       )}
 
       {loadingPlans ? (

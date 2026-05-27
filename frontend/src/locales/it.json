@@ -101,7 +101,9 @@
     "appName": "Borg UI",
     "sections": {
       "dashboard": "DASHBOARD",
-      "backup": "BACKUP",
+      "hosts": "HOST",
+      "targets": "DESTINAZIONI",
+      "backups": "BACKUP",
       "settings": "IMPOSTAZIONI"
     },
     "items": {
@@ -110,7 +112,7 @@
       "remoteMachines": "Macchine Remote",
       "managedAgents": "Agenti gestiti",
       "cloudStorage": "Archiviazione cloud",
-      "backupPlans": "Piani di backup",
+      "backupPlans": "Piani",
       "repositories": "Repository",
       "backup": "Backup manuale",
       "archives": "Archivi",
@@ -198,7 +200,33 @@
     "remoteDeleteFailed": "Impossibile eliminare il remoto rclone.",
     "browseFailed": "Impossibile sfogliare il remoto rclone.",
     "statusLoadFailed": "Impossibile caricare la disponibilità di rclone.",
-    "remotesLoadFailed": "Impossibile caricare i remoti rclone."
+    "remotesLoadFailed": "Impossibile caricare i remoti rclone.",
+    "search": "Cerca archiviazione cloud...",
+    "sort": {
+      "nameAZ": "Nome A → Z",
+      "nameZA": "Nome Z → A",
+      "provider": "Provider",
+      "status": "Stato (connessi prima)",
+      "usageMost": "Utilizzo (più usati prima)",
+      "usageLeast": "Utilizzo (meno usati prima)"
+    },
+    "group": {
+      "none": "Nessun raggruppamento",
+      "status": "Per stato",
+      "provider": "Per provider"
+    },
+    "groups": {
+      "connected": "Connesso",
+      "failed": "Fallito",
+      "pending": "In attesa",
+      "notTested": "Non testato"
+    },
+    "noMatch": {
+      "title": "Nessun remoto corrispondente",
+      "message": "Nessun remoto corrisponde a \"{{search}}\".",
+      "fallback": "Nessun remoto corrisponde ai filtri attuali.",
+      "clearSearch": "Cancella ricerca"
+    }
   },
   "status": {
     "completed": "Completato",

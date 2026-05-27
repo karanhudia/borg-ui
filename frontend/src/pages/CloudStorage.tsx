@@ -38,7 +38,6 @@ import {
   Search,
   SquarePen,
   Trash2,
-  XCircle,
 } from 'lucide-react'
 import { rcloneAPI } from '../services/api'
 import type { RcloneRemote, RcloneStatus } from '../services/api'
@@ -47,6 +46,8 @@ import { translateBackendKey } from '../utils/translateBackendKey'
 import RcloneRemoteDialog from '../components/wizard/RcloneRemoteDialog'
 import type { RcloneRemoteCreateInput } from '../components/wizard/RcloneRemoteDialog'
 import OperationalCard from '../components/OperationalCard'
+import PageHeader from '../components/PageHeader'
+import ListToolbar from '../components/ListToolbar'
 
 interface BrowseEntry {
   name: string
@@ -461,76 +462,113 @@ export function CloudStorageContent({
 }: CloudStorageContentProps) {
   const { t } = useTranslation()
   const isAvailable = status?.available !== false
-  const connectedCount = remotes.filter((remote) =>
-    ['success', 'connected'].includes(remote.last_test_status || '')
-  ).length
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<string>(
+    () => localStorage.getItem('cloud_storage_sort') || 'name-asc'
+  )
+  const [groupBy, setGroupBy] = useState<string>(
+    () => localStorage.getItem('cloud_storage_group') || 'none'
+  )
+
+  const handleSortChange = (value: string) => {
+    setSortBy(value)
+    localStorage.setItem('cloud_storage_sort', value)
+  }
+  const handleGroupChange = (value: string) => {
+    setGroupBy(value)
+    localStorage.setItem('cloud_storage_group', value)
+  }
+
+  const statusRank: Record<string, number> = {
+    connected: 0,
+    success: 0,
+    pending: 1,
+    running: 1,
+    unknown: 2,
+    failed: 3,
+    error: 3,
+  }
+
+  const statusGroupLabel = (status?: string | null) => {
+    switch (status) {
+      case 'connected':
+      case 'success':
+        return t('cloudStorage.groups.connected', { defaultValue: 'Connected' })
+      case 'failed':
+      case 'error':
+        return t('cloudStorage.groups.failed', { defaultValue: 'Failed' })
+      case 'pending':
+      case 'running':
+        return t('cloudStorage.groups.pending', { defaultValue: 'Pending' })
+      default:
+        return t('cloudStorage.groups.notTested', { defaultValue: 'Not tested' })
+    }
+  }
+
+  const processedRemotes = useMemo(() => {
+    let filtered = remotes
+    const query = searchQuery.trim().toLowerCase()
+    if (query) {
+      filtered = filtered.filter(
+        (remote) =>
+          remote.name.toLowerCase().includes(query) || remote.provider.toLowerCase().includes(query)
+      )
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name)
+        case 'name-desc':
+          return b.name.localeCompare(a.name)
+        case 'provider-asc':
+          return a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name)
+        case 'status':
+          return (
+            (statusRank[a.last_test_status || 'unknown'] ?? 2) -
+              (statusRank[b.last_test_status || 'unknown'] ?? 2) || a.name.localeCompare(b.name)
+          )
+        case 'usage-desc':
+          return (b.usage_count ?? 0) - (a.usage_count ?? 0) || a.name.localeCompare(b.name)
+        case 'usage-asc':
+          return (a.usage_count ?? 0) - (b.usage_count ?? 0) || a.name.localeCompare(b.name)
+        default:
+          return 0
+      }
+    })
+
+    if (groupBy === 'none') {
+      return { groups: [{ name: null as string | null, remotes: sorted }] }
+    }
+
+    const grouped = new Map<string, RcloneRemote[]>()
+    const keyFor = (remote: RcloneRemote) =>
+      groupBy === 'provider' ? remote.provider : statusGroupLabel(remote.last_test_status)
+    sorted.forEach((remote) => {
+      const key = keyFor(remote)
+      const bucket = grouped.get(key) ?? []
+      bucket.push(remote)
+      grouped.set(key, bucket)
+    })
+    const groups = Array.from(grouped.entries()).map(([name, list]) => ({ name, remotes: list }))
+    return {
+      groups: groups.length > 0 ? groups : [{ name: null as string | null, remotes: sorted }],
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remotes, searchQuery, sortBy, groupBy, t])
+
+  const totalAfterFilter = processedRemotes.groups.reduce((sum, g) => sum + g.remotes.length, 0)
+  const hasUnfilteredRemotes = remotes.length > 0
+  const showToolbar = isLoading || hasUnfilteredRemotes
 
   return (
     <Box component="section" aria-label={t('cloudStorage.title')}>
-      <Paper variant="outlined" sx={{ borderRadius: 1, mb: 2.5, overflow: 'hidden' }}>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: '1.2fr 1fr 1fr auto' },
-            alignItems: 'stretch',
-          }}
-        >
-          <Box sx={{ p: 2, borderRight: { sm: '1px solid' }, borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={700}>
-              {t('cloudStorage.rcloneAvailability')}
-            </Typography>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.75 }}>
-              {isAvailable ? (
-                <CheckCircle size={18} color="#047857" />
-              ) : (
-                <XCircle size={18} color="#b91c1c" />
-              )}
-              <Typography fontWeight={700}>
-                {isAvailable
-                  ? t('cloudStorage.statusAvailable')
-                  : t('cloudStorage.statusUnavailable')}
-              </Typography>
-            </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-              {status?.version || t('cloudStorage.versionUnknown')}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              p: 2,
-              borderRight: { sm: '1px solid' },
-              borderTop: { xs: '1px solid', sm: 0 },
-              borderColor: 'divider',
-            }}
-          >
-            <Typography variant="caption" color="text.secondary" fontWeight={700}>
-              {t('cloudStorage.remoteCountLabel')}
-            </Typography>
-            <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5 }}>
-              {remotes.length}
-            </Typography>
-          </Box>
-          <Box sx={{ p: 2, borderTop: { xs: '1px solid', sm: 0 }, borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={700}>
-              {t('cloudStorage.connectedCountLabel')}
-            </Typography>
-            <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5 }}>
-              {connectedCount}
-            </Typography>
-          </Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            justifyContent={{ xs: 'flex-start', lg: 'flex-end' }}
-            sx={{
-              p: 2,
-              borderTop: { xs: '1px solid', lg: 0 },
-              borderLeft: { lg: '1px solid' },
-              borderColor: 'divider',
-              minWidth: { lg: 190 },
-            }}
-          >
+      <PageHeader
+        title={t('cloudStorage.title')}
+        subtitle={t('cloudStorage.subtitle')}
+        actions={
+          <>
             <IconButton
               onClick={onRefresh}
               disabled={isRefreshing}
@@ -541,16 +579,16 @@ export function CloudStorageContent({
             </IconButton>
             <Button
               variant="contained"
-              startIcon={<Plus size={16} />}
+              startIcon={<Plus size={18} />}
               disabled={!isAvailable || isLoading}
               onClick={onAddRemote}
-              sx={{ height: 36 }}
+              sx={{ width: { xs: '100%', md: 'auto' } }}
             >
               {t('cloudStorage.addRemote')}
             </Button>
-          </Stack>
-        </Box>
-      </Paper>
+          </>
+        }
+      />
 
       {loadError ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -564,6 +602,57 @@ export function CloudStorageContent({
         </Alert>
       ) : null}
 
+      {showToolbar ? (
+        <ListToolbar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder={t('cloudStorage.search', {
+            defaultValue: 'Search cloud storage...',
+          })}
+          sortValue={sortBy}
+          onSortChange={handleSortChange}
+          sortOptions={[
+            {
+              value: 'name-asc',
+              label: t('cloudStorage.sort.nameAZ', { defaultValue: 'Name A → Z' }),
+            },
+            {
+              value: 'name-desc',
+              label: t('cloudStorage.sort.nameZA', { defaultValue: 'Name Z → A' }),
+            },
+            {
+              value: 'provider-asc',
+              label: t('cloudStorage.sort.provider', { defaultValue: 'Provider' }),
+            },
+            {
+              value: 'status',
+              label: t('cloudStorage.sort.status', { defaultValue: 'Status (connected first)' }),
+            },
+            {
+              value: 'usage-desc',
+              label: t('cloudStorage.sort.usageMost', { defaultValue: 'Usage (most first)' }),
+            },
+            {
+              value: 'usage-asc',
+              label: t('cloudStorage.sort.usageLeast', { defaultValue: 'Usage (least first)' }),
+            },
+          ]}
+          groupValue={groupBy}
+          onGroupChange={handleGroupChange}
+          groupOptions={[
+            { value: 'none', label: t('cloudStorage.group.none', { defaultValue: 'No grouping' }) },
+            {
+              value: 'status',
+              label: t('cloudStorage.group.status', { defaultValue: 'By status' }),
+            },
+            {
+              value: 'provider',
+              label: t('cloudStorage.group.provider', { defaultValue: 'By provider' }),
+            },
+          ]}
+        />
+      ) : null}
+
       {isLoading ? (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 2 }}>
           {[0, 1].map((item) => (
@@ -574,7 +663,7 @@ export function CloudStorageContent({
             </Paper>
           ))}
         </Box>
-      ) : remotes.length === 0 ? (
+      ) : !hasUnfilteredRemotes ? (
         <Paper
           variant="outlined"
           sx={{
@@ -592,21 +681,73 @@ export function CloudStorageContent({
             {t('cloudStorage.emptyDescription')}
           </Typography>
         </Paper>
+      ) : totalAfterFilter === 0 ? (
+        <Paper
+          variant="outlined"
+          sx={{ borderRadius: 1, p: 3, textAlign: 'center', bgcolor: 'background.paper' }}
+        >
+          <Cloud size={34} />
+          <Typography variant="h6" sx={{ mt: 1 }}>
+            {t('cloudStorage.noMatch.title', { defaultValue: 'No matching remotes' })}
+          </Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            {searchQuery
+              ? t('cloudStorage.noMatch.message', {
+                  search: searchQuery,
+                  defaultValue: `No remotes match "${searchQuery}".`,
+                })
+              : t('cloudStorage.noMatch.fallback', {
+                  defaultValue: 'No remotes match the current filters.',
+                })}
+          </Typography>
+          {searchQuery ? (
+            <Button variant="outlined" sx={{ mt: 2 }} onClick={() => setSearchQuery('')}>
+              {t('cloudStorage.noMatch.clearSearch', { defaultValue: 'Clear search' })}
+            </Button>
+          ) : null}
+        </Paper>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 2 }}>
-          {remotes.map((remote) => (
-            <CloudStorageRemoteCard
-              key={remote.id}
-              remote={remote}
-              testingRemoteId={testingRemoteId}
-              isBrowsing={isBrowsing}
-              onTestRemote={onTestRemote}
-              onBrowseRemote={onBrowseRemote}
-              onEditRemote={onEditRemote}
-              onRequestDeleteRemote={onRequestDeleteRemote}
-            />
+        <Stack spacing={3}>
+          {processedRemotes.groups.map((group, groupIndex) => (
+            <Box key={group.name ?? `group-${groupIndex}`}>
+              {group.name ? (
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontSize: '0.95rem',
+                    fontWeight: 600,
+                    color: 'primary.main',
+                    mb: 1.5,
+                  }}
+                >
+                  {group.name}
+                  <Typography
+                    component="span"
+                    sx={{ ml: 1, color: 'text.disabled', fontWeight: 500 }}
+                  >
+                    ({group.remotes.length})
+                  </Typography>
+                </Typography>
+              ) : null}
+              <Box
+                sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 2 }}
+              >
+                {group.remotes.map((remote) => (
+                  <CloudStorageRemoteCard
+                    key={remote.id}
+                    remote={remote}
+                    testingRemoteId={testingRemoteId}
+                    isBrowsing={isBrowsing}
+                    onTestRemote={onTestRemote}
+                    onBrowseRemote={onBrowseRemote}
+                    onEditRemote={onEditRemote}
+                    onRequestDeleteRemote={onRequestDeleteRemote}
+                  />
+                ))}
+              </Box>
+            </Box>
           ))}
-        </Box>
+        </Stack>
       )}
 
       {onCreateRemote && onCloseAddRemote ? (

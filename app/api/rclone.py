@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import configparser
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,8 @@ from app.database.database import get_db
 from app.database.models import RepositoryStorage, RcloneRemote, User
 from app.services.rclone_repository_service import normalize_rclone_relative_path
 from app.services.rclone_service import RcloneUnavailable, rclone_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["rclone"], dependencies=[Depends(authorize_request)])
 
@@ -91,7 +94,18 @@ def _new_config_parser() -> configparser.ConfigParser:
 def _load_config(config_path: Path) -> configparser.ConfigParser:
     parser = _new_config_parser()
     if config_path.exists():
-        parser.read(config_path, encoding="utf-8")
+        try:
+            parser.read(config_path, encoding="utf-8")
+        except (configparser.Error, UnicodeDecodeError) as exc:
+            # Malformed config (e.g. JSON written where INI was expected). Treat as
+            # empty so callers can still complete cleanup; the orphan file remains
+            # on disk for manual inspection.
+            logger.warning(
+                "Failed to parse rclone config at %s; treating as empty: %s",
+                config_path,
+                exc,
+            )
+            return _new_config_parser()
     return parser
 
 

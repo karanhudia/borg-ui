@@ -101,7 +101,9 @@
     "appName": "Borg UI",
     "sections": {
       "dashboard": "DASHBOARD",
-      "backup": "SICHERUNG",
+      "hosts": "HOSTS",
+      "targets": "ZIELE",
+      "backups": "SICHERUNGEN",
       "settings": "EINSTELLUNGEN"
     },
     "items": {
@@ -110,7 +112,7 @@
       "remoteMachines": "Remote-Maschinen",
       "managedAgents": "Managed Agents",
       "cloudStorage": "Cloud-Speicher",
-      "backupPlans": "Backup-Pläne",
+      "backupPlans": "Pläne",
       "repositories": "Repositories",
       "backup": "Manuelles Backup",
       "archives": "Archive",
@@ -198,7 +200,33 @@
     "remoteDeleteFailed": "rclone-Remote konnte nicht gelöscht werden.",
     "browseFailed": "rclone-Remote konnte nicht durchsucht werden.",
     "statusLoadFailed": "rclone-Verfügbarkeit konnte nicht geladen werden.",
-    "remotesLoadFailed": "rclone-Remotes konnten nicht geladen werden."
+    "remotesLoadFailed": "rclone-Remotes konnten nicht geladen werden.",
+    "search": "Cloud-Speicher durchsuchen...",
+    "sort": {
+      "nameAZ": "Name A → Z",
+      "nameZA": "Name Z → A",
+      "provider": "Anbieter",
+      "status": "Status (verbunden zuerst)",
+      "usageMost": "Nutzung (meiste zuerst)",
+      "usageLeast": "Nutzung (geringste zuerst)"
+    },
+    "group": {
+      "none": "Keine Gruppierung",
+      "status": "Nach Status",
+      "provider": "Nach Anbieter"
+    },
+    "groups": {
+      "connected": "Verbunden",
+      "failed": "Fehlgeschlagen",
+      "pending": "Ausstehend",
+      "notTested": "Nicht getestet"
+    },
+    "noMatch": {
+      "title": "Keine passenden Remotes",
+      "message": "Keine Remotes passen zu \"{{search}}\".",
+      "fallback": "Keine Remotes entsprechen den aktuellen Filtern.",
+      "clearSearch": "Suche zurücksetzen"
+    }
   },
   "status": {
     "completed": "Abgeschlossen",
