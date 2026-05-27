@@ -68,12 +68,40 @@ http://localhost:4000
 - Create an isolated workspace under `~/code/borg-ui-symphony-workspaces`.
 - Clone Borg UI into the issue workspace.
 - Start `codex app-server` in the workspace.
+- Run the Linear ticket metadata bootstrap before active implementation work:
+  Codex updates the Linear issue title, description, and labels so rough intake
+  tickets become durable work items.
+- Create and apply a missing label when the existing label set is insufficient
+  for the issue type or domain.
 - Instruct Codex to keep a single `## Codex Workpad` comment on the Linear
   issue.
 - Move validated PR work to `Human Review`.
 - Address in-place PR feedback when a human moves an issue to
   `Code Review Reply`.
 - Land approved work only after a human moves the issue to `Merging`.
+
+## Linear Ticket Metadata Bootstrap
+
+Before active implementation, the workflow prompt tells Codex to update the
+Linear issue title, description, and labels through Linear. Titles should be
+concise outcomes. Descriptions should preserve the original request while
+adding durable sections for the problem, desired outcome, acceptance criteria,
+validation, and any important notes. Codex must derive the `Problem`, `Desired
+outcome`, and `Acceptance criteria` from the original request rather than using
+generic boilerplate acceptance criteria. The original request remains available
+for audit in a Markdown block quote appendix so the rewritten ticket body stays
+focused on the actionable work. Codex should not use literal `<details>` markup
+in Linear descriptions because Linear can show those tags as visible text.
+Labeling uses existing `Bug`, `Feature`, and `Improvement` labels when they fit,
+and creates a missing label when the existing label set is insufficient for
+filtering the issue by type or domain.
+
+BOR-70 includes a one-time BOR-70 previous-ticket backfill: previous Borg UI
+project tickets should be updated with the same title, description, and label
+policy, while leaving states, comments, attachments, PR links, and workpads
+unchanged. The backfill should avoid repeated generic descriptions and should
+replace them with request-specific problem, desired outcome, and acceptance
+criteria sections. The backfill result is recorded in the BOR-70 workpad.
 
 ## Borg UI Validation Policy
 
