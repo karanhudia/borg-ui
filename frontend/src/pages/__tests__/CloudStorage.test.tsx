@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosResponse } from 'axios'
 import {
+  act,
   fireEvent,
   renderWithProviders,
   screen,
@@ -94,20 +95,20 @@ describe('CloudStorage', () => {
   })
 
   it('adds a managed rclone remote from the page action', async () => {
-    const user = userEvent.setup()
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
 
     await screen.findByText('prod-s3')
-    await user.click(await screen.findByRole('button', { name: /Add remote/i }))
-    await user.clear(screen.getByLabelText(/Remote name/i))
-    await user.type(screen.getByLabelText(/Remote name/i), 'local-test')
-    await user.clear(screen.getByLabelText(/^Provider/i))
-    await user.type(screen.getByLabelText(/^Provider/i), 'local')
-    await user.clear(screen.getByLabelText(/Config JSON/i))
+    fireEvent.click(await screen.findByRole('button', { name: /Add remote/i }))
+    fireEvent.change(screen.getByLabelText(/Remote name/i), {
+      target: { value: 'local-test' },
+    })
+    fireEvent.change(screen.getByLabelText(/^Provider/i), {
+      target: { value: 'local' },
+    })
     fireEvent.change(screen.getByLabelText(/Config JSON/i), {
       target: { value: '{"type":"local"}' },
     })
-    await user.click(screen.getByRole('button', { name: /Create remote/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Create remote/i }))
 
     await waitFor(() => {
       expect(rcloneAPI.createRemote).toHaveBeenCalledWith({
@@ -129,7 +130,11 @@ describe('CloudStorage', () => {
       expect(rcloneAPI.testRemote).toHaveBeenCalledWith(10)
     })
 
-    fireEvent.click(within(card).getByRole('button', { name: /Browse remote/i }))
+    await waitFor(() => {
+      expect(rcloneAPI.listRemotes).toHaveBeenCalledTimes(2)
+    })
+    const refreshedCard = await screen.findByTestId('cloud-storage-remote-prod-s3')
+    fireEvent.click(within(refreshedCard).getByRole('button', { name: /Browse remote/i }))
     await waitFor(() => {
       expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, '')
     })
@@ -137,6 +142,118 @@ describe('CloudStorage', () => {
     expect(screen.getByText('borg-ui')).toBeInTheDocument()
     expect(screen.getByText('README')).toBeInTheDocument()
   })
+
+  it('navigates folders in the reusable browse dialog', async () => {
+    vi.mocked(rcloneAPI.browseRemote).mockImplementation((_remoteId, path = '') => {
+      return Promise.resolve({
+        data: {
+          remote_id: 10,
+          path,
+          entries:
+            path === ''
+              ? [{ name: 'borg-ui', path: 'borg-ui', is_dir: true, size: null, modified: null }]
+              : [
+                  {
+                    name: 'archive.tar',
+                    path: 'borg-ui/archive.tar',
+                    is_dir: false,
+                    size: 2048,
+                    modified: '2026-05-27T12:00:00Z',
+                  },
+                ],
+        },
+      } as AxiosResponse)
+    })
+
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    const card = await screen.findByTestId('cloud-storage-remote-prod-s3')
+    fireEvent.click(within(card).getByRole('button', { name: /Browse remote/i }))
+
+    expect(await screen.findByRole('dialog', { name: /Browse prod-s3/i })).toBeInTheDocument()
+    expect(await screen.findByText('borg-ui')).toBeInTheDocument()
+    const folderButton = screen.getByRole('button', { name: /borg-ui/i })
+    fireEvent.click(folderButton)
+
+    await waitFor(() => {
+      expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui')
+    })
+    expect(await screen.findByText('archive.tar')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Root/i })).toBeInTheDocument()
+  }, 60000)
+
+  it('ignores stale browse responses after navigating away', async () => {
+    let resolveFolderBrowse!: (value: AxiosResponse) => void
+    const folderBrowse = new Promise<AxiosResponse>((resolve) => {
+      resolveFolderBrowse = resolve
+    })
+    let rootBrowseCount = 0
+
+    vi.mocked(rcloneAPI.browseRemote).mockImplementation((_remoteId, path = '') => {
+      if (path === 'borg-ui') {
+        return folderBrowse
+      }
+
+      rootBrowseCount += 1
+      return Promise.resolve({
+        data: {
+          remote_id: 10,
+          path: '',
+          entries:
+            rootBrowseCount === 1
+              ? [{ name: 'borg-ui', path: 'borg-ui', is_dir: true, size: null, modified: null }]
+              : [
+                  {
+                    name: 'root-readme',
+                    path: 'root-readme',
+                    is_dir: false,
+                    size: 512,
+                    modified: null,
+                  },
+                ],
+        },
+      } as AxiosResponse)
+    })
+
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    const card = await screen.findByTestId('cloud-storage-remote-prod-s3')
+    fireEvent.click(within(card).getByRole('button', { name: /Browse remote/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /borg-ui/i }))
+
+    await waitFor(() => {
+      expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui')
+    })
+    const rootBreadcrumb = screen.getByRole('button', { name: /^Root$/i })
+    await waitFor(() => {
+      expect(rootBreadcrumb).toBeEnabled()
+    })
+    fireEvent.click(rootBreadcrumb)
+
+    expect(await screen.findByText('root-readme')).toBeInTheDocument()
+
+    await act(async () => {
+      resolveFolderBrowse({
+        data: {
+          remote_id: 10,
+          path: 'borg-ui',
+          entries: [
+            {
+              name: 'archive.tar',
+              path: 'borg-ui/archive.tar',
+              is_dir: false,
+              size: 2048,
+              modified: null,
+            },
+          ],
+        },
+      } as AxiosResponse)
+      await folderBrowse
+    })
+
+    expect(screen.getByText('root-readme')).toBeInTheDocument()
+    expect(screen.queryByText('archive.tar')).not.toBeInTheDocument()
+  }, 60000)
 
   it('edits a remote from the remote card', async () => {
     const user = userEvent.setup()
