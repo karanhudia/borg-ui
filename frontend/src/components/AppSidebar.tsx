@@ -127,7 +127,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   }
 
   const sectionHeadingLabel = (heading: string): string => {
-    if (heading === 'BACKUP') return t('navigation.sections.backup')
+    if (heading === 'HOSTS') return t('navigation.sections.hosts')
+    if (heading === 'TARGETS') return t('navigation.sections.targets')
+    if (heading === 'BACKUPS') return t('navigation.sections.backups')
     if (heading === 'SETTINGS') return t('navigation.sections.settings')
     return heading
   }
@@ -154,39 +156,40 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     backupPlansData !== undefined && (backupPlansData?.data?.backup_plans?.length ?? 0) === 0
 
   const navigationSections = React.useMemo(() => {
-    const backupItems: Array<{
+    const hostItems: Array<{
       name: string
       href: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       icon: React.ComponentType<any>
-      key: 'connections' | 'repositories' | 'backupPlans' | 'backups' | 'archives' | 'schedule'
+      key: 'connections'
+    }> = canManageSsh
+      ? [
+          {
+            name: 'Remote Machines',
+            href: '/ssh-connections',
+            icon: Computer,
+            key: 'connections' as const,
+          },
+          ...(showManagedAgentsNav
+            ? [
+                {
+                  name: 'Managed Agents',
+                  href: '/managed-agents',
+                  icon: Server,
+                  key: 'connections' as const,
+                },
+              ]
+            : []),
+        ]
+      : []
+
+    const targetItems: Array<{
+      name: string
+      href: string
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      icon: React.ComponentType<any>
+      key: 'repositories'
     }> = [
-      ...(canManageSsh
-        ? [
-            {
-              name: 'Remote Machines',
-              href: '/ssh-connections',
-              icon: Computer,
-              key: 'connections' as const,
-            },
-            ...(showManagedAgentsNav
-              ? [
-                  {
-                    name: 'Managed Agents',
-                    href: '/managed-agents',
-                    icon: Server,
-                    key: 'connections' as const,
-                  },
-                ]
-              : []),
-          ]
-        : []),
-      {
-        name: 'Backup Plans',
-        href: '/backup-plans',
-        icon: ListChecks,
-        key: 'backupPlans' as const,
-      },
       { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
       {
         name: 'Cloud Storage',
@@ -194,11 +197,25 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
         icon: Cloud,
         key: 'repositories' as const,
       },
-      { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
-      { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
     ]
 
-    backupItems.push({ name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const })
+    const backupItems: Array<{
+      name: string
+      href: string
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      icon: React.ComponentType<any>
+      key: 'backupPlans' | 'backups' | 'archives' | 'schedule'
+    }> = [
+      {
+        name: 'Backup Plans',
+        href: '/backup-plans',
+        icon: ListChecks,
+        key: 'backupPlans' as const,
+      },
+      { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
+      { name: 'Schedule', href: '/schedule', icon: Clock, key: 'schedule' as const },
+      { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
+    ]
 
     return [
       {
@@ -208,10 +225,9 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
           { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
         ],
       },
-      {
-        heading: 'BACKUP',
-        items: backupItems,
-      },
+      ...(hostItems.length > 0 ? [{ heading: 'HOSTS', items: hostItems }] : []),
+      { heading: 'TARGETS', items: targetItems },
+      { heading: 'BACKUPS', items: backupItems },
       {
         heading: 'SETTINGS',
         items: [
