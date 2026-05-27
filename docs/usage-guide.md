@@ -88,6 +88,8 @@ Remote repositories use a Remote Machine connection.
 
 Use remote repositories when the Borg archive should live on another server or off-site storage.
 
+For BorgBase and other hosted Borg providers, see [Provider Guides](provider-guides).
+
 ## Import an Existing Repository
 
 Use Import Existing when a Borg repository already exists and you want Borg UI to manage or monitor it.
@@ -99,6 +101,8 @@ Use Import Existing when a Borg repository already exists and you want Borg UI t
 5. Save, then verify archives can be listed.
 
 Full mode lets Borg UI run backups for the repository. Observability-only mode is for repositories backed up by something else; Borg UI can browse archives, restore files, run checks, and show health, but it will not run backups or scheduled backups for that repository.
+
+If the repository comes from BorgBase or another hosted Borg service, keep the provider's repository path exactly as given. See [Provider Guides](provider-guides).
 
 ## Repository vs Backup Plan
 

@@ -53,6 +53,7 @@ export default defineConfig({
           { text: 'Configuration', link: '/configuration' },
           { text: 'Usage Guide', link: '/usage-guide' },
           { text: 'Sidebar Navigation', link: '/sidebar-navigation' },
+          { text: 'Provider Guides', link: '/provider-guides' },
           { text: 'Licensing', link: '/licensing' },
         ],
       },
