@@ -23,6 +23,7 @@ vi.mock('../../services/api', () => ({
     getStatus: vi.fn(),
     listRemotes: vi.fn(),
     createRemote: vi.fn(),
+    browseRemote: vi.fn(),
   },
 }))
 
@@ -217,6 +218,10 @@ const advanceCreateToSecurity = async (user: ReturnType<typeof userEvent.setup>)
   await fillLocalLocation()
   await user.click(screen.getByRole('button', { name: /Next/i }))
   await waitFor(() => {
+    expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+  })
+  await user.click(screen.getByRole('button', { name: /Next/i }))
+  await waitFor(() => {
     expect(screen.getByText('Repository Key')).toBeInTheDocument()
   })
 }
@@ -266,6 +271,13 @@ describe('RepositoryWizard', () => {
     ;(rcloneAPI.createRemote as Mock).mockResolvedValue({
       data: { id: 42, name: 'local-test', provider: 'local', last_test_status: null },
     })
+    ;(rcloneAPI.browseRemote as Mock).mockResolvedValue({
+      data: {
+        remote_id: 10,
+        path: '',
+        entries: [{ name: 'repositories', path: 'borg-ui/repositories', is_dir: true }],
+      },
+    })
   })
 
   describe('create mode', () => {
@@ -278,10 +290,41 @@ describe('RepositoryWizard', () => {
       })
 
       expect(screen.getByText('Security')).toBeInTheDocument()
+      expect(screen.getByText('Cloud Mirror')).toBeInTheDocument()
       expect(screen.getByText('Advanced')).toBeInTheDocument()
       expect(screen.getByText('Review')).toBeInTheDocument()
       expect(screen.queryByText('Source')).not.toBeInTheDocument()
       expect(screen.queryByText('Config')).not.toBeInTheDocument()
+    })
+
+    it('keeps Cloud Mirror immediately after Location when legacy source settings are shown', async () => {
+      renderWizard('edit', {
+        id: 1,
+        name: 'Existing Repo',
+        path: '/backups/existing',
+        encryption: 'repokey',
+        compression: 'lz4',
+        mode: 'full',
+        source_directories: ['/srv/app'],
+        exclude_patterns: [],
+      })
+
+      await waitFor(() => {
+        expect(screen.getByText('Location')).toBeInTheDocument()
+      })
+
+      const locationStep = screen.getByText('Location')
+      const cloudMirrorStep = screen.getByText('Cloud Mirror')
+      const sourceStep = screen.getByText('Source')
+
+      expect(
+        locationStep.compareDocumentPosition(cloudMirrorStep) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
+      expect(
+        cloudMirrorStep.compareDocumentPosition(sourceStep) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy()
     })
 
     it('requires repository name and path before continuing', async () => {
@@ -325,6 +368,12 @@ describe('RepositoryWizard', () => {
             encryption: 'repokey',
             passphrase: 'testpass123',
             compression: 'lz4',
+            storage_backend: 'local',
+            cloud_mirror_enabled: false,
+            rclone_remote_id: null,
+            rclone_remote_path: null,
+            rclone_remote_path_verified: false,
+            rclone_extra_flags: [],
           }),
           null
         )
@@ -342,6 +391,10 @@ describe('RepositoryWizard', () => {
       await user.clear(pathInput)
       setInputValue(pathInput, '/offsite/repo')
 
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
         expect(screen.getByText('Repository Key')).toBeInTheDocument()
@@ -394,6 +447,11 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Next/i }))
 
       await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+
+      await waitFor(() => {
         expect(screen.getByText('Repository Key')).toBeInTheDocument()
       })
 
@@ -428,21 +486,23 @@ describe('RepositoryWizard', () => {
       )
     }, 90000)
 
-    it('submits rclone storage fields from the cloud storage option', async () => {
+    it('submits optional cloud mirror fields without changing the primary location', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')
 
-      await fillLocalLocation('Cloud Repo', '/ignored/client/path')
-      await user.click(screen.getByRole('button', { name: /Cloud Storage/i }))
+      await fillLocalLocation('Cloud Repo', '/backups/cloud-repo')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('checkbox', { name: /Mirror this repository/i }))
 
       await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
       const remoteListbox = await screen.findByRole('listbox')
       await user.click(within(remoteListbox).getByText('prod-s3'))
       setInputValue(screen.getByLabelText(/Relative Remote Path/i), 'borg-ui/repositories/app')
 
-      expect(
-        screen.getByText(/Borg UI server -> local cache -> rclone sync -> remote/i)
-      ).toBeInTheDocument()
+      expect(screen.queryByText(/Local Cache Path/i)).not.toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
         expect(screen.getByText('Repository Key')).toBeInTheDocument()
@@ -459,11 +519,13 @@ describe('RepositoryWizard', () => {
         expect(onSubmit).toHaveBeenCalledWith(
           expect.objectContaining({
             name: 'Cloud Repo',
-            storage_backend: 'rclone',
+            storage_backend: 'local',
+            cloud_mirror_enabled: true,
             rclone_remote_id: 10,
             rclone_remote_path: 'borg-ui/repositories/app',
+            rclone_remote_path_verified: false,
             rclone_sync_policy: 'after_success',
-            path: 'borg-ui/repositories/app',
+            path: '/backups/cloud-repo',
             connection_id: null,
           }),
           null
@@ -471,7 +533,79 @@ describe('RepositoryWizard', () => {
       })
     }, 90000)
 
-    it('adds and selects a rclone remote from the cloud storage option', async () => {
+    it('submits browsed cloud mirror paths as verified', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+      ;(rcloneAPI.browseRemote as Mock)
+        .mockResolvedValueOnce({
+          data: {
+            remote_id: 10,
+            path: '',
+            entries: [{ name: 'repositories', path: 'borg-ui/repositories', is_dir: true }],
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            remote_id: 10,
+            path: 'borg-ui/repositories',
+            entries: [],
+          },
+        })
+
+      await fillLocalLocation('Browsed Cloud Repo', '/backups/browsed-cloud-repo')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('checkbox', { name: /Mirror this repository/i }))
+
+      await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
+      const remoteListbox = await screen.findByRole('listbox')
+      await user.click(within(remoteListbox).getByText('prod-s3'))
+      await user.click(screen.getByRole('button', { name: /Browse rclone remote/i }))
+
+      await waitFor(() => {
+        expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, '')
+      })
+      await user.click(await screen.findByText('repositories'))
+      await waitFor(() => {
+        expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui/repositories')
+      })
+      await user.click(screen.getByRole('button', { name: /Use folder/i }))
+
+      expect(screen.getByLabelText(/Relative Remote Path/i)).toHaveValue('borg-ui/repositories')
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Next/i })).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Repository Key')).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'cloudpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Browsed Cloud Repo',
+            storage_backend: 'local',
+            cloud_mirror_enabled: true,
+            rclone_remote_id: 10,
+            rclone_remote_path: 'borg-ui/repositories',
+            rclone_remote_path_verified: true,
+            path: '/backups/browsed-cloud-repo',
+          }),
+          null
+        )
+      })
+    }, 90000)
+
+    it('adds and selects a rclone remote from the cloud mirror step', async () => {
       const user = userEvent.setup()
       ;(rcloneAPI.listRemotes as Mock).mockResolvedValue({
         data: { remotes: [] },
@@ -479,8 +613,9 @@ describe('RepositoryWizard', () => {
 
       renderWizard('create')
 
-      await fillLocalLocation('Cloud Repo', '/ignored/client/path')
-      await user.click(screen.getByRole('button', { name: /Cloud Storage/i }))
+      await fillLocalLocation('Cloud Repo', '/backups/cloud-repo')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('checkbox', { name: /Mirror this repository/i }))
       await user.click(screen.getByRole('button', { name: /Add remote/i }))
 
       setInputValue(screen.getByLabelText(/Remote name/i), 'local-test')
@@ -501,7 +636,7 @@ describe('RepositoryWizard', () => {
       })
     }, 90000)
 
-    it('requires confirmed rclone availability before continuing cloud setup', async () => {
+    it('requires confirmed rclone availability before continuing enabled cloud mirror setup', async () => {
       const user = userEvent.setup()
       ;(rcloneAPI.getStatus as Mock).mockResolvedValue({
         data: { version: null, error: null },
@@ -509,12 +644,9 @@ describe('RepositoryWizard', () => {
 
       renderWizard('create')
 
-      await fillLocalLocation('Cloud Repo', '/ignored/client/path')
-      await user.click(screen.getByRole('button', { name: /Cloud Storage/i }))
-      await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
-      const remoteListbox = await screen.findByRole('listbox')
-      await user.click(within(remoteListbox).getByText('prod-s3'))
-      setInputValue(screen.getByLabelText(/Relative Remote Path/i), 'borg-ui/repositories/app')
+      await fillLocalLocation('Cloud Repo', '/backups/cloud-repo')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('checkbox', { name: /Mirror this repository/i }))
 
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
     }, 90000)
@@ -574,6 +706,10 @@ describe('RepositoryWizard', () => {
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
         expect(screen.getByText('Repository Key')).toBeInTheDocument()
       })
       setInputValue(screen.getByLabelText(/^Passphrase/i), 'agentpass')
@@ -620,6 +756,10 @@ describe('RepositoryWizard', () => {
       await fillLocalLocation('Imported Repo', '/existing/repo')
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
         expect(screen.getByText('Repository Key')).toBeInTheDocument()
       })
 
@@ -652,6 +792,10 @@ describe('RepositoryWizard', () => {
       const { onSubmit } = renderWizard('import')
 
       await fillLocalLocation('Imported Keyfile Repo', '/existing/keyfile-repo')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
         expect(screen.getByRole('combobox')).toBeInTheDocument()
@@ -707,6 +851,10 @@ describe('RepositoryWizard', () => {
 
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Read Only Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/backup/readonly')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
         expect(screen.getByText('Repository Key')).toBeInTheDocument()
@@ -770,6 +918,10 @@ describe('RepositoryWizard', () => {
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
         expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
       })
       await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -788,6 +940,10 @@ describe('RepositoryWizard', () => {
         expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Legacy Repo')
       })
 
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
         expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()

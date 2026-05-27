@@ -120,6 +120,109 @@ class _SuccessfulRcloneService:
         )
 
 
+class _RecordingRcloneService:
+    def __init__(self):
+        self.sync_calls = []
+
+    async def sync(self, source, destination, **kwargs):
+        self.sync_calls.append((source, destination, kwargs))
+        return RcloneCommandResult(
+            success=True,
+            return_code=0,
+            stdout="",
+            stderr="",
+            command=["rclone", "sync", source, destination],
+            redacted_command="rclone sync <path> <path>",
+        )
+
+
+class _ListingRcloneService:
+    def __init__(self, entries):
+        self.entries = entries
+
+    async def lsjson(self, target, *, timeout=60):
+        return self.entries
+
+
+@pytest.mark.unit
+def test_build_mirror_storage_uses_primary_repository_path_as_source():
+    service = RcloneRepositoryService(cache_root="/cache")
+
+    storage = service.build_mirror_storage(
+        repository_id=9,
+        source_path="/srv/borg/app",
+        remote_id=3,
+        remote_path="borg-ui/repositories/app",
+        sync_policy="manual",
+        extra_flags=["--fast-list"],
+    )
+
+    assert storage.backend == "rclone"
+    assert storage.cache_path == "/srv/borg/app"
+    assert storage.sync_direction == "primary_to_remote"
+    assert storage.sync_status == "pending"
+    assert storage.extra_flags == ["--fast-list"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_mirror_uses_primary_repository_path_source(db_session):
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path="/srv/borg/app", encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path="/srv/borg/app",
+        sync_policy="manual",
+        sync_status="pending",
+        sync_direction="primary_to_remote",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    rclone = _RecordingRcloneService()
+    service = RcloneRepositoryService(cache_root="/cache", service=rclone)
+
+    await service.sync_repository(db_session, repository)
+
+    assert rclone.sync_calls[0][0] == "/srv/borg/app"
+    assert rclone.sync_calls[0][1] == "prod-s3:borg-ui/repositories/app"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_preflight_remote_path_blocks_unverified_non_empty_target():
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    service = RcloneRepositoryService(
+        cache_root="/cache",
+        service=_ListingRcloneService([{"Name": "existing-repo", "IsDir": True}]),
+    )
+
+    with pytest.raises(ValueError, match="not empty"):
+        await service.preflight_remote_path(
+            remote,
+            "borg-ui/repositories/app",
+            verified_non_empty=False,
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_preflight_remote_path_allows_verified_non_empty_target():
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    service = RcloneRepositoryService(
+        cache_root="/cache",
+        service=_ListingRcloneService([{"Name": "existing-repo", "IsDir": True}]),
+    )
+
+    await service.preflight_remote_path(
+        remote,
+        "borg-ui/repositories/app",
+        verified_non_empty=True,
+    )
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_sync_repository_persists_failure_when_rclone_raises(

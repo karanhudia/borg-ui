@@ -34,13 +34,15 @@ const managedAgentPlanSourcesData: WizardReviewData = {
 const rcloneReviewData: WizardReviewData = {
   ...managedAgentPlanSourcesData,
   name: 'Cloud Mirror Repository',
-  repositoryLocation: 'rclone',
+  repositoryLocation: 'local',
   executionTarget: 'local',
   agentMachineId: '',
-  path: 'borg-ui/production',
+  path: '/mnt/borg/production',
   repoSshConnectionId: '',
   dataSource: 'local',
   sourceDirs: ['/srv/app', '/etc/borg-ui'],
+  cloudMirrorEnabled: true,
+  rcloneRemoteName: 'local-test',
   rcloneRemotePath: 'borg-ui/production',
   rcloneSyncPolicy: 'after_success',
 }
@@ -80,7 +82,7 @@ export const ManagedAgentPlanSources: Story = {
   ),
 }
 
-export const RcloneStorage: Story = {
+export const CloudMirror: Story = {
   args: {
     mode: 'create',
     data: rcloneReviewData,

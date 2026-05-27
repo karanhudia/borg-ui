@@ -46,9 +46,9 @@ const rcloneRepository: Repository = {
   ...sampleRepository,
   id: 43,
   name: 'Cloud Mirror Repository',
-  path: '/data/rclone-cache/repositories/43',
-  repository_type: 'rclone',
-  storage_backend: 'rclone',
+  path: '/mnt/borg/production',
+  repository_type: 'local',
+  storage_backend: 'local',
   rclone_storage: {
     repository_id: 43,
     backend: 'rclone',
@@ -56,7 +56,7 @@ const rcloneRepository: Repository = {
     rclone_remote_name: 'local-test',
     rclone_remote_path: 'borg-ui/production',
     rclone_target: 'local-test:borg-ui/production',
-    cache_path: '/data/rclone-cache/repositories/43',
+    cache_path: '/mnt/borg/production',
     cache_present: true,
     sync_policy: 'after_success',
     sync_status: 'current',
@@ -111,6 +111,25 @@ export const RcloneSynced: Story = {
     repository: rcloneRepository,
     onRcloneSync: noop,
     onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const EnableCloudMirror: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 46,
+      name: 'Eligible Local Repository',
+      storage_backend: 'local',
+      execution_target: 'local',
+      rclone_storage: null,
+    },
   },
   render: (args) => (
     <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>

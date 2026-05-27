@@ -16,11 +16,10 @@ import {
   IconButton,
   alpha,
   ButtonBase,
-  Button,
   Tooltip,
   Chip,
 } from '@mui/material'
-import { Server, Cloud, Laptop, Plus } from 'lucide-react'
+import { Server, Cloud, Laptop } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import type { SxProps, Theme } from '@mui/material/styles'
 import { useTranslation } from 'react-i18next'
@@ -54,23 +53,6 @@ export interface LocationStepData {
   path: string
   repoSshConnectionId: number | ''
   bypassLock: boolean
-  rcloneRemoteId?: number | ''
-  rcloneRemotePath?: string
-  rcloneSyncPolicy?: 'after_success' | 'manual' | 'scheduled'
-  rcloneExtraFlags?: string
-}
-
-interface RcloneRemote {
-  id: number
-  name: string
-  provider: string
-  last_test_status?: string | null
-}
-
-interface RcloneStatus {
-  available: boolean
-  version?: string | null
-  error?: string | null
 }
 
 interface WizardStepLocationProps {
@@ -78,13 +60,10 @@ interface WizardStepLocationProps {
   data: LocationStepData
   sshConnections: SSHConnection[]
   agentMachines?: AgentMachine[]
-  rcloneRemotes?: RcloneRemote[]
-  rcloneStatus?: RcloneStatus | null
   dataSource?: 'local' | 'remote' // Data source from step 2
   sourceSshConnectionId?: number | '' // Source SSH connection ID
   onChange: (data: Partial<LocationStepData>) => void
   onBrowsePath: () => void
-  onAddRcloneRemote?: () => void
 }
 
 export default function WizardStepLocation({
@@ -92,13 +71,10 @@ export default function WizardStepLocation({
   data,
   sshConnections,
   agentMachines = [],
-  rcloneRemotes = [],
-  rcloneStatus = null,
   dataSource,
   sourceSshConnectionId,
   onChange,
   onBrowsePath,
-  onAddRcloneRemote,
 }: WizardStepLocationProps) {
   const { t } = useTranslation()
   const executionTarget = data.executionTarget ?? 'local'
@@ -109,21 +85,16 @@ export default function WizardStepLocation({
   // Only enforce this in edit mode when we know the data source
   const isRemoteLocationDisabled =
     isAgentExecution || (mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId)
-  const isRcloneAvailable = rcloneStatus?.available !== false
 
-  const handleLocationChange = (location: 'local' | 'ssh' | 'rclone') => {
+  const handleLocationChange = (location: 'local' | 'ssh') => {
     if (location === 'ssh' && isRemoteLocationDisabled) {
       return // Don't allow switching to SSH if data source is remote
-    }
-    if (location === 'rclone' && !isRcloneAvailable) {
-      return
     }
     onChange({
       repositoryLocation: location,
       executionTarget: 'local',
       agentMachineId: '',
       repoSshConnectionId: location === 'ssh' ? data.repoSshConnectionId : '',
-      path: location === 'rclone' ? data.rcloneRemotePath || data.path : data.path,
     })
   }
 
@@ -192,16 +163,6 @@ export default function WizardStepLocation({
     WebkitBoxOrient: 'vertical',
     overflow: 'hidden',
   }
-  const rcloneSelectSx: SxProps<Theme> = {
-    minHeight: 56,
-    '& .MuiSelect-select': {
-      minHeight: 24,
-      py: '16.5px',
-      display: 'flex',
-      alignItems: 'center',
-    },
-  }
-
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Name Input */}
@@ -420,32 +381,6 @@ export default function WizardStepLocation({
             </CardActionArea>
           </Card>
 
-          <Card
-            variant="outlined"
-            sx={locationCardSx(data.repositoryLocation === 'rclone', !isRcloneAvailable)}
-          >
-            <CardActionArea
-              onClick={() => handleLocationChange('rclone')}
-              disabled={!isRcloneAvailable}
-              sx={locationActionSx}
-            >
-              <CardContent sx={locationContentSx}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                  <Box sx={locationIconSx(data.repositoryLocation === 'rclone')}>
-                    <Cloud size={20} />
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="subtitle2" sx={locationTitleSx}>
-                      {t('wizard.location.cloudStorage')}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
-                      {t('wizard.location.cloudStorageDesc')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
         </Box>
 
         {isRemoteLocationDisabled && (
@@ -561,171 +496,36 @@ export default function WizardStepLocation({
         </>
       )}
 
-      {data.repositoryLocation === 'rclone' && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {rcloneStatus && !rcloneStatus.available && (
-            <Alert severity="warning">
-              {rcloneStatus.error || t('wizard.location.rcloneUnavailable')}
-            </Alert>
-          )}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto' },
-              gap: 1,
-              alignItems: 'start',
-            }}
-          >
-            <FormControl fullWidth disabled={!isRcloneAvailable}>
-              <InputLabel id="rclone-remote-label">
-                {t('wizard.location.rcloneRemoteLabel')}
-              </InputLabel>
-              <Select
-                labelId="rclone-remote-label"
-                id="rclone-remote"
-                value={
-                  data.rcloneRemoteId === '' || data.rcloneRemoteId == null
-                    ? ''
-                    : String(data.rcloneRemoteId)
-                }
-                label={t('wizard.location.rcloneRemoteLabel')}
-                onChange={(e) => {
-                  const value = e.target.value
-                  onChange({ rcloneRemoteId: value ? Number(value) : '' })
-                }}
-                sx={rcloneSelectSx}
-              >
-                {rcloneRemotes.map((remote) => (
-                  <MenuItem key={remote.id} value={String(remote.id)}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <Cloud size={16} />
-                      <Typography variant="body2">{remote.name}</Typography>
-                      <Chip
-                        size="small"
-                        label={remote.provider}
-                        variant="outlined"
-                        sx={{ height: 20, fontSize: '0.65rem' }}
-                      />
-                      {remote.last_test_status && (
-                        <Typography variant="caption" color="text.secondary">
-                          {remote.last_test_status}
-                        </Typography>
-                      )}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {onAddRcloneRemote && (
-              <Button
-                variant="outlined"
-                startIcon={<Plus size={16} />}
-                onClick={onAddRcloneRemote}
-                disabled={!isRcloneAvailable}
-                sx={{ height: 56, minHeight: 56, whiteSpace: 'nowrap' }}
-              >
-                {t('wizard.location.rcloneAddRemote')}
-              </Button>
-            )}
-          </Box>
-
-          {rcloneRemotes.length === 0 && (
-            <Alert severity="info">{t('wizard.location.rcloneNoRemotes')}</Alert>
-          )}
-
-          <TextField
-            label={t('wizard.location.rcloneRemotePathLabel')}
-            value={data.rcloneRemotePath || ''}
-            onChange={(e) => {
-              onChange({ rcloneRemotePath: e.target.value })
-            }}
-            placeholder="borg-ui/repositories/app"
-            required
-            fullWidth
-            disabled={!isRcloneAvailable}
-            helperText={t('wizard.location.rcloneRemotePathHelper')}
-          />
-
-          <TextField
-            label={t('wizard.location.rcloneCachePreviewLabel')}
-            value="/data/rclone-cache/repositories/<repository-id>"
-            fullWidth
-            disabled={!isRcloneAvailable}
-            InputProps={{ readOnly: true }}
-            helperText={t('wizard.location.rcloneCachePreviewHelper')}
-          />
-
-          <FormControl fullWidth disabled={!isRcloneAvailable}>
-            <InputLabel id="rclone-sync-policy-label">
-              {t('wizard.location.rcloneSyncPolicyLabel')}
-            </InputLabel>
-            <Select
-              labelId="rclone-sync-policy-label"
-              id="rclone-sync-policy"
-              value={data.rcloneSyncPolicy || 'after_success'}
-              label={t('wizard.location.rcloneSyncPolicyLabel')}
-              onChange={(e) =>
-                onChange({
-                  rcloneSyncPolicy: e.target.value as 'after_success' | 'manual' | 'scheduled',
-                })
-              }
-            >
-              <MenuItem value="after_success">
-                {t('wizard.location.rcloneSyncAfterSuccess')}
-              </MenuItem>
-              <MenuItem value="manual">{t('wizard.location.rcloneSyncManual')}</MenuItem>
-              <MenuItem value="scheduled">{t('wizard.location.rcloneSyncScheduled')}</MenuItem>
-            </Select>
-          </FormControl>
-
-          <TextField
-            label={t('wizard.location.rcloneExtraFlagsLabel')}
-            value={data.rcloneExtraFlags || ''}
-            onChange={(e) => onChange({ rcloneExtraFlags: e.target.value })}
-            placeholder="--fast-list"
-            fullWidth
-            disabled={!isRcloneAvailable}
-            helperText={t('wizard.location.rcloneExtraFlagsHelper')}
-          />
-
-          <Alert severity="info" icon={<Cloud size={18} />}>
-            {t('wizard.location.rcloneRoutePreview')}
-          </Alert>
-        </Box>
-      )}
-
       {/* Path Input */}
-      {data.repositoryLocation !== 'rclone' && (
-        <TextField
-          label={t('wizard.location.repositoryPathLabel')}
-          value={data.path}
-          onChange={(e) => onChange({ path: e.target.value })}
-          placeholder={
-            data.repositoryLocation === 'local' ? '/backups/my-repo' : '/path/on/remote/server'
-          }
-          required
-          fullWidth
-          helperText={t('wizard.location.repositoryPathHelper')}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton
-                  onClick={onBrowsePath}
-                  edge="end"
-                  size="small"
-                  title={t('wizard.location.browseFilesystem')}
-                  disabled={
-                    (isAgentExecution && !data.agentMachineId) ||
-                    (data.repositoryLocation === 'ssh' && !data.repoSshConnectionId)
-                  }
-                >
-                  <FolderOpenIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-      )}
+      <TextField
+        label={t('wizard.location.repositoryPathLabel')}
+        value={data.path}
+        onChange={(e) => onChange({ path: e.target.value })}
+        placeholder={
+          data.repositoryLocation === 'local' ? '/backups/my-repo' : '/path/on/remote/server'
+        }
+        required
+        fullWidth
+        helperText={t('wizard.location.repositoryPathHelper')}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                onClick={onBrowsePath}
+                edge="end"
+                size="small"
+                title={t('wizard.location.browseFilesystem')}
+                disabled={
+                  (isAgentExecution && !data.agentMachineId) ||
+                  (data.repositoryLocation === 'ssh' && !data.repoSshConnectionId)
+                }
+              >
+                <FolderOpenIcon fontSize="small" />
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
     </Box>
   )
 }

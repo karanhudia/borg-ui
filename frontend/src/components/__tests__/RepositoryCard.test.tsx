@@ -862,6 +862,33 @@ describe('RepositoryCard', () => {
   })
 
   describe('Rclone Storage', () => {
+    it('exposes enable cloud mirror for eligible local repositories', async () => {
+      const user = userEvent.setup()
+      const onEdit = vi.fn()
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            repository_type: 'local',
+            storage_backend: 'local',
+            execution_target: 'local',
+            connection_id: null,
+            rclone_storage: null,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onEdit={onEdit}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
+
+      expect(onEdit).toHaveBeenCalled()
+    })
+
     it('renders rclone sync status, target, and mirror actions', () => {
       const rcloneRepository = {
         ...mockRepository,

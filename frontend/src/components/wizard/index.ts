@@ -10,6 +10,8 @@ export { default as WizardStepBackupConfig } from './WizardStepBackupConfig'
 export { default as WizardStepReview } from './WizardStepReview'
 export { default as BackupFlowPreview } from './BackupFlowPreview'
 export { default as RcloneRemoteDialog } from './RcloneRemoteDialog'
+export { default as WizardStepCloudMirror } from './WizardStepCloudMirror'
+export { default as RcloneRemoteFolderPickerDialog } from './RcloneRemoteFolderPickerDialog'
 
 // Restore Wizard Steps
 export { default as WizardStepRestoreFiles } from './WizardStepRestoreFiles'
@@ -25,6 +27,7 @@ export type { RepositoryAdvancedStepData } from './WizardStepRepositoryAdvanced'
 export type { BackupConfigStepData } from './WizardStepBackupConfig'
 export type { WizardReviewData } from './WizardStepReview'
 export type { RcloneRemoteCreateInput } from './RcloneRemoteDialog'
+export type { CloudMirrorStepData } from './WizardStepCloudMirror'
 
 // Restore Wizard Types
 export type { RestoreFilesStepData } from './WizardStepRestoreFiles'

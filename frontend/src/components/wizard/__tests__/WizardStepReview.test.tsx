@@ -116,7 +116,9 @@ describe('WizardStepReview', () => {
     it('shows localized rclone sync policy labels', () => {
       const rcloneData = {
         ...defaultData,
-        repositoryLocation: 'rclone' as const,
+        repositoryLocation: 'local' as const,
+        cloudMirrorEnabled: true,
+        rcloneRemoteName: 'prod-s3',
         rcloneRemotePath: 'borg-ui/repositories/app',
         rcloneSyncPolicy: 'manual' as const,
       }
@@ -127,6 +129,8 @@ describe('WizardStepReview', () => {
 
       expect(screen.getByText('Manual sync')).toBeInTheDocument()
       expect(screen.queryByText('manual')).not.toBeInTheDocument()
+      expect(screen.getByText('Cloud Mirror')).toBeInTheDocument()
+      expect(screen.getByText('prod-s3:borg-ui/repositories/app')).toBeInTheDocument()
     })
   })
 

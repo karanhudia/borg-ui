@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import WizardStepLocation from '../WizardStepLocation'
@@ -43,15 +43,6 @@ const defaultData = {
   rcloneExtraFlags: '',
 }
 
-const mockRcloneRemotes = [
-  {
-    id: 10,
-    name: 'prod-s3',
-    provider: 's3',
-    last_test_status: 'connected',
-  },
-]
-
 describe('WizardStepLocation', () => {
   describe('Create Mode', () => {
     it('renders Repository Name input', () => {
@@ -82,7 +73,7 @@ describe('WizardStepLocation', () => {
       expect(screen.getByLabelText(/Repository Path/i)).toBeInTheDocument()
     })
 
-    it('renders Cloud Storage as a location card beside filesystem destinations', () => {
+    it('renders only primary repository location cards', () => {
       render(
         <WizardStepLocation
           mode="create"
@@ -91,8 +82,6 @@ describe('WizardStepLocation', () => {
           agentMachines={[
             { id: 101, name: 'Workstation', hostname: 'workstation.local', status: 'online' },
           ]}
-          rcloneRemotes={mockRcloneRemotes}
-          rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
           onChange={vi.fn()}
           onBrowsePath={vi.fn()}
         />
@@ -103,112 +92,7 @@ describe('WizardStepLocation', () => {
       expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
       expect(screen.getByText('Remote Client')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Managed Agent/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Cloud Storage/i })).toBeInTheDocument()
-    })
-
-    it('switches to rclone storage from the Cloud Storage card', async () => {
-      const user = userEvent.setup()
-      const onChange = vi.fn()
-
-      render(
-        <WizardStepLocation
-          mode="create"
-          data={defaultData}
-          sshConnections={[]}
-          rcloneRemotes={mockRcloneRemotes}
-          rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
-          onChange={onChange}
-          onBrowsePath={vi.fn()}
-        />
-      )
-
-      await user.click(screen.getByRole('button', { name: /Cloud Storage/i }))
-
-      expect(onChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          repositoryLocation: 'rclone',
-        })
-      )
-    })
-
-    it('shows rclone remote controls and route preview when cloud storage is selected', () => {
-      render(
-        <WizardStepLocation
-          mode="create"
-          data={{
-            ...defaultData,
-            repositoryLocation: 'rclone',
-            rcloneRemoteId: 10,
-            rcloneRemotePath: 'borg-ui/repositories/app',
-          }}
-          sshConnections={[]}
-          rcloneRemotes={mockRcloneRemotes}
-          rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
-          onChange={vi.fn()}
-          onBrowsePath={vi.fn()}
-        />
-      )
-
-      expect(screen.getByText('prod-s3')).toBeInTheDocument()
-      expect(screen.getByLabelText(/Relative Remote Path/i)).toHaveValue('borg-ui/repositories/app')
-      expect(
-        screen.getByText(/Borg UI server -> local cache -> rclone sync -> remote/i)
-      ).toBeInTheDocument()
-    })
-
-    it('keeps filesystem repository path separate when editing rclone remote path', () => {
-      const onChange = vi.fn()
-
-      render(
-        <WizardStepLocation
-          mode="create"
-          data={{
-            ...defaultData,
-            repositoryLocation: 'rclone',
-            path: '/backups/local-repo',
-            rcloneRemoteId: 10,
-            rcloneRemotePath: '',
-          }}
-          sshConnections={[]}
-          rcloneRemotes={mockRcloneRemotes}
-          rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
-          onChange={onChange}
-          onBrowsePath={vi.fn()}
-        />
-      )
-
-      fireEvent.change(screen.getByLabelText(/Relative Remote Path/i), {
-        target: { value: 'borg-ui/repositories/app' },
-      })
-
-      expect(onChange).toHaveBeenCalledWith({
-        rcloneRemotePath: 'borg-ui/repositories/app',
-      })
-    })
-
-    it('does not allow cloud source selection when rclone is unavailable', () => {
-      const onChange = vi.fn()
-
-      render(
-        <WizardStepLocation
-          mode="create"
-          data={defaultData}
-          sshConnections={[]}
-          rcloneRemotes={mockRcloneRemotes}
-          rcloneStatus={{ available: false, error: 'rclone binary not found' }}
-          onChange={onChange}
-          onBrowsePath={vi.fn()}
-        />
-      )
-
-      const cloudCard = screen.getByRole('button', { name: /Cloud Storage/i })
-      expect(cloudCard).toBeDisabled()
-
-      fireEvent.click(cloudCard)
-
-      expect(onChange).not.toHaveBeenCalledWith(
-        expect.objectContaining({ repositoryLocation: 'rclone' })
-      )
+      expect(screen.queryByRole('button', { name: /Cloud Storage/i })).not.toBeInTheDocument()
     })
 
     it('does NOT show Repository Mode selector in create mode', () => {
