@@ -52,6 +52,7 @@ import { useAuth } from '../hooks/useAuth'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import PageTabs from '../components/PageTabs'
+import PageHeader from '../components/PageHeader'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import { buildAgentInstallCommand } from './managed-agents/agentInstallCommandText'
@@ -264,39 +265,25 @@ export default function ManagedAgents() {
 
   return (
     <Box>
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={2}
-        justifyContent="space-between"
-        alignItems={{ xs: 'stretch', md: 'center' }}
-        sx={{ mb: 3 }}
-      >
-        <Box>
-          <Typography variant="h4" fontWeight={700}>
-            Managed Agents
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Lightweight machines connected to this Borg UI server
-          </Typography>
-        </Box>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          <Tooltip title="Refresh">
-            <IconButton
-              onClick={refreshAll}
-              sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5 }}
-            >
-              <RefreshCw size={18} />
+      <PageHeader
+        title="Managed Agents"
+        subtitle="Lightweight machines connected to this Borg UI server"
+        actions={
+          <>
+            <IconButton onClick={refreshAll} aria-label="Refresh" title="Refresh">
+              <RefreshCw size={20} />
             </IconButton>
-          </Tooltip>
-          <Button
-            variant="contained"
-            startIcon={<Plus size={18} />}
-            onClick={() => setAddAgentDialogOpen(true)}
-          >
-            Add Agent
-          </Button>
-        </Stack>
-      </Stack>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={18} />}
+              onClick={() => setAddAgentDialogOpen(true)}
+              sx={{ width: { xs: '100%', md: 'auto' } }}
+            >
+              Add Agent
+            </Button>
+          </>
+        }
+      />
 
       <AgentSetupGuide command={setupCommand} onCopy={handleCopy} />
 

@@ -198,7 +198,33 @@
     "remoteDeleteFailed": "Failed to delete rclone remote.",
     "browseFailed": "Failed to browse rclone remote.",
     "statusLoadFailed": "Failed to load rclone availability.",
-    "remotesLoadFailed": "Failed to load rclone remotes."
+    "remotesLoadFailed": "Failed to load rclone remotes.",
+    "search": "Search cloud storage...",
+    "sort": {
+      "nameAZ": "Name A → Z",
+      "nameZA": "Name Z → A",
+      "provider": "Provider",
+      "status": "Status (connected first)",
+      "usageMost": "Usage (most first)",
+      "usageLeast": "Usage (least first)"
+    },
+    "group": {
+      "none": "No grouping",
+      "status": "By status",
+      "provider": "By provider"
+    },
+    "groups": {
+      "connected": "Connected",
+      "failed": "Failed",
+      "pending": "Pending",
+      "notTested": "Not tested"
+    },
+    "noMatch": {
+      "title": "No matching remotes",
+      "message": "No remotes match \"{{search}}\".",
+      "fallback": "No remotes match the current filters.",
+      "clearSearch": "Clear search"
+    }
   },
   "status": {
     "completed": "Completed",

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Box, Button, DialogActions, useTheme } from '@mui/material'
+import { Box, Button, DialogActions } from '@mui/material'
 import { CalendarClock, Edit, ListChecks } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { isAxiosError } from 'axios'
@@ -85,8 +85,6 @@ export default function BackupPlans() {
   const location = useLocation()
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const theme = useTheme()
-  const isDark = theme.palette.mode === 'dark'
   const { can } = usePlan()
   const canUseMultiRepository = can('backup_plan_multi_repository')
   const canUseBorg2 = can('borg_v2')
@@ -703,7 +701,6 @@ export default function BackupPlans() {
         setSortBy={setSortBy}
         groupBy={groupBy}
         setGroupBy={setGroupBy}
-        isDark={isDark}
         startingPlanId={startingPlanId}
         highlightedPlanId={highlightedPlanId}
         canUseMultiRepository={canUseMultiRepository}

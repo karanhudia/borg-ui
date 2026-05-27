@@ -1,7 +1,8 @@
 import Add from '@mui/icons-material/Add'
 import FileUpload from '@mui/icons-material/FileUpload'
-import { Box, Button, Stack, Typography } from '@mui/material'
+import { Button, Stack } from '@mui/material'
 import { useTranslation } from 'react-i18next'
+import PageHeader from '../../components/PageHeader'
 import type { Repository } from './types'
 
 interface RepositoriesHeaderProps {
@@ -16,26 +17,11 @@ export function RepositoriesHeader({
   const { t } = useTranslation()
 
   return (
-    <Box sx={{ mb: 3 }}>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'stretch', md: 'flex-start' },
-          gap: 2,
-          mb: 2,
-        }}
-      >
-        <Box sx={{ flex: 1, mr: { md: 2 } }}>
-          <Typography variant="h4" fontWeight={600} gutterBottom>
-            {t('repositories.title')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" paragraph>
-            {t('repositories.subtitle')}
-          </Typography>
-        </Box>
-        {canManageRepositoriesGlobally && (
+    <PageHeader
+      title={t('repositories.title')}
+      subtitle={t('repositories.subtitle')}
+      actions={
+        canManageRepositoriesGlobally ? (
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
             <Button
               variant="contained"
@@ -57,8 +43,8 @@ export function RepositoriesHeader({
               {t('repositories.importExisting')}
             </Button>
           </Stack>
-        )}
-      </Box>
-    </Box>
+        ) : null
+      }
+    />
   )
 }
