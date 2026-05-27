@@ -2,7 +2,9 @@ import asyncio
 
 import pytest
 
+from app.config import settings
 from app.services.rclone_service import RcloneCommandResult, RcloneService
+from app.services.rclone_service import rclone_service
 
 
 @pytest.mark.unit
@@ -46,6 +48,11 @@ def test_rclone_command_builders_use_argv_lists():
         "--s3-no-check-bucket",
         "--fast-list",
     ]
+
+
+@pytest.mark.unit
+def test_default_rclone_service_uses_managed_config_file():
+    assert rclone_service.config_path == f"{settings.rclone_config_root}/rclone.conf"
 
 
 @pytest.mark.unit

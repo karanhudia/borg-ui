@@ -29,6 +29,7 @@ import {
   Wifi,
   ListChecks,
   Activity,
+  Cloud,
 } from 'lucide-react'
 import api, { settingsAPI, backupPlansAPI } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
@@ -95,6 +96,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       Activity: t('navigation.items.activity'),
       'Remote Machines': t('navigation.items.remoteMachines'),
       'Managed Agents': t('navigation.items.managedAgents'),
+      'Cloud Storage': t('navigation.items.cloudStorage'),
       'Backup Plans': t('navigation.items.backupPlans'),
       Repositories: t('navigation.items.repositories'),
       Backup: t('navigation.items.backup'),
@@ -186,6 +188,12 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
         key: 'backupPlans' as const,
       },
       { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
+      {
+        name: 'Cloud Storage',
+        href: '/cloud-storage',
+        icon: Cloud,
+        key: 'repositories' as const,
+      },
       { name: 'Backup', href: '/backup', icon: FileText, key: 'backups' as const },
       { name: 'Archives', href: '/archives', icon: Archive, key: 'archives' as const },
     ]

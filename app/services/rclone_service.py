@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from app.config import settings
@@ -203,4 +204,8 @@ def _looks_like_path_or_remote(value: str) -> bool:
     )
 
 
-rclone_service = RcloneService()
+def _default_config_path() -> str:
+    return str(Path(settings.rclone_config_root) / "rclone.conf")
+
+
+rclone_service = RcloneService(config_path=_default_config_path())

@@ -65,6 +65,9 @@ vi.mock('../pages/Schedule', () => ({
 vi.mock('../pages/Repositories', () => ({
   default: () => <div>Repositories Page</div>,
 }))
+vi.mock('../pages/CloudStorage', () => ({
+  default: () => <div>Cloud Storage Page</div>,
+}))
 vi.mock('../pages/SSHConnectionsSingleKey', () => ({
   default: () => <div>SSH Connections Page</div>,
 }))
@@ -221,6 +224,14 @@ describe('App', () => {
     expect(await screen.findByText('Managed Agents Page')).toBeInTheDocument()
     expect(screen.getByText('Protected:connections')).toBeInTheDocument()
     expect(protectedRouteMock).toHaveBeenCalledWith('connections')
+  })
+
+  it('renders cloud storage under the repositories tab', async () => {
+    renderWithProviders(<App />, { initialRoute: '/cloud-storage' })
+
+    expect(await screen.findByText('Cloud Storage Page')).toBeInTheDocument()
+    expect(screen.getByText('Protected:repositories')).toBeInTheDocument()
+    expect(protectedRouteMock).toHaveBeenCalledWith('repositories')
   })
 
   it('loads analytics preferences and initializes analytics on mount', async () => {

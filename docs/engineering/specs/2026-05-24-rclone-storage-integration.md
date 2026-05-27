@@ -70,8 +70,9 @@ Official references:
 - Add a local-cache-plus-remote-mirror runtime path for create, import,
   backup, restore, archive browsing, check, prune, compact, and break-lock
   where those operations are supported today.
-- Add UI for selecting rclone as a repository location and configuring the
-  provider, remote path, local cache, sync policy, and advanced flags.
+- Add a Cloud Storage page for reusable rclone remotes, plus repository setup UI
+  for selecting an existing remote and configuring repository-owned remote path,
+  local cache preview, sync policy, and advanced flags.
 - Add status surfaces for cache state, last sync, pending sync, failed sync,
   hydration, and drift/conflict protection.
 - Add docs and smoke tests that prove a repository can be created locally,
@@ -242,8 +243,8 @@ normal sync.
 
 - Treat rclone config as sensitive. Rclone's obfuscation is not a replacement
   for Borg UI secret handling.
-- Store managed rclone configs under `/data/rclone` with restrictive file
-  permissions.
+- Store managed rclone remote sections in the server-owned
+  `/data/rclone/rclone.conf` with restrictive file permissions.
 - Redact tokens, keys, passwords, endpoints, and bucket names from logs unless
   the field is explicitly safe to display.
 - Keep Borg passphrases/keyfiles in the existing Borg UI repository secret path.
@@ -263,14 +264,20 @@ Use the existing operational dashboard style:
 
 ### Repository Location Step
 
-Add a fourth location option:
+Cloud Storage remote management lives in the BACKUP sidebar as a reusable
+rclone remote registry. It lists remotes, provider/config metadata, connection
+test state, browse actions, and repository usage counts. It must not create
+repositories or add a Backup Plan wizard step.
+
+Repository setup keeps a single Location step with four destination cards:
 
 - Borg UI server
 - Remote machine (SSH)
 - Managed agent
-- Cloud storage (rclone)
+- Cloud Storage
 
-When rclone is selected, the wizard shows:
+When Cloud Storage is selected, the wizard shows repository-owned rclone
+fields below the cards:
 
 - Remote selector with test status.
 - Provider badge and remote name.

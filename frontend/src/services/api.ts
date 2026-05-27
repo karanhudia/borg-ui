@@ -117,6 +117,7 @@ export interface RcloneRemote {
   id: number
   name: string
   provider: string
+  usage_count?: number
   config_source?: string
   config_path?: string | null
   redacted_config?: Record<string, unknown> | null

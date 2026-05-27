@@ -61,7 +61,12 @@ def test_create_and_list_rclone_remote(
     created = response.json()
     assert created["name"] == "prod-s3"
     assert created["provider"] == "s3"
-    assert created["config_path"].endswith("/prod-s3.conf")
+    assert created["config_path"].endswith("/rclone.conf")
+    config_file = tmp_path / "rclone" / "rclone.conf"
+    config_body = config_file.read_text(encoding="utf-8")
+    assert "[prod-s3]" in config_body
+    assert "type = s3" in config_body
+    assert "provider = AWS" in config_body
 
     response = test_client.get("/api/rclone/remotes", headers=admin_headers)
 
@@ -99,6 +104,57 @@ def test_create_and_list_rclone_remote(
     assert (
         traversal.json()["detail"]["key"] == "backend.errors.rclone.invalidRemoteName"
     )
+
+
+@pytest.mark.unit
+def test_list_rclone_remotes_includes_repository_usage_count(
+    test_client: TestClient, admin_headers, test_db
+):
+    used_remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    unused_remote = RcloneRemote(
+        name="archive-b2", provider="b2", config_source="managed"
+    )
+    repositories = [
+        Repository(name="Photos", path="/cache/repositories/1", encryption="none"),
+        Repository(name="Documents", path="/cache/repositories/2", encryption="none"),
+    ]
+    test_db.add_all([used_remote, unused_remote, *repositories])
+    test_db.commit()
+    test_db.refresh(used_remote)
+    test_db.refresh(unused_remote)
+    for repository in repositories:
+        test_db.refresh(repository)
+
+    test_db.add_all(
+        [
+            RepositoryStorage(
+                repository_id=repositories[0].id,
+                backend="rclone",
+                rclone_remote_id=used_remote.id,
+                rclone_remote_path="borg-ui/repositories/photos",
+                cache_path="/cache/repositories/1",
+                sync_policy="after_success",
+                sync_status="current",
+            ),
+            RepositoryStorage(
+                repository_id=repositories[1].id,
+                backend="rclone",
+                rclone_remote_id=used_remote.id,
+                rclone_remote_path="borg-ui/repositories/documents",
+                cache_path="/cache/repositories/2",
+                sync_policy="after_success",
+                sync_status="pending",
+            ),
+        ]
+    )
+    test_db.commit()
+
+    response = test_client.get("/api/rclone/remotes", headers=admin_headers)
+
+    assert response.status_code == 200
+    remotes = {remote["name"]: remote for remote in response.json()["remotes"]}
+    assert remotes["prod-s3"]["usage_count"] == 2
+    assert remotes["archive-b2"]["usage_count"] == 0
 
 
 @pytest.mark.unit
@@ -152,7 +208,7 @@ def test_create_managed_rclone_remote_removes_config_file_on_commit_failure(
     assert response.json()["detail"] == {
         "key": "backend.errors.rclone.failedToCreateRemote"
     }
-    assert not (config_root / "prod-s3.conf").exists()
+    assert not (config_root / "rclone.conf").exists()
 
 
 @pytest.mark.unit

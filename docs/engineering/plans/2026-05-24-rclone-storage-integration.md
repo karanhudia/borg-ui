@@ -99,8 +99,8 @@ rclone CLI wrappers, React/Vite/MUI, Vitest, Storybook screenshots.
 - [ ] Add `POST /api/rclone/remotes`.
 - [ ] Add `POST /api/rclone/remotes/{id}/test`.
 - [ ] Add `GET /api/rclone/remotes/{id}/browse`.
-- [ ] Persist managed configs under `RCLONE_CONFIG_ROOT` with restrictive file
-      permissions.
+- [ ] Persist managed remote sections in `RCLONE_CONFIG_ROOT/rclone.conf` with
+      restrictive file permissions.
 - [ ] Run `pytest tests/unit/test_api_rclone.py -q`.
 
 ## Task 5: Repository Storage Service
@@ -207,7 +207,9 @@ rclone CLI wrappers, React/Vite/MUI, Vitest, Storybook screenshots.
 
 **Files:**
 
+- Create: `frontend/src/pages/CloudStorage.tsx`
 - Modify: `frontend/src/components/RepositoryWizard.tsx`
+- Modify: `frontend/src/components/AppSidebar.tsx`
 - Modify: `frontend/src/components/wizard/WizardStepLocation.tsx`
 - Modify: `frontend/src/components/wizard/WizardStepReview.tsx`
 - Modify: `frontend/src/components/wizard/WizardStepLocation.stories.tsx`
@@ -216,11 +218,17 @@ rclone CLI wrappers, React/Vite/MUI, Vitest, Storybook screenshots.
 
 - [ ] Write failing tests for selecting rclone location and submitting rclone
       storage fields.
-- [ ] Add the "Cloud storage (rclone)" location option beside Borg UI server,
-      SSH remote, and managed agent.
+- [ ] Add a BACKUP sidebar Cloud Storage page for reusable rclone remotes with
+      add remote, test connection, browse, provider/config metadata, and
+      repository usage count.
+- [ ] Add the "Cloud Storage" location card beside Borg UI server, SSH remote,
+      and managed agent in the existing repository Location step.
 - [ ] Add remote selector, relative remote path field, browse action, derived
       target preview, server-derived local cache path preview, sync policy
       selector, and advanced flags section.
+- [ ] Do not add repository creation to the Cloud Storage page or a cloud step
+      to the Backup Plan Wizard; repositories own sync policy, path, status, and
+      hydrate/sync operations.
 - [ ] Show unavailable state when `GET /api/rclone/status` reports missing
       binary.
 - [ ] Update review to show route:

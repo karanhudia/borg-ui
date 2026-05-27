@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 import json
 import re
 from datetime import datetime, timezone
@@ -63,9 +64,9 @@ def _normalize_provider(provider: str) -> str:
     return normalized
 
 
-def _managed_config_path(config_root: Path, remote_name: str) -> Path:
+def _managed_config_path(config_root: Path) -> Path:
     root = config_root.resolve()
-    config_path = (root / f"{remote_name}.conf").resolve()
+    config_path = (root / "rclone.conf").resolve()
     if config_path.parent != root:
         raise HTTPException(
             status_code=400,
@@ -74,11 +75,82 @@ def _managed_config_path(config_root: Path, remote_name: str) -> Path:
     return config_path
 
 
+def _new_config_parser() -> configparser.ConfigParser:
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.optionxform = str
+    return parser
+
+
+def _load_config(config_path: Path) -> configparser.ConfigParser:
+    parser = _new_config_parser()
+    if config_path.exists():
+        parser.read(config_path, encoding="utf-8")
+    return parser
+
+
+def _stringify_config_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, separators=(",", ":"))
+    return str(value)
+
+
+def _managed_config_values(
+    provider: str, redacted_config: dict[str, Any] | None
+) -> dict[str, str]:
+    values = dict(redacted_config or {})
+    values["type"] = str(values.get("type") or provider).strip()
+    return {
+        str(key): _stringify_config_value(value)
+        for key, value in values.items()
+        if value is not None and str(key).strip()
+    }
+
+
+def _write_config_file(config_path: Path, parser: configparser.ConfigParser) -> None:
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = config_path.with_name(f".{config_path.name}.tmp")
+    with temp_path.open("w", encoding="utf-8") as handle:
+        parser.write(handle)
+    temp_path.chmod(0o600)
+    temp_path.replace(config_path)
+    config_path.chmod(0o600)
+
+
+def _write_managed_remote_config(
+    config_path: Path,
+    *,
+    remote_name: str,
+    provider: str,
+    redacted_config: dict[str, Any] | None,
+) -> None:
+    parser = _load_config(config_path)
+    if not parser.has_section(remote_name):
+        parser.add_section(remote_name)
+    for key, value in _managed_config_values(provider, redacted_config).items():
+        parser.set(remote_name, key, value)
+    _write_config_file(config_path, parser)
+
+
+def _remove_managed_remote_config(config_path: Path, remote_name: str) -> None:
+    parser = _load_config(config_path)
+    if not parser.remove_section(remote_name):
+        return
+    if parser.sections():
+        _write_config_file(config_path, parser)
+    else:
+        config_path.unlink(missing_ok=True)
+
+
 def _serialize_remote(remote: RcloneRemote) -> dict[str, Any]:
     return {
         "id": remote.id,
         "name": remote.name,
         "provider": remote.provider,
+        "usage_count": sum(
+            1 for storage in remote.storages if storage.backend == "rclone"
+        ),
         "config_source": remote.config_source,
         "config_path": remote.config_path,
         "redacted_config": remote.redacted_config,
@@ -133,21 +205,26 @@ async def create_remote(
     db.add(remote)
 
     config_file: Path | None = None
+    wrote_config = False
     try:
         db.flush()
         if payload.config_source == "managed":
             config_root = Path(settings.rclone_config_root)
             config_root.mkdir(parents=True, exist_ok=True)
-            config_file = _managed_config_path(config_root, remote_name)
+            config_file = _managed_config_path(config_root)
             remote.config_path = str(config_file)
-            config_body = payload.redacted_config or {"type": provider}
-            config_file.write_text(json.dumps(config_body, indent=2), encoding="utf-8")
-            config_file.chmod(0o600)
+            _write_managed_remote_config(
+                config_file,
+                remote_name=remote_name,
+                provider=provider,
+                redacted_config=payload.redacted_config,
+            )
+            wrote_config = True
         db.commit()
     except Exception as exc:
         db.rollback()
-        if config_file is not None:
-            config_file.unlink(missing_ok=True)
+        if config_file is not None and wrote_config:
+            _remove_managed_remote_config(config_file, remote_name)
         if isinstance(exc, HTTPException):
             raise
         raise HTTPException(

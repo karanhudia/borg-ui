@@ -82,12 +82,15 @@ describe('WizardStepLocation', () => {
       expect(screen.getByLabelText(/Repository Path/i)).toBeInTheDocument()
     })
 
-    it('renders destination tabs with filesystem options first', () => {
+    it('renders Cloud Storage as a location card beside filesystem destinations', () => {
       render(
         <WizardStepLocation
           mode="create"
           data={defaultData}
           sshConnections={[]}
+          agentMachines={[
+            { id: 101, name: 'Workstation', hostname: 'workstation.local', status: 'online' },
+          ]}
           rcloneRemotes={mockRcloneRemotes}
           rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
           onChange={vi.fn()}
@@ -95,20 +98,15 @@ describe('WizardStepLocation', () => {
         />
       )
 
-      expect(screen.getByRole('tab', { name: 'Filesystem destinations' })).toHaveAttribute(
-        'aria-selected',
-        'true'
-      )
-      expect(screen.getByRole('tab', { name: 'Cloud sources' })).toHaveAttribute(
-        'aria-selected',
-        'false'
-      )
+      expect(screen.queryByRole('tab', { name: 'Filesystem destinations' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('tab', { name: 'Cloud sources' })).not.toBeInTheDocument()
       expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
       expect(screen.getByText('Remote Client')).toBeInTheDocument()
-      expect(screen.queryByText('Cloud storage (rclone)')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Managed Agent/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Cloud Storage/i })).toBeInTheDocument()
     })
 
-    it('switches to rclone storage from the Cloud sources tab', async () => {
+    it('switches to rclone storage from the Cloud Storage card', async () => {
       const user = userEvent.setup()
       const onChange = vi.fn()
 
@@ -124,7 +122,7 @@ describe('WizardStepLocation', () => {
         />
       )
 
-      await user.click(screen.getByRole('tab', { name: 'Cloud sources' }))
+      await user.click(screen.getByRole('button', { name: /Cloud Storage/i }))
 
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -203,10 +201,10 @@ describe('WizardStepLocation', () => {
         />
       )
 
-      const cloudTab = screen.getByRole('tab', { name: 'Cloud sources' })
-      expect(cloudTab).toBeDisabled()
+      const cloudCard = screen.getByRole('button', { name: /Cloud Storage/i })
+      expect(cloudCard).toBeDisabled()
 
-      fireEvent.click(cloudTab)
+      fireEvent.click(cloudCard)
 
       expect(onChange).not.toHaveBeenCalledWith(
         expect.objectContaining({ repositoryLocation: 'rclone' })

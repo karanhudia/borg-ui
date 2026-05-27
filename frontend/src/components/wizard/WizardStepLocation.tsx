@@ -19,8 +19,6 @@ import {
   Button,
   Tooltip,
   Chip,
-  Tabs,
-  Tab,
 } from '@mui/material'
 import { Server, Cloud, Laptop, Plus } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
@@ -112,7 +110,6 @@ export default function WizardStepLocation({
   const isRemoteLocationDisabled =
     isAgentExecution || (mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId)
   const isRcloneAvailable = rcloneStatus?.available !== false
-  const destinationTab = data.repositoryLocation === 'rclone' ? 'cloud' : 'filesystem'
 
   const handleLocationChange = (location: 'local' | 'ssh' | 'rclone') => {
     if (location === 'ssh' && isRemoteLocationDisabled) {
@@ -123,19 +120,19 @@ export default function WizardStepLocation({
     }
     onChange({
       repositoryLocation: location,
+      executionTarget: 'local',
+      agentMachineId: '',
       repoSshConnectionId: location === 'ssh' ? data.repoSshConnectionId : '',
       path: location === 'rclone' ? data.rcloneRemotePath || data.path : data.path,
     })
   }
 
-  const handleDestinationTabChange = (_event: unknown, value: string) => {
-    if (value === 'cloud') {
-      handleLocationChange('rclone')
-      return
-    }
-    if (data.repositoryLocation === 'rclone') {
-      handleLocationChange('local')
-    }
+  const handleAgentLocationChange = () => {
+    onChange({
+      repositoryLocation: 'local',
+      executionTarget: 'agent',
+      repoSshConnectionId: '',
+    })
   }
 
   const queueableAgents = agentMachines.filter(
@@ -194,17 +191,6 @@ export default function WizardStepLocation({
     WebkitLineClamp: 2,
     WebkitBoxOrient: 'vertical',
     overflow: 'hidden',
-  }
-  const destinationTabsSx: SxProps<Theme> = {
-    minHeight: 40,
-    borderBottom: '1px solid',
-    borderColor: 'divider',
-    '& .MuiTab-root': {
-      minHeight: 40,
-      px: 1.5,
-      textTransform: 'none',
-      fontWeight: 600,
-    },
   }
   const rcloneSelectSx: SxProps<Theme> = {
     minHeight: 56,
@@ -345,82 +331,137 @@ export default function WizardStepLocation({
         />
       )}
 
-      {/* Repository Ownership Selection */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: { xs: 'stretch', sm: 'center' },
-          gap: 1.5,
-          flexDirection: { xs: 'column', sm: 'row' },
-          minHeight: { sm: 40 },
-        }}
-      >
-        <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
-          {t('wizard.location.executionTargetLabel')}
+      {/* Location Selection Cards */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
+          {t('wizard.location.whereToStore')}
         </Typography>
         <Box
           sx={{
-            display: 'flex',
-            p: '3px',
-            bgcolor: 'action.hover',
-            borderRadius: '10px',
-            gap: '2px',
-            width: { xs: '100%', sm: 'auto' },
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+            gap: 2,
+            p: 0.5,
+            m: -0.5,
           }}
         >
-          {[
-            {
-              value: 'local' as const,
-              label: t('wizard.location.executionTargetLocal'),
-              icon: Server,
-            },
-            { value: 'agent' as const, label: t('wizard.location.managedAgent'), icon: Laptop },
-          ].map((option) => {
-            const selected = executionTarget === option.value
-            const Icon = option.icon
-            return (
-              <ButtonBase
-                key={option.value}
-                onClick={() =>
-                  onChange(
-                    option.value === 'agent'
-                      ? {
-                          executionTarget: 'agent',
-                          repositoryLocation: 'local',
-                          repoSshConnectionId: '',
-                        }
-                      : { executionTarget: 'local', agentMachineId: '' }
-                  )
-                }
-                sx={{
-                  px: 1.5,
-                  py: 0.65,
-                  borderRadius: '8px',
-                  bgcolor: selected ? 'background.paper' : 'transparent',
-                  boxShadow: selected ? 1 : 0,
-                  fontWeight: selected ? 700 : 500,
-                  fontSize: '0.8rem',
-                  color: selected ? 'text.primary' : 'text.secondary',
-                  transition: 'background-color 0.15s ease, color 0.15s ease',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 0.75,
-                  flex: { xs: 1, sm: '0 0 auto' },
-                }}
-              >
-                <Icon size={14} />
-                {option.label}
-              </ButtonBase>
-            )
-          })}
+          <Card
+            variant="outlined"
+            sx={locationCardSx(data.repositoryLocation === 'local' && !isAgentExecution)}
+          >
+            <CardActionArea onClick={() => handleLocationChange('local')} sx={locationActionSx}>
+              <CardContent sx={locationContentSx}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                  <Box
+                    sx={locationIconSx(data.repositoryLocation === 'local' && !isAgentExecution)}
+                  >
+                    <Server size={20} />
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="subtitle2" sx={locationTitleSx}>
+                      {t('wizard.borgUiServer')}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
+                      {t('wizard.location.borgUiServerDesc')}
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </CardActionArea>
+          </Card>
+
+          <Card
+            variant="outlined"
+            sx={locationCardSx(
+              data.repositoryLocation === 'ssh' && !isAgentExecution,
+              isRemoteLocationDisabled
+            )}
+          >
+            <CardActionArea
+              onClick={() => handleLocationChange('ssh')}
+              disabled={isRemoteLocationDisabled}
+              sx={locationActionSx}
+            >
+              <CardContent sx={locationContentSx}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                  <Box sx={locationIconSx(data.repositoryLocation === 'ssh' && !isAgentExecution)}>
+                    <Cloud size={20} />
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="subtitle2" sx={locationTitleSx}>
+                      {t('wizard.remoteClient')}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
+                      {t('wizard.location.remoteClientDesc')}
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </CardActionArea>
+          </Card>
+
+          <Card variant="outlined" sx={locationCardSx(isAgentExecution)}>
+            <CardActionArea onClick={handleAgentLocationChange} sx={locationActionSx}>
+              <CardContent sx={locationContentSx}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                  <Box sx={locationIconSx(isAgentExecution)}>
+                    <Laptop size={20} />
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="subtitle2" sx={locationTitleSx}>
+                      {t('wizard.location.managedAgent')}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
+                      {t('wizard.location.managedAgentDesc')}
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </CardActionArea>
+          </Card>
+
+          <Card
+            variant="outlined"
+            sx={locationCardSx(data.repositoryLocation === 'rclone', !isRcloneAvailable)}
+          >
+            <CardActionArea
+              onClick={() => handleLocationChange('rclone')}
+              disabled={!isRcloneAvailable}
+              sx={locationActionSx}
+            >
+              <CardContent sx={locationContentSx}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                  <Box sx={locationIconSx(data.repositoryLocation === 'rclone')}>
+                    <Cloud size={20} />
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="subtitle2" sx={locationTitleSx}>
+                      {t('wizard.location.cloudStorage')}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
+                      {t('wizard.location.cloudStorageDesc')}
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </CardActionArea>
+          </Card>
         </Box>
-        {isAgentExecution &&
-          (queueableAgents.length === 0 ? (
-            <Alert severity="warning" sx={{ flex: 1 }}>
-              {t('wizard.location.noActiveManagedAgents')}
-            </Alert>
+
+        {isRemoteLocationDisabled && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+            <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
+            {t('wizard.location.remoteDisabledInfo')}
+          </Typography>
+        )}
+      </Box>
+
+      {isAgentExecution && (
+        <>
+          {queueableAgents.length === 0 ? (
+            <Alert severity="warning">{t('wizard.location.noActiveManagedAgents')}</Alert>
           ) : (
-            <FormControl sx={{ minWidth: { xs: '100%', sm: 260 }, flex: 1 }} size="small">
+            <FormControl fullWidth>
               <InputLabel id="managed-agent-select-label">
                 {t('wizard.location.managedAgentSelectLabel')}
               </InputLabel>
@@ -455,133 +496,15 @@ export default function WizardStepLocation({
                 ))}
               </Select>
             </FormControl>
-          ))}
-      </Box>
-
-      {/* Location Selection Cards — hidden in agent mode (only filesystem storage supported) */}
-      {!isAgentExecution && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
-            {t('wizard.location.whereToStore')}
+          )}
+          <Typography variant="body2" color="text.secondary">
+            {t('wizard.location.agentStorageNote')}
           </Typography>
-          <Tabs
-            value={destinationTab}
-            onChange={handleDestinationTabChange}
-            aria-label={t('wizard.location.whereToStore')}
-            sx={destinationTabsSx}
-          >
-            <Tab value="filesystem" label={t('wizard.location.filesystemDestinations')} />
-            <Tab
-              value="cloud"
-              label={t('wizard.location.cloudSources')}
-              disabled={!isRcloneAvailable && data.repositoryLocation !== 'rclone'}
-            />
-          </Tabs>
-          {destinationTab === 'filesystem' && (
-            <Box
-              sx={{
-                display: 'flex',
-                gap: 2,
-                p: 0.5,
-                m: -0.5,
-                flexDirection: { xs: 'column', sm: 'row' },
-              }}
-            >
-              <Card variant="outlined" sx={locationCardSx(data.repositoryLocation === 'local')}>
-                <CardActionArea onClick={() => handleLocationChange('local')} sx={locationActionSx}>
-                  <CardContent sx={locationContentSx}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                      <Box sx={locationIconSx(data.repositoryLocation === 'local')}>
-                        <Server size={20} />
-                      </Box>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle2" sx={locationTitleSx}>
-                          {t('wizard.borgUiServer')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
-                          {t('wizard.location.borgUiServerDesc')}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-
-              <Card
-                variant="outlined"
-                sx={locationCardSx(data.repositoryLocation === 'ssh', isRemoteLocationDisabled)}
-              >
-                <CardActionArea
-                  onClick={() => handleLocationChange('ssh')}
-                  disabled={isRemoteLocationDisabled}
-                  sx={locationActionSx}
-                >
-                  <CardContent sx={locationContentSx}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                      <Box sx={locationIconSx(data.repositoryLocation === 'ssh')}>
-                        <Cloud size={20} />
-                      </Box>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography variant="subtitle2" sx={locationTitleSx}>
-                          {t('wizard.remoteClient')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
-                          {t('wizard.location.remoteClientDesc')}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-            </Box>
-          )}
-          {destinationTab === 'cloud' && (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.25,
-                p: 1.5,
-                border: '1px solid',
-                borderColor: isRcloneAvailable ? 'divider' : 'warning.light',
-                borderRadius: 1,
-                bgcolor: isRcloneAvailable
-                  ? (theme) => alpha(theme.palette.info.main, 0.05)
-                  : (theme) => alpha(theme.palette.warning.main, 0.07),
-              }}
-            >
-              <Box sx={locationIconSx(true)}>
-                <Cloud size={20} />
-              </Box>
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="subtitle2" sx={locationTitleSx}>
-                  {t('wizard.location.rcloneStorage')}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
-                  {t('wizard.location.rcloneStorageDesc')}
-                </Typography>
-              </Box>
-            </Box>
-          )}
-
-          {/* Warning when remote location is disabled due to remote data source */}
-          {isRemoteLocationDisabled && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-              <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
-              {t('wizard.location.remoteDisabledInfo')}
-            </Typography>
-          )}
-        </Box>
-      )}
-
-      {isAgentExecution && (
-        <Typography variant="body2" color="text.secondary">
-          {t('wizard.location.agentStorageNote')}
-        </Typography>
+        </>
       )}
 
       {/* SSH Connection Selection */}
-      {data.repositoryLocation === 'ssh' && (
+      {!isAgentExecution && data.repositoryLocation === 'ssh' && (
         <>
           {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
             <Alert severity="warning">{t('wizard.noSshConnections')}</Alert>
