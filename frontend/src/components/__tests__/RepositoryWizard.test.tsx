@@ -566,7 +566,8 @@ describe('RepositoryWizard', () => {
       const agentListbox = await screen.findByRole('listbox')
       await user.click(within(agentListbox).getByText('workstation.local'))
 
-      expect(screen.queryByText('Remote Client')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Remote Client/i })).toBeDisabled()
+      expect(screen.queryByText('Select SSH Connection')).not.toBeInTheDocument()
       expect(
         screen.getByText(/Backups will be stored on the selected agent's filesystem/i)
       ).toBeInTheDocument()
