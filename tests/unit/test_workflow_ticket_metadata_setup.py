@@ -37,6 +37,33 @@ def test_metadata_bootstrap_updates_title_description_and_labels():
     assert "create the missing label" in normalized
 
 
+def test_metadata_bootstrap_derives_specific_description_from_original_request():
+    workflow = read("WORKFLOW.md")
+    docs = read("docs/symphony.md")
+    combined = squash(f"{workflow}\n{docs}")
+    lower_combined = combined.lower()
+
+    assert (
+        "derive the `problem`, `desired outcome`, and `acceptance criteria` "
+        "from the original request"
+    ) in lower_combined
+    assert "do not use generic boilerplate acceptance criteria" in lower_combined
+    assert "collapsed `<details>` appendix or block quote" in lower_combined
+
+
+def test_metadata_bootstrap_defers_todo_workpad_note_until_workpad_exists():
+    workflow = read("WORKFLOW.md")
+    normalized = squash(workflow)
+
+    assert (
+        "If a workpad already exists, record the metadata bootstrap note immediately"
+    ) in normalized
+    assert (
+        "For `Todo`, defer this note until after the `## Codex Workpad` comment "
+        "is created"
+    ) in normalized
+
+
 def test_todo_metadata_bootstrap_runs_once_before_status_routing():
     workflow = read("WORKFLOW.md")
     normalized = squash(workflow)

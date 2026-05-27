@@ -86,14 +86,21 @@ Before active implementation, the workflow prompt tells Codex to update the
 Linear issue title, description, and labels through Linear. Titles should be
 concise outcomes. Descriptions should preserve the original request while
 adding durable sections for the problem, desired outcome, acceptance criteria,
-validation, and any important notes. Labeling uses existing `Bug`, `Feature`,
-and `Improvement` labels when they fit, and creates a missing label when the
-existing label set is insufficient for filtering the issue by type or domain.
+validation, and any important notes. Codex must derive the `Problem`, `Desired
+outcome`, and `Acceptance criteria` from the original request rather than using
+generic boilerplate acceptance criteria. The original request remains available
+for audit in a collapsed `<details>` appendix or block quote so the rewritten
+ticket body stays focused on the actionable work. Labeling uses existing `Bug`,
+`Feature`, and `Improvement` labels when they fit, and creates a missing label
+when the existing label set is insufficient for filtering the issue by type or
+domain.
 
 BOR-70 includes a one-time BOR-70 previous-ticket backfill: previous Borg UI
 project tickets should be updated with the same title, description, and label
 policy, while leaving states, comments, attachments, PR links, and workpads
-unchanged. The backfill result is recorded in the BOR-70 workpad.
+unchanged. The backfill should avoid repeated generic descriptions and should
+replace them with request-specific problem, desired outcome, and acceptance
+criteria sections. The backfill result is recorded in the BOR-70 workpad.
 
 ## Borg UI Validation Policy
 

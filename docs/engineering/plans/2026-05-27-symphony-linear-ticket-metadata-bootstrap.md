@@ -28,7 +28,10 @@ ruff.
 Create tests that assert the workflow has a required metadata bootstrap before
 Step 0, that it mentions `issueUpdate`, `issueLabelCreate`, title/description
 rewrites, label creation, and previous-ticket backfill. Also assert
-`docs/symphony.md` documents the operator behavior.
+`docs/symphony.md` documents the operator behavior, that descriptions derive
+the problem, desired outcome, and acceptance criteria from the original request,
+and that raw original request text is preserved in a collapsed or quoted
+appendix instead of repeated as the primary ticket body.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -50,7 +53,9 @@ Expected: failures show the metadata bootstrap and docs text are missing.
 Insert a `## Linear metadata bootstrap` section before Step 0. Require active
 issues to polish the title and description using Linear `issueUpdate`, assign
 labels using `labelIds`/`addedLabelIds`, and create missing labels using
-`issueLabelCreate`.
+`issueLabelCreate`. Explicitly prohibit repeated generic acceptance criteria;
+the rewritten problem, desired outcome, and acceptance criteria must be derived
+from the original request and linked context.
 
 - [ ] **Step 2: Integrate startup sequencing**
 
@@ -92,8 +97,9 @@ labels.
 - [ ] **Step 2: Backfill previous tickets**
 
 Query previous Borg UI project issues, apply the same title/description/label
-policy where the issue is still editable, and record counts/skips in the
-workpad.
+policy where the issue is still editable, replace repeated generic descriptions
+with request-specific problem/outcome/acceptance criteria, preserve raw request
+text in a collapsed or quoted appendix, and record counts/skips in the workpad.
 
 ### Task 5: Validate And Publish
 

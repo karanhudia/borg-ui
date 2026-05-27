@@ -157,7 +157,13 @@ terminal state.
    - `Desired outcome`
    - `Acceptance criteria`
    - `Validation`
-   - `Notes` or `Original request` when needed to preserve important context
+   - `Notes` when needed to preserve important context
+   Derive the `Problem`, `Desired outcome`, and `Acceptance criteria` from the
+   original request, linked issue/PR context, and existing ticket comments. Do
+   not use generic boilerplate acceptance criteria such as "the title and labels
+   clearly identify the work" unless that is the actual user-requested outcome.
+   Preserve the raw original request in a collapsed `<details>` appendix or
+   block quote so it remains available for audit without dominating the ticket.
 4. Preserve every substantive requirement, constraint, and ticket-authored
    `Validation`, `Test Plan`, or `Testing` section. Do not weaken acceptance
    criteria while rewriting rough text.
@@ -174,9 +180,10 @@ terminal state.
    rewritten `description`, and either `labelIds` or `addedLabelIds` as
    appropriate. Use `addedLabelIds` when preserving existing labels, and
    `labelIds` only when replacing the full label set is intentional.
-7. After the workpad exists, record a short metadata bootstrap note in the
-   workpad with the title chosen, labels applied or created, and any skipped
-   field with the reason.
+7. If a workpad already exists, record the metadata bootstrap note immediately
+   with the title chosen, labels applied or created, and any skipped field with
+   the reason. For `Todo`, defer this note until after the `## Codex Workpad`
+   comment is created during the Todo startup sequence.
 
 ### BOR-70 previous-ticket backfill
 
@@ -186,7 +193,9 @@ For BOR-70 only, complete a one-time backfill before moving the issue to
 1. Query previous Borg UI project tickets, excluding BOR-70 and any issue that
    Linear reports as uneditable or inaccessible.
 2. Apply the same title, description, and label policy from the Linear metadata
-   bootstrap to each previous ticket.
+   bootstrap to each previous ticket, including request-specific problem,
+   outcome, and acceptance criteria. Do not replace rough descriptions with a
+   repeated generic template.
 3. Create missing labels with `issueLabelCreate` when needed, then apply them
    with `issueUpdate` using `addedLabelIds` unless a full replacement is
    explicitly safer.

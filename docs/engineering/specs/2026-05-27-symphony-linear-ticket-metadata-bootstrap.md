@@ -25,6 +25,10 @@ bootstrap before normal implementation work:
 - rewrite the title into a concise outcome-oriented title;
 - rewrite the description into durable sections that preserve original intent,
   acceptance criteria, validation requirements, and important constraints;
+- derive the problem, desired outcome, and acceptance criteria from the rough
+  request and linked context instead of using repeated generic boilerplate;
+- preserve the raw original request in a collapsed or quoted appendix so the
+  rewritten ticket body leads with actionable work;
 - choose an appropriate type label from the existing labels when possible;
 - create and apply an additional label when the existing label set is
   insufficient for a clear workflow or domain classification;
@@ -53,6 +57,8 @@ No Borg UI app runtime or frontend changes are required.
 - `WORKFLOW.md` requires active tickets to run a Linear metadata bootstrap
   before implementation work.
 - The bootstrap requires title and description updates through Linear.
+- The bootstrap requires request-specific descriptions and acceptance criteria,
+  not generic metadata boilerplate.
 - The bootstrap requires label assignment and creating missing labels when the
   existing label set is not enough.
 - The BOR-70 previous-ticket backfill is documented as a required one-time
