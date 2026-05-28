@@ -4634,12 +4634,7 @@ async def break_repository_lock(
 ):
     """Break a stale lock on a repository (user-initiated)"""
     try:
-        repository = db.query(Repository).filter(Repository.id == repo_id).first()
-        if not repository:
-            raise HTTPException(
-                status_code=404,
-                detail={"key": "backend.errors.repo.repositoryNotFound"},
-            )
+        repository = _load_repository_with_access(repo_id, current_user, db, "operator")
 
         logger.warning(
             "User requested lock break", repo_id=repo_id, user=current_user.username
@@ -4738,93 +4733,6 @@ async def get_repository_stats(
                 os.unlink(temp_key_file)
             except Exception:
                 pass
-
-
-@router.post("/{repository_id}/break-lock")
-async def break_repository_lock(
-    repository_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Break a stale lock on a repository
-
-    Use this when a backup has crashed or been killed, leaving behind a lock file
-    that prevents new backups from starting.
-
-    WARNING: Only use this if you're CERTAIN no backup is currently running!
-    """
-    try:
-        # Get repository from database
-        repository = db.query(Repository).filter(Repository.id == repository_id).first()
-        if not repository:
-            raise HTTPException(
-                status_code=404,
-                detail={"key": "backend.errors.repo.repositoryNotFound"},
-            )
-        _require_repository_access(db, current_user, repository, "operator")
-
-        logger.info(
-            "Breaking repository lock",
-            repository=repository.path,
-            user=current_user.username,
-            repository_id=repository_id,
-        )
-
-        cmd = BorgRouter(repository).build_break_lock_command(
-            repository_path=repository.path,
-            remote_path=repository.remote_path,
-        )
-
-        returncode, stdout, stderr = await _run_repository_command(
-            repository,
-            db,
-            cmd,
-            30,
-            log_message="Using SSH key for break-lock",
-            log_fields={"repository_id": repository_id},
-        )
-
-        stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
-        stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
-
-        if returncode == 0:
-            logger.info(
-                "Successfully broke repository lock",
-                repository=repository.path,
-                user=current_user.username,
-            )
-            return {
-                "success": True,
-                "message": "backend.success.repo.lockRemoved",
-                "repository": repository.path,
-                "output": stdout_str,
-            }
-        else:
-            logger.error(
-                "Failed to break repository lock",
-                repository=repository.path,
-                returncode=returncode,
-                stderr=stderr_str,
-            )
-            raise HTTPException(
-                status_code=500, detail={"key": "backend.errors.repo.failedToBreakLock"}
-            )
-
-    except asyncio.TimeoutError:
-        logger.error("Timeout breaking repository lock", repository_id=repository_id)
-        raise HTTPException(
-            status_code=500, detail={"key": "backend.errors.repo.breakLockTimeout"}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            "Error breaking repository lock", repository_id=repository_id, error=str(e)
-        )
-        raise HTTPException(
-            status_code=500, detail={"key": "backend.errors.repo.failedToBreakLock"}
-        )
 
 
 # Check job endpoints

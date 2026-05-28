@@ -1,4 +1,6 @@
 import asyncio
+import re
+from collections import Counter
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -33,6 +35,20 @@ def _create_repo(test_db, name: str, path: str, **kwargs) -> Repository:
 
 @pytest.mark.unit
 class TestRepositoryRouteContracts:
+    def test_repositories_register_single_canonical_break_lock_route(self):
+        break_lock_routes = [
+            route
+            for route in repositories_api.router.routes
+            if getattr(route, "path", "").endswith("/break-lock")
+            and "POST" in getattr(route, "methods", set())
+        ]
+        canonical_counts = Counter(
+            re.sub(r"\{[^}]+\}", "{param}", route.path) for route in break_lock_routes
+        )
+
+        assert canonical_counts["/{param}/break-lock"] == 1
+        assert [route.path for route in break_lock_routes] == ["/{repo_id}/break-lock"]
+
     def test_get_repositories_filters_to_explicit_permissions(
         self, test_client: TestClient, auth_headers, test_db, test_user
     ):
