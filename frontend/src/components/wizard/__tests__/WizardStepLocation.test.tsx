@@ -87,10 +87,12 @@ describe('WizardStepLocation', () => {
         />
       )
 
-      expect(screen.queryByRole('tab', { name: 'Filesystem destinations' })).not.toBeInTheDocument()
-      expect(screen.queryByRole('tab', { name: 'Cloud sources' })).not.toBeInTheDocument()
-      expect(screen.getByText('Borg UI Server')).toBeInTheDocument()
-      expect(screen.getByText('Remote Client')).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: 'Filesystem destinations' })
+      ).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Cloud sources' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Borg UI Server/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Remote Client/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /Managed Agent/i })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Cloud Storage/i })).not.toBeInTheDocument()
     })

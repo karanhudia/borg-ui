@@ -3343,7 +3343,7 @@
       "repositoryPathOnSelectedAgent": "Percorso repository sull'agente selezionato",
       "sshRemote": "SSH Remoto",
       "rcloneStorage": "Archiviazione rclone",
-      "cloudMirror": "Mirror cloud",
+      "cloudMirror": "mirror cloud",
       "rcloneRoute": "Percorso",
       "rcloneRemotePath": "Percorso remoto",
       "rcloneSyncPolicy": "Policy di sincronizzazione",
@@ -3704,7 +3704,7 @@
     "steps": {
       "location": "Posizione",
       "source": "Sorgente",
-      "cloudMirror": "Mirror cloud",
+      "cloudMirror": "mirror cloud",
       "security": "Sicurezza",
       "advanced": "Avanzate",
       "config": "Configurazione",

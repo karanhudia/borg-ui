@@ -10,9 +10,10 @@
 
 ---
 
-### Task 1: Backend Mirror Contract
+## Task 1: Backend Mirror Contract
 
 **Files:**
+
 - Modify: `app/services/rclone_repository_service.py`
 - Modify: `app/api/repositories.py`
 - Test: `tests/unit/test_rclone_repository_service.py`
@@ -26,9 +27,10 @@
 - [ ] Keep legacy `storage_backend: "rclone"` tests passing.
 - [ ] Run `pytest tests/unit/test_rclone_repository_service.py tests/unit/test_api_rclone.py -q`.
 
-### Task 2: Remote Path Preflight
+## Task 2: Remote Path Preflight
 
 **Files:**
+
 - Modify: `app/services/rclone_repository_service.py`
 - Modify: `app/api/repositories.py`
 - Test: `tests/unit/test_rclone_repository_service.py`
@@ -40,9 +42,10 @@
 - [ ] Treat missing remote path as safe-to-create only when rclone reports a not-found-style listing failure; other listing failures block with a validation error.
 - [ ] Run targeted rclone tests again.
 
-### Task 3: Frontend Wizard State And Payload
+## Task 3: Frontend Wizard State And Payload
 
 **Files:**
+
 - Modify: `frontend/src/components/RepositoryWizard.tsx`
 - Modify: `frontend/src/components/wizard/WizardStepLocation.tsx`
 - Create: `frontend/src/components/wizard/WizardStepCloudMirror.tsx`
@@ -66,9 +69,10 @@
 - [ ] Update Review to show primary repository location plus mirror target when enabled.
 - [ ] Run targeted Vitest tests.
 
-### Task 4: Existing Repository Card And Stories
+## Task 4: Existing Repository Card And Stories
 
 **Files:**
+
 - Modify: `frontend/src/components/RepositoryCard.tsx`
 - Modify: `frontend/src/components/RepositoryCard.stories.tsx`
 - Modify: `frontend/src/components/wizard/WizardStepLocation.stories.tsx`
@@ -81,9 +85,10 @@
 - [ ] Add stories for Cloud Mirror disabled/enabled and repository card enable/status states.
 - [ ] Run `cd frontend && npm run snapshots` and commit updated files under `frontend/storybook-snapshots/`.
 
-### Task 5: Final Validation And Handoff
+## Task 5: Final Validation And Handoff
 
 **Files:**
+
 - Modify as required by validation fixes only.
 
 - [ ] Run `ruff check app tests`.

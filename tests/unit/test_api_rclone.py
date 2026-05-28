@@ -1129,6 +1129,42 @@ def test_update_local_repository_enables_cloud_mirror(
 
 
 @pytest.mark.unit
+def test_update_local_repository_cloud_mirror_preflight_failure_uses_error_key(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(name="App", path="/repositories/app", encryption="none")
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(side_effect=TimeoutError("rclone timed out")),
+    )
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "storage_backend": "local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "manual",
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.rclone.remotePathPreflightFailed"
+    )
+    assert test_db.query(RepositoryStorage).count() == 0
+
+
+@pytest.mark.unit
 def test_update_mirrored_local_repository_path_updates_cloud_mirror_source(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):

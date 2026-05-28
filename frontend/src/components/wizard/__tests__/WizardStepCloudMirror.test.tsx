@@ -42,6 +42,7 @@ describe('WizardStepCloudMirror', () => {
 
   it('shows remote, relative path, sync policy, and extra flags when enabled', async () => {
     const onChange = vi.fn()
+    const onBrowseRemotePath = vi.fn()
     const user = userEvent.setup()
 
     render(
@@ -52,7 +53,7 @@ describe('WizardStepCloudMirror', () => {
         eligible={true}
         onChange={onChange}
         onAddRcloneRemote={vi.fn()}
-        onBrowseRemotePath={vi.fn()}
+        onBrowseRemotePath={onBrowseRemotePath}
       />
     )
 
@@ -72,7 +73,7 @@ describe('WizardStepCloudMirror', () => {
     })
 
     await user.click(screen.getByRole('button', { name: /Browse rclone remote/i }))
-    expect(onChange).toHaveBeenCalled()
+    expect(onBrowseRemotePath).toHaveBeenCalledTimes(1)
   })
 
   it('uses the inline folder button to browse the selected remote path', async () => {

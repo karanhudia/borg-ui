@@ -2991,7 +2991,7 @@ async def update_repository(
                     key = (
                         "backend.errors.rclone.remotePathNotVerified"
                         if "not empty" in message
-                        else "backend.errors.rclone.invalidPayload"
+                        else "backend.errors.rclone.remotePathPreflightFailed"
                     )
                     raise HTTPException(
                         status_code=400,

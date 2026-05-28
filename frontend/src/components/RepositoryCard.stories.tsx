@@ -42,7 +42,7 @@ const sampleRepository: Repository = {
   next_run: '2026-05-17T02:00:00.000Z',
 }
 
-const rcloneRepository: Repository = {
+const localRepositoryWithMirror: Repository = {
   ...sampleRepository,
   id: 43,
   name: 'Cloud Mirror Repository',
@@ -108,7 +108,7 @@ export const Default: Story = {
 export const RcloneSynced: Story = {
   args: {
     ...defaultArgs,
-    repository: rcloneRepository,
+    repository: localRepositoryWithMirror,
     onRcloneSync: noop,
     onRcloneHydrate: noop,
   },
@@ -142,11 +142,11 @@ export const RcloneFailed: Story = {
   args: {
     ...defaultArgs,
     repository: {
-      ...rcloneRepository,
+      ...localRepositoryWithMirror,
       id: 44,
       name: 'Failed Cloud Mirror',
       rclone_storage: {
-        ...rcloneRepository.rclone_storage!,
+        ...localRepositoryWithMirror.rclone_storage!,
         repository_id: 44,
         sync_policy: 'manual',
         sync_status: 'failed',
@@ -167,11 +167,11 @@ export const RcloneHydrationRequired: Story = {
   args: {
     ...defaultArgs,
     repository: {
-      ...rcloneRepository,
+      ...localRepositoryWithMirror,
       id: 45,
       name: 'Imported Cloud Mirror',
       rclone_storage: {
-        ...rcloneRepository.rclone_storage!,
+        ...localRepositoryWithMirror.rclone_storage!,
         repository_id: 45,
         cache_present: false,
         sync_status: 'pending',

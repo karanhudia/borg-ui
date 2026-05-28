@@ -115,7 +115,7 @@ export default function RcloneRemoteFolderPickerDialog({
                   </ListItemButton>
                 </ListItem>
               ))}
-              {!entries.length && !currentPath && (
+              {!entries.length && (
                 <Typography variant="body2" color="text.secondary">
                   {t('wizard.cloudMirror.noRemoteFolders')}
                 </Typography>
