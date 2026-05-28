@@ -132,7 +132,11 @@ def test_start_rclone_oauth_session_returns_authorization_url_and_token_config(
     assert response.status_code == 201
     started = response.json()
     assert started["provider"] == "drive"
-    assert started["authorization_url"] == "http://127.0.0.1:53682/auth?state=abc"
+    assert (
+        started["authorization_url"]
+        == f"/rclone/oauth/sessions/{started['session_id']}/authorize"
+    )
+    assert started["local_authorization_url"] == "http://127.0.0.1:53682/auth?state=abc"
     assert started["status"] in {"awaiting_callback", "authorized"}
 
     poll_response = test_client.get(
@@ -152,6 +156,94 @@ def test_start_rclone_oauth_session_returns_authorization_url_and_token_config(
         headers=admin_headers,
     )
     assert cleanup_response.status_code == 204
+
+
+@pytest.mark.unit
+def test_rclone_oauth_authorization_url_redirects_through_backend(
+    test_client: TestClient, admin_token, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    rclone_api.RCLONE_OAUTH_SESSIONS["oauth-proxy"] = {
+        "provider": "drive",
+        "status": "awaiting_callback",
+        "authorization_url": "/rclone/oauth/sessions/oauth-proxy/authorize",
+        "local_authorization_url": "http://127.0.0.1:53682/auth?state=abc",
+        "config": None,
+        "error": None,
+        "output": [],
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+        "ready_event": None,
+        "process": None,
+        "task": None,
+    }
+
+    async def fake_fetch_redirect(url: str) -> str:
+        assert url == "http://127.0.0.1:53682/auth?state=abc"
+        return "https://accounts.google.com/o/oauth2/v2/auth?state=abc"
+
+    monkeypatch.setattr(
+        rclone_api, "_fetch_oauth_authorization_redirect", fake_fetch_redirect
+    )
+
+    response = test_client.get(
+        f"/api/rclone/oauth/sessions/oauth-proxy/authorize?token={admin_token}",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert (
+        response.headers["location"]
+        == "https://accounts.google.com/o/oauth2/v2/auth?state=abc"
+    )
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_start_rclone_oauth_session_retires_previous_active_session(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    old_process = FakeRcloneOAuthProcess([])
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    rclone_api.RCLONE_OAUTH_SESSIONS["old-oauth"] = {
+        "provider": "drive",
+        "status": "awaiting_callback",
+        "authorization_url": "/rclone/oauth/sessions/old-oauth/authorize",
+        "local_authorization_url": "http://127.0.0.1:53682/auth?state=old",
+        "config": None,
+        "error": None,
+        "output": [],
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+        "ready_event": None,
+        "process": old_process,
+        "task": None,
+    }
+    new_process = FakeRcloneOAuthProcess(
+        [
+            b"NOTICE: If your browser doesn't open go to http://127.0.0.1:53682/auth?state=new\n"
+        ]
+    )
+
+    async def fake_start_oauth_process(provider, *, client_id=None, client_secret=None):
+        return new_process
+
+    monkeypatch.setattr("app.api.rclone._start_oauth_process", fake_start_oauth_process)
+
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "drive"},
+    )
+
+    assert response.status_code == 201
+    assert old_process.killed is True
+    assert "old-oauth" not in rclone_api.RCLONE_OAUTH_SESSIONS
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
 
 
 @pytest.mark.unit

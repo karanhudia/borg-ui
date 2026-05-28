@@ -4167,6 +4167,7 @@
         "remotePathRequired": "Introduce una ruta remota rclone relativa",
         "invalidSyncPolicy": "Política de sincronización rclone no válida",
         "invalidPayload": "Configuración de repositorio rclone no válida",
+        "oauthLinkUnavailable": "El enlace de autorización de rclone no está disponible. Vuelve a iniciar la autorización en el navegador.",
         "failedToCreateRemote": "No se pudo crear el remoto rclone",
         "failedToUpdateRemote": "No se pudo actualizar el remoto rclone",
         "failedToDeleteRemote": "No se pudo eliminar el remoto rclone"

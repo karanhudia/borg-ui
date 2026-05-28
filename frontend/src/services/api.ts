@@ -142,6 +142,7 @@ export interface RcloneOAuthSession {
   provider: string
   status: 'starting' | 'awaiting_callback' | 'authorized' | 'failed'
   authorization_url?: string | null
+  local_authorization_url?: string | null
   config?: Record<string, unknown> | null
   error?: string | null
 }

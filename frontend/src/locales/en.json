@@ -4167,6 +4167,7 @@
         "remotePathRequired": "Enter a relative rclone remote path",
         "invalidSyncPolicy": "Invalid rclone sync policy",
         "invalidPayload": "Invalid rclone repository settings",
+        "oauthLinkUnavailable": "The rclone authorization link is not available. Start browser authorization again.",
         "failedToCreateRemote": "Failed to create rclone remote",
         "failedToUpdateRemote": "Failed to update rclone remote",
         "failedToDeleteRemote": "Failed to delete rclone remote"

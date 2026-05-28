@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import CodeEditor from '../CodeEditor'
 import ResponsiveDialog from '../ResponsiveDialog'
 import type { RcloneOAuthSession, RcloneProvider } from '../../services/api'
+import { buildDownloadUrl } from '../../utils/downloadUrl'
 
 export interface RcloneRemoteCreateInput {
   name: string
@@ -85,6 +86,11 @@ const formatProviderTemplate = (provider: RcloneProvider, customProvider = '') =
   const template = { ...provider.config_template }
   template.type = provider.type_editable ? customProvider : provider.type
   return template
+}
+
+const browserAuthorizationUrl = (url: string | null | undefined) => {
+  if (!url) return null
+  return url.startsWith('/rclone/') ? buildDownloadUrl(url) : url
 }
 
 export default function RcloneRemoteDialog({
@@ -179,8 +185,9 @@ export default function RcloneRemoteDialog({
   }
 
   const openAuthorizationUrl = (url: string | null | undefined) => {
-    if (!url) return
-    window.open(url, '_blank', 'noopener,noreferrer')
+    const browserUrl = browserAuthorizationUrl(url)
+    if (!browserUrl) return
+    window.open(browserUrl, '_blank', 'noopener,noreferrer')
   }
 
   const applyOAuthConfig = (

@@ -173,7 +173,8 @@ describe('CloudStorage', () => {
         session_id: 'oauth-1',
         provider: 'drive',
         status: 'awaiting_callback',
-        authorization_url: 'http://127.0.0.1:53682/auth?state=abc',
+        authorization_url: '/rclone/oauth/sessions/oauth-1/authorize',
+        local_authorization_url: 'http://127.0.0.1:53682/auth?state=abc',
         config: null,
         error: null,
       },
@@ -183,7 +184,8 @@ describe('CloudStorage', () => {
         session_id: 'oauth-1',
         provider: 'drive',
         status: 'authorized',
-        authorization_url: 'http://127.0.0.1:53682/auth?state=abc',
+        authorization_url: '/rclone/oauth/sessions/oauth-1/authorize',
+        local_authorization_url: 'http://127.0.0.1:53682/auth?state=abc',
         config: {
           type: 'drive',
           token: '{"access_token":"real-access","refresh_token":"real-refresh"}',
@@ -310,7 +312,7 @@ describe('CloudStorage', () => {
     })
     await waitFor(() => {
       expect(openSpy).toHaveBeenCalledWith(
-        'http://127.0.0.1:53682/auth?state=abc',
+        '/api/rclone/oauth/sessions/oauth-1/authorize',
         '_blank',
         'noopener,noreferrer'
       )

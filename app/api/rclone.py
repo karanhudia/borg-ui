@@ -11,14 +11,17 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.authorization import authorize_request
-from app.core.security import get_current_user
+from app.core.security import get_current_download_user, get_current_user
 from app.database.database import get_db
 from app.database.models import RepositoryStorage, RcloneRemote, User
 from app.services.rclone_repository_service import normalize_rclone_relative_path
@@ -34,6 +37,7 @@ RCLONE_OAUTH_START_TIMEOUT_SECONDS = 15
 RCLONE_OAUTH_SESSION_TTL_SECONDS = 15 * 60
 RCLONE_OAUTH_MAX_SESSIONS = 32
 RCLONE_OAUTH_OUTPUT_LIMIT_CHARS = 20_000
+RCLONE_OAUTH_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 REDACTED_CONFIG_VALUE = "***"
 SAFE_CONFIG_KEY_EXCEPTIONS = {
     "key_file",
@@ -490,6 +494,23 @@ def _extract_oauth_authorization_url(text: str) -> str | None:
     return urls[0]
 
 
+def _oauth_authorization_path(session_id: str) -> str:
+    return f"/rclone/oauth/sessions/{session_id}/authorize"
+
+
+def _validate_local_oauth_url(url: str | None) -> str:
+    parsed = urlparse(url or "")
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname not in RCLONE_OAUTH_LOCAL_HOSTS
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.rclone.oauthLinkUnavailable"},
+        )
+    return url or ""
+
+
 def _iter_json_objects(text: str):
     depth = 0
     start: int | None = None
@@ -547,11 +568,44 @@ def _terminate_oauth_session(session: dict[str, Any]) -> None:
             pass
 
 
+async def _terminate_oauth_session_async(session: dict[str, Any]) -> None:
+    task = session.get("task")
+    if task is not None and not task.done():
+        task.cancel()
+    process = session.get("process")
+    if process is None:
+        return
+    try:
+        process.kill()
+    except ProcessLookupError:
+        pass
+    wait = getattr(process, "wait", None)
+    if wait is None:
+        return
+    try:
+        await asyncio.wait_for(wait(), timeout=2)
+    except (asyncio.TimeoutError, ProcessLookupError):
+        pass
+
+
 def _drop_oauth_session(session_id: str) -> dict[str, Any] | None:
     session = RCLONE_OAUTH_SESSIONS.pop(session_id, None)
     if session is not None:
         _terminate_oauth_session(session)
     return session
+
+
+async def _drop_oauth_session_async(session_id: str) -> dict[str, Any] | None:
+    session = RCLONE_OAUTH_SESSIONS.pop(session_id, None)
+    if session is not None:
+        await _terminate_oauth_session_async(session)
+    return session
+
+
+async def _drop_active_oauth_sessions() -> None:
+    for session_id, session in list(RCLONE_OAUTH_SESSIONS.items()):
+        if session.get("status") not in {"authorized", "failed"}:
+            await _drop_oauth_session_async(session_id)
 
 
 def _cleanup_rclone_oauth_sessions(now: datetime | None = None) -> None:
@@ -604,9 +658,33 @@ def _oauth_session_response(session_id: str) -> dict[str, Any]:
         "provider": session["provider"],
         "status": session["status"],
         "authorization_url": session.get("authorization_url"),
+        "local_authorization_url": session.get("local_authorization_url"),
         "config": session.get("config"),
         "error": session.get("error"),
     }
+
+
+async def _fetch_oauth_authorization_redirect(url: str) -> str:
+    local_url = _validate_local_oauth_url(url)
+    try:
+        async with httpx.AsyncClient(follow_redirects=False, timeout=10.0) as client:
+            response = await client.get(local_url)
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "key": "backend.errors.rclone.oauthLinkUnavailable",
+                "message": str(exc),
+            },
+        ) from exc
+
+    redirect_url = response.headers.get("location")
+    if not redirect_url:
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthLinkUnavailable"},
+        )
+    return redirect_url
 
 
 async def _start_oauth_process(
@@ -646,8 +724,9 @@ async def _consume_oauth_process(session_id: str, process) -> None:
             line = raw_line.decode("utf-8", errors="replace")
             _append_oauth_output(session, line)
             authorization_url = _extract_oauth_authorization_url(line)
-            if authorization_url and not session.get("authorization_url"):
-                session["authorization_url"] = authorization_url
+            if authorization_url and not session.get("local_authorization_url"):
+                session["local_authorization_url"] = authorization_url
+                session["authorization_url"] = _oauth_authorization_path(session_id)
                 session["status"] = "awaiting_callback"
                 ready_event.set()
             token = _extract_oauth_token("".join(session["output"][-20:]))
@@ -926,6 +1005,7 @@ async def start_oauth_session(
     _require_admin(current_user)
     provider = _normalize_provider(payload.provider)
     _require_oauth_provider(provider)
+    await _drop_active_oauth_sessions()
 
     session_id = secrets.token_urlsafe(18)
     ready_event = asyncio.Event()
@@ -934,6 +1014,7 @@ async def start_oauth_session(
         "provider": provider,
         "status": "starting",
         "authorization_url": None,
+        "local_authorization_url": None,
         "config": None,
         "error": None,
         "output": [],
@@ -984,13 +1065,30 @@ async def get_oauth_session(
     return _oauth_session_response(session_id)
 
 
+@router.get("/oauth/sessions/{session_id}/authorize")
+async def open_oauth_authorization(
+    session_id: str,
+    current_user: User = Depends(get_current_download_user),
+):
+    _require_admin(current_user)
+    session = _get_oauth_session(session_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404, detail={"key": "backend.errors.rclone.oauthNotFound"}
+        )
+    redirect_url = await _fetch_oauth_authorization_redirect(
+        session.get("local_authorization_url")
+    )
+    return RedirectResponse(redirect_url)
+
+
 @router.delete("/oauth/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_oauth_session(
     session_id: str,
     current_user: User = Depends(get_current_user),
 ):
     _require_admin(current_user)
-    session = _drop_oauth_session(session_id)
+    session = await _drop_oauth_session_async(session_id)
     if session is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
