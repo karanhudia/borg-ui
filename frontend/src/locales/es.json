@@ -4129,7 +4129,7 @@
         "remoteNotFound": "Remoto rclone no encontrado",
         "remoteInUse": "Este remoto todavía lo usan uno o más repositorios",
         "updateUnsupported": "Esta actualización del remoto rclone no está soportada",
-        "mirrorUnsupportedPrimary": "La réplica en la nube actualmente solo admite repositorios principales locales",
+        "mirrorUnsupportedPrimary": "La réplica en la nube es compatible con repositorios principales locales y SSH. Los repositorios de agentes gestionados requieren una estrategia de réplica separada.",
         "remotePathNotVerified": "Esta ruta remota rclone no está vacía. Explora y confirma la ruta de destino antes de sincronizar.",
         "remotePathPreflightFailed": "No se pudo verificar esta ruta remota rclone",
         "cachePathServerOwned": "El servidor administra la ruta de caché rclone",
