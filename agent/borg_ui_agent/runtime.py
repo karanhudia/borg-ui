@@ -28,6 +28,7 @@ DEFAULT_CAPABILITIES = [
     "repository.check",
     "repository.prune",
     "repository.compact",
+    "repository.rclone_sync",
 ]
 
 JOB_HANDLERS = {
@@ -38,6 +39,7 @@ JOB_HANDLERS = {
     "repository.check": execute_repository_operation_job,
     "repository.prune": execute_repository_operation_job,
     "repository.compact": execute_repository_operation_job,
+    "repository.rclone_sync": execute_repository_operation_job,
 }
 
 

@@ -50,6 +50,9 @@ jobs:
   backend-unit-coverage:
     name: Backend / Unit Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
 
     services:
       redis:

@@ -27,6 +27,8 @@ export interface Repository {
   execution_target?: 'local' | 'ssh' | 'agent'
   executor_type?: 'server' | 'agent'
   agent_machine_id?: number | null
+  agent_machine_name?: string | null
+  agent_machine_status?: string | null
   has_running_maintenance?: boolean
   borg_version?: number
   host?: string
@@ -77,6 +79,8 @@ export interface RcloneStorage {
   last_remote_check_at?: string | null
   last_sync_error?: string | null
   extra_flags?: string[]
+  agent_machine_name?: string | null
+  agent_machine_status?: string | null
 }
 
 export interface Archive {

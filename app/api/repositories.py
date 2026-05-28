@@ -64,6 +64,9 @@ from app.services.repository_executor import (
 )
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.rclone_repository_service import (
+    SYNC_DIRECTION_AGENT_TO_REMOTE,
+    SYNC_DIRECTION_PRIMARY_TO_REMOTE,
+    SYNC_DIRECTION_SSHFS_TO_REMOTE,
     VALID_SYNC_POLICIES,
     normalize_extra_flags,
     normalize_rclone_relative_path,
@@ -101,6 +104,8 @@ V2_ONLY_ENCRYPTION_MODES = {
     "keyfile-aes-ocb",
     "keyfile-chacha20-poly1305",
 }
+
+AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
 
 # Initialize Borg interface
 borg = BorgInterface()
@@ -983,6 +988,8 @@ def _primary_storage_backend(repository: Repository) -> str:
 def _mirror_source_backend_for_payload(
     data: Union[RepositoryCreate, RepositoryImport],
 ) -> str:
+    if _normalize_repository_executor(data) == "agent":
+        return "agent"
     storage_backend = (getattr(data, "storage_backend", "local") or "local").lower()
     if data.connection_id or storage_backend == "ssh":
         return "ssh"
@@ -990,6 +997,8 @@ def _mirror_source_backend_for_payload(
 
 
 def _mirror_source_backend_for_repository(repository: Repository) -> str:
+    if repository_executor_type(repository) == "agent":
+        return "agent"
     if (
         repository.connection_id
         or repository.repository_type == "ssh"
@@ -997,6 +1006,51 @@ def _mirror_source_backend_for_repository(repository: Repository) -> str:
     ):
         return "ssh"
     return "local"
+
+
+def _require_agent_capability(agent: AgentMachine, capability: str) -> None:
+    capabilities = agent.capabilities or []
+    if capability not in capabilities:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "key": "backend.errors.agents.capabilityMissing",
+                "params": {"capability": capability},
+            },
+        )
+
+
+def _require_agent_rclone_sync_capability(
+    agent_machine_id: Optional[int], db: Session
+) -> AgentMachine:
+    agent = _require_queueable_agent(agent_machine_id, db)
+    _require_agent_capability(agent, AGENT_RCLONE_SYNC_CAPABILITY)
+    return agent
+
+
+def _repository_has_cloud_mirror(
+    repository: Repository, storage: RepositoryStorage | None
+) -> bool:
+    return bool(
+        storage
+        and storage.backend == "rclone"
+        and repository.repository_type != "rclone"
+    )
+
+
+def _apply_mirror_source_strategy(
+    storage: RepositoryStorage, repository: Repository
+) -> None:
+    source_backend = _mirror_source_backend_for_repository(repository)
+    if source_backend == "agent":
+        storage.cache_path = None
+        storage.sync_direction = SYNC_DIRECTION_AGENT_TO_REMOTE
+    elif source_backend == "ssh":
+        storage.cache_path = None
+        storage.sync_direction = SYNC_DIRECTION_SSHFS_TO_REMOTE
+    else:
+        storage.cache_path = repository.path
+        storage.sync_direction = SYNC_DIRECTION_PRIMARY_TO_REMOTE
 
 
 def _reject_unsupported_rclone_borg2(
@@ -1079,12 +1133,10 @@ def _validate_cloud_mirror_payload(
         )
     if not _is_cloud_mirror_payload(data):
         return None
-    if _normalize_repository_executor(data) == "agent":
-        raise HTTPException(
-            status_code=400,
-            detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
-        )
-    if _mirror_source_backend_for_payload(data) == "ssh" and not data.connection_id:
+    source_backend = _mirror_source_backend_for_payload(data)
+    if source_backend == "agent":
+        _require_agent_rclone_sync_capability(data.agent_machine_id, db)
+    if source_backend == "ssh" and not data.connection_id:
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
@@ -1183,7 +1235,26 @@ def _serialize_rclone_storage(
         .filter(RcloneRemote.id == storage.rclone_remote_id)
         .first()
     )
-    return rclone_repository_service.serialize_status(repository, storage, remote)
+    status = rclone_repository_service.serialize_status(repository, storage, remote)
+    status.update(_agent_machine_summary(repository, db))
+    return status
+
+
+def _agent_machine_summary(repository: Repository, db: Session) -> Dict[str, Any]:
+    if not repository.agent_machine_id:
+        return {
+            "agent_machine_name": None,
+            "agent_machine_status": None,
+        }
+    agent = (
+        db.query(AgentMachine)
+        .filter(AgentMachine.id == repository.agent_machine_id)
+        .first()
+    )
+    return {
+        "agent_machine_name": agent.name if agent else None,
+        "agent_machine_status": agent.status if agent else None,
+    }
 
 
 def _require_borg2_feature(db: Session) -> None:
@@ -1262,7 +1333,7 @@ def _require_queueable_agent(
             status_code=404,
             detail={"key": "backend.errors.agents.agentNotFound"},
         )
-    if agent.status in ("disabled", "revoked"):
+    if agent.deleted_at is not None or agent.status in ("disabled", "revoked"):
         raise HTTPException(
             status_code=409,
             detail={"key": "backend.errors.agents.agentNotQueueable"},
@@ -1318,14 +1389,18 @@ def _validate_agent_repository_payload(
     return _require_queueable_agent(repo_data.agent_machine_id, db)
 
 
-def _create_agent_repository_record(
+async def _create_agent_repository_record(
     repo_data: Union[RepositoryCreate, RepositoryImport],
     current_user: User,
     db: Session,
     *,
     imported: bool,
 ):
+    cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
+    await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
     agent = _validate_agent_repository_payload(repo_data, db)
+    if cloud_mirror_remote:
+        _require_agent_capability(agent, AGENT_RCLONE_SYNC_CAPABILITY)
     repo_path = repo_data.path.strip()
     if not repo_path:
         raise HTTPException(
@@ -1394,6 +1469,21 @@ def _create_agent_repository_record(
     db.commit()
     db.refresh(repository)
 
+    if cloud_mirror_remote:
+        storage = rclone_repository_service.build_mirror_storage(
+            repository_id=repository.id,
+            source_path=repository.path,
+            source_backend="agent",
+            remote_id=cloud_mirror_remote.id,
+            remote_path=repo_data.rclone_remote_path or "",
+            sync_policy=repo_data.rclone_sync_policy,
+            extra_flags=repo_data.rclone_extra_flags,
+        )
+        db.add(storage)
+        db.commit()
+        if repo_data.rclone_sync_policy == "after_success":
+            await rclone_repository_service.sync_repository(db, repository)
+
     logger.info(
         "Agent-managed repository recorded",
         name=repository.name,
@@ -1412,21 +1502,28 @@ def _create_agent_repository_record(
             error=str(e),
         )
 
+    repository_payload = {
+        "id": repository.id,
+        "name": repository.name,
+        "path": repository.path,
+        "encryption": repository.encryption,
+        "compression": repository.compression,
+        "execution_target": repository.execution_target,
+        "executor_type": repository.executor_type,
+        "agent_machine_id": repository.agent_machine_id,
+        **_agent_machine_summary(repository, db),
+    }
+    rclone_storage = _serialize_rclone_storage(repository, db)
+    if rclone_storage:
+        repository_payload["storage_backend"] = _primary_storage_backend(repository)
+        repository_payload["rclone_storage"] = rclone_storage
+
     return {
         "success": True,
         "message": "backend.success.repo.repositoryImported"
         if imported
         else "backend.success.repo.repositoryCreated",
-        "repository": {
-            "id": repository.id,
-            "name": repository.name,
-            "path": repository.path,
-            "encryption": repository.encryption,
-            "compression": repository.compression,
-            "execution_target": repository.execution_target,
-            "executor_type": repository.executor_type,
-            "agent_machine_id": repository.agent_machine_id,
-        },
+        "repository": repository_payload,
     }
 
 
@@ -1774,6 +1871,7 @@ async def get_repositories(
                 "execution_target": repo.execution_target or "local",
                 "executor_type": repository_executor_type(repo),
                 "agent_machine_id": repo.agent_machine_id,
+                **_agent_machine_summary(repo, db),
                 "host": repo.host,
                 "port": repo.port,
                 "username": repo.username,
@@ -1839,11 +1937,11 @@ async def create_repository(
         if _is_rclone_payload(repo_data):
             return await _create_rclone_repository_record(repo_data, current_user, db)
         if _uses_borg2_payload(repo_data):
+            _require_borg2_feature(db)
             if executor_type == "agent":
-                return _create_agent_repository_record(
+                return await _create_agent_repository_record(
                     repo_data, current_user, db, imported=False
                 )
-            _require_borg2_feature(db)
             from app.api.v2.repositories import (
                 RepositoryV2Create,
                 create_repository as create_repository_v2,
@@ -1853,7 +1951,7 @@ async def create_repository(
             return await create_repository_v2(v2_payload, current_user, db)
 
         if executor_type == "agent":
-            return _create_agent_repository_record(
+            return await _create_agent_repository_record(
                 repo_data, current_user, db, imported=False
             )
 
@@ -2191,6 +2289,7 @@ async def create_repository(
             "execution_target": repository.execution_target,
             "executor_type": repository.executor_type,
             "agent_machine_id": repository.agent_machine_id,
+            **_agent_machine_summary(repository, db),
         }
         rclone_storage = _serialize_rclone_storage(repository, db)
         if rclone_storage:
@@ -2228,11 +2327,11 @@ async def import_repository(
         if _is_rclone_payload(repo_data):
             return await _import_rclone_repository_record(repo_data, current_user, db)
         if _uses_borg2_payload(repo_data):
+            _require_borg2_feature(db)
             if executor_type == "agent":
-                return _create_agent_repository_record(
+                return await _create_agent_repository_record(
                     repo_data, current_user, db, imported=True
                 )
-            _require_borg2_feature(db)
             from app.api.v2.repositories import (
                 RepositoryV2Import,
                 import_repository as import_repository_v2,
@@ -2242,7 +2341,7 @@ async def import_repository(
             return await import_repository_v2(v2_payload, current_user, db)
 
         if executor_type == "agent":
-            return _create_agent_repository_record(
+            return await _create_agent_repository_record(
                 repo_data, current_user, db, imported=True
             )
 
@@ -2542,6 +2641,7 @@ async def import_repository(
             "execution_target": repository.execution_target,
             "executor_type": repository.executor_type,
             "agent_machine_id": repository.agent_machine_id,
+            **_agent_machine_summary(repository, db),
         }
         rclone_storage = _serialize_rclone_storage(repository, db)
         if rclone_storage:
@@ -2797,6 +2897,7 @@ async def get_repository(
             "execution_target": repository.execution_target or "local",
             "executor_type": repository_executor_type(repository),
             "agent_machine_id": repository.agent_machine_id,
+            **_agent_machine_summary(repository, db),
             "last_backup": format_datetime(repository.last_backup),
             "total_size": repository.total_size,
             "archive_count": repository.archive_count,
@@ -2962,17 +3063,24 @@ async def update_repository(
                         detail={"key": "backend.errors.rclone.updateUnsupported"},
                     )
 
-            if should_enable_or_update_mirror and (
-                target_executor_type == "agent"
-                or (
+            if should_enable_or_update_mirror:
+                if target_executor_type == "agent":
+                    target_agent_id = (
+                        repo_data.agent_machine_id
+                        if "agent_machine_id" in update_data
+                        else repository.agent_machine_id
+                    )
+                    _require_agent_rclone_sync_capability(target_agent_id, db)
+                elif (
                     _mirror_source_backend_for_repository(repository) == "ssh"
                     and not target_connection_id
-                )
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
-                )
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.rclone.mirrorUnsupportedPrimary"
+                        },
+                    )
 
             if should_enable_or_update_mirror and storage is None:
                 if not repo_data.rclone_remote_id:
@@ -3118,7 +3226,7 @@ async def update_repository(
                                 "message": str(exc),
                             },
                         ) from exc
-                storage.cache_path = repository.path
+                _apply_mirror_source_strategy(storage, repository)
 
             if should_update_direct_rclone:
                 storage = existing_rclone_storage
@@ -3496,7 +3604,12 @@ async def update_repository(
                     if "agent_machine_id" in update_data
                     else repository.agent_machine_id
                 )
-                agent = _require_queueable_agent(requested_agent_id, db)
+                if _repository_has_cloud_mirror(repository, existing_rclone_storage):
+                    agent = _require_agent_rclone_sync_capability(
+                        requested_agent_id, db
+                    )
+                else:
+                    agent = _require_queueable_agent(requested_agent_id, db)
                 repository.executor_type = "agent"
                 repository.execution_target = "agent"
                 repository.agent_machine_id = agent.id
@@ -3523,7 +3636,12 @@ async def update_repository(
                     status_code=400,
                     detail={"key": "backend.errors.repo.invalidExecutionTarget"},
                 )
-            agent = _require_queueable_agent(repo_data.agent_machine_id, db)
+            if _repository_has_cloud_mirror(repository, existing_rclone_storage):
+                agent = _require_agent_rclone_sync_capability(
+                    repo_data.agent_machine_id, db
+                )
+            else:
+                agent = _require_queueable_agent(repo_data.agent_machine_id, db)
             repository.agent_machine_id = agent.id
 
         if (
@@ -3531,7 +3649,7 @@ async def update_repository(
             and existing_rclone_storage.backend == "rclone"
             and repository.repository_type != "rclone"
         ):
-            existing_rclone_storage.cache_path = repository.path
+            _apply_mirror_source_strategy(existing_rclone_storage, repository)
 
         repository.updated_at = datetime.utcnow()
         db.commit()

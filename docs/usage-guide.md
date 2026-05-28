@@ -93,15 +93,17 @@ mapping notes, see [Provider Guides](provider-guides).
 
 ## Add a Cloud Mirror
 
-Cloud mirrors keep the primary repository local or SSH-backed and sync a copy to an rclone remote.
+Cloud mirrors keep the primary repository local, SSH-backed, or managed-agent-backed and sync a copy to an rclone remote.
 
 1. Go to Cloud Storage and configure the rclone remote.
-2. Go to Repositories and create or edit a local or SSH repository.
+2. Go to Repositories and create or edit a local, SSH, or managed-agent repository.
 3. Open the Cloud Mirror step.
 4. Enable the mirror, choose the rclone remote, and enter or browse a relative remote path.
 5. Review and save.
 
 For SSH repositories, Borg UI mounts the repository on the server with SSHFS during each mirror sync, then unmounts it after rclone finishes. Borg UI owns that temporary mount path; the UI and API do not ask for a cache or staging path.
+
+For managed-agent repositories, the selected agent syncs its agent-local repository path to the configured rclone remote. Borg UI owns the mirror metadata and rclone target; the agent owns any temporary rclone execution files and removes them after the sync.
 
 ## Import an Existing Repository
 

@@ -37,6 +37,8 @@ export interface Repository extends RepositoryData {
   repository_type?: 'local' | 'ssh' | 'sftp' | 'rclone'
   execution_target?: 'local' | 'ssh' | 'agent'
   agent_machine_id?: number | null
+  agent_machine_name?: string | null
+  agent_machine_status?: string | null
   borg_version?: 1 | 2
 }
 

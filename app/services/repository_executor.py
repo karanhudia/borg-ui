@@ -20,6 +20,7 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.check",
     "repository.prune",
     "repository.compact",
+    "repository.rclone_sync",
 }
 
 

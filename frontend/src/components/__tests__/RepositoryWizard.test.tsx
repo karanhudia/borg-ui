@@ -587,6 +587,67 @@ describe('RepositoryWizard', () => {
       expect(submittedKeyFile).toBeNull()
     }, 90000)
 
+    it('submits managed-agent repository cloud mirror fields without a cache path', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await waitForLocationStep()
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Cloud Repo')
+      setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-cloud-repo')
+      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
+      const agentListbox = await screen.findByRole('listbox')
+      await user.click(within(agentListbox).getByText('workstation.local'))
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('checkbox', { name: /Mirror this repository/i }))
+      expect(
+        screen.getByText(/Selected managed agent syncs its repository path to the rclone remote/i)
+      ).toBeInTheDocument()
+      await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
+      const remoteListbox = await screen.findByRole('listbox')
+      await user.click(within(remoteListbox).getByText('prod-s3'))
+      setInputValue(screen.getByLabelText(/Relative Remote Path/i), 'borg-ui/repositories/agent')
+
+      expect(screen.queryByText(/Local Cache Path/i)).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Repository Key')).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'agentcloudpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalled()
+      })
+      const [submittedPayload, submittedKeyFile] = onSubmit.mock.calls[0]
+      expect(submittedPayload).not.toHaveProperty('rclone_cache_path')
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({
+          name: 'Agent Cloud Repo',
+          path: '/srv/borg/agent-cloud-repo',
+          executor_type: 'agent',
+          execution_target: 'agent',
+          storage_backend: 'agent_local',
+          agent_machine_id: 101,
+          cloud_mirror_enabled: true,
+          rclone_remote_id: 10,
+          rclone_remote_path: 'borg-ui/repositories/agent',
+          rclone_remote_path_verified: false,
+          rclone_sync_policy: 'after_success',
+        })
+      )
+      expect(submittedKeyFile).toBeNull()
+    }, 90000)
+
     it('submits browsed cloud mirror paths as verified', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')
