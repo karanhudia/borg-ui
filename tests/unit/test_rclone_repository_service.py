@@ -1,7 +1,12 @@
 import pytest
 from types import SimpleNamespace
 
-from app.database.models import Repository, RepositoryStorage, RcloneRemote
+from app.database.models import (
+    AgentMachine,
+    Repository,
+    RepositoryStorage,
+    RcloneRemote,
+)
 from app.services.rclone_repository_service import (
     RcloneRepositoryService,
     normalize_extra_flags,
@@ -205,6 +210,25 @@ def test_build_ssh_mirror_storage_records_server_owned_mount_strategy():
 
 
 @pytest.mark.unit
+def test_build_agent_mirror_storage_records_agent_owned_sync_strategy():
+    service = RcloneRepositoryService(cache_root="/cache")
+
+    storage = service.build_mirror_storage(
+        repository_id=9,
+        source_path="/agent/repositories/app",
+        source_backend="agent",
+        remote_id=3,
+        remote_path="borg-ui/repositories/app",
+        sync_policy="manual",
+    )
+
+    assert storage.backend == "rclone"
+    assert storage.cache_path is None
+    assert storage.sync_direction == "agent_to_remote"
+    assert storage.sync_status == "pending"
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_sync_repository_mirror_uses_primary_repository_path_source(db_session):
     remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
@@ -228,6 +252,155 @@ async def test_sync_repository_mirror_uses_primary_repository_path_source(db_ses
 
     assert rclone.sync_calls[0][0] == "/srv/borg/app"
     assert rclone.sync_calls[0][1] == "prod-s3:borg-ui/repositories/app"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_agent_mirror_queues_agent_owned_rclone_job(
+    db_session, monkeypatch
+):
+    remote = RcloneRemote(
+        id=3,
+        name="prod-s3",
+        provider="s3",
+        config_source="managed",
+        redacted_config={"type": "s3", "provider": "AWS"},
+    )
+    agent = AgentMachine(
+        id=7,
+        name="Laptop",
+        agent_id="agt_laptop",
+        token_hash="hash",
+        token_prefix="token",
+        status="online",
+        capabilities=["repository.rclone_sync"],
+    )
+    repository = Repository(
+        id=9,
+        name="Agent App",
+        path="/agent/repositories/app",
+        encryption="none",
+        execution_target="agent",
+        executor_type="agent",
+        agent_machine_id=7,
+    )
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=None,
+        sync_policy="manual",
+        sync_status="pending",
+        sync_direction="agent_to_remote",
+        extra_flags=["--fast-list"],
+    )
+    db_session.add_all([remote, agent, repository, storage])
+    db_session.commit()
+    queued_jobs = []
+
+    def fake_queue(db, repo, *, job_kind, operation=None, **_kwargs):
+        queued_jobs.append({"repo": repo, "job_kind": job_kind, "operation": operation})
+        return SimpleNamespace(id=42)
+
+    async def fake_wait(db, agent_job_id, *, timeout_seconds, **_kwargs):
+        return {"return_code": 0, "stdout": "synced", "stderr": ""}
+
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.queue_agent_repository_operation_job",
+        fake_queue,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.wait_for_agent_repository_operation_job",
+        fake_wait,
+        raising=False,
+    )
+    service = RcloneRepositoryService(cache_root="/cache")
+
+    status = await service.sync_repository(db_session, repository)
+
+    assert queued_jobs[0]["job_kind"] == "repository.rclone_sync"
+    assert queued_jobs[0]["operation"]["rclone"]["remote_name"] == "prod-s3"
+    assert queued_jobs[0]["operation"]["rclone"]["remote_path"] == (
+        "borg-ui/repositories/app"
+    )
+    assert queued_jobs[0]["operation"]["rclone"]["source_path"] == (
+        "/agent/repositories/app"
+    )
+    assert queued_jobs[0]["operation"]["rclone"]["config"] == {
+        "type": "s3",
+        "provider": "AWS",
+    }
+    assert status["sync_status"] == "current"
+    assert status["sync_direction"] == "agent_to_remote"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_agent_mirror_records_failed_agent_result(
+    db_session, monkeypatch
+):
+    remote = RcloneRemote(
+        id=4,
+        name="prod-s3",
+        provider="s3",
+        config_source="managed",
+        redacted_config={"type": "s3", "provider": "AWS"},
+    )
+    agent = AgentMachine(
+        id=8,
+        name="Laptop",
+        agent_id="agt_laptop_failed_sync",
+        token_hash="hash",
+        token_prefix="token",
+        status="online",
+        capabilities=["repository.rclone_sync"],
+    )
+    repository = Repository(
+        id=10,
+        name="Agent App Failed",
+        path="/agent/repositories/app",
+        encryption="none",
+        execution_target="agent",
+        executor_type="agent",
+        agent_machine_id=8,
+    )
+    storage = RepositoryStorage(
+        repository_id=10,
+        backend="rclone",
+        rclone_remote_id=4,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=None,
+        sync_policy="manual",
+        sync_status="pending",
+        sync_direction="agent_to_remote",
+    )
+    db_session.add_all([remote, agent, repository, storage])
+    db_session.commit()
+
+    def fake_queue(db, repo, *, job_kind, operation=None, **_kwargs):
+        return SimpleNamespace(id=43)
+
+    async def fake_wait(db, agent_job_id, *, timeout_seconds, **_kwargs):
+        return {"return_code": 2, "stdout": "", "stderr": "remote denied"}
+
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.queue_agent_repository_operation_job",
+        fake_queue,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.wait_for_agent_repository_operation_job",
+        fake_wait,
+        raising=False,
+    )
+    service = RcloneRepositoryService(cache_root="/cache")
+
+    status = await service.sync_repository(db_session, repository)
+
+    assert status["sync_status"] == "failed"
+    assert status["last_sync_error"] == "remote denied"
 
 
 @pytest.mark.unit

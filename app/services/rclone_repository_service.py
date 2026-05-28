@@ -6,6 +6,7 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import urlparse
 
@@ -13,6 +14,10 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database.models import Repository, RepositoryStorage, RcloneRemote
+from app.services.repository_executor import (
+    queue_agent_repository_operation_job,
+    wait_for_agent_repository_operation_job,
+)
 from app.services.rclone_service import RcloneService, rclone_service
 
 
@@ -20,6 +25,7 @@ VALID_SYNC_POLICIES = {"after_success", "manual", "scheduled"}
 SYNC_DIRECTION_CACHE_TO_REMOTE = "cache_to_remote"
 SYNC_DIRECTION_PRIMARY_TO_REMOTE = "primary_to_remote"
 SYNC_DIRECTION_SSHFS_TO_REMOTE = "sshfs_mount_to_remote"
+SYNC_DIRECTION_AGENT_TO_REMOTE = "agent_to_remote"
 
 
 def normalize_rclone_relative_path(value: str) -> str:
@@ -152,6 +158,9 @@ class RcloneRepositoryService:
         if source_backend == "ssh":
             cache_path = None
             sync_direction = SYNC_DIRECTION_SSHFS_TO_REMOTE
+        elif source_backend == "agent":
+            cache_path = None
+            sync_direction = SYNC_DIRECTION_AGENT_TO_REMOTE
         else:
             cache_path = normalized_source
             sync_direction = SYNC_DIRECTION_PRIMARY_TO_REMOTE
@@ -168,7 +177,10 @@ class RcloneRepositoryService:
         )
 
     def _cache_present(self, storage: RepositoryStorage) -> bool:
-        if storage.sync_direction == SYNC_DIRECTION_SSHFS_TO_REMOTE:
+        if storage.sync_direction in {
+            SYNC_DIRECTION_SSHFS_TO_REMOTE,
+            SYNC_DIRECTION_AGENT_TO_REMOTE,
+        }:
             return True
         if not storage.cache_path:
             return False
@@ -206,6 +218,57 @@ class RcloneRepositoryService:
             await mount_service.unmount(mount_id, force=True)
             raise ValueError("SSH cloud mirror mount did not return a mount point")
         return mount_point, mount_id, mount_service
+
+    def _agent_rclone_config(self, remote: RcloneRemote) -> dict[str, str]:
+        values = dict(remote.redacted_config or {})
+        values["type"] = str(values.get("type") or remote.provider).strip()
+        return {
+            str(key): _stringify_config_value(value)
+            for key, value in values.items()
+            if value is not None and str(key).strip()
+        }
+
+    async def _sync_agent_repository_source(
+        self,
+        db: Session,
+        repository: Repository,
+        storage: RepositoryStorage,
+        remote: RcloneRemote,
+        *,
+        timeout: int,
+    ):
+        agent_job = queue_agent_repository_operation_job(
+            db,
+            repository,
+            job_kind="repository.rclone_sync",
+            operation={
+                "rclone": {
+                    "source_path": repository.path,
+                    "remote_name": remote.name,
+                    "remote_path": storage.rclone_remote_path,
+                    "config": self._agent_rclone_config(remote),
+                    "extra_flags": storage.extra_flags or [],
+                }
+            },
+        )
+        result = await wait_for_agent_repository_operation_job(
+            db,
+            agent_job.id,
+            timeout_seconds=timeout,
+        )
+        result_payload = result if isinstance(result, dict) else {}
+        success = result_payload.get("success")
+        if success is None:
+            return_code = result_payload.get(
+                "return_code",
+                result_payload.get("exit_code", result_payload.get("code", 1)),
+            )
+            success = return_code == 0
+        return SimpleNamespace(
+            success=bool(success),
+            stdout=str(result_payload.get("stdout", "")),
+            stderr=str(result_payload.get("stderr", "")),
+        )
 
     async def preflight_remote_path(
         self,
@@ -254,20 +317,37 @@ class RcloneRepositoryService:
         mount_service = None
         try:
             source = storage.cache_path
-            if storage.sync_direction == SYNC_DIRECTION_SSHFS_TO_REMOTE:
+            if storage.sync_direction == SYNC_DIRECTION_AGENT_TO_REMOTE:
+                result = await self._sync_agent_repository_source(
+                    db,
+                    repository,
+                    storage,
+                    remote,
+                    timeout=timeout or settings.rclone_sync_timeout,
+                )
+            elif storage.sync_direction == SYNC_DIRECTION_SSHFS_TO_REMOTE:
                 (
                     source,
                     mount_id,
                     mount_service,
                 ) = await self._mount_ssh_repository_source(repository)
-            if not source:
-                raise ValueError("rclone sync source path is not available")
-            result = await self.service.sync(
-                source,
-                target,
-                timeout=timeout or settings.rclone_sync_timeout,
-                extra_flags=storage.extra_flags or [],
-            )
+                if not source:
+                    raise ValueError("rclone sync source path is not available")
+                result = await self.service.sync(
+                    source,
+                    target,
+                    timeout=timeout or settings.rclone_sync_timeout,
+                    extra_flags=storage.extra_flags or [],
+                )
+            else:
+                if not source:
+                    raise ValueError("rclone sync source path is not available")
+                result = await self.service.sync(
+                    source,
+                    target,
+                    timeout=timeout or settings.rclone_sync_timeout,
+                    extra_flags=storage.extra_flags or [],
+                )
         except Exception as exc:
             storage.sync_status = "failed"
             storage.last_sync_error = _exception_message(exc)
@@ -352,7 +432,24 @@ def _iso(value):
 
 
 def _exception_message(exc: Exception) -> str:
+    detail = getattr(exc, "detail", None)
+    if isinstance(detail, dict):
+        message = detail.get("message") or detail.get("key")
+        if message:
+            return str(message)
+    if isinstance(detail, str) and detail:
+        return detail
     return str(exc) or exc.__class__.__name__
+
+
+def _stringify_config_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (dict, list)):
+        import json
+
+        return json.dumps(value, separators=(",", ":"))
+    return str(value)
 
 
 rclone_repository_service = RcloneRepositoryService()

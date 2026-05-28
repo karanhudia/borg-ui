@@ -93,11 +93,17 @@ export const SshPrimaryEnabled: Story = {
   ),
 }
 
-export const ManagedAgentIneligible: Story = {
+export const ManagedAgentPrimaryEnabled: Story = {
   args: {
     ...baseArgs,
-    eligible: false,
     primaryLocation: 'agent',
+    data: {
+      ...baseArgs.data,
+      cloudMirrorEnabled: true,
+      rcloneRemoteId: 4,
+      rcloneRemotePath: 'borg-ui/agent-primary',
+      rcloneRemotePathVerified: true,
+    },
   },
   render: (args) => (
     <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>

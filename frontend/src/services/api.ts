@@ -73,6 +73,8 @@ export interface RepositoryData {
   execution_target?: 'local' | 'ssh' | 'agent'
   executor_type?: 'server' | 'agent'
   agent_machine_id?: number | null
+  agent_machine_name?: string | null
+  agent_machine_status?: string | null
   host?: string
   port?: number
   username?: string

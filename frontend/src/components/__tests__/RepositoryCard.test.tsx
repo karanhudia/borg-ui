@@ -917,6 +917,38 @@ describe('RepositoryCard', () => {
       expect(onEdit).toHaveBeenCalled()
     })
 
+    it('exposes enable cloud mirror for eligible managed-agent repositories', async () => {
+      const user = userEvent.setup()
+      const onEdit = vi.fn()
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            repository_type: 'local',
+            storage_backend: 'agent_local',
+            execution_target: 'agent',
+            executor_type: 'agent',
+            agent_machine_id: 101,
+            agent_machine_name: 'workstation.local',
+            agent_machine_status: 'online',
+            rclone_storage: null,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onEdit={onEdit}
+        />
+      )
+
+      expect(screen.getByText('Agent: workstation.local')).toBeInTheDocument()
+      expect(screen.getByText('Online')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
+
+      expect(onEdit).toHaveBeenCalled()
+    })
+
     it('renders rclone sync status, target, and mirror actions', () => {
       const rcloneRepository = {
         ...mockRepository,
@@ -986,6 +1018,52 @@ describe('RepositoryCard', () => {
       )
 
       expect(screen.getByText('Sync failed')).toBeInTheDocument()
+    })
+
+    it('renders managed-agent mirror sync status with agent state', () => {
+      const agentMirrorRepository = {
+        ...mockRepository,
+        repository_type: 'local' as const,
+        storage_backend: 'agent_local' as const,
+        execution_target: 'agent' as const,
+        executor_type: 'agent' as const,
+        agent_machine_id: 101,
+        agent_machine_name: 'workstation.local',
+        agent_machine_status: 'offline',
+        rclone_storage: {
+          repository_id: 1,
+          backend: 'rclone' as const,
+          rclone_remote_id: 10,
+          rclone_remote_name: 'prod-s3',
+          rclone_remote_path: 'borg-ui/agent',
+          rclone_target: 'prod-s3:borg-ui/agent',
+          cache_path: null,
+          cache_present: true,
+          sync_direction: 'agent_to_remote',
+          sync_policy: 'manual' as const,
+          sync_status: 'pending',
+          agent_machine_name: 'workstation.local',
+          agent_machine_status: 'offline',
+        },
+      }
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={agentMirrorRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onRcloneSync={vi.fn()}
+          onRcloneHydrate={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Agent: workstation.local')).toBeInTheDocument()
+      expect(screen.getByText('Offline')).toBeInTheDocument()
+      expect(screen.getByText('Sync pending')).toBeInTheDocument()
+      expect(screen.getByText('prod-s3:borg-ui/agent')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Hydrate local cache/i })).not.toBeInTheDocument()
     })
   })
 
