@@ -103,6 +103,14 @@ export default function RepositoryCard({
   const rcloneStorage = repository.rclone_storage
   const rcloneOperationRunning =
     rcloneStorage?.sync_status === 'syncing' || rcloneStorage?.sync_status === 'hydrating'
+  const canEnableCloudMirror =
+    canManageRepository &&
+    !rcloneStorage &&
+    repository.repository_type !== 'rclone' &&
+    (repository.storage_backend == null || repository.storage_backend === 'local') &&
+    (repository.execution_target == null || repository.execution_target === 'local') &&
+    repository.executor_type !== 'agent' &&
+    !repository.connection_id
 
   const [elapsedTime, setElapsedTime] = useState('')
 
@@ -841,8 +849,37 @@ export default function RepositoryCard({
             )}
           </Box>
 
-          {(canCreatePlan || canRunLegacyBackup) && (
+          {(canEnableCloudMirror || canCreatePlan || canRunLegacyBackup) && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
+              {canEnableCloudMirror && (
+                <Tooltip title={t('repositoryCard.buttons.enableCloudMirror')} arrow>
+                  <span>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Cloud size={13} />}
+                      onClick={onEdit}
+                      disabled={isMaintenanceRunning}
+                      sx={{
+                        fontSize: '0.76rem',
+                        height: 30,
+                        flexShrink: 0,
+                        px: { xs: 0.85, sm: 1.25 },
+                        minWidth: 'unset',
+                        '& .MuiButton-startIcon': {
+                          mr: { xs: 0, sm: 0.5 },
+                          ml: { xs: 0, sm: '-2px' },
+                        },
+                      }}
+                    >
+                      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                        {t('repositoryCard.buttons.enableCloudMirror')}
+                      </Box>
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+
               {canRunLegacyBackup && (
                 <Tooltip title={t('repositoryCard.buttons.legacyBackupTooltip')} arrow>
                   <span>

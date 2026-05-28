@@ -90,8 +90,10 @@ export interface RepositoryData {
   skip_on_hook_failure?: boolean
   passphrase?: string
   mode?: 'full' | 'observe'
+  cloud_mirror_enabled?: boolean
   rclone_remote_id?: number | null
   rclone_remote_path?: string | null
+  rclone_remote_path_verified?: boolean
   rclone_sync_policy?: 'after_success' | 'manual' | 'scheduled'
   rclone_extra_flags?: string[] | null
   rclone_storage?: RcloneStorage | null

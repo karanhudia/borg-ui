@@ -841,6 +841,8 @@ class RepositoryCreate(BaseModel):
     storage_backend: str = "local"  # local, ssh, agent_local, rclone
     rclone_remote_id: Optional[int] = None
     rclone_remote_path: Optional[str] = None
+    cloud_mirror_enabled: bool = False
+    rclone_remote_path_verified: bool = False
     rclone_sync_policy: str = "after_success"
     rclone_extra_flags: Optional[List[str]] = None
     rclone_cache_path: Optional[str] = None
@@ -890,6 +892,8 @@ class RepositoryImport(BaseModel):
     storage_backend: str = "local"  # local, ssh, agent_local, rclone
     rclone_remote_id: Optional[int] = None
     rclone_remote_path: Optional[str] = None
+    cloud_mirror_enabled: bool = False
+    rclone_remote_path_verified: bool = False
     rclone_sync_policy: str = "after_success"
     rclone_extra_flags: Optional[List[str]] = None
     rclone_cache_path: Optional[str] = None
@@ -929,6 +933,8 @@ class RepositoryUpdate(BaseModel):
     storage_backend: Optional[str] = None
     rclone_remote_id: Optional[int] = None
     rclone_remote_path: Optional[str] = None
+    cloud_mirror_enabled: Optional[bool] = None
+    rclone_remote_path_verified: Optional[bool] = None
     rclone_sync_policy: Optional[str] = None
     rclone_extra_flags: Optional[List[str]] = None
     rclone_cache_path: Optional[str] = None
@@ -956,6 +962,22 @@ def _uses_borg2_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool
 
 def _is_rclone_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
     return (getattr(data, "storage_backend", "local") or "local") == "rclone"
+
+
+def _is_cloud_mirror_payload(
+    data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
+) -> bool:
+    return bool(getattr(data, "cloud_mirror_enabled", False))
+
+
+def _primary_storage_backend(repository: Repository) -> str:
+    if repository.repository_type == "rclone":
+        return "rclone"
+    if repository_executor_type(repository) == "agent":
+        return "agent_local"
+    if repository.connection_id or repository.repository_type == "ssh":
+        return "ssh"
+    return "local"
 
 
 def _reject_unsupported_rclone_borg2(
@@ -1025,6 +1047,81 @@ def _validate_rclone_payload(
             detail={"key": "backend.errors.rclone.invalidPayload", "message": str(exc)},
         ) from exc
     return remote
+
+
+def _validate_cloud_mirror_payload(
+    data: Union[RepositoryCreate, RepositoryImport],
+    db: Session,
+) -> RcloneRemote | None:
+    if getattr(data, "rclone_cache_path", None):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.cachePathServerOwned"},
+        )
+    if not _is_cloud_mirror_payload(data):
+        return None
+    if _normalize_repository_executor(data) == "agent" or data.connection_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
+        )
+    if not data.rclone_remote_id:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.remoteRequired"},
+        )
+    if not data.rclone_remote_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.remotePathRequired"},
+        )
+    if data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+        )
+    remote = (
+        db.query(RcloneRemote).filter(RcloneRemote.id == data.rclone_remote_id).first()
+    )
+    if not remote:
+        raise HTTPException(
+            status_code=404,
+            detail={"key": "backend.errors.rclone.remoteNotFound"},
+        )
+    try:
+        normalize_extra_flags(data.rclone_extra_flags)
+        normalize_rclone_relative_path(data.rclone_remote_path)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidPayload", "message": str(exc)},
+        ) from exc
+    return remote
+
+
+async def _preflight_cloud_mirror_path(
+    data: Union[RepositoryCreate, RepositoryImport],
+    remote: RcloneRemote | None,
+) -> None:
+    if not remote:
+        return
+    try:
+        await rclone_repository_service.preflight_remote_path(
+            remote,
+            data.rclone_remote_path or "",
+            verified_non_empty=bool(data.rclone_remote_path_verified),
+        )
+    except ValueError as exc:
+        message = str(exc)
+        key = (
+            "backend.errors.rclone.remotePathNotVerified"
+            if "not empty" in message
+            else "backend.errors.rclone.remotePathPreflightFailed"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={"key": key, "message": message},
+        ) from exc
 
 
 def _discard_rclone_repository_record(
@@ -1690,9 +1787,10 @@ async def get_repositories(
             }
             rclone_storage = _serialize_rclone_storage(repo, db)
             if rclone_storage:
-                repo_payload["storage_backend"] = "rclone"
+                repo_payload["storage_backend"] = _primary_storage_backend(repo)
                 repo_payload["rclone_storage"] = rclone_storage
-                repo_payload["repository_type"] = "rclone"
+                if repo.repository_type == "rclone":
+                    repo_payload["repository_type"] = "rclone"
             repo_list.append(repo_payload)
 
         return {"success": True, "repositories": repo_list}
@@ -1859,6 +1957,9 @@ async def create_repository(
                 detail={"key": "backend.errors.repo.repositoryPathExists"},
             )
 
+        cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
+        await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
+
         # Create repository directory if local (but not if using /local mount)
         if not repo_data.connection_id:
             # Skip directory creation if path is within /local mount (host filesystem)
@@ -2010,6 +2111,20 @@ async def create_repository(
             repository.has_keyfile = True
             db.commit()
 
+        if cloud_mirror_remote:
+            storage = rclone_repository_service.build_mirror_storage(
+                repository_id=repository.id,
+                source_path=repository.path,
+                remote_id=cloud_mirror_remote.id,
+                remote_path=repo_data.rclone_remote_path or "",
+                sync_policy=repo_data.rclone_sync_policy,
+                extra_flags=repo_data.rclone_extra_flags,
+            )
+            db.add(storage)
+            db.commit()
+            if repo_data.rclone_sync_policy == "after_success":
+                await rclone_repository_service.sync_repository(db, repository)
+
         # Determine response message
         already_existed = init_result.get("already_existed", False)
         if already_existed:
@@ -2042,20 +2157,28 @@ async def create_repository(
                 error=str(e),
             )
 
+        repository_payload = {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "execution_target": repository.execution_target,
+            "executor_type": repository.executor_type,
+            "agent_machine_id": repository.agent_machine_id,
+        }
+        rclone_storage = _serialize_rclone_storage(repository, db)
+        if rclone_storage:
+            repository_payload["storage_backend"] = _primary_storage_backend(repository)
+            repository_payload["rclone_storage"] = rclone_storage
+            if repository.repository_type == "rclone":
+                repository_payload["repository_type"] = "rclone"
+
         return {
             "success": True,
             "message": message,
             "already_existed": already_existed,
-            "repository": {
-                "id": repository.id,
-                "name": repository.name,
-                "path": repository.path,
-                "encryption": repository.encryption,
-                "compression": repository.compression,
-                "execution_target": repository.execution_target,
-                "executor_type": repository.executor_type,
-                "agent_machine_id": repository.agent_machine_id,
-            },
+            "repository": repository_payload,
         }
     except HTTPException:
         raise
@@ -2214,6 +2337,9 @@ async def import_repository(
                 detail={"key": "backend.errors.repo.repositoryPathExists"},
             )
 
+        cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
+        await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
+
         # Write keyfile to disk before verification so borg can find it
         keyfile_path = None
         if repo_data.keyfile_content:
@@ -2346,6 +2472,20 @@ async def import_repository(
                 error=str(e),
             )
 
+        if cloud_mirror_remote:
+            storage = rclone_repository_service.build_mirror_storage(
+                repository_id=repository.id,
+                source_path=repository.path,
+                remote_id=cloud_mirror_remote.id,
+                remote_path=repo_data.rclone_remote_path or "",
+                sync_policy=repo_data.rclone_sync_policy,
+                extra_flags=repo_data.rclone_extra_flags,
+            )
+            db.add(storage)
+            db.commit()
+            if repo_data.rclone_sync_policy == "after_success":
+                await rclone_repository_service.sync_repository(db, repository)
+
         logger.info(
             "Repository imported successfully",
             name=repo_data.name,
@@ -2366,20 +2506,28 @@ async def import_repository(
                 error=str(e),
             )
 
+        repository_payload = {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "archive_count": repository.archive_count,
+            "execution_target": repository.execution_target,
+            "executor_type": repository.executor_type,
+            "agent_machine_id": repository.agent_machine_id,
+        }
+        rclone_storage = _serialize_rclone_storage(repository, db)
+        if rclone_storage:
+            repository_payload["storage_backend"] = _primary_storage_backend(repository)
+            repository_payload["rclone_storage"] = rclone_storage
+            if repository.repository_type == "rclone":
+                repository_payload["repository_type"] = "rclone"
+
         return {
             "success": True,
             "message": "backend.success.repo.repositoryImported",
-            "repository": {
-                "id": repository.id,
-                "name": repository.name,
-                "path": repository.path,
-                "encryption": repository.encryption,
-                "compression": repository.compression,
-                "archive_count": repository.archive_count,
-                "execution_target": repository.execution_target,
-                "executor_type": repository.executor_type,
-                "agent_machine_id": repository.agent_machine_id,
-            },
+            "repository": repository_payload,
         }
     except HTTPException:
         raise
@@ -2638,9 +2786,10 @@ async def get_repository(
         }
         rclone_storage = _serialize_rclone_storage(repository, db)
         if rclone_storage:
-            repository_payload["storage_backend"] = "rclone"
+            repository_payload["storage_backend"] = _primary_storage_backend(repository)
             repository_payload["rclone_storage"] = rclone_storage
-            repository_payload["repository_type"] = "rclone"
+            if repository.repository_type == "rclone":
+                repository_payload["repository_type"] = "rclone"
 
         return {
             "success": True,
@@ -2673,6 +2822,8 @@ async def update_repository(
             )
         _require_repository_access(db, current_user, repository, "operator")
 
+        update_data = repo_data.model_dump(exclude_unset=True)
+
         # Update fields
         if repo_data.name is not None:
             # Check if name already exists
@@ -2690,107 +2841,6 @@ async def update_repository(
 
         # Store raw path first (will be reconstructed for SSH below)
         raw_path = None
-        update_data = repo_data.model_dump(exclude_unset=True)
-        existing_rclone_storage = (
-            db.query(RepositoryStorage)
-            .filter(RepositoryStorage.repository_id == repository.id)
-            .first()
-        )
-        rclone_update_fields = {
-            "storage_backend",
-            "rclone_remote_id",
-            "rclone_remote_path",
-            "rclone_sync_policy",
-            "rclone_extra_flags",
-            "rclone_cache_path",
-        }
-        requested_rclone_updates = rclone_update_fields.intersection(update_data)
-        if requested_rclone_updates:
-            storage = existing_rclone_storage
-            if not storage or storage.backend != "rclone":
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.rclone.updateUnsupported"},
-                )
-            if "rclone_cache_path" in update_data:
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.rclone.cachePathServerOwned"},
-                )
-            if (
-                "storage_backend" in update_data
-                and repo_data.storage_backend != "rclone"
-            ):
-                raise HTTPException(
-                    status_code=400,
-                    detail={"key": "backend.errors.rclone.updateUnsupported"},
-                )
-            if "rclone_remote_id" in update_data:
-                if not repo_data.rclone_remote_id:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={"key": "backend.errors.rclone.remoteRequired"},
-                    )
-                remote = (
-                    db.query(RcloneRemote)
-                    .filter(RcloneRemote.id == repo_data.rclone_remote_id)
-                    .first()
-                )
-                if not remote:
-                    raise HTTPException(
-                        status_code=404,
-                        detail={"key": "backend.errors.rclone.remoteNotFound"},
-                    )
-                storage.rclone_remote_id = remote.id
-            if "rclone_remote_path" in update_data:
-                if not repo_data.rclone_remote_path:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={"key": "backend.errors.rclone.remotePathRequired"},
-                    )
-                try:
-                    storage.rclone_remote_path = normalize_rclone_relative_path(
-                        repo_data.rclone_remote_path
-                    )
-                except ValueError as exc:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={
-                            "key": "backend.errors.rclone.invalidPayload",
-                            "message": str(exc),
-                        },
-                    ) from exc
-            if "rclone_sync_policy" in update_data:
-                if repo_data.rclone_sync_policy not in VALID_SYNC_POLICIES:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
-                    )
-                storage.sync_policy = repo_data.rclone_sync_policy
-            if "rclone_extra_flags" in update_data:
-                try:
-                    storage.extra_flags = normalize_extra_flags(
-                        repo_data.rclone_extra_flags
-                    )
-                except ValueError as exc:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={
-                            "key": "backend.errors.rclone.invalidPayload",
-                            "message": str(exc),
-                        },
-                    ) from exc
-
-        if (
-            existing_rclone_storage
-            and existing_rclone_storage.backend == "rclone"
-            and "path" in update_data
-        ):
-            update_data.pop("path")
-
-        if "path" in update_data and repo_data.path is not None:
-            raw_path = repo_data.path.strip()
-
         target_executor_type = (
             normalize_executor_type(
                 repo_data.executor_type if "executor_type" in update_data else None,
@@ -2809,6 +2859,319 @@ async def update_repository(
             if "connection_id" in update_data
             else repository.connection_id
         )
+        existing_rclone_storage = (
+            db.query(RepositoryStorage)
+            .filter(RepositoryStorage.repository_id == repository.id)
+            .first()
+        )
+        rclone_update_fields = {
+            "storage_backend",
+            "rclone_remote_id",
+            "rclone_remote_path",
+            "rclone_sync_policy",
+            "rclone_extra_flags",
+            "rclone_cache_path",
+            "cloud_mirror_enabled",
+            "rclone_remote_path_verified",
+        }
+        requested_rclone_updates = rclone_update_fields.intersection(update_data)
+        sync_cloud_mirror_after_update = False
+        if requested_rclone_updates:
+            storage = existing_rclone_storage
+            is_direct_rclone_repository = repository.repository_type == "rclone"
+            if "rclone_cache_path" in update_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.cachePathServerOwned"},
+                )
+
+            if (
+                "storage_backend" in update_data
+                and repo_data.storage_backend == "rclone"
+                and not is_direct_rclone_repository
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.updateUnsupported"},
+                )
+
+            if (
+                repo_data.cloud_mirror_enabled is False
+                and storage
+                and storage.backend == "rclone"
+                and not is_direct_rclone_repository
+            ):
+                db.delete(storage)
+                existing_rclone_storage = None
+                storage = None
+
+            should_enable_or_update_mirror = repo_data.cloud_mirror_enabled is True or (
+                bool(storage)
+                and storage.backend == "rclone"
+                and not is_direct_rclone_repository
+                and repo_data.cloud_mirror_enabled is not False
+            )
+
+            should_update_direct_rclone = (
+                bool(storage)
+                and storage.backend == "rclone"
+                and is_direct_rclone_repository
+            )
+
+            if not should_enable_or_update_mirror and not should_update_direct_rclone:
+                has_meaningful_rclone_values = any(
+                    update_data.get(key)
+                    for key in (
+                        "rclone_remote_id",
+                        "rclone_remote_path",
+                        "rclone_extra_flags",
+                    )
+                )
+                if (
+                    has_meaningful_rclone_values
+                    or repo_data.storage_backend == "rclone"
+                ):
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.updateUnsupported"},
+                    )
+
+            if should_enable_or_update_mirror and (
+                target_executor_type == "agent"
+                or target_connection_id
+                or repository.repository_type == "ssh"
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
+                )
+
+            if should_enable_or_update_mirror and storage is None:
+                if not repo_data.rclone_remote_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remoteRequired"},
+                    )
+                if not repo_data.rclone_remote_path:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remotePathRequired"},
+                    )
+                if repo_data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+                    )
+                remote = (
+                    db.query(RcloneRemote)
+                    .filter(RcloneRemote.id == repo_data.rclone_remote_id)
+                    .first()
+                )
+                if not remote:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={"key": "backend.errors.rclone.remoteNotFound"},
+                    )
+                try:
+                    await rclone_repository_service.preflight_remote_path(
+                        remote,
+                        repo_data.rclone_remote_path,
+                        verified_non_empty=bool(repo_data.rclone_remote_path_verified),
+                    )
+                    storage = rclone_repository_service.build_mirror_storage(
+                        repository_id=repository.id,
+                        source_path=repository.path,
+                        remote_id=remote.id,
+                        remote_path=repo_data.rclone_remote_path,
+                        sync_policy=repo_data.rclone_sync_policy,
+                        extra_flags=repo_data.rclone_extra_flags,
+                    )
+                except ValueError as exc:
+                    message = str(exc)
+                    key = (
+                        "backend.errors.rclone.remotePathNotVerified"
+                        if "not empty" in message
+                        else "backend.errors.rclone.remotePathPreflightFailed"
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": key, "message": message},
+                    ) from exc
+                db.add(storage)
+                existing_rclone_storage = storage
+                sync_cloud_mirror_after_update = storage.sync_policy == "after_success"
+
+            if should_enable_or_update_mirror and storage is not None:
+                rclone_remote_changed = "rclone_remote_id" in update_data
+                rclone_remote_path_changed = "rclone_remote_path" in update_data
+                if "rclone_remote_id" in update_data:
+                    if not repo_data.rclone_remote_id:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={"key": "backend.errors.rclone.remoteRequired"},
+                        )
+                    remote = (
+                        db.query(RcloneRemote)
+                        .filter(RcloneRemote.id == repo_data.rclone_remote_id)
+                        .first()
+                    )
+                    if not remote:
+                        raise HTTPException(
+                            status_code=404,
+                            detail={"key": "backend.errors.rclone.remoteNotFound"},
+                        )
+                else:
+                    remote = (
+                        db.query(RcloneRemote)
+                        .filter(RcloneRemote.id == storage.rclone_remote_id)
+                        .first()
+                    )
+                    if not remote:
+                        raise HTTPException(
+                            status_code=404,
+                            detail={"key": "backend.errors.rclone.remoteNotFound"},
+                        )
+                if rclone_remote_changed or rclone_remote_path_changed:
+                    candidate_remote_path = (
+                        repo_data.rclone_remote_path
+                        if rclone_remote_path_changed
+                        else storage.rclone_remote_path
+                    )
+                    if not candidate_remote_path:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={"key": "backend.errors.rclone.remotePathRequired"},
+                        )
+                    try:
+                        await rclone_repository_service.preflight_remote_path(
+                            remote,
+                            candidate_remote_path,
+                            verified_non_empty=bool(
+                                repo_data.rclone_remote_path_verified
+                            ),
+                        )
+                        if rclone_remote_changed:
+                            storage.rclone_remote_id = remote.id
+                        if rclone_remote_path_changed:
+                            storage.rclone_remote_path = normalize_rclone_relative_path(
+                                candidate_remote_path
+                            )
+                    except ValueError as exc:
+                        message = str(exc)
+                        key = (
+                            "backend.errors.rclone.remotePathNotVerified"
+                            if "not empty" in message
+                            else "backend.errors.rclone.remotePathPreflightFailed"
+                        )
+                        raise HTTPException(
+                            status_code=400,
+                            detail={"key": key, "message": message},
+                        ) from exc
+                if "rclone_sync_policy" in update_data:
+                    if repo_data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+                        )
+                    storage.sync_policy = repo_data.rclone_sync_policy
+                if "rclone_extra_flags" in update_data:
+                    try:
+                        storage.extra_flags = normalize_extra_flags(
+                            repo_data.rclone_extra_flags
+                        )
+                    except ValueError as exc:
+                        raise HTTPException(
+                            status_code=400,
+                            detail={
+                                "key": "backend.errors.rclone.invalidPayload",
+                                "message": str(exc),
+                            },
+                        ) from exc
+                storage.cache_path = repository.path
+
+            if should_update_direct_rclone:
+                storage = existing_rclone_storage
+                if not storage or storage.backend != "rclone":
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.updateUnsupported"},
+                    )
+            if (
+                "storage_backend" in update_data
+                and repo_data.storage_backend != "rclone"
+                and is_direct_rclone_repository
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.updateUnsupported"},
+                )
+            if should_update_direct_rclone and "rclone_remote_id" in update_data:
+                if not repo_data.rclone_remote_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remoteRequired"},
+                    )
+                remote = (
+                    db.query(RcloneRemote)
+                    .filter(RcloneRemote.id == repo_data.rclone_remote_id)
+                    .first()
+                )
+                if not remote:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={"key": "backend.errors.rclone.remoteNotFound"},
+                    )
+                storage.rclone_remote_id = remote.id
+            if should_update_direct_rclone and "rclone_remote_path" in update_data:
+                if not repo_data.rclone_remote_path:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.remotePathRequired"},
+                    )
+                try:
+                    storage.rclone_remote_path = normalize_rclone_relative_path(
+                        repo_data.rclone_remote_path
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.rclone.invalidPayload",
+                            "message": str(exc),
+                        },
+                    ) from exc
+            if should_update_direct_rclone and "rclone_sync_policy" in update_data:
+                if repo_data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+                    )
+                storage.sync_policy = repo_data.rclone_sync_policy
+            if should_update_direct_rclone and "rclone_extra_flags" in update_data:
+                try:
+                    storage.extra_flags = normalize_extra_flags(
+                        repo_data.rclone_extra_flags
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "key": "backend.errors.rclone.invalidPayload",
+                            "message": str(exc),
+                        },
+                    ) from exc
+
+        if (
+            existing_rclone_storage
+            and existing_rclone_storage.backend == "rclone"
+            and repository.repository_type == "rclone"
+            and "path" in update_data
+        ):
+            update_data.pop("path")
+
+        if "path" in update_data and repo_data.path is not None:
+            raw_path = repo_data.path.strip()
+
         target_path = raw_path if raw_path is not None else repository.path
         if target_executor_type == "agent":
             _reject_agent_repository_ssh_target(
@@ -3132,8 +3495,18 @@ async def update_repository(
             agent = _require_queueable_agent(repo_data.agent_machine_id, db)
             repository.agent_machine_id = agent.id
 
+        if (
+            existing_rclone_storage
+            and existing_rclone_storage.backend == "rclone"
+            and repository.repository_type != "rclone"
+        ):
+            existing_rclone_storage.cache_path = repository.path
+
         repository.updated_at = datetime.utcnow()
         db.commit()
+
+        if sync_cloud_mirror_after_update:
+            await rclone_repository_service.sync_repository(db, repository)
 
         logger.info("Repository updated", repo_id=repo_id, user=current_user.username)
 
@@ -3150,6 +3523,7 @@ async def update_repository(
 
         return {"success": True, "message": "backend.success.repo.repositoryUpdated"}
     except HTTPException:
+        db.rollback()
         raise
     except Exception as e:
         logger.error("Failed to update repository", error=str(e))

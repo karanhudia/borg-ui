@@ -69,6 +69,7 @@ export interface RcloneStorage {
   rclone_target?: string | null
   cache_path?: string | null
   cache_present?: boolean
+  sync_direction?: 'primary_to_remote' | 'remote_to_cache' | string | null
   sync_policy: 'after_success' | 'manual' | 'scheduled'
   sync_status: 'current' | 'pending' | 'syncing' | 'failed' | 'hydrating' | string
   last_synced_at?: string | null

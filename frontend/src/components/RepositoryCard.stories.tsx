@@ -42,13 +42,13 @@ const sampleRepository: Repository = {
   next_run: '2026-05-17T02:00:00.000Z',
 }
 
-const rcloneRepository: Repository = {
+const localRepositoryWithMirror: Repository = {
   ...sampleRepository,
   id: 43,
   name: 'Cloud Mirror Repository',
-  path: '/data/rclone-cache/repositories/43',
-  repository_type: 'rclone',
-  storage_backend: 'rclone',
+  path: '/mnt/borg/production',
+  repository_type: 'local',
+  storage_backend: 'local',
   rclone_storage: {
     repository_id: 43,
     backend: 'rclone',
@@ -56,7 +56,7 @@ const rcloneRepository: Repository = {
     rclone_remote_name: 'local-test',
     rclone_remote_path: 'borg-ui/production',
     rclone_target: 'local-test:borg-ui/production',
-    cache_path: '/data/rclone-cache/repositories/43',
+    cache_path: '/mnt/borg/production',
     cache_present: true,
     sync_policy: 'after_success',
     sync_status: 'current',
@@ -108,9 +108,28 @@ export const Default: Story = {
 export const RcloneSynced: Story = {
   args: {
     ...defaultArgs,
-    repository: rcloneRepository,
+    repository: localRepositoryWithMirror,
     onRcloneSync: noop,
     onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const EnableCloudMirror: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 46,
+      name: 'Eligible Local Repository',
+      storage_backend: 'local',
+      execution_target: 'local',
+      rclone_storage: null,
+    },
   },
   render: (args) => (
     <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
@@ -123,11 +142,11 @@ export const RcloneFailed: Story = {
   args: {
     ...defaultArgs,
     repository: {
-      ...rcloneRepository,
+      ...localRepositoryWithMirror,
       id: 44,
       name: 'Failed Cloud Mirror',
       rclone_storage: {
-        ...rcloneRepository.rclone_storage!,
+        ...localRepositoryWithMirror.rclone_storage!,
         repository_id: 44,
         sync_policy: 'manual',
         sync_status: 'failed',
@@ -148,11 +167,11 @@ export const RcloneHydrationRequired: Story = {
   args: {
     ...defaultArgs,
     repository: {
-      ...rcloneRepository,
+      ...localRepositoryWithMirror,
       id: 45,
       name: 'Imported Cloud Mirror',
       rclone_storage: {
-        ...rcloneRepository.rclone_storage!,
+        ...localRepositoryWithMirror.rclone_storage!,
         repository_id: 45,
         cache_present: false,
         sync_status: 'pending',

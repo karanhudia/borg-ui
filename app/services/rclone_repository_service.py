@@ -128,6 +128,63 @@ class RcloneRepositoryService:
             extra_flags=normalize_extra_flags(extra_flags),
         )
 
+    def build_mirror_storage(
+        self,
+        *,
+        repository_id: int,
+        source_path: str,
+        remote_id: int,
+        remote_path: str,
+        sync_policy: str = "after_success",
+        extra_flags: Any = None,
+    ) -> RepositoryStorage:
+        if sync_policy not in VALID_SYNC_POLICIES:
+            raise ValueError("invalid rclone sync policy")
+        normalized_source = str(source_path).strip()
+        if not normalized_source:
+            raise ValueError("repository path is required for cloud mirror")
+        return RepositoryStorage(
+            repository_id=repository_id,
+            backend="rclone",
+            rclone_remote_id=remote_id,
+            rclone_remote_path=normalize_rclone_relative_path(remote_path),
+            cache_path=normalized_source,
+            sync_policy=sync_policy,
+            sync_direction="primary_to_remote",
+            sync_status="pending",
+            extra_flags=normalize_extra_flags(extra_flags),
+        )
+
+    async def preflight_remote_path(
+        self,
+        remote: RcloneRemote,
+        relative_path: str,
+        *,
+        verified_non_empty: bool = False,
+        timeout: int = 60,
+    ) -> None:
+        target = self.compose_target(remote, relative_path)
+        try:
+            entries = await self.service.lsjson(target, timeout=timeout)
+        except Exception as exc:
+            message = _exception_message(exc)
+            lowered = message.lower()
+            not_found_markers = (
+                "not found",
+                "not exist",
+                "doesn't exist",
+                "directory not found",
+                "object not found",
+            )
+            if any(marker in lowered for marker in not_found_markers):
+                return
+            raise ValueError(f"unable to verify rclone remote path: {message}") from exc
+
+        if entries and not verified_non_empty:
+            raise ValueError(
+                "rclone remote path is not empty; browse the target path before syncing"
+            )
+
     async def sync_repository(
         self,
         db: Session,
