@@ -201,6 +201,15 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       repository?.post_backup_script
     )
   const showSourceStep = showLegacyBackupSteps
+  const isCloudMirrorEligible = (state: WizardState) =>
+    state.executionTarget === 'local' &&
+    (state.repositoryLocation === 'local' || state.repositoryLocation === 'ssh')
+  const cloudMirrorPrimaryLocation: 'local' | 'ssh' | 'agent' =
+    wizardState.executionTarget === 'agent'
+      ? 'agent'
+      : wizardState.repositoryLocation === 'ssh'
+        ? 'ssh'
+        : 'local'
 
   // Step definitions
   const steps = useMemo(() => {
@@ -404,9 +413,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       }
 
       const next = { ...prev, ...nextUpdates }
-      const cloudMirrorEligible =
-        next.executionTarget === 'local' && next.repositoryLocation === 'local'
-      if (!cloudMirrorEligible) {
+      if (!isCloudMirrorEligible(next)) {
         next.cloudMirrorEnabled = false
         next.rcloneRemoteId = ''
         next.rcloneRemotePath = ''
@@ -578,7 +585,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         )
 
         if (matchingConnection) {
-          handleStateChange({ repoSshConnectionId: matchingConnection.id })
+          setWizardState((prev) => ({
+            ...prev,
+            repoSshConnectionId: matchingConnection.id,
+          }))
         }
       }
     }
@@ -605,8 +615,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
       case 'cloudMirror':
         if (!wizardState.cloudMirrorEnabled) return true
-        if (wizardState.executionTarget !== 'local' || wizardState.repositoryLocation !== 'local')
-          return false
+        if (!isCloudMirrorEligible(wizardState)) return false
         if (rcloneStatus?.available !== true) return false
         if (!wizardState.rcloneRemoteId || !wizardState.rcloneRemotePath.trim()) return false
         return true
@@ -654,8 +663,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           : 'local'
     const cloudMirrorEnabled =
       wizardState.cloudMirrorEnabled &&
-      wizardState.executionTarget === 'local' &&
-      wizardState.repositoryLocation === 'local'
+      isCloudMirrorEligible(wizardState)
 
     const data: RepositoryData = {
       name: wizardState.name,
@@ -822,8 +830,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             rcloneStatus={rcloneStatus}
             rcloneRemotes={rcloneRemotes}
             eligible={
-              wizardState.executionTarget === 'local' && wizardState.repositoryLocation === 'local'
+              isCloudMirrorEligible(wizardState)
             }
+            primaryLocation={cloudMirrorPrimaryLocation}
             onChange={handleStateChange}
             onAddRcloneRemote={() => {
               setRcloneRemoteCreateError(null)

@@ -103,14 +103,22 @@ export default function RepositoryCard({
   const rcloneStorage = repository.rclone_storage
   const rcloneOperationRunning =
     rcloneStorage?.sync_status === 'syncing' || rcloneStorage?.sync_status === 'hydrating'
+  const isSshPrimaryRepository =
+    repository.storage_backend === 'ssh' ||
+    repository.repository_type === 'ssh' ||
+    repository.execution_target === 'ssh' ||
+    Boolean(repository.connection_id)
+  const isLocalPrimaryRepository =
+    repository.storage_backend == null ||
+    repository.storage_backend === 'local' ||
+    repository.repository_type === 'local'
   const canEnableCloudMirror =
     canManageRepository &&
     !rcloneStorage &&
     repository.repository_type !== 'rclone' &&
-    (repository.storage_backend == null || repository.storage_backend === 'local') &&
-    (repository.execution_target == null || repository.execution_target === 'local') &&
-    repository.executor_type !== 'agent' &&
-    !repository.connection_id
+    (isLocalPrimaryRepository || isSshPrimaryRepository) &&
+    repository.execution_target !== 'agent' &&
+    repository.executor_type !== 'agent'
 
   const [elapsedTime, setElapsedTime] = useState('')
 

@@ -45,6 +45,7 @@ interface WizardStepCloudMirrorProps {
   rcloneRemotes?: RcloneRemote[]
   rcloneStatus?: RcloneStatus | null
   eligible: boolean
+  primaryLocation?: 'local' | 'ssh' | 'agent'
   onChange: (data: Partial<CloudMirrorStepData>) => void
   onAddRcloneRemote?: () => void
   onBrowseRemotePath?: () => void
@@ -55,6 +56,7 @@ export default function WizardStepCloudMirror({
   rcloneRemotes = [],
   rcloneStatus = null,
   eligible,
+  primaryLocation = 'local',
   onChange,
   onAddRcloneRemote,
   onBrowseRemotePath,
@@ -62,6 +64,14 @@ export default function WizardStepCloudMirror({
   const { t } = useTranslation()
   const isRcloneAvailable = rcloneStatus?.available === true
   const controlsDisabled = !eligible || !isRcloneAvailable
+  const ineligibleMessage =
+    primaryLocation === 'agent'
+      ? t('wizard.cloudMirror.managedAgentUnsupported')
+      : t('wizard.cloudMirror.unsupportedPrimary')
+  const routePreview =
+    primaryLocation === 'ssh'
+      ? t('wizard.cloudMirror.sshRoutePreview')
+      : t('wizard.cloudMirror.routePreview')
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>
@@ -90,7 +100,7 @@ export default function WizardStepCloudMirror({
         }
       />
 
-      {!eligible && <Alert severity="info">{t('wizard.cloudMirror.localOnly')}</Alert>}
+      {!eligible && <Alert severity="info">{ineligibleMessage}</Alert>}
 
       {data.cloudMirrorEnabled && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -237,7 +247,7 @@ export default function WizardStepCloudMirror({
           />
 
           <Alert severity="info" icon={<Cloud size={18} />}>
-            {t('wizard.cloudMirror.routePreview')}
+            {routePreview}
           </Alert>
         </Box>
       )}

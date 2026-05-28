@@ -980,6 +980,25 @@ def _primary_storage_backend(repository: Repository) -> str:
     return "local"
 
 
+def _mirror_source_backend_for_payload(
+    data: Union[RepositoryCreate, RepositoryImport],
+) -> str:
+    storage_backend = (getattr(data, "storage_backend", "local") or "local").lower()
+    if data.connection_id or storage_backend == "ssh":
+        return "ssh"
+    return "local"
+
+
+def _mirror_source_backend_for_repository(repository: Repository) -> str:
+    if (
+        repository.connection_id
+        or repository.repository_type == "ssh"
+        or (repository.path or "").startswith("ssh://")
+    ):
+        return "ssh"
+    return "local"
+
+
 def _reject_unsupported_rclone_borg2(
     data: Union[RepositoryCreate, RepositoryImport],
 ) -> None:
@@ -1060,7 +1079,12 @@ def _validate_cloud_mirror_payload(
         )
     if not _is_cloud_mirror_payload(data):
         return None
-    if _normalize_repository_executor(data) == "agent" or data.connection_id:
+    if _normalize_repository_executor(data) == "agent":
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
+        )
+    if _mirror_source_backend_for_payload(data) == "ssh" and not data.connection_id:
         raise HTTPException(
             status_code=400,
             detail={"key": "backend.errors.rclone.mirrorUnsupportedPrimary"},
@@ -2115,6 +2139,7 @@ async def create_repository(
             storage = rclone_repository_service.build_mirror_storage(
                 repository_id=repository.id,
                 source_path=repository.path,
+                source_backend=_mirror_source_backend_for_repository(repository),
                 remote_id=cloud_mirror_remote.id,
                 remote_path=repo_data.rclone_remote_path or "",
                 sync_policy=repo_data.rclone_sync_policy,
@@ -2476,6 +2501,7 @@ async def import_repository(
             storage = rclone_repository_service.build_mirror_storage(
                 repository_id=repository.id,
                 source_path=repository.path,
+                source_backend=_mirror_source_backend_for_repository(repository),
                 remote_id=cloud_mirror_remote.id,
                 remote_path=repo_data.rclone_remote_path or "",
                 sync_policy=repo_data.rclone_sync_policy,
@@ -2938,8 +2964,10 @@ async def update_repository(
 
             if should_enable_or_update_mirror and (
                 target_executor_type == "agent"
-                or target_connection_id
-                or repository.repository_type == "ssh"
+                or (
+                    _mirror_source_backend_for_repository(repository) == "ssh"
+                    and not target_connection_id
+                )
             ):
                 raise HTTPException(
                     status_code=400,
@@ -2981,6 +3009,9 @@ async def update_repository(
                     storage = rclone_repository_service.build_mirror_storage(
                         repository_id=repository.id,
                         source_path=repository.path,
+                        source_backend=_mirror_source_backend_for_repository(
+                            repository
+                        ),
                         remote_id=remote.id,
                         remote_path=repo_data.rclone_remote_path,
                         sync_policy=repo_data.rclone_sync_policy,

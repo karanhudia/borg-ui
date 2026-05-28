@@ -531,6 +531,63 @@ describe('RepositoryWizard', () => {
       })
     }, 90000)
 
+    it('submits SSH repository cloud mirror fields without a cache path', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await fillLocalLocation('SSH Cloud Repo', '/backups/ssh-cloud')
+      await chooseRemoteRepository(user)
+
+      const pathInput = screen.getByLabelText(/Repository Path/i)
+      await user.clear(pathInput)
+      setInputValue(pathInput, '/backups/ssh-cloud')
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('checkbox', { name: /Mirror this repository/i }))
+
+      await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
+      const remoteListbox = await screen.findByRole('listbox')
+      await user.click(within(remoteListbox).getByText('prod-s3'))
+      setInputValue(screen.getByLabelText(/Relative Remote Path/i), 'borg-ui/repositories/ssh')
+
+      expect(screen.queryByText(/Local Cache Path/i)).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Repository Key')).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'sshcloudpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.not.objectContaining({ rclone_cache_path: expect.anything() }),
+          null
+        )
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'SSH Cloud Repo',
+            path: '/backups/ssh-cloud',
+            storage_backend: 'ssh',
+            connection_id: 1,
+            cloud_mirror_enabled: true,
+            rclone_remote_id: 10,
+            rclone_remote_path: 'borg-ui/repositories/ssh',
+            rclone_remote_path_verified: false,
+            rclone_sync_policy: 'after_success',
+          }),
+          null
+        )
+      })
+    }, 90000)
+
     it('submits browsed cloud mirror paths as verified', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')

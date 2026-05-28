@@ -74,10 +74,30 @@ export const Enabled: Story = {
   ),
 }
 
-export const IneligiblePrimary: Story = {
+export const SshPrimaryEnabled: Story = {
+  args: {
+    ...baseArgs,
+    primaryLocation: 'ssh',
+    data: {
+      ...baseArgs.data,
+      cloudMirrorEnabled: true,
+      rcloneRemoteId: 4,
+      rcloneRemotePath: 'borg-ui/ssh-primary',
+      rcloneRemotePathVerified: true,
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepCloudMirror {...args} />
+    </Box>
+  ),
+}
+
+export const ManagedAgentIneligible: Story = {
   args: {
     ...baseArgs,
     eligible: false,
+    primaryLocation: 'agent',
   },
   render: (args) => (
     <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>

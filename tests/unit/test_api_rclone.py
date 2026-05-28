@@ -6,7 +6,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Repository, RepositoryStorage, RcloneRemote
+from app.database.models import (
+    Repository,
+    RepositoryStorage,
+    RcloneRemote,
+    SSHConnection,
+)
 from app.services.rclone_service import RcloneCommandResult
 from app.services.rclone_service import RcloneUnavailable
 from tests.unit.helpers import assert_auth_required
@@ -548,6 +553,232 @@ def test_create_local_repository_cloud_mirror_rejects_client_cache_path(
     assert (
         response.json()["detail"]["key"] == "backend.errors.rclone.cachePathServerOwned"
     )
+
+
+@pytest.mark.unit
+def test_create_ssh_repository_with_cloud_mirror_uses_server_owned_mount_strategy(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    connection = SSHConnection(host="storage.example", username="borg", port=22)
+    test_db.add_all([remote, connection])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(connection)
+    monkeypatch.setattr(
+        "app.api.repositories.initialize_borg_repository",
+        AsyncMock(return_value={"success": True, "already_existed": False}),
+    )
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.sync",
+        AsyncMock(
+            return_value=RcloneCommandResult(
+                success=True,
+                return_code=0,
+                stdout="",
+                stderr="",
+                command=["rclone", "sync"],
+                redacted_command="rclone sync <path> <path>",
+            )
+        ),
+    )
+    mount_service = AsyncMock()
+    mount_service.active_mounts = {
+        "mount-ssh-repo": type(
+            "MountInfo", (), {"mount_point": "/tmp/sshfs_mount_9/backups/app"}
+        )()
+    }
+    mount_service.mount_ssh_directory.return_value = (
+        "/tmp/sshfs_mount_9",
+        "mount-ssh-repo",
+    )
+    mount_service.unmount.return_value = True
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_repository_service.ssh_mount_service",
+        mount_service,
+    )
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "SSH App",
+            "path": "/backups/app",
+            "encryption": "none",
+            "storage_backend": "ssh",
+            "repository_type": "ssh",
+            "connection_id": connection.id,
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "after_success",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = test_db.query(Repository).filter(Repository.name == "SSH App").one()
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    assert repository.path == "ssh://borg@storage.example:22/backups/app"
+    assert repository.connection_id == connection.id
+    assert storage.cache_path is None
+    assert storage.sync_direction == "sshfs_mount_to_remote"
+    assert storage.sync_status == "current"
+    assert response.json()["repository"]["rclone_storage"]["sync_direction"] == (
+        "sshfs_mount_to_remote"
+    )
+    assert "rclone_cache_path" not in response.json()["repository"]
+
+
+@pytest.mark.unit
+def test_create_ssh_repository_cloud_mirror_rejects_client_cache_path(
+    test_client: TestClient, admin_headers, test_db
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    connection = SSHConnection(host="storage.example", username="borg", port=22)
+    test_db.add_all([remote, connection])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(connection)
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "SSH App",
+            "path": "/backups/app",
+            "encryption": "none",
+            "storage_backend": "ssh",
+            "repository_type": "ssh",
+            "connection_id": connection.id,
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_cache_path": "/tmp/client-owned-stage",
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"] == "backend.errors.rclone.cachePathServerOwned"
+    )
+
+
+@pytest.mark.unit
+def test_create_ssh_repository_cloud_mirror_requires_stored_connection(
+    test_client: TestClient, admin_headers, test_db
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "SSH App",
+            "path": "/backups/app",
+            "encryption": "none",
+            "storage_backend": "ssh",
+            "repository_type": "ssh",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.rclone.mirrorUnsupportedPrimary"
+    )
+
+
+@pytest.mark.unit
+def test_create_ssh_repository_cloud_mirror_first_sync_failure_preserves_repository(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    connection = SSHConnection(host="storage.example", username="borg", port=22)
+    test_db.add_all([remote, connection])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(connection)
+    monkeypatch.setattr(
+        "app.api.repositories.initialize_borg_repository",
+        AsyncMock(return_value={"success": True, "already_existed": False}),
+    )
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+    mount_service = AsyncMock()
+    mount_service.active_mounts = {
+        "mount-ssh-repo": type(
+            "MountInfo", (), {"mount_point": "/tmp/sshfs_mount_9/backups/app"}
+        )()
+    }
+    mount_service.mount_ssh_directory.return_value = (
+        "/tmp/sshfs_mount_9",
+        "mount-ssh-repo",
+    )
+    mount_service.unmount.return_value = True
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_repository_service.ssh_mount_service",
+        mount_service,
+    )
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.sync",
+        AsyncMock(
+            return_value=RcloneCommandResult(
+                success=False,
+                return_code=1,
+                stdout="",
+                stderr="remote unavailable",
+                command=["rclone", "sync"],
+                redacted_command="rclone sync <path> <path>",
+            )
+        ),
+    )
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "SSH App",
+            "path": "/backups/app",
+            "encryption": "none",
+            "storage_backend": "ssh",
+            "repository_type": "ssh",
+            "connection_id": connection.id,
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "after_success",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = test_db.query(Repository).filter(Repository.name == "SSH App").one()
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    assert repository.path == "ssh://borg@storage.example:22/backups/app"
+    assert storage.sync_status == "failed"
+    assert storage.last_sync_error == "remote unavailable"
+    assert response.json()["repository"]["rclone_storage"]["sync_status"] == "failed"
 
 
 @pytest.mark.unit
@@ -1260,6 +1491,65 @@ def test_update_cloud_mirror_remote_change_blocks_unverified_non_empty_target(
     )
     test_db.refresh(storage)
     assert storage.rclone_remote_id == old_remote.id
+
+
+@pytest.mark.unit
+def test_update_ssh_cloud_mirror_remote_change_rolls_back_on_preflight_failure(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    old_remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    new_remote = RcloneRemote(name="archive-s3", provider="s3", config_source="managed")
+    connection = SSHConnection(host="storage.example", username="borg", port=22)
+    repository = Repository(
+        name="SSH App",
+        path="ssh://borg@storage.example:22/backups/app",
+        encryption="none",
+        repository_type="ssh",
+        connection_id=1,
+        execution_target="ssh",
+        executor_type="server",
+    )
+    test_db.add_all([old_remote, new_remote, connection, repository])
+    test_db.commit()
+    test_db.refresh(old_remote)
+    test_db.refresh(new_remote)
+    test_db.refresh(connection)
+    repository.connection_id = connection.id
+    test_db.commit()
+    test_db.refresh(repository)
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=old_remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=None,
+        sync_policy="manual",
+        sync_status="current",
+        sync_direction="sshfs_mount_to_remote",
+    )
+    test_db.add(storage)
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[{"Name": "existing", "IsDir": True}]),
+    )
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={"rclone_remote_id": new_remote.id},
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.rclone.remotePathNotVerified"
+    )
+    test_db.refresh(storage)
+    assert storage.rclone_remote_id == old_remote.id
+    assert storage.rclone_remote_path == "borg-ui/repositories/app"
+    assert storage.cache_path is None
+    assert storage.sync_direction == "sshfs_mount_to_remote"
 
 
 @pytest.mark.unit

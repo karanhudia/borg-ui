@@ -109,6 +109,7 @@ describe('WizardStepCloudMirror', () => {
         rcloneRemotes={remotes}
         rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
         eligible={false}
+        primaryLocation="agent"
         onChange={vi.fn()}
         onAddRcloneRemote={vi.fn()}
         onBrowseRemotePath={vi.fn()}
@@ -117,7 +118,28 @@ describe('WizardStepCloudMirror', () => {
 
     expect(screen.getByRole('checkbox', { name: /Mirror this repository/i })).toBeDisabled()
     expect(
-      screen.getByText(/Local repositories can be mirrored in this release/i)
+      screen.getByText(/Managed-agent repositories need a separate mirror strategy/i)
     ).toBeInTheDocument()
+  })
+
+  it('allows SSH-primary repositories and explains the server-owned mount route', () => {
+    render(
+      <WizardStepCloudMirror
+        data={{ ...defaultData, cloudMirrorEnabled: true, rcloneRemoteId: 10 }}
+        rcloneRemotes={remotes}
+        rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
+        eligible={true}
+        primaryLocation="ssh"
+        onChange={vi.fn()}
+        onAddRcloneRemote={vi.fn()}
+        onBrowseRemotePath={vi.fn()}
+      />
+    )
+
+    expect(screen.getByRole('checkbox', { name: /Mirror this repository/i })).not.toBeDisabled()
+    expect(
+      screen.getByText(/Borg UI server mounts the SSH repository via SSHFS/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Local Cache Path/i)).not.toBeInTheDocument()
   })
 })

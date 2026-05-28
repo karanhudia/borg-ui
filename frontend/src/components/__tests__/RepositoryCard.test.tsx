@@ -889,6 +889,34 @@ describe('RepositoryCard', () => {
       expect(onEdit).toHaveBeenCalled()
     })
 
+    it('exposes enable cloud mirror for eligible SSH repositories', async () => {
+      const user = userEvent.setup()
+      const onEdit = vi.fn()
+
+      renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            repository_type: 'ssh',
+            storage_backend: 'ssh',
+            execution_target: 'ssh',
+            executor_type: 'server',
+            connection_id: 1,
+            rclone_storage: null,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+          onEdit={onEdit}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
+
+      expect(onEdit).toHaveBeenCalled()
+    })
+
     it('renders rclone sync status, target, and mirror actions', () => {
       const rcloneRepository = {
         ...mockRepository,
