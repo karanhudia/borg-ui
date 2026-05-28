@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 
 from app.database.models import Repository, RepositoryStorage, RcloneRemote
 from app.services.rclone_repository_service import (
@@ -136,6 +137,26 @@ class _RecordingRcloneService:
         )
 
 
+class _RecordingMountService:
+    def __init__(self):
+        self.mount_calls = []
+        self.unmount_calls = []
+        self.active_mounts = {}
+
+    async def mount_ssh_directory(self, connection_id, remote_path, job_id=None):
+        self.mount_calls.append((connection_id, remote_path, job_id))
+        mount_id = "mount-ssh-repo"
+        self.active_mounts[mount_id] = SimpleNamespace(
+            mount_point="/tmp/sshfs_mount_9/backups/app"
+        )
+        return "/tmp/sshfs_mount_9", mount_id
+
+    async def unmount(self, mount_id, force=False):
+        self.unmount_calls.append((mount_id, force))
+        self.active_mounts.pop(mount_id, None)
+        return True
+
+
 class _ListingRcloneService:
     def __init__(self, entries):
         self.entries = entries
@@ -165,6 +186,25 @@ def test_build_mirror_storage_uses_primary_repository_path_as_source():
 
 
 @pytest.mark.unit
+def test_build_ssh_mirror_storage_records_server_owned_mount_strategy():
+    service = RcloneRepositoryService(cache_root="/cache")
+
+    storage = service.build_mirror_storage(
+        repository_id=9,
+        source_path="ssh://borg@storage.example:22/backups/app",
+        source_backend="ssh",
+        remote_id=3,
+        remote_path="borg-ui/repositories/app",
+        sync_policy="manual",
+    )
+
+    assert storage.backend == "rclone"
+    assert storage.cache_path is None
+    assert storage.sync_direction == "sshfs_mount_to_remote"
+    assert storage.sync_status == "pending"
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_sync_repository_mirror_uses_primary_repository_path_source(db_session):
     remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
@@ -188,6 +228,44 @@ async def test_sync_repository_mirror_uses_primary_repository_path_source(db_ses
 
     assert rclone.sync_calls[0][0] == "/srv/borg/app"
     assert rclone.sync_calls[0][1] == "prod-s3:borg-ui/repositories/app"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_ssh_mirror_mounts_server_owned_source(db_session):
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(
+        id=9,
+        name="SSH App",
+        path="ssh://borg@storage.example:22/backups/app",
+        connection_id=7,
+        encryption="none",
+        repository_type="ssh",
+    )
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=None,
+        sync_policy="manual",
+        sync_status="pending",
+        sync_direction="sshfs_mount_to_remote",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    rclone = _RecordingRcloneService()
+    mount_service = _RecordingMountService()
+    service = RcloneRepositoryService(
+        cache_root="/cache", service=rclone, ssh_mount_service=mount_service
+    )
+
+    await service.sync_repository(db_session, repository)
+
+    assert mount_service.mount_calls == [(7, "/backups/app", None)]
+    assert rclone.sync_calls[0][0] == "/tmp/sshfs_mount_9/backups/app"
+    assert rclone.sync_calls[0][1] == "prod-s3:borg-ui/repositories/app"
+    assert mount_service.unmount_calls == [("mount-ssh-repo", True)]
 
 
 @pytest.mark.unit

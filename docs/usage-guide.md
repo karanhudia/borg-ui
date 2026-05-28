@@ -91,6 +91,18 @@ Use remote repositories when the Borg archive should live on another server or o
 For BorgBase, Hetzner Storage Box, other hosted Borg providers, and NAS path
 mapping notes, see [Provider Guides](provider-guides).
 
+## Add a Cloud Mirror
+
+Cloud mirrors keep the primary repository local or SSH-backed and sync a copy to an rclone remote.
+
+1. Go to Cloud Storage and configure the rclone remote.
+2. Go to Repositories and create or edit a local or SSH repository.
+3. Open the Cloud Mirror step.
+4. Enable the mirror, choose the rclone remote, and enter or browse a relative remote path.
+5. Review and save.
+
+For SSH repositories, Borg UI mounts the repository on the server with SSHFS during each mirror sync, then unmounts it after rclone finishes. Borg UI owns that temporary mount path; the UI and API do not ask for a cache or staging path.
+
 ## Import an Existing Repository
 
 Use Import Existing when a Borg repository already exists and you want Borg UI to manage or monitor it.
