@@ -7,6 +7,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,9 @@ from app.services.rclone_service import RcloneService, rclone_service
 
 
 VALID_SYNC_POLICIES = {"after_success", "manual", "scheduled"}
+SYNC_DIRECTION_CACHE_TO_REMOTE = "cache_to_remote"
+SYNC_DIRECTION_PRIMARY_TO_REMOTE = "primary_to_remote"
+SYNC_DIRECTION_SSHFS_TO_REMOTE = "sshfs_mount_to_remote"
 
 
 def normalize_rclone_relative_path(value: str) -> str:
@@ -47,9 +51,11 @@ class RcloneRepositoryService:
         *,
         cache_root: str | None = None,
         service: RcloneService | None = None,
+        ssh_mount_service: Any | None = None,
     ):
         self.cache_root = cache_root or settings.rclone_cache_root
         self.service = service or rclone_service
+        self.ssh_mount_service = ssh_mount_service
 
     def derive_cache_path(self, repository_id: int) -> str:
         return str(Path(self.cache_root) / "repositories" / str(repository_id))
@@ -73,9 +79,7 @@ class RcloneRepositoryService:
             if remote and storage.rclone_remote_path
             else None,
             "cache_path": storage.cache_path,
-            "cache_present": bool(
-                storage.cache_path and os.path.isdir(storage.cache_path)
-            ),
+            "cache_present": self._cache_present(storage),
             "sync_policy": storage.sync_policy,
             "sync_direction": storage.sync_direction,
             "sync_status": storage.sync_status,
@@ -133,6 +137,7 @@ class RcloneRepositoryService:
         *,
         repository_id: int,
         source_path: str,
+        source_backend: str = "local",
         remote_id: int,
         remote_path: str,
         sync_policy: str = "after_success",
@@ -143,17 +148,64 @@ class RcloneRepositoryService:
         normalized_source = str(source_path).strip()
         if not normalized_source:
             raise ValueError("repository path is required for cloud mirror")
+        source_backend = (source_backend or "local").strip().lower()
+        if source_backend == "ssh":
+            cache_path = None
+            sync_direction = SYNC_DIRECTION_SSHFS_TO_REMOTE
+        else:
+            cache_path = normalized_source
+            sync_direction = SYNC_DIRECTION_PRIMARY_TO_REMOTE
         return RepositoryStorage(
             repository_id=repository_id,
             backend="rclone",
             rclone_remote_id=remote_id,
             rclone_remote_path=normalize_rclone_relative_path(remote_path),
-            cache_path=normalized_source,
+            cache_path=cache_path,
             sync_policy=sync_policy,
-            sync_direction="primary_to_remote",
+            sync_direction=sync_direction,
             sync_status="pending",
             extra_flags=normalize_extra_flags(extra_flags),
         )
+
+    def _cache_present(self, storage: RepositoryStorage) -> bool:
+        if storage.sync_direction == SYNC_DIRECTION_SSHFS_TO_REMOTE:
+            return True
+        if not storage.cache_path:
+            return False
+        return os.path.isdir(storage.cache_path)
+
+    def _get_ssh_mount_service(self):
+        if self.ssh_mount_service is not None:
+            return self.ssh_mount_service
+        from app.services.mount_service import mount_service
+
+        return mount_service
+
+    def _ssh_repository_remote_path(self, repository: Repository) -> str:
+        source = (repository.path or "").strip()
+        if not source:
+            raise ValueError("SSH repository path is required for cloud mirror")
+        if source.startswith("ssh://"):
+            parsed = urlparse(source)
+            return parsed.path or "/"
+        return source
+
+    async def _mount_ssh_repository_source(
+        self, repository: Repository
+    ) -> tuple[str, str, Any]:
+        if not repository.connection_id:
+            raise ValueError("SSH cloud mirror requires a stored SSH connection")
+        remote_path = self._ssh_repository_remote_path(repository)
+        mount_service = self._get_ssh_mount_service()
+        _temp_root, mount_id = await mount_service.mount_ssh_directory(
+            repository.connection_id, remote_path
+        )
+        mount_info = mount_service.active_mounts.get(mount_id)
+        mount_point = getattr(mount_info, "mount_point", None)
+        if not mount_point:
+            await mount_service.unmount(mount_id, force=True)
+            raise ValueError("SSH cloud mirror mount did not return a mount point")
+        return mount_point, mount_id, mount_service
 
     async def preflight_remote_path(
         self,
@@ -198,9 +250,20 @@ class RcloneRepositoryService:
         storage.sync_status = "syncing"
         storage.last_sync_error = None
         db.commit()
+        mount_id = None
+        mount_service = None
         try:
+            source = storage.cache_path
+            if storage.sync_direction == SYNC_DIRECTION_SSHFS_TO_REMOTE:
+                (
+                    source,
+                    mount_id,
+                    mount_service,
+                ) = await self._mount_ssh_repository_source(repository)
+            if not source:
+                raise ValueError("rclone sync source path is not available")
             result = await self.service.sync(
-                storage.cache_path,
+                source,
                 target,
                 timeout=timeout or settings.rclone_sync_timeout,
                 extra_flags=storage.extra_flags or [],
@@ -210,6 +273,12 @@ class RcloneRepositoryService:
             storage.last_sync_error = _exception_message(exc)
             db.commit()
             return self.serialize_status(repository, storage, remote)
+        finally:
+            if mount_id and mount_service:
+                try:
+                    await mount_service.unmount(mount_id, force=True)
+                except Exception:
+                    pass
         now = datetime.now(timezone.utc)
         if result.success:
             storage.sync_status = "current"

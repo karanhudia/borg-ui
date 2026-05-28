@@ -138,6 +138,29 @@ export const EnableCloudMirror: Story = {
   ),
 }
 
+export const EnableCloudMirrorForSsh: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 47,
+      name: 'SSH Repository Mirror',
+      path: 'ssh://borg@storage.example:22/backups/production',
+      repository_type: 'ssh',
+      storage_backend: 'ssh',
+      execution_target: 'ssh',
+      executor_type: 'server',
+      connection_id: 11,
+      rclone_storage: null,
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
 export const RcloneFailed: Story = {
   args: {
     ...defaultArgs,
