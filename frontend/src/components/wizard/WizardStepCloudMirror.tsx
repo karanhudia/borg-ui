@@ -214,10 +214,7 @@ export default function WizardStepCloudMirror({
               label={t('wizard.location.rcloneSyncPolicyLabel')}
               onChange={(event) =>
                 onChange({
-                  rcloneSyncPolicy: event.target.value as
-                    | 'after_success'
-                    | 'manual'
-                    | 'scheduled',
+                  rcloneSyncPolicy: event.target.value as 'after_success' | 'manual' | 'scheduled',
                 })
               }
             >

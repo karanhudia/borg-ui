@@ -115,6 +115,8 @@ describe('WizardStepCloudMirror', () => {
     )
 
     expect(screen.getByRole('checkbox', { name: /Mirror this repository/i })).toBeDisabled()
-    expect(screen.getByText(/Local repositories can be mirrored in this release/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Local repositories can be mirrored in this release/i)
+    ).toBeInTheDocument()
   })
 })

@@ -380,7 +380,6 @@ export default function WizardStepLocation({
               </CardContent>
             </CardActionArea>
           </Card>
-
         </Box>
 
         {isRemoteLocationDisabled && (

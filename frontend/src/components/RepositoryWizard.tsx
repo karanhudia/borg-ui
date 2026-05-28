@@ -691,23 +691,18 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       storage_backend: storageBackend,
       cloud_mirror_enabled: cloudMirrorEnabled,
       rclone_remote_id:
-        cloudMirrorEnabled && wizardState.rcloneRemoteId
-          ? wizardState.rcloneRemoteId
-          : null,
+        cloudMirrorEnabled && wizardState.rcloneRemoteId ? wizardState.rcloneRemoteId : null,
       rclone_remote_path: cloudMirrorEnabled ? wizardState.rcloneRemotePath : null,
       rclone_remote_path_verified: cloudMirrorEnabled
         ? wizardState.rcloneRemotePathVerified
         : false,
       rclone_sync_policy: cloudMirrorEnabled ? wizardState.rcloneSyncPolicy : 'after_success',
-      rclone_extra_flags:
-        cloudMirrorEnabled
-          ? wizardState.rcloneExtraFlags.split(/\s+/).filter(Boolean)
-          : [],
+      rclone_extra_flags: cloudMirrorEnabled
+        ? wizardState.rcloneExtraFlags.split(/\s+/).filter(Boolean)
+        : [],
       // Connection IDs - single source of truth for SSH
       connection_id:
-        wizardState.executionTarget === 'agent'
-          ? null
-          : wizardState.repoSshConnectionId || null,
+        wizardState.executionTarget === 'agent' ? null : wizardState.repoSshConnectionId || null,
       source_connection_id:
         wizardState.executionTarget !== 'agent' &&
         wizardState.dataSource === 'remote' &&
@@ -794,10 +789,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             dataSource={wizardState.dataSource}
             sourceSshConnectionId={wizardState.sourceSshConnectionId}
             onChange={(updates) => {
-              if (
-                typeof updates.path === 'string' &&
-                updates.repositoryLocation === undefined
-              ) {
+              if (typeof updates.path === 'string' && updates.repositoryLocation === undefined) {
                 handlePathChange(updates.path)
                 return
               }

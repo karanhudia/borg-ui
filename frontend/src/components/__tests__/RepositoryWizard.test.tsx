@@ -318,12 +318,10 @@ describe('RepositoryWizard', () => {
       const sourceStep = screen.getByText('Source')
 
       expect(
-        locationStep.compareDocumentPosition(cloudMirrorStep) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+        locationStep.compareDocumentPosition(cloudMirrorStep) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy()
       expect(
-        cloudMirrorStep.compareDocumentPosition(sourceStep) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+        cloudMirrorStep.compareDocumentPosition(sourceStep) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy()
     })
 
