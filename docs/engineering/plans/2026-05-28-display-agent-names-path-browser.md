@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Prove The Existing Bug
+## Task 1: Prove The Existing Bug
 
 **Files:**
 - Modify: `frontend/src/components/__tests__/FileExplorerDialog.test.tsx`
@@ -38,7 +38,7 @@ Run: `cd frontend && npm run test -- src/components/__tests__/FileExplorerDialog
 
 Expected: FAIL because the dialog still renders `Agent #42`.
 
-### Task 2: Implement The Dialog Prop
+## Task 2: Implement The Dialog Prop
 
 **Files:**
 - Modify: `frontend/src/components/FileExplorerDialog.tsx`
@@ -64,7 +64,7 @@ Run: `cd frontend && npm run test -- src/components/__tests__/FileExplorerDialog
 
 Expected: PASS.
 
-### Task 3: Pass Names From Affected Flows
+## Task 3: Pass Names From Affected Flows
 
 **Files:**
 - Modify: `frontend/src/pages/backup-plans/wizard-step/SourceSelectionDialog.tsx`
@@ -87,7 +87,7 @@ const selectedAgentMachine =
 
 Pass `agentName={selectedAgentMachine?.name}` to the repository path `FileExplorerDialog`.
 
-### Task 4: Storybook Coverage
+## Task 4: Storybook Coverage
 
 **Files:**
 - Create: `frontend/src/components/FileExplorerDialog.stories.tsx`
@@ -103,7 +103,7 @@ Run: `cd frontend && npm run snapshots`
 
 Expected: snapshot generation succeeds and creates or updates the FileExplorerDialog snapshot.
 
-### Task 5: Full Frontend Validation And Handoff
+## Task 5: Full Frontend Validation And Handoff
 
 **Files:**
 - No new source files beyond previous tasks.

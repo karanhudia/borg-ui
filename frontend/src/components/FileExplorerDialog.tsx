@@ -479,7 +479,9 @@ export default function FileExplorerDialog({
   const filteredItems = allItems.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
-  const agentLabel = agentName?.trim() || (agentId ? `Agent #${agentId}` : '')
+  const agentLabel =
+    agentName?.trim() ||
+    (agentId ? t('backupPlans.sourceChooser.agentFallback', { id: agentId }) : '')
 
   return (
     <>
