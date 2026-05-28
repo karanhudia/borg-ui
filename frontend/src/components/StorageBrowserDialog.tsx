@@ -159,8 +159,12 @@ export default function StorageBrowserDialog({
   const hasModifiedColumn =
     showModifiedColumn || files.some((file) => Boolean(file.modified || formatModified))
 
-  const renderSize = (size?: number | null) =>
-    size === null || size === undefined ? null : formatSize(size)
+  const renderSize = (size?: number | null) => {
+    if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) {
+      return null
+    }
+    return formatSize(size)
+  }
 
   return (
     <ResponsiveDialog

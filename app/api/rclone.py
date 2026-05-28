@@ -3,6 +3,7 @@ from __future__ import annotations
 import configparser
 import json
 import logging
+import math
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -115,6 +116,33 @@ def _stringify_config_value(value: Any) -> str:
     if isinstance(value, (dict, list)):
         return json.dumps(value, separators=(",", ":"))
     return str(value)
+
+
+def _normalize_browse_entry_path(value: Any) -> str:
+    return "/".join(part for part in str(value or "").strip().split("/") if part)
+
+
+def _compose_browse_entry_path(relative_path: str, item: dict[str, Any]) -> str:
+    item_path = _normalize_browse_entry_path(item.get("Path") or item.get("Name"))
+    if not item_path:
+        return relative_path
+    if not relative_path:
+        return item_path
+    if item_path == relative_path or item_path.startswith(f"{relative_path}/"):
+        return item_path
+    return f"{relative_path}/{item_path}"
+
+
+def _serialize_browse_entry_size(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(size) or size < 0:
+        return None
+    return int(size)
 
 
 def _managed_config_values(
@@ -472,9 +500,9 @@ async def browse_remote(
         "entries": [
             {
                 "name": item.get("Name"),
-                "path": item.get("Path"),
+                "path": _compose_browse_entry_path(relative_path, item),
                 "is_dir": bool(item.get("IsDir")),
-                "size": item.get("Size"),
+                "size": _serialize_browse_entry_size(item.get("Size")),
                 "modified": item.get("ModTime"),
             }
             for item in entries

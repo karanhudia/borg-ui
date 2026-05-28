@@ -43,7 +43,7 @@ import OperationalCard from '../components/OperationalCard'
 import PageHeader from '../components/PageHeader'
 import ListToolbar from '../components/ListToolbar'
 import StorageBrowserDialog, { type StorageBrowserItem } from '../components/StorageBrowserDialog'
-import { normalizeBrowserPath } from '../utils/storageBrowserPaths'
+import { joinBrowserPath, normalizeBrowserPath } from '../utils/storageBrowserPaths'
 
 interface BrowseEntry {
   name: string
@@ -562,7 +562,7 @@ export function CloudStorageContent({
 
     return browseState.entries.map((entry) => ({
       name: entry.name,
-      path: normalizeBrowserPath(entry.path || entry.name),
+      path: joinBrowserPath(browseState.path, entry.path || entry.name),
       type: entry.is_dir ? 'directory' : 'file',
       size: entry.size,
       modified: entry.modified,

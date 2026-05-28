@@ -121,10 +121,11 @@ describe('CloudStorage', () => {
   }, 60000)
 
   it('tests and browses a remote from the remote card', async () => {
+    const user = userEvent.setup()
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
 
     const card = await screen.findByTestId('cloud-storage-remote-prod-s3')
-    fireEvent.click(within(card).getByRole('button', { name: /Test connection/i }))
+    await user.click(within(card).getByRole('button', { name: /Test connection/i }))
 
     await waitFor(() => {
       expect(rcloneAPI.testRemote).toHaveBeenCalledWith(10)
@@ -134,7 +135,7 @@ describe('CloudStorage', () => {
       expect(rcloneAPI.listRemotes).toHaveBeenCalledTimes(2)
     })
     const refreshedCard = await screen.findByTestId('cloud-storage-remote-prod-s3')
-    fireEvent.click(within(refreshedCard).getByRole('button', { name: /Browse remote/i }))
+    await user.click(within(refreshedCard).getByRole('button', { name: /Browse remote/i }))
     await waitFor(() => {
       expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, '')
     })
@@ -144,6 +145,7 @@ describe('CloudStorage', () => {
   })
 
   it('navigates folders in the reusable browse dialog', async () => {
+    const user = userEvent.setup()
     vi.mocked(rcloneAPI.browseRemote).mockImplementation((_remoteId, path = '') => {
       return Promise.resolve({
         data: {
@@ -168,12 +170,12 @@ describe('CloudStorage', () => {
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
 
     const card = await screen.findByTestId('cloud-storage-remote-prod-s3')
-    fireEvent.click(within(card).getByRole('button', { name: /Browse remote/i }))
+    await user.click(within(card).getByRole('button', { name: /Browse remote/i }))
 
     expect(await screen.findByRole('dialog', { name: /Browse prod-s3/i })).toBeInTheDocument()
     expect(await screen.findByText('borg-ui')).toBeInTheDocument()
     const folderButton = screen.getByRole('button', { name: /borg-ui/i })
-    fireEvent.click(folderButton)
+    await user.click(folderButton)
 
     await waitFor(() => {
       expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui')
@@ -182,7 +184,54 @@ describe('CloudStorage', () => {
     expect(screen.getByRole('button', { name: /Root/i })).toBeInTheDocument()
   }, 60000)
 
+  it('keeps nested rclone paths rooted under the current folder when API entries are relative', async () => {
+    const user = userEvent.setup()
+    vi.mocked(rcloneAPI.browseRemote).mockImplementation((_remoteId, path = '') => {
+      return Promise.resolve({
+        data: {
+          remote_id: 10,
+          path,
+          entries:
+            path === ''
+              ? [{ name: 'borg-ui', path: 'borg-ui', is_dir: true, size: null, modified: null }]
+              : path === 'borg-ui'
+                ? [{ name: 'snapshots', path: 'snapshots', is_dir: true, size: -1, modified: null }]
+                : [
+                    {
+                      name: 'manifest.json',
+                      path: 'manifest.json',
+                      is_dir: false,
+                      size: 128,
+                      modified: null,
+                    },
+                  ],
+        },
+      } as AxiosResponse)
+    })
+
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    const card = await screen.findByTestId('cloud-storage-remote-prod-s3')
+    await user.click(within(card).getByRole('button', { name: /Browse remote/i }))
+    await waitFor(() => {
+      expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, '')
+    })
+    await user.click(await screen.findByRole('button', { name: /borg-ui/i }, { timeout: 10000 }))
+
+    const nestedFolder = await screen.findByRole(
+      'button',
+      { name: /snapshots/i },
+      { timeout: 10000 }
+    )
+    await user.click(nestedFolder)
+
+    await waitFor(() => {
+      expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui/snapshots')
+    })
+  }, 60000)
+
   it('ignores stale browse responses after navigating away', async () => {
+    const user = userEvent.setup()
     let resolveFolderBrowse!: (value: AxiosResponse) => void
     const folderBrowse = new Promise<AxiosResponse>((resolve) => {
       resolveFolderBrowse = resolve
@@ -218,8 +267,11 @@ describe('CloudStorage', () => {
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
 
     const card = await screen.findByTestId('cloud-storage-remote-prod-s3')
-    fireEvent.click(within(card).getByRole('button', { name: /Browse remote/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /borg-ui/i }))
+    await user.click(within(card).getByRole('button', { name: /Browse remote/i }))
+    await waitFor(() => {
+      expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, '')
+    })
+    await user.click(await screen.findByRole('button', { name: /borg-ui/i }, { timeout: 10000 }))
 
     await waitFor(() => {
       expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui')
@@ -228,7 +280,7 @@ describe('CloudStorage', () => {
     await waitFor(() => {
       expect(rootBreadcrumb).toBeEnabled()
     })
-    fireEvent.click(rootBreadcrumb)
+    await user.click(rootBreadcrumb)
 
     expect(await screen.findByText('root-readme')).toBeInTheDocument()
 
