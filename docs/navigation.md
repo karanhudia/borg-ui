@@ -1,10 +1,10 @@
 ---
-title: Sidebar Navigation
+title: Navigation
 nav_order: 5
-description: "What each Borg UI sidebar tab is for and how to follow the product flow"
+description: "What each Borg UI tab is for and how to follow the product flow"
 ---
 
-# Sidebar Navigation
+# Navigation
 
 Use the sidebar as the main path through Borg UI. Some tabs appear only when
 your account has the right permission, the feature is enabled, or the current
