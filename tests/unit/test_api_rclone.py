@@ -1,14 +1,18 @@
 import importlib
 from collections import deque
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
+from app.core.security import get_password_hash
 from app.database.models import (
+    AgentMachine,
     Repository,
     RepositoryStorage,
     RcloneRemote,
@@ -1120,6 +1124,496 @@ def test_create_ssh_repository_cloud_mirror_first_sync_failure_preserves_reposit
     assert storage.sync_status == "failed"
     assert storage.last_sync_error == "remote unavailable"
     assert response.json()["repository"]["rclone_storage"]["sync_status"] == "failed"
+
+
+@pytest.mark.unit
+def test_create_agent_repository_with_cloud_mirror_records_agent_owned_strategy(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    agent = AgentMachine(
+        name="Laptop",
+        agent_id="agt_laptop_mirror",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.rclone_sync"],
+    )
+    test_db.add_all([remote, agent])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(agent)
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Agent Mirror App",
+            "path": "/agent/repositories/app",
+            "encryption": "none",
+            "execution_target": "agent",
+            "executor_type": "agent",
+            "agent_machine_id": agent.id,
+            "storage_backend": "agent_local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "manual",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository).filter(Repository.name == "Agent Mirror App").one()
+    )
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    assert repository.executor_type == "agent"
+    assert repository.agent_machine_id == agent.id
+    assert repository.path == "/agent/repositories/app"
+    assert storage.cache_path is None
+    assert storage.sync_direction == "agent_to_remote"
+    assert response.json()["repository"]["rclone_storage"]["sync_direction"] == (
+        "agent_to_remote"
+    )
+    assert response.json()["repository"]["rclone_storage"]["cache_path"] is None
+    assert response.json()["repository"]["agent_machine_name"] == "Laptop"
+    assert response.json()["repository"]["agent_machine_status"] == "online"
+    assert (
+        response.json()["repository"]["rclone_storage"]["agent_machine_name"]
+        == "Laptop"
+    )
+    assert (
+        response.json()["repository"]["rclone_storage"]["agent_machine_status"]
+        == "online"
+    )
+    assert "rclone_cache_path" not in response.json()["repository"]
+
+
+@pytest.mark.unit
+def test_create_agent_repository_cloud_mirror_rejects_client_cache_path(
+    test_client: TestClient, admin_headers, test_db
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    agent = AgentMachine(
+        name="Laptop",
+        agent_id="agt_laptop_cache_reject",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.rclone_sync"],
+    )
+    test_db.add_all([remote, agent])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(agent)
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Agent Mirror App",
+            "path": "/agent/repositories/app",
+            "encryption": "none",
+            "execution_target": "agent",
+            "executor_type": "agent",
+            "agent_machine_id": agent.id,
+            "storage_backend": "agent_local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_cache_path": "/tmp/client-owned-agent-stage",
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"] == "backend.errors.rclone.cachePathServerOwned"
+    )
+    assert test_db.query(RepositoryStorage).count() == 0
+
+
+@pytest.mark.unit
+def test_create_agent_repository_cloud_mirror_requires_agent_sync_capability(
+    test_client: TestClient, admin_headers, test_db
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    agent = AgentMachine(
+        name="Laptop",
+        agent_id="agt_laptop_missing_capability",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.info"],
+    )
+    test_db.add_all([remote, agent])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(agent)
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Agent Mirror App",
+            "path": "/agent/repositories/app",
+            "encryption": "none",
+            "execution_target": "agent",
+            "executor_type": "agent",
+            "agent_machine_id": agent.id,
+            "storage_backend": "agent_local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["key"] == "backend.errors.agents.capabilityMissing"
+    assert (
+        test_db.query(Repository).filter(Repository.name == "Agent Mirror App").first()
+        is None
+    )
+    assert test_db.query(RepositoryStorage).count() == 0
+
+
+@pytest.mark.unit
+def test_create_agent_repository_cloud_mirror_rejects_soft_deleted_agent(test_db):
+    from app.api.repositories import _require_agent_rclone_sync_capability
+
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    agent = AgentMachine(
+        name="Deleted Laptop",
+        agent_id="agt_deleted_laptop_mirror",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        deleted_at=datetime.utcnow(),
+        capabilities=["repository.rclone_sync"],
+    )
+    test_db.add_all([remote, agent])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(agent)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _require_agent_rclone_sync_capability(agent.id, test_db)
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["key"] == "backend.errors.agents.agentNotQueueable"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_agent_repository_borg2_requires_plan_feature(
+    admin_user, test_db, monkeypatch
+):
+    from app.api.repositories import RepositoryCreate, create_repository
+
+    agent = AgentMachine(
+        name="Laptop",
+        agent_id="agt_laptop_borg2_plan",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.info"],
+    )
+    test_db.add(agent)
+    test_db.commit()
+    test_db.refresh(agent)
+
+    async def unexpected_agent_create(*_args, **_kwargs):
+        return {"success": True}
+
+    monkeypatch.setattr(
+        "app.api.repositories._create_agent_repository_record",
+        unexpected_agent_create,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await create_repository(
+            RepositoryCreate(
+                name="Agent Borg2 App",
+                path="/agent/repositories/borg2-app",
+                borg_version=2,
+                encryption="none",
+                execution_target="agent",
+                executor_type="agent",
+                agent_machine_id=agent.id,
+                storage_backend="agent_local",
+            ),
+            admin_user,
+            test_db,
+        )
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["key"] == "backend.errors.plan.featureNotAvailable"
+    assert (
+        test_db.query(Repository).filter(Repository.name == "Agent Borg2 App").first()
+        is None
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_mirrored_agent_repository_requires_new_agent_sync_capability(
+    admin_user, test_db, monkeypatch
+):
+    from app.api.repositories import RepositoryUpdate, update_repository
+
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    original_agent = AgentMachine(
+        name="Mirror Agent",
+        agent_id="agt_mirror_capable",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.rclone_sync"],
+    )
+    replacement_agent = AgentMachine(
+        name="Info Agent",
+        agent_id="agt_info_only",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.info"],
+    )
+    test_db.add_all([remote, original_agent, replacement_agent])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(original_agent)
+    test_db.refresh(replacement_agent)
+    repository = Repository(
+        name="Agent Mirror App",
+        path="/agent/repositories/app",
+        encryption="none",
+        compression="lz4",
+        execution_target="agent",
+        executor_type="agent",
+        agent_machine_id=original_agent.id,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=None,
+        sync_policy="manual",
+        sync_status="current",
+        sync_direction="agent_to_remote",
+    )
+    test_db.add(storage)
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda *args, **kwargs: None,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await update_repository(
+            repository.id,
+            RepositoryUpdate(agent_machine_id=replacement_agent.id),
+            admin_user,
+            test_db,
+        )
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["key"] == "backend.errors.agents.capabilityMissing"
+    test_db.refresh(repository)
+    assert repository.agent_machine_id == original_agent.id
+
+
+@pytest.mark.unit
+def test_create_agent_repository_cloud_mirror_first_sync_failure_preserves_repository(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(
+        name="prod-s3",
+        provider="s3",
+        config_source="managed",
+        redacted_config={"type": "s3", "provider": "AWS"},
+    )
+    agent = AgentMachine(
+        name="Laptop",
+        agent_id="agt_laptop_sync_failure",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.rclone_sync"],
+    )
+    test_db.add_all([remote, agent])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(agent)
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+
+    def fake_queue(db, repository, *, job_kind, operation=None, **_kwargs):
+        return SimpleNamespace(id=77)
+
+    async def fake_wait(db, agent_job_id, **_kwargs):
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "key": "backend.errors.agents.repositoryOperationFailed",
+                "message": "agent rclone failed",
+            },
+        )
+
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.queue_agent_repository_operation_job",
+        fake_queue,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.wait_for_agent_repository_operation_job",
+        fake_wait,
+        raising=False,
+    )
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Agent Mirror App",
+            "path": "/agent/repositories/app",
+            "encryption": "none",
+            "execution_target": "agent",
+            "executor_type": "agent",
+            "agent_machine_id": agent.id,
+            "storage_backend": "agent_local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "after_success",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository).filter(Repository.name == "Agent Mirror App").one()
+    )
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    assert repository.path == "/agent/repositories/app"
+    assert storage.sync_status == "failed"
+    assert storage.last_sync_error == "agent rclone failed"
+    assert response.json()["repository"]["rclone_storage"]["sync_status"] == "failed"
+
+
+@pytest.mark.unit
+def test_update_agent_repository_cloud_mirror_preflight_failure_rolls_back_storage(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    agent = AgentMachine(
+        name="Laptop",
+        agent_id="agt_laptop_update_rollback",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=["repository.rclone_sync"],
+    )
+    test_db.add_all([remote, agent])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(agent)
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+
+    create_response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Agent Mirror App",
+            "path": "/agent/repositories/app",
+            "encryption": "none",
+            "execution_target": "agent",
+            "executor_type": "agent",
+            "agent_machine_id": agent.id,
+            "storage_backend": "agent_local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/old",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "manual",
+            "rclone_extra_flags": ["--fast-list"],
+        },
+    )
+
+    assert create_response.status_code == 200
+    repository = (
+        test_db.query(Repository).filter(Repository.name == "Agent Mirror App").one()
+    )
+    test_db.refresh(repository)
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    storage.sync_status = "current"
+    test_db.commit()
+    test_db.refresh(storage)
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(side_effect=TimeoutError("remote timed out")),
+    )
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "name": "Agent Mirror App",
+            "path": "/agent/repositories/app",
+            "encryption": "none",
+            "compression": "lz4",
+            "execution_target": "agent",
+            "executor_type": "agent",
+            "agent_machine_id": agent.id,
+            "storage_backend": "agent_local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/new",
+            "rclone_remote_path_verified": False,
+            "rclone_sync_policy": "after_success",
+            "rclone_extra_flags": [],
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.rclone.remotePathPreflightFailed"
+    )
+    test_db.refresh(repository)
+    test_db.refresh(storage)
+    assert repository.path == "/agent/repositories/app"
+    assert repository.agent_machine_id == agent.id
+    assert storage.rclone_remote_path == "borg-ui/repositories/old"
+    assert storage.cache_path is None
+    assert storage.sync_direction == "agent_to_remote"
+    assert storage.sync_policy == "manual"
+    assert storage.sync_status == "current"
+    assert storage.extra_flags == ["--fast-list"]
 
 
 @pytest.mark.unit

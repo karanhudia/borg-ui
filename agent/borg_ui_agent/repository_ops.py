@@ -5,8 +5,10 @@ import os
 import shlex
 import signal
 import subprocess
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Optional
 
 from agent.borg_ui_agent.backup import _extract_environment, parse_borg_progress
@@ -19,6 +21,7 @@ REPOSITORY_JOB_KINDS = {
     "repository.check",
     "repository.prune",
     "repository.compact",
+    "repository.rclone_sync",
 }
 
 
@@ -80,7 +83,34 @@ class RepositoryOperationPayload:
             cmd.extend(["--remote-path", self.remote_path])
         return cmd
 
-    def build_command(self) -> list[str]:
+    def build_command(self, *, rclone_config_path: Optional[str] = None) -> list[str]:
+        if self.job_kind == "repository.rclone_sync":
+            rclone = _rclone_operation(self.operation)
+            remote_name = _require_non_empty_string(
+                rclone.get("remote_name"), "rclone remote_name"
+            )
+            remote_path = _require_non_empty_string(
+                rclone.get("remote_path"), "rclone remote_path"
+            )
+            source_path = (
+                str(rclone.get("source_path")).strip()
+                if rclone.get("source_path")
+                else self.repository_path
+            )
+            if not source_path:
+                raise ValueError("repository.rclone_sync requires a source path")
+            if not rclone_config_path:
+                raise ValueError("repository.rclone_sync requires a rclone config path")
+            return [
+                "rclone",
+                "--config",
+                rclone_config_path,
+                "sync",
+                source_path,
+                f"{remote_name}:{remote_path}",
+                *_split_flags(rclone.get("extra_flags")),
+            ]
+
         if self.job_kind == "repository.info":
             if self.borg_version == 2:
                 return [*self._base_borg2("info"), "--json"]
@@ -171,6 +201,56 @@ def _split_flags(value: Any) -> list[str]:
     raise ValueError("repository operation flags must be a string or list")
 
 
+def _require_non_empty_string(value: Any, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"repository.rclone_sync requires {field_name}")
+    return value.strip()
+
+
+def _rclone_operation(operation: dict[str, Any] | None) -> dict[str, Any]:
+    rclone = (operation or {}).get("rclone")
+    if not isinstance(rclone, dict):
+        raise ValueError("repository.rclone_sync requires operation.rclone")
+    return rclone
+
+
+def _write_temp_rclone_config(payload: RepositoryOperationPayload) -> str:
+    rclone = _rclone_operation(payload.operation)
+    remote_name = _require_non_empty_string(rclone.get("remote_name"), "remote_name")
+    config = rclone.get("config")
+    if not isinstance(config, dict) or not config:
+        raise ValueError("repository.rclone_sync requires rclone config")
+    handle = tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", prefix="borg-ui-rclone-", suffix=".conf", delete=False
+    )
+    path = Path(handle.name)
+    try:
+        try:
+            handle.write(f"[{remote_name}]\n")
+            for key, value in config.items():
+                if value is None or not str(key).strip():
+                    continue
+                handle.write(f"{key} = {_stringify_config_value(value)}\n")
+        finally:
+            handle.close()
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+    return str(path)
+
+
+def _stringify_config_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, separators=(",", ":"))
+    return str(value)
+
+
 def execute_repository_operation_job(
     job: dict[str, Any],
     client: AgentClient,
@@ -178,9 +258,18 @@ def execute_repository_operation_job(
     should_cancel: Optional[Callable[[], bool]] = None,
 ) -> RepositoryOperationResult:
     job_id = int(job["id"])
+    rclone_config_path: Optional[str] = None
     try:
         payload = RepositoryOperationPayload.from_job_payload(job.get("payload") or {})
-        cmd = payload.build_command()
+        try:
+            if payload.job_kind == "repository.rclone_sync":
+                rclone_config_path = _write_temp_rclone_config(payload)
+                cmd = payload.build_command(rclone_config_path=rclone_config_path)
+            else:
+                cmd = payload.build_command()
+        except Exception:
+            _remove_temp_file(rclone_config_path)
+            raise
     except (TypeError, ValueError) as exc:
         error_message = f"Invalid repository operation payload: {exc}"
         client.send_log(job_id, sequence=0, stream="stderr", message=error_message)
@@ -201,17 +290,34 @@ def execute_repository_operation_job(
     sequence += 1
 
     if payload.job_kind in {"repository.info", "repository.list_archives"}:
-        return _execute_short_repository_operation(job_id, payload, client, cmd, env)
+        try:
+            return _execute_short_repository_operation(
+                job_id, payload, client, cmd, env
+            )
+        finally:
+            _remove_temp_file(rclone_config_path)
 
-    return _execute_streaming_repository_operation(
-        job_id,
-        payload,
-        client,
-        cmd,
-        env,
-        initial_sequence=sequence,
-        should_cancel=should_cancel,
-    )
+    try:
+        return _execute_streaming_repository_operation(
+            job_id,
+            payload,
+            client,
+            cmd,
+            env,
+            initial_sequence=sequence,
+            should_cancel=should_cancel,
+        )
+    finally:
+        _remove_temp_file(rclone_config_path)
+
+
+def _remove_temp_file(path: Optional[str]) -> None:
+    if not path:
+        return
+    try:
+        Path(path).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _execute_short_repository_operation(

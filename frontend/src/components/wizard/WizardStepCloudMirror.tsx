@@ -64,14 +64,13 @@ export default function WizardStepCloudMirror({
   const { t } = useTranslation()
   const isRcloneAvailable = rcloneStatus?.available === true
   const controlsDisabled = !eligible || !isRcloneAvailable
-  const ineligibleMessage =
-    primaryLocation === 'agent'
-      ? t('wizard.cloudMirror.managedAgentUnsupported')
-      : t('wizard.cloudMirror.unsupportedPrimary')
+  const ineligibleMessage = t('wizard.cloudMirror.unsupportedPrimary')
   const routePreview =
-    primaryLocation === 'ssh'
-      ? t('wizard.cloudMirror.sshRoutePreview')
-      : t('wizard.cloudMirror.routePreview')
+    primaryLocation === 'agent'
+      ? t('wizard.cloudMirror.agentRoutePreview')
+      : primaryLocation === 'ssh'
+        ? t('wizard.cloudMirror.sshRoutePreview')
+        : t('wizard.cloudMirror.routePreview')
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>

@@ -161,6 +161,47 @@ export const EnableCloudMirrorForSsh: Story = {
   ),
 }
 
+export const ManagedAgentMirrorPending: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 48,
+      name: 'Agent Repository Mirror',
+      path: '/srv/borg/workstation',
+      repository_type: 'local',
+      storage_backend: 'agent_local',
+      execution_target: 'agent',
+      executor_type: 'agent',
+      agent_machine_id: 31,
+      agent_machine_name: 'workstation.local',
+      agent_machine_status: 'online',
+      rclone_storage: {
+        repository_id: 48,
+        backend: 'rclone',
+        rclone_remote_id: 4,
+        rclone_remote_name: 's3-archive',
+        rclone_remote_path: 'borg-ui/workstation',
+        rclone_target: 's3-archive:borg-ui/workstation',
+        cache_path: null,
+        cache_present: true,
+        sync_direction: 'agent_to_remote',
+        sync_policy: 'manual',
+        sync_status: 'pending',
+        agent_machine_name: 'workstation.local',
+        agent_machine_status: 'online',
+      },
+    },
+    onRcloneSync: noop,
+    onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
 export const RcloneFailed: Story = {
   args: {
     ...defaultArgs,

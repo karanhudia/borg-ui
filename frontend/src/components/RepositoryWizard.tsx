@@ -202,8 +202,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     )
   const showSourceStep = showLegacyBackupSteps
   const isCloudMirrorEligible = (state: WizardState) =>
-    state.executionTarget === 'local' &&
-    (state.repositoryLocation === 'local' || state.repositoryLocation === 'ssh')
+    state.executionTarget === 'agent' ||
+    (state.executionTarget === 'local' &&
+      (state.repositoryLocation === 'local' || state.repositoryLocation === 'ssh'))
   const cloudMirrorPrimaryLocation: 'local' | 'ssh' | 'agent' =
     wizardState.executionTarget === 'agent'
       ? 'agent'
@@ -402,7 +403,6 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         nextUpdates.sourceSshConnectionId = ''
         nextUpdates.repositoryLocation = 'local'
         nextUpdates.repoSshConnectionId = ''
-        nextUpdates.rcloneRemoteId = ''
       } else if (nextUpdates.executionTarget === 'local') {
         nextUpdates.agentMachineId = ''
       }

@@ -102,13 +102,13 @@ describe('WizardStepCloudMirror', () => {
     expect(onBrowseRemotePath).toHaveBeenCalled()
   })
 
-  it('disables mirror enablement when the primary repository is not eligible', () => {
+  it('allows managed-agent-primary mirrors and explains the agent-owned sync route', () => {
     render(
       <WizardStepCloudMirror
-        data={defaultData}
+        data={{ ...defaultData, cloudMirrorEnabled: true, rcloneRemoteId: 10 }}
         rcloneRemotes={remotes}
         rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
-        eligible={false}
+        eligible={true}
         primaryLocation="agent"
         onChange={vi.fn()}
         onAddRcloneRemote={vi.fn()}
@@ -116,10 +116,11 @@ describe('WizardStepCloudMirror', () => {
       />
     )
 
-    expect(screen.getByRole('checkbox', { name: /Mirror this repository/i })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: /Mirror this repository/i })).not.toBeDisabled()
     expect(
-      screen.getByText(/Managed-agent repositories need a separate mirror strategy/i)
+      screen.getByText(/Selected managed agent syncs its repository path to the rclone remote/i)
     ).toBeInTheDocument()
+    expect(screen.queryByText(/Local Cache Path/i)).not.toBeInTheDocument()
   })
 
   it('allows SSH-primary repositories and explains the server-owned mount route', () => {
