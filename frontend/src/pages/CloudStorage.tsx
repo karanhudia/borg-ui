@@ -40,7 +40,12 @@ import {
   Trash2,
 } from 'lucide-react'
 import { rcloneAPI } from '../services/api'
-import type { RcloneRemote, RcloneStatus } from '../services/api'
+import type {
+  RcloneOAuthSession,
+  RcloneProvider,
+  RcloneRemote,
+  RcloneStatus,
+} from '../services/api'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RcloneRemoteDialog from '../components/wizard/RcloneRemoteDialog'
@@ -66,6 +71,7 @@ interface BrowseState {
 interface CloudStorageContentProps {
   status?: RcloneStatus | null
   remotes: RcloneRemote[]
+  providers?: RcloneProvider[]
   isLoading?: boolean
   isRefreshing?: boolean
   isCreating?: boolean
@@ -84,6 +90,11 @@ interface CloudStorageContentProps {
   onAddRemote?: () => void
   onCloseAddRemote?: () => void
   onCreateRemote?: (data: RcloneRemoteCreateInput) => Promise<void> | void
+  onStartOAuth?: (data: {
+    provider: string
+    config: Record<string, unknown>
+  }) => Promise<RcloneOAuthSession>
+  onGetOAuthSession?: (sessionId: string) => Promise<RcloneOAuthSession>
   onEditRemote?: (remote: RcloneRemote) => void
   onCloseEditRemote?: () => void
   onUpdateRemote?: (data: RcloneRemoteCreateInput) => Promise<void> | void
@@ -313,8 +324,12 @@ function CloudStorageRemoteCard({
                 <Typography
                   variant="body2"
                   fontWeight={600}
-                  noWrap
-                  sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.85rem' }}
+                  sx={{
+                    fontVariantNumeric: 'tabular-nums',
+                    fontSize: '0.85rem',
+                    minWidth: 0,
+                    overflowWrap: 'anywhere',
+                  }}
                 >
                   {stat.value}
                 </Typography>
@@ -432,6 +447,7 @@ function CloudStorageRemoteCard({
 export function CloudStorageContent({
   status,
   remotes,
+  providers,
   isLoading = false,
   isRefreshing = false,
   isCreating = false,
@@ -450,6 +466,8 @@ export function CloudStorageContent({
   onAddRemote,
   onCloseAddRemote,
   onCreateRemote,
+  onStartOAuth,
+  onGetOAuthSession,
   onEditRemote,
   onCloseEditRemote,
   onUpdateRemote,
@@ -755,8 +773,11 @@ export function CloudStorageContent({
           open={addDialogOpen}
           isCreating={isCreating}
           error={createError}
+          providers={providers}
           onClose={onCloseAddRemote}
           onCreate={onCreateRemote}
+          onStartOAuth={onStartOAuth}
+          onGetOAuthSession={onGetOAuthSession}
         />
       ) : null}
 
@@ -772,8 +793,11 @@ export function CloudStorageContent({
           }}
           isCreating={isUpdating}
           error={updateError}
+          providers={providers}
           onClose={onCloseEditRemote}
           onCreate={onUpdateRemote}
+          onStartOAuth={onStartOAuth}
+          onGetOAuthSession={onGetOAuthSession}
         />
       ) : null}
 
@@ -855,6 +879,14 @@ export default function CloudStorage() {
     queryFn: async () => {
       const response = await rcloneAPI.listRemotes()
       return response.data.remotes
+    },
+  })
+
+  const providersQuery = useQuery({
+    queryKey: ['rclone-providers'],
+    queryFn: async () => {
+      const response = await rcloneAPI.getProviders()
+      return response.data.providers
     },
   })
 
@@ -942,6 +974,7 @@ export default function CloudStorage() {
   const refreshAll = () => {
     queryClient.invalidateQueries({ queryKey: ['rclone-status'] })
     queryClient.invalidateQueries({ queryKey: ['rclone-remotes'] })
+    queryClient.invalidateQueries({ queryKey: ['rclone-providers'] })
   }
 
   const loadError = useMemo(() => {
@@ -958,6 +991,7 @@ export default function CloudStorage() {
     <CloudStorageContent
       status={statusQuery.data}
       remotes={remotesQuery.data || []}
+      providers={providersQuery.data}
       isLoading={statusQuery.isLoading || remotesQuery.isLoading}
       isRefreshing={statusQuery.isFetching || remotesQuery.isFetching}
       isCreating={createRemoteMutation.isPending}
@@ -988,6 +1022,14 @@ export default function CloudStorage() {
       }}
       onCreateRemote={async (data) => {
         await createRemoteMutation.mutateAsync(data)
+      }}
+      onStartOAuth={async (data) => {
+        const response = await rcloneAPI.startOAuthSession(data)
+        return response.data
+      }}
+      onGetOAuthSession={async (sessionId) => {
+        const response = await rcloneAPI.getOAuthSession(sessionId)
+        return response.data
       }}
       onEditRemote={(remote) => {
         updateRemoteMutation.reset()
