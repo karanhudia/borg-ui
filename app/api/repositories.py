@@ -1330,7 +1330,7 @@ def _serialize_rclone_storage(
             "started_at": format_datetime(latest_job.started_at),
             "completed_at": format_datetime(latest_job.completed_at),
             "error_text": latest_job.error_text,
-            "log_text": latest_job.log_text,
+            "has_log": bool(latest_job.log_text),
         }
         if latest_job
         else None
@@ -3206,7 +3206,8 @@ async def update_repository(
                         status_code=400,
                         detail={"key": "backend.errors.rclone.remotePathRequired"},
                     )
-                if repo_data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+                effective_sync_policy = repo_data.rclone_sync_policy or "after_success"
+                if effective_sync_policy not in VALID_SYNC_POLICIES:
                     raise HTTPException(
                         status_code=400,
                         detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
@@ -3236,7 +3237,7 @@ async def update_repository(
                         ),
                         remote_id=remote.id,
                         remote_path=repo_data.rclone_remote_path,
-                        sync_policy=repo_data.rclone_sync_policy,
+                        sync_policy=effective_sync_policy,
                         extra_flags=repo_data.rclone_extra_flags,
                         sync_cron_expression=repo_data.rclone_sync_cron_expression,
                         sync_timezone=repo_data.rclone_sync_timezone,

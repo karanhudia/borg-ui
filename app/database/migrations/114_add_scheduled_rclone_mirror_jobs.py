@@ -23,6 +23,18 @@ def _create_index_if_missing(db, index_name: str, ddl: str) -> None:
         db.execute(text(ddl))
 
 
+def _drop_index_if_exists(db, table_name: str, index_name: str) -> None:
+    if index_name in {
+        index["name"] for index in inspect(_bind(db)).get_indexes(table_name)
+    }:
+        db.execute(text(f"DROP INDEX {index_name}"))
+
+
+def _drop_column_if_exists(db, table_name: str, column_name: str) -> None:
+    if column_name in _columns(db, table_name):
+        db.execute(text(f"ALTER TABLE {table_name} DROP COLUMN {column_name}"))
+
+
 def upgrade(db):
     timestamp_type = (
         "TIMESTAMP" if _bind(db).dialect.name == "postgresql" else "DATETIME"
@@ -70,4 +82,16 @@ def upgrade(db):
 
 
 def downgrade(db):
+    _drop_index_if_exists(
+        db,
+        "repository_storage",
+        "ix_repository_storage_next_scheduled_sync_at",
+    )
+    _drop_column_if_exists(db, "rclone_sync_jobs", "log_text")
+    _drop_column_if_exists(db, "rclone_sync_jobs", "scheduled_for")
+    _drop_column_if_exists(db, "rclone_sync_jobs", "triggered_by")
+    _drop_column_if_exists(db, "repository_storage", "next_scheduled_sync_at")
+    _drop_column_if_exists(db, "repository_storage", "last_scheduled_sync_at")
+    _drop_column_if_exists(db, "repository_storage", "sync_timezone")
+    _drop_column_if_exists(db, "repository_storage", "sync_cron_expression")
     db.commit()

@@ -458,7 +458,14 @@ class TestScheduleRouteContracts:
 
         test_db.refresh(repo)
         test_db.refresh(storage)
-        sync_job = test_db.query(RcloneSyncJob).one()
+        sync_job = (
+            test_db.query(RcloneSyncJob)
+            .filter(
+                RcloneSyncJob.repository_id == repo.id,
+                RcloneSyncJob.triggered_by == "schedule",
+            )
+            .one()
+        )
         assert repo.path == "/repos/mirror"
         assert storage.rclone_remote_path == "borg-ui/repositories/mirror"
         assert storage.sync_status == "failed"
@@ -470,6 +477,66 @@ class TestScheduleRouteContracts:
         assert sync_job.scheduled_for == now.replace(tzinfo=None) - timedelta(minutes=5)
         assert sync_job.error_text == "remote unavailable"
         assert sync_job.log_text == "remote unavailable"
+
+    def test_dispatch_scheduled_rclone_mirror_claims_before_background_task(
+        self, test_db, monkeypatch
+    ):
+        from app.services import rclone_mirror_scheduler
+
+        now = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+        repo = Repository(
+            name="Mirror Repo",
+            path="/repos/mirror",
+            encryption="none",
+            repository_type="local",
+            mode="full",
+        )
+        test_db.add_all([remote, repo])
+        test_db.commit()
+        test_db.refresh(remote)
+        test_db.refresh(repo)
+        storage = RepositoryStorage(
+            repository_id=repo.id,
+            backend="rclone",
+            rclone_remote_id=remote.id,
+            rclone_remote_path="borg-ui/repositories/mirror",
+            cache_path=repo.path,
+            sync_policy="scheduled",
+            sync_status="current",
+            sync_direction="primary_to_remote",
+            sync_cron_expression="*/15 * * * *",
+            sync_timezone="UTC",
+            next_scheduled_sync_at=now - timedelta(minutes=5),
+        )
+        test_db.add(storage)
+        test_db.commit()
+        created_coroutines = []
+
+        class FakeTask:
+            def add_done_callback(self, callback):
+                callback(self)
+
+        def fake_create_task(coro):
+            created_coroutines.append(coro)
+            coro.close()
+            return FakeTask()
+
+        monkeypatch.setattr(
+            rclone_mirror_scheduler.asyncio,
+            "create_task",
+            fake_create_task,
+        )
+
+        dispatched = rclone_mirror_scheduler.dispatch_due_scheduled_rclone_mirrors(
+            test_db, now
+        )
+
+        test_db.refresh(storage)
+        assert dispatched == 1
+        assert len(created_coroutines) == 1
+        assert storage.last_scheduled_sync_at is None
+        assert storage.next_scheduled_sync_at > now.replace(tzinfo=None)
 
     def test_validate_cron_returns_preview_for_valid_expression(
         self, test_client: TestClient, admin_headers

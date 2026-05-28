@@ -93,7 +93,7 @@ export interface RcloneStorage {
     started_at?: string | null
     completed_at?: string | null
     error_text?: string | null
-    log_text?: string | null
+    has_log?: boolean
   } | null
 }
 

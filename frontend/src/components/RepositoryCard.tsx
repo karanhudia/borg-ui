@@ -308,10 +308,17 @@ export default function RepositoryCard({
     if (!rcloneStorage || rcloneStorage.sync_policy !== 'scheduled') return null
 
     const timezoneLabel = rcloneStorage.sync_timezone || 'UTC'
-    const failureMessage =
-      rcloneStorage.latest_sync_job?.error_text || rcloneStorage.last_sync_error
+    const latestScheduledJob =
+      rcloneStorage.latest_sync_job?.triggered_by === 'schedule'
+        ? rcloneStorage.latest_sync_job
+        : null
+    const hasLatestSyncJob = Boolean(rcloneStorage.latest_sync_job)
     const scheduledFailure =
-      rcloneStorage.sync_status === 'failed' || rcloneStorage.latest_sync_job?.status === 'failed'
+      latestScheduledJob?.status === 'failed' ||
+      (!hasLatestSyncJob && rcloneStorage.sync_status === 'failed')
+    const failureMessage =
+      latestScheduledJob?.error_text ||
+      (!hasLatestSyncJob ? rcloneStorage.last_sync_error : undefined)
 
     if (scheduledFailure) {
       return {
@@ -336,6 +343,15 @@ export default function RepositoryCard({
     }
 
     const nextRunDate = new Date(rcloneStorage.next_scheduled_sync_at)
+    if (Number.isNaN(nextRunDate.getTime())) {
+      return {
+        label: t('repositoryCard.rcloneScheduled'),
+        title: t('repositoryCard.rcloneScheduledNoNextRun', { timezone: timezoneLabel }),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.info.main, isDark ? 0.32 : 0.24),
+      }
+    }
     let whenLabel = format(
       nextRunDate,
       isThisYear(nextRunDate) ? 'MMM d · h:mm a' : 'MMM d, yyyy · h:mm a'

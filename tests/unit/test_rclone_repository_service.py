@@ -330,7 +330,14 @@ async def test_sync_repository_records_manual_job_without_advancing_schedule(
     )
 
     db_session.refresh(storage)
-    sync_job = db_session.query(RcloneSyncJob).one()
+    sync_job = (
+        db_session.query(RcloneSyncJob)
+        .filter(
+            RcloneSyncJob.repository_id == repository.id,
+            RcloneSyncJob.triggered_by == "manual",
+        )
+        .one()
+    )
     assert status["sync_status"] == "current"
     assert storage.next_scheduled_sync_at == original_next_run
     assert storage.last_scheduled_sync_at is None

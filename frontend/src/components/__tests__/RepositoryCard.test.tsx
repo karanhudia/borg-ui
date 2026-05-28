@@ -261,6 +261,33 @@ describe('RepositoryCard', () => {
             rclone_storage: {
               ...scheduledMirrorStorage,
               sync_status: 'failed',
+              last_sync_error: 'manual sync failed',
+              latest_sync_job: {
+                id: 3,
+                triggered_by: 'manual',
+                status: 'failed',
+                completed_at: '2099-04-14T01:00:05Z',
+                error_text: 'manual sync failed',
+                has_log: true,
+              },
+            },
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.queryByText('Mirror failed')).not.toBeInTheDocument()
+
+      rerender(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            rclone_storage: {
+              ...scheduledMirrorStorage,
+              sync_status: 'failed',
               last_sync_error: 'remote unavailable',
               latest_sync_job: {
                 id: 4,
@@ -269,7 +296,7 @@ describe('RepositoryCard', () => {
                 scheduled_for: '2099-04-14T02:00:00Z',
                 completed_at: '2099-04-14T02:00:05Z',
                 error_text: 'remote unavailable',
-                log_text: 'remote unavailable',
+                has_log: true,
               },
             },
           }}

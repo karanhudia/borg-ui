@@ -264,7 +264,7 @@ export default function WizardStepCloudMirror({
               />
               <TextField
                 label={t('wizard.location.rcloneSyncTimezoneLabel')}
-                value={data.rcloneSyncTimezone || 'UTC'}
+                value={data.rcloneSyncTimezone ?? ''}
                 onChange={(event) => onChange({ rcloneSyncTimezone: event.target.value })}
                 placeholder="UTC"
                 required

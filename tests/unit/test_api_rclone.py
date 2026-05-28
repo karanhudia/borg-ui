@@ -1955,7 +1955,7 @@ def test_update_rclone_repository_storage_fields(
 
 
 @pytest.mark.unit
-def test_update_local_repository_enables_cloud_mirror(
+def test_update_local_repository_enables_cloud_mirror_with_default_policy(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):
     remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
@@ -1978,7 +1978,6 @@ def test_update_local_repository_enables_cloud_mirror(
             "rclone_remote_id": remote.id,
             "rclone_remote_path": "borg-ui/repositories/app",
             "rclone_remote_path_verified": True,
-            "rclone_sync_policy": "manual",
             "rclone_extra_flags": ["--fast-list"],
         },
     )
@@ -1996,7 +1995,7 @@ def test_update_local_repository_enables_cloud_mirror(
     assert storage.sync_direction == "primary_to_remote"
     assert storage.rclone_remote_id == remote.id
     assert storage.rclone_remote_path == "borg-ui/repositories/app"
-    assert storage.sync_policy == "manual"
+    assert storage.sync_policy == "after_success"
     assert storage.extra_flags == ["--fast-list"]
 
 
@@ -2089,7 +2088,14 @@ def test_manual_rclone_sync_records_job_without_clearing_schedule(
 
     assert response.status_code == 200
     test_db.refresh(storage)
-    sync_job = test_db.query(RcloneSyncJob).one()
+    sync_job = (
+        test_db.query(RcloneSyncJob)
+        .filter(
+            RcloneSyncJob.repository_id == repository.id,
+            RcloneSyncJob.triggered_by == "manual",
+        )
+        .one()
+    )
     assert response.json()["sync_status"] == "current"
     assert storage.next_scheduled_sync_at == next_run
     assert sync_job.triggered_by == "manual"
