@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,10 +10,14 @@ from app.database.models import (
     BackupPlan,
     BackupPlanRepository,
     Repository,
+    RepositoryStorage,
+    RcloneRemote,
+    RcloneSyncJob,
     ScheduledJob,
     ScheduledJobRepository,
     SSHConnection,
 )
+from app.services.rclone_service import RcloneCommandResult
 
 
 class _FixedDateTime(datetime):
@@ -398,6 +403,73 @@ class TestScheduleRouteContracts:
         assert backup_job.route_strategy == "remote_direct"
         assert backup_job.execution_mode == "remote_ssh"
         assert backup_job.source_ssh_connection_id == connection.id
+
+    @pytest.mark.asyncio
+    async def test_due_scheduled_rclone_mirror_records_failure_and_preserves_metadata(
+        self, test_db, monkeypatch
+    ):
+        from app.services.rclone_mirror_scheduler import (
+            run_due_scheduled_rclone_mirrors,
+        )
+
+        now = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+        repo = Repository(
+            name="Mirror Repo",
+            path="/repos/mirror",
+            encryption="none",
+            repository_type="local",
+            mode="full",
+        )
+        test_db.add_all([remote, repo])
+        test_db.commit()
+        test_db.refresh(remote)
+        test_db.refresh(repo)
+        storage = RepositoryStorage(
+            repository_id=repo.id,
+            backend="rclone",
+            rclone_remote_id=remote.id,
+            rclone_remote_path="borg-ui/repositories/mirror",
+            cache_path=repo.path,
+            sync_policy="scheduled",
+            sync_status="current",
+            sync_direction="primary_to_remote",
+            sync_cron_expression="*/15 * * * *",
+            sync_timezone="UTC",
+            next_scheduled_sync_at=now - timedelta(minutes=5),
+        )
+        test_db.add(storage)
+        test_db.commit()
+        monkeypatch.setattr(
+            "app.services.rclone_repository_service.rclone_service.sync",
+            AsyncMock(
+                return_value=RcloneCommandResult(
+                    success=False,
+                    return_code=1,
+                    stdout="",
+                    stderr="remote unavailable",
+                    command=["rclone", "sync"],
+                    redacted_command="rclone sync <path> <path>",
+                )
+            ),
+        )
+
+        await run_due_scheduled_rclone_mirrors(test_db, now)
+
+        test_db.refresh(repo)
+        test_db.refresh(storage)
+        sync_job = test_db.query(RcloneSyncJob).one()
+        assert repo.path == "/repos/mirror"
+        assert storage.rclone_remote_path == "borg-ui/repositories/mirror"
+        assert storage.sync_status == "failed"
+        assert storage.last_sync_error == "remote unavailable"
+        assert storage.last_scheduled_sync_at == now.replace(tzinfo=None)
+        assert storage.next_scheduled_sync_at > now.replace(tzinfo=None)
+        assert sync_job.triggered_by == "schedule"
+        assert sync_job.status == "failed"
+        assert sync_job.scheduled_for == now.replace(tzinfo=None) - timedelta(minutes=5)
+        assert sync_job.error_text == "remote unavailable"
+        assert sync_job.log_text == "remote unavailable"
 
     def test_validate_cron_returns_preview_for_valid_expression(
         self, test_client: TestClient, admin_headers

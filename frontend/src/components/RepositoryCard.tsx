@@ -22,6 +22,7 @@ import {
   RefreshCw,
   ClipboardList,
   Bot,
+  CalendarClock,
 } from 'lucide-react'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
@@ -303,6 +304,61 @@ export default function RepositoryCard({
     )
   })()
 
+  const rcloneScheduledMirrorBadge = (() => {
+    if (!rcloneStorage || rcloneStorage.sync_policy !== 'scheduled') return null
+
+    const timezoneLabel = rcloneStorage.sync_timezone || 'UTC'
+    const failureMessage =
+      rcloneStorage.latest_sync_job?.error_text || rcloneStorage.last_sync_error
+    const scheduledFailure =
+      rcloneStorage.sync_status === 'failed' || rcloneStorage.latest_sync_job?.status === 'failed'
+
+    if (scheduledFailure) {
+      return {
+        label: t('repositoryCard.rcloneScheduledFailed'),
+        title: failureMessage
+          ? t('repositoryCard.rcloneScheduledError', { message: failureMessage })
+          : t('repositoryCard.rcloneScheduledFailed'),
+        color: theme.palette.error.main,
+        bg: alpha(theme.palette.error.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.error.main, isDark ? 0.34 : 0.24),
+      }
+    }
+
+    if (!rcloneStorage.next_scheduled_sync_at) {
+      return {
+        label: t('repositoryCard.rcloneScheduled'),
+        title: t('repositoryCard.rcloneScheduledNoNextRun', { timezone: timezoneLabel }),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.info.main, isDark ? 0.32 : 0.24),
+      }
+    }
+
+    const nextRunDate = new Date(rcloneStorage.next_scheduled_sync_at)
+    let whenLabel = format(
+      nextRunDate,
+      isThisYear(nextRunDate) ? 'MMM d · h:mm a' : 'MMM d, yyyy · h:mm a'
+    )
+    if (isToday(nextRunDate)) {
+      whenLabel = format(nextRunDate, 'h:mm a')
+    } else if (isTomorrow(nextRunDate)) {
+      whenLabel = `${t('repositoryCard.tomorrow')} · ${format(nextRunDate, 'h:mm a')}`
+    }
+
+    return {
+      label: t('repositoryCard.rcloneNextSyncBadge', { when: whenLabel }),
+      title: t('repositoryCard.rcloneNextSyncWithSchedule', {
+        when: formatDateTimeFull(rcloneStorage.next_scheduled_sync_at),
+        cron: rcloneStorage.sync_cron_expression || t('repositoryCard.rcloneScheduleUnknown'),
+        timezone: timezoneLabel,
+      }),
+      color: theme.palette.info.main,
+      bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.08),
+      border: alpha(theme.palette.info.main, isDark ? 0.32 : 0.24),
+    }
+  })()
+
   const agentStatusBadge = (() => {
     if (!isAgentPrimaryRepository) return null
     const normalized = (agentMachineStatus || '').toLowerCase()
@@ -542,6 +598,34 @@ export default function RepositoryCard({
                         color: rcloneStatusBadge.color,
                         border: '1px solid',
                         borderColor: rcloneStatusBadge.border,
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        '& .MuiChip-icon': {
+                          ml: 0.75,
+                          color: 'inherit',
+                        },
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )}
+                {rcloneScheduledMirrorBadge && (
+                  <Tooltip title={rcloneScheduledMirrorBadge.title} arrow>
+                    <Chip
+                      icon={<CalendarClock size={12} />}
+                      label={rcloneScheduledMirrorBadge.label}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        maxWidth: { xs: 150, sm: 190 },
+                        bgcolor: rcloneScheduledMirrorBadge.bg,
+                        color: rcloneScheduledMirrorBadge.color,
+                        border: '1px solid',
+                        borderColor: rcloneScheduledMirrorBadge.border,
                         fontSize: '0.64rem',
                         fontWeight: 700,
                         '& .MuiChip-icon': {

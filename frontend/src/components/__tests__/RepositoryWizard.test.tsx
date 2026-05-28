@@ -531,6 +531,57 @@ describe('RepositoryWizard', () => {
       })
     }, 90000)
 
+    it('submits scheduled cloud mirror policy fields', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await fillLocalLocation('Scheduled Cloud Repo', '/backups/scheduled-cloud')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('checkbox', { name: /Mirror this repository/i }))
+
+      await user.click(screen.getByRole('combobox', { name: /Rclone Remote/i }))
+      const remoteListbox = await screen.findByRole('listbox')
+      await user.click(within(remoteListbox).getByText('prod-s3'))
+      setInputValue(
+        screen.getByLabelText(/Relative Remote Path/i),
+        'borg-ui/repositories/scheduled'
+      )
+
+      await user.click(screen.getByRole('combobox', { name: /Sync Policy/i }))
+      const policyListbox = await screen.findByRole('listbox')
+      await user.click(within(policyListbox).getByText('Scheduled sync'))
+      setInputValue(screen.getByLabelText(/Mirror schedule/i), '*/30 * * * *')
+      setInputValue(screen.getByLabelText(/Timezone/i), 'UTC')
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Repository Key')).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'scheduledpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Scheduled Cloud Repo',
+            cloud_mirror_enabled: true,
+            rclone_sync_policy: 'scheduled',
+            rclone_sync_cron_expression: '*/30 * * * *',
+            rclone_sync_timezone: 'UTC',
+          }),
+          null
+        )
+      })
+    }, 90000)
+
     it('submits SSH repository cloud mirror fields without a cache path', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')

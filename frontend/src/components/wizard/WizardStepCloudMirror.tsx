@@ -24,6 +24,8 @@ export interface CloudMirrorStepData {
   rcloneRemotePath: string
   rcloneRemotePathVerified: boolean
   rcloneSyncPolicy: 'after_success' | 'manual' | 'scheduled'
+  rcloneSyncCronExpression: string
+  rcloneSyncTimezone: string
   rcloneExtraFlags: string
 }
 
@@ -221,11 +223,18 @@ export default function WizardStepCloudMirror({
               id="cloud-mirror-sync-policy"
               value={data.rcloneSyncPolicy || 'after_success'}
               label={t('wizard.location.rcloneSyncPolicyLabel')}
-              onChange={(event) =>
+              onChange={(event) => {
+                const policy = event.target.value as 'after_success' | 'manual' | 'scheduled'
                 onChange({
-                  rcloneSyncPolicy: event.target.value as 'after_success' | 'manual' | 'scheduled',
+                  rcloneSyncPolicy: policy,
+                  ...(policy === 'scheduled' && !data.rcloneSyncCronExpression
+                    ? { rcloneSyncCronExpression: '0 */6 * * *' }
+                    : {}),
+                  ...(policy === 'scheduled' && !data.rcloneSyncTimezone
+                    ? { rcloneSyncTimezone: 'UTC' }
+                    : {}),
                 })
-              }
+              }}
             >
               <MenuItem value="after_success">
                 {t('wizard.location.rcloneSyncAfterSuccess')}
@@ -234,6 +243,37 @@ export default function WizardStepCloudMirror({
               <MenuItem value="scheduled">{t('wizard.location.rcloneSyncScheduled')}</MenuItem>
             </Select>
           </FormControl>
+
+          {data.rcloneSyncPolicy === 'scheduled' && (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 180px' },
+                gap: 1.5,
+              }}
+            >
+              <TextField
+                label={t('wizard.location.rcloneSyncCronLabel')}
+                value={data.rcloneSyncCronExpression || ''}
+                onChange={(event) => onChange({ rcloneSyncCronExpression: event.target.value })}
+                placeholder="0 */6 * * *"
+                required
+                fullWidth
+                disabled={controlsDisabled}
+                helperText={t('wizard.location.rcloneSyncCronHelper')}
+              />
+              <TextField
+                label={t('wizard.location.rcloneSyncTimezoneLabel')}
+                value={data.rcloneSyncTimezone || 'UTC'}
+                onChange={(event) => onChange({ rcloneSyncTimezone: event.target.value })}
+                placeholder="UTC"
+                required
+                fullWidth
+                disabled={controlsDisabled}
+                helperText={t('wizard.location.rcloneSyncTimezoneHelper')}
+              />
+            </Box>
+          )}
 
           <TextField
             label={t('wizard.location.rcloneExtraFlagsLabel')}
