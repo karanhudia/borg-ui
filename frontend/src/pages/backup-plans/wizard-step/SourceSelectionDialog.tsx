@@ -1126,6 +1126,7 @@ export function SourceSelectionDialog({
               sourceKind === 'agent' ? 'agent' : selectedSourceConnection ? 'ssh' : 'local'
             }
             agentId={selectedAgent?.id}
+            agentName={selectedAgent?.name}
             sshConfig={selectedSourceSshConfig}
             showSshMountPoints={false}
             onSelectPaths={(paths) => {
