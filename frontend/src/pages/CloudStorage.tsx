@@ -103,7 +103,11 @@ interface CloudStorageContentProps {
 }
 
 const getApiMessage = (error: unknown, fallback: string) => {
-  return translateBackendKey(getApiErrorDetail(error)) || fallback
+  const detail = getApiErrorDetail(error)
+  if (detail === null || detail === undefined) {
+    return fallback
+  }
+  return translateBackendKey(detail) || fallback
 }
 
 const formatStatus = (remote: RcloneRemote) => {
@@ -993,16 +997,19 @@ export default function CloudStorage() {
     if (remotesQuery.error) {
       return getApiMessage(remotesQuery.error, t('cloudStorage.remotesLoadFailed'))
     }
+    if (providersQuery.error) {
+      return getApiMessage(providersQuery.error, t('cloudStorage.providersLoadFailed'))
+    }
     return null
-  }, [remotesQuery.error, statusQuery.error, t])
+  }, [providersQuery.error, remotesQuery.error, statusQuery.error, t])
 
   return (
     <CloudStorageContent
       status={statusQuery.data}
       remotes={remotesQuery.data || []}
       providers={providersQuery.data}
-      isLoading={statusQuery.isLoading || remotesQuery.isLoading}
-      isRefreshing={statusQuery.isFetching || remotesQuery.isFetching}
+      isLoading={statusQuery.isLoading || remotesQuery.isLoading || providersQuery.isLoading}
+      isRefreshing={statusQuery.isFetching || remotesQuery.isFetching || providersQuery.isFetching}
       isCreating={createRemoteMutation.isPending}
       isUpdating={updateRemoteMutation.isPending}
       isDeleting={deleteRemoteMutation.isPending}

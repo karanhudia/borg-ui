@@ -201,6 +201,7 @@
     "browseFailed": "Impossibile sfogliare il remoto rclone.",
     "statusLoadFailed": "Impossibile caricare la disponibilità di rclone.",
     "remotesLoadFailed": "Impossibile caricare i remoti rclone.",
+    "providersLoadFailed": "Impossibile caricare i provider cloud.",
     "search": "Cerca archiviazione cloud...",
     "sort": {
       "nameAZ": "Nome A → Z",

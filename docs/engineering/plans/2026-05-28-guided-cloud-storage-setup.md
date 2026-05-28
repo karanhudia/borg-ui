@@ -10,6 +10,8 @@
 
 ---
 
+## Implementation Tasks
+
 ### Task 1: Backend Provider Catalog And Redaction
 
 **Files:**

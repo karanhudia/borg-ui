@@ -201,6 +201,7 @@
     "browseFailed": "rclone-Remote konnte nicht durchsucht werden.",
     "statusLoadFailed": "rclone-Verfügbarkeit konnte nicht geladen werden.",
     "remotesLoadFailed": "rclone-Remotes konnten nicht geladen werden.",
+    "providersLoadFailed": "Cloud-Anbieter konnten nicht geladen werden.",
     "search": "Cloud-Speicher durchsuchen...",
     "sort": {
       "nameAZ": "Name A → Z",

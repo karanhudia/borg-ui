@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -110,6 +110,8 @@ export default function RcloneRemoteDialog({
   const [oauthError, setOauthError] = useState<string | null>(null)
   const [isStartingOAuth, setIsStartingOAuth] = useState(false)
   const [isCheckingOAuth, setIsCheckingOAuth] = useState(false)
+  const oauthRequestIdRef = useRef(0)
+  const resolvedProviderRef = useRef('local')
 
   const providerOptions = providers.length ? providers : DEFAULT_PROVIDERS
   const selectedProvider =
@@ -125,6 +127,22 @@ export default function RcloneRemoteDialog({
   })
 
   useEffect(() => {
+    resolvedProviderRef.current = resolvedProvider
+  }, [resolvedProvider])
+
+  const resetOAuthState = useCallback(() => {
+    oauthRequestIdRef.current += 1
+    setOauthSession(null)
+    setOauthError(null)
+    setIsStartingOAuth(false)
+    setIsCheckingOAuth(false)
+  }, [])
+
+  const isCurrentOAuthRequest = useCallback((requestId: number, provider: string) => {
+    return requestId === oauthRequestIdRef.current && provider === resolvedProviderRef.current
+  }, [])
+
+  useEffect(() => {
     if (!open) return
     const nextProvider = initialRemote?.provider || 'local'
     const providerIsKnown = providerOptions.some((provider) => provider.type === nextProvider)
@@ -134,9 +152,8 @@ export default function RcloneRemoteDialog({
     setCustomProvider(nextProviderType === 'custom' ? nextProvider : '')
     setConfigJson(formatConfigJson(initialRemote?.redacted_config, nextProvider))
     setLocalError(null)
-    setOauthSession(null)
-    setOauthError(null)
-  }, [initialRemote, open, providerOptions])
+    resetOAuthState()
+  }, [initialRemote, open, providerOptions, resetOAuthState])
 
   useEffect(() => {
     if (open) return
@@ -145,16 +162,14 @@ export default function RcloneRemoteDialog({
     setCustomProvider('')
     setConfigJson('{\n  "type": "local"\n}')
     setLocalError(null)
-    setOauthSession(null)
-    setOauthError(null)
-  }, [open])
+    resetOAuthState()
+  }, [open, resetOAuthState])
 
   const handleProviderTypeChange = (nextProviderType: string) => {
     const nextProvider =
       providerOptions.find((provider) => provider.type === nextProviderType) ?? providerOptions[0]
     setProviderType(nextProvider.type)
-    setOauthSession(null)
-    setOauthError(null)
+    resetOAuthState()
     if (nextProvider.type_editable) {
       setCustomProvider('')
     }
@@ -168,31 +183,45 @@ export default function RcloneRemoteDialog({
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  const applyOAuthConfig = (session: RcloneOAuthSession) => {
-    if (session.status !== 'authorized' || !session.config) return
-    let currentConfig: Record<string, unknown>
-    try {
-      currentConfig = parseConfig(configJson, resolvedProvider)
-    } catch {
-      currentConfig = { type: resolvedProvider }
+  const applyOAuthConfig = (
+    session: RcloneOAuthSession,
+    requestProvider: string,
+    requestId: number
+  ) => {
+    const sessionConfig = session.config
+    if (
+      session.status !== 'authorized' ||
+      !sessionConfig ||
+      session.provider !== requestProvider ||
+      !isCurrentOAuthRequest(requestId, requestProvider)
+    ) {
+      return
     }
-    setConfigJson(
-      formatConfigJson(
+    setConfigJson((currentJson) => {
+      let currentConfig: Record<string, unknown>
+      try {
+        currentConfig = parseConfig(currentJson, requestProvider)
+      } catch {
+        currentConfig = { type: requestProvider }
+      }
+      return formatConfigJson(
         {
           ...currentConfig,
-          ...session.config,
-          type: session.config.type || resolvedProvider,
+          ...sessionConfig,
+          type: sessionConfig.type || requestProvider,
         },
-        resolvedProvider
+        requestProvider
       )
-    )
+    })
   }
 
   const handleStartOAuth = async () => {
     if (!onStartOAuth || !resolvedProvider) return
+    const requestProvider = resolvedProvider
+    const requestId = (oauthRequestIdRef.current += 1)
     let currentConfig: Record<string, unknown>
     try {
-      currentConfig = parseConfig(configJson, resolvedProvider)
+      currentConfig = parseConfig(configJson, requestProvider)
     } catch {
       setLocalError(t('wizard.location.rcloneConfigInvalidJson'))
       return
@@ -201,32 +230,44 @@ export default function RcloneRemoteDialog({
     setOauthError(null)
     setIsStartingOAuth(true)
     try {
-      const session = await onStartOAuth({ provider: resolvedProvider, config: currentConfig })
+      const session = await onStartOAuth({ provider: requestProvider, config: currentConfig })
+      if (!isCurrentOAuthRequest(requestId, requestProvider)) return
       setOauthSession(session)
-      applyOAuthConfig(session)
+      applyOAuthConfig(session, requestProvider, requestId)
       openAuthorizationUrl(session.authorization_url)
     } catch {
-      setOauthError(t('wizard.location.rcloneOAuthFailed'))
+      if (isCurrentOAuthRequest(requestId, requestProvider)) {
+        setOauthError(t('wizard.location.rcloneOAuthFailed'))
+      }
     } finally {
-      setIsStartingOAuth(false)
+      if (isCurrentOAuthRequest(requestId, requestProvider)) {
+        setIsStartingOAuth(false)
+      }
     }
   }
 
   const handleCheckOAuth = async () => {
     if (!onGetOAuthSession || !oauthSession) return
+    const requestProvider = oauthSession.provider
+    const requestId = oauthRequestIdRef.current
     setOauthError(null)
     setIsCheckingOAuth(true)
     try {
       const session = await onGetOAuthSession(oauthSession.session_id)
+      if (!isCurrentOAuthRequest(requestId, requestProvider)) return
       setOauthSession(session)
-      applyOAuthConfig(session)
+      applyOAuthConfig(session, requestProvider, requestId)
       if (session.status === 'failed') {
         setOauthError(session.error || t('wizard.location.rcloneOAuthFailed'))
       }
     } catch {
-      setOauthError(t('wizard.location.rcloneOAuthFailed'))
+      if (isCurrentOAuthRequest(requestId, requestProvider)) {
+        setOauthError(t('wizard.location.rcloneOAuthFailed'))
+      }
     } finally {
-      setIsCheckingOAuth(false)
+      if (isCurrentOAuthRequest(requestId, requestProvider)) {
+        setIsCheckingOAuth(false)
+      }
     }
   }
 
@@ -400,7 +441,12 @@ export default function RcloneRemoteDialog({
                     {oauthStatusMessage}
                   </Typography>
                 ) : null}
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={1}
+                  useFlexGap
+                  flexWrap="wrap"
+                >
                   <Button
                     size="small"
                     variant="contained"

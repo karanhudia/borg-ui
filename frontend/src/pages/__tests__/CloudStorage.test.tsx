@@ -48,11 +48,7 @@ vi.mock('../../components/CodeEditor', () => ({
     value: string
     onChange: (value: string) => void
   }) => (
-    <textarea
-      aria-label={label}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <textarea aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} />
   ),
 }))
 
@@ -277,8 +273,7 @@ describe('CloudStorage', () => {
     await user.type(screen.getByLabelText(/Remote name/i), 'gdrive-prod')
     fireEvent.change(screen.getByLabelText(/Config JSON/i), {
       target: {
-        value:
-          '{"type":"drive","scope":"drive","token":"{\\"access_token\\":\\"redacted\\"}"}',
+        value: '{"type":"drive","scope":"drive","token":"{\\"access_token\\":\\"redacted\\"}"}',
       },
     })
     await user.click(screen.getByRole('button', { name: /Create remote/i }))
@@ -348,6 +343,59 @@ describe('CloudStorage', () => {
     })
   }, 60000)
 
+  it('ignores stale OAuth responses after switching providers', async () => {
+    let resolveStart!: (value: AxiosResponse) => void
+    vi.mocked(rcloneAPI.startOAuthSession).mockReturnValue(
+      new Promise<AxiosResponse>((resolve) => {
+        resolveStart = resolve
+      })
+    )
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    await screen.findByText('prod-s3')
+    fireEvent.click(screen.getByRole('button', { name: /Add remote/i }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Google Drive/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Start browser authorization/i }))
+
+    await waitFor(() => {
+      expect(rcloneAPI.startOAuthSession).toHaveBeenCalledWith({
+        provider: 'drive',
+        config: { type: 'drive', scope: 'drive', token: '' },
+      })
+    })
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Amazon S3/i }))
+    await waitFor(() => {
+      expect((screen.getByLabelText(/Config JSON/i) as HTMLTextAreaElement).value).toContain(
+        '"type": "s3"'
+      )
+    })
+
+    await act(async () => {
+      resolveStart({
+        data: {
+          session_id: 'oauth-stale',
+          provider: 'drive',
+          status: 'authorized',
+          authorization_url: 'http://127.0.0.1:53682/auth?state=stale',
+          config: {
+            type: 'drive',
+            token: '{"access_token":"stale-access","refresh_token":"stale-refresh"}',
+          },
+          error: null,
+        },
+      } as AxiosResponse)
+      await Promise.resolve()
+    })
+
+    const configValue = (screen.getByLabelText(/Config JSON/i) as HTMLTextAreaElement).value
+    expect(configValue).toContain('"type": "s3"')
+    expect(configValue).not.toContain('stale-refresh')
+    expect(openSpy).not.toHaveBeenCalled()
+  }, 60000)
+
   it('keeps a custom backend path for unsupported rclone providers', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
@@ -384,6 +432,13 @@ describe('CloudStorage', () => {
     await user.click(screen.getByRole('button', { name: /Add remote/i }))
 
     expect(await screen.findByTestId('drag-handle')).toBeInTheDocument()
+  })
+
+  it('surfaces provider catalog load failures', async () => {
+    vi.mocked(rcloneAPI.getProviders).mockRejectedValue(new Error('provider catalog unavailable'))
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    expect(await screen.findByText('Failed to load cloud providers.')).toBeInTheDocument()
   })
 
   it('tests and browses a remote from the remote card', async () => {

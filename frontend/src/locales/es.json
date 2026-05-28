@@ -201,6 +201,7 @@
     "browseFailed": "No se pudo explorar el remoto rclone.",
     "statusLoadFailed": "No se pudo cargar la disponibilidad de rclone.",
     "remotesLoadFailed": "No se pudieron cargar los remotos rclone.",
+    "providersLoadFailed": "No se pudieron cargar los proveedores en la nube.",
     "search": "Buscar almacenamiento en la nube...",
     "sort": {
       "nameAZ": "Nombre A → Z",

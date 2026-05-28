@@ -7,6 +7,7 @@ import logging
 import math
 import re
 import secrets
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,9 @@ router = APIRouter(tags=["rclone"], dependencies=[Depends(authorize_request)])
 RCLONE_REMOTE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 RCLONE_OAUTH_URL_RE = re.compile(r"https?://[^\s<>]+")
 RCLONE_OAUTH_START_TIMEOUT_SECONDS = 15
+RCLONE_OAUTH_SESSION_TTL_SECONDS = 15 * 60
+RCLONE_OAUTH_MAX_SESSIONS = 32
+RCLONE_OAUTH_OUTPUT_LIMIT_CHARS = 20_000
 REDACTED_CONFIG_VALUE = "***"
 SAFE_CONFIG_KEY_EXCEPTIONS = {
     "key_file",
@@ -388,7 +392,7 @@ RCLONE_PROVIDER_CATALOG: list[dict[str, Any]] = [
     },
 ]
 
-RCLONE_OAUTH_SESSIONS: dict[str, dict[str, Any]] = {}
+RCLONE_OAUTH_SESSIONS: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
 
 class RcloneRemoteCreate(BaseModel):
@@ -527,8 +531,74 @@ def _extract_oauth_token(output: str) -> str | None:
     return None
 
 
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _terminate_oauth_session(session: dict[str, Any]) -> None:
+    task = session.get("task")
+    if task is not None and not task.done():
+        task.cancel()
+    process = session.get("process")
+    if process is not None:
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+
+
+def _drop_oauth_session(session_id: str) -> dict[str, Any] | None:
+    session = RCLONE_OAUTH_SESSIONS.pop(session_id, None)
+    if session is not None:
+        _terminate_oauth_session(session)
+    return session
+
+
+def _cleanup_rclone_oauth_sessions(now: datetime | None = None) -> None:
+    now = now or _utc_now()
+    for session_id, session in list(RCLONE_OAUTH_SESSIONS.items()):
+        updated_at = session.get("updated_at") or session.get("created_at")
+        if not isinstance(updated_at, datetime):
+            updated_at = now
+        if (now - updated_at).total_seconds() > RCLONE_OAUTH_SESSION_TTL_SECONDS:
+            _drop_oauth_session(session_id)
+
+    while len(RCLONE_OAUTH_SESSIONS) > RCLONE_OAUTH_MAX_SESSIONS:
+        oldest_session_id = next(iter(RCLONE_OAUTH_SESSIONS))
+        _drop_oauth_session(oldest_session_id)
+
+
+def _store_oauth_session(session_id: str, session: dict[str, Any]) -> None:
+    _cleanup_rclone_oauth_sessions()
+    RCLONE_OAUTH_SESSIONS[session_id] = session
+    RCLONE_OAUTH_SESSIONS.move_to_end(session_id)
+    _cleanup_rclone_oauth_sessions()
+
+
+def _get_oauth_session(session_id: str) -> dict[str, Any] | None:
+    _cleanup_rclone_oauth_sessions()
+    session = RCLONE_OAUTH_SESSIONS.get(session_id)
+    if session is None:
+        return None
+    session["updated_at"] = _utc_now()
+    RCLONE_OAUTH_SESSIONS.move_to_end(session_id)
+    return session
+
+
+def _append_oauth_output(session: dict[str, Any], line: str) -> None:
+    output: list[str] = session["output"]
+    output.append(line[-RCLONE_OAUTH_OUTPUT_LIMIT_CHARS:])
+    total_chars = sum(len(chunk) for chunk in output)
+    while len(output) > 1 and total_chars > RCLONE_OAUTH_OUTPUT_LIMIT_CHARS:
+        total_chars -= len(output.pop(0))
+    if output and total_chars > RCLONE_OAUTH_OUTPUT_LIMIT_CHARS:
+        output[0] = output[0][-RCLONE_OAUTH_OUTPUT_LIMIT_CHARS:]
+    session["updated_at"] = _utc_now()
+
+
 def _oauth_session_response(session_id: str) -> dict[str, Any]:
     session = RCLONE_OAUTH_SESSIONS[session_id]
+    RCLONE_OAUTH_SESSIONS.move_to_end(session_id)
     return {
         "session_id": session_id,
         "provider": session["provider"],
@@ -567,7 +637,6 @@ async def _consume_oauth_process(session_id: str, process) -> None:
     session = RCLONE_OAUTH_SESSIONS.get(session_id)
     if session is None:
         return
-    output: list[str] = session["output"]
     ready_event: asyncio.Event = session["ready_event"]
     try:
         while True:
@@ -575,14 +644,13 @@ async def _consume_oauth_process(session_id: str, process) -> None:
             if not raw_line:
                 break
             line = raw_line.decode("utf-8", errors="replace")
-            output.append(line)
-            session["updated_at"] = datetime.now(timezone.utc)
+            _append_oauth_output(session, line)
             authorization_url = _extract_oauth_authorization_url(line)
             if authorization_url and not session.get("authorization_url"):
                 session["authorization_url"] = authorization_url
                 session["status"] = "awaiting_callback"
                 ready_event.set()
-            token = _extract_oauth_token("".join(output[-20:]))
+            token = _extract_oauth_token("".join(session["output"][-20:]))
             if token:
                 session["status"] = "authorized"
                 session["config"] = {"type": session["provider"], "token": token}
@@ -591,7 +659,7 @@ async def _consume_oauth_process(session_id: str, process) -> None:
         return_code = await process.wait()
         if session["status"] != "authorized":
             session["status"] = "failed"
-            tail = "".join(output[-12:]).strip()
+            tail = "".join(session["output"][-12:]).strip()
             if return_code == 0:
                 session["error"] = (
                     "rclone authorization finished without returning a token"
@@ -606,6 +674,7 @@ async def _consume_oauth_process(session_id: str, process) -> None:
         ready_event.set()
     finally:
         session["process"] = None
+        session["updated_at"] = _utc_now()
 
 
 def _new_config_parser() -> configparser.ConfigParser:
@@ -686,12 +755,10 @@ def _preserve_redacted_config_values(
     resolved: dict[str, Any] = {}
     for key, value in incoming.items():
         key_text = str(key)
-        if (
-            _is_sensitive_config_key(key_text)
-            and _is_redacted_config_value(value)
-            and key_text in existing
-        ):
-            resolved[key_text] = existing[key_text]
+        if _is_redacted_config_value(value):
+            if key_text in existing:
+                resolved[key_text] = existing[key_text]
+            continue
         else:
             resolved[key_text] = value
     return resolved
@@ -732,7 +799,9 @@ def _managed_config_values(
     return {
         str(key): _stringify_config_value(value)
         for key, value in values.items()
-        if value is not None and str(key).strip()
+        if value is not None
+        and str(key).strip()
+        and not _is_redacted_config_value(value)
     }
 
 
@@ -860,6 +929,7 @@ async def start_oauth_session(
 
     session_id = secrets.token_urlsafe(18)
     ready_event = asyncio.Event()
+    now = _utc_now()
     session = {
         "provider": provider,
         "status": "starting",
@@ -867,13 +937,13 @@ async def start_oauth_session(
         "config": None,
         "error": None,
         "output": [],
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": now,
+        "updated_at": now,
         "ready_event": ready_event,
         "process": None,
         "task": None,
     }
-    RCLONE_OAUTH_SESSIONS[session_id] = session
+    _store_oauth_session(session_id, session)
 
     try:
         process = await _start_oauth_process(
@@ -882,7 +952,7 @@ async def start_oauth_session(
             client_secret=payload.client_secret,
         )
     except RcloneUnavailable as exc:
-        RCLONE_OAUTH_SESSIONS.pop(session_id, None)
+        _drop_oauth_session(session_id)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"key": "backend.errors.rclone.unavailable", "message": str(exc)},
@@ -906,7 +976,7 @@ async def get_oauth_session(
     current_user: User = Depends(get_current_user),
 ):
     _require_admin(current_user)
-    if session_id not in RCLONE_OAUTH_SESSIONS:
+    if _get_oauth_session(session_id) is None:
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.rclone.oauthNotFound"}
         )
@@ -920,18 +990,9 @@ async def cancel_oauth_session(
     current_user: User = Depends(get_current_user),
 ):
     _require_admin(current_user)
-    session = RCLONE_OAUTH_SESSIONS.pop(session_id, None)
+    session = _drop_oauth_session(session_id)
     if session is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-    task = session.get("task")
-    if task is not None and not task.done():
-        task.cancel()
-    process = session.get("process")
-    if process is not None:
-        try:
-            process.kill()
-        except ProcessLookupError:
-            pass
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -1054,13 +1115,16 @@ async def update_remote(
             config_file = _managed_config_path_for_remote(remote)
             original_parser = _load_config(config_file)
             existing_config = _config_section_values(original_parser, old_remote_name)
-            config_for_write = (
-                _preserve_redacted_config_values(
+            if payload.redacted_config is not None:
+                config_for_write = _preserve_redacted_config_values(
                     payload.redacted_config, existing_config
                 )
-                if payload.redacted_config is not None
-                else existing_config or remote.redacted_config
-            )
+            elif existing_config:
+                config_for_write = existing_config
+            else:
+                config_for_write = _preserve_redacted_config_values(
+                    remote.redacted_config or {}, existing_config
+                )
             _replace_managed_remote_config(
                 config_file,
                 old_remote_name=old_remote_name,

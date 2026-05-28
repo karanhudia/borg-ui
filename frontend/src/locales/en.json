@@ -201,6 +201,7 @@
     "browseFailed": "Failed to browse rclone remote.",
     "statusLoadFailed": "Failed to load rclone availability.",
     "remotesLoadFailed": "Failed to load rclone remotes.",
+    "providersLoadFailed": "Failed to load cloud providers.",
     "search": "Search cloud storage...",
     "sort": {
       "nameAZ": "Name A → Z",
