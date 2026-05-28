@@ -27,11 +27,28 @@ def _drop_index_if_exists(db, table_name: str, index_name: str) -> None:
     if index_name in {
         index["name"] for index in inspect(_bind(db)).get_indexes(table_name)
     }:
-        db.execute(text(f"DROP INDEX {index_name}"))
+        dialect_name = _bind(db).dialect.name
+        if dialect_name in {"mysql", "mariadb"}:
+            db.execute(text(f"DROP INDEX {index_name} ON {table_name}"))
+        elif dialect_name == "postgresql":
+            db.execute(text(f"DROP INDEX IF EXISTS {index_name}"))
+        else:
+            db.execute(text(f"DROP INDEX {index_name}"))
+
+
+def _sqlite_supports_drop_column(db) -> bool:
+    version = db.execute(text("SELECT sqlite_version()")).scalar() or "0.0.0"
+    return tuple(int(part) for part in version.split(".")[:3]) >= (3, 35, 0)
 
 
 def _drop_column_if_exists(db, table_name: str, column_name: str) -> None:
     if column_name in _columns(db, table_name):
+        if _bind(db).dialect.name == "sqlite" and not _sqlite_supports_drop_column(db):
+            print(
+                f"SQLite version does not support DROP COLUMN; "
+                f"{table_name}.{column_name} will remain"
+            )
+            return
         db.execute(text(f"ALTER TABLE {table_name} DROP COLUMN {column_name}"))
 
 
