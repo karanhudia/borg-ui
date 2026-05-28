@@ -597,6 +597,51 @@ def test_browse_remote_returns_redacted_entries(
 
 
 @pytest.mark.unit
+def test_browse_remote_returns_paths_relative_to_remote_root(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+
+    monkeypatch.setattr(
+        "app.api.rclone.rclone_service.lsjson",
+        AsyncMock(
+            return_value=[
+                {"Name": "snapshots", "Path": "snapshots", "IsDir": True, "Size": -1},
+                {"Name": "manifest.json", "Path": "manifest.json", "IsDir": False},
+            ]
+        ),
+    )
+
+    response = test_client.get(
+        f"/api/rclone/remotes/{remote.id}/browse",
+        headers=admin_headers,
+        params={"path": "borg-ui"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["path"] == "borg-ui"
+    assert response.json()["entries"] == [
+        {
+            "name": "snapshots",
+            "path": "borg-ui/snapshots",
+            "is_dir": True,
+            "size": None,
+            "modified": None,
+        },
+        {
+            "name": "manifest.json",
+            "path": "borg-ui/manifest.json",
+            "is_dir": False,
+            "size": None,
+            "modified": None,
+        },
+    ]
+
+
+@pytest.mark.unit
 def test_repository_rclone_status_endpoint(
     test_client: TestClient, admin_headers, test_db
 ):

@@ -203,15 +203,21 @@ export const BrowseDialog: Story = {
         remotes={remotes}
         browseState={{
           remote: remotes[0],
-          path: '',
+          path: 'borg-ui',
           entries: [
-            { name: 'borg-ui', path: 'borg-ui', is_dir: true, size: null, modified: null },
             {
-              name: 'README.md',
-              path: 'README.md',
+              name: 'archives',
+              path: 'borg-ui/archives',
+              is_dir: true,
+              size: null,
+              modified: null,
+            },
+            {
+              name: 'manifest.json',
+              path: 'borg-ui/manifest.json',
               is_dir: false,
               size: 128,
-              modified: null,
+              modified: '2026-05-27T12:00:00Z',
             },
           ],
         }}

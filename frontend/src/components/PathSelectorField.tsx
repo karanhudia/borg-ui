@@ -20,6 +20,7 @@ interface PathSelectorFieldProps {
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>
   connectionType?: 'local' | 'ssh' | 'agent'
   agentId?: number
+  agentName?: string
   sshConfig?: {
     ssh_key_id: number
     host: string
@@ -47,6 +48,7 @@ export default function PathSelectorField({
   onKeyDown,
   connectionType = 'local',
   agentId,
+  agentName,
   sshConfig,
   showSshMountPoints,
   fullWidth = true,
@@ -109,6 +111,7 @@ export default function PathSelectorField({
         multiSelect={multiSelect}
         connectionType={connectionType}
         agentId={agentId}
+        agentName={agentName}
         sshConfig={sshConfig}
         selectMode={selectMode}
         showSshMountPoints={showSshMountPoints}

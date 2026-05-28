@@ -90,10 +90,12 @@ interface FileExplorerDialogProps {
   multiSelect?: boolean
   connectionType?: FileExplorerConnectionType
   agentId?: number
+  agentName?: string
   sshConfig?: SSHNetworkConfig
   selectMode?: 'directories' | 'files' | 'both'
   showSshMountPoints?: boolean // Set to false to hide SSH mount points (e.g., when repo is SSH to prevent remote-to-remote)
   allowedSshConnectionId?: number | null // Only show this SSH connection's mount point (used when source_connection_id is already set)
+  dialogContainer?: HTMLElement | (() => HTMLElement | null) | null
 }
 
 export default function FileExplorerDialog({
@@ -105,10 +107,12 @@ export default function FileExplorerDialog({
   multiSelect = false,
   connectionType = 'local',
   agentId,
+  agentName,
   sshConfig,
   selectMode = 'directories',
   showSshMountPoints = true,
   allowedSshConnectionId = null,
+  dialogContainer,
 }: FileExplorerDialogProps) {
   const { t } = useTranslation()
   const [currentPath, setCurrentPath] = useState(initialPath)
@@ -475,6 +479,9 @@ export default function FileExplorerDialog({
   const filteredItems = allItems.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
+  const agentLabel =
+    agentName?.trim() ||
+    (agentId ? t('backupPlans.sourceChooser.agentFallback', { id: agentId }) : '')
 
   return (
     <>
@@ -484,6 +491,7 @@ export default function FileExplorerDialog({
         maxWidth="md"
         fullWidth
         fullScreen={fullScreen}
+        container={dialogContainer}
         PaperProps={{ sx: { height: fullScreen ? '100%' : '75vh' } }}
       >
         <DialogTitle sx={{ pb: 1, pt: 2 }}>
@@ -494,7 +502,7 @@ export default function FileExplorerDialog({
             {activeConnectionType === 'agent' && agentId ? (
               <Chip
                 icon={<Laptop size={14} />}
-                label={`Agent #${agentId}`}
+                label={agentLabel}
                 size="small"
                 color="primary"
                 variant="outlined"
