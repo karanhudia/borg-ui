@@ -100,7 +100,8 @@ ssh://abcd@abcd.repo.borgbase.com/./repo
 ```
 
 Use `/./repo` as the Remote Machine default path and repository path. Do not
-shorten it to `/repo`. See [Provider Guides](provider-guides).
+shorten it to `/repo`. See [Provider Guides](provider-guides) for BorgBase,
+Hetzner Storage Box, Synology, Unraid, and other hosted or NAS examples.
 
 ## Remote Direct Backups
 
@@ -118,7 +119,8 @@ passed to Borg as the repository-side remote Borg path.
 ## Synology and NAS Path Prefixes
 
 Some NAS devices expose different paths over SFTP and SSH. Synology DSM is a
-common example:
+common example. For provider-level mapping notes, see
+[Provider Guides](provider-guides#synology-unraid-and-other-nas-targets).
 
 ```text
 SFTP path shown while browsing: /playbackup/borguitest
