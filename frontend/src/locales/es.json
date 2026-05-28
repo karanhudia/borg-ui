@@ -3226,7 +3226,7 @@
     "cloudMirror": {
       "enableLabel": "Replicar este repositorio en almacenamiento en la nube",
       "enableHelper": "Mantén el repositorio principal en el almacenamiento seleccionado y sincroniza una copia con un remoto rclone.",
-      "localOnly": "En esta versión se pueden replicar repositorios locales y SSH. La estrategia de agente gestionado se sigue por separado.",
+      "localOnly": "En esta versión se pueden replicar repositorios locales y SSH. La estrategia para agentes gestionados se gestiona por separado.",
       "unsupportedPrimary": "Esta ubicación de repositorio aún no puede replicarse al almacenamiento en la nube.",
       "managedAgentUnsupported": "Los repositorios de agente gestionado necesitan una estrategia de réplica separada antes de habilitar la réplica en la nube.",
       "remotePathVerified": "Ruta verificada desde el explorador remoto.",
@@ -4129,7 +4129,7 @@
         "remoteNotFound": "Remoto rclone no encontrado",
         "remoteInUse": "Este remoto todavía lo usan uno o más repositorios",
         "updateUnsupported": "Esta actualización del remoto rclone no está soportada",
-        "mirrorUnsupportedPrimary": "La réplica en la nube actualmente solo admite repositorios principales locales",
+        "mirrorUnsupportedPrimary": "La réplica en la nube actualmente solo admite repositorios principales locales y SSH",
         "remotePathNotVerified": "Esta ruta remota rclone no está vacía. Explora y confirma la ruta de destino antes de sincronizar.",
         "remotePathPreflightFailed": "No se pudo verificar esta ruta remota rclone",
         "cachePathServerOwned": "El servidor administra la ruta de caché rclone",

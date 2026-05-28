@@ -4129,7 +4129,7 @@
         "remoteNotFound": "rclone-Remote nicht gefunden",
         "remoteInUse": "Dieses Remote wird noch von einem oder mehreren Repositories verwendet",
         "updateUnsupported": "Diese rclone-Remote-Aktualisierung wird nicht unterstützt",
-        "mirrorUnsupportedPrimary": "Cloud-Spiegelung wird derzeit nur für lokale primäre Repositories unterstützt",
+        "mirrorUnsupportedPrimary": "Cloud-Spiegelung wird derzeit nur für lokale und SSH-primäre Repositories unterstützt",
         "remotePathNotVerified": "Dieser rclone-Remote-Pfad ist nicht leer. Durchsuche und bestätige den Zielpfad vor der Synchronisierung.",
         "remotePathPreflightFailed": "Dieser rclone-Remote-Pfad konnte nicht verifiziert werden",
         "cachePathServerOwned": "Der rclone-Cache-Pfad wird vom Server verwaltet",

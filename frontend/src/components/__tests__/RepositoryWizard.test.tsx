@@ -567,25 +567,24 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Create Repository/i }))
 
       await waitFor(() => {
-        expect(onSubmit).toHaveBeenCalledWith(
-          expect.not.objectContaining({ rclone_cache_path: expect.anything() }),
-          null
-        )
-        expect(onSubmit).toHaveBeenCalledWith(
-          expect.objectContaining({
-            name: 'SSH Cloud Repo',
-            path: '/backups/ssh-cloud',
-            storage_backend: 'ssh',
-            connection_id: 1,
-            cloud_mirror_enabled: true,
-            rclone_remote_id: 10,
-            rclone_remote_path: 'borg-ui/repositories/ssh',
-            rclone_remote_path_verified: false,
-            rclone_sync_policy: 'after_success',
-          }),
-          null
-        )
+        expect(onSubmit).toHaveBeenCalled()
       })
+      const [submittedPayload, submittedKeyFile] = onSubmit.mock.calls[0]
+      expect(submittedPayload).not.toHaveProperty('rclone_cache_path')
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({
+          name: 'SSH Cloud Repo',
+          path: '/backups/ssh-cloud',
+          storage_backend: 'ssh',
+          connection_id: 1,
+          cloud_mirror_enabled: true,
+          rclone_remote_id: 10,
+          rclone_remote_path: 'borg-ui/repositories/ssh',
+          rclone_remote_path_verified: false,
+          rclone_sync_policy: 'after_success',
+        })
+      )
+      expect(submittedKeyFile).toBeNull()
     }, 90000)
 
     it('submits browsed cloud mirror paths as verified', async () => {

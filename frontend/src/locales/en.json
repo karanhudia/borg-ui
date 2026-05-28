@@ -4129,7 +4129,7 @@
         "remoteNotFound": "rclone remote not found",
         "remoteInUse": "This remote is still used by one or more repositories",
         "updateUnsupported": "This rclone remote update is not supported",
-        "mirrorUnsupportedPrimary": "Cloud mirror is currently supported only for local primary repositories",
+        "mirrorUnsupportedPrimary": "Cloud mirror is currently supported only for local and SSH primary repositories",
         "remotePathNotVerified": "This rclone remote path is not empty. Browse and confirm the target path before syncing.",
         "remotePathPreflightFailed": "Could not verify this rclone remote path",
         "cachePathServerOwned": "The rclone cache path is managed by the server",
