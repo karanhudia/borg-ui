@@ -8,6 +8,10 @@ description: "Create repositories, build backup plans, browse archives, and rest
 
 This guide covers the normal path after installation.
 
+If you are unsure where to start in the app, use the
+[Navigation](navigation) guide to understand what each sidebar tab is for. This
+usage guide focuses on the common backup and restore flow.
+
 ## First Login
 
 Open Borg UI:
