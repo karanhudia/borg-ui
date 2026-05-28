@@ -145,6 +145,41 @@ describe('FileExplorerDialog', () => {
       })
     })
 
+    it('shows the agent name in the managed-agent connection chip', async () => {
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          agentName="Build Runner"
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Build Runner')).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Agent #42')).not.toBeInTheDocument()
+    })
+
+    it('falls back to the localized agent label when the agent name is blank', async () => {
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          agentName="   "
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('Agent #42')).toBeInTheDocument()
+      })
+    })
+
     it('shows search input', async () => {
       renderWithProviders(
         <FileExplorerDialog open={true} onClose={mockOnClose} onSelect={mockOnSelect} />

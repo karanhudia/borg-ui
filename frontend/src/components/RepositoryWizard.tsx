@@ -975,6 +975,11 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     }
   }
 
+  const selectedAgentMachine =
+    wizardState.executionTarget === 'agent' && wizardState.agentMachineId
+      ? agentMachines.find((agent) => agent.id === Number(wizardState.agentMachineId))
+      : null
+
   return (
     <>
       <WizardDialog
@@ -1093,6 +1098,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             ? Number(wizardState.agentMachineId)
             : undefined
         }
+        agentName={selectedAgentMachine?.name}
         sshConfig={
           wizardState.executionTarget !== 'agent' &&
           wizardState.repositoryLocation === 'ssh' &&
