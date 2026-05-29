@@ -33,10 +33,18 @@ lives or where you want new archives to be stored.
 
 Cloud Storage manages reusable rclone remotes. Open Cloud Storage, choose
 **Add remote**, pick the provider, and review the provider-specific config
-template before saving. Google Drive, OneDrive, Dropbox, and Box use rclone's
-browser OAuth flow; start authorization from Borg UI, complete the rclone
-callback, and check authorization to add the returned token JSON to the managed
-config editor. Access-key providers such as S3,
+template before saving. Google Drive and OneDrive use Borg UI-owned OAuth
+callbacks when `PUBLIC_BASE_URL` and provider client credentials are configured;
+start authorization from Borg UI, complete the provider login, and check
+authorization to add the returned token JSON to the managed config editor.
+Provider secrets stay on the backend and are not exposed in the browser. For
+OneDrive, Borg UI also records the default Microsoft Graph drive ID and drive
+type returned for the signed-in account. Enter a specific drive ID manually when
+targeting a SharePoint document library or another non-default drive.
+
+If Borg UI-owned OAuth is not configured, or if you are using providers such as
+Dropbox or Box, Cloud Storage keeps the rclone loopback/manual authorization
+path available for advanced setups. Access-key providers such as S3,
 Backblaze B2, and Azure Blob store their keys in Borg UI's server-managed
 `rclone.conf` and return redacted values through the API.
 

@@ -13,6 +13,10 @@ const providers: RcloneProvider[] = [
     type_editable: false,
     docs_url: 'https://rclone.org/drive/',
     config_template: { type: 'drive', scope: 'drive', token: '' },
+    oauth_mode: 'borg_ui',
+    oauth_configured: true,
+    oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
+    oauth_setup_key: null,
     fields: [
       {
         name: 'token',
@@ -32,6 +36,10 @@ const providers: RcloneProvider[] = [
     type_editable: false,
     docs_url: 'https://rclone.org/onedrive/',
     config_template: { type: 'onedrive', token: '' },
+    oauth_mode: 'borg_ui',
+    oauth_configured: true,
+    oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/onedrive',
+    oauth_setup_key: null,
     fields: [
       {
         name: 'token',
@@ -95,8 +103,9 @@ export const CreateManagedRemote: Story = {
       session_id: 'storybook-oauth',
       provider: 'drive',
       status: 'awaiting_callback',
+      oauth_mode: 'borg_ui',
       authorization_url: '/rclone/oauth/sessions/storybook-oauth/authorize',
-      local_authorization_url: 'http://127.0.0.1:53682/auth?state=storybook',
+      local_authorization_url: null,
       config: null,
       error: null,
     }),
@@ -104,11 +113,13 @@ export const CreateManagedRemote: Story = {
       session_id: 'storybook-oauth',
       provider: 'drive',
       status: 'authorized',
+      oauth_mode: 'borg_ui',
       authorization_url: '/rclone/oauth/sessions/storybook-oauth/authorize',
-      local_authorization_url: 'http://127.0.0.1:53682/auth?state=storybook',
+      local_authorization_url: null,
       config: {
         type: 'drive',
         token: '{"access_token":"storybook","refresh_token":"storybook"}',
+        _borg_ui_oauth_provider: 'drive',
       },
       error: null,
     }),
@@ -146,6 +157,29 @@ export const CreateError: Story = {
   args: {
     ...CreateManagedRemote.args,
     error: 'Remote name already exists.',
+  },
+  render: renderDialog,
+}
+
+export const BorgUiOAuthSetupMissing: Story = {
+  args: {
+    ...CreateManagedRemote.args,
+    initialRemote: {
+      name: 'gdrive-prod',
+      provider: 'drive',
+      config_source: 'managed',
+      redacted_config: { type: 'drive', scope: 'drive', token: '' },
+    },
+    providers: providers.map((provider) =>
+      provider.type === 'drive'
+        ? {
+            ...provider,
+            oauth_configured: false,
+            oauth_callback_url: null,
+            oauth_setup_key: 'backend.errors.rclone.oauthPublicBaseUrlRequired',
+          }
+        : provider
+    ),
   },
   render: renderDialog,
 }

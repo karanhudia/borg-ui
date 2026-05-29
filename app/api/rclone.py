@@ -8,14 +8,14 @@ import math
 import re
 import secrets
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -30,6 +30,7 @@ from app.services.rclone_service import RcloneUnavailable, rclone_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["rclone"], dependencies=[Depends(authorize_request)])
+public_router = APIRouter(tags=["rclone"])
 
 RCLONE_REMOTE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 RCLONE_OAUTH_URL_RE = re.compile(r"https?://[^\s<>]+")
@@ -38,6 +39,13 @@ RCLONE_OAUTH_SESSION_TTL_SECONDS = 15 * 60
 RCLONE_OAUTH_MAX_SESSIONS = 32
 RCLONE_OAUTH_OUTPUT_LIMIT_CHARS = 20_000
 RCLONE_OAUTH_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
+BORG_UI_OAUTH_MARKER_KEY = "_borg_ui_oauth_provider"
+BORG_UI_OAUTH_PROVIDERS = {"drive", "onedrive"}
+GOOGLE_DRIVE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_DRIVE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+MICROSOFT_AUTH_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+MICROSOFT_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+MICROSOFT_GRAPH_ME_DRIVE_URL = "https://graph.microsoft.com/v1.0/me/drive"
 REDACTED_CONFIG_VALUE = "***"
 SAFE_CONFIG_KEY_EXCEPTIONS = {
     "key_file",
@@ -50,7 +58,11 @@ SENSITIVE_CONFIG_KEYS = {
     "account",
     "account_key",
     "application_key",
+    "authorization_code",
+    "client_id",
     "client_secret",
+    "code",
+    "code_verifier",
     "key",
     "password",
     "pass",
@@ -63,7 +75,10 @@ SENSITIVE_CONFIG_KEYS = {
 }
 SENSITIVE_CONFIG_FRAGMENTS = (
     "access_token",
+    "authorization_code",
+    "client_id",
     "client_secret",
+    "code_verifier",
     "password",
     "refresh_token",
     "secret",
@@ -419,6 +434,7 @@ class RcloneOAuthStart(BaseModel):
     config: dict[str, Any] | None = None
     client_id: str | None = None
     client_secret: str | None = None
+    mode: str = "auto"
 
 
 def _require_admin(user: User) -> None:
@@ -468,6 +484,118 @@ def _require_oauth_provider(provider: str) -> dict[str, Any]:
             detail={"key": "backend.errors.rclone.oauthUnsupported"},
         )
     return entry
+
+
+def _strip_optional(value: str | None) -> str | None:
+    stripped = (value or "").strip()
+    return stripped or None
+
+
+def _provider_oauth_credentials(
+    provider: str, *, required: bool = False
+) -> tuple[str | None, str | None]:
+    if provider == "drive":
+        client_id = _strip_optional(settings.google_drive_oauth_client_id)
+        client_secret = _strip_optional(settings.google_drive_oauth_client_secret)
+    elif provider == "onedrive":
+        client_id = _strip_optional(settings.onedrive_oauth_client_id)
+        client_secret = _strip_optional(settings.onedrive_oauth_client_secret)
+    else:
+        client_id = None
+        client_secret = None
+
+    if required and (not client_id or not client_secret):
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.rclone.oauthProviderCredentialsRequired"},
+        )
+    return client_id, client_secret
+
+
+def _validate_public_base_url() -> str:
+    raw_base_url = _strip_optional(settings.public_base_url)
+    if not raw_base_url:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.rclone.oauthPublicBaseUrlRequired"},
+        )
+
+    base_url = raw_base_url.rstrip("/")
+    parsed = urlparse(base_url)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.rclone.oauthPublicBaseUrlInvalid"},
+        )
+    if parsed.scheme != "https" and parsed.hostname not in RCLONE_OAUTH_LOCAL_HOSTS:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.rclone.oauthPublicBaseUrlHttpsRequired"},
+        )
+    return base_url
+
+
+def _borg_ui_oauth_callback_url(provider: str) -> str:
+    return f"{_validate_public_base_url()}/api/rclone/oauth/callback/{provider}"
+
+
+def _borg_ui_oauth_setup_status(provider: str) -> dict[str, Any]:
+    if provider not in BORG_UI_OAUTH_PROVIDERS:
+        return {
+            "oauth_mode": "rclone_loopback",
+            "oauth_configured": False,
+            "oauth_callback_url": None,
+            "oauth_setup_key": None,
+        }
+
+    client_id, client_secret = _provider_oauth_credentials(provider)
+    if not client_id or not client_secret:
+        return {
+            "oauth_mode": "borg_ui",
+            "oauth_configured": False,
+            "oauth_callback_url": None,
+            "oauth_setup_key": "backend.errors.rclone.oauthProviderCredentialsRequired",
+        }
+    try:
+        callback_url = _borg_ui_oauth_callback_url(provider)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        return {
+            "oauth_mode": "borg_ui",
+            "oauth_configured": False,
+            "oauth_callback_url": None,
+            "oauth_setup_key": detail.get(
+                "key", "backend.errors.rclone.oauthPublicBaseUrlInvalid"
+            ),
+        }
+    return {
+        "oauth_mode": "borg_ui",
+        "oauth_configured": True,
+        "oauth_callback_url": callback_url,
+        "oauth_setup_key": None,
+    }
+
+
+def _serialize_provider_catalog_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    serialized = dict(entry)
+    if entry.get("auth_type") == "oauth_token":
+        serialized.update(_borg_ui_oauth_setup_status(str(entry["type"])))
+    else:
+        serialized.update(
+            {
+                "oauth_mode": "manual",
+                "oauth_configured": False,
+                "oauth_callback_url": None,
+                "oauth_setup_key": None,
+            }
+        )
+    return serialized
 
 
 def _managed_config_path(config_root: Path) -> Path:
@@ -554,6 +682,149 @@ def _extract_oauth_token(output: str) -> str | None:
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _google_drive_scope(config: dict[str, Any] | None) -> str:
+    configured_scope = str((config or {}).get("scope") or "drive").strip()
+    if configured_scope == "drive.readonly":
+        return "https://www.googleapis.com/auth/drive.readonly"
+    return "https://www.googleapis.com/auth/drive"
+
+
+def _onedrive_scope(config: dict[str, Any] | None) -> str:
+    configured_scope = str((config or {}).get("access_scopes") or "").strip()
+    if configured_scope:
+        return configured_scope
+    return (
+        "offline_access Files.Read Files.ReadWrite Files.Read.All Files.ReadWrite.All"
+    )
+
+
+def _provider_authorization_url(
+    provider: str,
+    *,
+    config: dict[str, Any] | None,
+    redirect_uri: str,
+    state: str,
+) -> str:
+    client_id, _client_secret = _provider_oauth_credentials(provider, required=True)
+    if provider == "drive":
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": _google_drive_scope(config),
+            "state": state,
+            "access_type": "offline",
+            "prompt": "consent",
+        }
+        return f"{GOOGLE_DRIVE_AUTH_URL}?{urlencode(params)}"
+    if provider == "onedrive":
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "response_mode": "query",
+            "scope": _onedrive_scope(config),
+            "state": state,
+        }
+        return f"{MICROSOFT_AUTH_URL}?{urlencode(params)}"
+    raise HTTPException(
+        status_code=400,
+        detail={"key": "backend.errors.rclone.oauthUnsupported"},
+    )
+
+
+def _rclone_token_from_oauth_response(payload: dict[str, Any]) -> str:
+    token: dict[str, Any] = {}
+    for key in ("access_token", "token_type", "refresh_token", "id_token"):
+        if payload.get(key):
+            token[key] = payload[key]
+    expires_in = payload.get("expires_in")
+    if expires_in is not None:
+        try:
+            seconds = int(expires_in)
+        except (TypeError, ValueError):
+            seconds = 0
+        if seconds > 0:
+            token["expiry"] = (
+                (_utc_now() + timedelta(seconds=seconds))
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+    return json.dumps(token, separators=(",", ":"))
+
+
+async def _exchange_borg_ui_oauth_code(
+    provider: str, code: str, redirect_uri: str
+) -> dict[str, Any]:
+    client_id, client_secret = _provider_oauth_credentials(provider, required=True)
+    token_url = GOOGLE_DRIVE_TOKEN_URL if provider == "drive" else MICROSOFT_TOKEN_URL
+    data = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(token_url, data=data)
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        ) from exc
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        )
+    try:
+        parsed = response.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        ) from exc
+    if not isinstance(parsed, dict) or not parsed.get("access_token"):
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        )
+    return parsed
+
+
+async def _fetch_onedrive_default_drive(access_token: str) -> dict[str, Any]:
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                MICROSOFT_GRAPH_ME_DRIVE_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        ) from exc
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        )
+    try:
+        parsed = response.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        ) from exc
+    if not isinstance(parsed, dict) or not parsed.get("id"):
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        )
+    return parsed
 
 
 def _terminate_oauth_session(session: dict[str, Any]) -> None:
@@ -659,6 +930,7 @@ def _oauth_session_response(session_id: str) -> dict[str, Any]:
         "status": session["status"],
         "authorization_url": session.get("authorization_url"),
         "local_authorization_url": session.get("local_authorization_url"),
+        "oauth_mode": session.get("flow", "rclone_loopback"),
         "config": session.get("config"),
         "error": session.get("error"),
     }
@@ -709,6 +981,41 @@ async def _start_oauth_process(
     if process.stdout is None:
         raise RcloneUnavailable("rclone authorization output stream unavailable")
     return process
+
+
+async def _start_borg_ui_oauth_session(
+    session_id: str, provider: str, config: dict[str, Any] | None
+) -> dict[str, Any]:
+    redirect_uri = _borg_ui_oauth_callback_url(provider)
+    state = secrets.token_urlsafe(32)
+    authorization_url = _provider_authorization_url(
+        provider, config=config, redirect_uri=redirect_uri, state=state
+    )
+    now = _utc_now()
+    base_config = dict(config or {})
+    base_config.pop("token", None)
+    base_config.pop(BORG_UI_OAUTH_MARKER_KEY, None)
+    session = {
+        "provider": provider,
+        "flow": "borg_ui",
+        "status": "awaiting_callback",
+        "authorization_url": _oauth_authorization_path(session_id),
+        "local_authorization_url": None,
+        "provider_authorization_url": authorization_url,
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "base_config": base_config,
+        "config": None,
+        "error": None,
+        "output": [],
+        "created_at": now,
+        "updated_at": now,
+        "ready_event": None,
+        "process": None,
+        "task": None,
+    }
+    _store_oauth_session(session_id, session)
+    return _oauth_session_response(session_id)
 
 
 async def _consume_oauth_process(session_id: str, process) -> None:
@@ -806,17 +1113,20 @@ def _redact_config_values(values: dict[str, Any] | None) -> dict[str, Any] | Non
         return None
     redacted: dict[str, Any] = {}
     for key, value in values.items():
-        if _is_sensitive_config_key(str(key)) and value not in (None, ""):
-            redacted[str(key)] = REDACTED_CONFIG_VALUE
+        key_text = str(key)
+        if key_text.startswith("_borg_ui_oauth"):
+            continue
+        if _is_sensitive_config_key(key_text) and value not in (None, ""):
+            redacted[key_text] = REDACTED_CONFIG_VALUE
         elif isinstance(value, dict):
-            redacted[str(key)] = _redact_config_values(value)
+            redacted[key_text] = _redact_config_values(value)
         elif isinstance(value, list):
-            redacted[str(key)] = [
+            redacted[key_text] = [
                 _redact_config_values(item) if isinstance(item, dict) else item
                 for item in value
             ]
         else:
-            redacted[str(key)] = value
+            redacted[key_text] = value
     return redacted
 
 
@@ -874,7 +1184,17 @@ def _managed_config_values(
     provider: str, redacted_config: dict[str, Any] | None
 ) -> dict[str, str]:
     values = dict(redacted_config or {})
+    borg_ui_oauth_provider = values.pop(BORG_UI_OAUTH_MARKER_KEY, None)
+    values = {
+        str(key): value
+        for key, value in values.items()
+        if not str(key).startswith("_borg_ui_oauth")
+    }
     values["type"] = str(values.get("type") or provider).strip()
+    if borg_ui_oauth_provider == provider and provider in BORG_UI_OAUTH_PROVIDERS:
+        client_id, client_secret = _provider_oauth_credentials(provider, required=True)
+        values["client_id"] = client_id
+        values["client_secret"] = client_secret
     return {
         str(key): _stringify_config_value(value)
         for key, value in values.items()
@@ -994,7 +1314,12 @@ async def get_status(current_user: User = Depends(get_current_user)):
 @router.get("/providers")
 async def list_providers(current_user: User = Depends(get_current_user)):
     _require_admin(current_user)
-    return {"providers": RCLONE_PROVIDER_CATALOG}
+    return {
+        "providers": [
+            _serialize_provider_catalog_entry(provider)
+            for provider in RCLONE_PROVIDER_CATALOG
+        ]
+    }
 
 
 @router.post("/oauth/sessions", status_code=status.HTTP_201_CREATED)
@@ -1008,10 +1333,33 @@ async def start_oauth_session(
     await _drop_active_oauth_sessions()
 
     session_id = secrets.token_urlsafe(18)
+    mode = (payload.mode or "auto").strip()
+    if mode not in {"auto", "borg_ui", "rclone_loopback"}:
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.rclone.oauthModeInvalid"}
+        )
+    if mode == "borg_ui" or (
+        mode == "auto"
+        and provider in BORG_UI_OAUTH_PROVIDERS
+        and _borg_ui_oauth_setup_status(provider)["oauth_configured"]
+    ):
+        return await _start_borg_ui_oauth_session(session_id, provider, payload.config)
+    if mode == "borg_ui":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "key": _borg_ui_oauth_setup_status(provider).get(
+                    "oauth_setup_key",
+                    "backend.errors.rclone.oauthProviderCredentialsRequired",
+                )
+            },
+        )
+
     ready_event = asyncio.Event()
     now = _utc_now()
     session = {
         "provider": provider,
+        "flow": "rclone_loopback",
         "status": "starting",
         "authorization_url": None,
         "local_authorization_url": None,
@@ -1076,10 +1424,97 @@ async def open_oauth_authorization(
         raise HTTPException(
             status_code=404, detail={"key": "backend.errors.rclone.oauthNotFound"}
         )
+    if session.get("flow") == "borg_ui":
+        provider_url = session.get("provider_authorization_url")
+        if not provider_url:
+            raise HTTPException(
+                status_code=409,
+                detail={"key": "backend.errors.rclone.oauthLinkUnavailable"},
+            )
+        return RedirectResponse(provider_url)
     redirect_url = await _fetch_oauth_authorization_redirect(
         session.get("local_authorization_url")
     )
     return RedirectResponse(redirect_url)
+
+
+@public_router.get("/oauth/callback/{provider}")
+async def complete_borg_ui_oauth_callback(
+    provider: str,
+    state: str | None = None,
+    code: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+):
+    provider = _normalize_provider(provider)
+    if provider not in BORG_UI_OAUTH_PROVIDERS:
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.rclone.oauthUnsupported"}
+        )
+    session_id = None
+    session = None
+    for candidate_id, candidate in RCLONE_OAUTH_SESSIONS.items():
+        if (
+            candidate.get("flow") == "borg_ui"
+            and candidate.get("provider") == provider
+            and candidate.get("state") == state
+        ):
+            session_id = candidate_id
+            session = candidate
+            break
+    if session_id is None or session is None:
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.rclone.oauthStateInvalid"}
+        )
+
+    if error:
+        session["status"] = "failed"
+        session["error"] = error_description or error
+        session["updated_at"] = _utc_now()
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.rclone.oauthProviderDenied"}
+        )
+    if not code:
+        session["status"] = "failed"
+        session["error"] = (
+            "OAuth provider callback did not include an authorization code."
+        )
+        session["updated_at"] = _utc_now()
+        raise HTTPException(
+            status_code=400, detail={"key": "backend.errors.rclone.oauthCodeMissing"}
+        )
+
+    token_response = await _exchange_borg_ui_oauth_code(
+        provider, code, session["redirect_uri"]
+    )
+    config = dict(session.get("base_config") or {})
+    if (
+        provider == "onedrive"
+        and not config.get("drive_id")
+        and token_response.get("access_token")
+    ):
+        default_drive = await _fetch_onedrive_default_drive(
+            str(token_response["access_token"])
+        )
+        config["drive_id"] = str(default_drive["id"])
+        if default_drive.get("driveType") and not config.get("drive_type"):
+            config["drive_type"] = str(default_drive["driveType"])
+    config.update(
+        {
+            "type": provider,
+            "token": _rclone_token_from_oauth_response(token_response),
+            BORG_UI_OAUTH_MARKER_KEY: provider,
+        }
+    )
+    session["status"] = "authorized"
+    session["config"] = config
+    session["error"] = None
+    session["updated_at"] = _utc_now()
+    RCLONE_OAUTH_SESSIONS.move_to_end(session_id)
+    return HTMLResponse(
+        "<!doctype html><title>Borg UI OAuth</title>"
+        "<p>Authorization complete. You can close this tab and return to Borg UI.</p>"
+    )
 
 
 @router.delete("/oauth/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

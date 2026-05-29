@@ -87,6 +87,33 @@ def test_rclone_redacts_sensitive_command_values():
 
 
 @pytest.mark.unit
+def test_rclone_redacts_oauth_client_and_token_command_values():
+    service = RcloneService(binary="rclone", config_path="/data/rclone/prod.conf")
+
+    redacted = service.redact_command(
+        [
+            "rclone",
+            "authorize",
+            "drive",
+            "--client-id",
+            "google-client-id",
+            "--client-secret=google-client-secret",
+            "--auth-code",
+            "provider-code",
+            "--token",
+            '{"access_token":"real-access","refresh_token":"real-refresh"}',
+        ]
+    )
+
+    assert "google-client-id" not in redacted
+    assert "google-client-secret" not in redacted
+    assert "provider-code" not in redacted
+    assert "real-access" not in redacted
+    assert "real-refresh" not in redacted
+    assert redacted.count("<redacted>") >= 4
+
+
+@pytest.mark.unit
 def test_rclone_parse_json_result():
     result = RcloneCommandResult(
         success=True,
