@@ -17,6 +17,7 @@ import {
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { Cloud, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import SchedulePicker from '../SchedulePicker'
 
 export interface CloudMirrorStepData {
   cloudMirrorEnabled: boolean
@@ -245,34 +246,25 @@ export default function WizardStepCloudMirror({
           </FormControl>
 
           {data.rcloneSyncPolicy === 'scheduled' && (
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) 180px' },
-                gap: 1.5,
-              }}
-            >
-              <TextField
-                label={t('wizard.location.rcloneSyncCronLabel')}
-                value={data.rcloneSyncCronExpression || ''}
-                onChange={(event) => onChange({ rcloneSyncCronExpression: event.target.value })}
-                placeholder="0 */6 * * *"
-                required
-                fullWidth
-                disabled={controlsDisabled}
-                helperText={t('wizard.location.rcloneSyncCronHelper')}
-              />
-              <TextField
-                label={t('wizard.location.rcloneSyncTimezoneLabel')}
-                value={data.rcloneSyncTimezone ?? ''}
-                onChange={(event) => onChange({ rcloneSyncTimezone: event.target.value })}
-                placeholder="UTC"
-                required
-                fullWidth
-                disabled={controlsDisabled}
-                helperText={t('wizard.location.rcloneSyncTimezoneHelper')}
-              />
-            </Box>
+            <SchedulePicker
+              cronExpression={data.rcloneSyncCronExpression || ''}
+              timezone={data.rcloneSyncTimezone || 'UTC'}
+              onChange={(updates) =>
+                onChange({
+                  ...(updates.cronExpression !== undefined
+                    ? { rcloneSyncCronExpression: updates.cronExpression }
+                    : {}),
+                  ...(updates.timezone !== undefined
+                    ? { rcloneSyncTimezone: updates.timezone }
+                    : {}),
+                })
+              }
+              required
+              disabled={controlsDisabled}
+              cronLabel={t('wizard.location.rcloneSyncCronLabel')}
+              cronHelperText={t('wizard.location.rcloneSyncCronHelper')}
+              timezoneLabel={t('wizard.location.rcloneSyncTimezoneLabel')}
+            />
           )}
 
           <TextField

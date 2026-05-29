@@ -102,6 +102,10 @@ describe('WizardStepCloudMirror', () => {
 
     expect(screen.getByLabelText(/Mirror schedule/i)).toHaveValue('15 */4 * * *')
     expect(screen.getByLabelText(/Timezone/i)).toHaveValue('UTC')
+    expect(screen.getByLabelText(/Next 3 Run Times/i)).toBeInTheDocument()
+    expect(
+      screen.getAllByRole('button', { name: /Open schedule builder/i }).length
+    ).toBeGreaterThan(0)
 
     fireEvent.change(screen.getByLabelText(/Mirror schedule/i), {
       target: { value: '*/30 * * * *' },
