@@ -15,6 +15,7 @@ lives or where you want new archives to be stored.
 | Local disk or mounted share | Mount the host path into the Borg UI container and use the container path. |
 | NAS or Linux server over SSH | Add a Remote Machine, then create or import an SSH repository. See the NAS notes below when SSH and SFTP paths differ. |
 | Hosted Borg service | Add the provider as a Remote Machine and keep the provider's repository path exactly as given. BorgBase and Hetzner need the most care. |
+| Cloud or object storage through rclone | Add the provider in Cloud Storage, then select that reusable remote when configuring a cloud mirror. |
 | Existing Borg repository | Use Import Existing. Choose Full mode if Borg UI should run backups, or Observability-only if another tool already writes archives. |
 
 ## Which Setups Need Provider Guidance?
@@ -25,7 +26,23 @@ lives or where you want new archives to be stored.
 | Hetzner Storage Box | Use the Hetzner mapping below because Borg access uses port 23, relative `./` paths, and sometimes a named remote Borg binary. |
 | Synology DSM | Use the NAS mapping below when SFTP shows a share path but Borg needs the full `/volumeN/...` path. |
 | Unraid | Use the NAS mapping below with one consistent share path, usually under `/mnt/user/<share>/...`. |
+| Google Drive, OneDrive, Dropbox, Box, S3, B2, Azure Blob, WebDAV, SFTP | Use Cloud Storage and pick the matching rclone provider template. |
 | Other hosted Borg providers | Preserve the host, port, username, and path exactly as the provider gives them. |
+
+## Cloud Storage with rclone
+
+Cloud Storage manages reusable rclone remotes. Open Cloud Storage, choose
+**Add remote**, pick the provider, and review the provider-specific config
+template before saving. Google Drive, OneDrive, Dropbox, and Box use rclone's
+browser OAuth flow; start authorization from Borg UI, complete the rclone
+callback, and check authorization to add the returned token JSON to the managed
+config editor. Access-key providers such as S3,
+Backblaze B2, and Azure Blob store their keys in Borg UI's server-managed
+`rclone.conf` and return redacted values through the API.
+
+Use **Custom rclone backend** when the provider is not listed. Keep the `type`
+field set to the exact rclone backend name and add any provider-specific keys
+from the rclone documentation.
 
 ## BorgBase
 

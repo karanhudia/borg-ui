@@ -119,6 +119,36 @@ export interface RcloneStatus {
   error?: string | null
 }
 
+export interface RcloneProviderField {
+  name: string
+  label: string
+  kind: 'text' | 'password' | 'json'
+  required?: boolean
+  secret?: boolean
+  helper?: string
+}
+
+export interface RcloneProvider {
+  type: string
+  label: string
+  description: string
+  auth_type: 'none' | 'oauth_token' | 'access_key' | 'basic' | 'manual'
+  type_editable: boolean
+  docs_url?: string
+  config_template: Record<string, unknown>
+  fields: RcloneProviderField[]
+}
+
+export interface RcloneOAuthSession {
+  session_id: string
+  provider: string
+  status: 'starting' | 'awaiting_callback' | 'authorized' | 'failed'
+  authorization_url?: string | null
+  local_authorization_url?: string | null
+  config?: Record<string, unknown> | null
+  error?: string | null
+}
+
 export interface RcloneRemote {
   id: number
   name: string
@@ -746,6 +776,17 @@ export const repositoriesAPI = {
 
 export const rcloneAPI = {
   getStatus: () => api.get<RcloneStatus>('/rclone/status'),
+  getProviders: () => api.get<{ providers: RcloneProvider[] }>('/rclone/providers'),
+  startOAuthSession: (data: {
+    provider: string
+    config?: Record<string, unknown>
+    client_id?: string
+    client_secret?: string
+  }) => api.post<RcloneOAuthSession>('/rclone/oauth/sessions', data),
+  getOAuthSession: (sessionId: string) =>
+    api.get<RcloneOAuthSession>(`/rclone/oauth/sessions/${sessionId}`),
+  cancelOAuthSession: (sessionId: string) =>
+    api.delete<void>(`/rclone/oauth/sessions/${sessionId}`),
   listRemotes: () => api.get<{ remotes: RcloneRemote[] }>('/rclone/remotes'),
   createRemote: (data: CreateRcloneRemoteRequest) =>
     api.post<RcloneRemote>('/rclone/remotes', data),
