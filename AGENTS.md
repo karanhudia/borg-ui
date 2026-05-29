@@ -19,8 +19,8 @@ These instructions apply to the entire repository.
 - After adding or changing a UI story, run `cd frontend && npm run snapshots` and commit the resulting screenshot files under `frontend/storybook-snapshots/`.
 - UI components should stay small and composed from smaller components. When a UI component is added or changed, add or update the component story and snapshot that cover it.
 - Schedule-related UI must use the shared schedule controls (`SchedulePicker`,
-  `CronExpressionInput`, `CronBuilderDialog`, and supported timezone selectors)
-  instead of ad hoc cron or timezone text fields.
+  `CronExpressionInput`, `CronBuilderDialog`, and the timezone selector rendered
+  by `SchedulePicker`) instead of ad hoc cron or timezone text fields.
 
 ## UI Preferences
 
