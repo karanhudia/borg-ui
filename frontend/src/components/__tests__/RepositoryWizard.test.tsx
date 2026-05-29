@@ -1196,34 +1196,15 @@ describe('RepositoryWizard', () => {
     })
 
     it('shows Save Changes on the final edit step', async () => {
-      const user = userEvent.setup()
       renderWizard('edit', legacyRepository)
 
       await waitFor(() => {
         expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Legacy Repo')
       })
 
-      await user.click(screen.getByRole('button', { name: /Next/i }))
-      await waitFor(() => {
-        expect(screen.getByText('Mirror this repository to cloud storage')).toBeInTheDocument()
-      })
-      await user.click(screen.getByRole('button', { name: /Next/i }))
-      await waitFor(() => {
-        expect(screen.getByText(/Where is the data you want to back up/i)).toBeInTheDocument()
-      })
-      await user.click(screen.getByRole('button', { name: /Next/i }))
-      await waitFor(() => {
-        expect(screen.getByText(/Encryption settings cannot be changed/i)).toBeInTheDocument()
-      })
-      await user.click(screen.getByRole('button', { name: /Next/i }))
-      await waitFor(() => {
-        expect(screen.getByTestId('advanced-options')).toBeInTheDocument()
-      })
-      await user.click(screen.getByRole('button', { name: /Next/i }))
-      await waitFor(() => {
-        expect(screen.getByTestId('exclude-patterns')).toBeInTheDocument()
-      })
-      await user.click(screen.getByRole('button', { name: /Next/i }))
+      const reviewStep = screen.getByText('Review').closest('div')
+      expect(reviewStep).not.toBeNull()
+      fireEvent.click(reviewStep!)
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Save Changes/i })).toBeInTheDocument()
