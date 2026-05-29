@@ -518,7 +518,9 @@ export default function RcloneRemoteDialog({
                     size="small"
                     variant="contained"
                     onClick={() => handleStartOAuth()}
-                    disabled={!onStartOAuth || isCreating || isStartingOAuth || !canStartPrimaryOAuth}
+                    disabled={
+                      !onStartOAuth || isCreating || isStartingOAuth || !canStartPrimaryOAuth
+                    }
                     startIcon={
                       isStartingOAuth ? (
                         <CircularProgress size={14} color="inherit" />

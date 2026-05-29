@@ -428,9 +428,7 @@ describe('CloudStorage', () => {
 
     expect(screen.getAllByText(/Borg UI callback/i).length).toBeGreaterThan(0)
     expect(
-      screen.getByText(
-        /https:\/\/backups\.example\.com\/api\/rclone\/oauth\/callback\/drive/i
-      )
+      screen.getByText(/https:\/\/backups\.example\.com\/api\/rclone\/oauth\/callback\/drive/i)
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Use rclone loopback/i })).toBeInTheDocument()
   })
