@@ -2,8 +2,9 @@
 
 `borg-ui-agent` is the lightweight runtime for machines managed by a central
 Borg UI server. It registers with Borg UI, stores an agent credential locally,
-polls for queued work, runs Borg on the local machine, and streams logs and
-progress back to the server.
+keeps one authenticated outbound WebSocket session open to Borg UI, runs Borg on
+the local machine, and streams logs and progress back to the server. The
+`once` command still uses the polling path for compatibility.
 
 ## One-Command Linux Install
 
@@ -84,13 +85,13 @@ Default config paths:
 | macOS | `~/Library/Application Support/borg-ui-agent/config.toml` |
 | Windows | `%ProgramData%\borg-ui-agent\config.toml` |
 
-Poll once:
+Poll once through the compatibility job-polling path:
 
 ```bash
 borg-ui-agent once
 ```
 
-Run continuously:
+Run continuously with the live WebSocket session and reconnect backoff:
 
 ```bash
 borg-ui-agent run

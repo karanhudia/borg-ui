@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+import json
 
 import pytest
 
@@ -17,6 +18,24 @@ from agent.borg_ui_agent.repository_ops import (
     _write_temp_rclone_config,
 )
 from agent.borg_ui_agent.runtime import AgentRuntime, get_capabilities
+
+
+class FakeWebSocket:
+    def __init__(self, incoming):
+        self.incoming = list(incoming)
+        self.sent = []
+        self.closed = False
+
+    def send(self, payload):
+        self.sent.append(json.loads(payload))
+
+    def recv(self):
+        if not self.incoming:
+            raise EOFError("closed")
+        return json.dumps(self.incoming.pop(0))
+
+    def close(self):
+        self.closed = True
 
 
 class FakeResponse:
@@ -427,6 +446,234 @@ def test_runtime_run_once_dispatches_registered_structured_handler(monkeypatch):
 @pytest.mark.unit
 def test_runtime_advertises_repository_rclone_sync_capability():
     assert "repository.rclone_sync" in get_capabilities()
+
+
+@pytest.mark.unit
+def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket([])
+    connect_calls = []
+
+    def fake_connect(url, *, header, timeout):
+        connect_calls.append((url, header, timeout))
+        return socket
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=fake_connect,
+    )
+    runtime.run_session(max_messages=0)
+
+    assert connect_calls == [
+        (
+            "wss://borgui.example.com/api/agents/session",
+            ["X-Borg-Agent-Authorization: Bearer secret"],
+            30,
+        )
+    ]
+    assert socket.sent[0] == {
+        "type": "hello",
+        "agent_id": "agt_123",
+        "hostname": "host.local",
+        "agent_version": "0.1.0",
+        "borg_versions": [],
+        "capabilities": get_capabilities(),
+        "running_job_ids": [],
+    }
+    assert socket.closed is True
+
+
+@pytest.mark.unit
+def test_session_runtime_handles_ephemeral_filesystem_browse(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-1",
+                "command": "filesystem.browse",
+                "job_id": None,
+                "payload": {"path": "/home", "include_hidden": True, "max_items": 10},
+            }
+        ]
+    )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.browse_filesystem",
+        lambda path, include_hidden=False: {
+            "success": True,
+            "current_path": path,
+            "parent_path": "/",
+            "items": [{"name": "docs"}],
+        },
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("http://borgui.local:8080/base", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+    )
+    runtime.run_session(max_messages=1)
+
+    assert socket.sent[1] == {
+        "type": "command_ack",
+        "command_id": "cmd-1",
+        "job_id": None,
+    }
+    assert socket.sent[2] == {
+        "type": "command_result",
+        "command_id": "cmd-1",
+        "job_id": None,
+        "result": {
+            "success": True,
+            "current_path": "/home",
+            "parent_path": "/",
+            "items": [{"name": "docs"}],
+        },
+    }
+
+
+@pytest.mark.unit
+def test_session_runtime_reports_durable_job_events(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            {
+                "type": "command",
+                "command_id": "cmd-2",
+                "command": "backup.create",
+                "job_id": 77,
+                "payload": {"job_kind": "backup.create"},
+            }
+        ]
+    )
+
+    def fake_handler(job, client, *, should_cancel=None):
+        assert job["id"] == 77
+        assert job["payload"] == {"job_kind": "backup.create"}
+        client.start_job(77)
+        client.send_log(77, sequence=1, stream="stdout", message="running")
+        client.send_progress(77, {"progress_percent": 25, "current_file": "/src"})
+        client.complete_job(77, result={"archive_name": "archive"})
+        return SimpleNamespace(job_id=77, status="completed", message="complete")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.get_job_handler",
+        lambda command: fake_handler if command == "backup.create" else None,
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+    )
+    runtime.run_session(max_messages=1)
+
+    assert socket.sent[1]["type"] == "command_ack"
+    assert socket.sent[2]["type"] == "job_started"
+    assert socket.sent[3] == {
+        "type": "log",
+        "command_id": "cmd-2",
+        "job_id": 77,
+        "sequence": 1,
+        "stream": "stdout",
+        "message": "running",
+    }
+    assert socket.sent[4]["type"] == "progress"
+    assert socket.sent[4]["progress_percent"] == 25
+    assert socket.sent[5]["type"] == "command_result"
+    assert socket.sent[5]["result"] == {"archive_name": "archive"}
+
+
+@pytest.mark.unit
+def test_session_runtime_reconnects_with_backoff(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    attempts = []
+    sleeps = []
+
+    def failing_connect(*args, **kwargs):
+        attempts.append((args, kwargs))
+        raise OSError("server unavailable")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=failing_connect,
+        sleep=sleeps.append,
+    )
+
+    runtime.run_forever(
+        max_iterations=3,
+        initial_backoff_seconds=1,
+        max_backoff_seconds=8,
+    )
+
+    assert len(attempts) == 3
+    assert sleeps == [1, 2, 4]
+
+
+@pytest.mark.unit
+def test_runtime_run_forever_uses_websocket_session(monkeypatch):
+    from agent.borg_ui_agent import session as session_module
+
+    calls = []
+
+    class FakeSessionRuntime:
+        def __init__(self, config):
+            calls.append(("init", config))
+
+        def run_forever(
+            self,
+            *,
+            max_iterations=None,
+            initial_backoff_seconds=1,
+            max_backoff_seconds=60,
+        ):
+            calls.append(
+                (
+                    "run_forever",
+                    max_iterations,
+                    initial_backoff_seconds,
+                    max_backoff_seconds,
+                )
+            )
+
+    monkeypatch.setattr(session_module, "AgentSessionRuntime", FakeSessionRuntime)
+    config = AgentConfig("https://borgui.example.com", "agt_123", "secret")
+
+    AgentRuntime(config).run_forever(
+        max_iterations=2,
+        initial_backoff_seconds=3,
+        max_backoff_seconds=9,
+    )
+
+    assert calls == [
+        ("init", config),
+        ("run_forever", 2, 3, 9),
+    ]
 
 
 @pytest.mark.unit

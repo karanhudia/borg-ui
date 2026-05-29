@@ -39,7 +39,14 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("unregister")
 
     run = subparsers.add_parser("run")
-    run.add_argument("--poll-interval", type=int, default=15)
+    run.add_argument(
+        "--poll-interval",
+        type=int,
+        default=15,
+        help="Compatibility polling interval used by the once command path",
+    )
+    run.add_argument("--initial-backoff", type=float, default=1)
+    run.add_argument("--max-backoff", type=float, default=60)
     run.add_argument("--max-iterations", type=int, default=None)
 
     service_check = subparsers.add_parser("service-check")
@@ -129,6 +136,8 @@ def _run(args: argparse.Namespace) -> int:
     AgentRuntime(config).run_forever(
         poll_interval_seconds=args.poll_interval,
         max_iterations=args.max_iterations,
+        initial_backoff_seconds=args.initial_backoff,
+        max_backoff_seconds=args.max_backoff,
     )
     return 0
 

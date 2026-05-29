@@ -23,7 +23,12 @@ def _create_enrollment_token(test_client: TestClient, admin_headers, name="agent
     return response.json()
 
 
-def _register_agent(test_client: TestClient, enrollment_token: str, name="laptop"):
+def _register_agent(
+    test_client: TestClient,
+    enrollment_token: str,
+    name="laptop",
+    capabilities: list[str] | None = None,
+):
     response = test_client.post(
         "/api/agents/register",
         json={
@@ -36,7 +41,7 @@ def _register_agent(test_client: TestClient, enrollment_token: str, name="laptop
             "borg_versions": [
                 {"major": 1, "version": "1.2.8", "path": "/usr/bin/borg"}
             ],
-            "capabilities": ["backup.create", "logs.stream"],
+            "capabilities": capabilities or ["backup.create", "logs.stream"],
         },
     )
     assert response.status_code == 200
@@ -323,6 +328,105 @@ class TestAgentRegistrationAndHeartbeat:
 
 @pytest.mark.unit
 class TestAgentJobTransport:
+    def test_websocket_session_hello_marks_agent_online_until_disconnect(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+            capabilities=["session.commands", "filesystem.browse"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+        agent.status = "offline"
+        test_db.commit()
+
+        with test_client.websocket_connect(
+            "/api/agents/session",
+            headers=_agent_headers(registered["agent_token"]),
+        ) as websocket:
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "agent_id": registered["agent_id"],
+                    "hostname": "session-host.local",
+                    "agent_version": "0.2.0",
+                    "borg_versions": [
+                        {
+                            "major": 2,
+                            "version": "2.0.0b10",
+                            "path": "/usr/local/bin/borg2",
+                        }
+                    ],
+                    "capabilities": ["session.commands", "filesystem.browse"],
+                    "running_job_ids": [],
+                }
+            )
+
+            assert websocket.receive_json()["type"] == "hello_ack"
+            test_db.refresh(agent)
+            assert agent.status == "online"
+            assert agent.hostname == "session-host.local"
+            assert agent.agent_version == "0.2.0"
+            assert "filesystem.browse" in agent.capabilities
+
+        test_db.refresh(agent)
+        assert agent.status == "offline"
+
+    def test_websocket_session_dispatches_durable_job_without_polling(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+            capabilities=["session.commands", "backup.create", "logs.stream"],
+        )
+        agent = _get_agent(test_db, registered["agent_id"])
+
+        with test_client.websocket_connect(
+            "/api/agents/session",
+            headers=_agent_headers(registered["agent_token"]),
+        ) as websocket:
+            websocket.send_json(
+                {
+                    "type": "hello",
+                    "agent_id": registered["agent_id"],
+                    "hostname": "session-host.local",
+                    "agent_version": "0.2.0",
+                    "borg_versions": [],
+                    "capabilities": [
+                        "session.commands",
+                        "backup.create",
+                        "logs.stream",
+                    ],
+                    "running_job_ids": [],
+                }
+            )
+            assert websocket.receive_json()["type"] == "hello_ack"
+
+            queued = test_client.post(
+                f"/api/managed-machines/agents/{agent.id}/backup-jobs",
+                json={
+                    "repository_path": "/backups/laptop",
+                    "archive_name": "laptop-now",
+                    "source_paths": ["/home/user/docs"],
+                },
+                headers=admin_headers,
+            )
+
+            assert queued.status_code == 201
+            command = websocket.receive_json()
+            assert command["type"] == "command"
+            assert command["command"] == "backup.create"
+            assert command["job_id"] == queued.json()["id"]
+            assert command["payload"]["job_kind"] == "backup.create"
+
+            polled = test_client.get(
+                "/api/agents/jobs/poll",
+                headers=_agent_headers(registered["agent_token"]),
+            )
+            assert polled.status_code == 200
+            assert polled.json()["jobs"] == []
+
     def test_admin_can_queue_backup_job_and_agent_can_poll_it(
         self, test_client: TestClient, test_db, admin_headers
     ):

@@ -28,3 +28,4 @@ tzdata==2026.2
 uvicorn[standard]==0.44.0
 paho-mqtt==2.1.0
 webauthn==2.7.1
+websocket-client==1.8.0

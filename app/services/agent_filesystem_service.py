@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-import asyncio
-import time
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.database.models import AgentJob, AgentMachine
-
-
-TERMINAL_AGENT_JOB_STATUSES = {"completed", "failed", "canceled"}
+from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_MAX_ITEMS
+from app.database.models import AgentMachine
+from app.services.agent_connection_manager import (
+    AgentCommandError,
+    AgentCommandTimeout,
+    AgentConnectionUnavailable,
+    agent_connection_manager,
+)
 
 
 def _now_utc() -> datetime:
@@ -48,42 +50,55 @@ async def browse_agent_filesystem(
     timeout_seconds: int = 15,
 ) -> dict[str, Any]:
     agent = _require_browse_agent(db, agent_machine_id)
-    now = _now_utc()
-    job = AgentJob(
-        agent_machine_id=agent.id,
-        job_type="filesystem",
-        status="queued",
-        payload={
-            "schema_version": 1,
-            "job_kind": "filesystem.browse",
-            "filesystem": {
+    try:
+        result = await agent_connection_manager.send_command(
+            agent.id,
+            command="filesystem.browse",
+            payload={
                 "path": path or "/",
                 "include_hidden": include_hidden,
+                "max_items": AGENT_FILESYSTEM_BROWSE_MAX_ITEMS,
             },
-        },
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
+            timeout_seconds=timeout_seconds,
+            wait_for_result=True,
+        )
+    except AgentConnectionUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"key": "backend.errors.agents.agentOffline"},
+        ) from exc
+    except AgentCommandTimeout as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail={"key": "backend.errors.agents.filesystemBrowseTimeout"},
+        ) from exc
+    except AgentCommandError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "key": "backend.errors.agents.filesystemBrowseFailed",
+                "message": str(exc),
+            },
+        ) from exc
 
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        db.refresh(job)
-        if job.status == "completed":
-            return job.result or {}
-        if job.status in TERMINAL_AGENT_JOB_STATUSES:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail={
-                    "key": "backend.errors.agents.filesystemBrowseFailed",
-                    "message": job.error_message,
-                },
-            )
-        await asyncio.sleep(0.25)
+    if result.get("success") is False:
+        error = result.get("error") if isinstance(result.get("error"), dict) else {}
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "key": "backend.errors.agents.filesystemBrowseFailed",
+                "message": error.get("message") or "Filesystem browse failed",
+            },
+        )
 
-    raise HTTPException(
-        status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-        detail={"key": "backend.errors.agents.filesystemBrowseTimeout"},
-    )
+    items = result.get("items")
+    if isinstance(items, list) and len(items) > AGENT_FILESYSTEM_BROWSE_MAX_ITEMS:
+        result = {
+            **result,
+            "items": items[:AGENT_FILESYSTEM_BROWSE_MAX_ITEMS],
+            "items_truncated": True,
+        }
+    else:
+        result.setdefault("items_truncated", False)
+
+    return result

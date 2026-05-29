@@ -63,6 +63,7 @@ from app.services.repository_executor import (
     repository_executor_type,
     wait_for_agent_repository_operation_job,
 )
+from app.services.agent_job_dispatcher import dispatch_agent_job_if_connected
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.rclone_repository_service import (
     SYNC_DIRECTION_AGENT_TO_REMOTE,
@@ -4031,6 +4032,7 @@ async def check_repository(
                 maintenance_job_kind="check",
                 maintenance_job_id=check_job.id,
             )
+            await dispatch_agent_job_if_connected(db, agent_job)
             logger.info(
                 "Agent repository check job queued",
                 job_id=check_job.id,
@@ -4183,6 +4185,7 @@ async def compact_repository(
                 maintenance_job_kind="compact",
                 maintenance_job_id=compact_job.id,
             )
+            await dispatch_agent_job_if_connected(db, agent_job)
             logger.info(
                 "Agent repository compact job queued",
                 job_id=compact_job.id,
@@ -4275,6 +4278,7 @@ async def prune_repository(
                 maintenance_job_kind="prune",
                 maintenance_job_id=prune_job.id,
             )
+            await dispatch_agent_job_if_connected(db, agent_job)
             logger.info(
                 "Agent repository prune job queued",
                 job_id=prune_job.id,
@@ -4755,6 +4759,7 @@ async def list_repository_archives(
                 repository,
                 job_kind="repository.list_archives",
             )
+            await dispatch_agent_job_if_connected(db, agent_job)
             result = await wait_for_agent_repository_operation_job(db, agent_job.id)
             archives_data = _parse_agent_json_result(result)
             archives = archives_data.get("archives", [])
@@ -4842,6 +4847,7 @@ async def get_repository_info(
                 repository,
                 job_kind="repository.info",
             )
+            await dispatch_agent_job_if_connected(db, agent_job)
             result = await wait_for_agent_repository_operation_job(db, agent_job.id)
             info_data = _parse_agent_json_result(result)
             logger.info(
