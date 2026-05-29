@@ -1,4 +1,5 @@
 import importlib
+import json
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -100,6 +101,330 @@ def test_list_rclone_providers_includes_popular_guided_sources(
     assert providers["onedrive"]["auth_type"] == "oauth_token"
     assert providers["custom"]["type_editable"] is True
     assert any(field["name"] == "token" for field in providers["drive"]["fields"])
+
+
+@pytest.mark.unit
+def test_rclone_provider_metadata_reports_borg_ui_oauth_callbacks_without_secrets(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com/borg-ui",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.onedrive_oauth_client_id",
+        "onedrive-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.onedrive_oauth_client_secret",
+        "onedrive-client-secret",
+    )
+
+    response = test_client.get("/api/rclone/providers", headers=admin_headers)
+
+    assert response.status_code == 200
+    providers = {
+        provider["type"]: provider for provider in response.json()["providers"]
+    }
+    assert providers["drive"]["oauth_mode"] == "borg_ui"
+    assert providers["drive"]["oauth_configured"] is True
+    assert (
+        providers["drive"]["oauth_callback_url"]
+        == "https://backups.example.com/borg-ui/api/rclone/oauth/callback/drive"
+    )
+    assert providers["onedrive"]["oauth_mode"] == "borg_ui"
+    assert providers["onedrive"]["oauth_configured"] is True
+    assert (
+        providers["onedrive"]["oauth_callback_url"]
+        == "https://backups.example.com/borg-ui/api/rclone/oauth/callback/onedrive"
+    )
+    assert providers["dropbox"]["oauth_mode"] == "rclone_loopback"
+    serialized = json.dumps(response.json())
+    assert "google-client-id" not in serialized
+    assert "google-client-secret" not in serialized
+    assert "onedrive-client-id" not in serialized
+    assert "onedrive-client-secret" not in serialized
+
+
+@pytest.mark.unit
+def test_start_borg_ui_oauth_session_requires_valid_public_base_url(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    monkeypatch.setattr("app.api.rclone.settings.public_base_url", None)
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "drive", "mode": "borg_ui"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {
+        "key": "backend.errors.rclone.oauthPublicBaseUrlRequired"
+    }
+
+
+@pytest.mark.unit
+def test_start_borg_ui_oauth_session_returns_backend_authorize_url_not_loopback(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={
+            "provider": "drive",
+            "mode": "borg_ui",
+            "config": {"type": "drive", "scope": "drive.readonly"},
+        },
+    )
+
+    assert response.status_code == 201
+    started = response.json()
+    assert started["provider"] == "drive"
+    assert started["status"] == "awaiting_callback"
+    assert (
+        started["authorization_url"]
+        == f"/rclone/oauth/sessions/{started['session_id']}/authorize"
+    )
+    assert started["local_authorization_url"] is None
+    assert started["config"] is None
+    assert "google-client-id" not in json.dumps(started)
+    session = rclone_api.RCLONE_OAUTH_SESSIONS[started["session_id"]]
+    assert session["flow"] == "borg_ui"
+    assert session["state"]
+    assert (
+        "accounts.google.com/o/oauth2/v2/auth" in session["provider_authorization_url"]
+    )
+    assert "127.0.0.1:53682" not in session["provider_authorization_url"]
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_borg_ui_oauth_callback_validates_state_and_exchanges_code(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    async def fake_exchange(provider: str, code: str, redirect_uri: str):
+        assert provider == "drive"
+        assert code == "provider-code"
+        assert (
+            redirect_uri
+            == "https://backups.example.com/api/rclone/oauth/callback/drive"
+        )
+        return {
+            "access_token": "real-access",
+            "refresh_token": "real-refresh",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }
+
+    monkeypatch.setattr(
+        rclone_api, "_exchange_borg_ui_oauth_code", fake_exchange, raising=False
+    )
+
+    start_response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "drive", "mode": "borg_ui"},
+    )
+    session_id = start_response.json()["session_id"]
+    state = rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["state"]
+
+    bad_state_response = test_client.get(
+        "/api/rclone/oauth/callback/drive",
+        params={"state": "wrong", "code": "provider-code"},
+    )
+
+    assert bad_state_response.status_code == 400
+    assert rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["status"] == "awaiting_callback"
+
+    callback_response = test_client.get(
+        "/api/rclone/oauth/callback/drive",
+        params={"state": state, "code": "provider-code"},
+    )
+
+    assert callback_response.status_code == 200
+    assert "Authorization complete" in callback_response.text
+    poll_response = test_client.get(
+        f"/api/rclone/oauth/sessions/{session_id}",
+        headers=admin_headers,
+    )
+    assert poll_response.status_code == 200
+    polled = poll_response.json()
+    assert polled["status"] == "authorized"
+    assert polled["config"]["type"] == "drive"
+    assert json.loads(polled["config"]["token"])["refresh_token"] == "real-refresh"
+    assert polled["config"]["_borg_ui_oauth_provider"] == "drive"
+    assert "google-client-secret" not in json.dumps(polled)
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_onedrive_oauth_callback_discovers_default_drive_for_rclone_config(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.onedrive_oauth_client_id",
+        "onedrive-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.onedrive_oauth_client_secret",
+        "onedrive-client-secret",
+    )
+
+    async def fake_exchange(provider: str, code: str, redirect_uri: str):
+        assert provider == "onedrive"
+        assert code == "provider-code"
+        assert (
+            redirect_uri
+            == "https://backups.example.com/api/rclone/oauth/callback/onedrive"
+        )
+        return {
+            "access_token": "onedrive-access",
+            "refresh_token": "onedrive-refresh",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }
+
+    async def fake_default_drive(access_token: str):
+        assert access_token == "onedrive-access"
+        return {"id": "default-drive-id", "driveType": "business"}
+
+    monkeypatch.setattr(
+        rclone_api, "_exchange_borg_ui_oauth_code", fake_exchange, raising=False
+    )
+    monkeypatch.setattr(
+        rclone_api, "_fetch_onedrive_default_drive", fake_default_drive, raising=False
+    )
+
+    start_response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "onedrive", "mode": "borg_ui"},
+    )
+    session_id = start_response.json()["session_id"]
+    state = rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["state"]
+
+    callback_response = test_client.get(
+        "/api/rclone/oauth/callback/onedrive",
+        params={"state": state, "code": "provider-code"},
+    )
+
+    assert callback_response.status_code == 200
+    poll_response = test_client.get(
+        f"/api/rclone/oauth/sessions/{session_id}",
+        headers=admin_headers,
+    )
+    polled = poll_response.json()
+    assert polled["status"] == "authorized"
+    assert polled["config"]["type"] == "onedrive"
+    assert polled["config"]["drive_id"] == "default-drive-id"
+    assert polled["config"]["drive_type"] == "business"
+    assert json.loads(polled["config"]["token"])["refresh_token"] == "onedrive-refresh"
+    assert polled["config"]["_borg_ui_oauth_provider"] == "onedrive"
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_create_borg_ui_oauth_remote_injects_provider_credentials_and_redacts_response(
+    test_client: TestClient, admin_headers, tmp_path, monkeypatch
+):
+    config_root = tmp_path / "rclone"
+    monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "gdrive-prod",
+            "provider": "drive",
+            "config_source": "managed",
+            "redacted_config": {
+                "type": "drive",
+                "scope": "drive",
+                "token": '{"access_token":"real-access","refresh_token":"real-refresh"}',
+                "_borg_ui_oauth_provider": "drive",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    created = response.json()
+    assert created["redacted_config"]["token"] == "***"
+    serialized = json.dumps(created)
+    assert "google-client-id" not in serialized
+    assert "google-client-secret" not in serialized
+    assert "real-access" not in serialized
+    config_body = (config_root / "rclone.conf").read_text(encoding="utf-8")
+    assert (
+        'token = {"access_token":"real-access","refresh_token":"real-refresh"}'
+        in config_body
+    )
+    assert "client_id = google-client-id" in config_body
+    assert "client_secret = google-client-secret" in config_body
+    assert "_borg_ui_oauth_provider" not in config_body
 
 
 @pytest.mark.unit
