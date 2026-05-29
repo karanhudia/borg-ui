@@ -14,15 +14,34 @@ from sqlalchemy.orm import sessionmaker
 from app.core.security import get_password_hash
 from app.database.models import (
     AgentMachine,
+    LicensingState,
     Repository,
     RepositoryStorage,
     RcloneSyncJob,
     RcloneRemote,
     SSHConnection,
+    SystemSettings,
 )
 from app.services.rclone_service import RcloneCommandResult
 from app.services.rclone_service import RcloneUnavailable
 from tests.unit.helpers import assert_auth_required
+
+
+def _enable_borg_v2(test_db):
+    settings_row = test_db.query(SystemSettings).first()
+    if settings_row is None:
+        settings_row = SystemSettings()
+        test_db.add(settings_row)
+
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="test-rclone-direct-borg2")
+        test_db.add(state)
+
+    state.plan = "pro"
+    state.status = "active"
+    state.is_trial = False
+    test_db.commit()
 
 
 class FakeRcloneStdout:
@@ -2455,6 +2474,411 @@ def test_create_rclone_repository_derives_cache_path_and_syncs(
     assert storage.sync_status == "current"
     assert response.json()["repository"]["rclone_storage"]["rclone_target"] == (
         "prod-s3:borg-ui/repositories/app"
+    )
+
+
+@pytest.mark.unit
+def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    _enable_borg_v2(test_db)
+    init_mock = AsyncMock(return_value={"success": True, "already_existed": False})
+    sync_mock = AsyncMock()
+    v2_create_mock = AsyncMock(
+        return_value={"success": True, "stdout": "", "stderr": ""}
+    )
+    monkeypatch.setattr("app.api.repositories.initialize_borg_repository", init_mock)
+    monkeypatch.setattr(
+        "app.api.repositories.rclone_repository_service.sync_repository", sync_mock
+    )
+    monkeypatch.setattr("app.api.v2.repositories._rcreate", v2_create_mock)
+    mqtt_reasons = []
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda _db, *, reason: mqtt_reasons.append(reason),
+    )
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Direct Borg2 Cloud Repo",
+            "path": "rclone://prod-s3/borg-ui/direct",
+            "borg_version": 2,
+            "encryption": "none",
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository)
+        .filter(Repository.name == "Direct Borg2 Cloud Repo")
+        .one()
+    )
+    assert repository.path == "rclone://prod-s3/borg-ui/direct"
+    assert repository.repository_type == "rclone"
+    assert repository.borg_version == 2
+    assert (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+        is None
+    )
+    assert response.json()["repository"]["storage_backend"] == "rclone_direct"
+    init_mock.assert_awaited_once()
+    assert init_mock.await_args.kwargs["borg_version"] == 2
+    sync_mock.assert_not_awaited()
+    v2_create_mock.assert_not_awaited()
+    assert mqtt_reasons == ["repository creation"]
+
+
+@pytest.mark.unit
+def test_import_direct_borg2_rclone_repository_verifies_url_without_hydrate(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    _enable_borg_v2(test_db)
+    verify_mock = AsyncMock(
+        return_value={"success": True, "info": {"encryption": {"mode": "none"}}}
+    )
+    hydrate_mock = AsyncMock(return_value={"sync_status": "current"})
+    v2_info_mock = AsyncMock(
+        return_value={"success": True, "stdout": '{"repository": {"id": "abc"}}'}
+    )
+    monkeypatch.setattr("app.api.repositories.verify_existing_repository", verify_mock)
+    monkeypatch.setattr(
+        "app.api.repositories.rclone_repository_service.hydrate_repository",
+        hydrate_mock,
+    )
+    monkeypatch.setattr("app.api.v2.repositories._rinfo", v2_info_mock)
+    mqtt_reasons = []
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda _db, *, reason: mqtt_reasons.append(reason),
+    )
+
+    response = test_client.post(
+        "/api/repositories/import",
+        headers=admin_headers,
+        json={
+            "name": "Imported Direct Borg2 Cloud Repo",
+            "path": "rclone://prod-s3/borg-ui/imported",
+            "borg_version": 2,
+            "encryption": "none",
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository)
+        .filter(Repository.name == "Imported Direct Borg2 Cloud Repo")
+        .one()
+    )
+    assert repository.path == "rclone://prod-s3/borg-ui/imported"
+    assert repository.repository_type == "rclone"
+    assert repository.borg_version == 2
+    assert (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+        is None
+    )
+    assert response.json()["repository"]["storage_backend"] == "rclone_direct"
+    verify_mock.assert_awaited_once()
+    assert verify_mock.await_args.kwargs["borg_version"] == 2
+    hydrate_mock.assert_not_awaited()
+    v2_info_mock.assert_not_awaited()
+    assert mqtt_reasons == ["repository import"]
+
+
+@pytest.mark.unit
+def test_import_direct_borg2_rclone_repository_persists_keyfile_before_verify(
+    test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+):
+    _enable_borg_v2(test_db)
+    repo_path = "rclone://prod-s3/borg-ui/keyfile-import"
+    keyfile_content = "BORG_KEY test-keyfile"
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    async def verify_repository(**kwargs):
+        from app.api.repositories import _borg_keyfile_name
+
+        keyfile_path = (
+            tmp_path / ".config" / "borg" / "keys" / _borg_keyfile_name(repo_path)
+        )
+        assert kwargs["path"] == repo_path
+        assert keyfile_path.read_text() == keyfile_content
+        assert keyfile_path.stat().st_mode & 0o777 == 0o600
+        return {
+            "success": True,
+            "info": {"encryption": {"mode": "keyfile-aes-ocb"}},
+        }
+
+    monkeypatch.setattr(
+        "app.api.repositories.verify_existing_repository", verify_repository
+    )
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda *args, **kwargs: None,
+    )
+
+    response = test_client.post(
+        "/api/repositories/import",
+        headers=admin_headers,
+        json={
+            "name": "Imported Direct Keyfile Repo",
+            "path": repo_path,
+            "borg_version": 2,
+            "encryption": "keyfile-aes-ocb",
+            "passphrase": "secret",
+            "keyfile_content": keyfile_content,
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository)
+        .filter(Repository.name == "Imported Direct Keyfile Repo")
+        .one()
+    )
+    assert repository.has_keyfile is True
+    assert response.json()["repository"]["storage_backend"] == "rclone_direct"
+
+
+@pytest.mark.unit
+def test_get_direct_borg2_rclone_repository_reports_direct_storage_backend(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    repository = Repository(
+        name="Direct Repo Detail",
+        path="rclone://prod-s3/borg-ui/direct-detail",
+        encryption="none",
+        compression="lz4",
+        repository_type="rclone",
+        execution_target="local",
+        executor_type="server",
+        borg_version=2,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.api.repositories.get_repository_stats",
+        AsyncMock(return_value={"total_size": 0, "archive_count": 0}),
+    )
+
+    response = test_client.get(
+        f"/api/repositories/{repository.id}", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["repository"]
+    assert payload["repository_type"] == "rclone"
+    assert payload["storage_backend"] == "rclone_direct"
+    assert "rclone_storage" not in payload
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("payload_overrides", "expected_key"),
+    [
+        (
+            {"borg_version": 1},
+            "backend.errors.rclone.directBorg2Required",
+        ),
+        (
+            {"path": "/tmp/not-a-rclone-url"},
+            "backend.errors.rclone.directInvalidUrl",
+        ),
+        (
+            {
+                "cloud_mirror_enabled": True,
+                "rclone_remote_id": 1,
+                "rclone_remote_path": "borg-ui/mirror",
+            },
+            "backend.errors.rclone.directIncompatiblePayload",
+        ),
+        (
+            {"rclone_sync_policy": "manual"},
+            "backend.errors.rclone.directIncompatiblePayload",
+        ),
+        (
+            {"connection_id": 1},
+            "backend.errors.rclone.directIncompatiblePayload",
+        ),
+        (
+            {
+                "executor_type": "agent",
+                "execution_target": "agent",
+                "agent_machine_id": 1,
+            },
+            "backend.errors.rclone.directIncompatiblePayload",
+        ),
+    ],
+)
+def test_direct_borg2_rclone_repository_validates_incompatible_create_payloads(
+    test_client: TestClient,
+    admin_headers,
+    test_db,
+    payload_overrides,
+    expected_key,
+):
+    _enable_borg_v2(test_db)
+    if payload_overrides.get("rclone_remote_id"):
+        test_db.add(RcloneRemote(id=1, name="prod-s3", provider="s3"))
+    if payload_overrides.get("connection_id"):
+        test_db.add(
+            SSHConnection(
+                id=1,
+                host="server.example.com",
+                username="borg",
+                port=22,
+                ssh_key_id=1,
+            )
+        )
+    test_db.commit()
+
+    payload = {
+        "name": "Invalid Direct Borg2 Cloud Repo",
+        "path": "rclone://prod-s3/borg-ui/direct",
+        "borg_version": 2,
+        "encryption": "none",
+        "storage_backend": "rclone_direct",
+    }
+    payload.update(payload_overrides)
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json=payload,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["key"] == expected_key
+
+
+@pytest.mark.unit
+def test_update_normal_repository_rejects_switching_to_direct_rclone_mode(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    repository = Repository(
+        name="Normal Repo",
+        path="/backups/normal",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        borg_version=2,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.api.repositories.BorgRouter.verify_repository",
+        AsyncMock(return_value={"success": True}),
+    )
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "path": "rclone://prod-s3/borg-ui/direct",
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["key"] == "backend.errors.rclone.updateUnsupported"
+
+
+@pytest.mark.unit
+def test_update_direct_borg2_rclone_repository_accepts_noop_form_fields(
+    test_client: TestClient, admin_headers, test_db
+):
+    repository = Repository(
+        name="Direct Repo",
+        path="rclone://prod-s3/borg-ui/direct",
+        encryption="none",
+        compression="lz4",
+        repository_type="rclone",
+        execution_target="local",
+        executor_type="server",
+        borg_version=2,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "name": "Direct Repo Renamed",
+            "path": "rclone://prod-s3/borg-ui/direct",
+            "storage_backend": "rclone_direct",
+            "execution_target": "local",
+            "executor_type": "server",
+            "agent_machine_id": None,
+            "connection_id": None,
+            "cloud_mirror_enabled": False,
+            "rclone_remote_id": None,
+            "rclone_remote_path": None,
+            "rclone_remote_path_verified": False,
+            "rclone_sync_policy": "after_success",
+            "rclone_extra_flags": [],
+            "rclone_cache_path": None,
+        },
+    )
+
+    assert response.status_code == 200
+    test_db.refresh(repository)
+    assert repository.name == "Direct Repo Renamed"
+    assert repository.path == "rclone://prod-s3/borg-ui/direct"
+    assert repository.repository_type == "rclone"
+    assert repository.connection_id is None
+    assert repository.agent_machine_id is None
+    assert (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+        is None
+    )
+
+
+@pytest.mark.unit
+def test_update_direct_borg2_rclone_repository_rejects_mirror_fields(
+    test_client: TestClient, admin_headers, test_db
+):
+    repository = Repository(
+        name="Direct Repo",
+        path="rclone://prod-s3/borg-ui/direct",
+        encryption="none",
+        compression="lz4",
+        repository_type="rclone",
+        execution_target="local",
+        executor_type="server",
+        borg_version=2,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "storage_backend": "rclone_direct",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": 1,
+            "rclone_remote_path": "borg-ui/mirror",
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.rclone.directIncompatiblePayload"
     )
 
 

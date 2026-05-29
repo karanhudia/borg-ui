@@ -23,7 +23,7 @@ export interface Repository {
   name: string
   path: string
   repository_type?: 'local' | 'ssh' | 'sftp' | 'rclone'
-  storage_backend?: 'local' | 'ssh' | 'agent_local' | 'rclone'
+  storage_backend?: 'local' | 'ssh' | 'agent_local' | 'rclone' | 'rclone_direct'
   execution_target?: 'local' | 'ssh' | 'agent'
   executor_type?: 'server' | 'agent'
   agent_machine_id?: number | null
