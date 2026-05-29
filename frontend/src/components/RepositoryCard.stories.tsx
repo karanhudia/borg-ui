@@ -119,6 +119,42 @@ export const RcloneSynced: Story = {
   ),
 }
 
+export const RcloneScheduled: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...localRepositoryWithMirror,
+      id: 49,
+      name: 'Scheduled Cloud Mirror',
+      rclone_storage: {
+        ...localRepositoryWithMirror.rclone_storage!,
+        repository_id: 49,
+        sync_policy: 'scheduled',
+        sync_status: 'current',
+        sync_cron_expression: '0 */6 * * *',
+        sync_timezone: 'UTC',
+        next_scheduled_sync_at: '2026-05-17T06:00:00.000Z',
+        latest_sync_job: {
+          id: 91,
+          triggered_by: 'schedule',
+          status: 'completed',
+          scheduled_for: '2026-05-17T00:00:00.000Z',
+          completed_at: '2026-05-17T00:01:00.000Z',
+          error_text: null,
+          has_log: true,
+        },
+      },
+    },
+    onRcloneSync: noop,
+    onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
 export const EnableCloudMirror: Story = {
   args: {
     ...defaultArgs,
@@ -215,6 +251,43 @@ export const RcloneFailed: Story = {
         sync_policy: 'manual',
         sync_status: 'failed',
         last_sync_error: 'remote local-test unavailable',
+      },
+    },
+    onRcloneSync: noop,
+    onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const RcloneScheduledFailed: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...localRepositoryWithMirror,
+      id: 50,
+      name: 'Failed Scheduled Mirror',
+      rclone_storage: {
+        ...localRepositoryWithMirror.rclone_storage!,
+        repository_id: 50,
+        sync_policy: 'scheduled',
+        sync_status: 'failed',
+        sync_cron_expression: '*/30 * * * *',
+        sync_timezone: 'UTC',
+        next_scheduled_sync_at: '2026-05-17T06:30:00.000Z',
+        last_sync_error: 'remote local-test unavailable',
+        latest_sync_job: {
+          id: 92,
+          triggered_by: 'schedule',
+          status: 'failed',
+          scheduled_for: '2026-05-17T06:00:00.000Z',
+          completed_at: '2026-05-17T06:00:04.000Z',
+          error_text: 'remote local-test unavailable',
+          has_log: true,
+        },
       },
     },
     onRcloneSync: noop,

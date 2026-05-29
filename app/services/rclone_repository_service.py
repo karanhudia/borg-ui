@@ -13,12 +13,23 @@ from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database.models import Repository, RepositoryStorage, RcloneRemote
+from app.database.models import (
+    Repository,
+    RepositoryStorage,
+    RcloneRemote,
+    RcloneSyncJob,
+)
 from app.services.repository_executor import (
     queue_agent_repository_operation_job,
     wait_for_agent_repository_operation_job,
 )
 from app.services.rclone_service import RcloneService, rclone_service
+from app.utils.schedule_time import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    calculate_next_cron_run,
+    normalize_schedule_timezone,
+    to_utc_naive,
+)
 
 
 VALID_SYNC_POLICIES = {"after_success", "manual", "scheduled"}
@@ -89,6 +100,10 @@ class RcloneRepositoryService:
             "sync_policy": storage.sync_policy,
             "sync_direction": storage.sync_direction,
             "sync_status": storage.sync_status,
+            "sync_cron_expression": storage.sync_cron_expression,
+            "sync_timezone": storage.sync_timezone or DEFAULT_SCHEDULE_TIMEZONE,
+            "last_scheduled_sync_at": _iso(storage.last_scheduled_sync_at),
+            "next_scheduled_sync_at": _iso(storage.next_scheduled_sync_at),
             "last_synced_at": _iso(storage.last_synced_at),
             "last_hydrated_at": _iso(storage.last_hydrated_at),
             "last_remote_check_at": _iso(storage.last_remote_check_at),
@@ -124,10 +139,13 @@ class RcloneRepositoryService:
         remote_path: str,
         sync_policy: str = "after_success",
         extra_flags: Any = None,
+        sync_cron_expression: str | None = None,
+        sync_timezone: str | None = None,
+        now: datetime | None = None,
     ) -> RepositoryStorage:
         if sync_policy not in VALID_SYNC_POLICIES:
             raise ValueError("invalid rclone sync policy")
-        return RepositoryStorage(
+        storage = RepositoryStorage(
             repository_id=repository_id,
             backend="rclone",
             rclone_remote_id=remote_id,
@@ -137,6 +155,14 @@ class RcloneRepositoryService:
             sync_status="pending",
             extra_flags=normalize_extra_flags(extra_flags),
         )
+        self.configure_schedule(
+            storage,
+            sync_policy=sync_policy,
+            sync_cron_expression=sync_cron_expression,
+            sync_timezone=sync_timezone,
+            now=now,
+        )
+        return storage
 
     def build_mirror_storage(
         self,
@@ -148,6 +174,9 @@ class RcloneRepositoryService:
         remote_path: str,
         sync_policy: str = "after_success",
         extra_flags: Any = None,
+        sync_cron_expression: str | None = None,
+        sync_timezone: str | None = None,
+        now: datetime | None = None,
     ) -> RepositoryStorage:
         if sync_policy not in VALID_SYNC_POLICIES:
             raise ValueError("invalid rclone sync policy")
@@ -164,7 +193,7 @@ class RcloneRepositoryService:
         else:
             cache_path = normalized_source
             sync_direction = SYNC_DIRECTION_PRIMARY_TO_REMOTE
-        return RepositoryStorage(
+        storage = RepositoryStorage(
             repository_id=repository_id,
             backend="rclone",
             rclone_remote_id=remote_id,
@@ -174,6 +203,54 @@ class RcloneRepositoryService:
             sync_direction=sync_direction,
             sync_status="pending",
             extra_flags=normalize_extra_flags(extra_flags),
+        )
+        self.configure_schedule(
+            storage,
+            sync_policy=sync_policy,
+            sync_cron_expression=sync_cron_expression,
+            sync_timezone=sync_timezone,
+            now=now,
+        )
+        return storage
+
+    def configure_schedule(
+        self,
+        storage: RepositoryStorage,
+        *,
+        sync_policy: str | None = None,
+        sync_cron_expression: str | None = None,
+        sync_timezone: str | None = None,
+        now: datetime | None = None,
+    ) -> None:
+        policy = sync_policy or storage.sync_policy or "after_success"
+        if policy not in VALID_SYNC_POLICIES:
+            raise ValueError("invalid rclone sync policy")
+
+        storage.sync_policy = policy
+        if policy != "scheduled":
+            storage.sync_cron_expression = None
+            storage.sync_timezone = normalize_schedule_timezone(sync_timezone)
+            storage.next_scheduled_sync_at = None
+            return
+
+        cron_expression = (
+            sync_cron_expression
+            if sync_cron_expression is not None
+            else storage.sync_cron_expression
+        )
+        cron_expression = (cron_expression or "").strip()
+        if not cron_expression:
+            raise ValueError("rclone schedule cron expression is required")
+
+        timezone_name = normalize_schedule_timezone(
+            sync_timezone if sync_timezone is not None else storage.sync_timezone
+        )
+        storage.sync_cron_expression = cron_expression
+        storage.sync_timezone = timezone_name
+        storage.next_scheduled_sync_at = calculate_next_cron_run(
+            cron_expression,
+            now,
+            timezone_name,
         )
 
     def _cache_present(self, storage: RepositoryStorage) -> bool:
@@ -306,13 +383,26 @@ class RcloneRepositoryService:
         repository: Repository,
         *,
         timeout: int | None = None,
+        triggered_by: str = "manual",
+        scheduled_for: datetime | None = None,
     ) -> dict[str, Any]:
         storage = self.get_storage(db, repository.id)
         remote = self.get_remote(db, storage)
         target = self.compose_target(remote, storage.rclone_remote_path)
+        started_at = datetime.now(timezone.utc)
+        sync_job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction=storage.sync_direction,
+            status="running",
+            triggered_by=triggered_by,
+            scheduled_for=to_utc_naive(scheduled_for) if scheduled_for else None,
+            started_at=started_at,
+        )
+        db.add(sync_job)
         storage.sync_status = "syncing"
         storage.last_sync_error = None
         db.commit()
+        db.refresh(sync_job)
         mount_id = None
         mount_service = None
         try:
@@ -349,8 +439,13 @@ class RcloneRepositoryService:
                     extra_flags=storage.extra_flags or [],
                 )
         except Exception as exc:
+            message = _exception_message(exc)
             storage.sync_status = "failed"
-            storage.last_sync_error = _exception_message(exc)
+            storage.last_sync_error = message
+            sync_job.status = "failed"
+            sync_job.completed_at = datetime.now(timezone.utc)
+            sync_job.error_text = message
+            sync_job.log_text = message
             db.commit()
             return self.serialize_status(repository, storage, remote)
         finally:
@@ -360,13 +455,20 @@ class RcloneRepositoryService:
                 except Exception:
                     pass
         now = datetime.now(timezone.utc)
+        log_text = _sync_result_log_text(result)
         if result.success:
             storage.sync_status = "current"
             storage.last_synced_at = now
             storage.last_sync_error = None
+            sync_job.status = "completed"
+            sync_job.error_text = None
         else:
             storage.sync_status = "failed"
             storage.last_sync_error = result.stderr or "rclone sync failed"
+            sync_job.status = "failed"
+            sync_job.error_text = storage.last_sync_error
+        sync_job.completed_at = now
+        sync_job.log_text = log_text
         db.commit()
         return self.serialize_status(repository, storage, remote)
 
@@ -450,6 +552,14 @@ def _stringify_config_value(value: Any) -> str:
 
         return json.dumps(value, separators=(",", ":"))
     return str(value)
+
+
+def _sync_result_log_text(result: Any) -> str | None:
+    stdout = str(getattr(result, "stdout", "") or "").strip()
+    stderr = str(getattr(result, "stderr", "") or "").strip()
+    if stdout and stderr:
+        return f"{stdout}\n{stderr}"
+    return stdout or stderr or None
 
 
 rclone_repository_service = RcloneRepositoryService()

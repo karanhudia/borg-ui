@@ -36,6 +36,8 @@ const baseArgs = {
     rcloneRemotePath: '',
     rcloneRemotePathVerified: false,
     rcloneSyncPolicy: 'after_success' as const,
+    rcloneSyncCronExpression: '0 */6 * * *',
+    rcloneSyncTimezone: 'UTC',
     rcloneExtraFlags: '',
   },
   rcloneRemotes: remotes,
@@ -64,6 +66,28 @@ export const Enabled: Story = {
       rcloneRemoteId: 3,
       rcloneRemotePath: 'borg-ui/production',
       rcloneRemotePathVerified: true,
+      rcloneExtraFlags: '--fast-list',
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepCloudMirror {...args} />
+    </Box>
+  ),
+}
+
+export const Scheduled: Story = {
+  args: {
+    ...baseArgs,
+    data: {
+      ...baseArgs.data,
+      cloudMirrorEnabled: true,
+      rcloneRemoteId: 4,
+      rcloneRemotePath: 'borg-ui/production',
+      rcloneRemotePathVerified: true,
+      rcloneSyncPolicy: 'scheduled',
+      rcloneSyncCronExpression: '15 */4 * * *',
+      rcloneSyncTimezone: 'UTC',
       rcloneExtraFlags: '--fast-list',
     },
   },

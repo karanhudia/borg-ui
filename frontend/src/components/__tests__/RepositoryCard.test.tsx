@@ -223,6 +223,93 @@ describe('RepositoryCard', () => {
       expect(screen.getByText('Schedule paused')).toBeInTheDocument()
     })
 
+    it('renders scheduled cloud mirror next-run state and failure state', () => {
+      const scheduledMirrorStorage = {
+        repository_id: 1,
+        backend: 'rclone' as const,
+        rclone_remote_id: 10,
+        rclone_remote_name: 'prod-s3',
+        rclone_remote_path: 'borg-ui/repositories/app',
+        rclone_target: 'prod-s3:borg-ui/repositories/app',
+        cache_present: true,
+        sync_policy: 'scheduled' as const,
+        sync_status: 'current',
+        sync_cron_expression: '0 */6 * * *',
+        sync_timezone: 'UTC',
+        next_scheduled_sync_at: '2099-04-14T02:00:00Z',
+      }
+
+      const { rerender } = renderWithProviders(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            rclone_storage: scheduledMirrorStorage,
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText(/Mirror:/)).toBeInTheDocument()
+
+      rerender(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            rclone_storage: {
+              ...scheduledMirrorStorage,
+              sync_status: 'failed',
+              last_sync_error: 'manual sync failed',
+              latest_sync_job: {
+                id: 3,
+                triggered_by: 'manual',
+                status: 'failed',
+                completed_at: '2099-04-14T01:00:05Z',
+                error_text: 'manual sync failed',
+                has_log: true,
+              },
+            },
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.queryByText('Mirror failed')).not.toBeInTheDocument()
+
+      rerender(
+        <RepositoryCard
+          repository={{
+            ...mockRepository,
+            rclone_storage: {
+              ...scheduledMirrorStorage,
+              sync_status: 'failed',
+              last_sync_error: 'remote unavailable',
+              latest_sync_job: {
+                id: 4,
+                triggered_by: 'schedule',
+                status: 'failed',
+                scheduled_for: '2099-04-14T02:00:00Z',
+                completed_at: '2099-04-14T02:00:05Z',
+                error_text: 'remote unavailable',
+                has_log: true,
+              },
+            },
+          }}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      expect(screen.getByText('Mirror failed')).toBeInTheDocument()
+    })
+
     it('renders N/A for missing total size', () => {
       const repoWithoutSize = { ...mockRepository, total_size: null }
       renderWithProviders(

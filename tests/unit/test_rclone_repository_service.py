@@ -1,10 +1,12 @@
 import pytest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from app.database.models import (
     AgentMachine,
     Repository,
     RepositoryStorage,
+    RcloneSyncJob,
     RcloneRemote,
 )
 from app.services.rclone_repository_service import (
@@ -142,6 +144,22 @@ class _RecordingRcloneService:
         )
 
 
+class _VerboseRecordingRcloneService:
+    def __init__(self):
+        self.sync_calls = []
+
+    async def sync(self, source, destination, **kwargs):
+        self.sync_calls.append((source, destination, kwargs))
+        return RcloneCommandResult(
+            success=True,
+            return_code=0,
+            stdout="copied 2 files",
+            stderr="",
+            command=["rclone", "sync", source, destination],
+            redacted_command="rclone sync <path> <path>",
+        )
+
+
 class _RecordingMountService:
     def __init__(self):
         self.mount_calls = []
@@ -229,6 +247,30 @@ def test_build_agent_mirror_storage_records_agent_owned_sync_strategy():
 
 
 @pytest.mark.unit
+def test_build_scheduled_mirror_storage_records_schedule_metadata():
+    service = RcloneRepositoryService(cache_root="/cache")
+    now = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+
+    storage = service.build_mirror_storage(
+        repository_id=9,
+        source_path="/srv/borg/app",
+        remote_id=3,
+        remote_path="borg-ui/repositories/app",
+        sync_policy="scheduled",
+        sync_cron_expression="0 */6 * * *",
+        sync_timezone="UTC",
+        now=now,
+    )
+
+    assert storage.sync_policy == "scheduled"
+    assert storage.sync_cron_expression == "0 */6 * * *"
+    assert storage.sync_timezone == "UTC"
+    assert storage.next_scheduled_sync_at is not None
+    assert storage.next_scheduled_sync_at > now.replace(tzinfo=None)
+    assert storage.last_scheduled_sync_at is None
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_sync_repository_mirror_uses_primary_repository_path_source(db_session):
     remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
@@ -252,6 +294,58 @@ async def test_sync_repository_mirror_uses_primary_repository_path_source(db_ses
 
     assert rclone.sync_calls[0][0] == "/srv/borg/app"
     assert rclone.sync_calls[0][1] == "prod-s3:borg-ui/repositories/app"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sync_repository_records_manual_job_without_advancing_schedule(
+    db_session,
+):
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path="/srv/borg/app", encryption="none")
+    original_next_run = datetime(2026, 1, 1, 18, 0)
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path="/srv/borg/app",
+        sync_policy="scheduled",
+        sync_status="pending",
+        sync_direction="primary_to_remote",
+        sync_cron_expression="0 */6 * * *",
+        sync_timezone="UTC",
+        next_scheduled_sync_at=original_next_run,
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    service = RcloneRepositoryService(
+        cache_root="/cache", service=_VerboseRecordingRcloneService()
+    )
+
+    status = await service.sync_repository(
+        db_session,
+        repository,
+        triggered_by="manual",
+    )
+
+    db_session.refresh(storage)
+    sync_job = (
+        db_session.query(RcloneSyncJob)
+        .filter(
+            RcloneSyncJob.repository_id == repository.id,
+            RcloneSyncJob.triggered_by == "manual",
+        )
+        .one()
+    )
+    assert status["sync_status"] == "current"
+    assert storage.next_scheduled_sync_at == original_next_run
+    assert storage.last_scheduled_sync_at is None
+    assert sync_job.repository_id == repository.id
+    assert sync_job.status == "completed"
+    assert sync_job.triggered_by == "manual"
+    assert sync_job.scheduled_for is None
+    assert sync_job.log_text == "copied 2 files"
 
 
 @pytest.mark.unit

@@ -18,6 +18,8 @@ const defaultData = {
   rcloneRemotePath: '',
   rcloneRemotePathVerified: false,
   rcloneSyncPolicy: 'after_success' as const,
+  rcloneSyncCronExpression: '0 */6 * * *',
+  rcloneSyncTimezone: 'UTC',
   rcloneExtraFlags: '',
 }
 
@@ -74,6 +76,43 @@ describe('WizardStepCloudMirror', () => {
 
     await user.click(screen.getByRole('button', { name: /Browse rclone remote/i }))
     expect(onBrowseRemotePath).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows cron and timezone fields for scheduled mirror syncs', () => {
+    const onChange = vi.fn()
+
+    render(
+      <WizardStepCloudMirror
+        data={{
+          ...defaultData,
+          cloudMirrorEnabled: true,
+          rcloneRemoteId: 10,
+          rcloneSyncPolicy: 'scheduled',
+          rcloneSyncCronExpression: '15 */4 * * *',
+          rcloneSyncTimezone: 'UTC',
+        }}
+        rcloneRemotes={remotes}
+        rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
+        eligible={true}
+        onChange={onChange}
+        onAddRcloneRemote={vi.fn()}
+        onBrowseRemotePath={vi.fn()}
+      />
+    )
+
+    expect(screen.getByLabelText(/Mirror schedule/i)).toHaveValue('15 */4 * * *')
+    expect(screen.getByLabelText(/Timezone/i)).toHaveValue('UTC')
+    expect(screen.getByLabelText(/Next 3 Run Times/i)).toBeInTheDocument()
+    expect(
+      screen.getAllByRole('button', { name: /Open schedule builder/i }).length
+    ).toBeGreaterThan(0)
+
+    fireEvent.change(screen.getByLabelText(/Mirror schedule/i), {
+      target: { value: '*/30 * * * *' },
+    })
+    expect(onChange).toHaveBeenCalledWith({
+      rcloneSyncCronExpression: '*/30 * * * *',
+    })
   })
 
   it('uses the inline folder button to browse the selected remote path', async () => {

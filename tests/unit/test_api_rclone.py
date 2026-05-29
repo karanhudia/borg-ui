@@ -15,6 +15,7 @@ from app.database.models import (
     AgentMachine,
     Repository,
     RepositoryStorage,
+    RcloneSyncJob,
     RcloneRemote,
     SSHConnection,
 )
@@ -1805,6 +1806,106 @@ def test_create_local_repository_cloud_mirror_first_sync_failure_preserves_repos
 
 
 @pytest.mark.unit
+def test_create_local_repository_cloud_mirror_scheduled_policy_returns_next_run(
+    test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+    repo_path = tmp_path / "repositories" / "scheduled-app"
+    monkeypatch.setattr(
+        "app.api.repositories.initialize_borg_repository",
+        AsyncMock(return_value={"success": True, "already_existed": False}),
+    )
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Scheduled Mirror App",
+            "path": str(repo_path),
+            "encryption": "none",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/scheduled-app",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "scheduled",
+            "rclone_sync_cron_expression": "0 */6 * * *",
+            "rclone_sync_timezone": "UTC",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository)
+        .filter(Repository.name == "Scheduled Mirror App")
+        .one()
+    )
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    payload = response.json()["repository"]["rclone_storage"]
+    assert storage.sync_policy == "scheduled"
+    assert storage.sync_cron_expression == "0 */6 * * *"
+    assert storage.sync_timezone == "UTC"
+    assert storage.next_scheduled_sync_at is not None
+    assert payload["sync_cron_expression"] == "0 */6 * * *"
+    assert payload["sync_timezone"] == "UTC"
+    assert payload["next_scheduled_sync_at"] is not None
+
+
+@pytest.mark.unit
+def test_create_scheduled_cloud_mirror_requires_cron_expression(
+    test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    test_db.add(remote)
+    test_db.commit()
+    test_db.refresh(remote)
+    monkeypatch.setattr(
+        "app.api.repositories.initialize_borg_repository",
+        AsyncMock(return_value={"success": True, "already_existed": False}),
+    )
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Missing Cron Mirror",
+            "path": str(tmp_path / "repositories" / "missing-cron"),
+            "encryption": "none",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/missing-cron",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "scheduled",
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"] == "backend.errors.rclone.scheduleCronRequired"
+    )
+    assert (
+        test_db.query(Repository)
+        .filter(Repository.name == "Missing Cron Mirror")
+        .first()
+        is None
+    )
+
+
+@pytest.mark.unit
 def test_import_local_repository_with_cloud_mirror_preserves_primary_path_and_syncs(
     test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
 ):
@@ -2241,7 +2342,7 @@ def test_update_rclone_repository_storage_fields(
 
 
 @pytest.mark.unit
-def test_update_local_repository_enables_cloud_mirror(
+def test_update_local_repository_enables_cloud_mirror_with_default_policy(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):
     remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
@@ -2264,7 +2365,6 @@ def test_update_local_repository_enables_cloud_mirror(
             "rclone_remote_id": remote.id,
             "rclone_remote_path": "borg-ui/repositories/app",
             "rclone_remote_path_verified": True,
-            "rclone_sync_policy": "manual",
             "rclone_extra_flags": ["--fast-list"],
         },
     )
@@ -2282,8 +2382,112 @@ def test_update_local_repository_enables_cloud_mirror(
     assert storage.sync_direction == "primary_to_remote"
     assert storage.rclone_remote_id == remote.id
     assert storage.rclone_remote_path == "borg-ui/repositories/app"
-    assert storage.sync_policy == "manual"
+    assert storage.sync_policy == "after_success"
     assert storage.extra_flags == ["--fast-list"]
+
+
+@pytest.mark.unit
+def test_update_local_repository_cloud_mirror_adds_scheduled_policy(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(name="App", path="/repositories/app", encryption="none")
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "storage_backend": "local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "scheduled",
+            "rclone_sync_cron_expression": "*/30 * * * *",
+            "rclone_sync_timezone": "UTC",
+        },
+    )
+
+    assert response.status_code == 200
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    assert storage.sync_policy == "scheduled"
+    assert storage.sync_cron_expression == "*/30 * * * *"
+    assert storage.sync_timezone == "UTC"
+    assert storage.next_scheduled_sync_at is not None
+
+
+@pytest.mark.unit
+def test_manual_rclone_sync_records_job_without_clearing_schedule(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(name="App", path="/repositories/app", encryption="none")
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    next_run = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path="/repositories/app",
+        sync_policy="scheduled",
+        sync_status="pending",
+        sync_direction="primary_to_remote",
+        sync_cron_expression="0 */6 * * *",
+        sync_timezone="UTC",
+        next_scheduled_sync_at=next_run,
+    )
+    test_db.add(storage)
+    test_db.commit()
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.sync",
+        AsyncMock(
+            return_value=RcloneCommandResult(
+                success=True,
+                return_code=0,
+                stdout="manual sync completed",
+                stderr="",
+                command=["rclone", "sync"],
+                redacted_command="rclone sync <path> <path>",
+            )
+        ),
+    )
+
+    response = test_client.post(
+        f"/api/repositories/{repository.id}/rclone/sync",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    test_db.refresh(storage)
+    sync_job = (
+        test_db.query(RcloneSyncJob)
+        .filter(
+            RcloneSyncJob.repository_id == repository.id,
+            RcloneSyncJob.triggered_by == "manual",
+        )
+        .one()
+    )
+    assert response.json()["sync_status"] == "current"
+    assert storage.next_scheduled_sync_at == next_run
+    assert sync_job.triggered_by == "manual"
+    assert sync_job.status == "completed"
+    assert sync_job.log_text == "manual sync completed"
 
 
 @pytest.mark.unit
@@ -2539,3 +2743,62 @@ def test_rclone_storage_migration_uses_postgresql_identity_columns():
         "id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY"
     )
     assert migration._timestamp_type(FakeDb()) == "TIMESTAMP"
+
+
+@pytest.mark.unit
+def test_scheduled_rclone_mirror_migration_downgrade_removes_added_fields():
+    base_migration = importlib.import_module(
+        "app.database.migrations.113_add_rclone_storage"
+    )
+    migration = importlib.import_module(
+        "app.database.migrations.114_add_scheduled_rclone_mirror_jobs"
+    )
+    engine = create_engine("sqlite:///:memory:")
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    try:
+        base_migration.upgrade(db)
+        migration.upgrade(db)
+        inspector = inspect(engine)
+        storage_columns = {
+            column["name"] for column in inspector.get_columns("repository_storage")
+        }
+        job_columns = {
+            column["name"] for column in inspector.get_columns("rclone_sync_jobs")
+        }
+        index_names = {
+            index["name"] for index in inspector.get_indexes("repository_storage")
+        }
+        assert "sync_cron_expression" in storage_columns
+        assert "sync_timezone" in storage_columns
+        assert "last_scheduled_sync_at" in storage_columns
+        assert "next_scheduled_sync_at" in storage_columns
+        assert "triggered_by" in job_columns
+        assert "scheduled_for" in job_columns
+        assert "log_text" in job_columns
+        assert "ix_repository_storage_next_scheduled_sync_at" in index_names
+
+        migration.downgrade(db)
+        inspector = inspect(engine)
+        storage_columns = {
+            column["name"] for column in inspector.get_columns("repository_storage")
+        }
+        job_columns = {
+            column["name"] for column in inspector.get_columns("rclone_sync_jobs")
+        }
+        index_names = {
+            index["name"] for index in inspector.get_indexes("repository_storage")
+        }
+
+        assert "ix_repository_storage_next_scheduled_sync_at" not in index_names
+        if migration._sqlite_supports_drop_column(db):
+            assert "sync_cron_expression" not in storage_columns
+            assert "sync_timezone" not in storage_columns
+            assert "last_scheduled_sync_at" not in storage_columns
+            assert "next_scheduled_sync_at" not in storage_columns
+            assert "triggered_by" not in job_columns
+            assert "scheduled_for" not in job_columns
+            assert "log_text" not in job_columns
+    finally:
+        db.close()
