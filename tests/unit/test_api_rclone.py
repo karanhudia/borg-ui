@@ -1,5 +1,6 @@
 import importlib
-from datetime import datetime
+from collections import deque
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -20,6 +21,29 @@ from app.database.models import (
 from app.services.rclone_service import RcloneCommandResult
 from app.services.rclone_service import RcloneUnavailable
 from tests.unit.helpers import assert_auth_required
+
+
+class FakeRcloneStdout:
+    def __init__(self, lines: list[bytes]):
+        self._lines = deque(lines)
+
+    async def readline(self) -> bytes:
+        if self._lines:
+            return self._lines.popleft()
+        return b""
+
+
+class FakeRcloneOAuthProcess:
+    def __init__(self, lines: list[bytes], return_code: int = 0):
+        self.stdout = FakeRcloneStdout(lines)
+        self.returncode = return_code
+        self.killed = False
+
+    async def wait(self) -> int:
+        return self.returncode
+
+    def kill(self) -> None:
+        self.killed = True
 
 
 @pytest.mark.unit
@@ -45,6 +69,240 @@ def test_rclone_status_reports_unavailable_binary(
         "available": False,
         "version": None,
         "error": "rclone binary not found",
+    }
+
+
+@pytest.mark.unit
+def test_list_rclone_providers_includes_popular_guided_sources(
+    test_client: TestClient, admin_headers
+):
+    response = test_client.get("/api/rclone/providers", headers=admin_headers)
+
+    assert response.status_code == 200
+    providers = {
+        provider["type"]: provider for provider in response.json()["providers"]
+    }
+    for provider_type in {
+        "drive",
+        "onedrive",
+        "dropbox",
+        "box",
+        "s3",
+        "b2",
+        "azureblob",
+        "webdav",
+        "sftp",
+        "local",
+        "custom",
+    }:
+        assert provider_type in providers
+    assert providers["drive"]["auth_type"] == "oauth_token"
+    assert providers["onedrive"]["auth_type"] == "oauth_token"
+    assert providers["custom"]["type_editable"] is True
+    assert any(field["name"] == "token" for field in providers["drive"]["fields"])
+
+
+@pytest.mark.unit
+def test_start_rclone_oauth_session_returns_authorization_url_and_token_config(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    fake_process = FakeRcloneOAuthProcess(
+        [
+            b"NOTICE: If your browser doesn't open go to http://127.0.0.1:53682/auth?state=abc\n",
+            b"Paste the following into your remote machine --->\n",
+            b'{"access_token":"real-access","refresh_token":"real-refresh"}\n',
+            b"<---End paste\n",
+        ]
+    )
+
+    async def fake_start_oauth_process(provider, *, client_id=None, client_secret=None):
+        assert provider == "drive"
+        assert client_id is None
+        assert client_secret is None
+        return fake_process
+
+    monkeypatch.setattr("app.api.rclone._start_oauth_process", fake_start_oauth_process)
+
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "drive"},
+    )
+
+    assert response.status_code == 201
+    started = response.json()
+    assert started["provider"] == "drive"
+    assert (
+        started["authorization_url"]
+        == f"/rclone/oauth/sessions/{started['session_id']}/authorize"
+    )
+    assert started["local_authorization_url"] == "http://127.0.0.1:53682/auth?state=abc"
+    assert started["status"] in {"awaiting_callback", "authorized"}
+
+    poll_response = test_client.get(
+        f"/api/rclone/oauth/sessions/{started['session_id']}",
+        headers=admin_headers,
+    )
+
+    assert poll_response.status_code == 200
+    polled = poll_response.json()
+    assert polled["status"] == "authorized"
+    assert polled["config"] == {
+        "type": "drive",
+        "token": '{"access_token":"real-access","refresh_token":"real-refresh"}',
+    }
+    cleanup_response = test_client.delete(
+        f"/api/rclone/oauth/sessions/{started['session_id']}",
+        headers=admin_headers,
+    )
+    assert cleanup_response.status_code == 204
+
+
+@pytest.mark.unit
+def test_rclone_oauth_authorization_url_redirects_through_backend(
+    test_client: TestClient, admin_token, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    rclone_api.RCLONE_OAUTH_SESSIONS["oauth-proxy"] = {
+        "provider": "drive",
+        "status": "awaiting_callback",
+        "authorization_url": "/rclone/oauth/sessions/oauth-proxy/authorize",
+        "local_authorization_url": "http://127.0.0.1:53682/auth?state=abc",
+        "config": None,
+        "error": None,
+        "output": [],
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+        "ready_event": None,
+        "process": None,
+        "task": None,
+    }
+
+    async def fake_fetch_redirect(url: str) -> str:
+        assert url == "http://127.0.0.1:53682/auth?state=abc"
+        return "https://accounts.google.com/o/oauth2/v2/auth?state=abc"
+
+    monkeypatch.setattr(
+        rclone_api, "_fetch_oauth_authorization_redirect", fake_fetch_redirect
+    )
+
+    response = test_client.get(
+        f"/api/rclone/oauth/sessions/oauth-proxy/authorize?token={admin_token}",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert (
+        response.headers["location"]
+        == "https://accounts.google.com/o/oauth2/v2/auth?state=abc"
+    )
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_start_rclone_oauth_session_retires_previous_active_session(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    old_process = FakeRcloneOAuthProcess([])
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    rclone_api.RCLONE_OAUTH_SESSIONS["old-oauth"] = {
+        "provider": "drive",
+        "status": "awaiting_callback",
+        "authorization_url": "/rclone/oauth/sessions/old-oauth/authorize",
+        "local_authorization_url": "http://127.0.0.1:53682/auth?state=old",
+        "config": None,
+        "error": None,
+        "output": [],
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+        "ready_event": None,
+        "process": old_process,
+        "task": None,
+    }
+    new_process = FakeRcloneOAuthProcess(
+        [
+            b"NOTICE: If your browser doesn't open go to http://127.0.0.1:53682/auth?state=new\n"
+        ]
+    )
+
+    async def fake_start_oauth_process(provider, *, client_id=None, client_secret=None):
+        return new_process
+
+    monkeypatch.setattr("app.api.rclone._start_oauth_process", fake_start_oauth_process)
+
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "drive"},
+    )
+
+    assert response.status_code == 201
+    assert old_process.killed is True
+    assert "old-oauth" not in rclone_api.RCLONE_OAUTH_SESSIONS
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_rclone_oauth_session_cleanup_prunes_expired_and_excess(monkeypatch):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    now = datetime(2026, 5, 28, tzinfo=timezone.utc)
+    monkeypatch.setattr(rclone_api, "RCLONE_OAUTH_SESSION_TTL_SECONDS", 30)
+    monkeypatch.setattr(rclone_api, "RCLONE_OAUTH_MAX_SESSIONS", 1)
+    rclone_api.RCLONE_OAUTH_SESSIONS["expired"] = {
+        "updated_at": now - timedelta(seconds=31),
+        "task": None,
+        "process": None,
+    }
+    rclone_api.RCLONE_OAUTH_SESSIONS["older"] = {
+        "updated_at": now,
+        "task": None,
+        "process": None,
+    }
+    rclone_api.RCLONE_OAUTH_SESSIONS["newer"] = {
+        "updated_at": now,
+        "task": None,
+        "process": None,
+    }
+
+    rclone_api._cleanup_rclone_oauth_sessions(now)
+
+    assert list(rclone_api.RCLONE_OAUTH_SESSIONS) == ["newer"]
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_rclone_oauth_output_is_capped(monkeypatch):
+    from app.api import rclone as rclone_api
+
+    monkeypatch.setattr(rclone_api, "RCLONE_OAUTH_OUTPUT_LIMIT_CHARS", 10)
+    session = {"output": []}
+
+    rclone_api._append_oauth_output(session, "first-line")
+    rclone_api._append_oauth_output(session, "0123456789abcdef")
+
+    assert "".join(session["output"]) == "6789abcdef"
+    assert len("".join(session["output"])) <= 10
+
+
+@pytest.mark.unit
+def test_start_rclone_oauth_session_rejects_non_oauth_provider(
+    test_client: TestClient, admin_headers
+):
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "s3"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == {
+        "key": "backend.errors.rclone.oauthUnsupported"
     }
 
 
@@ -184,6 +442,135 @@ def test_create_rclone_remote_rejects_blank_provider(
 
     assert response.status_code == 400
     assert response.json()["detail"] == {"key": "backend.errors.rclone.invalidProvider"}
+
+
+@pytest.mark.unit
+def test_create_managed_rclone_remote_redacts_sensitive_config_values(
+    test_client: TestClient, admin_headers, tmp_path, monkeypatch
+):
+    config_root = tmp_path / "rclone"
+    monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
+
+    response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "gdrive-prod",
+            "provider": "drive",
+            "config_source": "managed",
+            "redacted_config": {
+                "type": "drive",
+                "token": '{"access_token":"real-access","refresh_token":"real-refresh"}',
+                "client_secret": "real-client-secret",
+                "scope": "drive",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    created = response.json()
+    assert created["redacted_config"]["token"] == "***"
+    assert created["redacted_config"]["client_secret"] == "***"
+    assert created["redacted_config"]["scope"] == "drive"
+    config_body = (config_root / "rclone.conf").read_text(encoding="utf-8")
+    assert "real-access" in config_body
+    assert "real-refresh" in config_body
+    assert "real-client-secret" in config_body
+
+    response = test_client.get("/api/rclone/remotes", headers=admin_headers)
+
+    listed = response.json()["remotes"][0]
+    assert listed["redacted_config"]["token"] == "***"
+    assert listed["redacted_config"]["client_secret"] == "***"
+
+
+@pytest.mark.unit
+def test_update_managed_rclone_remote_preserves_redacted_existing_secrets(
+    test_client: TestClient, admin_headers, tmp_path, monkeypatch
+):
+    config_root = tmp_path / "rclone"
+    monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
+
+    create_response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "gdrive-prod",
+            "provider": "drive",
+            "config_source": "managed",
+            "redacted_config": {
+                "type": "drive",
+                "token": '{"access_token":"real-access","refresh_token":"real-refresh"}',
+                "scope": "drive",
+            },
+        },
+    )
+    remote_id = create_response.json()["id"]
+
+    response = test_client.put(
+        f"/api/rclone/remotes/{remote_id}",
+        headers=admin_headers,
+        json={
+            "name": "gdrive-archive",
+            "provider": "drive",
+            "redacted_config": {
+                "type": "drive",
+                "token": "***",
+                "scope": "drive.readonly",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["name"] == "gdrive-archive"
+    assert updated["redacted_config"]["token"] == "***"
+    assert updated["redacted_config"]["scope"] == "drive.readonly"
+    config_body = (config_root / "rclone.conf").read_text(encoding="utf-8")
+    assert "[gdrive-prod]" not in config_body
+    assert "[gdrive-archive]" in config_body
+    assert "real-access" in config_body
+    assert "real-refresh" in config_body
+    assert "scope = drive.readonly" in config_body
+
+
+@pytest.mark.unit
+def test_update_managed_rclone_remote_does_not_write_redaction_marker_without_existing_config(
+    test_client: TestClient, admin_headers, tmp_path, monkeypatch
+):
+    config_root = tmp_path / "rclone"
+    monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
+
+    create_response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "gdrive-prod",
+            "provider": "drive",
+            "config_source": "managed",
+            "redacted_config": {
+                "type": "drive",
+                "token": '{"access_token":"real-access","refresh_token":"real-refresh"}',
+                "scope": "drive",
+            },
+        },
+    )
+    remote_id = create_response.json()["id"]
+    (config_root / "rclone.conf").unlink()
+
+    response = test_client.put(
+        f"/api/rclone/remotes/{remote_id}",
+        headers=admin_headers,
+        json={"name": "gdrive-archive"},
+    )
+
+    assert response.status_code == 200
+    config_body = (config_root / "rclone.conf").read_text(encoding="utf-8")
+    assert "[gdrive-archive]" in config_body
+    assert "type = drive" in config_body
+    assert "scope = drive" in config_body
+    assert "***" not in config_body
+    assert "token =" not in config_body
 
 
 @pytest.mark.unit

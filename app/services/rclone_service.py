@@ -60,6 +60,19 @@ class RcloneService:
     def about_command(self, target: str) -> list[str]:
         return self._base_command() + ["about", target]
 
+    def authorize_command(
+        self,
+        provider: str,
+        *,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+    ) -> list[str]:
+        command = self._base_command(include_config=False) + ["authorize", provider]
+        if client_id and client_secret:
+            command.extend([client_id, client_secret])
+        command.append("--auth-no-open-browser")
+        return command
+
     def sync_command(
         self, source: str, destination: str, *, extra_flags: list[str] | None = None
     ) -> list[str]:
