@@ -243,6 +243,31 @@ https://example.com/borg-ui/api/rclone/oauth/callback/drive
 https://example.com/borg-ui/api/rclone/oauth/callback/onedrive
 ```
 
+For local development with `./scripts/dev.sh`, the browser opens the Vite dev
+server at `http://localhost:7879` and Vite proxies `/api` to the backend
+container. Use `localhost` as the public base URL and register the matching
+localhost callback:
+
+```dotenv
+PUBLIC_BASE_URL=http://localhost:7879
+GOOGLE_DRIVE_OAUTH_CLIENT_ID=your-google-client-id
+GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=your-google-client-secret
+ONEDRIVE_OAUTH_CLIENT_ID=your-microsoft-client-id
+ONEDRIVE_OAUTH_CLIENT_SECRET=your-microsoft-client-secret
+```
+
+```text
+http://localhost:7879/api/rclone/oauth/callback/drive
+http://localhost:7879/api/rclone/oauth/callback/onedrive
+```
+
+Place those values in the repository root `.env` file before starting
+`./scripts/dev.sh`, or export them in the shell that starts the dev script. The
+dev compose file passes them only to the backend container. For a
+production-style local `docker compose up` run, use the actual browser URL and
+port for that compose stack, for example `PUBLIC_BASE_URL=http://localhost:8081`
+when `PORT=8081`.
+
 Keep provider client secrets in Compose secrets, an `.env` file that is not
 committed, or your orchestrator's secret store. They are never needed by the
 frontend. Borg UI returns only OAuth setup state and callback URLs to the
