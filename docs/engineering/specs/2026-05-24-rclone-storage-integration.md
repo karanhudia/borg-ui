@@ -363,8 +363,10 @@ It shows:
 - Start with server-owned rclone repositories only.
 - Add telemetry-safe counters for rclone repository count and sync failure
   categories, without provider credentials or paths.
-- Mark direct mount as unsupported in UI copy until a separate spec proves it
-  safe for selected providers.
+- Mark direct mount as unsupported in UI copy. The follow-up decision record
+  `docs/engineering/specs/2026-05-28-direct-rclone-mount-decision.md`
+  rejects direct `rclone mount` support until a separate provider-specific
+  proof matrix is satisfied.
 
 ## Self-Review
 

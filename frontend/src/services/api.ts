@@ -137,12 +137,17 @@ export interface RcloneProvider {
   docs_url?: string
   config_template: Record<string, unknown>
   fields: RcloneProviderField[]
+  oauth_mode?: 'borg_ui' | 'rclone_loopback' | 'manual'
+  oauth_configured?: boolean
+  oauth_callback_url?: string | null
+  oauth_setup_key?: string | null
 }
 
 export interface RcloneOAuthSession {
   session_id: string
   provider: string
   status: 'starting' | 'awaiting_callback' | 'authorized' | 'failed'
+  oauth_mode?: 'borg_ui' | 'rclone_loopback'
   authorization_url?: string | null
   local_authorization_url?: string | null
   config?: Record<string, unknown> | null
@@ -782,6 +787,7 @@ export const rcloneAPI = {
     config?: Record<string, unknown>
     client_id?: string
     client_secret?: string
+    mode?: 'auto' | 'borg_ui' | 'rclone_loopback'
   }) => api.post<RcloneOAuthSession>('/rclone/oauth/sessions', data),
   getOAuthSession: (sessionId: string) =>
     api.get<RcloneOAuthSession>(`/rclone/oauth/sessions/${sessionId}`),

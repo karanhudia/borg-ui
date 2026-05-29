@@ -87,6 +87,16 @@ services:
       # Sub-path for reverse proxy deployment (e.g., /borg-ui)
       # Leave empty or unset for root deployment. See docs/reverse-proxy.md for NGINX config.
       # - BASE_PATH=/borg-ui
+      #
+      # Cloud Storage OAuth callbacks for Google Drive and Microsoft OneDrive.
+      # Set PUBLIC_BASE_URL to the public HTTPS URL users open in their browser.
+      # Register the matching /api/rclone/oauth/callback/<provider> URLs with
+      # the provider OAuth app. Keep provider secrets out of committed Compose files.
+      # - PUBLIC_BASE_URL=https://backups.example.com
+      # - GOOGLE_DRIVE_OAUTH_CLIENT_ID=your-google-client-id
+      # - GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=your-google-client-secret
+      # - ONEDRIVE_OAUTH_CLIENT_ID=your-microsoft-client-id
+      # - ONEDRIVE_OAUTH_CLIENT_SECRET=your-microsoft-client-secret
 
       # Docker socket proxy alternative for backup hook scripts:
       # 1. Remove/comment the /var/run/docker.sock app volume above.
