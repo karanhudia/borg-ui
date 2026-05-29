@@ -105,6 +105,25 @@ For SSH repositories, Borg UI mounts the repository on the server with SSHFS dur
 
 For managed-agent repositories, the selected agent syncs its agent-local repository path to the configured rclone remote. Borg UI owns the mirror metadata and rclone target; the agent owns any temporary rclone execution files and removes them after the sync.
 
+## Use a Direct Borg 2 rclone Repository
+
+Direct rclone repositories are an advanced Borg 2 mode. Borg writes directly to a `rclone:` repository URL instead of writing to a normal primary location and syncing a Cloud Mirror.
+
+Use the standard Cloud Mirror flow when you want Borg UI to keep a normal local, SSH, or managed-agent primary repository and mirror it off-site. Use direct rclone only when you intentionally want Borg 2 itself to operate through rclone and you accept that Borg UI will not show cache hydration or mirror sync status for that repository.
+
+1. Go to Repositories and create or import a repository.
+2. In Location, select Borg v2.
+3. Open Advanced storage mode and enable direct Borg 2 rclone repository.
+4. Enter a URL such as:
+
+```text
+rclone://remote-name/path/to/repository
+```
+
+5. Continue through Security, Advanced, and Review.
+
+The rclone remote must be configured for the same account and environment that runs Borg. Borg UI validates this mode as Borg 2-only and blocks SSH, managed-agent, cached rclone, and Cloud Mirror settings on the same repository.
+
 ## Import an Existing Repository
 
 Use Import Existing when a Borg repository already exists and you want Borg UI to manage or monitor it.

@@ -378,6 +378,60 @@ describe('RepositoryWizard', () => {
       })
     })
 
+    it('submits direct Borg 2 rclone repositories through the advanced mode', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+
+      await waitForLocationStep()
+      await user.click(screen.getByRole('button', { name: /v2/i }))
+      await user.click(
+        await screen.findByRole('checkbox', { name: /Use direct Borg 2 rclone repository/i })
+      )
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Direct Cloud Repo')
+      setInputValue(
+        screen.getByLabelText(/Direct rclone repository URL/i),
+        'rclone://prod-s3/borg-ui/direct'
+      )
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(
+          screen.queryByText('Mirror this repository to cloud storage')
+        ).not.toBeInTheDocument()
+        expect(screen.getByLabelText(/^Passphrase/i)).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'directpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Direct Borg 2 rclone')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Direct Cloud Repo',
+            borg_version: 2,
+            path: 'rclone://prod-s3/borg-ui/direct',
+            storage_backend: 'rclone_direct',
+            execution_target: 'local',
+            executor_type: 'server',
+            connection_id: null,
+            cloud_mirror_enabled: false,
+            rclone_remote_id: null,
+            rclone_remote_path: null,
+            rclone_remote_path_verified: false,
+            rclone_extra_flags: [],
+          }),
+          null
+        )
+      })
+    }, 90000)
+
     it('submits a remote repository connection id', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')
@@ -962,7 +1016,7 @@ describe('RepositoryWizard', () => {
       await waitFor(() => {
         expect(screen.getByText(/Read-only storage access/i)).toBeInTheDocument()
       })
-      await user.click(screen.getByRole('checkbox'))
+      await user.click(screen.getByRole('checkbox', { name: /Read-only storage access/i }))
 
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Read Only Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/backup/readonly')
@@ -1021,6 +1075,33 @@ describe('RepositoryWizard', () => {
       expect(screen.getByText('Source')).toBeInTheDocument()
       expect(screen.getByText('Config')).toBeInTheDocument()
       expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/backups/legacy')
+    })
+
+    it('populates existing direct Borg 2 rclone repositories without showing Cloud Mirror', async () => {
+      renderWizard('edit', {
+        id: 8,
+        name: 'Direct Cloud Repo',
+        path: 'rclone://prod-s3/borg-ui/direct',
+        mode: 'full',
+        repository_type: 'rclone',
+        storage_backend: 'rclone_direct',
+        borg_version: 2,
+        encryption: 'repokey-aes-ocb',
+        compression: 'lz4',
+        rclone_storage: null,
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Direct Cloud Repo')
+      })
+
+      expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue(
+        'rclone://prod-s3/borg-ui/direct'
+      )
+      expect(
+        screen.getByRole('checkbox', { name: /Use direct Borg 2 rclone repository/i })
+      ).toBeChecked()
+      expect(screen.queryByText('Cloud Mirror')).not.toBeInTheDocument()
     })
 
     it('allows edit workflow without re-entering the passphrase', async () => {

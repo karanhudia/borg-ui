@@ -111,3 +111,21 @@ export const SshDestination: Story = {
     </Box>
   ),
 }
+
+export const DirectBorg2Rclone: Story = {
+  args: {
+    ...baseArgs,
+    data: {
+      ...baseArgs.data,
+      name: 'Direct Cloud Repository',
+      borgVersion: 2,
+      repositoryLocation: 'rclone',
+      path: 'rclone://prod-s3/borg-ui/direct',
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}

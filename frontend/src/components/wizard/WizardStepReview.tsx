@@ -143,6 +143,7 @@ export default function WizardStepReview({
   const hasBackupSource = data.repositoryMode === 'full' && data.sourceDirs.length > 0
   const hasPlanOwnedAgentSources =
     data.repositoryMode === 'full' && executionTarget === 'agent' && data.sourceDirs.length === 0
+  const isDirectRclone = data.repositoryLocation === 'rclone' && !data.cloudMirrorEnabled
   const hasBackupConfiguration =
     data.repositoryMode === 'full' &&
     (hasBackupSource || data.excludePatterns.length > 0 || Boolean(data.customFlags))
@@ -159,7 +160,7 @@ export default function WizardStepReview({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Backup Flow Preview */}
-      {hasBackupSource && (
+      {!isDirectRclone && hasBackupSource && (
         <BackupFlowPreview
           repositoryLocation={data.repositoryLocation}
           dataSource={data.dataSource}
@@ -171,26 +172,28 @@ export default function WizardStepReview({
       )}
 
       {/* Command Preview */}
-      {(data.dataSource === 'local' || data.dataSource === 'remote') && hasBackupSource && (
-        <CommandPreview
-          mode={mode === 'create' ? 'create' : 'import'}
-          borgVersion={data.borgVersion}
-          repositoryPath={data.path}
-          repositoryLocation={data.repositoryLocation}
-          host={repoDetails.host}
-          username={repoDetails.username}
-          port={repoDetails.port}
-          encryption={data.encryption}
-          compression={data.compression}
-          excludePatterns={data.excludePatterns}
-          sourceDirs={data.sourceDirs}
-          customFlags={data.customFlags}
-          remotePath={data.remotePath}
-          repositoryMode={data.repositoryMode}
-          dataSource={data.dataSource}
-          sourceSshConnection={getSourceSshConnection()}
-        />
-      )}
+      {!isDirectRclone &&
+        (data.dataSource === 'local' || data.dataSource === 'remote') &&
+        hasBackupSource && (
+          <CommandPreview
+            mode={mode === 'create' ? 'create' : 'import'}
+            borgVersion={data.borgVersion}
+            repositoryPath={data.path}
+            repositoryLocation={data.repositoryLocation}
+            host={repoDetails.host}
+            username={repoDetails.username}
+            port={repoDetails.port}
+            encryption={data.encryption}
+            compression={data.compression}
+            excludePatterns={data.excludePatterns}
+            sourceDirs={data.sourceDirs}
+            customFlags={data.customFlags}
+            remotePath={data.remotePath}
+            repositoryMode={data.repositoryMode}
+            dataSource={data.dataSource}
+            sourceSshConnection={getSourceSshConnection()}
+          />
+        )}
 
       {/* Manifest header + status chip */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -266,9 +269,11 @@ export default function WizardStepReview({
                   ? t('wizard.review.repositoryPathOnSelectedAgent')
                   : data.repositoryLocation === 'local'
                     ? t('wizard.review.borgUiServer')
-                    : data.repositoryLocation === 'rclone'
-                      ? t('wizard.review.rcloneStorage')
-                      : t('wizard.review.sshRemote')}
+                    : isDirectRclone
+                      ? t('wizard.review.directRclone')
+                      : data.repositoryLocation === 'rclone'
+                        ? t('wizard.review.rcloneStorage')
+                        : t('wizard.review.sshRemote')}
               </Typography>
             </Box>
           </ReviewAttrRow>
@@ -300,21 +305,16 @@ export default function WizardStepReview({
             <ReviewCodePill>{data.path || t('wizard.review.notSet')}</ReviewCodePill>
           </ReviewAttrRow>
 
-          {data.repositoryLocation === 'rclone' && !data.cloudMirrorEnabled && (
+          {isDirectRclone && (
             <>
               <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
                 <Typography variant="body2" fontSize="0.75rem">
-                  {t('wizard.location.rcloneRoutePreview')}
+                  {t('wizard.location.directRcloneRoutePreview')}
                 </Typography>
               </ReviewAttrRow>
-              <ReviewAttrRow label={t('wizard.review.rcloneRemotePath')}>
-                <ReviewCodePill>
-                  {data.rcloneRemotePath || t('wizard.review.notSet')}
-                </ReviewCodePill>
-              </ReviewAttrRow>
-              <ReviewAttrRow label={t('wizard.review.rcloneSyncPolicy')}>
+              <ReviewAttrRow label={t('wizard.review.directRcloneTradeoffsLabel')}>
                 <Typography variant="body2" fontSize="0.75rem">
-                  {getRcloneSyncPolicyLabel()}
+                  {t('wizard.review.directRcloneTradeoffs')}
                 </Typography>
               </ReviewAttrRow>
             </>

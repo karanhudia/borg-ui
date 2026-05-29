@@ -16,7 +16,7 @@ class BackupV2Service:
     """Version-specific Borg 2 backup helpers and execution."""
 
     def validate_local_repository_access(self, repo: Repository) -> None:
-        if not repo or repo.path.startswith("ssh://"):
+        if not repo or repo.path.startswith(("ssh://", "rclone:")):
             return
 
         if not os.path.isdir(repo.path):
