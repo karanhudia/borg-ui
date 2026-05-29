@@ -30,7 +30,7 @@ For a new setup, follow the sidebar in this order:
 | Hosts | Remote Machines | Add SSH-connected machines for remote repositories, remote backup sources, and SSH restore destinations. |
 | Hosts | Managed Agents | Enroll and manage Borg UI agents on remote machines. This appears when managed agents are enabled. |
 | Targets | Repositories | Create, import, inspect, maintain, and restore from Borg repositories. A repository is the storage target. |
-| Targets | Cloud Storage | Configure reusable rclone remotes for S3-compatible or other cloud-backed repository locations. |
+| Targets | Cloud Storage | Configure reusable rclone remotes for Cloud Mirror targets and advanced direct Borg 2 rclone repository URLs. |
 | Backups | Backup Plans | Define what to back up, where it should go, when it should run, and what maintenance should run afterward. |
 | Backups | Backup | Run older repository-based backups or legacy backup jobs. New workflows should usually start from Backup Plans. |
 | Backups | Schedule | Review scheduled repository work, scheduled restore checks, and plan schedules from one operational view. |

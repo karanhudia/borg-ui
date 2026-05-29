@@ -20,6 +20,7 @@ import CodeEditor from '../CodeEditor'
 import ResponsiveDialog from '../ResponsiveDialog'
 import type { RcloneOAuthSession, RcloneProvider } from '../../services/api'
 import { buildDownloadUrl } from '../../utils/downloadUrl'
+import { translateBackendKey } from '../../utils/translateBackendKey'
 
 export interface RcloneRemoteCreateInput {
   name: string
@@ -41,6 +42,7 @@ interface RcloneRemoteDialogProps {
   onStartOAuth?: (data: {
     provider: string
     config: Record<string, unknown>
+    mode?: 'auto' | 'borg_ui' | 'rclone_loopback'
   }) => Promise<RcloneOAuthSession>
   onGetOAuthSession?: (sessionId: string) => Promise<RcloneOAuthSession>
 }
@@ -116,6 +118,7 @@ export default function RcloneRemoteDialog({
   const [oauthError, setOauthError] = useState<string | null>(null)
   const [isStartingOAuth, setIsStartingOAuth] = useState(false)
   const [isCheckingOAuth, setIsCheckingOAuth] = useState(false)
+  const [borgUiOAuthProvider, setBorgUiOAuthProvider] = useState<string | null>(null)
   const oauthRequestIdRef = useRef(0)
   const resolvedProviderRef = useRef('local')
 
@@ -131,6 +134,17 @@ export default function RcloneRemoteDialog({
   const authLabel = t(`wizard.location.rcloneAuthTypes.${selectedProvider.auth_type}`, {
     defaultValue: selectedProvider.auth_type,
   })
+  const selectedOAuthMode =
+    selectedProvider.auth_type === 'oauth_token'
+      ? selectedProvider.oauth_mode || 'rclone_loopback'
+      : 'manual'
+  const usesBorgUiOAuth = selectedOAuthMode === 'borg_ui'
+  const borgUiOAuthConfigured = usesBorgUiOAuth && selectedProvider.oauth_configured === true
+  const canStartPrimaryOAuth = !usesBorgUiOAuth || borgUiOAuthConfigured
+  const callbackUrl = selectedProvider.oauth_callback_url || ''
+  const setupMessage = selectedProvider.oauth_setup_key
+    ? translateBackendKey(selectedProvider.oauth_setup_key)
+    : t('wizard.location.rcloneOAuthSetupMissing')
 
   useEffect(() => {
     resolvedProviderRef.current = resolvedProvider
@@ -142,6 +156,7 @@ export default function RcloneRemoteDialog({
     setOauthError(null)
     setIsStartingOAuth(false)
     setIsCheckingOAuth(false)
+    setBorgUiOAuthProvider(null)
   }, [])
 
   const isCurrentOAuthRequest = useCallback((requestId: number, provider: string) => {
@@ -204,6 +219,18 @@ export default function RcloneRemoteDialog({
     ) {
       return
     }
+    const marker =
+      typeof sessionConfig._borg_ui_oauth_provider === 'string'
+        ? sessionConfig._borg_ui_oauth_provider
+        : null
+    const visibleSessionConfig = Object.fromEntries(
+      Object.entries(sessionConfig).filter(([key]) => !key.startsWith('_borg_ui_oauth'))
+    )
+    if (marker === requestProvider) {
+      setBorgUiOAuthProvider(marker)
+    } else {
+      setBorgUiOAuthProvider(null)
+    }
     setConfigJson((currentJson) => {
       let currentConfig: Record<string, unknown>
       try {
@@ -214,17 +241,19 @@ export default function RcloneRemoteDialog({
       return formatConfigJson(
         {
           ...currentConfig,
-          ...sessionConfig,
-          type: sessionConfig.type || requestProvider,
+          ...visibleSessionConfig,
+          type: visibleSessionConfig.type || requestProvider,
         },
         requestProvider
       )
     })
   }
 
-  const handleStartOAuth = async () => {
+  const handleStartOAuth = async (modeOverride?: 'borg_ui' | 'rclone_loopback') => {
     if (!onStartOAuth || !resolvedProvider) return
     const requestProvider = resolvedProvider
+    const requestMode =
+      modeOverride ?? (usesBorgUiOAuth && borgUiOAuthConfigured ? 'borg_ui' : 'rclone_loopback')
     const requestId = (oauthRequestIdRef.current += 1)
     let currentConfig: Record<string, unknown>
     try {
@@ -237,7 +266,11 @@ export default function RcloneRemoteDialog({
     setOauthError(null)
     setIsStartingOAuth(true)
     try {
-      const session = await onStartOAuth({ provider: requestProvider, config: currentConfig })
+      const session = await onStartOAuth({
+        provider: requestProvider,
+        config: currentConfig,
+        mode: requestMode,
+      })
       if (!isCurrentOAuthRequest(requestId, requestProvider)) return
       setOauthSession(session)
       applyOAuthConfig(session, requestProvider, requestId)
@@ -320,6 +353,11 @@ export default function RcloneRemoteDialog({
     } catch {
       setLocalError(t('wizard.location.rcloneConfigInvalidJson'))
       return
+    }
+    if (borgUiOAuthProvider === remoteProvider) {
+      redactedConfig._borg_ui_oauth_provider = borgUiOAuthProvider
+    } else {
+      delete redactedConfig._borg_ui_oauth_provider
     }
 
     setLocalError(null)
@@ -430,6 +468,18 @@ export default function RcloneRemoteDialog({
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
             <Chip size="small" label={providerTypeLabel} />
             <Chip size="small" label={authLabel} variant="outlined" />
+            {selectedProvider.auth_type === 'oauth_token' ? (
+              <Chip
+                size="small"
+                variant={usesBorgUiOAuth ? 'filled' : 'outlined'}
+                color={usesBorgUiOAuth && borgUiOAuthConfigured ? 'success' : 'default'}
+                label={
+                  usesBorgUiOAuth
+                    ? t('wizard.location.rcloneOAuthModeBorgUi')
+                    : t('wizard.location.rcloneOAuthModeLoopback')
+                }
+              />
+            ) : null}
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
             {selectedProvider.description}
@@ -442,7 +492,21 @@ export default function RcloneRemoteDialog({
               sx={{ mt: 1.5 }}
             >
               <Stack spacing={1}>
-                <Typography variant="body2">{t('wizard.location.rcloneOAuthHelper')}</Typography>
+                <Typography variant="body2">
+                  {usesBorgUiOAuth
+                    ? borgUiOAuthConfigured
+                      ? t('wizard.location.rcloneOAuthBorgUiHelper')
+                      : setupMessage
+                    : t('wizard.location.rcloneOAuthLoopbackHelper')}
+                </Typography>
+                {usesBorgUiOAuth && callbackUrl ? (
+                  <Typography
+                    variant="caption"
+                    sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}
+                  >
+                    {t('wizard.location.rcloneOAuthCallbackUrl', { url: callbackUrl })}
+                  </Typography>
+                ) : null}
                 {oauthStatusMessage ? (
                   <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
                     {oauthStatusMessage}
@@ -457,8 +521,10 @@ export default function RcloneRemoteDialog({
                   <Button
                     size="small"
                     variant="contained"
-                    onClick={handleStartOAuth}
-                    disabled={!onStartOAuth || isCreating || isStartingOAuth}
+                    onClick={() => handleStartOAuth()}
+                    disabled={
+                      !onStartOAuth || isCreating || isStartingOAuth || !canStartPrimaryOAuth
+                    }
                     startIcon={
                       isStartingOAuth ? (
                         <CircularProgress size={14} color="inherit" />
@@ -469,8 +535,21 @@ export default function RcloneRemoteDialog({
                   >
                     {isStartingOAuth
                       ? t('wizard.location.rcloneOAuthStarting')
-                      : t('wizard.location.rcloneOAuthStart')}
+                      : usesBorgUiOAuth
+                        ? t('wizard.location.rcloneOAuthStartBorgUi')
+                        : t('wizard.location.rcloneOAuthStart')}
                   </Button>
+                  {usesBorgUiOAuth ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => handleStartOAuth('rclone_loopback')}
+                      disabled={!onStartOAuth || isCreating || isStartingOAuth}
+                      startIcon={<ExternalLink size={14} />}
+                    >
+                      {t('wizard.location.rcloneOAuthUseLoopback')}
+                    </Button>
+                  ) : null}
                   {oauthSession?.authorization_url ? (
                     <Button
                       size="small"

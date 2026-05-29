@@ -14,6 +14,10 @@ const providers: RcloneProvider[] = [
     docs_url: 'https://rclone.org/drive/',
     config_template: { type: 'drive', scope: 'drive', token: '' },
     fields: [{ name: 'token', label: 'OAuth token JSON', kind: 'json', secret: true }],
+    oauth_mode: 'borg_ui',
+    oauth_configured: true,
+    oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
+    oauth_setup_key: null,
   },
   {
     type: 'onedrive',
@@ -24,6 +28,10 @@ const providers: RcloneProvider[] = [
     docs_url: 'https://rclone.org/onedrive/',
     config_template: { type: 'onedrive', token: '' },
     fields: [{ name: 'token', label: 'OAuth token JSON', kind: 'json', secret: true }],
+    oauth_mode: 'borg_ui',
+    oauth_configured: true,
+    oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/onedrive',
+    oauth_setup_key: null,
   },
   {
     type: 's3',
@@ -108,8 +116,9 @@ const commonProps = {
     session_id: 'storybook-oauth',
     provider: 'drive',
     status: 'awaiting_callback' as const,
+    oauth_mode: 'borg_ui' as const,
     authorization_url: '/rclone/oauth/sessions/storybook-oauth/authorize',
-    local_authorization_url: 'http://127.0.0.1:53682/auth?state=storybook',
+    local_authorization_url: null,
     config: null,
     error: null,
   }),
@@ -117,11 +126,13 @@ const commonProps = {
     session_id: 'storybook-oauth',
     provider: 'drive',
     status: 'authorized' as const,
+    oauth_mode: 'borg_ui' as const,
     authorization_url: '/rclone/oauth/sessions/storybook-oauth/authorize',
-    local_authorization_url: 'http://127.0.0.1:53682/auth?state=storybook',
+    local_authorization_url: null,
     config: {
       type: 'drive',
       token: '{"access_token":"storybook","refresh_token":"storybook"}',
+      _borg_ui_oauth_provider: 'drive',
     },
     error: null,
   }),
@@ -188,6 +199,27 @@ export const EditingRemote: Story = {
 export const AddGuidedRemote: Story = {
   render: () =>
     renderPage(<CloudStorageContent {...commonProps} remotes={remotes} addDialogOpen />),
+}
+
+export const AddGuidedRemoteSetupMissing: Story = {
+  render: () =>
+    renderPage(
+      <CloudStorageContent
+        {...commonProps}
+        providers={providers.map((provider) =>
+          provider.type === 'drive'
+            ? {
+                ...provider,
+                oauth_configured: false,
+                oauth_callback_url: null,
+                oauth_setup_key: 'backend.errors.rclone.oauthPublicBaseUrlRequired',
+              }
+            : provider
+        )}
+        remotes={remotes}
+        addDialogOpen
+      />
+    ),
 }
 
 export const DeleteConfirmation: Story = {

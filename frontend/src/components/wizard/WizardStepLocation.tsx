@@ -80,6 +80,8 @@ export default function WizardStepLocation({
   const executionTarget = data.executionTarget ?? 'local'
   const agentMachineId = data.agentMachineId ?? ''
   const isAgentExecution = executionTarget === 'agent'
+  const isDirectRclone = data.repositoryLocation === 'rclone'
+  const borgVersion = data.borgVersion ?? 1
 
   // Disable SSH repository location if data source is remote (prevent remote-to-remote)
   // Only enforce this in edit mode when we know the data source
@@ -102,6 +104,16 @@ export default function WizardStepLocation({
     onChange({
       repositoryLocation: 'local',
       executionTarget: 'agent',
+      repoSshConnectionId: '',
+    })
+  }
+
+  const handleDirectRcloneChange = (checked: boolean) => {
+    onChange({
+      borgVersion: 2,
+      repositoryLocation: checked ? 'rclone' : 'local',
+      executionTarget: 'local',
+      agentMachineId: '',
       repoSshConnectionId: '',
     })
   }
@@ -390,6 +402,55 @@ export default function WizardStepLocation({
         )}
       </Box>
 
+      <Box
+        sx={{
+          border: '1px solid',
+          borderColor: isDirectRclone ? 'warning.main' : 'divider',
+          bgcolor: (theme) => alpha(theme.palette.warning.main, isDirectRclone ? 0.08 : 0.03),
+          borderRadius: 1,
+          p: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Typography variant="subtitle2" fontWeight={700}>
+            {t('wizard.location.directRcloneAdvancedTitle')}
+          </Typography>
+          <Chip
+            label="Borg 2"
+            size="small"
+            variant="outlined"
+            color="warning"
+            sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+          />
+        </Box>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={isDirectRclone}
+              disabled={borgVersion !== 2}
+              onChange={(event) => handleDirectRcloneChange(event.target.checked)}
+            />
+          }
+          label={
+            <Box>
+              <Typography variant="body2" fontWeight={600}>
+                {t('wizard.location.directRcloneLabel')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {t(
+                  borgVersion === 2
+                    ? 'wizard.location.directRcloneHelper'
+                    : 'wizard.location.directRcloneUnavailable'
+                )}
+              </Typography>
+            </Box>
+          }
+        />
+      </Box>
+
       {isAgentExecution && (
         <>
           {queueableAgents.length === 0 ? (
@@ -497,15 +558,27 @@ export default function WizardStepLocation({
 
       {/* Path Input */}
       <TextField
-        label={t('wizard.location.repositoryPathLabel')}
+        label={
+          isDirectRclone
+            ? t('wizard.location.directRclonePathLabel')
+            : t('wizard.location.repositoryPathLabel')
+        }
         value={data.path}
         onChange={(e) => onChange({ path: e.target.value })}
         placeholder={
-          data.repositoryLocation === 'local' ? '/backups/my-repo' : '/path/on/remote/server'
+          isDirectRclone
+            ? t('wizard.location.directRclonePathPlaceholder')
+            : data.repositoryLocation === 'local'
+              ? '/backups/my-repo'
+              : '/path/on/remote/server'
         }
         required
         fullWidth
-        helperText={t('wizard.location.repositoryPathHelper')}
+        helperText={
+          isDirectRclone
+            ? t('wizard.location.directRclonePathHelper')
+            : t('wizard.location.repositoryPathHelper')
+        }
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">
@@ -515,6 +588,7 @@ export default function WizardStepLocation({
                 size="small"
                 title={t('wizard.location.browseFilesystem')}
                 disabled={
+                  isDirectRclone ||
                   (isAgentExecution && !data.agentMachineId) ||
                   (data.repositoryLocation === 'ssh' && !data.repoSshConnectionId)
                 }

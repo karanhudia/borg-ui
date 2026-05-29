@@ -1,4 +1,5 @@
 import importlib
+import json
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -13,15 +14,34 @@ from sqlalchemy.orm import sessionmaker
 from app.core.security import get_password_hash
 from app.database.models import (
     AgentMachine,
+    LicensingState,
     Repository,
     RepositoryStorage,
     RcloneSyncJob,
     RcloneRemote,
     SSHConnection,
+    SystemSettings,
 )
 from app.services.rclone_service import RcloneCommandResult
 from app.services.rclone_service import RcloneUnavailable
 from tests.unit.helpers import assert_auth_required
+
+
+def _enable_borg_v2(test_db):
+    settings_row = test_db.query(SystemSettings).first()
+    if settings_row is None:
+        settings_row = SystemSettings()
+        test_db.add(settings_row)
+
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="test-rclone-direct-borg2")
+        test_db.add(state)
+
+    state.plan = "pro"
+    state.status = "active"
+    state.is_trial = False
+    test_db.commit()
 
 
 class FakeRcloneStdout:
@@ -101,6 +121,330 @@ def test_list_rclone_providers_includes_popular_guided_sources(
     assert providers["onedrive"]["auth_type"] == "oauth_token"
     assert providers["custom"]["type_editable"] is True
     assert any(field["name"] == "token" for field in providers["drive"]["fields"])
+
+
+@pytest.mark.unit
+def test_rclone_provider_metadata_reports_borg_ui_oauth_callbacks_without_secrets(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com/borg-ui",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.onedrive_oauth_client_id",
+        "onedrive-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.onedrive_oauth_client_secret",
+        "onedrive-client-secret",
+    )
+
+    response = test_client.get("/api/rclone/providers", headers=admin_headers)
+
+    assert response.status_code == 200
+    providers = {
+        provider["type"]: provider for provider in response.json()["providers"]
+    }
+    assert providers["drive"]["oauth_mode"] == "borg_ui"
+    assert providers["drive"]["oauth_configured"] is True
+    assert (
+        providers["drive"]["oauth_callback_url"]
+        == "https://backups.example.com/borg-ui/api/rclone/oauth/callback/drive"
+    )
+    assert providers["onedrive"]["oauth_mode"] == "borg_ui"
+    assert providers["onedrive"]["oauth_configured"] is True
+    assert (
+        providers["onedrive"]["oauth_callback_url"]
+        == "https://backups.example.com/borg-ui/api/rclone/oauth/callback/onedrive"
+    )
+    assert providers["dropbox"]["oauth_mode"] == "rclone_loopback"
+    serialized = json.dumps(response.json())
+    assert "google-client-id" not in serialized
+    assert "google-client-secret" not in serialized
+    assert "onedrive-client-id" not in serialized
+    assert "onedrive-client-secret" not in serialized
+
+
+@pytest.mark.unit
+def test_start_borg_ui_oauth_session_requires_valid_public_base_url(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    monkeypatch.setattr("app.api.rclone.settings.public_base_url", None)
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "drive", "mode": "borg_ui"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {
+        "key": "backend.errors.rclone.oauthPublicBaseUrlRequired"
+    }
+
+
+@pytest.mark.unit
+def test_start_borg_ui_oauth_session_returns_backend_authorize_url_not_loopback(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={
+            "provider": "drive",
+            "mode": "borg_ui",
+            "config": {"type": "drive", "scope": "drive.readonly"},
+        },
+    )
+
+    assert response.status_code == 201
+    started = response.json()
+    assert started["provider"] == "drive"
+    assert started["status"] == "awaiting_callback"
+    assert (
+        started["authorization_url"]
+        == f"/rclone/oauth/sessions/{started['session_id']}/authorize"
+    )
+    assert started["local_authorization_url"] is None
+    assert started["config"] is None
+    assert "google-client-id" not in json.dumps(started)
+    session = rclone_api.RCLONE_OAUTH_SESSIONS[started["session_id"]]
+    assert session["flow"] == "borg_ui"
+    assert session["state"]
+    assert (
+        "accounts.google.com/o/oauth2/v2/auth" in session["provider_authorization_url"]
+    )
+    assert "127.0.0.1:53682" not in session["provider_authorization_url"]
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_borg_ui_oauth_callback_validates_state_and_exchanges_code(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    async def fake_exchange(provider: str, code: str, redirect_uri: str):
+        assert provider == "drive"
+        assert code == "provider-code"
+        assert (
+            redirect_uri
+            == "https://backups.example.com/api/rclone/oauth/callback/drive"
+        )
+        return {
+            "access_token": "real-access",
+            "refresh_token": "real-refresh",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }
+
+    monkeypatch.setattr(
+        rclone_api, "_exchange_borg_ui_oauth_code", fake_exchange, raising=False
+    )
+
+    start_response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "drive", "mode": "borg_ui"},
+    )
+    session_id = start_response.json()["session_id"]
+    state = rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["state"]
+
+    bad_state_response = test_client.get(
+        "/api/rclone/oauth/callback/drive",
+        params={"state": "wrong", "code": "provider-code"},
+    )
+
+    assert bad_state_response.status_code == 400
+    assert rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["status"] == "awaiting_callback"
+
+    callback_response = test_client.get(
+        "/api/rclone/oauth/callback/drive",
+        params={"state": state, "code": "provider-code"},
+    )
+
+    assert callback_response.status_code == 200
+    assert "Authorization complete" in callback_response.text
+    poll_response = test_client.get(
+        f"/api/rclone/oauth/sessions/{session_id}",
+        headers=admin_headers,
+    )
+    assert poll_response.status_code == 200
+    polled = poll_response.json()
+    assert polled["status"] == "authorized"
+    assert polled["config"]["type"] == "drive"
+    assert json.loads(polled["config"]["token"])["refresh_token"] == "real-refresh"
+    assert polled["config"]["_borg_ui_oauth_provider"] == "drive"
+    assert "google-client-secret" not in json.dumps(polled)
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_onedrive_oauth_callback_discovers_default_drive_for_rclone_config(
+    test_client: TestClient, admin_headers, monkeypatch
+):
+    from app.api import rclone as rclone_api
+
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.onedrive_oauth_client_id",
+        "onedrive-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.onedrive_oauth_client_secret",
+        "onedrive-client-secret",
+    )
+
+    async def fake_exchange(provider: str, code: str, redirect_uri: str):
+        assert provider == "onedrive"
+        assert code == "provider-code"
+        assert (
+            redirect_uri
+            == "https://backups.example.com/api/rclone/oauth/callback/onedrive"
+        )
+        return {
+            "access_token": "onedrive-access",
+            "refresh_token": "onedrive-refresh",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+        }
+
+    async def fake_default_drive(access_token: str):
+        assert access_token == "onedrive-access"
+        return {"id": "default-drive-id", "driveType": "business"}
+
+    monkeypatch.setattr(
+        rclone_api, "_exchange_borg_ui_oauth_code", fake_exchange, raising=False
+    )
+    monkeypatch.setattr(
+        rclone_api, "_fetch_onedrive_default_drive", fake_default_drive, raising=False
+    )
+
+    start_response = test_client.post(
+        "/api/rclone/oauth/sessions",
+        headers=admin_headers,
+        json={"provider": "onedrive", "mode": "borg_ui"},
+    )
+    session_id = start_response.json()["session_id"]
+    state = rclone_api.RCLONE_OAUTH_SESSIONS[session_id]["state"]
+
+    callback_response = test_client.get(
+        "/api/rclone/oauth/callback/onedrive",
+        params={"state": state, "code": "provider-code"},
+    )
+
+    assert callback_response.status_code == 200
+    poll_response = test_client.get(
+        f"/api/rclone/oauth/sessions/{session_id}",
+        headers=admin_headers,
+    )
+    polled = poll_response.json()
+    assert polled["status"] == "authorized"
+    assert polled["config"]["type"] == "onedrive"
+    assert polled["config"]["drive_id"] == "default-drive-id"
+    assert polled["config"]["drive_type"] == "business"
+    assert json.loads(polled["config"]["token"])["refresh_token"] == "onedrive-refresh"
+    assert polled["config"]["_borg_ui_oauth_provider"] == "onedrive"
+    rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+def test_create_borg_ui_oauth_remote_injects_provider_credentials_and_redacts_response(
+    test_client: TestClient, admin_headers, tmp_path, monkeypatch
+):
+    config_root = tmp_path / "rclone"
+    monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        "app.api.rclone.settings.google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "gdrive-prod",
+            "provider": "drive",
+            "config_source": "managed",
+            "redacted_config": {
+                "type": "drive",
+                "scope": "drive",
+                "token": '{"access_token":"real-access","refresh_token":"real-refresh"}',
+                "_borg_ui_oauth_provider": "drive",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    created = response.json()
+    assert created["redacted_config"]["token"] == "***"
+    serialized = json.dumps(created)
+    assert "google-client-id" not in serialized
+    assert "google-client-secret" not in serialized
+    assert "real-access" not in serialized
+    config_body = (config_root / "rclone.conf").read_text(encoding="utf-8")
+    assert (
+        'token = {"access_token":"real-access","refresh_token":"real-refresh"}'
+        in config_body
+    )
+    assert "client_id = google-client-id" in config_body
+    assert "client_secret = google-client-secret" in config_body
+    assert "_borg_ui_oauth_provider" not in config_body
 
 
 @pytest.mark.unit
@@ -200,6 +544,95 @@ def test_rclone_oauth_authorization_url_redirects_through_backend(
         == "https://accounts.google.com/o/oauth2/v2/auth?state=abc"
     )
     rclone_api.RCLONE_OAUTH_SESSIONS.clear()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_exchange_borg_ui_oauth_code_maps_malformed_json_to_exchange_error(
+    monkeypatch,
+):
+    from app.api import rclone as rclone_api
+
+    monkeypatch.setattr(
+        rclone_api.settings,
+        "google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        rclone_api.settings,
+        "google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    class MalformedJsonResponse:
+        status_code = 200
+
+        def json(self):
+            raise ValueError("malformed provider response")
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, *_args, **_kwargs):
+            return MalformedJsonResponse()
+
+    monkeypatch.setattr(rclone_api.httpx, "AsyncClient", FakeAsyncClient)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await rclone_api._exchange_borg_ui_oauth_code(
+            "drive",
+            "provider-code",
+            "https://backups.example.com/api/rclone/oauth/callback/drive",
+        )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == {
+        "key": "backend.errors.rclone.oauthCodeExchangeFailed"
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fetch_onedrive_default_drive_maps_malformed_json_to_exchange_error(
+    monkeypatch,
+):
+    from app.api import rclone as rclone_api
+
+    class MalformedJsonResponse:
+        status_code = 200
+
+        def json(self):
+            raise ValueError("malformed graph response")
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def get(self, *_args, **_kwargs):
+            return MalformedJsonResponse()
+
+    monkeypatch.setattr(rclone_api.httpx, "AsyncClient", FakeAsyncClient)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await rclone_api._fetch_onedrive_default_drive("access-token")
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == {
+        "key": "backend.errors.rclone.oauthCodeExchangeFailed"
+    }
 
 
 @pytest.mark.unit
@@ -2041,6 +2474,411 @@ def test_create_rclone_repository_derives_cache_path_and_syncs(
     assert storage.sync_status == "current"
     assert response.json()["repository"]["rclone_storage"]["rclone_target"] == (
         "prod-s3:borg-ui/repositories/app"
+    )
+
+
+@pytest.mark.unit
+def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    _enable_borg_v2(test_db)
+    init_mock = AsyncMock(return_value={"success": True, "already_existed": False})
+    sync_mock = AsyncMock()
+    v2_create_mock = AsyncMock(
+        return_value={"success": True, "stdout": "", "stderr": ""}
+    )
+    monkeypatch.setattr("app.api.repositories.initialize_borg_repository", init_mock)
+    monkeypatch.setattr(
+        "app.api.repositories.rclone_repository_service.sync_repository", sync_mock
+    )
+    monkeypatch.setattr("app.api.v2.repositories._rcreate", v2_create_mock)
+    mqtt_reasons = []
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda _db, *, reason: mqtt_reasons.append(reason),
+    )
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json={
+            "name": "Direct Borg2 Cloud Repo",
+            "path": "rclone://prod-s3/borg-ui/direct",
+            "borg_version": 2,
+            "encryption": "none",
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository)
+        .filter(Repository.name == "Direct Borg2 Cloud Repo")
+        .one()
+    )
+    assert repository.path == "rclone://prod-s3/borg-ui/direct"
+    assert repository.repository_type == "rclone"
+    assert repository.borg_version == 2
+    assert (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+        is None
+    )
+    assert response.json()["repository"]["storage_backend"] == "rclone_direct"
+    init_mock.assert_awaited_once()
+    assert init_mock.await_args.kwargs["borg_version"] == 2
+    sync_mock.assert_not_awaited()
+    v2_create_mock.assert_not_awaited()
+    assert mqtt_reasons == ["repository creation"]
+
+
+@pytest.mark.unit
+def test_import_direct_borg2_rclone_repository_verifies_url_without_hydrate(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    _enable_borg_v2(test_db)
+    verify_mock = AsyncMock(
+        return_value={"success": True, "info": {"encryption": {"mode": "none"}}}
+    )
+    hydrate_mock = AsyncMock(return_value={"sync_status": "current"})
+    v2_info_mock = AsyncMock(
+        return_value={"success": True, "stdout": '{"repository": {"id": "abc"}}'}
+    )
+    monkeypatch.setattr("app.api.repositories.verify_existing_repository", verify_mock)
+    monkeypatch.setattr(
+        "app.api.repositories.rclone_repository_service.hydrate_repository",
+        hydrate_mock,
+    )
+    monkeypatch.setattr("app.api.v2.repositories._rinfo", v2_info_mock)
+    mqtt_reasons = []
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda _db, *, reason: mqtt_reasons.append(reason),
+    )
+
+    response = test_client.post(
+        "/api/repositories/import",
+        headers=admin_headers,
+        json={
+            "name": "Imported Direct Borg2 Cloud Repo",
+            "path": "rclone://prod-s3/borg-ui/imported",
+            "borg_version": 2,
+            "encryption": "none",
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository)
+        .filter(Repository.name == "Imported Direct Borg2 Cloud Repo")
+        .one()
+    )
+    assert repository.path == "rclone://prod-s3/borg-ui/imported"
+    assert repository.repository_type == "rclone"
+    assert repository.borg_version == 2
+    assert (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+        is None
+    )
+    assert response.json()["repository"]["storage_backend"] == "rclone_direct"
+    verify_mock.assert_awaited_once()
+    assert verify_mock.await_args.kwargs["borg_version"] == 2
+    hydrate_mock.assert_not_awaited()
+    v2_info_mock.assert_not_awaited()
+    assert mqtt_reasons == ["repository import"]
+
+
+@pytest.mark.unit
+def test_import_direct_borg2_rclone_repository_persists_keyfile_before_verify(
+    test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+):
+    _enable_borg_v2(test_db)
+    repo_path = "rclone://prod-s3/borg-ui/keyfile-import"
+    keyfile_content = "BORG_KEY test-keyfile"
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    async def verify_repository(**kwargs):
+        from app.api.repositories import _borg_keyfile_name
+
+        keyfile_path = (
+            tmp_path / ".config" / "borg" / "keys" / _borg_keyfile_name(repo_path)
+        )
+        assert kwargs["path"] == repo_path
+        assert keyfile_path.read_text() == keyfile_content
+        assert keyfile_path.stat().st_mode & 0o777 == 0o600
+        return {
+            "success": True,
+            "info": {"encryption": {"mode": "keyfile-aes-ocb"}},
+        }
+
+    monkeypatch.setattr(
+        "app.api.repositories.verify_existing_repository", verify_repository
+    )
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda *args, **kwargs: None,
+    )
+
+    response = test_client.post(
+        "/api/repositories/import",
+        headers=admin_headers,
+        json={
+            "name": "Imported Direct Keyfile Repo",
+            "path": repo_path,
+            "borg_version": 2,
+            "encryption": "keyfile-aes-ocb",
+            "passphrase": "secret",
+            "keyfile_content": keyfile_content,
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository)
+        .filter(Repository.name == "Imported Direct Keyfile Repo")
+        .one()
+    )
+    assert repository.has_keyfile is True
+    assert response.json()["repository"]["storage_backend"] == "rclone_direct"
+
+
+@pytest.mark.unit
+def test_get_direct_borg2_rclone_repository_reports_direct_storage_backend(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    repository = Repository(
+        name="Direct Repo Detail",
+        path="rclone://prod-s3/borg-ui/direct-detail",
+        encryption="none",
+        compression="lz4",
+        repository_type="rclone",
+        execution_target="local",
+        executor_type="server",
+        borg_version=2,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.api.repositories.get_repository_stats",
+        AsyncMock(return_value={"total_size": 0, "archive_count": 0}),
+    )
+
+    response = test_client.get(
+        f"/api/repositories/{repository.id}", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["repository"]
+    assert payload["repository_type"] == "rclone"
+    assert payload["storage_backend"] == "rclone_direct"
+    assert "rclone_storage" not in payload
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("payload_overrides", "expected_key"),
+    [
+        (
+            {"borg_version": 1},
+            "backend.errors.rclone.directBorg2Required",
+        ),
+        (
+            {"path": "/tmp/not-a-rclone-url"},
+            "backend.errors.rclone.directInvalidUrl",
+        ),
+        (
+            {
+                "cloud_mirror_enabled": True,
+                "rclone_remote_id": 1,
+                "rclone_remote_path": "borg-ui/mirror",
+            },
+            "backend.errors.rclone.directIncompatiblePayload",
+        ),
+        (
+            {"rclone_sync_policy": "manual"},
+            "backend.errors.rclone.directIncompatiblePayload",
+        ),
+        (
+            {"connection_id": 1},
+            "backend.errors.rclone.directIncompatiblePayload",
+        ),
+        (
+            {
+                "executor_type": "agent",
+                "execution_target": "agent",
+                "agent_machine_id": 1,
+            },
+            "backend.errors.rclone.directIncompatiblePayload",
+        ),
+    ],
+)
+def test_direct_borg2_rclone_repository_validates_incompatible_create_payloads(
+    test_client: TestClient,
+    admin_headers,
+    test_db,
+    payload_overrides,
+    expected_key,
+):
+    _enable_borg_v2(test_db)
+    if payload_overrides.get("rclone_remote_id"):
+        test_db.add(RcloneRemote(id=1, name="prod-s3", provider="s3"))
+    if payload_overrides.get("connection_id"):
+        test_db.add(
+            SSHConnection(
+                id=1,
+                host="server.example.com",
+                username="borg",
+                port=22,
+                ssh_key_id=1,
+            )
+        )
+    test_db.commit()
+
+    payload = {
+        "name": "Invalid Direct Borg2 Cloud Repo",
+        "path": "rclone://prod-s3/borg-ui/direct",
+        "borg_version": 2,
+        "encryption": "none",
+        "storage_backend": "rclone_direct",
+    }
+    payload.update(payload_overrides)
+
+    response = test_client.post(
+        "/api/repositories/",
+        headers=admin_headers,
+        json=payload,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["key"] == expected_key
+
+
+@pytest.mark.unit
+def test_update_normal_repository_rejects_switching_to_direct_rclone_mode(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    repository = Repository(
+        name="Normal Repo",
+        path="/backups/normal",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        borg_version=2,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.api.repositories.BorgRouter.verify_repository",
+        AsyncMock(return_value={"success": True}),
+    )
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "path": "rclone://prod-s3/borg-ui/direct",
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["key"] == "backend.errors.rclone.updateUnsupported"
+
+
+@pytest.mark.unit
+def test_update_direct_borg2_rclone_repository_accepts_noop_form_fields(
+    test_client: TestClient, admin_headers, test_db
+):
+    repository = Repository(
+        name="Direct Repo",
+        path="rclone://prod-s3/borg-ui/direct",
+        encryption="none",
+        compression="lz4",
+        repository_type="rclone",
+        execution_target="local",
+        executor_type="server",
+        borg_version=2,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "name": "Direct Repo Renamed",
+            "path": "rclone://prod-s3/borg-ui/direct",
+            "storage_backend": "rclone_direct",
+            "execution_target": "local",
+            "executor_type": "server",
+            "agent_machine_id": None,
+            "connection_id": None,
+            "cloud_mirror_enabled": False,
+            "rclone_remote_id": None,
+            "rclone_remote_path": None,
+            "rclone_remote_path_verified": False,
+            "rclone_sync_policy": "after_success",
+            "rclone_extra_flags": [],
+            "rclone_cache_path": None,
+        },
+    )
+
+    assert response.status_code == 200
+    test_db.refresh(repository)
+    assert repository.name == "Direct Repo Renamed"
+    assert repository.path == "rclone://prod-s3/borg-ui/direct"
+    assert repository.repository_type == "rclone"
+    assert repository.connection_id is None
+    assert repository.agent_machine_id is None
+    assert (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+        is None
+    )
+
+
+@pytest.mark.unit
+def test_update_direct_borg2_rclone_repository_rejects_mirror_fields(
+    test_client: TestClient, admin_headers, test_db
+):
+    repository = Repository(
+        name="Direct Repo",
+        path="rclone://prod-s3/borg-ui/direct",
+        encryption="none",
+        compression="lz4",
+        repository_type="rclone",
+        execution_target="local",
+        executor_type="server",
+        borg_version=2,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "storage_backend": "rclone_direct",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": 1,
+            "rclone_remote_path": "borg-ui/mirror",
+        },
+    )
+
+    assert response.status_code == 400
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.rclone.directIncompatiblePayload"
     )
 
 

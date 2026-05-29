@@ -101,9 +101,15 @@ class RcloneService:
             "--s3-access-key-id",
             "--s3-secret-access-key",
             "--token",
+            "--access-token",
+            "--auth-code",
+            "--authorization-code",
+            "--client-id",
             "--client-secret",
+            "--code-verifier",
             "--drive-client-secret",
             "--b2-key",
+            "--refresh-token",
         }
         redacted: list[str] = []
         redact_next = False
