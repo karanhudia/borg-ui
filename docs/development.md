@@ -56,6 +56,14 @@ http://localhost:7879/api/rclone/oauth/callback/drive
 http://localhost:7879/api/rclone/oauth/callback/onedrive
 ```
 
+To obtain OAuth credentials, create a Google Cloud project in the
+[Google Cloud Console](https://console.cloud.google.com/) and enable the Google
+Drive API, or register a Microsoft Entra application in the
+[Azure portal](https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
+for OneDrive. If the `PUBLIC_BASE_URL`, client ID, or client secret values are
+not configured, Google Drive and OneDrive fall back to rclone's loopback/manual
+authorization flow.
+
 The callback hits Vite on port `7879`, and Vite proxies `/api` to the backend
 container on `DEV_PORT` (`8083` by default). The client secrets stay in the
 backend environment; they are not sent to the frontend.
