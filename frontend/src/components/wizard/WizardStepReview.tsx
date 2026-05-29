@@ -65,6 +65,8 @@ export interface WizardReviewData {
   rcloneRemoteName?: string
   rcloneRemotePath?: string
   rcloneSyncPolicy?: 'after_success' | 'manual' | 'scheduled'
+  rcloneSyncCronExpression?: string
+  rcloneSyncTimezone?: string
 }
 
 interface WizardStepReviewProps {
@@ -317,6 +319,15 @@ export default function WizardStepReview({
                   {t('wizard.review.directRcloneTradeoffs')}
                 </Typography>
               </ReviewAttrRow>
+              {data.rcloneSyncPolicy === 'scheduled' && (
+                <ReviewAttrRow label={t('wizard.review.rcloneSyncSchedule')}>
+                  <ReviewCodePill>
+                    {`${data.rcloneSyncCronExpression || t('wizard.review.notSet')} · ${
+                      data.rcloneSyncTimezone || 'UTC'
+                    }`}
+                  </ReviewCodePill>
+                </ReviewAttrRow>
+              )}
             </>
           )}
         </ReviewSectionCard>
@@ -340,6 +351,15 @@ export default function WizardStepReview({
                 {getRcloneSyncPolicyLabel()}
               </Typography>
             </ReviewAttrRow>
+            {data.rcloneSyncPolicy === 'scheduled' && (
+              <ReviewAttrRow label={t('wizard.review.rcloneSyncSchedule')}>
+                <ReviewCodePill>
+                  {`${data.rcloneSyncCronExpression || t('wizard.review.notSet')} · ${
+                    data.rcloneSyncTimezone || 'UTC'
+                  }`}
+                </ReviewCodePill>
+              </ReviewAttrRow>
+            )}
           </ReviewSectionCard>
         )}
 

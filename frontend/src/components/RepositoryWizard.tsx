@@ -79,6 +79,8 @@ interface WizardState {
   rcloneRemotePath: string
   rcloneRemotePathVerified: boolean
   rcloneSyncPolicy: 'after_success' | 'manual' | 'scheduled'
+  rcloneSyncCronExpression: string
+  rcloneSyncTimezone: string
   rcloneExtraFlags: string
   // Data source step
   dataSource: 'local' | 'remote'
@@ -116,6 +118,8 @@ const createInitialState = (): WizardState => ({
   rcloneRemotePath: '',
   rcloneRemotePathVerified: false,
   rcloneSyncPolicy: 'after_success',
+  rcloneSyncCronExpression: '0 */6 * * *',
+  rcloneSyncTimezone: 'UTC',
   rcloneExtraFlags: '',
   dataSource: 'local',
   sourceSshConnectionId: '',
@@ -372,6 +376,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
       rcloneSyncPolicy:
         (repository.rclone_storage?.sync_policy as 'after_success' | 'manual' | 'scheduled') ||
         'after_success',
+      rcloneSyncCronExpression: String(
+        repository.rclone_storage?.sync_cron_expression || '0 */6 * * *'
+      ),
+      rcloneSyncTimezone: String(repository.rclone_storage?.sync_timezone || 'UTC'),
       rcloneExtraFlags: Array.isArray(repository.rclone_storage?.extra_flags)
         ? repository.rclone_storage.extra_flags.join(' ')
         : '',
@@ -662,6 +670,10 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         if (!isCloudMirrorEligible(wizardState)) return false
         if (rcloneStatus?.available !== true) return false
         if (!wizardState.rcloneRemoteId || !wizardState.rcloneRemotePath.trim()) return false
+        if (wizardState.rcloneSyncPolicy === 'scheduled') {
+          if (!wizardState.rcloneSyncCronExpression.trim()) return false
+          if (!wizardState.rcloneSyncTimezone.trim()) return false
+        }
         return true
 
       case 'source':
@@ -754,6 +766,14 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         ? wizardState.rcloneRemotePathVerified
         : false,
       rclone_sync_policy: cloudMirrorEnabled ? wizardState.rcloneSyncPolicy : 'after_success',
+      rclone_sync_cron_expression:
+        cloudMirrorEnabled && wizardState.rcloneSyncPolicy === 'scheduled'
+          ? wizardState.rcloneSyncCronExpression
+          : null,
+      rclone_sync_timezone:
+        cloudMirrorEnabled && wizardState.rcloneSyncPolicy === 'scheduled'
+          ? wizardState.rcloneSyncTimezone
+          : null,
       rclone_extra_flags: cloudMirrorEnabled
         ? wizardState.rcloneExtraFlags.split(/\s+/).filter(Boolean)
         : [],
@@ -877,6 +897,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               rcloneRemotePath: wizardState.rcloneRemotePath,
               rcloneRemotePathVerified: wizardState.rcloneRemotePathVerified,
               rcloneSyncPolicy: wizardState.rcloneSyncPolicy,
+              rcloneSyncCronExpression: wizardState.rcloneSyncCronExpression,
+              rcloneSyncTimezone: wizardState.rcloneSyncTimezone,
               rcloneExtraFlags: wizardState.rcloneExtraFlags,
             }}
             rcloneStatus={rcloneStatus}
@@ -1022,6 +1044,8 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               rcloneRemoteName: selectedRcloneRemote?.name,
               rcloneRemotePath: wizardState.rcloneRemotePath,
               rcloneSyncPolicy: wizardState.rcloneSyncPolicy,
+              rcloneSyncCronExpression: wizardState.rcloneSyncCronExpression,
+              rcloneSyncTimezone: wizardState.rcloneSyncTimezone,
             }}
             sshConnections={sshConnections}
             agentMachines={agentMachines}

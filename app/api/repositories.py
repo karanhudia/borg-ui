@@ -18,6 +18,7 @@ from app.database.models import (
     Repository,
     RepositoryStorage,
     RcloneRemote,
+    RcloneSyncJob,
     AgentMachine,
     CheckJob,
     CompactJob,
@@ -860,6 +861,8 @@ class RepositoryCreate(BaseModel):
     cloud_mirror_enabled: bool = False
     rclone_remote_path_verified: bool = False
     rclone_sync_policy: str = "after_success"
+    rclone_sync_cron_expression: Optional[str] = None
+    rclone_sync_timezone: Optional[str] = None
     rclone_extra_flags: Optional[List[str]] = None
     rclone_cache_path: Optional[str] = None
 
@@ -911,6 +914,8 @@ class RepositoryImport(BaseModel):
     cloud_mirror_enabled: bool = False
     rclone_remote_path_verified: bool = False
     rclone_sync_policy: str = "after_success"
+    rclone_sync_cron_expression: Optional[str] = None
+    rclone_sync_timezone: Optional[str] = None
     rclone_extra_flags: Optional[List[str]] = None
     rclone_cache_path: Optional[str] = None
 
@@ -952,6 +957,8 @@ class RepositoryUpdate(BaseModel):
     cloud_mirror_enabled: Optional[bool] = None
     rclone_remote_path_verified: Optional[bool] = None
     rclone_sync_policy: Optional[str] = None
+    rclone_sync_cron_expression: Optional[str] = None
+    rclone_sync_timezone: Optional[str] = None
     rclone_extra_flags: Optional[List[str]] = None
     rclone_cache_path: Optional[str] = None
 
@@ -1143,6 +1150,8 @@ def _validate_direct_rclone_payload(
         or bool((data.rclone_remote_path or "").strip())
         or bool(data.rclone_extra_flags)
         or data.rclone_sync_policy != "after_success"
+        or bool((data.rclone_sync_cron_expression or "").strip())
+        or bool((data.rclone_sync_timezone or "").strip())
     ):
         _raise_direct_rclone_incompatible_payload()
 
@@ -1162,6 +1171,8 @@ def _validate_direct_rclone_update(
         or repo_data.rclone_remote_id is not None
         or bool((repo_data.rclone_remote_path or "").strip())
         or bool(repo_data.rclone_extra_flags)
+        or bool((repo_data.rclone_sync_cron_expression or "").strip())
+        or bool((repo_data.rclone_sync_timezone or "").strip())
         or (
             "rclone_sync_policy" in update_data
             and repo_data.rclone_sync_policy != "after_success"
@@ -1195,6 +1206,8 @@ def _strip_direct_rclone_noop_update_fields(update_data: dict[str, Any]) -> None
         "rclone_remote_id",
         "rclone_remote_path",
         "rclone_sync_policy",
+        "rclone_sync_cron_expression",
+        "rclone_sync_timezone",
         "rclone_extra_flags",
         "rclone_cache_path",
         "cloud_mirror_enabled",
@@ -1203,6 +1216,73 @@ def _strip_direct_rclone_noop_update_fields(update_data: dict[str, Any]) -> None
         "agent_machine_id",
     ):
         update_data.pop(key, None)
+
+
+def _raise_rclone_schedule_error(exc: Exception) -> None:
+    message = str(exc) or exc.__class__.__name__
+    if isinstance(exc, InvalidScheduleTimezone):
+        key = "backend.errors.rclone.invalidScheduleTimezone"
+    elif "cron expression is required" in message:
+        key = "backend.errors.rclone.scheduleCronRequired"
+    elif "invalid rclone sync policy" in message:
+        key = "backend.errors.rclone.invalidSyncPolicy"
+    else:
+        key = "backend.errors.rclone.invalidScheduleCron"
+    raise HTTPException(
+        status_code=400,
+        detail={"key": key, "message": message},
+    ) from exc
+
+
+def _validate_rclone_schedule_payload(
+    data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
+    *,
+    storage: RepositoryStorage | None = None,
+) -> None:
+    policy = (
+        data.rclone_sync_policy
+        if data.rclone_sync_policy is not None
+        else (storage.sync_policy if storage else "after_success")
+    )
+    if policy not in VALID_SYNC_POLICIES:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+        )
+    if policy != "scheduled":
+        timezone_value = data.rclone_sync_timezone
+        if timezone_value is not None:
+            try:
+                normalize_schedule_timezone(timezone_value)
+            except InvalidScheduleTimezone as exc:
+                _raise_rclone_schedule_error(exc)
+        return
+
+    cron_expression = (
+        data.rclone_sync_cron_expression
+        if data.rclone_sync_cron_expression is not None
+        else (storage.sync_cron_expression if storage else None)
+    )
+    cron_expression = (cron_expression or "").strip()
+    if not cron_expression:
+        _raise_rclone_schedule_error(
+            ValueError("rclone schedule cron expression is required")
+        )
+
+    timezone_value = (
+        data.rclone_sync_timezone
+        if data.rclone_sync_timezone is not None
+        else (storage.sync_timezone if storage else DEFAULT_SCHEDULE_TIMEZONE)
+    )
+    try:
+        timezone_name = normalize_schedule_timezone(timezone_value)
+        calculate_next_cron_run(
+            cron_expression,
+            datetime.now(timezone.utc),
+            timezone_name,
+        )
+    except Exception as exc:
+        _raise_rclone_schedule_error(exc)
 
 
 def _validate_rclone_payload(
@@ -1239,6 +1319,7 @@ def _validate_rclone_payload(
             status_code=400,
             detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
         )
+    _validate_rclone_schedule_payload(data)
     remote = (
         db.query(RcloneRemote).filter(RcloneRemote.id == data.rclone_remote_id).first()
     )
@@ -1255,6 +1336,8 @@ def _validate_rclone_payload(
             remote_path=data.rclone_remote_path,
             sync_policy=data.rclone_sync_policy,
             extra_flags=data.rclone_extra_flags,
+            sync_cron_expression=data.rclone_sync_cron_expression,
+            sync_timezone=data.rclone_sync_timezone,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -1298,6 +1381,7 @@ def _validate_cloud_mirror_payload(
             status_code=400,
             detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
         )
+    _validate_rclone_schedule_payload(data)
     remote = (
         db.query(RcloneRemote).filter(RcloneRemote.id == data.rclone_remote_id).first()
     )
@@ -1379,6 +1463,26 @@ def _serialize_rclone_storage(
     )
     status = rclone_repository_service.serialize_status(repository, storage, remote)
     status.update(_agent_machine_summary(repository, db))
+    latest_job = (
+        db.query(RcloneSyncJob)
+        .filter(RcloneSyncJob.repository_id == repository.id)
+        .order_by(RcloneSyncJob.created_at.desc(), RcloneSyncJob.id.desc())
+        .first()
+    )
+    status["latest_sync_job"] = (
+        {
+            "id": latest_job.id,
+            "triggered_by": latest_job.triggered_by,
+            "status": latest_job.status,
+            "scheduled_for": format_datetime(latest_job.scheduled_for),
+            "started_at": format_datetime(latest_job.started_at),
+            "completed_at": format_datetime(latest_job.completed_at),
+            "error_text": latest_job.error_text,
+            "has_log": bool(latest_job.log_text),
+        }
+        if latest_job
+        else None
+    )
     return status
 
 
@@ -1620,6 +1724,8 @@ async def _create_agent_repository_record(
             remote_path=repo_data.rclone_remote_path or "",
             sync_policy=repo_data.rclone_sync_policy,
             extra_flags=repo_data.rclone_extra_flags,
+            sync_cron_expression=repo_data.rclone_sync_cron_expression,
+            sync_timezone=repo_data.rclone_sync_timezone,
         )
         db.add(storage)
         db.commit()
@@ -1765,6 +1871,8 @@ async def _create_rclone_repository_record(
         remote_path=repo_data.rclone_remote_path,
         sync_policy=repo_data.rclone_sync_policy,
         extra_flags=repo_data.rclone_extra_flags,
+        sync_cron_expression=repo_data.rclone_sync_cron_expression,
+        sync_timezone=repo_data.rclone_sync_timezone,
     )
     repository.path = storage.cache_path
     db.add(storage)
@@ -1971,6 +2079,8 @@ async def _import_rclone_repository_record(
         remote_path=repo_data.rclone_remote_path,
         sync_policy=repo_data.rclone_sync_policy,
         extra_flags=repo_data.rclone_extra_flags,
+        sync_cron_expression=repo_data.rclone_sync_cron_expression,
+        sync_timezone=repo_data.rclone_sync_timezone,
     )
     repository.path = storage.cache_path
     db.add(storage)
@@ -2629,6 +2739,8 @@ async def create_repository(
                 remote_path=repo_data.rclone_remote_path or "",
                 sync_policy=repo_data.rclone_sync_policy,
                 extra_flags=repo_data.rclone_extra_flags,
+                sync_cron_expression=repo_data.rclone_sync_cron_expression,
+                sync_timezone=repo_data.rclone_sync_timezone,
             )
             db.add(storage)
             db.commit()
@@ -2999,6 +3111,8 @@ async def import_repository(
                 remote_path=repo_data.rclone_remote_path or "",
                 sync_policy=repo_data.rclone_sync_policy,
                 extra_flags=repo_data.rclone_extra_flags,
+                sync_cron_expression=repo_data.rclone_sync_cron_expression,
+                sync_timezone=repo_data.rclone_sync_timezone,
             )
             db.add(storage)
             db.commit()
@@ -3399,6 +3513,8 @@ async def update_repository(
             "rclone_remote_id",
             "rclone_remote_path",
             "rclone_sync_policy",
+            "rclone_sync_cron_expression",
+            "rclone_sync_timezone",
             "rclone_extra_flags",
             "rclone_cache_path",
             "cloud_mirror_enabled",
@@ -3466,6 +3582,9 @@ async def update_repository(
                     for key in (
                         "rclone_remote_id",
                         "rclone_remote_path",
+                        "rclone_sync_policy",
+                        "rclone_sync_cron_expression",
+                        "rclone_sync_timezone",
                         "rclone_extra_flags",
                     )
                 )
@@ -3508,11 +3627,13 @@ async def update_repository(
                         status_code=400,
                         detail={"key": "backend.errors.rclone.remotePathRequired"},
                     )
-                if repo_data.rclone_sync_policy not in VALID_SYNC_POLICIES:
+                effective_sync_policy = repo_data.rclone_sync_policy or "after_success"
+                if effective_sync_policy not in VALID_SYNC_POLICIES:
                     raise HTTPException(
                         status_code=400,
                         detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
                     )
+                _validate_rclone_schedule_payload(repo_data)
                 remote = (
                     db.query(RcloneRemote)
                     .filter(RcloneRemote.id == repo_data.rclone_remote_id)
@@ -3537,8 +3658,10 @@ async def update_repository(
                         ),
                         remote_id=remote.id,
                         remote_path=repo_data.rclone_remote_path,
-                        sync_policy=repo_data.rclone_sync_policy,
+                        sync_policy=effective_sync_policy,
                         extra_flags=repo_data.rclone_extra_flags,
+                        sync_cron_expression=repo_data.rclone_sync_cron_expression,
+                        sync_timezone=repo_data.rclone_sync_timezone,
                     )
                 except ValueError as exc:
                     message = str(exc)
@@ -3621,13 +3744,27 @@ async def update_repository(
                             status_code=400,
                             detail={"key": key, "message": message},
                         ) from exc
-                if "rclone_sync_policy" in update_data:
-                    if repo_data.rclone_sync_policy not in VALID_SYNC_POLICIES:
-                        raise HTTPException(
-                            status_code=400,
-                            detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+                schedule_fields_changed = {
+                    "rclone_sync_policy",
+                    "rclone_sync_cron_expression",
+                    "rclone_sync_timezone",
+                }.intersection(update_data)
+                if schedule_fields_changed:
+                    try:
+                        rclone_repository_service.configure_schedule(
+                            storage,
+                            sync_policy=repo_data.rclone_sync_policy
+                            if "rclone_sync_policy" in update_data
+                            else storage.sync_policy,
+                            sync_cron_expression=repo_data.rclone_sync_cron_expression
+                            if "rclone_sync_cron_expression" in update_data
+                            else None,
+                            sync_timezone=repo_data.rclone_sync_timezone
+                            if "rclone_sync_timezone" in update_data
+                            else None,
                         )
-                    storage.sync_policy = repo_data.rclone_sync_policy
+                    except Exception as exc:
+                        _raise_rclone_schedule_error(exc)
                 if "rclone_extra_flags" in update_data:
                     try:
                         storage.extra_flags = normalize_extra_flags(
@@ -3694,13 +3831,26 @@ async def update_repository(
                             "message": str(exc),
                         },
                     ) from exc
-            if should_update_direct_rclone and "rclone_sync_policy" in update_data:
-                if repo_data.rclone_sync_policy not in VALID_SYNC_POLICIES:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={"key": "backend.errors.rclone.invalidSyncPolicy"},
+            if should_update_direct_rclone and {
+                "rclone_sync_policy",
+                "rclone_sync_cron_expression",
+                "rclone_sync_timezone",
+            }.intersection(update_data):
+                try:
+                    rclone_repository_service.configure_schedule(
+                        storage,
+                        sync_policy=repo_data.rclone_sync_policy
+                        if "rclone_sync_policy" in update_data
+                        else storage.sync_policy,
+                        sync_cron_expression=repo_data.rclone_sync_cron_expression
+                        if "rclone_sync_cron_expression" in update_data
+                        else None,
+                        sync_timezone=repo_data.rclone_sync_timezone
+                        if "rclone_sync_timezone" in update_data
+                        else None,
                     )
-                storage.sync_policy = repo_data.rclone_sync_policy
+                except Exception as exc:
+                    _raise_rclone_schedule_error(exc)
             if should_update_direct_rclone and "rclone_extra_flags" in update_data:
                 try:
                     storage.extra_flags = normalize_extra_flags(

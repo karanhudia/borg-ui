@@ -17,6 +17,7 @@ import {
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { Cloud, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import SchedulePicker from '../SchedulePicker'
 
 export interface CloudMirrorStepData {
   cloudMirrorEnabled: boolean
@@ -24,6 +25,8 @@ export interface CloudMirrorStepData {
   rcloneRemotePath: string
   rcloneRemotePathVerified: boolean
   rcloneSyncPolicy: 'after_success' | 'manual' | 'scheduled'
+  rcloneSyncCronExpression: string
+  rcloneSyncTimezone: string
   rcloneExtraFlags: string
 }
 
@@ -221,11 +224,18 @@ export default function WizardStepCloudMirror({
               id="cloud-mirror-sync-policy"
               value={data.rcloneSyncPolicy || 'after_success'}
               label={t('wizard.location.rcloneSyncPolicyLabel')}
-              onChange={(event) =>
+              onChange={(event) => {
+                const policy = event.target.value as 'after_success' | 'manual' | 'scheduled'
                 onChange({
-                  rcloneSyncPolicy: event.target.value as 'after_success' | 'manual' | 'scheduled',
+                  rcloneSyncPolicy: policy,
+                  ...(policy === 'scheduled' && !data.rcloneSyncCronExpression
+                    ? { rcloneSyncCronExpression: '0 */6 * * *' }
+                    : {}),
+                  ...(policy === 'scheduled' && !data.rcloneSyncTimezone
+                    ? { rcloneSyncTimezone: 'UTC' }
+                    : {}),
                 })
-              }
+              }}
             >
               <MenuItem value="after_success">
                 {t('wizard.location.rcloneSyncAfterSuccess')}
@@ -234,6 +244,28 @@ export default function WizardStepCloudMirror({
               <MenuItem value="scheduled">{t('wizard.location.rcloneSyncScheduled')}</MenuItem>
             </Select>
           </FormControl>
+
+          {data.rcloneSyncPolicy === 'scheduled' && (
+            <SchedulePicker
+              cronExpression={data.rcloneSyncCronExpression || ''}
+              timezone={data.rcloneSyncTimezone || 'UTC'}
+              onChange={(updates) =>
+                onChange({
+                  ...(updates.cronExpression !== undefined
+                    ? { rcloneSyncCronExpression: updates.cronExpression }
+                    : {}),
+                  ...(updates.timezone !== undefined
+                    ? { rcloneSyncTimezone: updates.timezone }
+                    : {}),
+                })
+              }
+              required
+              disabled={controlsDisabled}
+              cronLabel={t('wizard.location.rcloneSyncCronLabel')}
+              cronHelperText={t('wizard.location.rcloneSyncCronHelper')}
+              timezoneLabel={t('wizard.location.rcloneSyncTimezoneLabel')}
+            />
+          )}
 
           <TextField
             label={t('wizard.location.rcloneExtraFlagsLabel')}
