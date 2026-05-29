@@ -107,6 +107,7 @@ V2_ONLY_ENCRYPTION_MODES = {
 }
 
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
+DIRECT_RCLONE_STORAGE_BACKEND = "rclone_direct"
 
 # Initialize Borg interface
 borg = BorgInterface()
@@ -268,6 +269,16 @@ def _borg_keyfile_name(repo_path: str) -> str:
     else:
         path = repo_path.lstrip("/")
     return re.sub(r"[^a-zA-Z0-9]", "_", path)
+
+
+def _write_borg_keyfile(repo_path: str, keyfile_content: str) -> str:
+    keyfile_dir = os.path.expanduser("~/.config/borg/keys")
+    os.makedirs(keyfile_dir, exist_ok=True)
+    keyfile_path = os.path.join(keyfile_dir, _borg_keyfile_name(repo_path))
+    with open(keyfile_path, "w") as f:
+        f.write(keyfile_content)
+    os.chmod(keyfile_path, 0o600)
+    return keyfile_path
 
 
 def get_standard_ssh_opts(include_key_path=None):
@@ -976,6 +987,32 @@ def _is_rclone_payload(data: Union[RepositoryCreate, RepositoryImport]) -> bool:
     return (getattr(data, "storage_backend", "local") or "local") == "rclone"
 
 
+def _is_direct_rclone_payload(
+    data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
+) -> bool:
+    return (
+        getattr(data, "storage_backend", "local") or "local"
+    ).lower() == DIRECT_RCLONE_STORAGE_BACKEND
+
+
+def _is_direct_rclone_url(path: Optional[str]) -> bool:
+    return bool((path or "").strip().startswith("rclone:"))
+
+
+def _normalize_direct_rclone_url(path: Optional[str]) -> str:
+    repo_path = (path or "").strip()
+    if (
+        not repo_path
+        or not repo_path.startswith("rclone:")
+        or repo_path in {"rclone:", "rclone://"}
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.directInvalidUrl"},
+        )
+    return repo_path
+
+
 def _is_cloud_mirror_payload(
     data: Union[RepositoryCreate, RepositoryImport, RepositoryUpdate],
 ) -> bool:
@@ -984,6 +1021,10 @@ def _is_cloud_mirror_payload(
 
 def _primary_storage_backend(repository: Repository) -> str:
     if repository.repository_type == "rclone":
+        if (repository.borg_version or 1) == 2 and _is_direct_rclone_url(
+            repository.path
+        ):
+            return DIRECT_RCLONE_STORAGE_BACKEND
         return "rclone"
     if repository_executor_type(repository) == "agent":
         return "agent_local"
@@ -1045,6 +1086,17 @@ def _repository_has_cloud_mirror(
     )
 
 
+def _is_direct_rclone_repository(
+    repository: Repository, storage: RepositoryStorage | None = None
+) -> bool:
+    return bool(
+        repository.repository_type == "rclone"
+        and (repository.borg_version or 1) == 2
+        and _is_direct_rclone_url(repository.path)
+        and storage is None
+    )
+
+
 def _apply_mirror_source_strategy(
     storage: RepositoryStorage, repository: Repository
 ) -> None:
@@ -1068,6 +1120,102 @@ def _reject_unsupported_rclone_borg2(
             status_code=400,
             detail={"key": "backend.errors.rclone.borgV2Unsupported"},
         )
+
+
+def _raise_direct_rclone_incompatible_payload() -> None:
+    raise HTTPException(
+        status_code=400,
+        detail={"key": "backend.errors.rclone.directIncompatiblePayload"},
+    )
+
+
+def _validate_direct_rclone_payload(
+    data: Union[RepositoryCreate, RepositoryImport],
+    db: Session,
+) -> str:
+    if (data.borg_version or 1) != 2:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.directBorg2Required"},
+        )
+
+    if (
+        getattr(data, "rclone_cache_path", None)
+        or data.connection_id
+        or _normalize_repository_executor(data) == "agent"
+        or _normalize_execution_target(data.execution_target) != "local"
+        or data.agent_machine_id is not None
+        or data.cloud_mirror_enabled
+        or data.rclone_remote_id is not None
+        or bool((data.rclone_remote_path or "").strip())
+        or bool(data.rclone_extra_flags)
+        or data.rclone_sync_policy != "after_success"
+        or bool((data.rclone_sync_cron_expression or "").strip())
+        or bool((data.rclone_sync_timezone or "").strip())
+    ):
+        _raise_direct_rclone_incompatible_payload()
+
+    repo_path = _normalize_direct_rclone_url(data.path)
+    _require_borg2_feature(db)
+    return repo_path
+
+
+def _validate_direct_rclone_update(
+    repo_data: RepositoryUpdate,
+    update_data: dict[str, Any],
+) -> None:
+    if (
+        repo_data.cloud_mirror_enabled is True
+        or repo_data.rclone_remote_path_verified is True
+        or bool((repo_data.rclone_cache_path or "").strip())
+        or repo_data.rclone_remote_id is not None
+        or bool((repo_data.rclone_remote_path or "").strip())
+        or bool(repo_data.rclone_extra_flags)
+        or bool((repo_data.rclone_sync_cron_expression or "").strip())
+        or bool((repo_data.rclone_sync_timezone or "").strip())
+        or (
+            "rclone_sync_policy" in update_data
+            and repo_data.rclone_sync_policy != "after_success"
+        )
+        or repo_data.connection_id is not None
+        or _normalize_repository_executor(repo_data) == "agent"
+        or (
+            repo_data.execution_target is not None
+            and _normalize_execution_target(repo_data.execution_target) != "local"
+        )
+        or repo_data.agent_machine_id is not None
+    ):
+        _raise_direct_rclone_incompatible_payload()
+
+    if (
+        "storage_backend" in update_data
+        and repo_data.storage_backend != DIRECT_RCLONE_STORAGE_BACKEND
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.updateUnsupported"},
+        )
+
+    if repo_data.path is not None:
+        _normalize_direct_rclone_url(repo_data.path)
+
+
+def _strip_direct_rclone_noop_update_fields(update_data: dict[str, Any]) -> None:
+    for key in (
+        "storage_backend",
+        "rclone_remote_id",
+        "rclone_remote_path",
+        "rclone_sync_policy",
+        "rclone_sync_cron_expression",
+        "rclone_sync_timezone",
+        "rclone_extra_flags",
+        "rclone_cache_path",
+        "cloud_mirror_enabled",
+        "rclone_remote_path_verified",
+        "connection_id",
+        "agent_machine_id",
+    ):
+        update_data.pop(key, None)
 
 
 def _raise_rclone_schedule_error(exc: Exception) -> None:
@@ -1786,6 +1934,113 @@ async def _create_rclone_repository_record(
     }
 
 
+async def _create_direct_rclone_repository_record(
+    repo_data: RepositoryCreate,
+    current_user: User,
+    db: Session,
+):
+    repo_path = _validate_direct_rclone_payload(repo_data, db)
+    _validate_repository_name_available(repo_data.name, db)
+
+    valid_encryption_modes = V2_ONLY_ENCRYPTION_MODES | {"none"}
+    if repo_data.encryption not in valid_encryption_modes:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.invalidEncryptionMode"},
+        )
+    if repo_data.encryption != "none" and not (repo_data.passphrase or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "key": "backend.errors.repo.encryptedPassphraseRequired",
+                "params": {"mode": repo_data.encryption},
+            },
+        )
+
+    existing_path = db.query(Repository).filter(Repository.path == repo_path).first()
+    if existing_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryPathExists"},
+        )
+
+    init_result = await initialize_borg_repository(
+        repo_path,
+        repo_data.encryption,
+        repo_data.passphrase,
+        None,
+        None,
+        borg_version=2,
+    )
+    if not init_result["success"]:
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToInitializeRepository"},
+        )
+
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
+    )
+    repository = Repository(
+        path=repo_path,
+        source_directories=json.dumps(source_directories)
+        if source_directories
+        else None,
+        source_locations=json.dumps(source_locations) if source_locations else None,
+        exclude_patterns=json.dumps(repo_data.exclude_patterns)
+        if repo_data.exclude_patterns
+        else None,
+        source_ssh_connection_id=source_connection_id,
+        **_repository_common_values(repo_data),
+    )
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+
+    try:
+        mqtt_service.sync_state_with_db(db, reason="repository creation")
+        logger.info(
+            "Synced repositories with MQTT after direct rclone creation",
+            repo_id=repository.id,
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to sync repositories with MQTT after direct rclone creation",
+            repo_id=repository.id,
+            error=str(e),
+        )
+
+    logger.info(
+        "Direct Borg 2 rclone repository created",
+        name=repository.name,
+        path=repository.path,
+        user=current_user.username,
+    )
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryCreated",
+        "repository": {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "execution_target": repository.execution_target,
+            "executor_type": repository.executor_type,
+            "agent_machine_id": repository.agent_machine_id,
+            "repository_type": "rclone",
+            "borg_version": 2,
+            "storage_backend": DIRECT_RCLONE_STORAGE_BACKEND,
+        },
+    }
+
+
 async def _import_rclone_repository_record(
     repo_data: RepositoryImport,
     current_user: User,
@@ -1908,6 +2163,137 @@ async def _import_rclone_repository_record(
     }
 
 
+async def _import_direct_rclone_repository_record(
+    repo_data: RepositoryImport,
+    current_user: User,
+    db: Session,
+):
+    repo_path = _validate_direct_rclone_payload(repo_data, db)
+    _validate_repository_name_available(repo_data.name, db)
+
+    existing_path = db.query(Repository).filter(Repository.path == repo_path).first()
+    if existing_path:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.repo.repositoryPathExists"},
+        )
+
+    keyfile_path = None
+    if repo_data.keyfile_content:
+        keyfile_path = _write_borg_keyfile(repo_path, repo_data.keyfile_content)
+        logger.info(
+            "Wrote keyfile before direct rclone verification",
+            keyfile_path=keyfile_path,
+        )
+
+    verify_result = await verify_existing_repository(
+        path=repo_path,
+        passphrase=repo_data.passphrase,
+        ssh_key_id=None,
+        remote_path=None,
+        bypass_lock=repo_data.bypass_lock,
+        borg_version=2,
+    )
+    if not verify_result["success"]:
+        if keyfile_path and os.path.exists(keyfile_path):
+            os.unlink(keyfile_path)
+            logger.info(
+                "Removed keyfile after failed direct rclone verification",
+                keyfile_path=keyfile_path,
+            )
+
+        error_msg = verify_result.get("error", "Unknown error")
+        if "passphrase" in error_msg.lower() or "encrypted" in error_msg.lower():
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.repo.encryptedPassphraseIncorrect"},
+            )
+        if "not a valid repository" in error_msg.lower():
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.repo.notValidBorgRepository",
+                    "params": {"path": repo_path},
+                },
+            )
+        raise HTTPException(
+            status_code=500,
+            detail={"key": "backend.errors.repo.failedToVerifyRepository"},
+        )
+
+    (
+        source_locations,
+        source_connection_id,
+        source_directories,
+    ) = _normalize_repository_source_payload(
+        source_locations=repo_data.source_locations,
+        source_connection_id=repo_data.source_connection_id,
+        source_directories=repo_data.source_directories,
+    )
+    repo_info = verify_result.get("info", {})
+    encryption_mode = repo_info.get("encryption", {}).get("mode", repo_data.encryption)
+    repository = Repository(
+        path=repo_path,
+        source_directories=json.dumps(source_directories)
+        if source_directories
+        else None,
+        source_locations=json.dumps(source_locations) if source_locations else None,
+        exclude_patterns=json.dumps(repo_data.exclude_patterns)
+        if repo_data.exclude_patterns
+        else None,
+        source_ssh_connection_id=source_connection_id,
+        archive_count=0,
+        **_repository_common_values(repo_data),
+    )
+    repository.encryption = encryption_mode
+    db.add(repository)
+    db.commit()
+    db.refresh(repository)
+
+    if keyfile_path:
+        repository.has_keyfile = True
+        db.commit()
+        db.refresh(repository)
+
+    try:
+        mqtt_service.sync_state_with_db(db, reason="repository import")
+        logger.info(
+            "Synced repositories with MQTT after direct rclone import",
+            repo_id=repository.id,
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to sync repositories with MQTT after direct rclone import",
+            repo_id=repository.id,
+            error=str(e),
+        )
+
+    logger.info(
+        "Direct Borg 2 rclone repository imported",
+        name=repository.name,
+        path=repository.path,
+        user=current_user.username,
+    )
+    return {
+        "success": True,
+        "message": "backend.success.repo.repositoryImported",
+        "repository": {
+            "id": repository.id,
+            "name": repository.name,
+            "path": repository.path,
+            "encryption": repository.encryption,
+            "compression": repository.compression,
+            "archive_count": repository.archive_count,
+            "execution_target": repository.execution_target,
+            "executor_type": repository.executor_type,
+            "agent_machine_id": repository.agent_machine_id,
+            "repository_type": "rclone",
+            "borg_version": 2,
+            "storage_backend": DIRECT_RCLONE_STORAGE_BACKEND,
+        },
+    }
+
+
 @router.get("/")
 async def get_repositories(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
@@ -2017,6 +2403,9 @@ async def get_repositories(
                 repo_payload["rclone_storage"] = rclone_storage
                 if repo.repository_type == "rclone":
                     repo_payload["repository_type"] = "rclone"
+            elif _is_direct_rclone_repository(repo):
+                repo_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+                repo_payload["repository_type"] = "rclone"
             repo_list.append(repo_payload)
 
         return {"success": True, "repositories": repo_list}
@@ -2037,6 +2426,10 @@ async def create_repository(
     """Create a new repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        if _is_direct_rclone_payload(repo_data):
+            return await _create_direct_rclone_repository_record(
+                repo_data, current_user, db
+            )
         _reject_unsupported_rclone_borg2(repo_data)
         if _is_rclone_payload(repo_data):
             return await _create_rclone_repository_record(repo_data, current_user, db)
@@ -2403,6 +2796,9 @@ async def create_repository(
             repository_payload["rclone_storage"] = rclone_storage
             if repository.repository_type == "rclone":
                 repository_payload["repository_type"] = "rclone"
+        elif _is_direct_rclone_repository(repository):
+            repository_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+            repository_payload["repository_type"] = "rclone"
 
         return {
             "success": True,
@@ -2429,6 +2825,10 @@ async def import_repository(
     """Import an existing Borg repository"""
     try:
         executor_type = _normalize_repository_executor(repo_data)
+        if _is_direct_rclone_payload(repo_data):
+            return await _import_direct_rclone_repository_record(
+                repo_data, current_user, db
+            )
         _reject_unsupported_rclone_borg2(repo_data)
         if _is_rclone_payload(repo_data):
             return await _import_rclone_repository_record(repo_data, current_user, db)
@@ -2757,6 +3157,9 @@ async def import_repository(
             repository_payload["rclone_storage"] = rclone_storage
             if repository.repository_type == "rclone":
                 repository_payload["repository_type"] = "rclone"
+        elif _is_direct_rclone_repository(repository):
+            repository_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+            repository_payload["repository_type"] = "rclone"
 
         return {
             "success": True,
@@ -3025,6 +3428,9 @@ async def get_repository(
             repository_payload["rclone_storage"] = rclone_storage
             if repository.repository_type == "rclone":
                 repository_payload["repository_type"] = "rclone"
+        elif _is_direct_rclone_repository(repository):
+            repository_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+            repository_payload["repository_type"] = "rclone"
 
         return {
             "success": True,
@@ -3099,6 +3505,9 @@ async def update_repository(
             .filter(RepositoryStorage.repository_id == repository.id)
             .first()
         )
+        existing_direct_rclone_repository = _is_direct_rclone_repository(
+            repository, existing_rclone_storage
+        )
         rclone_update_fields = {
             "storage_backend",
             "rclone_remote_id",
@@ -3112,6 +3521,18 @@ async def update_repository(
             "rclone_remote_path_verified",
         }
         requested_rclone_updates = rclone_update_fields.intersection(update_data)
+        if (
+            _is_direct_rclone_payload(repo_data)
+            and not existing_direct_rclone_repository
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        if existing_direct_rclone_repository:
+            _validate_direct_rclone_update(repo_data, update_data)
+            _strip_direct_rclone_noop_update_fields(update_data)
+            requested_rclone_updates = set()
         sync_cloud_mirror_after_update = False
         if requested_rclone_updates:
             storage = existing_rclone_storage
@@ -4703,6 +5124,7 @@ async def initialize_borg_repository(
     passphrase: str = None,
     ssh_key_id: int = None,
     remote_path: str = None,
+    borg_version: int = 1,
 ) -> Dict[str, Any]:
     """Initialize a new Borg repository"""
     logger.info(
@@ -4712,13 +5134,14 @@ async def initialize_borg_repository(
         has_passphrase=bool(passphrase),
         ssh_key_id=ssh_key_id,
         remote_path=remote_path,
+        borg_version=borg_version,
     )
     repo_for_routing = SimpleNamespace(
         path=path,
         encryption=encryption,
         passphrase=passphrase,
         remote_path=remote_path,
-        borg_version=1,
+        borg_version=borg_version,
     )
     result = await BorgRouter(repo_for_routing).initialize_repository(
         ssh_key_id=ssh_key_id,

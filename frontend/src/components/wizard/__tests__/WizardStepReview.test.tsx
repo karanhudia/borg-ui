@@ -132,6 +132,32 @@ describe('WizardStepReview', () => {
       expect(screen.getByText('Cloud Mirror')).toBeInTheDocument()
       expect(screen.getByText('prod-s3:borg-ui/repositories/app')).toBeInTheDocument()
     })
+
+    it('shows direct Borg 2 rclone tradeoffs without mirror sync controls', () => {
+      const directRcloneData = {
+        ...defaultData,
+        borgVersion: 2 as const,
+        repositoryLocation: 'rclone' as const,
+        path: 'rclone://prod-s3/borg-ui/direct',
+        cloudMirrorEnabled: false,
+      }
+
+      render(
+        <WizardStepReview
+          mode="create"
+          data={directRcloneData}
+          sshConnections={mockSshConnections}
+        />
+      )
+
+      expect(screen.getByText('Direct Borg 2 rclone')).toBeInTheDocument()
+      expect(screen.getByText(/Borg writes directly through rclone/i)).toBeInTheDocument()
+      expect(screen.getByText('rclone://prod-s3/borg-ui/direct')).toBeInTheDocument()
+      expect(screen.queryByText('Cloud Mirror')).not.toBeInTheDocument()
+      expect(screen.queryByText('Manual sync')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('backup-flow-preview')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('command-preview')).not.toBeInTheDocument()
+    })
   })
 
   describe('Data Source Section', () => {

@@ -69,7 +69,7 @@ export interface RepositoryData {
   source_locations?: SourceLocation[]
   exclude_patterns?: string[]
   repository_type?: string
-  storage_backend?: 'local' | 'ssh' | 'agent_local' | 'rclone'
+  storage_backend?: 'local' | 'ssh' | 'agent_local' | 'rclone' | 'rclone_direct'
   execution_target?: 'local' | 'ssh' | 'agent'
   executor_type?: 'server' | 'agent'
   agent_machine_id?: number | null

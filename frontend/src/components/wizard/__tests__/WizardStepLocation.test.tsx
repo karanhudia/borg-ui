@@ -183,6 +183,50 @@ describe('WizardStepLocation', () => {
       expect(screen.getByText('Beta')).toBeInTheDocument()
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
+
+    it('shows direct Borg 2 rclone as an advanced option instead of a location card', () => {
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={{ ...defaultData, borgVersion: 2 }}
+          sshConnections={[]}
+          onChange={vi.fn()}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText('Advanced storage mode')).toBeInTheDocument()
+      expect(
+        screen.getByRole('checkbox', { name: /Use direct Borg 2 rclone repository/i })
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('button', { name: /Direct Borg 2 rclone/i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('uses direct rclone URL copy and disables filesystem browsing in direct mode', () => {
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={{
+            ...defaultData,
+            borgVersion: 2,
+            repositoryLocation: 'rclone',
+            path: 'rclone://prod-s3/borg-ui/direct',
+          }}
+          sshConnections={[]}
+          onChange={vi.fn()}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      expect(screen.getByLabelText(/Direct rclone repository URL/i)).toBeInTheDocument()
+      expect(
+        screen.getByPlaceholderText(/rclone:\/\/remote-name\/path\/to\/repository/i)
+      ).toBeInTheDocument()
+      expect(screen.getByText(/Borg writes directly through rclone/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Browse filesystem/i })).toBeDisabled()
+    })
   })
 
   describe('Import Mode', () => {

@@ -47,6 +47,20 @@ const rcloneReviewData: WizardReviewData = {
   rcloneSyncPolicy: 'after_success',
 }
 
+const directRcloneReviewData: WizardReviewData = {
+  ...managedAgentPlanSourcesData,
+  name: 'Direct Cloud Repository',
+  borgVersion: 2,
+  repositoryLocation: 'rclone',
+  executionTarget: 'local',
+  agentMachineId: '',
+  path: 'rclone://prod-s3/borg-ui/direct',
+  repoSshConnectionId: '',
+  dataSource: 'local',
+  sourceDirs: ['/srv/app', '/etc/borg-ui'],
+  cloudMirrorEnabled: false,
+}
+
 const meta = {
   title: 'Components/Wizard/Repository Review',
   component: WizardStepReview,
@@ -86,6 +100,20 @@ export const CloudMirror: Story = {
   args: {
     mode: 'create',
     data: rcloneReviewData,
+    sshConnections: [],
+    agentMachines,
+  },
+  render: (args) => (
+    <Box sx={{ width: 760, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepReview {...args} />
+    </Box>
+  ),
+}
+
+export const DirectBorg2Rclone: Story = {
+  args: {
+    mode: 'create',
+    data: directRcloneReviewData,
     sshConnections: [],
     agentMachines,
   },
