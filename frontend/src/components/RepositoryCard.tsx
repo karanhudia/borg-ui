@@ -21,6 +21,8 @@ import {
   ScanSearch,
   RefreshCw,
   ClipboardList,
+  Bot,
+  CalendarClock,
 } from 'lucide-react'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
@@ -103,6 +105,40 @@ export default function RepositoryCard({
   const rcloneStorage = repository.rclone_storage
   const rcloneOperationRunning =
     rcloneStorage?.sync_status === 'syncing' || rcloneStorage?.sync_status === 'hydrating'
+  const isSshPrimaryRepository =
+    repository.storage_backend === 'ssh' ||
+    repository.repository_type === 'ssh' ||
+    repository.execution_target === 'ssh' ||
+    Boolean(repository.connection_id)
+  const isLocalPrimaryRepository =
+    repository.storage_backend == null ||
+    repository.storage_backend === 'local' ||
+    repository.repository_type === 'local'
+  const isAgentPrimaryRepository =
+    repository.storage_backend === 'agent_local' ||
+    repository.execution_target === 'agent' ||
+    repository.executor_type === 'agent'
+  const agentMachineName =
+    typeof repository.agent_machine_name === 'string'
+      ? repository.agent_machine_name
+      : typeof rcloneStorage?.agent_machine_name === 'string'
+        ? rcloneStorage.agent_machine_name
+        : null
+  const agentMachineStatus =
+    typeof repository.agent_machine_status === 'string'
+      ? repository.agent_machine_status
+      : typeof rcloneStorage?.agent_machine_status === 'string'
+        ? rcloneStorage.agent_machine_status
+        : null
+  const canEnableCloudMirror =
+    canManageRepository &&
+    !rcloneStorage &&
+    repository.repository_type !== 'rclone' &&
+    (isLocalPrimaryRepository || isSshPrimaryRepository || isAgentPrimaryRepository)
+  const canHydrateRclone =
+    Boolean(rcloneStorage) &&
+    rcloneStorage?.sync_direction !== 'agent_to_remote' &&
+    rcloneStorage?.sync_direction !== 'sshfs_to_remote'
 
   const [elapsedTime, setElapsedTime] = useState('')
 
@@ -268,6 +304,109 @@ export default function RepositoryCard({
     )
   })()
 
+  const rcloneScheduledMirrorBadge = (() => {
+    if (!rcloneStorage || rcloneStorage.sync_policy !== 'scheduled') return null
+
+    const timezoneLabel = rcloneStorage.sync_timezone || 'UTC'
+    const latestScheduledJob =
+      rcloneStorage.latest_sync_job?.triggered_by === 'schedule'
+        ? rcloneStorage.latest_sync_job
+        : null
+    const hasLatestSyncJob = Boolean(rcloneStorage.latest_sync_job)
+    const scheduledFailure =
+      latestScheduledJob?.status === 'failed' ||
+      (!hasLatestSyncJob && rcloneStorage.sync_status === 'failed')
+    const failureMessage =
+      latestScheduledJob?.error_text ||
+      (!hasLatestSyncJob ? rcloneStorage.last_sync_error : undefined)
+
+    if (scheduledFailure) {
+      return {
+        label: t('repositoryCard.rcloneScheduledFailed'),
+        title: failureMessage
+          ? t('repositoryCard.rcloneScheduledError', { message: failureMessage })
+          : t('repositoryCard.rcloneScheduledFailed'),
+        color: theme.palette.error.main,
+        bg: alpha(theme.palette.error.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.error.main, isDark ? 0.34 : 0.24),
+      }
+    }
+
+    if (!rcloneStorage.next_scheduled_sync_at) {
+      return {
+        label: t('repositoryCard.rcloneScheduled'),
+        title: t('repositoryCard.rcloneScheduledNoNextRun', { timezone: timezoneLabel }),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.info.main, isDark ? 0.32 : 0.24),
+      }
+    }
+
+    const nextRunDate = new Date(rcloneStorage.next_scheduled_sync_at)
+    if (Number.isNaN(nextRunDate.getTime())) {
+      return {
+        label: t('repositoryCard.rcloneScheduled'),
+        title: t('repositoryCard.rcloneScheduledNoNextRun', { timezone: timezoneLabel }),
+        color: theme.palette.info.main,
+        bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.08),
+        border: alpha(theme.palette.info.main, isDark ? 0.32 : 0.24),
+      }
+    }
+    let whenLabel = format(
+      nextRunDate,
+      isThisYear(nextRunDate) ? 'MMM d · h:mm a' : 'MMM d, yyyy · h:mm a'
+    )
+    if (isToday(nextRunDate)) {
+      whenLabel = format(nextRunDate, 'h:mm a')
+    } else if (isTomorrow(nextRunDate)) {
+      whenLabel = `${t('repositoryCard.tomorrow')} · ${format(nextRunDate, 'h:mm a')}`
+    }
+
+    return {
+      label: t('repositoryCard.rcloneNextSyncBadge', { when: whenLabel }),
+      title: t('repositoryCard.rcloneNextSyncWithSchedule', {
+        when: formatDateTimeFull(rcloneStorage.next_scheduled_sync_at),
+        cron: rcloneStorage.sync_cron_expression || t('repositoryCard.rcloneScheduleUnknown'),
+        timezone: timezoneLabel,
+      }),
+      color: theme.palette.info.main,
+      bg: alpha(theme.palette.info.main, isDark ? 0.12 : 0.08),
+      border: alpha(theme.palette.info.main, isDark ? 0.32 : 0.24),
+    }
+  })()
+
+  const agentStatusBadge = (() => {
+    if (!isAgentPrimaryRepository) return null
+    const normalized = (agentMachineStatus || '').toLowerCase()
+    const online = normalized === 'online'
+    const disabled = normalized === 'disabled' || normalized === 'revoked'
+    const color = online
+      ? theme.palette.success.main
+      : disabled
+        ? theme.palette.error.main
+        : theme.palette.warning.main
+    const label =
+      normalized === 'online'
+        ? t('repositoryCard.agentStatusOnline')
+        : normalized === 'offline'
+          ? t('repositoryCard.agentStatusOffline')
+          : normalized === 'disabled'
+            ? t('repositoryCard.agentStatusDisabled')
+            : normalized === 'revoked'
+              ? t('repositoryCard.agentStatusRevoked')
+              : t('repositoryCard.agentStatusUnknown')
+
+    return {
+      label,
+      color,
+      bg: alpha(color, isDark ? 0.12 : 0.09),
+      border: alpha(color, isDark ? 0.34 : 0.24),
+      title: agentMachineName
+        ? t('repositoryCard.agentStatusTitle', { name: agentMachineName, status: label })
+        : label,
+    }
+  })()
+
   const scheduleBadge = (() => {
     if (!repository.has_schedule) return null
     const scheduleTimezone = repository.schedule_timezone || 'UTC'
@@ -402,6 +541,66 @@ export default function RepositoryCard({
                   />
                 )}
                 <BorgVersionChip borgVersion={repository.borg_version} />
+                {isAgentPrimaryRepository && (
+                  <Tooltip
+                    title={
+                      agentMachineName
+                        ? t('repositoryCard.agentTitle', { name: agentMachineName })
+                        : t('repositoryCard.agentUnknown')
+                    }
+                    arrow
+                  >
+                    <Chip
+                      icon={<Bot size={12} />}
+                      label={t('repositoryCard.agentLabel', {
+                        name: agentMachineName || t('repositoryCard.agentUnknown'),
+                      })}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        maxWidth: { xs: 150, sm: 200 },
+                        bgcolor: isDark ? alpha('#fff', 0.05) : alpha('#000', 0.035),
+                        color: 'text.secondary',
+                        border: '1px solid',
+                        borderColor: isDark ? alpha('#fff', 0.12) : alpha('#000', 0.1),
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        '& .MuiChip-icon': {
+                          ml: 0.75,
+                          color: 'inherit',
+                        },
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )}
+                {agentStatusBadge && (
+                  <Tooltip title={agentStatusBadge.title} arrow>
+                    <Chip
+                      label={agentStatusBadge.label}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        maxWidth: { xs: 110, sm: 140 },
+                        bgcolor: agentStatusBadge.bg,
+                        color: agentStatusBadge.color,
+                        border: '1px solid',
+                        borderColor: agentStatusBadge.border,
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )}
                 {rcloneStatusBadge && (
                   <Tooltip title={rcloneStatusBadge.title} arrow>
                     <Chip
@@ -415,6 +614,34 @@ export default function RepositoryCard({
                         color: rcloneStatusBadge.color,
                         border: '1px solid',
                         borderColor: rcloneStatusBadge.border,
+                        fontSize: '0.64rem',
+                        fontWeight: 700,
+                        '& .MuiChip-icon': {
+                          ml: 0.75,
+                          color: 'inherit',
+                        },
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )}
+                {rcloneScheduledMirrorBadge && (
+                  <Tooltip title={rcloneScheduledMirrorBadge.title} arrow>
+                    <Chip
+                      icon={<CalendarClock size={12} />}
+                      label={rcloneScheduledMirrorBadge.label}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        maxWidth: { xs: 150, sm: 190 },
+                        bgcolor: rcloneScheduledMirrorBadge.bg,
+                        color: rcloneScheduledMirrorBadge.color,
+                        border: '1px solid',
+                        borderColor: rcloneScheduledMirrorBadge.border,
                         fontSize: '0.64rem',
                         fontWeight: 700,
                         '& .MuiChip-icon': {
@@ -774,19 +1001,23 @@ export default function RepositoryCard({
                     </IconButton>
                   </span>
                 </Tooltip>
-                <Tooltip title={t('repositoryCard.buttons.rcloneHydrate')} arrow>
-                  <span>
-                    <IconButton
-                      size="small"
-                      onClick={onRcloneHydrate}
-                      aria-label={t('repositoryCard.buttons.rcloneHydrate')}
-                      disabled={!onRcloneHydrate || isMaintenanceRunning || rcloneOperationRunning}
-                      sx={coloredIconBtnSx('primary')}
-                    >
-                      <CloudDownload size={16} />
-                    </IconButton>
-                  </span>
-                </Tooltip>
+                {canHydrateRclone && (
+                  <Tooltip title={t('repositoryCard.buttons.rcloneHydrate')} arrow>
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={onRcloneHydrate}
+                        aria-label={t('repositoryCard.buttons.rcloneHydrate')}
+                        disabled={
+                          !onRcloneHydrate || isMaintenanceRunning || rcloneOperationRunning
+                        }
+                        sx={coloredIconBtnSx('primary')}
+                      >
+                        <CloudDownload size={16} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}
               </>
             )}
 
@@ -841,8 +1072,37 @@ export default function RepositoryCard({
             )}
           </Box>
 
-          {(canCreatePlan || canRunLegacyBackup) && (
+          {(canEnableCloudMirror || canCreatePlan || canRunLegacyBackup) && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
+              {canEnableCloudMirror && (
+                <Tooltip title={t('repositoryCard.buttons.enableCloudMirror')} arrow>
+                  <span>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<Cloud size={13} />}
+                      onClick={onEdit}
+                      disabled={isMaintenanceRunning}
+                      sx={{
+                        fontSize: '0.76rem',
+                        height: 30,
+                        flexShrink: 0,
+                        px: { xs: 0.85, sm: 1.25 },
+                        minWidth: 'unset',
+                        '& .MuiButton-startIcon': {
+                          mr: { xs: 0, sm: 0.5 },
+                          ml: { xs: 0, sm: '-2px' },
+                        },
+                      }}
+                    >
+                      <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+                        {t('repositoryCard.buttons.enableCloudMirror')}
+                      </Box>
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+
               {canRunLegacyBackup && (
                 <Tooltip title={t('repositoryCard.buttons.legacyBackupTooltip')} arrow>
                   <span>

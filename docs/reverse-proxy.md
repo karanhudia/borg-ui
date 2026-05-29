@@ -99,6 +99,38 @@ environment:
 
 If you rely on forwarded headers instead, make sure the proxy IP is listed in `TRUSTED_PROXIES`. The value is a comma-separated list of proxy IPs.
 
+## Cloud Storage OAuth Callbacks
+
+Google Drive and Microsoft OneDrive OAuth callbacks return to Borg UI at these
+API paths:
+
+```text
+/api/rclone/oauth/callback/drive
+/api/rclone/oauth/callback/onedrive
+```
+
+The public redirect URL registered with the provider must exactly match the
+browser URL for the deployment. For a root-domain deployment, use:
+
+```text
+https://backups.example.com/api/rclone/oauth/callback/drive
+https://backups.example.com/api/rclone/oauth/callback/onedrive
+```
+
+For a sub-path deployment, include the sub-path:
+
+```text
+https://example.com/borg-ui/api/rclone/oauth/callback/drive
+https://example.com/borg-ui/api/rclone/oauth/callback/onedrive
+```
+
+Set `PUBLIC_BASE_URL` when the backend cannot infer the public URL from trusted
+forwarded headers. Borg UI validates this value before starting a provider-owned
+OAuth flow and rejects non-HTTPS public URLs except for localhost development.
+
+Make sure the proxy forwards the callback path to Borg UI without requiring a
+browser to reach rclone's loopback listener at `127.0.0.1:53682`.
+
 ## Traefik Example
 
 ```yaml

@@ -2,7 +2,78 @@ import type { Meta, StoryObj } from '@storybook/react-vite'
 import type { ReactNode } from 'react'
 import { Box } from '@mui/material'
 import { CloudStorageContent } from './CloudStorage'
-import type { RcloneRemote } from '../services/api'
+import type { RcloneProvider, RcloneRemote } from '../services/api'
+
+const providers: RcloneProvider[] = [
+  {
+    type: 'drive',
+    label: 'Google Drive',
+    description: 'Google Drive and shared drives through rclone.',
+    auth_type: 'oauth_token',
+    type_editable: false,
+    docs_url: 'https://rclone.org/drive/',
+    config_template: { type: 'drive', scope: 'drive', token: '' },
+    fields: [{ name: 'token', label: 'OAuth token JSON', kind: 'json', secret: true }],
+    oauth_mode: 'borg_ui',
+    oauth_configured: true,
+    oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
+    oauth_setup_key: null,
+  },
+  {
+    type: 'onedrive',
+    label: 'Microsoft OneDrive',
+    description: 'OneDrive personal and business drives.',
+    auth_type: 'oauth_token',
+    type_editable: false,
+    docs_url: 'https://rclone.org/onedrive/',
+    config_template: { type: 'onedrive', token: '' },
+    fields: [{ name: 'token', label: 'OAuth token JSON', kind: 'json', secret: true }],
+    oauth_mode: 'borg_ui',
+    oauth_configured: true,
+    oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/onedrive',
+    oauth_setup_key: null,
+  },
+  {
+    type: 's3',
+    label: 'Amazon S3 / S3-compatible',
+    description: 'S3-compatible object storage.',
+    auth_type: 'access_key',
+    type_editable: false,
+    docs_url: 'https://rclone.org/s3/',
+    config_template: { type: 's3', provider: 'AWS' },
+    fields: [],
+  },
+  {
+    type: 'b2',
+    label: 'Backblaze B2',
+    description: 'Backblaze B2 buckets.',
+    auth_type: 'access_key',
+    type_editable: false,
+    docs_url: 'https://rclone.org/b2/',
+    config_template: { type: 'b2', account: '' },
+    fields: [],
+  },
+  {
+    type: 'local',
+    label: 'Local filesystem',
+    description: 'Local path remote.',
+    auth_type: 'none',
+    type_editable: false,
+    docs_url: 'https://rclone.org/local/',
+    config_template: { type: 'local' },
+    fields: [],
+  },
+  {
+    type: 'custom',
+    label: 'Custom rclone backend',
+    description: 'Manual setup for any rclone backend.',
+    auth_type: 'manual',
+    type_editable: true,
+    docs_url: 'https://rclone.org/docs/',
+    config_template: { type: '' },
+    fields: [],
+  },
+]
 
 const remotes: RcloneRemote[] = [
   {
@@ -36,10 +107,35 @@ const renderPage = (children: ReactNode) => (
 
 const commonProps = {
   status: { available: true, version: 'rclone v1.66.0' },
+  providers,
   onRefresh: noop,
   onAddRemote: noop,
   onCloseAddRemote: noop,
   onCreateRemote: noopAsync,
+  onStartOAuth: async () => ({
+    session_id: 'storybook-oauth',
+    provider: 'drive',
+    status: 'awaiting_callback' as const,
+    oauth_mode: 'borg_ui' as const,
+    authorization_url: '/rclone/oauth/sessions/storybook-oauth/authorize',
+    local_authorization_url: null,
+    config: null,
+    error: null,
+  }),
+  onGetOAuthSession: async () => ({
+    session_id: 'storybook-oauth',
+    provider: 'drive',
+    status: 'authorized' as const,
+    oauth_mode: 'borg_ui' as const,
+    authorization_url: '/rclone/oauth/sessions/storybook-oauth/authorize',
+    local_authorization_url: null,
+    config: {
+      type: 'drive',
+      token: '{"access_token":"storybook","refresh_token":"storybook"}',
+      _borg_ui_oauth_provider: 'drive',
+    },
+    error: null,
+  }),
   onEditRemote: noop,
   onCloseEditRemote: noop,
   onUpdateRemote: noopAsync,
@@ -100,6 +196,32 @@ export const EditingRemote: Story = {
     ),
 }
 
+export const AddGuidedRemote: Story = {
+  render: () =>
+    renderPage(<CloudStorageContent {...commonProps} remotes={remotes} addDialogOpen />),
+}
+
+export const AddGuidedRemoteSetupMissing: Story = {
+  render: () =>
+    renderPage(
+      <CloudStorageContent
+        {...commonProps}
+        providers={providers.map((provider) =>
+          provider.type === 'drive'
+            ? {
+                ...provider,
+                oauth_configured: false,
+                oauth_callback_url: null,
+                oauth_setup_key: 'backend.errors.rclone.oauthPublicBaseUrlRequired',
+              }
+            : provider
+        )}
+        remotes={remotes}
+        addDialogOpen
+      />
+    ),
+}
+
 export const DeleteConfirmation: Story = {
   render: () =>
     renderPage(
@@ -115,15 +237,21 @@ export const BrowseDialog: Story = {
         remotes={remotes}
         browseState={{
           remote: remotes[0],
-          path: '',
+          path: 'borg-ui',
           entries: [
-            { name: 'borg-ui', path: 'borg-ui', is_dir: true, size: null, modified: null },
             {
-              name: 'README.md',
-              path: 'README.md',
+              name: 'archives',
+              path: 'borg-ui/archives',
+              is_dir: true,
+              size: null,
+              modified: null,
+            },
+            {
+              name: 'manifest.json',
+              path: 'borg-ui/manifest.json',
               is_dir: false,
               size: 128,
-              modified: null,
+              modified: '2026-05-27T12:00:00Z',
             },
           ],
         }}

@@ -27,6 +27,8 @@ export interface Repository {
   execution_target?: 'local' | 'ssh' | 'agent'
   executor_type?: 'server' | 'agent'
   agent_machine_id?: number | null
+  agent_machine_name?: string | null
+  agent_machine_status?: string | null
   has_running_maintenance?: boolean
   borg_version?: number
   host?: string
@@ -69,13 +71,30 @@ export interface RcloneStorage {
   rclone_target?: string | null
   cache_path?: string | null
   cache_present?: boolean
+  sync_direction?: 'primary_to_remote' | 'remote_to_cache' | string | null
   sync_policy: 'after_success' | 'manual' | 'scheduled'
   sync_status: 'current' | 'pending' | 'syncing' | 'failed' | 'hydrating' | string
+  sync_cron_expression?: string | null
+  sync_timezone?: string | null
+  last_scheduled_sync_at?: string | null
+  next_scheduled_sync_at?: string | null
   last_synced_at?: string | null
   last_hydrated_at?: string | null
   last_remote_check_at?: string | null
   last_sync_error?: string | null
   extra_flags?: string[]
+  agent_machine_name?: string | null
+  agent_machine_status?: string | null
+  latest_sync_job?: {
+    id: number
+    triggered_by?: 'manual' | 'schedule' | 'scheduled' | string | null
+    status?: string | null
+    scheduled_for?: string | null
+    started_at?: string | null
+    completed_at?: string | null
+    error_text?: string | null
+    has_log?: boolean
+  } | null
 }
 
 export interface Archive {

@@ -8,6 +8,10 @@ description: "Create repositories, build backup plans, browse archives, and rest
 
 This guide covers the normal path after installation.
 
+If you are unsure where to start in the app, use the
+[Navigation](navigation) guide to understand what each sidebar tab is for. This
+usage guide focuses on the common backup and restore flow.
+
 ## First Login
 
 Open Borg UI:
@@ -84,6 +88,23 @@ Remote repositories use a Remote Machine connection.
 
 Use remote repositories when the Borg archive should live on another server or off-site storage.
 
+For BorgBase, Hetzner Storage Box, other hosted Borg providers, and NAS path
+mapping notes, see [Provider Guides](provider-guides).
+
+## Add a Cloud Mirror
+
+Cloud mirrors keep the primary repository local, SSH-backed, or managed-agent-backed and sync a copy to an rclone remote.
+
+1. Go to Cloud Storage and configure the rclone remote.
+2. Go to Repositories and create or edit a local, SSH, or managed-agent repository.
+3. Open the Cloud Mirror step.
+4. Enable the mirror, choose the rclone remote, and enter or browse a relative remote path.
+5. Review and save.
+
+For SSH repositories, Borg UI mounts the repository on the server with SSHFS during each mirror sync, then unmounts it after rclone finishes. Borg UI owns that temporary mount path; the UI and API do not ask for a cache or staging path.
+
+For managed-agent repositories, the selected agent syncs its agent-local repository path to the configured rclone remote. Borg UI owns the mirror metadata and rclone target; the agent owns any temporary rclone execution files and removes them after the sync.
+
 ## Import an Existing Repository
 
 Use Import Existing when a Borg repository already exists and you want Borg UI to manage or monitor it.
@@ -95,6 +116,10 @@ Use Import Existing when a Borg repository already exists and you want Borg UI t
 5. Save, then verify archives can be listed.
 
 Full mode lets Borg UI run backups for the repository. Observability-only mode is for repositories backed up by something else; Borg UI can browse archives, restore files, run checks, and show health, but it will not run backups or scheduled backups for that repository.
+
+If the repository comes from BorgBase, Hetzner Storage Box, another hosted Borg
+service, or a NAS with special path mapping, keep the provider's repository path
+exactly as given. See [Provider Guides](provider-guides).
 
 ## Repository vs Backup Plan
 

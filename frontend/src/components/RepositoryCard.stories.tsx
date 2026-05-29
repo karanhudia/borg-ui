@@ -42,13 +42,13 @@ const sampleRepository: Repository = {
   next_run: '2026-05-17T02:00:00.000Z',
 }
 
-const rcloneRepository: Repository = {
+const localRepositoryWithMirror: Repository = {
   ...sampleRepository,
   id: 43,
   name: 'Cloud Mirror Repository',
-  path: '/data/rclone-cache/repositories/43',
-  repository_type: 'rclone',
-  storage_backend: 'rclone',
+  path: '/mnt/borg/production',
+  repository_type: 'local',
+  storage_backend: 'local',
   rclone_storage: {
     repository_id: 43,
     backend: 'rclone',
@@ -56,7 +56,7 @@ const rcloneRepository: Repository = {
     rclone_remote_name: 'local-test',
     rclone_remote_path: 'borg-ui/production',
     rclone_target: 'local-test:borg-ui/production',
-    cache_path: '/data/rclone-cache/repositories/43',
+    cache_path: '/mnt/borg/production',
     cache_present: true,
     sync_policy: 'after_success',
     sync_status: 'current',
@@ -108,7 +108,126 @@ export const Default: Story = {
 export const RcloneSynced: Story = {
   args: {
     ...defaultArgs,
-    repository: rcloneRepository,
+    repository: localRepositoryWithMirror,
+    onRcloneSync: noop,
+    onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const RcloneScheduled: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...localRepositoryWithMirror,
+      id: 49,
+      name: 'Scheduled Cloud Mirror',
+      rclone_storage: {
+        ...localRepositoryWithMirror.rclone_storage!,
+        repository_id: 49,
+        sync_policy: 'scheduled',
+        sync_status: 'current',
+        sync_cron_expression: '0 */6 * * *',
+        sync_timezone: 'UTC',
+        next_scheduled_sync_at: '2026-05-17T06:00:00.000Z',
+        latest_sync_job: {
+          id: 91,
+          triggered_by: 'schedule',
+          status: 'completed',
+          scheduled_for: '2026-05-17T00:00:00.000Z',
+          completed_at: '2026-05-17T00:01:00.000Z',
+          error_text: null,
+          has_log: true,
+        },
+      },
+    },
+    onRcloneSync: noop,
+    onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const EnableCloudMirror: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 46,
+      name: 'Eligible Local Repository',
+      storage_backend: 'local',
+      execution_target: 'local',
+      rclone_storage: null,
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const EnableCloudMirrorForSsh: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 47,
+      name: 'SSH Repository Mirror',
+      path: 'ssh://borg@storage.example:22/backups/production',
+      repository_type: 'ssh',
+      storage_backend: 'ssh',
+      execution_target: 'ssh',
+      executor_type: 'server',
+      connection_id: 11,
+      rclone_storage: null,
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
+export const ManagedAgentMirrorPending: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...sampleRepository,
+      id: 48,
+      name: 'Agent Repository Mirror',
+      path: '/srv/borg/workstation',
+      repository_type: 'local',
+      storage_backend: 'agent_local',
+      execution_target: 'agent',
+      executor_type: 'agent',
+      agent_machine_id: 31,
+      agent_machine_name: 'workstation.local',
+      agent_machine_status: 'online',
+      rclone_storage: {
+        repository_id: 48,
+        backend: 'rclone',
+        rclone_remote_id: 4,
+        rclone_remote_name: 's3-archive',
+        rclone_remote_path: 'borg-ui/workstation',
+        rclone_target: 's3-archive:borg-ui/workstation',
+        cache_path: null,
+        cache_present: true,
+        sync_direction: 'agent_to_remote',
+        sync_policy: 'manual',
+        sync_status: 'pending',
+        agent_machine_name: 'workstation.local',
+        agent_machine_status: 'online',
+      },
+    },
     onRcloneSync: noop,
     onRcloneHydrate: noop,
   },
@@ -123,11 +242,11 @@ export const RcloneFailed: Story = {
   args: {
     ...defaultArgs,
     repository: {
-      ...rcloneRepository,
+      ...localRepositoryWithMirror,
       id: 44,
       name: 'Failed Cloud Mirror',
       rclone_storage: {
-        ...rcloneRepository.rclone_storage!,
+        ...localRepositoryWithMirror.rclone_storage!,
         repository_id: 44,
         sync_policy: 'manual',
         sync_status: 'failed',
@@ -144,15 +263,52 @@ export const RcloneFailed: Story = {
   ),
 }
 
+export const RcloneScheduledFailed: Story = {
+  args: {
+    ...defaultArgs,
+    repository: {
+      ...localRepositoryWithMirror,
+      id: 50,
+      name: 'Failed Scheduled Mirror',
+      rclone_storage: {
+        ...localRepositoryWithMirror.rclone_storage!,
+        repository_id: 50,
+        sync_policy: 'scheduled',
+        sync_status: 'failed',
+        sync_cron_expression: '*/30 * * * *',
+        sync_timezone: 'UTC',
+        next_scheduled_sync_at: '2026-05-17T06:30:00.000Z',
+        last_sync_error: 'remote local-test unavailable',
+        latest_sync_job: {
+          id: 92,
+          triggered_by: 'schedule',
+          status: 'failed',
+          scheduled_for: '2026-05-17T06:00:00.000Z',
+          completed_at: '2026-05-17T06:00:04.000Z',
+          error_text: 'remote local-test unavailable',
+          has_log: true,
+        },
+      },
+    },
+    onRcloneSync: noop,
+    onRcloneHydrate: noop,
+  },
+  render: (args) => (
+    <Box sx={{ width: 620, maxWidth: 'calc(100vw - 32px)' }}>
+      <RepositoryCard {...args} />
+    </Box>
+  ),
+}
+
 export const RcloneHydrationRequired: Story = {
   args: {
     ...defaultArgs,
     repository: {
-      ...rcloneRepository,
+      ...localRepositoryWithMirror,
       id: 45,
       name: 'Imported Cloud Mirror',
       rclone_storage: {
-        ...rcloneRepository.rclone_storage!,
+        ...localRepositoryWithMirror.rclone_storage!,
         repository_id: 45,
         cache_present: false,
         sync_status: 'pending',

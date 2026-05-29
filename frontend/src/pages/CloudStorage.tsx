@@ -14,10 +14,6 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
   Paper,
   Skeleton,
   Stack,
@@ -30,8 +26,6 @@ import {
   AlertTriangle,
   CheckCircle,
   Cloud,
-  File,
-  Folder,
   HardDrive,
   Plus,
   RefreshCw,
@@ -40,7 +34,12 @@ import {
   Trash2,
 } from 'lucide-react'
 import { rcloneAPI } from '../services/api'
-import type { RcloneRemote, RcloneStatus } from '../services/api'
+import type {
+  RcloneOAuthSession,
+  RcloneProvider,
+  RcloneRemote,
+  RcloneStatus,
+} from '../services/api'
 import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import RcloneRemoteDialog from '../components/wizard/RcloneRemoteDialog'
@@ -48,6 +47,8 @@ import type { RcloneRemoteCreateInput } from '../components/wizard/RcloneRemoteD
 import OperationalCard from '../components/OperationalCard'
 import PageHeader from '../components/PageHeader'
 import ListToolbar from '../components/ListToolbar'
+import StorageBrowserDialog, { type StorageBrowserItem } from '../components/StorageBrowserDialog'
+import { joinBrowserPath, normalizeBrowserPath } from '../utils/storageBrowserPaths'
 
 interface BrowseEntry {
   name: string
@@ -66,6 +67,7 @@ interface BrowseState {
 interface CloudStorageContentProps {
   status?: RcloneStatus | null
   remotes: RcloneRemote[]
+  providers?: RcloneProvider[]
   isLoading?: boolean
   isRefreshing?: boolean
   isCreating?: boolean
@@ -84,6 +86,11 @@ interface CloudStorageContentProps {
   onAddRemote?: () => void
   onCloseAddRemote?: () => void
   onCreateRemote?: (data: RcloneRemoteCreateInput) => Promise<void> | void
+  onStartOAuth?: (data: {
+    provider: string
+    config: Record<string, unknown>
+  }) => Promise<RcloneOAuthSession>
+  onGetOAuthSession?: (sessionId: string) => Promise<RcloneOAuthSession>
   onEditRemote?: (remote: RcloneRemote) => void
   onCloseEditRemote?: () => void
   onUpdateRemote?: (data: RcloneRemoteCreateInput) => Promise<void> | void
@@ -91,12 +98,16 @@ interface CloudStorageContentProps {
   onCloseDeleteRemote?: () => void
   onConfirmDeleteRemote?: () => Promise<void> | void
   onTestRemote?: (remote: RcloneRemote) => void
-  onBrowseRemote?: (remote: RcloneRemote) => void
+  onBrowseRemote?: (remote: RcloneRemote, path?: string) => void
   onCloseBrowse?: () => void
 }
 
 const getApiMessage = (error: unknown, fallback: string) => {
-  return translateBackendKey(getApiErrorDetail(error)) || fallback
+  const detail = getApiErrorDetail(error)
+  if (detail === null || detail === undefined) {
+    return fallback
+  }
+  return translateBackendKey(detail) || fallback
 }
 
 const formatStatus = (remote: RcloneRemote) => {
@@ -313,8 +324,12 @@ function CloudStorageRemoteCard({
                 <Typography
                   variant="body2"
                   fontWeight={600}
-                  noWrap
-                  sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.85rem' }}
+                  sx={{
+                    fontVariantNumeric: 'tabular-nums',
+                    fontSize: '0.85rem',
+                    minWidth: 0,
+                    overflowWrap: 'anywhere',
+                  }}
                 >
                   {stat.value}
                 </Typography>
@@ -432,6 +447,7 @@ function CloudStorageRemoteCard({
 export function CloudStorageContent({
   status,
   remotes,
+  providers,
   isLoading = false,
   isRefreshing = false,
   isCreating = false,
@@ -450,6 +466,8 @@ export function CloudStorageContent({
   onAddRemote,
   onCloseAddRemote,
   onCreateRemote,
+  onStartOAuth,
+  onGetOAuthSession,
   onEditRemote,
   onCloseEditRemote,
   onUpdateRemote,
@@ -561,6 +579,17 @@ export function CloudStorageContent({
   const totalAfterFilter = processedRemotes.groups.reduce((sum, g) => sum + g.remotes.length, 0)
   const hasUnfilteredRemotes = remotes.length > 0
   const showToolbar = isLoading || hasUnfilteredRemotes
+  const browseItems = useMemo<StorageBrowserItem[] | null>(() => {
+    if (!browseState) return null
+
+    return browseState.entries.map((entry) => ({
+      name: entry.name,
+      path: joinBrowserPath(browseState.path, entry.path || entry.name),
+      type: entry.is_dir ? 'directory' : 'file',
+      size: entry.size,
+      modified: entry.modified,
+    }))
+  }, [browseState])
 
   return (
     <Box component="section" aria-label={t('cloudStorage.title')}>
@@ -755,8 +784,11 @@ export function CloudStorageContent({
           open={addDialogOpen}
           isCreating={isCreating}
           error={createError}
+          providers={providers}
           onClose={onCloseAddRemote}
           onCreate={onCreateRemote}
+          onStartOAuth={onStartOAuth}
+          onGetOAuthSession={onGetOAuthSession}
         />
       ) : null}
 
@@ -772,8 +804,11 @@ export function CloudStorageContent({
           }}
           isCreating={isUpdating}
           error={updateError}
+          providers={providers}
           onClose={onCloseEditRemote}
           onCreate={onUpdateRemote}
+          onStartOAuth={onStartOAuth}
+          onGetOAuthSession={onGetOAuthSession}
         />
       ) : null}
 
@@ -800,35 +835,25 @@ export function CloudStorageContent({
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!browseState} onClose={onCloseBrowse} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {t('cloudStorage.browseTitle', { name: browseState?.remote.name })}
-        </DialogTitle>
-        <DialogContent dividers>
-          {isBrowsing ? (
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <CircularProgress size={18} />
-              <Typography>{t('cloudStorage.browsing')}</Typography>
-            </Stack>
-          ) : browseState?.entries.length ? (
-            <List dense>
-              {browseState.entries.map((entry) => (
-                <ListItem key={entry.path || entry.name} disableGutters>
-                  <ListItemIcon sx={{ minWidth: 34 }}>
-                    {entry.is_dir ? <Folder size={18} /> : <File size={18} />}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={entry.name}
-                    secondary={entry.is_dir ? t('cloudStorage.directory') : t('cloudStorage.file')}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          ) : (
-            <Typography color="text.secondary">{t('cloudStorage.noEntries')}</Typography>
-          )}
-        </DialogContent>
-      </Dialog>
+      <StorageBrowserDialog
+        open={!!browseState}
+        title={t('cloudStorage.browseTitle', { name: browseState?.remote.name })}
+        subtitle={browseState?.remote.provider}
+        currentPath={browseState?.path || ''}
+        items={browseItems}
+        isLoading={isBrowsing}
+        rootLabel={t('archiveContents.root')}
+        closeLabel={t('common.buttons.close')}
+        emptyDirectoryLabel={t('cloudStorage.noEntries')}
+        noInfoLabel={t('cloudStorage.noEntries')}
+        maxWidth="md"
+        onClose={() => onCloseBrowse?.()}
+        onNavigate={(path) => {
+          if (browseState) {
+            onBrowseRemote?.(browseState.remote, path)
+          }
+        }}
+      />
     </Box>
   )
 }
@@ -855,6 +880,14 @@ export default function CloudStorage() {
     queryFn: async () => {
       const response = await rcloneAPI.listRemotes()
       return response.data.remotes
+    },
+  })
+
+  const providersQuery = useQuery({
+    queryKey: ['rclone-providers'],
+    queryFn: async () => {
+      const response = await rcloneAPI.getProviders()
+      return response.data.providers
     },
   })
 
@@ -922,17 +955,29 @@ export default function CloudStorage() {
   })
 
   const browseRemoteMutation = useMutation({
-    mutationFn: async (remote: RcloneRemote) => {
-      setBrowseState({ remote, path: '', entries: [] })
-      const response = await rcloneAPI.browseRemote(remote.id, '')
+    mutationFn: async ({ remote, path }: { remote: RcloneRemote; path: string }) => {
+      const normalizedPath = normalizeBrowserPath(path)
+      setBrowseState({ remote, path: normalizedPath, entries: [] })
+      const response = await rcloneAPI.browseRemote(remote.id, normalizedPath)
       return {
         remote,
-        path: response.data.path || '',
+        path: normalizeBrowserPath(response.data.path || normalizedPath),
         entries: (response.data.entries || []) as BrowseEntry[],
       }
     },
     onSuccess: ({ remote, path, entries }) => {
-      setBrowseState({ remote, path, entries })
+      const normalizedPath = normalizeBrowserPath(path)
+      setBrowseState((current) => {
+        if (
+          !current ||
+          current.remote.id !== remote.id ||
+          normalizeBrowserPath(current.path) !== normalizedPath
+        ) {
+          return current
+        }
+
+        return { remote, path: normalizedPath, entries }
+      })
     },
     onError: (error: unknown) => {
       toast.error(getApiMessage(error, t('cloudStorage.browseFailed')))
@@ -942,6 +987,7 @@ export default function CloudStorage() {
   const refreshAll = () => {
     queryClient.invalidateQueries({ queryKey: ['rclone-status'] })
     queryClient.invalidateQueries({ queryKey: ['rclone-remotes'] })
+    queryClient.invalidateQueries({ queryKey: ['rclone-providers'] })
   }
 
   const loadError = useMemo(() => {
@@ -951,15 +997,19 @@ export default function CloudStorage() {
     if (remotesQuery.error) {
       return getApiMessage(remotesQuery.error, t('cloudStorage.remotesLoadFailed'))
     }
+    if (providersQuery.error) {
+      return getApiMessage(providersQuery.error, t('cloudStorage.providersLoadFailed'))
+    }
     return null
-  }, [remotesQuery.error, statusQuery.error, t])
+  }, [providersQuery.error, remotesQuery.error, statusQuery.error, t])
 
   return (
     <CloudStorageContent
       status={statusQuery.data}
       remotes={remotesQuery.data || []}
-      isLoading={statusQuery.isLoading || remotesQuery.isLoading}
-      isRefreshing={statusQuery.isFetching || remotesQuery.isFetching}
+      providers={providersQuery.data}
+      isLoading={statusQuery.isLoading || remotesQuery.isLoading || providersQuery.isLoading}
+      isRefreshing={statusQuery.isFetching || remotesQuery.isFetching || providersQuery.isFetching}
       isCreating={createRemoteMutation.isPending}
       isUpdating={updateRemoteMutation.isPending}
       isDeleting={deleteRemoteMutation.isPending}
@@ -989,6 +1039,14 @@ export default function CloudStorage() {
       onCreateRemote={async (data) => {
         await createRemoteMutation.mutateAsync(data)
       }}
+      onStartOAuth={async (data) => {
+        const response = await rcloneAPI.startOAuthSession(data)
+        return response.data
+      }}
+      onGetOAuthSession={async (sessionId) => {
+        const response = await rcloneAPI.getOAuthSession(sessionId)
+        return response.data
+      }}
       onEditRemote={(remote) => {
         updateRemoteMutation.reset()
         setEditingRemote(remote)
@@ -1012,7 +1070,7 @@ export default function CloudStorage() {
         await deleteRemoteMutation.mutateAsync()
       }}
       onTestRemote={(remote) => testRemoteMutation.mutate(remote)}
-      onBrowseRemote={(remote) => browseRemoteMutation.mutate(remote)}
+      onBrowseRemote={(remote, path = '') => browseRemoteMutation.mutate({ remote, path })}
       onCloseBrowse={() => setBrowseState(null)}
     />
   )

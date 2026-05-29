@@ -202,6 +202,86 @@ Use trusted-header auth only when the Borg UI container is reachable exclusively
 
 See [Authentication and SSO](authentication).
 
+## Cloud Storage OAuth Callbacks
+
+Google Drive and Microsoft OneDrive can use Borg UI-owned OAuth callbacks
+instead of rclone's local loopback callback. This is the recommended mode for
+Docker, remote-server, and reverse-proxy deployments where a user's browser
+cannot reach `127.0.0.1` inside the Borg UI container.
+
+Configure these values only on the backend/container:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PUBLIC_BASE_URL` | empty | Public browser URL for Borg UI, including `BASE_PATH` when served under a sub-path |
+| `GOOGLE_DRIVE_OAUTH_CLIENT_ID` | empty | Google OAuth web application client ID for Borg UI-owned Drive callbacks |
+| `GOOGLE_DRIVE_OAUTH_CLIENT_SECRET` | empty | Google OAuth web application client secret |
+| `ONEDRIVE_OAUTH_CLIENT_ID` | empty | Microsoft Entra application client ID for Borg UI-owned OneDrive callbacks |
+| `ONEDRIVE_OAUTH_CLIENT_SECRET` | empty | Microsoft Entra application client secret |
+
+`PUBLIC_BASE_URL` must be the normal browser URL for the deployment and must
+use HTTPS, except for localhost development URLs. If Borg UI is served from a
+sub-path, include it:
+
+```yaml
+environment:
+  - BASE_PATH=/borg-ui
+  - PUBLIC_BASE_URL=https://example.com/borg-ui
+```
+
+Register these redirect URLs with the provider OAuth app:
+
+```text
+https://example.com/api/rclone/oauth/callback/drive
+https://example.com/api/rclone/oauth/callback/onedrive
+```
+
+For a sub-path deployment, include the sub-path in the redirect URL:
+
+```text
+https://example.com/borg-ui/api/rclone/oauth/callback/drive
+https://example.com/borg-ui/api/rclone/oauth/callback/onedrive
+```
+
+For local development with `./scripts/dev.sh`, the browser opens the Vite dev
+server at `http://localhost:7879` and Vite proxies `/api` to the backend
+container. Use `localhost` as the public base URL and register the matching
+localhost callback:
+
+```dotenv
+PUBLIC_BASE_URL=http://localhost:7879
+GOOGLE_DRIVE_OAUTH_CLIENT_ID=your-google-client-id
+GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=your-google-client-secret
+ONEDRIVE_OAUTH_CLIENT_ID=your-microsoft-client-id
+ONEDRIVE_OAUTH_CLIENT_SECRET=your-microsoft-client-secret
+```
+
+```text
+http://localhost:7879/api/rclone/oauth/callback/drive
+http://localhost:7879/api/rclone/oauth/callback/onedrive
+```
+
+Place those values in the repository root `.env` file before starting
+`./scripts/dev.sh`, or export them in the shell that starts the dev script. The
+dev compose file passes them only to the backend container. For a
+production-style local `docker compose up` run, use the actual browser URL and
+port for that compose stack, for example `PUBLIC_BASE_URL=http://localhost:8081`
+when `PORT=8081`.
+
+Keep provider client secrets in Compose secrets, an `.env` file that is not
+committed, or your orchestrator's secret store. They are never needed by the
+frontend. Borg UI returns only OAuth setup state and callback URLs to the
+browser, and stores completed tokens in the server-managed rclone config.
+OneDrive app registrations need delegated Microsoft Graph permissions matching
+the scopes Borg UI requests, including `offline_access`, `User.Read`,
+`Files.Read`, `Files.ReadWrite`, `Files.Read.All`, and `Files.ReadWrite.All`.
+Add `Sites.Read.All` and configure the rclone `access_scopes` field when using
+SharePoint site discovery or document libraries.
+
+When provider credentials or `PUBLIC_BASE_URL` are missing, Cloud Storage keeps
+Google Drive and OneDrive available through the existing rclone loopback/manual
+authorization path.
+
 ## Licensing and Activation
 
 | Variable | Default | Purpose |

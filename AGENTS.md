@@ -10,6 +10,7 @@ These instructions apply to the entire repository.
 - Save durable specs and implementation plans under `docs/engineering/specs/` and `docs/engineering/plans/` with dated, slugged filenames such as `YYYY-MM-DD-feature-name.md`.
 - Keep process proportional: small mechanical fixes can use a concise inline plan plus targeted tests or verification instead of a full written spec.
 - Do not create generic `design.md` files by default; use feature-specific specs only when a written spec is warranted.
+- When sidebar tabs, navigation groups, or the main user flow change, update the relevant user docs in the same change so navigation guidance stays current.
 
 ## UI Workflow
 
@@ -17,6 +18,9 @@ These instructions apply to the entire repository.
 - New or changed UI features must add or update a Storybook story that demonstrates the changed state.
 - After adding or changing a UI story, run `cd frontend && npm run snapshots` and commit the resulting screenshot files under `frontend/storybook-snapshots/`.
 - UI components should stay small and composed from smaller components. When a UI component is added or changed, add or update the component story and snapshot that cover it.
+- Schedule-related UI must use the shared schedule controls (`SchedulePicker`,
+  `CronExpressionInput`, `CronBuilderDialog`, and the timezone selector rendered
+  by `SchedulePicker`) instead of ad hoc cron or timezone text fields.
 
 ## UI Preferences
 

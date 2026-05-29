@@ -219,3 +219,30 @@ class TestRepositoryApiDispatch:
         assert response.json()["message"] == "backend.success.repo.lockBroken"
         mock_router.assert_called_once()
         fake_router.break_lock.assert_awaited_once()
+
+    def test_break_lock_route_requires_operator_access(
+        self, test_client: TestClient, auth_headers, test_db
+    ):
+        repo = Repository(
+            name="Repo",
+            path="/tmp/repo",
+            encryption="none",
+            repository_type="local",
+            borg_version=2,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        fake_router = Mock(break_lock=AsyncMock(return_value={"success": True}))
+        with patch(
+            "app.api.repositories.BorgRouter", return_value=fake_router
+        ) as mock_router:
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/break-lock",
+                headers=auth_headers,
+            )
+
+        assert response.status_code == 403
+        mock_router.assert_not_called()
+        fake_router.break_lock.assert_not_awaited()

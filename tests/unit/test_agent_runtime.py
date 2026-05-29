@@ -11,7 +11,11 @@ from agent.borg_ui_agent.backup import (
 from agent.borg_ui_agent.borg import detect_borg_binaries
 from agent.borg_ui_agent.client import AGENT_AUTH_HEADER, AgentClient
 from agent.borg_ui_agent.config import AgentConfig, load_config, save_config
-from agent.borg_ui_agent.repository_ops import RepositoryOperationPayload
+from agent.borg_ui_agent.repository_ops import (
+    RepositoryOperationPayload,
+    execute_repository_operation_job,
+    _write_temp_rclone_config,
+)
 from agent.borg_ui_agent.runtime import AgentRuntime, get_capabilities
 
 
@@ -418,6 +422,139 @@ def test_runtime_run_once_dispatches_registered_structured_handler(monkeypatch):
     assert handled_jobs[0][0]["id"] == 44
     assert handled_jobs[0][1] is client
     assert callable(handled_jobs[0][2])
+
+
+@pytest.mark.unit
+def test_runtime_advertises_repository_rclone_sync_capability():
+    assert "repository.rclone_sync" in get_capabilities()
+
+
+@pytest.mark.unit
+def test_repository_rclone_sync_payload_builds_agent_owned_command(tmp_path: Path):
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.rclone_sync",
+            "repository": {"path": "/agent/repositories/app"},
+            "operation": {
+                "rclone": {
+                    "remote_name": "prod-s3",
+                    "remote_path": "borg-ui/repositories/app",
+                    "config": {"type": "s3", "provider": "AWS"},
+                    "extra_flags": ["--fast-list"],
+                }
+            },
+        }
+    )
+
+    command = payload.build_command(rclone_config_path=str(tmp_path / "rclone.conf"))
+
+    assert command == [
+        "rclone",
+        "--config",
+        str(tmp_path / "rclone.conf"),
+        "sync",
+        "/agent/repositories/app",
+        "prod-s3:borg-ui/repositories/app",
+        "--fast-list",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_rclone_sync_removes_temp_config_when_command_build_fails(
+    tmp_path: Path, monkeypatch
+):
+    config_path = tmp_path / "rclone.conf"
+    config_path.write_text("[prod-s3]\ntype = s3\n", encoding="utf-8")
+
+    def fake_write_temp_config(_payload):
+        return str(config_path)
+
+    def fail_build_command(self, *, rclone_config_path=None):
+        assert rclone_config_path == str(config_path)
+        raise ValueError("rclone remote_path is required")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops._write_temp_rclone_config",
+        fake_write_temp_config,
+    )
+    monkeypatch.setattr(
+        RepositoryOperationPayload,
+        "build_command",
+        fail_build_command,
+    )
+    client = FakeRuntimeClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 88,
+            "payload": {
+                "schema_version": 1,
+                "job_kind": "repository.rclone_sync",
+                "repository": {"path": "/agent/repositories/app"},
+                "operation": {
+                    "rclone": {
+                        "remote_name": "prod-s3",
+                        "remote_path": "borg-ui/repositories/app",
+                        "config": {"type": "s3"},
+                    }
+                },
+            },
+        },
+        client,
+    )
+
+    assert result.status == "failed"
+    assert not config_path.exists()
+
+
+@pytest.mark.unit
+def test_repository_rclone_sync_removes_partial_temp_config_when_write_fails(
+    tmp_path: Path, monkeypatch
+):
+    partial_config_path = tmp_path / "partial-rclone.conf"
+    closed = False
+
+    class FailingTempConfig:
+        name = str(partial_config_path)
+
+        def __init__(self):
+            self._handle = partial_config_path.open("w", encoding="utf-8")
+
+        def write(self, text):
+            self._handle.write(text)
+            self._handle.flush()
+            raise OSError("disk full")
+
+        def close(self):
+            nonlocal closed
+            closed = True
+            self._handle.close()
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.tempfile.NamedTemporaryFile",
+        lambda *args, **kwargs: FailingTempConfig(),
+    )
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.rclone_sync",
+            "repository": {"path": "/agent/repositories/app"},
+            "operation": {
+                "rclone": {
+                    "remote_name": "prod-s3",
+                    "remote_path": "borg-ui/repositories/app",
+                    "config": {"type": "s3"},
+                }
+            },
+        }
+    )
+
+    with pytest.raises(OSError, match="disk full"):
+        _write_temp_rclone_config(payload)
+
+    assert closed is True
+    assert not partial_config_path.exists()
 
 
 @pytest.mark.unit

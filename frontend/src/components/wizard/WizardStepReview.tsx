@@ -61,8 +61,12 @@ export interface WizardReviewData {
   excludePatterns: string[]
   customFlags: string
   remotePath: string
+  cloudMirrorEnabled?: boolean
+  rcloneRemoteName?: string
   rcloneRemotePath?: string
   rcloneSyncPolicy?: 'after_success' | 'manual' | 'scheduled'
+  rcloneSyncCronExpression?: string
+  rcloneSyncTimezone?: string
 }
 
 interface WizardStepReviewProps {
@@ -144,6 +148,9 @@ export default function WizardStepReview({
   const hasBackupConfiguration =
     data.repositoryMode === 'full' &&
     (hasBackupSource || data.excludePatterns.length > 0 || Boolean(data.customFlags))
+  const cloudMirrorTarget = data.rcloneRemoteName
+    ? `${data.rcloneRemoteName}:${data.rcloneRemotePath || ''}`
+    : data.rcloneRemotePath || t('wizard.review.notSet')
 
   const EMERALD = '#10b981'
   const BLUE = '#3b82f6'
@@ -295,7 +302,7 @@ export default function WizardStepReview({
             <ReviewCodePill>{data.path || t('wizard.review.notSet')}</ReviewCodePill>
           </ReviewAttrRow>
 
-          {data.repositoryLocation === 'rclone' && (
+          {data.repositoryLocation === 'rclone' && !data.cloudMirrorEnabled && (
             <>
               <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
                 <Typography variant="body2" fontSize="0.75rem">
@@ -312,9 +319,49 @@ export default function WizardStepReview({
                   {getRcloneSyncPolicyLabel()}
                 </Typography>
               </ReviewAttrRow>
+              {data.rcloneSyncPolicy === 'scheduled' && (
+                <ReviewAttrRow label={t('wizard.review.rcloneSyncSchedule')}>
+                  <ReviewCodePill>
+                    {`${data.rcloneSyncCronExpression || t('wizard.review.notSet')} · ${
+                      data.rcloneSyncTimezone || 'UTC'
+                    }`}
+                  </ReviewCodePill>
+                </ReviewAttrRow>
+              )}
             </>
           )}
         </ReviewSectionCard>
+
+        {data.cloudMirrorEnabled && (
+          <ReviewSectionCard
+            icon={<Cloud size={14} />}
+            label={t('wizard.review.cloudMirror')}
+            accentColor={VIOLET}
+          >
+            <ReviewAttrRow label={t('wizard.review.rcloneRoute')}>
+              <Typography variant="body2" fontSize="0.75rem">
+                {t('wizard.cloudMirror.routePreview')}
+              </Typography>
+            </ReviewAttrRow>
+            <ReviewAttrRow label={t('wizard.review.rcloneRemotePath')}>
+              <ReviewCodePill>{cloudMirrorTarget}</ReviewCodePill>
+            </ReviewAttrRow>
+            <ReviewAttrRow label={t('wizard.review.rcloneSyncPolicy')}>
+              <Typography variant="body2" fontSize="0.75rem">
+                {getRcloneSyncPolicyLabel()}
+              </Typography>
+            </ReviewAttrRow>
+            {data.rcloneSyncPolicy === 'scheduled' && (
+              <ReviewAttrRow label={t('wizard.review.rcloneSyncSchedule')}>
+                <ReviewCodePill>
+                  {`${data.rcloneSyncCronExpression || t('wizard.review.notSet')} · ${
+                    data.rcloneSyncTimezone || 'UTC'
+                  }`}
+                </ReviewCodePill>
+              </ReviewAttrRow>
+            )}
+          </ReviewSectionCard>
+        )}
 
         {/* SECURITY */}
         <ReviewSectionCard
