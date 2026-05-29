@@ -270,6 +270,16 @@ def _borg_keyfile_name(repo_path: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]", "_", path)
 
 
+def _write_borg_keyfile(repo_path: str, keyfile_content: str) -> str:
+    keyfile_dir = os.path.expanduser("~/.config/borg/keys")
+    os.makedirs(keyfile_dir, exist_ok=True)
+    keyfile_path = os.path.join(keyfile_dir, _borg_keyfile_name(repo_path))
+    with open(keyfile_path, "w") as f:
+        f.write(keyfile_content)
+    os.chmod(keyfile_path, 0o600)
+    return keyfile_path
+
+
 def get_standard_ssh_opts(include_key_path=None):
     """Backwards-compatible wrapper for shared Borg SSH options."""
     return shared_get_standard_ssh_opts(include_key_path=include_key_path)
@@ -1885,6 +1895,19 @@ async def _create_direct_rclone_repository_record(
     db.commit()
     db.refresh(repository)
 
+    try:
+        mqtt_service.sync_state_with_db(db, reason="repository creation")
+        logger.info(
+            "Synced repositories with MQTT after direct rclone creation",
+            repo_id=repository.id,
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to sync repositories with MQTT after direct rclone creation",
+            repo_id=repository.id,
+            error=str(e),
+        )
+
     logger.info(
         "Direct Borg 2 rclone repository created",
         name=repository.name,
@@ -2045,6 +2068,14 @@ async def _import_direct_rclone_repository_record(
             detail={"key": "backend.errors.repo.repositoryPathExists"},
         )
 
+    keyfile_path = None
+    if repo_data.keyfile_content:
+        keyfile_path = _write_borg_keyfile(repo_path, repo_data.keyfile_content)
+        logger.info(
+            "Wrote keyfile before direct rclone verification",
+            keyfile_path=keyfile_path,
+        )
+
     verify_result = await verify_existing_repository(
         path=repo_path,
         passphrase=repo_data.passphrase,
@@ -2054,6 +2085,13 @@ async def _import_direct_rclone_repository_record(
         borg_version=2,
     )
     if not verify_result["success"]:
+        if keyfile_path and os.path.exists(keyfile_path):
+            os.unlink(keyfile_path)
+            logger.info(
+                "Removed keyfile after failed direct rclone verification",
+                keyfile_path=keyfile_path,
+            )
+
         error_msg = verify_result.get("error", "Unknown error")
         if "passphrase" in error_msg.lower() or "encrypted" in error_msg.lower():
             raise HTTPException(
@@ -2101,6 +2139,24 @@ async def _import_direct_rclone_repository_record(
     db.add(repository)
     db.commit()
     db.refresh(repository)
+
+    if keyfile_path:
+        repository.has_keyfile = True
+        db.commit()
+        db.refresh(repository)
+
+    try:
+        mqtt_service.sync_state_with_db(db, reason="repository import")
+        logger.info(
+            "Synced repositories with MQTT after direct rclone import",
+            repo_id=repository.id,
+        )
+    except Exception as e:
+        logger.warning(
+            "Failed to sync repositories with MQTT after direct rclone import",
+            repo_id=repository.id,
+            error=str(e),
+        )
 
     logger.info(
         "Direct Borg 2 rclone repository imported",
@@ -2987,6 +3043,9 @@ async def import_repository(
             repository_payload["rclone_storage"] = rclone_storage
             if repository.repository_type == "rclone":
                 repository_payload["repository_type"] = "rclone"
+        elif _is_direct_rclone_repository(repository):
+            repository_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+            repository_payload["repository_type"] = "rclone"
 
         return {
             "success": True,
@@ -3255,6 +3314,9 @@ async def get_repository(
             repository_payload["rclone_storage"] = rclone_storage
             if repository.repository_type == "rclone":
                 repository_payload["repository_type"] = "rclone"
+        elif _is_direct_rclone_repository(repository):
+            repository_payload["storage_backend"] = DIRECT_RCLONE_STORAGE_BACKEND
+            repository_payload["repository_type"] = "rclone"
 
         return {
             "success": True,

@@ -1590,6 +1590,11 @@ def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
         "app.api.repositories.rclone_repository_service.sync_repository", sync_mock
     )
     monkeypatch.setattr("app.api.v2.repositories._rcreate", v2_create_mock)
+    mqtt_reasons = []
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda _db, *, reason: mqtt_reasons.append(reason),
+    )
 
     response = test_client.post(
         "/api/repositories/",
@@ -1623,6 +1628,7 @@ def test_create_direct_borg2_rclone_repository_uses_url_without_storage_row(
     assert init_mock.await_args.kwargs["borg_version"] == 2
     sync_mock.assert_not_awaited()
     v2_create_mock.assert_not_awaited()
+    assert mqtt_reasons == ["repository creation"]
 
 
 @pytest.mark.unit
@@ -1643,6 +1649,11 @@ def test_import_direct_borg2_rclone_repository_verifies_url_without_hydrate(
         hydrate_mock,
     )
     monkeypatch.setattr("app.api.v2.repositories._rinfo", v2_info_mock)
+    mqtt_reasons = []
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda _db, *, reason: mqtt_reasons.append(reason),
+    )
 
     response = test_client.post(
         "/api/repositories/import",
@@ -1676,6 +1687,95 @@ def test_import_direct_borg2_rclone_repository_verifies_url_without_hydrate(
     assert verify_mock.await_args.kwargs["borg_version"] == 2
     hydrate_mock.assert_not_awaited()
     v2_info_mock.assert_not_awaited()
+    assert mqtt_reasons == ["repository import"]
+
+
+@pytest.mark.unit
+def test_import_direct_borg2_rclone_repository_persists_keyfile_before_verify(
+    test_client: TestClient, admin_headers, test_db, tmp_path, monkeypatch
+):
+    _enable_borg_v2(test_db)
+    repo_path = "rclone://prod-s3/borg-ui/keyfile-import"
+    keyfile_content = "BORG_KEY test-keyfile"
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    async def verify_repository(**kwargs):
+        from app.api.repositories import _borg_keyfile_name
+
+        keyfile_path = (
+            tmp_path / ".config" / "borg" / "keys" / _borg_keyfile_name(repo_path)
+        )
+        assert kwargs["path"] == repo_path
+        assert keyfile_path.read_text() == keyfile_content
+        assert keyfile_path.stat().st_mode & 0o777 == 0o600
+        return {
+            "success": True,
+            "info": {"encryption": {"mode": "keyfile-aes-ocb"}},
+        }
+
+    monkeypatch.setattr(
+        "app.api.repositories.verify_existing_repository", verify_repository
+    )
+    monkeypatch.setattr(
+        "app.api.repositories.mqtt_service.sync_state_with_db",
+        lambda *args, **kwargs: None,
+    )
+
+    response = test_client.post(
+        "/api/repositories/import",
+        headers=admin_headers,
+        json={
+            "name": "Imported Direct Keyfile Repo",
+            "path": repo_path,
+            "borg_version": 2,
+            "encryption": "keyfile-aes-ocb",
+            "passphrase": "secret",
+            "keyfile_content": keyfile_content,
+            "storage_backend": "rclone_direct",
+        },
+    )
+
+    assert response.status_code == 200
+    repository = (
+        test_db.query(Repository)
+        .filter(Repository.name == "Imported Direct Keyfile Repo")
+        .one()
+    )
+    assert repository.has_keyfile is True
+    assert response.json()["repository"]["storage_backend"] == "rclone_direct"
+
+
+@pytest.mark.unit
+def test_get_direct_borg2_rclone_repository_reports_direct_storage_backend(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    repository = Repository(
+        name="Direct Repo Detail",
+        path="rclone://prod-s3/borg-ui/direct-detail",
+        encryption="none",
+        compression="lz4",
+        repository_type="rclone",
+        execution_target="local",
+        executor_type="server",
+        borg_version=2,
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.api.repositories.get_repository_stats",
+        AsyncMock(return_value={"total_size": 0, "archive_count": 0}),
+    )
+
+    response = test_client.get(
+        f"/api/repositories/{repository.id}", headers=admin_headers
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["repository"]
+    assert payload["repository_type"] == "rclone"
+    assert payload["storage_backend"] == "rclone_direct"
+    assert "rclone_storage" not in payload
 
 
 @pytest.mark.unit
