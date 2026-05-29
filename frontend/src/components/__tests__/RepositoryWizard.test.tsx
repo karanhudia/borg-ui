@@ -49,6 +49,20 @@ vi.mock('../CommandPreview', () => ({
   default: () => <div data-testid="command-preview">Command Preview</div>,
 }))
 
+vi.mock('../CodeEditor', () => ({
+  default: ({
+    label,
+    value,
+    onChange,
+  }: {
+    label?: string
+    value: string
+    onChange: (value: string) => void
+  }) => (
+    <textarea aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} />
+  ),
+}))
+
 vi.mock('../ExcludePatternInput', () => ({
   default: () => <div data-testid="exclude-patterns">Exclude Patterns</div>,
 }))
@@ -788,7 +802,9 @@ describe('RepositoryWizard', () => {
       await user.click(screen.getByRole('button', { name: /Add remote/i }))
 
       setInputValue(screen.getByLabelText(/Remote name/i), 'local-test')
-      setInputValue(screen.getByLabelText(/^Provider/i), 'local')
+      expect(screen.getByRole('combobox', { name: /^Provider/i })).toHaveTextContent(
+        'Local filesystem'
+      )
       setInputValue(screen.getByLabelText(/Config JSON/i), '{"type":"local"}')
       await user.click(screen.getByRole('button', { name: /Create remote/i }))
 
