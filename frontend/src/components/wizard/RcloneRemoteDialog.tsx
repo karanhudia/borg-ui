@@ -228,6 +228,8 @@ export default function RcloneRemoteDialog({
     )
     if (marker === requestProvider) {
       setBorgUiOAuthProvider(marker)
+    } else {
+      setBorgUiOAuthProvider(null)
     }
     setConfigJson((currentJson) => {
       let currentConfig: Record<string, unknown>
@@ -354,6 +356,8 @@ export default function RcloneRemoteDialog({
     }
     if (borgUiOAuthProvider === remoteProvider) {
       redactedConfig._borg_ui_oauth_provider = borgUiOAuthProvider
+    } else {
+      delete redactedConfig._borg_ui_oauth_provider
     }
 
     setLocalError(null)

@@ -361,6 +361,117 @@ describe('CloudStorage', () => {
     })
   }, 60000)
 
+  it('clears Borg UI OAuth metadata when loopback authorization replaces it', async () => {
+    vi.mocked(rcloneAPI.startOAuthSession)
+      .mockResolvedValueOnce({
+        data: {
+          session_id: 'oauth-borg-ui',
+          provider: 'drive',
+          status: 'awaiting_callback',
+          oauth_mode: 'borg_ui',
+          authorization_url: '/rclone/oauth/sessions/oauth-borg-ui/authorize',
+          local_authorization_url: null,
+          config: null,
+          error: null,
+        },
+      } as AxiosResponse)
+      .mockResolvedValueOnce({
+        data: {
+          session_id: 'oauth-loopback',
+          provider: 'drive',
+          status: 'awaiting_callback',
+          oauth_mode: 'rclone_loopback',
+          authorization_url: '/rclone/oauth/sessions/oauth-loopback/authorize',
+          local_authorization_url: 'http://127.0.0.1:53682/auth?state=loopback',
+          config: null,
+          error: null,
+        },
+      } as AxiosResponse)
+    vi.mocked(rcloneAPI.getOAuthSession)
+      .mockResolvedValueOnce({
+        data: {
+          session_id: 'oauth-borg-ui',
+          provider: 'drive',
+          status: 'authorized',
+          oauth_mode: 'borg_ui',
+          authorization_url: '/rclone/oauth/sessions/oauth-borg-ui/authorize',
+          local_authorization_url: null,
+          config: {
+            type: 'drive',
+            token: '{"access_token":"borg-access","refresh_token":"borg-refresh"}',
+            _borg_ui_oauth_provider: 'drive',
+          },
+          error: null,
+        },
+      } as AxiosResponse)
+      .mockResolvedValueOnce({
+        data: {
+          session_id: 'oauth-loopback',
+          provider: 'drive',
+          status: 'authorized',
+          oauth_mode: 'rclone_loopback',
+          authorization_url: '/rclone/oauth/sessions/oauth-loopback/authorize',
+          local_authorization_url: 'http://127.0.0.1:53682/auth?state=loopback',
+          config: {
+            type: 'drive',
+            token: '{"access_token":"loopback-access","refresh_token":"loopback-refresh"}',
+          },
+          error: null,
+        },
+      } as AxiosResponse)
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    await screen.findByText('prod-s3')
+    fireEvent.click(screen.getByRole('button', { name: /Add remote/i }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Google Drive/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /Start Borg UI OAuth/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /Check authorization/i }))
+
+    await waitFor(() => {
+      expect((screen.getByLabelText(/Config JSON/i) as HTMLTextAreaElement).value).toContain(
+        'borg-refresh'
+      )
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Use rclone loopback/i }))
+
+    await waitFor(() => {
+      expect(rcloneAPI.startOAuthSession).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          provider: 'drive',
+          mode: 'rclone_loopback',
+        })
+      )
+    })
+    fireEvent.click(await screen.findByRole('button', { name: /Check authorization/i }))
+
+    await waitFor(() => {
+      expect((screen.getByLabelText(/Config JSON/i) as HTMLTextAreaElement).value).toContain(
+        'loopback-refresh'
+      )
+    })
+
+    fireEvent.change(screen.getByLabelText(/Remote name/i), {
+      target: { value: 'gdrive-loopback' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Create remote/i }))
+
+    await waitFor(() => {
+      expect(rcloneAPI.createRemote).toHaveBeenCalledWith({
+        name: 'gdrive-loopback',
+        provider: 'drive',
+        config_source: 'managed',
+        redacted_config: {
+          type: 'drive',
+          scope: 'drive',
+          token: '{"access_token":"loopback-access","refresh_token":"loopback-refresh"}',
+        },
+      })
+    })
+  }, 60000)
+
   it('ignores stale OAuth responses after switching providers', async () => {
     let resolveStart!: (value: AxiosResponse) => void
     vi.mocked(rcloneAPI.startOAuthSession).mockReturnValue(

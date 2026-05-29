@@ -527,6 +527,95 @@ def test_rclone_oauth_authorization_url_redirects_through_backend(
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+async def test_exchange_borg_ui_oauth_code_maps_malformed_json_to_exchange_error(
+    monkeypatch,
+):
+    from app.api import rclone as rclone_api
+
+    monkeypatch.setattr(
+        rclone_api.settings,
+        "google_drive_oauth_client_id",
+        "google-client-id",
+    )
+    monkeypatch.setattr(
+        rclone_api.settings,
+        "google_drive_oauth_client_secret",
+        "google-client-secret",
+    )
+
+    class MalformedJsonResponse:
+        status_code = 200
+
+        def json(self):
+            raise ValueError("malformed provider response")
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def post(self, *_args, **_kwargs):
+            return MalformedJsonResponse()
+
+    monkeypatch.setattr(rclone_api.httpx, "AsyncClient", FakeAsyncClient)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await rclone_api._exchange_borg_ui_oauth_code(
+            "drive",
+            "provider-code",
+            "https://backups.example.com/api/rclone/oauth/callback/drive",
+        )
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == {
+        "key": "backend.errors.rclone.oauthCodeExchangeFailed"
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fetch_onedrive_default_drive_maps_malformed_json_to_exchange_error(
+    monkeypatch,
+):
+    from app.api import rclone as rclone_api
+
+    class MalformedJsonResponse:
+        status_code = 200
+
+        def json(self):
+            raise ValueError("malformed graph response")
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+        async def get(self, *_args, **_kwargs):
+            return MalformedJsonResponse()
+
+    monkeypatch.setattr(rclone_api.httpx, "AsyncClient", FakeAsyncClient)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await rclone_api._fetch_onedrive_default_drive("access-token")
+
+    assert exc_info.value.status_code == 502
+    assert exc_info.value.detail == {
+        "key": "backend.errors.rclone.oauthCodeExchangeFailed"
+    }
+
+
+@pytest.mark.unit
 def test_start_rclone_oauth_session_retires_previous_active_session(
     test_client: TestClient, admin_headers, monkeypatch
 ):

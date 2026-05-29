@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Backend OAuth Configuration and Provider Metadata
+## Task 1: Backend OAuth Configuration and Provider Metadata
 
 **Files:**
 - Modify: `app/config.py`
@@ -31,7 +31,7 @@
       redirect URLs.
 - [ ] Run `pytest tests/unit/test_api_rclone.py -q` and verify the new tests pass.
 
-### Task 2: Backend Provider-Owned OAuth Sessions and Callback
+## Task 2: Backend Provider-Owned OAuth Sessions and Callback
 
 **Files:**
 - Modify: `app/api/rclone.py`
@@ -54,7 +54,7 @@
       `mode: "rclone_loopback"` and unsupported OAuth providers.
 - [ ] Run `pytest tests/unit/test_api_rclone.py -q`.
 
-### Task 3: Backend Token Persistence and Redaction
+## Task 3: Backend Token Persistence and Redaction
 
 **Files:**
 - Modify: `app/api/rclone.py`
@@ -72,7 +72,7 @@
 - [ ] Extend sensitive key/value redaction for provider OAuth fields.
 - [ ] Run `pytest tests/unit/test_api_rclone.py tests/unit/test_rclone_service.py -q`.
 
-### Task 4: Frontend API Types and Dialog Behavior
+## Task 4: Frontend API Types and Dialog Behavior
 
 **Files:**
 - Modify: `frontend/src/services/api.ts`
@@ -92,7 +92,7 @@
 - [ ] Keep manual JSON editing and Custom backend path working.
 - [ ] Run `cd frontend && npm test -- CloudStorage.test.tsx`.
 
-### Task 5: Stories and Snapshots
+## Task 5: Stories and Snapshots
 
 **Files:**
 - Modify: `frontend/src/components/wizard/RcloneRemoteDialog.stories.tsx`
@@ -105,7 +105,7 @@
 - [ ] Inspect generated snapshot filenames and ensure changed screenshots match
       the intended UI states.
 
-### Task 6: Final Validation, Runtime Walkthrough, and Handoff
+## Task 6: Final Validation, Runtime Walkthrough, and Handoff
 
 **Files:**
 - Update Linear workpad only

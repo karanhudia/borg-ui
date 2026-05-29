@@ -780,7 +780,13 @@ async def _exchange_borg_ui_oauth_code(
             status_code=502,
             detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
         )
-    parsed = response.json()
+    try:
+        parsed = response.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        ) from exc
     if not isinstance(parsed, dict) or not parsed.get("access_token"):
         raise HTTPException(
             status_code=502,
@@ -806,7 +812,13 @@ async def _fetch_onedrive_default_drive(access_token: str) -> dict[str, Any]:
             status_code=502,
             detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
         )
-    parsed = response.json()
+    try:
+        parsed = response.json()
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"key": "backend.errors.rclone.oauthCodeExchangeFailed"},
+        ) from exc
     if not isinstance(parsed, dict) or not parsed.get("id"):
         raise HTTPException(
             status_code=502,
