@@ -35,6 +35,7 @@ import {
   HardDrive,
   Info,
   Laptop,
+  Lock,
   Plus,
   RefreshCw,
   Server,
@@ -434,13 +435,31 @@ function selectedAgentRepositoryKey(
   wizardState: WizardState,
   fullRepositories: Repository[]
 ): SourceKey | null {
+  const constraint = getAgentRepoConstraint(wizardState, fullRepositories, [])
+  return constraint ? `agent:${constraint.agentId}` : null
+}
+
+// When the plan targets a single agent-backed repository, the backend (see
+// _agent_source_paths in app/services/repository_executor.py) only accepts
+// sources of source_type=local or source_type=agent with the same
+// agent_machine_id. We surface that constraint in the UI by disabling the
+// Remote card and locking the Managed Agent picker to the repo's agent.
+function getAgentRepoConstraint(
+  wizardState: WizardState,
+  fullRepositories: Repository[],
+  agentMachines: AgentMachineResponse[]
+): { agentId: number; agentName: string } | null {
   const selectedRepositories = wizardState.repositoryIds
     .map((id) => fullRepositories.find((repository) => repository.id === id))
     .filter((repository): repository is Repository => Boolean(repository))
   if (selectedRepositories.length !== 1) return null
   const repository = selectedRepositories[0]
   if (repository.executor_type !== 'agent' || !repository.agent_machine_id) return null
-  return `agent:${repository.agent_machine_id}`
+  const agent = agentMachines.find((item) => item.id === repository.agent_machine_id)
+  return {
+    agentId: repository.agent_machine_id,
+    agentName: agent ? agentDisplayName(agent) : `Agent #${repository.agent_machine_id}`,
+  }
 }
 
 function agentDisplayName(agent?: AgentMachineResponse | null) {
@@ -897,6 +916,7 @@ export function SourceSelectionDialog({
     const selectedAgentIdNum = selectedSourceKey.startsWith('agent:')
       ? Number(selectedSourceKey.split(':')[1])
       : 0
+    const agentRepoConstraint = getAgentRepoConstraint(wizardState, fullRepositories, agentMachines)
     const hasRemoteOptions = sshConnections.length > 0
     const hasAgentOptions = agentMachines.length > 0
     const remoteDisabled = sourceKind === 'remote' && !hasRemoteOptions
@@ -913,6 +933,10 @@ export function SourceSelectionDialog({
       t('backupPlans.sourceChooser.snapshotLocalOnly'),
     ]
 
+    const lockedByAgentRepo = !!agentRepoConstraint
+    const localCardDisabled = lockedByAgentRepo
+    const remoteCardDisabled = !hasRemoteOptions || lockedByAgentRepo
+
     return (
       <Stack spacing={2}>
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
@@ -928,6 +952,18 @@ export function SourceSelectionDialog({
           </Button>
         </Stack>
 
+        {agentRepoConstraint && (
+          <Alert
+            severity="info"
+            icon={<Info size={18} />}
+            sx={{ py: 0.5, '& .MuiAlert-message': { py: 0.5 } }}
+          >
+            {t('backupPlans.sourceChooser.agentRepoConstraintBanner', {
+              agent: agentRepoConstraint.agentName,
+            })}
+          </Alert>
+        )}
+
         <Box
           sx={{
             display: 'flex',
@@ -938,23 +974,37 @@ export function SourceSelectionDialog({
         >
           <RepoStyleSourceCard
             selected={sourceKind === 'local'}
-            icon={<HardDrive size={28} />}
+            disabled={localCardDisabled}
+            icon={lockedByAgentRepo ? <Lock size={28} /> : <HardDrive size={28} />}
             title={t('backupPlans.sourceChooser.borgUiServer')}
-            description={t('backupPlans.sourceChooser.localSourceDescription')}
-            onClick={() => selectSourceKey('local')}
+            description={
+              lockedByAgentRepo
+                ? t('backupPlans.sourceChooser.agentRepoLockedLocal', {
+                    agent: agentRepoConstraint.agentName,
+                  })
+                : t('backupPlans.sourceChooser.localSourceDescription')
+            }
+            onClick={() => {
+              if (localCardDisabled) return
+              selectSourceKey('local')
+            }}
           />
           <RepoStyleSourceCard
             selected={sourceKind === 'remote'}
-            disabled={!hasRemoteOptions}
-            icon={<Server size={28} />}
+            disabled={remoteCardDisabled}
+            icon={lockedByAgentRepo ? <Lock size={28} /> : <Server size={28} />}
             title={t('backupPlans.sourceChooser.remoteMachine')}
             description={
-              hasRemoteOptions
-                ? t('backupPlans.sourceChooser.remoteMachineDescription')
-                : t('backupPlans.sourceChooser.noRemoteMachines')
+              lockedByAgentRepo
+                ? t('backupPlans.sourceChooser.agentRepoLockedRemote', {
+                    agent: agentRepoConstraint.agentName,
+                  })
+                : hasRemoteOptions
+                  ? t('backupPlans.sourceChooser.remoteMachineDescription')
+                  : t('backupPlans.sourceChooser.noRemoteMachines')
             }
             onClick={() => {
-              if (!hasRemoteOptions) return
+              if (remoteCardDisabled) return
               const targetId =
                 selectedRemoteIdNum &&
                 sshConnections.some((connection) => connection.id === selectedRemoteIdNum)
@@ -975,6 +1025,10 @@ export function SourceSelectionDialog({
             }
             onClick={() => {
               if (!hasAgentOptions) return
+              if (agentRepoConstraint) {
+                selectSourceKey(`agent:${agentRepoConstraint.agentId}`)
+                return
+              }
               const targetId =
                 selectedAgentIdNum && agentMachines.some((agent) => agent.id === selectedAgentIdNum)
                   ? selectedAgentIdNum
@@ -1036,6 +1090,28 @@ export function SourceSelectionDialog({
               ))}
             </Select>
           </FormControl>
+        ) : sourceKind === 'agent' && hasAgentOptions && agentRepoConstraint ? (
+          <Box
+            sx={{
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: 'action.hover',
+              color: 'text.secondary',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1.5,
+              height: 56,
+            }}
+          >
+            <Lock size={14} />
+            <Typography variant="body2" color="text.secondary">
+              {t('backupPlans.sourceChooser.agentRepoLockedAgentPicker', {
+                agent: agentRepoConstraint.agentName,
+              })}
+            </Typography>
+          </Box>
         ) : sourceKind === 'agent' && hasAgentOptions ? (
           <FormControl fullWidth sx={{ height: 56 }}>
             <InputLabel id="source-agent-machine-label">
