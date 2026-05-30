@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
-import LogViewerDialog from '../LogViewerDialog'
+import LogViewerDialog from '../shared/LogViewerDialog'
 
 const { activityListMock, activityLogsMock } = vi.hoisted(() => ({
   activityListMock: vi.fn().mockResolvedValue({ data: [] }),
@@ -18,20 +18,25 @@ vi.mock('../../services/api', () => ({
 }))
 
 // Mock the TerminalLogViewer component
-vi.mock('../TerminalLogViewer', () => ({
+vi.mock('../shared/TerminalLogViewer', () => ({
   TerminalLogViewer: ({
     jobId,
     status,
     jobType,
+    onFetchLogs,
   }: {
     jobId: string
     status: string
     jobType: string
+    onFetchLogs: (offset: number) => Promise<unknown>
   }) => (
     <div data-testid="terminal-log-viewer">
       <span>Job ID: {jobId}</span>
       <span>Status: {status}</span>
       <span>Job Type: {jobType}</span>
+      <button type="button" onClick={() => void onFetchLogs(0)}>
+        Fetch logs
+      </button>
     </div>
   ),
 }))
@@ -42,6 +47,10 @@ vi.mock('../StatusBadge', () => ({
 }))
 
 describe('LogViewerDialog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   const mockJob = {
     id: 123,
     status: 'completed',
@@ -83,6 +92,28 @@ describe('LogViewerDialog', () => {
       expect(screen.getByText('Job ID: 123')).toBeInTheDocument()
       expect(screen.getByText('Status: completed')).toBeInTheDocument()
       expect(screen.getByText('Job Type: backup')).toBeInTheDocument()
+    })
+
+    it('uses a caller-provided log fetcher instead of the activity logs API', async () => {
+      const user = userEvent.setup()
+      const customFetchLogs = vi.fn().mockResolvedValue({
+        lines: [{ line_number: 1, content: 'custom managed-agent log' }],
+        total_lines: 1,
+        has_more: false,
+      })
+
+      render(
+        <LogViewerDialog
+          job={mockJob}
+          open={true}
+          onClose={vi.fn()}
+          onFetchLogs={customFetchLogs}
+        />
+      )
+      await user.click(screen.getByRole('button', { name: /fetch logs/i }))
+
+      expect(customFetchLogs).toHaveBeenCalledWith(0)
+      expect(activityLogsMock).not.toHaveBeenCalled()
     })
   })
 

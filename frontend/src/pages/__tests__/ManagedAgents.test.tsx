@@ -68,6 +68,7 @@ describe('ManagedAgents', () => {
       data: [],
     } as AxiosResponse)
     vi.mocked(managedAgentsAPI.listJobs).mockResolvedValue({ data: [] } as AxiosResponse)
+    vi.mocked(managedAgentsAPI.listJobLogs).mockResolvedValue({ data: [] } as AxiosResponse)
     vi.mocked(managedAgentsAPI.listAgentLogs).mockResolvedValue({ data: [] } as AxiosResponse)
   })
 
@@ -480,6 +481,112 @@ describe('ManagedAgents', () => {
     expect(await screen.findByRole('dialog', { name: /agent logs/i })).toBeInTheDocument()
     expect(screen.getByText(/Agent session connected/i)).toBeInTheDocument()
     expect(screen.getByText(/cmd-1/i)).toBeInTheDocument()
+  }, 60000)
+
+  it('uses the standard view icon for managed agent log actions', () => {
+    const agent = {
+      id: 7,
+      agent_id: 'agent-client-7',
+      name: 'client',
+      hostname: 'client-01',
+      status: 'online',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+    const job = {
+      id: 501,
+      agent_machine_id: 7,
+      job_type: 'backup',
+      status: 'running',
+      payload: { job_kind: 'backup.create' },
+      progress_percent: 42,
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentJobResponse
+
+    const { container: agentContainer } = renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+    const agentLogButton = within(agentContainer).getByRole('button', {
+      name: /view agent logs/i,
+    })
+
+    expect(agentLogButton.querySelector('svg.lucide-eye')).toBeInTheDocument()
+    expect(agentLogButton.querySelector('svg.lucide-terminal')).not.toBeInTheDocument()
+
+    const { container: jobsContainer } = renderWithProviders(
+      <JobsTable
+        jobs={[job]}
+        agentsById={new Map([[agent.id, agent]])}
+        onCancel={vi.fn()}
+        onViewLogs={vi.fn()}
+        isCanceling={false}
+      />
+    )
+    const jobLogButton = within(jobsContainer).getByRole('button', { name: /view logs/i })
+
+    expect(jobLogButton.querySelector('svg.lucide-eye')).toBeInTheDocument()
+    expect(jobLogButton.querySelector('svg.lucide-terminal')).not.toBeInTheDocument()
+  })
+
+  it('opens managed-agent job logs in the shared log viewer', async () => {
+    const user = userEvent.setup()
+    const agent = {
+      id: 7,
+      agent_id: 'agent-client-7',
+      name: 'client',
+      hostname: 'client-01',
+      status: 'online',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+    const job = {
+      id: 501,
+      agent_machine_id: 7,
+      job_type: 'backup',
+      status: 'completed',
+      payload: { job_kind: 'backup.create' },
+      progress_percent: 100,
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentJobResponse
+    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [agent] } as AxiosResponse)
+    vi.mocked(managedAgentsAPI.listJobs).mockResolvedValue({ data: [job] } as AxiosResponse)
+    vi.mocked(managedAgentsAPI.listJobLogs).mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          agent_job_id: 501,
+          sequence: 1,
+          stream: 'stdout',
+          message: 'borg create started',
+          created_at: '2026-05-18T10:00:00.000Z',
+          received_at: '2026-05-18T10:00:01.000Z',
+        },
+      ],
+    } as AxiosResponse)
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    await screen.findByText('Managed Agents')
+    await user.click(screen.getByRole('tab', { name: /jobs/i }))
+    await screen.findByText('#501')
+    await user.click(screen.getByRole('button', { name: /view logs/i }))
+
+    expect(managedAgentsAPI.listJobLogs).toHaveBeenCalledWith(501)
+    expect(
+      await screen.findByRole('dialog', { name: /Agent Job Logs - Job #501/i })
+    ).toBeInTheDocument()
+    expect(screen.getByText(/stdout: borg create started/i)).toBeInTheDocument()
   }, 60000)
 
   it('warns when an agent has no usable Borg binary', () => {

@@ -12,6 +12,7 @@ import AgentInstallCommand from './managed-agents/AgentInstallCommand'
 import { buildAgentInstallCommand } from './managed-agents/agentInstallCommandText'
 import {
   AgentDeleteConfirmationDialog,
+  AgentJobLogsDialog,
   AgentList,
   AgentReinstallDialog,
   AgentSessionLogsDialog,
@@ -138,6 +139,27 @@ const agentLogs: AgentSessionLogEntryResponse[] = [
     level: 'info',
     message: 'filesystem.browse completed for /home',
     created_at: '2026-05-16T11:56:00.000Z',
+  },
+]
+
+const jobLogs = [
+  {
+    id: 1,
+    agent_job_id: 501,
+    sequence: 1,
+    stream: 'stdout',
+    message: 'borg create /repo::media-2026-05-16 /srv/media',
+    created_at: '2026-05-16T11:51:03.000Z',
+    received_at: '2026-05-16T11:51:04.000Z',
+  },
+  {
+    id: 2,
+    agent_job_id: 501,
+    sequence: 2,
+    stream: 'stderr',
+    message: 'Processing files: /srv/media/photos',
+    created_at: '2026-05-16T11:52:00.000Z',
+    received_at: '2026-05-16T11:52:01.000Z',
   },
 ]
 
@@ -446,6 +468,14 @@ export const AgentLogs: Story = {
         loading={false}
         onClose={() => {}}
       />
+    </Box>
+  ),
+}
+
+export const AgentJobLogs: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AgentJobLogsDialog job={jobs[0]} logs={jobLogs} onClose={() => {}} />
     </Box>
   ),
 }
