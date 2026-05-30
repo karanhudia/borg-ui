@@ -1,7 +1,20 @@
-import { Box, Divider, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Divider,
+  FormControlLabel,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
+} from '@mui/material'
 
 import PruneSettingsInput from '../../../components/PruneSettingsInput'
 import SchedulePicker from '../../../components/SchedulePicker'
+import {
+  formatCheckFlagList,
+  getCheckFlagDurationConflict,
+} from '../../../utils/checkFlagConflicts'
 import type { BackupPlanWizardStepProps } from './types'
 
 const wizardSwitchRowSx = {
@@ -31,6 +44,12 @@ export function ScheduleStep({
   handlePruneSettingsChange,
   t,
 }: ScheduleStepProps) {
+  const conflictingCheckFlags = getCheckFlagDurationConflict(
+    wizardState.checkExtraFlags,
+    wizardState.checkMaxDuration
+  )
+  const hasCheckFlagConflict = conflictingCheckFlags.length > 0
+
   return (
     <Stack spacing={3}>
       <Stack spacing={2}>
@@ -151,6 +170,13 @@ export function ScheduleStep({
                   inputProps={{ spellCheck: false }}
                   fullWidth
                 />
+                {hasCheckFlagConflict && (
+                  <Alert severity="warning">
+                    {t('checkFlagConflicts.durationConflict', {
+                      flags: formatCheckFlagList(conflictingCheckFlags),
+                    })}
+                  </Alert>
+                )}
               </Stack>
             </Box>
           )}

@@ -2980,7 +2980,7 @@
     "checkScheduleLabel": "Check Schedule",
     "timezoneLabel": "Timezone",
     "maxDuration": "Max Duration (seconds)",
-    "maxDurationHint": "Time limit for check operation (3600 = 1 hour)",
+    "maxDurationHint": "Time limit for check operation (3600 = 1 hour). Use 0 for unlimited/full checks.",
     "maxDurationHintBorg2": "For Borg 2, a time limit runs a partial repository-only check (3600 = 1 hour). Use 0 to include archive checks.",
     "extraFlags": "Advanced check flags",
     "extraFlagsHint": "Additional borg check options appended to scheduled checks.",
@@ -4084,6 +4084,9 @@
   "terminalLog": {
     "inProgress": "{{type}} in progress..."
   },
+  "checkFlagConflicts": {
+    "durationConflict": "Set max duration to 0 (unlimited) to use {{flags}}. Positive durations run partial repository-only checks, which conflict with full archive-aware Borg check flags."
+  },
   "backend": {
     "errors": {
       "auth": {
@@ -4178,6 +4181,7 @@
         "cannotSwitchToFullModeNoSourceDirs": "Cannot switch to full mode: at least one source directory is required",
         "cannotDeleteRepoWithArchives": "Cannot delete repository with existing archives. Please delete all archives first.",
         "checkAlreadyRunning": "A check operation is already running for this repository",
+        "checkFlagsRequireUnlimitedDuration": "Set max duration to 0 (unlimited) when using {{flags}} because these Borg check flags require a full archive-aware check.",
         "compactAlreadyRunning": "A compact operation is already running for this repository",
         "restoreCheckCanaryUnsupportedObserve": "Canary restore checks are unavailable for observe-only repositories. Use selected probe paths or a full archive drill.",
         "breakLockTimeout": "Timeout while trying to break lock",

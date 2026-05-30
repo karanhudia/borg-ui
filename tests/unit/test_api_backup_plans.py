@@ -258,7 +258,10 @@ class TestBackupPlanRoutes:
         create_response = test_client.post(
             "/api/backup-plans/",
             json=_payload(
-                [repo.id], run_check_after=True, check_extra_flags=" --verify-data "
+                [repo.id],
+                run_check_after=True,
+                check_max_duration=0,
+                check_extra_flags=" --verify-data ",
             ),
             headers=admin_headers,
         )
@@ -281,6 +284,7 @@ class TestBackupPlanRoutes:
             [repo.id],
             name="Updated project plan",
             run_check_after=True,
+            check_max_duration=0,
             check_extra_flags=" --repair --save-space ",
         )
         update_response = test_client.put(
@@ -302,6 +306,28 @@ class TestBackupPlanRoutes:
             f"/api/backup-plans/{created['id']}", headers=admin_headers
         )
         assert get_response.status_code == 404
+
+    def test_create_plan_rejects_full_check_flags_with_partial_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                run_check_after=True,
+                check_max_duration=3600,
+                check_extra_flags=" --repair ",
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
+        )
+        assert response.json()["detail"]["params"]["flags"] == "--repair"
 
     def test_create_plan_defaults_to_repository_scripts_enabled(
         self, test_client: TestClient, admin_headers, test_db

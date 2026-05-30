@@ -63,6 +63,10 @@ from app.services.repository_executor import (
     repository_executor_type,
     wait_for_agent_repository_operation_job,
 )
+from app.services.check_flag_validation import (
+    CheckFlagConflictError,
+    validate_check_flags_for_max_duration,
+)
 from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.repository_command_lock import run_serialized_repository_command
 from app.services.rclone_repository_service import (
@@ -152,6 +156,16 @@ def _normalize_optional_flags(value: Any) -> Optional[str]:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _raise_check_flag_conflict(exc: CheckFlagConflictError) -> None:
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "key": "backend.errors.repo.checkFlagsRequireUnlimitedDuration",
+            "params": {"flags": ", ".join(exc.conflicting_flags)},
+        },
+    ) from exc
 
 
 def _resolve_restore_check_targets(
@@ -4457,6 +4471,10 @@ async def check_repository(
             if request
             else None
         )
+        try:
+            validate_check_flags_for_max_duration(check_extra_flags, max_duration)
+        except CheckFlagConflictError as exc:
+            _raise_check_flag_conflict(exc)
 
         if is_agent_executor(repository):
             ensure_no_running_job(
@@ -5917,6 +5935,14 @@ async def update_check_schedule(
             repo.check_extra_flags = _normalize_optional_flags(
                 request.get("check_extra_flags")
             )
+
+        if repo.check_cron_expression and repo.check_schedule_enabled:
+            try:
+                validate_check_flags_for_max_duration(
+                    repo.check_extra_flags, repo.check_max_duration
+                )
+            except CheckFlagConflictError as exc:
+                _raise_check_flag_conflict(exc)
 
         notify_on_success = request.get("notify_on_success")
         if notify_on_success is not None:

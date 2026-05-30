@@ -26,6 +26,7 @@ import { BorgApiClient } from '../services/borgApi'
 import { usePlan } from '../hooks/usePlan'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { buildBackupPlanPayload } from '../utils/backupPlanPayload'
+import { getCheckFlagDurationConflict } from '../utils/checkFlagConflicts'
 import {
   applyRepositorySelectionLimit,
   isRepositorySelectionOverLimit,
@@ -585,6 +586,13 @@ export default function BackupPlans() {
       return true
     }
     if (stepKey === 'schedule') {
+      if (
+        wizardState.runCheckAfter &&
+        getCheckFlagDurationConflict(wizardState.checkExtraFlags, wizardState.checkMaxDuration)
+          .length > 0
+      ) {
+        return false
+      }
       return Boolean(!wizardState.scheduleEnabled || wizardState.cronExpression.trim())
     }
     return true

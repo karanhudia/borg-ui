@@ -944,6 +944,11 @@ describe('RepositoryWizard', () => {
 
       await chooseManagedAgentRepository(user)
 
+      const destinationListbox = await openDestinationSelect(user)
+      expect(
+        within(destinationListbox).getByRole('option', { name: /Remote Client/i })
+      ).not.toHaveAttribute('aria-disabled', 'true')
+      await user.keyboard('{Escape}')
       expect(screen.queryByText('Select SSH Connection')).not.toBeInTheDocument()
       expect(
         screen.getByText(/Backups will be stored on the selected agent's filesystem/i)

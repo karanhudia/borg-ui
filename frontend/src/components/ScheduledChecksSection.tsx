@@ -32,6 +32,7 @@ import BackupJobsTable from './BackupJobsTable'
 import { usePermissions } from '../hooks/usePermissions'
 import type { Repository } from '../types'
 import type { Job } from '../types/jobs'
+import { formatCheckFlagList, getCheckFlagDurationConflict } from '../utils/checkFlagConflicts'
 
 interface ScheduledCheck {
   repository_id: number
@@ -94,6 +95,11 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
     (repo: Repository) => repo.id === selectedRepositoryId
   ) as Repository | undefined
   const isSelectedRepoBorg2 = selectedRepository?.borg_version === 2
+  const conflictingCheckFlags = getCheckFlagDurationConflict(
+    formData.check_extra_flags,
+    formData.max_duration
+  )
+  const hasCheckFlagConflict = conflictingCheckFlags.length > 0
 
   // Fetch scheduled checks for all repositories
   const { data: scheduledChecks, isLoading } = useQuery({
@@ -490,7 +496,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
             <Button
               onClick={handleSubmit}
               variant="contained"
-              disabled={!selectedRepositoryId || updateMutation.isPending}
+              disabled={!selectedRepositoryId || updateMutation.isPending || hasCheckFlagConflict}
             >
               {selectedRepositoryId ? t('scheduledChecks.update') : t('scheduledChecks.create')}
             </Button>
@@ -602,7 +608,7 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
                   : t('scheduledChecks.maxDurationHint')
               }
               fullWidth
-              inputProps={{ min: 60 }}
+              inputProps={{ min: 0 }}
             />
 
             <TextField
@@ -614,6 +620,14 @@ const ScheduledChecksSection = forwardRef<ScheduledChecksSectionRef, {}>((_, ref
               placeholder="--repair --verify-data"
               inputProps={{ spellCheck: false }}
             />
+
+            {hasCheckFlagConflict && (
+              <Alert severity="warning">
+                {t('checkFlagConflicts.durationConflict', {
+                  flags: formatCheckFlagList(conflictingCheckFlags),
+                })}
+              </Alert>
+            )}
           </Stack>
         </DialogContent>
       </ResponsiveDialog>
