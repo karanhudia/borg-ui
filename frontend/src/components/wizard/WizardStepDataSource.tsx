@@ -11,7 +11,7 @@ import {
 import { HardDrive, Laptop, Ban } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import SourceDirectoriesInput from '../SourceDirectoriesInput'
-import SshConnectionSelect from '../SshConnectionSelect'
+import SshConnectionSelect from '../shared/SshConnectionSelect'
 
 interface SSHConnection {
   id: number

@@ -56,10 +56,10 @@ import CodeEditor from '../../../components/CodeEditor'
 import DestinationSelect, {
   type DestinationOption,
 } from '../../../components/shared/DestinationSelect'
-import ManagedAgentSelect from '../../../components/ManagedAgentSelect'
+import ManagedAgentSelect from '../../../components/shared/ManagedAgentSelect'
 import PathSelectorField from '../../../components/PathSelectorField'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
-import SshConnectionSelect from '../../../components/SshConnectionSelect'
+import SshConnectionSelect from '../../../components/shared/SshConnectionSelect'
 import {
   type AgentMachineResponse,
   type FilesystemSnapshotCapabilitiesResponse,

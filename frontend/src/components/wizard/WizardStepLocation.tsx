@@ -20,8 +20,8 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../PlanGate'
 import { getDestinations, type DestinationKey } from './destinations'
-import SshConnectionSelect from '../SshConnectionSelect'
-import ManagedAgentSelect from '../ManagedAgentSelect'
+import SshConnectionSelect from '../shared/SshConnectionSelect'
+import ManagedAgentSelect from '../shared/ManagedAgentSelect'
 import DestinationSelect from '../shared/DestinationSelect'
 
 interface SSHConnection {
