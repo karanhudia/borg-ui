@@ -201,8 +201,8 @@ The first implementation supports:
 - polling and claiming jobs
 - `backup.create` using Borg 1 or Borg 2
 - `filesystem.browse` for source path selection from the central Borg UI
-- `repository.info`, `repository.list_archives`, `repository.check`,
-  `repository.prune`, and `repository.compact` for agent-owned local
-  repositories
+- `repository.init`, `repository.info`, `repository.list_archives`,
+  `repository.check`, `repository.prune`, `repository.compact`, and
+  `repository.rclone_sync` for agent-owned repositories
 - log and progress upload
 - cancellation through heartbeat

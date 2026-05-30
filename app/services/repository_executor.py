@@ -15,6 +15,7 @@ EXECUTOR_SERVER = "server"
 EXECUTOR_AGENT = "agent"
 TERMINAL_AGENT_STATUSES = {"completed", "failed", "canceled"}
 REPOSITORY_OPERATION_CAPABILITIES = {
+    "repository.init",
     "repository.info",
     "repository.list_archives",
     "repository.check",

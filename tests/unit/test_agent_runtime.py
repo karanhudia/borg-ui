@@ -456,6 +456,70 @@ def test_runtime_advertises_repository_rclone_sync_capability():
 
 
 @pytest.mark.unit
+def test_runtime_advertises_repository_init_capability_and_handler():
+    import agent.borg_ui_agent.runtime as runtime_module
+
+    assert "repository.init" in get_capabilities()
+    assert "repository.init" in runtime_module.JOB_HANDLERS
+
+
+@pytest.mark.unit
+def test_repository_init_payload_builds_borg1_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.init",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"encryption": "repokey"},
+        }
+    )
+
+    command = payload.build_command()
+
+    assert command == ["borg", "init", "--encryption", "repokey", "/agent/repo"]
+
+
+@pytest.mark.unit
+def test_repository_init_payload_rejects_non_mapping_operation():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.init",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": ["not", "a", "mapping"],
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="repository.init requires operation.encryption"
+    ):
+        payload.build_command()
+
+
+@pytest.mark.unit
+def test_repository_init_payload_builds_borg2_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.init",
+            "repository": {"path": "/agent/repo2", "borg_version": 2},
+            "operation": {"encryption": "repokey-aes-ocb"},
+        }
+    )
+
+    command = payload.build_command()
+
+    assert command == [
+        "borg2",
+        "-r",
+        "/agent/repo2",
+        "repo-create",
+        "--encryption",
+        "repokey-aes-ocb",
+    ]
+
+
+@pytest.mark.unit
 def test_session_runtime_connects_with_websocket_url_and_sends_hello(monkeypatch):
     from agent.borg_ui_agent.session import AgentSessionRuntime
 

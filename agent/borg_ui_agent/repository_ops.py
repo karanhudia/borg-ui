@@ -16,6 +16,7 @@ from agent.borg_ui_agent.client import AgentClient
 
 
 REPOSITORY_JOB_KINDS = {
+    "repository.init",
     "repository.info",
     "repository.list_archives",
     "repository.check",
@@ -109,6 +110,27 @@ class RepositoryOperationPayload:
                 source_path,
                 f"{remote_name}:{remote_path}",
                 *_split_flags(rclone.get("extra_flags")),
+            ]
+
+        if self.job_kind == "repository.init":
+            operation = self.operation or {}
+            if not isinstance(operation, dict):
+                raise ValueError("repository.init requires operation.encryption")
+            encryption = operation.get("encryption")
+            if not isinstance(encryption, str) or not encryption.strip():
+                raise ValueError("repository.init requires operation.encryption")
+            encryption = encryption.strip()
+            if self.borg_version == 2:
+                return [
+                    *self._base_borg2("repo-create"),
+                    "--encryption",
+                    encryption,
+                ]
+            return [
+                *self._base_borg1("init"),
+                "--encryption",
+                encryption,
+                self.repository_path,
             ]
 
         if self.job_kind == "repository.info":

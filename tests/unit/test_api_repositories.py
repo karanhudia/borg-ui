@@ -19,6 +19,7 @@ import json
 import os
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
@@ -421,7 +422,7 @@ class TestRepositoriesCreate:
 
         assert response.status_code == 200
 
-    def test_create_agent_repository_records_target_without_server_init(
+    def test_create_agent_repository_queues_init_and_waits_before_success(
         self, test_client: TestClient, admin_headers, test_db
     ):
         agent = AgentMachine(
@@ -430,16 +431,22 @@ class TestRepositoriesCreate:
             token_hash=get_password_hash("borgui_agent_secret"),
             token_prefix="borgui_agent_secret"[:20],
             status="online",
+            capabilities=["repository.init"],
         )
         test_db.add(agent)
         test_db.commit()
         test_db.refresh(agent)
+        wait_for_init = AsyncMock(return_value={"status": "completed"})
 
         with (
             patch(
                 "app.api.repositories.initialize_borg_repository",
                 new=AsyncMock(return_value={"success": True}),
             ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                wait_for_init,
+            ),
             patch("app.api.repositories.mqtt_service.sync_state_with_db"),
         ):
             response = test_client.post(
@@ -456,23 +463,91 @@ class TestRepositoriesCreate:
                 headers=admin_headers,
             )
 
+        wait_for_init.assert_awaited_once()
         assert response.status_code == 200
         initialize.assert_not_awaited()
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.job_type == "repository"
+        assert agent_job.payload["job_kind"] == "repository.init"
+        assert agent_job.payload["repository"]["path"] == "/agent/repo"
+        assert agent_job.payload["operation"]["encryption"] == "none"
         repo = test_db.query(Repository).filter_by(name="Agent Repo").first()
         assert repo.execution_target == "agent"
         assert repo.executor_type == "agent"
         assert repo.agent_machine_id == agent.id
         assert repo.path == "/agent/repo"
 
-    def test_create_agent_repository_without_source_paths(
+    def test_create_agent_repository_init_failure_deletes_record(
         self, test_client: TestClient, admin_headers, test_db
     ):
         agent = AgentMachine(
             name="Laptop",
-            agent_id="agt_laptop_no_sources",
+            agent_id="agt_laptop_init_failure",
             token_hash=get_password_hash("borgui_agent_secret"),
             token_prefix="borgui_agent_secret"[:20],
             status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+        wait_for_init = AsyncMock(
+            side_effect=HTTPException(
+                status_code=502,
+                detail={
+                    "key": "backend.errors.agents.repositoryOperationFailed",
+                    "message": "agent init failed",
+                },
+            )
+        )
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                wait_for_init,
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Init Failure Repo",
+                    "path": "/agent/fails-init",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "source_directories": ["/home/user/docs"],
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 502
+        initialize.assert_not_awaited()
+        assert (
+            test_db.query(Repository).filter_by(name="Agent Init Failure Repo").first()
+            is None
+        )
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.job_type == "repository"
+        assert agent_job.payload["job_kind"] == "repository.init"
+        assert agent_job.payload["repository"]["path"] == "/agent/fails-init"
+        assert agent_job.payload["operation"]["encryption"] == "none"
+
+    def test_create_agent_repository_unexpected_init_failure_deletes_record(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_init_crash",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
         )
         test_db.add(agent)
         test_db.commit()
@@ -483,6 +558,58 @@ class TestRepositoriesCreate:
                 "app.api.repositories.initialize_borg_repository",
                 new=AsyncMock(return_value={"success": True}),
             ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(side_effect=RuntimeError("agent init crashed")),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Init Crash Repo",
+                    "path": "/agent/init-crash",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        initialize.assert_not_awaited()
+        assert (
+            test_db.query(Repository).filter_by(name="Agent Init Crash Repo").first()
+            is None
+        )
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["job_kind"] == "repository.init"
+
+    def test_create_agent_repository_without_source_paths(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_no_sources",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
             patch("app.api.repositories.mqtt_service.sync_state_with_db"),
         ):
             response = test_client.post(
@@ -569,6 +696,7 @@ class TestRepositoriesCreate:
             token_hash=get_password_hash("borgui_agent_secret"),
             token_prefix="borgui_agent_secret"[:20],
             status="online",
+            capabilities=["repository.init"],
         )
         test_db.add(agent)
         test_db.commit()
@@ -579,6 +707,10 @@ class TestRepositoriesCreate:
                 "app.api.repositories.initialize_borg_repository",
                 new=AsyncMock(return_value={"success": True}),
             ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"status": "completed"}),
+            ),
             patch("app.api.repositories.mqtt_service.sync_state_with_db"),
         ):
             response = test_client.post(
