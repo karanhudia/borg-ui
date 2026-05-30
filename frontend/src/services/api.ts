@@ -929,6 +929,17 @@ export interface AgentJobLogEntryResponse {
   received_at: string
 }
 
+export interface AgentSessionLogEntryResponse {
+  id: string
+  agent_machine_id: number
+  job_id?: number | null
+  command_id?: string | null
+  stream: string
+  level: string
+  message: string
+  created_at: string
+}
+
 export interface AgentBackupJobCreate {
   repository_path: string
   archive_name: string
@@ -956,6 +967,7 @@ export interface AgentFilesystemBrowseResponse {
   current_path: string
   parent_path: string | null
   items: AgentFilesystemItem[]
+  items_truncated?: boolean
 }
 
 export interface AgentEnrollmentTokenCreate {
@@ -983,6 +995,8 @@ export const managedAgentsAPI = {
     api.post<AgentJobResponse>(`/managed-machines/agent-jobs/${jobId}/cancel`),
   listJobLogs: (jobId: number) =>
     api.get<AgentJobLogEntryResponse[]>(`/managed-machines/agent-jobs/${jobId}/logs`),
+  listAgentLogs: (agentId: number) =>
+    api.get<AgentSessionLogEntryResponse[]>(`/managed-machines/agents/${agentId}/logs`),
   browseFilesystem: (agentId: number, path = '/', includeHidden = false) =>
     api.get<AgentFilesystemBrowseResponse>(
       `/managed-machines/agents/${agentId}/filesystem/browse`,

@@ -1,13 +1,27 @@
+import asyncio
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 import structlog
 
-from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH, get_current_agent
+from app.core.agent_auth import (
+    AGENT_AUTH_HEADER,
+    AGENT_TOKEN_PREFIX_LENGTH,
+    get_current_agent,
+    resolve_agent_from_token,
+)
 from app.core.agent_constants import DEFAULT_AGENT_POLL_INTERVAL_SECONDS
 from app.core.security import get_password_hash, verify_password
 from app.database.database import get_db
@@ -22,10 +36,19 @@ from app.database.models import (
     PruneJob,
     Repository,
 )
+from app.services.agent_connection_manager import (
+    AgentConnection,
+    agent_connection_manager,
+)
+from app.services.agent_job_dispatcher import (
+    agent_job_kind as live_agent_job_kind,
+    dispatch_agent_job_best_effort,
+)
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/agents", tags=["agents"])
+AGENT_SESSION_HELLO_TIMEOUT_SECONDS = 10.0
 
 FINAL_AGENT_JOB_STATUSES = {"completed", "failed", "canceled"}
 STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=15)
@@ -92,6 +115,16 @@ class AgentHeartbeatResponse(BaseModel):
 
     class Config:
         json_encoders = {datetime: lambda v: serialize_datetime(v)}
+
+
+class AgentSessionHello(BaseModel):
+    type: str
+    agent_id: str
+    hostname: Optional[str] = None
+    agent_version: Optional[str] = None
+    borg_versions: list[dict[str, Any]] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
+    running_job_ids: list[int] = Field(default_factory=list)
 
 
 class AgentJobPollItem(BaseModel):
@@ -400,6 +433,375 @@ def _finish_linked_repository_operation_job(
         repository.updated_at = _now_utc()
 
 
+def _get_agent_token_from_websocket(websocket: WebSocket) -> Optional[str]:
+    auth_header = websocket.headers.get(AGENT_AUTH_HEADER)
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+    return auth_header.split(" ", 1)[1].strip()
+
+
+def _mark_agent_job_claimed(job: AgentJob, *, now: Optional[datetime] = None) -> None:
+    if job.status != "queued":
+        return
+    now = now or _now_utc()
+    job.status = "claimed"
+    job.claimed_at = now
+    job.updated_at = now
+
+
+def _mark_agent_job_started(
+    job: AgentJob, db: Session, *, started_at: Optional[datetime] = None
+) -> None:
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        return
+    now = _now_utc()
+    if job.claimed_at is None:
+        job.claimed_at = now
+    if job.started_at is None:
+        job.started_at = _normalize_agent_timestamp(started_at)
+    if job.status != "cancel_requested":
+        job.status = "running"
+    backup_job = _get_linked_backup_job(job, db)
+    if backup_job:
+        backup_job.status = "running"
+        if backup_job.started_at is None:
+            backup_job.started_at = job.started_at
+    else:
+        _sync_repository_operation_progress(job, db)
+    job.updated_at = now
+
+
+def _apply_agent_job_progress(
+    job: AgentJob, db: Session, progress: dict[str, Any]
+) -> None:
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        return
+    for field_name, value in progress.items():
+        if hasattr(job, field_name):
+            setattr(job, field_name, value)
+    job.progress = progress
+    backup_job = _get_linked_backup_job(job, db)
+    if backup_job:
+        backup_job.status = "running"
+        _sync_backup_progress(job, backup_job)
+    else:
+        _sync_repository_operation_progress(job, db)
+    job.updated_at = _now_utc()
+
+
+def _append_agent_job_log(
+    job: AgentJob,
+    db: Session,
+    *,
+    sequence: int,
+    stream: str,
+    message: str,
+    created_at: Optional[datetime] = None,
+) -> bool:
+    existing_log = (
+        db.query(AgentJobLog)
+        .filter(
+            AgentJobLog.agent_job_id == job.id,
+            AgentJobLog.sequence == sequence,
+        )
+        .first()
+    )
+    if existing_log:
+        return False
+    db.add(
+        AgentJobLog(
+            agent_job_id=job.id,
+            sequence=sequence,
+            stream=stream,
+            message=message,
+            created_at=_normalize_agent_timestamp(created_at),
+            received_at=_now_utc(),
+        )
+    )
+    job.updated_at = _now_utc()
+    return True
+
+
+def _complete_agent_job(
+    job: AgentJob,
+    db: Session,
+    *,
+    result: dict[str, Any],
+    completed_at: Optional[datetime] = None,
+) -> None:
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        return
+    completed = _normalize_agent_timestamp(completed_at)
+    job.status = "completed"
+    job.completed_at = completed
+    job.result = result
+    job.error_message = None
+    job.updated_at = _now_utc()
+    _finish_linked_backup_job(job, db, status_value="completed", completed_at=completed)
+    _finish_linked_repository_operation_job(
+        job, db, status_value="completed", completed_at=completed
+    )
+
+
+def _fail_agent_job(
+    job: AgentJob,
+    db: Session,
+    *,
+    error_message: str,
+    return_code: Optional[int] = None,
+    completed_at: Optional[datetime] = None,
+) -> None:
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        return
+    completed = _normalize_agent_timestamp(completed_at)
+    job.status = "failed"
+    job.completed_at = completed
+    job.error_message = error_message
+    job.result = {"return_code": return_code} if return_code is not None else {}
+    job.updated_at = _now_utc()
+    _finish_linked_backup_job(
+        job,
+        db,
+        status_value="failed",
+        completed_at=completed,
+        error_message=error_message,
+    )
+    _finish_linked_repository_operation_job(
+        job,
+        db,
+        status_value="failed",
+        completed_at=completed,
+        error_message=error_message,
+    )
+
+
+def _cancel_agent_job(
+    job: AgentJob, db: Session, *, completed_at: Optional[datetime] = None
+) -> None:
+    if job.status in FINAL_AGENT_JOB_STATUSES:
+        return
+    completed = _normalize_agent_timestamp(completed_at)
+    job.status = "canceled"
+    job.completed_at = completed
+    job.updated_at = _now_utc()
+    _finish_linked_backup_job(
+        job,
+        db,
+        status_value="cancelled",
+        completed_at=completed,
+        error_message="Agent job canceled",
+    )
+    _finish_linked_repository_operation_job(
+        job,
+        db,
+        status_value="cancelled",
+        completed_at=completed,
+        error_message="Agent job canceled",
+    )
+
+
+async def _dispatch_queued_agent_jobs(db: Session, agent_machine_id: int) -> None:
+    jobs = (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.agent_machine_id == agent_machine_id,
+            AgentJob.status == "queued",
+        )
+        .order_by(AgentJob.created_at.asc(), AgentJob.id.asc())
+        .all()
+    )
+    for job in jobs:
+        if live_agent_job_kind(job) == "filesystem.browse":
+            continue
+        await dispatch_agent_job_best_effort(
+            db,
+            job,
+            source="session_reconnect",
+        )
+
+
+def _load_session_job(
+    db: Session, agent_machine_id: int, job_id: Any
+) -> Optional[AgentJob]:
+    if job_id is None:
+        return None
+    try:
+        parsed_job_id = int(job_id)
+    except (TypeError, ValueError):
+        return None
+    return (
+        db.query(AgentJob)
+        .filter(
+            AgentJob.id == parsed_job_id,
+            AgentJob.agent_machine_id == agent_machine_id,
+        )
+        .first()
+    )
+
+
+async def _handle_agent_session_message(
+    db: Session,
+    agent_machine_id: int,
+    message: dict[str, Any],
+) -> None:
+    message_type = str(message.get("type") or "")
+    command_id = str(message.get("command_id") or "")
+    job_id = message.get("job_id")
+
+    job = _load_session_job(db, agent_machine_id, job_id)
+
+    if message_type == "command_ack":
+        if job:
+            _mark_agent_job_claimed(job)
+            db.commit()
+        return
+
+    if message_type == "job_started":
+        if job:
+            _mark_agent_job_started(
+                job, db, started_at=_parse_optional_datetime(message.get("started_at"))
+            )
+            db.commit()
+        return
+
+    if message_type == "progress":
+        if job:
+            progress = {
+                key: value
+                for key, value in message.items()
+                if key
+                in {
+                    "progress_percent",
+                    "current_file",
+                    "original_size",
+                    "compressed_size",
+                    "deduplicated_size",
+                    "nfiles",
+                    "backup_speed",
+                    "total_expected_size",
+                    "estimated_time_remaining",
+                }
+            }
+            _apply_agent_job_progress(job, db, progress)
+            db.commit()
+        return
+
+    if message_type == "log":
+        text = str(message.get("message") or "")
+        stream = str(message.get("stream") or "stdout")
+        sequence = _parse_int(message.get("sequence"), default=0)
+        agent_connection_manager.append_log(
+            agent_machine_id,
+            message=text,
+            stream=stream,
+            command_id=command_id or None,
+            job_id=_parse_int(job_id, default=0) or None,
+        )
+        if job:
+            _append_agent_job_log(
+                job,
+                db,
+                sequence=sequence,
+                stream=stream,
+                message=text,
+                created_at=_parse_optional_datetime(message.get("created_at")),
+            )
+            db.commit()
+        return
+
+    if message_type == "command_result":
+        result = message.get("result")
+        result_payload = result if isinstance(result, dict) else {}
+        if command_id:
+            agent_connection_manager.resolve_command(
+                agent_machine_id, command_id, result_payload
+            )
+        agent_connection_manager.append_log(
+            agent_machine_id,
+            message="Command completed",
+            stream="session",
+            command_id=command_id or None,
+            job_id=int(job_id) if job_id else None,
+        )
+        if job:
+            _complete_agent_job(
+                job,
+                db,
+                result=result_payload,
+                completed_at=_parse_optional_datetime(message.get("completed_at")),
+            )
+            db.commit()
+        return
+
+    if message_type == "command_error":
+        error_payload = (
+            message.get("error") if isinstance(message.get("error"), dict) else {}
+        )
+        error_message = str(
+            error_payload.get("message") or message.get("message") or "Command failed"
+        )
+        if command_id:
+            agent_connection_manager.reject_command(
+                agent_machine_id,
+                command_id,
+                message=error_message,
+                payload=error_payload,
+            )
+        agent_connection_manager.append_log(
+            agent_machine_id,
+            level="error",
+            message=error_message,
+            stream="session",
+            command_id=command_id or None,
+            job_id=int(job_id) if job_id else None,
+        )
+        if job:
+            _fail_agent_job(
+                job,
+                db,
+                error_message=error_message,
+                return_code=error_payload.get("return_code"),
+                completed_at=_parse_optional_datetime(message.get("completed_at")),
+            )
+            db.commit()
+        return
+
+    if message_type == "job_canceled":
+        if job:
+            _cancel_agent_job(
+                job,
+                db,
+                completed_at=_parse_optional_datetime(message.get("completed_at")),
+            )
+            db.commit()
+        return
+
+    agent_connection_manager.append_log(
+        agent_machine_id,
+        level="warning",
+        stream="session",
+        message=f"Ignored unknown session message type: {message_type}",
+    )
+
+
+def _parse_optional_datetime(value: Any) -> Optional[datetime]:
+    if value is None or isinstance(value, datetime):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _parse_int(value: Any, *, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 @router.post("/register", response_model=AgentRegisterResponse)
 async def register_agent(
     payload: AgentRegisterRequest,
@@ -499,6 +901,92 @@ async def heartbeat(
         poll_interval_seconds=DEFAULT_AGENT_POLL_INTERVAL_SECONDS,
         cancel_job_ids=[row[0] for row in cancel_job_ids],
     )
+
+
+@router.websocket("/session")
+async def session(websocket: WebSocket, db: Session = Depends(get_db)):
+    connection: Optional[AgentConnection] = None
+    try:
+        try:
+            current_agent = resolve_agent_from_token(
+                _get_agent_token_from_websocket(websocket), db
+            )
+        except HTTPException as exc:
+            await websocket.close(code=1008, reason=str(exc.detail))
+            return
+
+        await websocket.accept()
+        try:
+            raw_hello = await asyncio.wait_for(
+                websocket.receive_json(),
+                timeout=AGENT_SESSION_HELLO_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            await websocket.close(code=1008, reason="Hello timeout")
+            return
+        try:
+            hello = AgentSessionHello.model_validate(raw_hello)
+        except Exception:
+            await websocket.close(code=1003, reason="Invalid hello")
+            return
+
+        if hello.type != "hello" or hello.agent_id != current_agent.agent_id:
+            await websocket.close(code=1008, reason="Agent identity mismatch")
+            return
+
+        now = _now_utc()
+        current_agent.hostname = hello.hostname or current_agent.hostname
+        current_agent.agent_version = hello.agent_version or current_agent.agent_version
+        current_agent.borg_versions = hello.borg_versions
+        current_agent.capabilities = hello.capabilities
+        current_agent.status = "online"
+        current_agent.last_error = None
+        current_agent.last_seen_at = now
+        current_agent.updated_at = now
+        _requeue_stale_agent_jobs(
+            db,
+            current_agent,
+            now=now,
+            running_job_ids=hello.running_job_ids,
+        )
+        db.commit()
+
+        connection = AgentConnection(
+            agent_machine_id=current_agent.id,
+            agent_id=current_agent.agent_id,
+            websocket=websocket,
+            metadata=hello.model_dump(),
+        )
+        await agent_connection_manager.register(connection)
+        await websocket.send_json(
+            {
+                "type": "hello_ack",
+                "server_time": serialize_datetime(_now_utc()),
+            }
+        )
+        await _dispatch_queued_agent_jobs(db, current_agent.id)
+
+        while True:
+            message = await websocket.receive_json()
+            if isinstance(message, dict):
+                await _handle_agent_session_message(db, current_agent.id, message)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if connection is not None:
+            disconnected = await agent_connection_manager.disconnect(
+                connection.agent_machine_id, connection
+            )
+            if disconnected:
+                current = (
+                    db.query(AgentMachine)
+                    .filter(AgentMachine.id == connection.agent_machine_id)
+                    .first()
+                )
+                if current and current.status == "online":
+                    current.status = "offline"
+                    current.updated_at = _now_utc()
+                    db.commit()
 
 
 @router.post("/unregister", status_code=status.HTTP_204_NO_CONTENT)

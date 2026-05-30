@@ -1,13 +1,17 @@
 from datetime import datetime, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient
 
 from app.core.agent_constants import (
+    AGENT_FILESYSTEM_BROWSE_MAX_ITEMS,
     AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
     DEFAULT_AGENT_POLL_INTERVAL_SECONDS,
 )
+from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
 from app.database.models import AgentJob, AgentJobLog, AgentMachine
+from app.services.agent_connection_manager import agent_connection_manager
 
 
 def _agent(test_db, **overrides):
@@ -25,6 +29,25 @@ def _agent(test_db, **overrides):
     test_db.commit()
     test_db.refresh(agent)
     return agent
+
+
+def _agent_headers(agent: AgentMachine) -> dict[str, str]:
+    return {AGENT_AUTH_HEADER: "Bearer borgui_agent_secret"}
+
+
+def _send_session_hello(websocket, agent: AgentMachine) -> None:
+    websocket.send_json(
+        {
+            "type": "hello",
+            "agent_id": agent.agent_id,
+            "hostname": agent.hostname or "agent.local",
+            "agent_version": "0.2.0",
+            "borg_versions": [],
+            "capabilities": ["session.commands", "filesystem.browse"],
+            "running_job_ids": [],
+        }
+    )
+    assert websocket.receive_json()["type"] == "hello_ack"
 
 
 def _agent_job(test_db, agent: AgentMachine) -> AgentJob:
@@ -169,6 +192,199 @@ def test_agent_filesystem_browse_endpoint_waits_longer_than_default_agent_poll_i
 
     assert response.status_code == 200
     assert calls[0][3] > DEFAULT_AGENT_POLL_INTERVAL_SECONDS
+
+
+def test_agent_filesystem_browse_uses_live_session_without_agent_job(
+    test_client: TestClient, admin_headers, test_db
+):
+    agent = _agent(test_db, hostname="nas.local")
+
+    with test_client.websocket_connect(
+        "/api/agents/session", headers=_agent_headers(agent)
+    ) as websocket:
+        _send_session_hello(websocket, agent)
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                lambda: test_client.get(
+                    f"/api/managed-machines/agents/{agent.id}/filesystem/browse",
+                    params={"path": "/home/pi", "include_hidden": "true"},
+                    headers=admin_headers,
+                )
+            )
+
+            command = websocket.receive_json()
+            assert command["type"] == "command"
+            assert command["command"] == "filesystem.browse"
+            assert command["job_id"] is None
+            assert command["payload"] == {
+                "path": "/home/pi",
+                "include_hidden": True,
+                "max_items": AGENT_FILESYSTEM_BROWSE_MAX_ITEMS,
+            }
+
+            websocket.send_json(
+                {
+                    "type": "command_result",
+                    "command_id": command["command_id"],
+                    "result": {
+                        "success": True,
+                        "current_path": "/home/pi",
+                        "parent_path": "/home",
+                        "items": [
+                            {
+                                "name": "docs",
+                                "path": "/home/pi/docs",
+                                "type": "directory",
+                                "size": 0,
+                                "modified_at": 1.0,
+                                "hidden": False,
+                            }
+                        ],
+                    },
+                }
+            )
+            response = future.result(timeout=2)
+
+    assert response.status_code == 200
+    assert response.json()["current_path"] == "/home/pi"
+    assert response.json()["items"][0]["name"] == "docs"
+    assert any(
+        log["message"] == "Command completed"
+        and log["command_id"] == command["command_id"]
+        for log in agent_connection_manager.list_logs(agent.id)
+    )
+    assert (
+        test_db.query(AgentJob).filter(AgentJob.agent_machine_id == agent.id).count()
+        == 0
+    )
+
+
+def test_agent_filesystem_browse_times_out_when_session_does_not_answer(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    agent = _agent(test_db, hostname="nas.local")
+    monkeypatch.setattr(
+        "app.api.managed_machines.AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS",
+        0.05,
+    )
+
+    with test_client.websocket_connect(
+        "/api/agents/session", headers=_agent_headers(agent)
+    ) as websocket:
+        _send_session_hello(websocket, agent)
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                lambda: test_client.get(
+                    f"/api/managed-machines/agents/{agent.id}/filesystem/browse",
+                    params={"path": "/slow"},
+                    headers=admin_headers,
+                )
+            )
+
+            assert websocket.receive_json()["command"] == "filesystem.browse"
+            response = future.result(timeout=2)
+
+    assert response.status_code == 504
+    assert (
+        response.json()["detail"]["key"]
+        == "backend.errors.agents.filesystemBrowseTimeout"
+    )
+
+
+def test_agent_filesystem_browse_truncates_oversized_session_result(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    agent = _agent(test_db, hostname="nas.local")
+    monkeypatch.setattr("app.core.agent_constants.AGENT_FILESYSTEM_BROWSE_MAX_ITEMS", 2)
+    monkeypatch.setattr(
+        "app.services.agent_filesystem_service.AGENT_FILESYSTEM_BROWSE_MAX_ITEMS", 2
+    )
+
+    with test_client.websocket_connect(
+        "/api/agents/session", headers=_agent_headers(agent)
+    ) as websocket:
+        _send_session_hello(websocket, agent)
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                lambda: test_client.get(
+                    f"/api/managed-machines/agents/{agent.id}/filesystem/browse",
+                    params={"path": "/many"},
+                    headers=admin_headers,
+                )
+            )
+
+            command = websocket.receive_json()
+            websocket.send_json(
+                {
+                    "type": "command_result",
+                    "command_id": command["command_id"],
+                    "result": {
+                        "success": True,
+                        "current_path": "/many",
+                        "parent_path": "/",
+                        "items": [
+                            {
+                                "name": "a",
+                                "path": "/many/a",
+                                "type": "file",
+                                "size": 1,
+                                "modified_at": 1.0,
+                                "hidden": False,
+                            },
+                            {
+                                "name": "b",
+                                "path": "/many/b",
+                                "type": "file",
+                                "size": 1,
+                                "modified_at": 1.0,
+                                "hidden": False,
+                            },
+                            {
+                                "name": "c",
+                                "path": "/many/c",
+                                "type": "file",
+                                "size": 1,
+                                "modified_at": 1.0,
+                                "hidden": False,
+                            },
+                        ],
+                    },
+                }
+            )
+            response = future.result(timeout=2)
+
+    assert response.status_code == 200
+    assert [item["name"] for item in response.json()["items"]] == ["a", "b"]
+    assert response.json()["items_truncated"] is True
+
+
+def test_list_agent_logs_returns_recent_session_entries(
+    test_client: TestClient, admin_headers, test_db
+):
+    agent = _agent(test_db, hostname="nas.local")
+    agent_connection_manager.append_log(
+        agent.id,
+        level="info",
+        stream="session",
+        command_id="cmd-visible",
+        message="Agent session connected",
+    )
+
+    response = test_client.get(
+        f"/api/managed-machines/agents/{agent.id}/logs",
+        headers=admin_headers,
+    )
+
+    assert response.status_code == 200
+    assert any(
+        log["message"] == "Agent session connected"
+        and log["command_id"] == "cmd-visible"
+        and log["level"] == "info"
+        for log in response.json()
+    )
 
 
 def test_delete_agent_hides_it_from_list_and_keeps_job_logs(
