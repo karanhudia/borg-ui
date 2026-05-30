@@ -16,7 +16,7 @@ from urllib.parse import urlencode, urlparse
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -447,6 +447,18 @@ class RcloneOAuthCredentialUpdate(BaseModel):
     client_id: str | None = None
     client_secret: str | None = None
     clear_client_secret: bool = False
+
+    @model_validator(mode="after")
+    def validate_paired_credentials(self) -> "RcloneOAuthCredentialUpdate":
+        if self.clear_client_secret:
+            return self
+        client_id_set = bool((self.client_id or "").strip())
+        client_secret_set = bool((self.client_secret or "").strip())
+        if client_id_set != client_secret_set:
+            raise ValueError(
+                "client_id and client_secret must both be provided or both be empty"
+            )
+        return self
 
 
 def _require_admin(user: User) -> None:
@@ -1705,16 +1717,25 @@ async def update_oauth_credentials(
     settings_row = _get_or_create_system_settings(db)
     client_id_field, client_secret_field = _provider_oauth_db_field_names(provider)
 
-    if payload.client_id is not None:
-        setattr(settings_row, client_id_field, _strip_optional(payload.client_id))
+    client_id_stripped = _strip_optional(payload.client_id)
+    secret_stripped = _strip_optional(payload.client_secret)
+
     if payload.clear_client_secret:
+        # Explicit secret-only clear (backward-compat path; validator bypassed).
+        if payload.client_id is not None:
+            setattr(settings_row, client_id_field, client_id_stripped)
         setattr(settings_row, client_secret_field, None)
-    elif payload.client_secret is not None:
-        stripped_secret = _strip_optional(payload.client_secret)
+    elif not client_id_stripped and not secret_stripped:
+        # Both fields empty → clear all stored credentials.
+        setattr(settings_row, client_id_field, None)
+        setattr(settings_row, client_secret_field, None)
+    else:
+        # Both fields provided (validator ensures they are paired).
+        setattr(settings_row, client_id_field, client_id_stripped)
         setattr(
             settings_row,
             client_secret_field,
-            encrypt_secret(stripped_secret) if stripped_secret else None,
+            encrypt_secret(secret_stripped) if secret_stripped else None,
         )
 
     db.commit()

@@ -419,6 +419,78 @@ describe('CloudStorage', () => {
     })
   }, 60000)
 
+  it('clears stored credentials when both fields are empty on save', async () => {
+    const missingOAuthProviders = providers.map((provider) =>
+      provider.type === 'drive'
+        ? {
+            ...provider,
+            oauth_configured: false,
+            oauth_callback_url: null,
+            oauth_setup_key: 'backend.errors.rclone.oauthProviderCredentialsRequired',
+            oauth_credentials_source: 'unset',
+            oauth_client_id_set: false,
+            oauth_client_secret_set: false,
+          }
+        : provider
+    )
+    vi.mocked(rcloneAPI.getProviders).mockResolvedValue({
+      data: { providers: missingOAuthProviders },
+    } as AxiosResponse)
+    const user = userEvent.setup()
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    await screen.findByText('prod-s3')
+    await user.click(screen.getByRole('button', { name: /Add remote/i }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Google Drive/i }))
+
+    // Leave both fields empty and click save → should trigger the clearing path.
+    await user.click(screen.getByRole('button', { name: /Save OAuth credentials/i }))
+
+    await waitFor(() => {
+      expect(rcloneAPI.updateOAuthCredentials).toHaveBeenCalledWith('drive', {
+        client_id: null,
+        client_secret: null,
+      })
+    })
+  }, 60000)
+
+  it('shows a validation error when only one OAuth credential field is filled', async () => {
+    const missingOAuthProviders = providers.map((provider) =>
+      provider.type === 'drive'
+        ? {
+            ...provider,
+            oauth_configured: false,
+            oauth_callback_url: null,
+            oauth_setup_key: 'backend.errors.rclone.oauthProviderCredentialsRequired',
+            oauth_credentials_source: 'unset',
+            oauth_client_id_set: false,
+            oauth_client_secret_set: false,
+          }
+        : provider
+    )
+    vi.mocked(rcloneAPI.getProviders).mockResolvedValue({
+      data: { providers: missingOAuthProviders },
+    } as AxiosResponse)
+    const user = userEvent.setup()
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    await screen.findByText('prod-s3')
+    await user.click(screen.getByRole('button', { name: /Add remote/i }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Google Drive/i }))
+
+    // Fill only the client ID, leave secret empty.
+    await user.type(screen.getByLabelText(/OAuth client ID/i), 'drive-client-id')
+    await user.click(screen.getByRole('button', { name: /Save OAuth credentials/i }))
+
+    // Validation error shown; API not called.
+    await waitFor(() => {
+      expect(screen.getByText(/Enter both a client ID and client secret/i)).toBeInTheDocument()
+    })
+    expect(rcloneAPI.updateOAuthCredentials).not.toHaveBeenCalled()
+  }, 60000)
+
   it('shows OAuth token expiry and refresh availability on managed OAuth remotes', async () => {
     vi.mocked(rcloneAPI.listRemotes).mockResolvedValue({
       data: {

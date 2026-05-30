@@ -366,7 +366,8 @@ export default function RcloneRemoteDialog({
     if (!onSaveOAuthCredentials || !resolvedProvider) return
     const clientId = oauthClientId.trim()
     const clientSecret = oauthClientSecret.trim()
-    if (!clientId && !clientSecret) {
+    if (Boolean(clientId) !== Boolean(clientSecret)) {
+      // Partial input: one field filled but not the other.
       setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsRequired'))
       return
     }
@@ -374,6 +375,7 @@ export default function RcloneRemoteDialog({
     setOauthCredentialsError(null)
     setIsSavingOAuthCredentials(true)
     try {
+      // Both empty → null payload clears stored credentials on the backend.
       await onSaveOAuthCredentials(resolvedProvider, {
         client_id: clientId || null,
         client_secret: clientSecret || null,

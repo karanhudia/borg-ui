@@ -248,9 +248,68 @@ def test_update_rclone_oauth_credentials_persists_secret_encrypted_and_redacts(
 
 
 @pytest.mark.unit
+def test_clearing_both_empty_credentials_removes_stored_values(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    monkeypatch.setattr(
+        "app.api.rclone.settings.public_base_url",
+        "https://backups.example.com",
+    )
+
+    # Seed stored credentials for Google Drive.
+    test_client.put(
+        "/api/rclone/oauth/credentials/drive",
+        headers=admin_headers,
+        json={"client_id": "drive-client-id", "client_secret": "drive-secret"},
+    )
+    settings_row = test_db.query(SystemSettings).first()
+    assert settings_row.google_drive_oauth_client_id == "drive-client-id"
+    assert settings_row.google_drive_oauth_client_secret_encrypted
+
+    # Send both fields empty → should clear stored credentials.
+    response = test_client.put(
+        "/api/rclone/oauth/credentials/drive",
+        headers=admin_headers,
+        json={"client_id": None, "client_secret": None},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["configured"] is False
+    assert body["client_id_set"] is False
+    assert body["client_secret_set"] is False
+    assert body["credential_source"] == "unset"
+
+    test_db.refresh(settings_row)
+    assert settings_row.google_drive_oauth_client_id is None
+    assert settings_row.google_drive_oauth_client_secret_encrypted is None
+
+
+@pytest.mark.unit
+def test_update_rclone_oauth_credentials_rejects_partial_input(
+    test_client: TestClient, admin_headers
+):
+    # client_id provided but client_secret omitted → 422 validation error.
+    response = test_client.put(
+        "/api/rclone/oauth/credentials/drive",
+        headers=admin_headers,
+        json={"client_id": "drive-client-id"},
+    )
+    assert response.status_code == 422
+
+    # client_secret provided but client_id omitted → 422 validation error.
+    response = test_client.put(
+        "/api/rclone/oauth/credentials/drive",
+        headers=admin_headers,
+        json={"client_secret": "drive-secret"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.unit
 def test_persisted_rclone_oauth_credentials_take_precedence_over_environment(
     test_client: TestClient, admin_headers, monkeypatch
-):
+
     from app.api import rclone as rclone_api
 
     rclone_api.RCLONE_OAUTH_SESSIONS.clear()
