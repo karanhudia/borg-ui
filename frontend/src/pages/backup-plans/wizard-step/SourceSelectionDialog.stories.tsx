@@ -18,6 +18,7 @@ const sshConnections: SSHConnection[] = [
     port: 22,
     ssh_key_id: 1,
     default_path: '/home/backup-a',
+    mount_point: '/mnt/server-a',
     status: 'connected',
   },
   {
@@ -434,10 +435,19 @@ interface DialogStoryArgs {
   wizardState: WizardState
   mockOptions: MockOptions
   initialView?: 'paths' | 'database' | 'database-detail'
+  initialScanTarget?: { type: 'local' | 'remote'; sshId: number | '' }
+  initialCaptureModeExpanded?: boolean
   scrollToText?: string
 }
 
-function DialogStory({ wizardState, mockOptions, initialView, scrollToText }: DialogStoryArgs) {
+function DialogStory({
+  wizardState,
+  mockOptions,
+  initialView,
+  initialScanTarget,
+  initialCaptureModeExpanded,
+  scrollToText,
+}: DialogStoryArgs) {
   useMockedDiscovery(mockOptions)
   const stableState = useMemo(() => wizardState, [wizardState])
 
@@ -449,7 +459,7 @@ function DialogStory({ wizardState, mockOptions, initialView, scrollToText }: Di
 
     const scrollToMatch = () => {
       const match = Array.from(
-        document.querySelectorAll<HTMLElement>('button, [role="button"]')
+        document.querySelectorAll<HTMLElement>('button, [role="button"], label, [role="combobox"]')
       ).find((element) => element.textContent?.includes(scrollToText))
 
       if (match) {
@@ -485,6 +495,8 @@ function DialogStory({ wizardState, mockOptions, initialView, scrollToText }: Di
         onClose={() => {}}
         t={t as never}
         initialView={initialView}
+        initialScanTarget={initialScanTarget}
+        initialCaptureModeExpanded={initialCaptureModeExpanded}
       />
     </Box>
   )
@@ -511,6 +523,25 @@ export const PathPickerWithLocalSelections: Story = {
   render: () => (
     <DialogStory wizardState={localPathsState} mockOptions={{ scanStatus: 'detected' }} />
   ),
+}
+
+export const PathPickerCaptureModeExpanded: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialCaptureModeExpanded
+      scrollToText="Snapshot mode"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Local file source picker with Advanced capture mode expanded, covering the accordion spacing around snapshot controls.',
+      },
+    },
+  },
 }
 
 export const PathPickerWithBtrfsSnapshot: Story = {
@@ -572,6 +603,25 @@ export const DatabaseScanDetected: Story = {
       description: {
         story:
           'Open the Database view from "Scan a database instead". Mocked endpoint returns two detected engines plus all five templates, including SQLite.',
+      },
+    },
+  },
+}
+
+export const DatabaseScanRemoteTarget: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="database"
+      initialScanTarget={{ type: 'remote', sshId: 11 }}
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Database scan view with a remote SSH target selected, showing the shared SSH connection picker row.',
       },
     },
   },

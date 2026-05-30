@@ -264,6 +264,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.remoteMachineDescription': 'Pull from an SSH connection',
   'backupPlans.sourceChooser.selectRemoteMachine': 'Select a remote machine',
   'backupPlans.sourceChooser.noRemoteMachines': 'No SSH connections available',
+  'backupPlans.sourceChooser.scanTarget': 'Scan where?',
   'backupPlans.sourceChooser.showLessPaths': 'Show less',
   'backupPlans.sourceChooser.kindFiles': 'Files',
   'backupPlans.sourceChooser.kindDatabase': 'Database',
@@ -570,7 +571,16 @@ describe('SourceStep', () => {
     })
 
     // Snapshot config lives inside the collapsed "Advanced — Capture mode" accordion.
-    fireEvent.click(screen.getByRole('button', { name: /advanced.*capture mode/i }))
+    const advancedCaptureToggle = screen.getByRole('button', {
+      name: /advanced.*capture mode/i,
+    })
+    fireEvent.click(advancedCaptureToggle)
+    const advancedCapturePanel = advancedCaptureToggle.closest('.MuiAccordion-root')
+    expect(advancedCapturePanel).not.toBeNull()
+    expect(window.getComputedStyle(advancedCapturePanel as Element).marginTop).toBe('16px')
+    const advancedCaptureDetails = advancedCapturePanel?.querySelector('.MuiAccordionDetails-root')
+    expect(advancedCaptureDetails).not.toBeNull()
+    expect(window.getComputedStyle(advancedCaptureDetails as Element).paddingTop).toBe('16px')
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /snapshot mode/i }))
     const listbox = await screen.findByRole('listbox')
     fireEvent.click(within(listbox).getByText(/btrfs snapshot/i))
@@ -822,6 +832,63 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /pi.local/i }))
     expect(screen.getByTitle('/selected/from-browser')).toBeInTheDocument()
   }, 30000)
+
+  it('uses the shared SSH connection picker for database scan targets', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    const sshConnections = [
+      {
+        id: 11,
+        host: 'server-a.example',
+        username: 'backup-a',
+        port: 22,
+        ssh_key_id: 1,
+        default_path: '/home/backup-a',
+        mount_point: '/mnt/server-a',
+        status: 'connected',
+      },
+    ]
+    render(<StatefulSourceStep sshConnections={sshConnections} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /scan where/i }))
+    let listbox = await screen.findByRole('listbox')
+    fireEvent.click(within(listbox).getByRole('option', { name: /remote machine/i }))
+    await waitFor(() => {
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
+
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /select a remote machine/i }))
+    listbox = await screen.findByRole('listbox')
+    expect(within(listbox).getByText('backup-a@server-a.example')).toBeInTheDocument()
+    expect(within(listbox).getByText(/Port 22.*\/mnt\/server-a/i)).toBeInTheDocument()
+  })
+
+  it('uses the shared path selector for database scan paths', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    render(<StatefulSourceStep />)
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
+
+    const sourcePathInput = screen.getByLabelText(/source path/i)
+    fireEvent.click(screen.getByTitle('Browse filesystem'))
+
+    const explorer = screen.getByTestId('file-explorer-dialog')
+    expect(explorer).toHaveAttribute('data-connection-type', 'local')
+    expect(explorer).toHaveAttribute('data-initial-path', '/')
+
+    clickExistingTextButton(/select browsed path/i)
+
+    const selectedPath = screen.getByText('/selected/from-browser')
+    const sourcePathControl = sourcePathInput.closest('.MuiFormControl-root') || sourcePathInput
+    expect(
+      sourcePathControl.compareDocumentPosition(selectedPath) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
 
   it('applies database templates with code-editor script drafts', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
