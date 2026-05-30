@@ -81,6 +81,22 @@ function getAgentBrowseCacheKey(agentId: number, path: string, includeHidden: bo
   return `agent:${agentId}:${includeHidden ? 'hidden' : 'visible'}:${path || '/'}`
 }
 
+function resolveInitialBrowsePath(
+  connectionType: FileExplorerConnectionType,
+  initialPath: string,
+  agentDefaultPath?: string | null
+) {
+  const trimmedAgentDefaultPath = agentDefaultPath?.trim()
+  if (
+    connectionType === 'agent' &&
+    trimmedAgentDefaultPath &&
+    (!initialPath || initialPath === '/')
+  ) {
+    return trimmedAgentDefaultPath
+  }
+  return initialPath
+}
+
 interface FileExplorerDialogProps {
   open: boolean
   onClose: () => void
@@ -91,6 +107,7 @@ interface FileExplorerDialogProps {
   connectionType?: FileExplorerConnectionType
   agentId?: number
   agentName?: string
+  agentDefaultPath?: string | null
   sshConfig?: SSHNetworkConfig
   selectMode?: 'directories' | 'files' | 'both'
   showSshMountPoints?: boolean // Set to false to hide SSH mount points (e.g., when repo is SSH to prevent remote-to-remote)
@@ -108,6 +125,7 @@ export default function FileExplorerDialog({
   connectionType = 'local',
   agentId,
   agentName,
+  agentDefaultPath,
   sshConfig,
   selectMode = 'directories',
   showSshMountPoints = true,
@@ -269,9 +287,10 @@ export default function FileExplorerDialog({
       setSelectedPaths([])
       setSearchTerm('')
 
-      if (initialPath) {
+      const startPath = resolveInitialBrowsePath(connectionType, initialPath, agentDefaultPath)
+      if (startPath) {
         // Use provided configuration for initial load
-        loadDirectory(initialPath, connectionType, sshConfig)
+        loadDirectory(startPath, connectionType, sshConfig)
       } else {
         // Load default/root path
         loadDirectory('', connectionType, sshConfig)
@@ -288,11 +307,11 @@ export default function FileExplorerDialog({
       browseCache.current.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialPath, connectionType, sshConfig])
+  }, [open, initialPath, connectionType, sshConfig, agentDefaultPath])
 
   useEffect(() => {
     browseCache.current.clear()
-  }, [agentId, connectionType])
+  }, [agentId, connectionType, agentDefaultPath])
 
   const handleItemClick = (item: FileSystemItem) => {
     if (item.is_mount_point && item.ssh_connection) {

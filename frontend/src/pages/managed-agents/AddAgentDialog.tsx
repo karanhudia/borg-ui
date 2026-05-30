@@ -196,6 +196,7 @@ export default function AddAgentDialog({
   const [borgInstallMode, setBorgInstallMode] = useState<BorgInstallMode>(initialBorgInstallMode)
   const [serviceUserMode, setServiceUserMode] =
     useState<AgentServiceUserMode>(initialServiceUserMode)
+  const [defaultPath, setDefaultPath] = useState('')
   const [serverUrl, setServerUrl] = useState(defaultServerUrl)
   const [createdToken, setCreatedToken] = useState<AgentEnrollmentTokenCreated | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -214,6 +215,7 @@ export default function AddAgentDialog({
     setExpiry('7d')
     setBorgInstallMode(initialBorgInstallMode)
     setServiceUserMode(initialServiceUserMode)
+    setDefaultPath('')
     setServerUrl(defaultServerUrl)
     setCreatedToken(initialCreatedToken)
     setError(null)
@@ -248,8 +250,10 @@ export default function AddAgentDialog({
   const handleGenerate = async () => {
     setError(null)
     try {
+      const trimmedDefaultPath = defaultPath.trim()
       const token = await onCreateToken({
         name: agentName.trim(),
+        ...(trimmedDefaultPath ? { default_path: trimmedDefaultPath } : {}),
         ...expiryPayload(expiry),
       })
       setCreatedToken(token)
@@ -360,6 +364,14 @@ export default function AddAgentDialog({
         onChange={(event) => setAgentName(event.target.value)}
         fullWidth
         autoFocus
+      />
+      <TextField
+        label="Default path"
+        value={defaultPath}
+        onChange={(event) => setDefaultPath(event.target.value)}
+        placeholder="/home/karanhudia"
+        helperText="Starting directory for browsing this agent's files."
+        fullWidth
       />
       <FormControl fullWidth>
         <InputLabel id="agent-token-expiry-label">Token expiry</InputLabel>

@@ -13,6 +13,7 @@ vi.mock('../../FileExplorerDialog', () => ({
     selectMode,
     connectionType,
     agentId,
+    agentDefaultPath,
     initialPath,
   }: {
     open: boolean
@@ -22,6 +23,7 @@ vi.mock('../../FileExplorerDialog', () => ({
     selectMode: string
     connectionType?: string
     agentId?: number
+    agentDefaultPath?: string | null
     initialPath?: string
   }) => {
     if (!open) return null
@@ -30,6 +32,7 @@ vi.mock('../../FileExplorerDialog', () => ({
         data-testid="mock-file-explorer"
         data-connection-type={connectionType}
         data-agent-id={agentId || ''}
+        data-agent-default-path={agentDefaultPath || ''}
         data-initial-path={initialPath || ''}
       >
         <button
@@ -256,6 +259,7 @@ describe('PathSelectorField', () => {
           onChange={mockOnChange}
           connectionType="agent"
           agentId={101}
+          agentDefaultPath="/home/agent"
         />
       )
 
@@ -266,6 +270,10 @@ describe('PathSelectorField', () => {
         'agent'
       )
       expect(screen.getByTestId('mock-file-explorer')).toHaveAttribute('data-agent-id', '101')
+      expect(screen.getByTestId('mock-file-explorer')).toHaveAttribute(
+        'data-agent-default-path',
+        '/home/agent'
+      )
     })
 
     it('defaults selectMode to directories', async () => {

@@ -88,6 +88,7 @@ class AgentMachine(Base):
     os = Column(String, nullable=True)
     arch = Column(String, nullable=True)
     agent_version = Column(String, nullable=True)
+    default_path = Column(String, nullable=True)
     borg_versions = Column(JSON, nullable=True)
     capabilities = Column(JSON, nullable=True)
     labels = Column(JSON, nullable=True)
@@ -106,6 +107,7 @@ class AgentEnrollmentToken(Base):
     name = Column(String, nullable=False)
     token_hash = Column(String, nullable=False)
     token_prefix = Column(String(20), index=True, nullable=False)
+    default_path = Column(String, nullable=True)
     created_by_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

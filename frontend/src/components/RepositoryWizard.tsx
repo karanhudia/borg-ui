@@ -1240,6 +1240,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             : undefined
         }
         agentName={selectedAgentMachine?.name}
+        agentDefaultPath={selectedAgentMachine?.default_path}
         sshConfig={
           wizardState.executionTarget !== 'agent' &&
           wizardState.repositoryLocation === 'ssh' &&

@@ -36,6 +36,7 @@ def _now_utc() -> datetime:
 
 class AgentEnrollmentTokenCreate(BaseModel):
     name: str
+    default_path: Optional[str] = None
     expires_in_minutes: Optional[int] = Field(default=None, ge=1, le=60 * 24 * 30)
     expires_in_hours: Optional[int] = Field(default=None, ge=1, le=24 * 30)
     expires_in_days: Optional[int] = Field(default=None, ge=1, le=30)
@@ -47,6 +48,7 @@ class AgentEnrollmentTokenCreated(BaseModel):
     name: str
     token: str
     token_prefix: str
+    default_path: Optional[str] = None
     expires_at: Optional[datetime]
     created_at: datetime
 
@@ -58,6 +60,7 @@ class AgentEnrollmentTokenSummary(BaseModel):
     id: int
     name: str
     token_prefix: str
+    default_path: Optional[str] = None
     expires_at: Optional[datetime]
     used_at: Optional[datetime] = None
     used_by_agent_id: Optional[int] = None
@@ -77,6 +80,7 @@ class AgentMachineResponse(BaseModel):
     os: Optional[str] = None
     arch: Optional[str] = None
     agent_version: Optional[str] = None
+    default_path: Optional[str] = None
     borg_versions: Optional[list[dict[str, Any]]] = None
     capabilities: Optional[list[str]] = None
     labels: Optional[dict[str, Any]] = None
@@ -161,6 +165,13 @@ def _require_nonempty_string(value: str, error_key: str) -> str:
             detail={"key": error_key},
         )
     return stripped
+
+
+def _optional_trimmed(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 def _build_backup_job_payload(payload: AgentBackupJobCreate) -> dict[str, Any]:
@@ -258,6 +269,7 @@ async def create_enrollment_token(
         name=name,
         token_hash=get_password_hash(raw_token),
         token_prefix=raw_token[:AGENT_TOKEN_PREFIX_LENGTH],
+        default_path=_optional_trimmed(payload.default_path),
         created_by_user_id=current_user.id,
         expires_at=_enrollment_expires_at(payload, now),
         created_at=now,
@@ -278,6 +290,7 @@ async def create_enrollment_token(
         name=token.name,
         token=raw_token,
         token_prefix=token.token_prefix,
+        default_path=token.default_path,
         expires_at=token.expires_at,
         created_at=token.created_at,
     )

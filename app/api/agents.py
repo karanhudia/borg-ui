@@ -826,6 +826,7 @@ async def register_agent(
         os=payload.os,
         arch=payload.arch,
         agent_version=payload.agent_version,
+        default_path=enrollment_token.default_path,
         borg_versions=payload.borg_versions,
         capabilities=payload.capabilities,
         labels=payload.labels,
