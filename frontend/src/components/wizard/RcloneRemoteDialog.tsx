@@ -315,6 +315,10 @@ export default function RcloneRemoteDialog({
     }
     setLocalError(null)
     setOauthError(null)
+    setOauthSession(null)
+    setBorgUiOAuthProvider(null)
+    setBorgUiOAuthSessionId(null)
+    setOauthTokenStatus(null)
     setIsStartingOAuth(true)
     try {
       const session = await onStartOAuth({
@@ -367,6 +371,21 @@ export default function RcloneRemoteDialog({
     const clientId = oauthClientId.trim()
     const clientSecret = oauthClientSecret.trim()
     if (!clientId && !clientSecret) {
+      setOauthCredentialsError(null)
+      setIsSavingOAuthCredentials(true)
+      try {
+        await onSaveOAuthCredentials(resolvedProvider, {
+          client_id: null,
+          client_secret: null,
+        })
+      } catch {
+        setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsSaveFailed'))
+      } finally {
+        setIsSavingOAuthCredentials(false)
+      }
+      return
+    }
+    if (!clientId || !clientSecret) {
       setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsRequired'))
       return
     }

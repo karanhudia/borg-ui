@@ -419,6 +419,25 @@ describe('CloudStorage', () => {
     })
   }, 60000)
 
+  it('clears provider OAuth app credentials from the guided setup panel', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    await screen.findByText('prod-s3')
+    await user.click(screen.getByRole('button', { name: /Add remote/i }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Google Drive/i }))
+
+    await user.click(screen.getByRole('button', { name: /Save OAuth credentials/i }))
+
+    await waitFor(() => {
+      expect(rcloneAPI.updateOAuthCredentials).toHaveBeenCalledWith('drive', {
+        client_id: null,
+        client_secret: null,
+      })
+    })
+  }, 60000)
+
   it('shows OAuth token expiry and refresh availability on managed OAuth remotes', async () => {
     vi.mocked(rcloneAPI.listRemotes).mockResolvedValue({
       data: {
@@ -570,6 +589,85 @@ describe('CloudStorage', () => {
           type: 'drive',
           scope: 'drive',
           token: '{"access_token":"loopback-access","refresh_token":"loopback-refresh"}',
+        },
+      })
+    })
+  }, 60000)
+
+  it('clears stale Borg UI OAuth metadata when replacement authorization starts', async () => {
+    vi.mocked(rcloneAPI.startOAuthSession)
+      .mockResolvedValueOnce({
+        data: {
+          session_id: 'oauth-borg-ui',
+          provider: 'drive',
+          status: 'awaiting_callback',
+          oauth_mode: 'borg_ui',
+          authorization_url: '/rclone/oauth/sessions/oauth-borg-ui/authorize',
+          local_authorization_url: null,
+          config: null,
+          error: null,
+        },
+      } as AxiosResponse)
+      .mockResolvedValueOnce({
+        data: {
+          session_id: 'oauth-loopback',
+          provider: 'drive',
+          status: 'awaiting_callback',
+          oauth_mode: 'rclone_loopback',
+          authorization_url: '/rclone/oauth/sessions/oauth-loopback/authorize',
+          local_authorization_url: 'http://127.0.0.1:53682/auth?state=loopback',
+          config: null,
+          error: null,
+        },
+      } as AxiosResponse)
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    await screen.findByText('prod-s3')
+    fireEvent.click(screen.getByRole('button', { name: /Add remote/i }))
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
+    fireEvent.click(await screen.findByRole('option', { name: /Google Drive/i }))
+
+    fireEvent.click(screen.getByRole('button', { name: /Start Borg UI OAuth/i }))
+    await waitFor(() => {
+      expect(rcloneAPI.startOAuthSession).toHaveBeenCalledTimes(1)
+    })
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalledWith(
+        '/api/rclone/oauth/sessions/oauth-borg-ui/authorize',
+        '_blank',
+        'noopener,noreferrer'
+      )
+    })
+    fireEvent.click(await screen.findByRole('button', { name: /Check authorization/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Token ready to save/i)).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Use rclone loopback/i }))
+
+    await waitFor(() => {
+      expect(rcloneAPI.startOAuthSession).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          provider: 'drive',
+          mode: 'rclone_loopback',
+        })
+      )
+    })
+
+    fireEvent.change(screen.getByLabelText(/Remote name/i), {
+      target: { value: 'gdrive-loopback' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Create remote/i }))
+
+    await waitFor(() => {
+      expect(rcloneAPI.createRemote).toHaveBeenCalledWith({
+        name: 'gdrive-loopback',
+        provider: 'drive',
+        config_source: 'managed',
+        redacted_config: {
+          type: 'drive',
+          scope: 'drive',
         },
       })
     })

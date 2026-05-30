@@ -223,7 +223,7 @@ remote dialog or supplied through backend environment variables:
 
 Complete credentials saved in Borg UI take precedence over environment values.
 Environment variables remain useful for local development, immutable
-deployments, and secret-store driven production setups. Borg UI stores UI-saved
+deployments, and secret-store-driven production setups. Borg UI stores UI-saved
 client secrets encrypted in the backend database and returns only credential
 source/status metadata to the frontend.
 

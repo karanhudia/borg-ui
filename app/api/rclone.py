@@ -17,6 +17,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -504,11 +505,20 @@ def _strip_optional(value: str | None) -> str | None:
 
 
 def _get_or_create_system_settings(db: Session) -> SystemSettings:
-    settings_row = db.query(SystemSettings).first()
+    settings_query = (
+        db.query(SystemSettings).order_by(SystemSettings.id.asc()).with_for_update()
+    )
+    settings_row = settings_query.first()
     if settings_row is None:
-        settings_row = SystemSettings()
+        settings_row = SystemSettings(id=1)
         db.add(settings_row)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            settings_row = settings_query.first()
+            if settings_row is None:
+                raise
     return settings_row
 
 
@@ -1595,8 +1605,12 @@ def _remote_oauth_token_status(remote: RcloneRemote) -> dict[str, Any] | None:
             )
         except OSError:
             values = {}
+    used_redacted_fallback = False
     if not values:
         values = dict(remote.redacted_config or {})
+        used_redacted_fallback = True
+    if used_redacted_fallback and _is_redacted_config_value(values.get("token")):
+        return {"status": "unknown", "expires_at": None, "refresh_available": False}
     return _oauth_token_status_from_config_values(remote.provider, values)
 
 
@@ -1704,18 +1718,17 @@ async def update_oauth_credentials(
         )
     settings_row = _get_or_create_system_settings(db)
     client_id_field, client_secret_field = _provider_oauth_db_field_names(provider)
+    payload_fields = getattr(payload, "model_fields_set", None)
+    if payload_fields is None:
+        payload_fields = getattr(payload, "__fields_set__", set())
 
-    if payload.client_id is not None:
+    if "client_id" in payload_fields:
         setattr(settings_row, client_id_field, _strip_optional(payload.client_id))
-    if payload.clear_client_secret:
-        setattr(settings_row, client_secret_field, None)
-    elif payload.client_secret is not None:
+    if payload.clear_client_secret or "client_secret" in payload_fields:
         stripped_secret = _strip_optional(payload.client_secret)
-        setattr(
-            settings_row,
-            client_secret_field,
-            encrypt_secret(stripped_secret) if stripped_secret else None,
-        )
+        setattr(settings_row, client_secret_field, None)
+        if stripped_secret and not payload.clear_client_secret:
+            setattr(settings_row, client_secret_field, encrypt_secret(stripped_secret))
 
     db.commit()
     db.refresh(settings_row)
@@ -2059,6 +2072,15 @@ async def update_remote(
     old_remote_name = remote.name
     try:
         if remote.config_source == "managed":
+            if (
+                payload.provider is not None
+                and provider != remote.provider
+                and payload.redacted_config is None
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.updateUnsupported"},
+                )
             config_file = _managed_config_path_for_remote(remote)
             original_parser = _load_config(config_file)
             existing_config = _config_section_values(original_parser, old_remote_name)
