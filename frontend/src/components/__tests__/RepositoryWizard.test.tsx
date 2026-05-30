@@ -919,7 +919,7 @@ describe('RepositoryWizard', () => {
       expect(screen.getByLabelText(/Repository Path/i)).toHaveValue('/selected/from-browser')
     }, 90000)
 
-    it('clears and disables SSH repository target when managed-agent execution is selected', async () => {
+    it('clears SSH repository target when managed-agent execution is selected', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')
 
@@ -934,7 +934,7 @@ describe('RepositoryWizard', () => {
       const agentListbox = await screen.findByRole('listbox')
       await user.click(within(agentListbox).getByText('workstation.local'))
 
-      expect(screen.getByRole('button', { name: /Remote Client/i })).toBeDisabled()
+      expect(screen.getByRole('button', { name: /Remote Client/i })).not.toBeDisabled()
       expect(screen.queryByText('Select SSH Connection')).not.toBeInTheDocument()
       expect(
         screen.getByText(/Backups will be stored on the selected agent's filesystem/i)

@@ -83,14 +83,17 @@ export default function WizardStepLocation({
   const isDirectRclone = data.repositoryLocation === 'rclone'
   const borgVersion = data.borgVersion ?? 1
 
-  // Disable SSH repository location if data source is remote (prevent remote-to-remote)
-  // Only enforce this in edit mode when we know the data source
-  const isRemoteLocationDisabled =
-    isAgentExecution || (mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId)
+  // Legacy v1 repos with an attached remote data source: prevent switching the repository
+  // to another remote target. Remote-to-remote was never supported in the v1 mapping model.
+  // New repositories carry no source/destination coupling — that lives in backup plans now —
+  // so cards are freely interchangeable.
+  const isLegacyRemoteSource = mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId
+  const isRemoteLocationDisabled = isLegacyRemoteSource
+  const isAgentLocationDisabled = isLegacyRemoteSource
 
   const handleLocationChange = (location: 'local' | 'ssh') => {
     if (location === 'ssh' && isRemoteLocationDisabled) {
-      return // Don't allow switching to SSH if data source is remote
+      return
     }
     onChange({
       repositoryLocation: location,
@@ -101,6 +104,9 @@ export default function WizardStepLocation({
   }
 
   const handleAgentLocationChange = () => {
+    if (isAgentLocationDisabled) {
+      return
+    }
     onChange({
       repositoryLocation: 'local',
       executionTarget: 'agent',
@@ -373,8 +379,12 @@ export default function WizardStepLocation({
             </CardActionArea>
           </Card>
 
-          <Card variant="outlined" sx={locationCardSx(isAgentExecution)}>
-            <CardActionArea onClick={handleAgentLocationChange} sx={locationActionSx}>
+          <Card variant="outlined" sx={locationCardSx(isAgentExecution, isAgentLocationDisabled)}>
+            <CardActionArea
+              onClick={handleAgentLocationChange}
+              disabled={isAgentLocationDisabled}
+              sx={locationActionSx}
+            >
               <CardContent sx={locationContentSx}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
                   <Box sx={locationIconSx(isAgentExecution)}>
