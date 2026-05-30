@@ -53,7 +53,9 @@ import type { IconType } from 'react-icons'
 import type { TFunction } from 'i18next'
 
 import CodeEditor from '../../../components/CodeEditor'
-import DestinationSelect, { type DestinationOption } from '../../../components/DestinationSelect'
+import DestinationSelect, {
+  type DestinationOption,
+} from '../../../components/shared/DestinationSelect'
 import ManagedAgentSelect from '../../../components/ManagedAgentSelect'
 import PathSelectorField from '../../../components/PathSelectorField'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'

@@ -22,7 +22,7 @@ import PlanGate from '../PlanGate'
 import { getDestinations, type DestinationKey } from './destinations'
 import SshConnectionSelect from '../SshConnectionSelect'
 import ManagedAgentSelect from '../ManagedAgentSelect'
-import DestinationSelect from '../DestinationSelect'
+import DestinationSelect from '../shared/DestinationSelect'
 
 interface SSHConnection {
   id: number
