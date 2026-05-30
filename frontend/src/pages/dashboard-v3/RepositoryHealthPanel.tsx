@@ -9,7 +9,7 @@ type RepositoryHealth = DashboardOverview['repository_health']
 
 export function RepositoryHealthPanel({
   T,
-  glass,
+  surface,
   repos,
   criticalCount,
   warningCount,
@@ -18,7 +18,7 @@ export function RepositoryHealthPanel({
   onOpenRepositories,
 }: {
   T: Tokens
-  glass: Record<string, unknown>
+  surface: Record<string, unknown>
   repos: RepositoryHealth
   criticalCount: number
   warningCount: number
@@ -29,16 +29,15 @@ export function RepositoryHealthPanel({
   const { t } = useTranslation()
 
   return (
-    <Box sx={{ ...glass, p: 2.5 }}>
+    <Box sx={{ ...surface, p: 2.5 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
         <Stack direction="row" spacing={1} alignItems="center">
-          <Server size={13} color={T.textMuted} />
+          <Server size={14} color={T.textMuted} />
           <Typography
             sx={{
-              fontSize: '0.58rem',
-              color: T.textMuted,
-              letterSpacing: 2,
-              textTransform: 'uppercase',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: T.textPrimary,
             }}
           >
             {t('dashboard.repositoryHealth.title')}
@@ -50,8 +49,8 @@ export function RepositoryHealthPanel({
               label={t('dashboard.banner.critical', { count: criticalCount })}
               size="small"
               sx={{
-                height: 19,
-                fontSize: '0.6rem',
+                height: 22,
+                fontSize: '0.75rem',
                 bgcolor: T.redDim,
                 color: T.red,
                 border: `1px solid ${T.red}30`,
@@ -64,8 +63,8 @@ export function RepositoryHealthPanel({
               label={t('dashboard.banner.warnChip', { count: warningCount })}
               size="small"
               sx={{
-                height: 19,
-                fontSize: '0.6rem',
+                height: 22,
+                fontSize: '0.75rem',
                 bgcolor: T.amberDim,
                 color: T.amber,
                 border: `1px solid ${T.amber}30`,
@@ -78,8 +77,8 @@ export function RepositoryHealthPanel({
               label={t('dashboard.banner.okChip', { count: healthyCount })}
               size="small"
               sx={{
-                height: 19,
-                fontSize: '0.6rem',
+                height: 22,
+                fontSize: '0.75rem',
                 bgcolor: T.greenDim,
                 color: T.green,
                 border: `1px solid ${T.green}30`,
@@ -118,11 +117,10 @@ export function RepositoryHealthPanel({
                 borderRadius: '10px',
                 p: 1.25,
                 cursor: 'pointer',
-                transition: 'all 0.18s',
+                transition: 'border-color 0.18s, background-color 0.18s',
                 '&:hover': {
-                  borderColor: cs.color + '60',
-                  transform: 'translateY(-1px)',
-                  boxShadow: `0 4px 20px ${cs.glow}`,
+                  borderColor: cs.color + '80',
+                  bgcolor: cs.color + '12',
                 },
               }}
             >
@@ -134,18 +132,18 @@ export function RepositoryHealthPanel({
                 sx={{ mb: 0.55 }}
               >
                 <Stack direction="row" spacing={0.75} alignItems="center">
-                  <PulseDot color={cs.color} glow={cs.glow} />
+                  <PulseDot color={cs.color} />
                   <Chip
                     label={repo.type.toUpperCase()}
                     size="small"
                     sx={{
-                      height: 15,
-                      fontSize: '0.52rem',
+                      height: 20,
+                      fontSize: '0.6875rem',
                       bgcolor: T.repoBadgeBg,
                       color: T.textMuted,
                       border: `1px solid ${T.border}`,
                       fontFamily: T.mono,
-                      px: 0,
+                      px: 0.5,
                     }}
                   />
                   {repo.mode === 'observe' && (
@@ -153,13 +151,13 @@ export function RepositoryHealthPanel({
                       label={t('repositories.observeOnly')}
                       size="small"
                       sx={{
-                        height: 15,
-                        fontSize: '0.52rem',
+                        height: 20,
+                        fontSize: '0.6875rem',
                         bgcolor: T.indigoDim,
                         color: T.indigo,
                         border: `1px solid ${T.indigo}30`,
                         fontFamily: T.mono,
-                        px: 0,
+                        px: 0.5,
                       }}
                     />
                   )}
@@ -174,13 +172,13 @@ export function RepositoryHealthPanel({
                 />
               </Stack>
 
-              {/* ── Name + stats ── */}
+              {/* Name + stats */}
               <Typography
                 sx={{
-                  fontSize: '0.78rem',
+                  fontSize: '0.875rem',
                   fontWeight: 600,
                   color: T.textPrimary,
-                  mb: 0.2,
+                  mb: 0.4,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -188,13 +186,13 @@ export function RepositoryHealthPanel({
               >
                 {repo.name}
               </Typography>
-              <Stack direction="row" spacing={1.35} sx={{ mb: 0.65 }}>
-                <Typography sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}>
+              <Stack direction="row" spacing={1.5} sx={{ mb: 0.75 }}>
+                <Typography sx={{ fontFamily: T.mono, fontSize: '0.75rem', color: T.textMuted }}>
                   {t('dashboard.repositoryHealth.archiveCountShort', {
                     count: repo.archive_count,
                   })}
                 </Typography>
-                <Typography sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}>
+                <Typography sx={{ fontFamily: T.mono, fontSize: '0.75rem', color: T.textMuted }}>
                   {repo.total_size}
                 </Typography>
               </Stack>
@@ -204,7 +202,7 @@ export function RepositoryHealthPanel({
                   direction="row"
                   spacing={0.75}
                   alignItems="center"
-                  sx={{ mb: 0.65, minWidth: 0 }}
+                  sx={{ mb: 0.75, minWidth: 0 }}
                 >
                   <Chip
                     label={`${repo.backup_plan_count} ${
@@ -212,8 +210,8 @@ export function RepositoryHealthPanel({
                     }`}
                     size="small"
                     sx={{
-                      height: 17,
-                      fontSize: '0.58rem',
+                      height: 20,
+                      fontSize: '0.75rem',
                       bgcolor: T.blueDim,
                       color: T.blue,
                       border: `1px solid ${T.blue}25`,
@@ -224,7 +222,7 @@ export function RepositoryHealthPanel({
                     <Typography
                       key={name}
                       sx={{
-                        fontSize: '0.62rem',
+                        fontSize: '0.75rem',
                         color: T.textMuted,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -260,7 +258,7 @@ export function RepositoryHealthPanel({
         })}
       </Box>
       {repos.length === 0 && (
-        <Typography sx={{ color: T.textMuted, textAlign: 'center', py: 4, fontSize: '0.85rem' }}>
+        <Typography sx={{ color: T.textMuted, textAlign: 'center', py: 4, fontSize: '0.875rem' }}>
           {t('dashboard.noRepositoriesShort')}
         </Typography>
       )}

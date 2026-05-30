@@ -13,35 +13,24 @@ import {
 import { formatDateTimeFull } from '../../utils/dateUtils'
 import { useT } from './tokens'
 
-export function PulseDot({ color, glow }: { color: string; glow: string }) {
+/**
+ * Status dot. Was an animated pulse ring with a colored glow; now a static
+ * solid dot with a faint ring so status reads at a glance without movement
+ * or decoration. Color alone is never the only signal (the parent surface
+ * also carries the status via border and chip).
+ */
+export function PulseDot({ color }: { color: string; glow?: string }) {
   return (
-    <Box sx={{ position: 'relative', width: 8, height: 8, flexShrink: 0 }}>
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: '50%',
-          bgcolor: color,
-          opacity: 0.6,
-          animation: 'pulse-ring 2.4s ease-in-out infinite',
-          '@keyframes pulse-ring': {
-            '0%': { transform: 'scale(1)', opacity: 0.6 },
-            '60%': { transform: 'scale(2.2)', opacity: 0 },
-            '100%': { transform: 'scale(1)', opacity: 0 },
-          },
-          boxShadow: `0 0 8px ${glow}`,
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          borderRadius: '50%',
-          bgcolor: color,
-          boxShadow: `0 0 6px ${color}`,
-        }}
-      />
-    </Box>
+    <Box
+      sx={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        bgcolor: color,
+        boxShadow: `0 0 0 2px ${color}22`,
+        flexShrink: 0,
+      }}
+    />
   )
 }
 
@@ -206,16 +195,16 @@ export function DimStatusGrid({
               borderLeft: i > 0 ? `1px solid ${T.border}` : 'none',
             }}
           >
-            {/* Label row */}
-            <Stack direction="row" spacing={0.4} alignItems="center" sx={{ mb: 0.2, minWidth: 0 }}>
-              <DimIcon status={item.status} size={9} />
+            {/* Label row. Translation values are already uppercase (BACKUP,
+                CHECK, RESTORE, etc.); we render at a larger size with no extra
+                tracking so the line reads as a label, not an eyebrow. */}
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.4, minWidth: 0 }}>
+              <DimIcon status={item.status} size={12} />
               <Typography
                 sx={{
-                  fontSize: '0.49rem',
+                  fontSize: '0.75rem',
                   fontWeight: 600,
-                  color: T.textDim,
-                  letterSpacing: 0.8,
-                  textTransform: 'uppercase',
+                  color: T.textMuted,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -231,10 +220,10 @@ export function DimStatusGrid({
                   cursor: item.tooltip ? 'help' : 'default',
                   display: 'inline-block',
                   fontFamily: T.mono,
-                  fontSize: '0.58rem',
+                  fontSize: '0.8125rem',
                   fontWeight: 600,
                   color,
-                  lineHeight: 1,
+                  lineHeight: 1.2,
                   maxWidth: '100%',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -286,10 +275,9 @@ export function ScheduleBadge({
         title={t('dashboard.scheduleBadge.noSchedule')}
         sx={{
           fontFamily: T.mono,
-          fontSize: '0.58rem',
+          fontSize: '0.75rem',
           fontWeight: 500,
-          color: T.textDim,
-          letterSpacing: 0.5,
+          color: T.textMuted,
           userSelect: 'none',
         }}
       >
@@ -311,19 +299,19 @@ export function ScheduleBadge({
             : `${t('dashboard.scheduleBadge.pausedTitleGeneric')} (${timezoneLabel})`
         }
         sx={{
-          px: 0.8,
-          py: 0.2,
+          px: 1,
+          py: 0.4,
           bgcolor: T.amberDim,
           border: `1px solid ${T.amber}35`,
           borderRadius: '99px',
           flexShrink: 0,
         }}
       >
-        <Pause size={9} color={T.amber} />
+        <Pause size={12} color={T.amber} />
         <Typography
           sx={{
             fontFamily: T.mono,
-            fontSize: '0.6rem',
+            fontSize: '0.75rem',
             fontWeight: 600,
             color: T.amber,
             lineHeight: 1,
@@ -344,19 +332,19 @@ export function ScheduleBadge({
         alignItems="center"
         title={`${scheduleName ?? t('dashboard.scheduleBadge.scheduled')} (${timezoneLabel})`}
         sx={{
-          px: 0.8,
-          py: 0.2,
+          px: 1,
+          py: 0.4,
           bgcolor: T.blueDim,
           border: `1px solid ${T.blue}35`,
           borderRadius: '99px',
           flexShrink: 0,
         }}
       >
-        <RotateCw size={9} color={T.blue} />
+        <RotateCw size={12} color={T.blue} />
         <Typography
           sx={{
             fontFamily: T.mono,
-            fontSize: '0.6rem',
+            fontSize: '0.75rem',
             fontWeight: 600,
             color: T.blue,
             lineHeight: 1,
@@ -382,10 +370,12 @@ export function ScheduleBadge({
           ? `${Math.floor(hoursAway)}h`
           : `${Math.floor(hoursAway / 24)}d`
 
+  // Imminent runs get a higher-contrast ring (no animation) so reduced-motion
+  // users still see the same emphasis non-imminent runs don't get.
   return (
     <Stack
       direction="row"
-      spacing={0.4}
+      spacing={0.5}
       alignItems="center"
       title={
         scheduleName
@@ -393,26 +383,20 @@ export function ScheduleBadge({
           : `${t('dashboard.scheduleBadge.nextRunTitleGeneric', { label })} (${timezoneLabel})`
       }
       sx={{
-        px: 0.8,
-        py: 0.2,
+        px: 1,
+        py: 0.4,
         bgcolor: T.indigoDim,
-        border: `1px solid ${T.indigo}35`,
+        border: `1px solid ${isImminent ? T.indigo : T.indigo + '35'}`,
         borderRadius: '99px',
         flexShrink: 0,
-        ...(isImminent && {
-          animation: 'badge-pulse 2s ease-in-out infinite',
-          '@keyframes badge-pulse': {
-            '0%, 100%': { boxShadow: `0 0 0 0 ${T.indigo}50` },
-            '50%': { boxShadow: `0 0 0 5px ${T.indigo}00` },
-          },
-        }),
+        ...(isImminent && { boxShadow: `0 0 0 2px ${T.indigo}22` }),
       }}
     >
-      <Play size={9} color={T.indigo} />
+      <Play size={12} color={T.indigo} />
       <Typography
         sx={{
           fontFamily: T.mono,
-          fontSize: '0.6rem',
+          fontSize: '0.75rem',
           fontWeight: 700,
           color: T.indigo,
           lineHeight: 1,

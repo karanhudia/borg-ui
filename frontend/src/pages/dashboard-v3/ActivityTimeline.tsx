@@ -103,20 +103,22 @@ export function ActivityTimeline({
         {/* Today highlight column */}
         <rect x={ML + (DAYS - 1) * colW} y={MT} width={colW} height={cH} fill={T.todayCol} rx={2} />
 
-        {/* Activity dots */}
+        {/* Activity dots. Failed jobs use a larger ring so they read as
+            distinct without depending on glow/shadow effects. */}
         {dots.map((d, i) => (
           <g key={i}>
-            {/* Glow halo for failed */}
-            {d.failed && <circle cx={d.x} cy={d.y} r={7} fill={d.color} opacity={0.2} />}
-            <circle
-              cx={d.x}
-              cy={d.y}
-              r={4}
-              fill={d.color}
-              stroke={d.failed ? 'rgba(255,255,255,0.4)' : 'none'}
-              strokeWidth={d.failed ? 1 : 0}
-              style={{ filter: `drop-shadow(0 0 4px ${d.color}90)` }}
-            >
+            {d.failed && (
+              <circle
+                cx={d.x}
+                cy={d.y}
+                r={6.5}
+                fill="none"
+                stroke={d.color}
+                strokeWidth={1.5}
+                opacity={0.55}
+              />
+            )}
+            <circle cx={d.x} cy={d.y} r={d.failed ? 3.5 : 4} fill={d.color}>
               <title>{d.title}</title>
             </circle>
           </g>
@@ -153,34 +155,26 @@ export function ActivityTimeline({
       </svg>
 
       {/* Legend */}
-      <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+      <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
         {Object.entries(JOB_COLOR).map(([type, color]) => (
-          <Stack key={type} direction="row" spacing={0.5} alignItems="center">
-            <Box
-              sx={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                bgcolor: color,
-                boxShadow: `0 0 4px ${color}80`,
-              }}
-            />
-            <Typography sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}>
+          <Stack key={type} direction="row" spacing={0.65} alignItems="center">
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />
+            <Typography sx={{ fontFamily: T.mono, fontSize: '0.75rem', color: T.textMuted }}>
               {t(`dashboard.activityTimeline.jobType.${type}`, { defaultValue: type })}
             </Typography>
           </Stack>
         ))}
-        <Stack direction="row" spacing={0.5} alignItems="center">
+        <Stack direction="row" spacing={0.65} alignItems="center">
           <Box
             sx={{
-              width: 7,
-              height: 7,
+              width: 8,
+              height: 8,
               borderRadius: '50%',
-              bgcolor: T.red,
-              border: '1px solid rgba(255,255,255,0.4)',
+              border: `1.5px solid ${T.red}`,
+              flexShrink: 0,
             }}
           />
-          <Typography sx={{ fontFamily: T.mono, fontSize: '0.6rem', color: T.textMuted }}>
+          <Typography sx={{ fontFamily: T.mono, fontSize: '0.75rem', color: T.textMuted }}>
             {t('dashboard.activityTimeline.legendFailed')}
           </Typography>
         </Stack>
