@@ -367,10 +367,7 @@ export default function ManagedAgents() {
 
       <AgentJobLogsDialog job={selectedLogsJob} onClose={() => setLogsJob(null)} />
 
-      <AgentSessionLogsDialog
-        agent={selectedLogsAgent}
-        onClose={() => setLogsAgent(null)}
-      />
+      <AgentSessionLogsDialog agent={selectedLogsAgent} onClose={() => setLogsAgent(null)} />
     </Box>
   )
 }
