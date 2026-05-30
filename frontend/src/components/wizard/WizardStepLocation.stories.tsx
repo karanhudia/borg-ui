@@ -129,3 +129,61 @@ export const DirectBorg2Rclone: Story = {
     </Box>
   ),
 }
+
+export const AgentDestinationEmpty: Story = {
+  args: {
+    ...baseArgs,
+    data: {
+      ...baseArgs.data,
+      name: 'Agent Repository',
+      executionTarget: 'agent',
+      repositoryLocation: 'local',
+    },
+    agentMachines: [],
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}
+
+export const AgentDestinationMultiple: Story = {
+  args: {
+    ...baseArgs,
+    data: {
+      ...baseArgs.data,
+      name: 'Agent Repository',
+      executionTarget: 'agent',
+      repositoryLocation: 'local',
+      agentMachineId: 7,
+    },
+    agentMachines: [
+      { id: 7, name: 'Media Node', hostname: 'media-node.local', status: 'online' },
+      { id: 8, name: 'Workstation', hostname: 'workstation.lan', status: 'online' },
+      { id: 9, name: 'Laptop', hostname: 'laptop.lan', status: 'offline' },
+    ],
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}
+
+export const SshDestinationNoConnections: Story = {
+  args: {
+    ...baseArgs,
+    data: {
+      ...baseArgs.data,
+      name: 'Remote Repository',
+      repositoryLocation: 'ssh',
+    },
+    sshConnections: [],
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepLocation {...args} />
+    </Box>
+  ),
+}

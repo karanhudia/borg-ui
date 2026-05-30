@@ -3310,7 +3310,6 @@
       "directRcloneAdvancedTitle": "Advanced storage mode",
       "directRcloneLabel": "Use direct Borg 2 rclone repository",
       "directRcloneHelper": "Borg writes directly through rclone. There is no Borg UI cache, cloud mirror, or rclone sync status.",
-      "directRcloneUnavailable": "Select Borg v2 to use direct rclone repository URLs.",
       "directRclonePathLabel": "Direct rclone repository URL",
       "directRclonePathHelper": "Use a Borg 2 rclone URL. The rclone remote must be configured for the Borg process.",
       "directRclonePathPlaceholder": "rclone://remote-name/path/to/repository",
