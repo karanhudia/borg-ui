@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy.orm import Session
+import structlog
 
 from app.database.models import AgentJob
 from app.services.agent_connection_manager import agent_connection_manager
+
+logger = structlog.get_logger()
 
 
 def _now_utc() -> datetime:
@@ -66,6 +70,30 @@ async def dispatch_agent_job_if_connected(
         )
         return False
     return True
+
+
+async def dispatch_agent_job_best_effort(
+    db: Session,
+    job: AgentJob,
+    *,
+    timeout_seconds: float = 1.0,
+    **context: Any,
+) -> bool:
+    try:
+        return await dispatch_agent_job_if_connected(
+            db,
+            job,
+            timeout_seconds=timeout_seconds,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Immediate agent dispatch failed; leaving queued job for fallback handling",
+            agent_job_id=getattr(job, "id", None),
+            agent_machine_id=getattr(job, "agent_machine_id", None),
+            error=str(exc),
+            **context,
+        )
+        return False
 
 
 async def dispatch_agent_cancel_if_connected(

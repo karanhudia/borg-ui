@@ -25,6 +25,7 @@ class FakeWebSocket:
         self.incoming = list(incoming)
         self.sent = []
         self.closed = False
+        self.pings = 0
 
     def send(self, payload):
         self.sent.append(json.loads(payload))
@@ -32,7 +33,13 @@ class FakeWebSocket:
     def recv(self):
         if not self.incoming:
             raise EOFError("closed")
-        return json.dumps(self.incoming.pop(0))
+        item = self.incoming.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return json.dumps(item)
+
+    def ping(self):
+        self.pings += 1
 
     def close(self):
         self.closed = True
@@ -603,6 +610,49 @@ def test_session_runtime_reports_durable_job_events(monkeypatch):
 
 
 @pytest.mark.unit
+def test_session_runtime_sends_ping_on_idle_recv_timeout(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    socket = FakeWebSocket(
+        [
+            TimeoutError("idle"),
+            {
+                "type": "command",
+                "command_id": "cmd-1",
+                "command": "filesystem.browse",
+                "job_id": None,
+                "payload": {"path": "/home"},
+            },
+        ]
+    )
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.detect_platform",
+        lambda: {"hostname": "host.local", "os": "linux", "arch": "amd64"},
+    )
+    monkeypatch.setattr("agent.borg_ui_agent.session.detect_borg_binaries", lambda: [])
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.browse_filesystem",
+        lambda path, include_hidden=False: {
+            "success": True,
+            "current_path": path,
+            "parent_path": "/",
+            "items": [],
+        },
+    )
+
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: socket,
+    )
+    runtime.run_session(max_messages=1)
+
+    assert socket.pings == 1
+    assert socket.sent[1]["type"] == "command_ack"
+    assert socket.sent[2]["type"] == "command_result"
+
+
+@pytest.mark.unit
 def test_session_runtime_reconnects_with_backoff(monkeypatch):
     from agent.borg_ui_agent.session import AgentSessionRuntime
 
@@ -633,6 +683,37 @@ def test_session_runtime_reconnects_with_backoff(monkeypatch):
 
     assert len(attempts) == 3
     assert sleeps == [1, 2, 4]
+
+
+@pytest.mark.unit
+def test_session_runtime_resets_backoff_after_healthy_session(monkeypatch):
+    from agent.borg_ui_agent.session import AgentSessionRuntime
+
+    sleeps = []
+    runtime = AgentSessionRuntime(
+        AgentConfig("https://borgui.example.com", "agt_123", "secret"),
+        connect=lambda *args, **kwargs: FakeWebSocket([]),
+        sleep=sleeps.append,
+    )
+
+    outcomes = [RuntimeError("short"), RuntimeError("healthy"), RuntimeError("short")]
+
+    def fake_run_session():
+        raise outcomes.pop(0)
+
+    times = iter([0, 1, 10, 80, 100, 101])
+    monkeypatch.setattr(runtime, "run_session", fake_run_session)
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.session.time.monotonic", lambda: next(times)
+    )
+
+    runtime.run_forever(
+        max_iterations=3,
+        initial_backoff_seconds=4,
+        max_backoff_seconds=8,
+    )
+
+    assert sleeps == [4, 4, 8]
 
 
 @pytest.mark.unit

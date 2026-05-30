@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.core.agent_auth import AGENT_AUTH_HEADER, AGENT_TOKEN_PREFIX_LENGTH
 from app.core.security import get_password_hash
@@ -328,6 +329,28 @@ class TestAgentRegistrationAndHeartbeat:
 
 @pytest.mark.unit
 class TestAgentJobTransport:
+    def test_websocket_session_times_out_missing_hello(
+        self, test_client: TestClient, admin_headers, monkeypatch
+    ):
+        registered = _register_agent(
+            test_client,
+            _create_enrollment_token(test_client, admin_headers)["token"],
+            capabilities=["session.commands"],
+        )
+        monkeypatch.setattr(
+            "app.api.agents.AGENT_SESSION_HELLO_TIMEOUT_SECONDS",
+            0.01,
+        )
+
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with test_client.websocket_connect(
+                "/api/agents/session",
+                headers=_agent_headers(registered["agent_token"]),
+            ) as websocket:
+                websocket.receive_json()
+
+        assert exc_info.value.code == 1008
+
     def test_websocket_session_hello_marks_agent_online_until_disconnect(
         self, test_client: TestClient, test_db, admin_headers
     ):
@@ -419,6 +442,16 @@ class TestAgentJobTransport:
             assert command["command"] == "backup.create"
             assert command["job_id"] == queued.json()["id"]
             assert command["payload"]["job_kind"] == "backup.create"
+            websocket.send_json(
+                {
+                    "type": "log",
+                    "command_id": command["command_id"],
+                    "job_id": queued.json()["id"],
+                    "sequence": "not-a-number",
+                    "stream": "stderr",
+                    "message": "still handled",
+                }
+            )
 
             polled = test_client.get(
                 "/api/agents/jobs/poll",
@@ -426,6 +459,14 @@ class TestAgentJobTransport:
             )
             assert polled.status_code == 200
             assert polled.json()["jobs"] == []
+
+        log = (
+            test_db.query(AgentJobLog)
+            .filter(AgentJobLog.agent_job_id == queued.json()["id"])
+            .one()
+        )
+        assert log.sequence == 0
+        assert log.message == "still handled"
 
     def test_admin_can_queue_backup_job_and_agent_can_poll_it(
         self, test_client: TestClient, test_db, admin_headers

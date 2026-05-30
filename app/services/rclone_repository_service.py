@@ -19,7 +19,7 @@ from app.database.models import (
     RcloneRemote,
     RcloneSyncJob,
 )
-from app.services.agent_job_dispatcher import dispatch_agent_job_if_connected
+from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.repository_executor import (
     queue_agent_repository_operation_job,
     wait_for_agent_repository_operation_job,
@@ -329,7 +329,11 @@ class RcloneRepositoryService:
                 }
             },
         )
-        await dispatch_agent_job_if_connected(db, agent_job)
+        await dispatch_agent_job_best_effort(
+            db,
+            agent_job,
+            repository_id=repository.id,
+        )
         result = await wait_for_agent_repository_operation_job(
             db,
             agent_job.id,

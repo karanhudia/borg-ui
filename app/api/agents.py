@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -41,12 +42,13 @@ from app.services.agent_connection_manager import (
 )
 from app.services.agent_job_dispatcher import (
     agent_job_kind as live_agent_job_kind,
-    dispatch_agent_job_if_connected,
+    dispatch_agent_job_best_effort,
 )
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/agents", tags=["agents"])
+AGENT_SESSION_HELLO_TIMEOUT_SECONDS = 10.0
 
 FINAL_AGENT_JOB_STATUSES = {"completed", "failed", "canceled"}
 STALE_AGENT_JOB_REQUEUE_AFTER = timedelta(minutes=15)
@@ -611,7 +613,11 @@ async def _dispatch_queued_agent_jobs(db: Session, agent_machine_id: int) -> Non
     for job in jobs:
         if live_agent_job_kind(job) == "filesystem.browse":
             continue
-        await dispatch_agent_job_if_connected(db, job)
+        await dispatch_agent_job_best_effort(
+            db,
+            job,
+            source="session_reconnect",
+        )
 
 
 def _load_session_job(
@@ -683,13 +689,13 @@ async def _handle_agent_session_message(
     if message_type == "log":
         text = str(message.get("message") or "")
         stream = str(message.get("stream") or "stdout")
-        sequence = int(message.get("sequence") or 0)
+        sequence = _parse_int(message.get("sequence"), default=0)
         agent_connection_manager.append_log(
             agent_machine_id,
             message=text,
             stream=stream,
             command_id=command_id or None,
-            job_id=int(job_id) if job_id else None,
+            job_id=_parse_int(job_id, default=0) or None,
         )
         if job:
             _append_agent_job_log(
@@ -787,6 +793,13 @@ def _parse_optional_datetime(value: Any) -> Optional[datetime]:
         return datetime.fromisoformat(value)
     except ValueError:
         return None
+
+
+def _parse_int(value: Any, *, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 @router.post("/register", response_model=AgentRegisterResponse)
@@ -903,7 +916,14 @@ async def session(websocket: WebSocket, db: Session = Depends(get_db)):
             return
 
         await websocket.accept()
-        raw_hello = await websocket.receive_json()
+        try:
+            raw_hello = await asyncio.wait_for(
+                websocket.receive_json(),
+                timeout=AGENT_SESSION_HELLO_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            await websocket.close(code=1008, reason="Hello timeout")
+            return
         try:
             hello = AgentSessionHello.model_validate(raw_hello)
         except Exception:

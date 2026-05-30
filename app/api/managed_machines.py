@@ -20,7 +20,7 @@ from app.database.models import (
 )
 from app.services.agent_job_dispatcher import (
     dispatch_agent_cancel_if_connected,
-    dispatch_agent_job_if_connected,
+    dispatch_agent_job_best_effort,
 )
 from app.services.agent_filesystem_service import browse_agent_filesystem
 from app.services.agent_connection_manager import agent_connection_manager
@@ -372,7 +372,7 @@ async def create_agent_backup_job(
     db.add(job)
     db.commit()
     db.refresh(job)
-    await dispatch_agent_job_if_connected(db, job)
+    await dispatch_agent_job_best_effort(db, job, source="backup_job_create")
 
     logger.info(
         "Agent backup job queued",

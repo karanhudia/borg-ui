@@ -16,6 +16,11 @@ from agent.borg_ui_agent.runtime import get_capabilities, get_job_handler
 
 logger = logging.getLogger(__name__)
 
+try:
+    from websocket import WebSocketTimeoutException
+except Exception:  # pragma: no cover - only used when optional dep is unavailable.
+    WebSocketTimeoutException = TimeoutError
+
 
 def _default_connect(url: str, *, header: list[str], timeout: int):
     from websocket import create_connection
@@ -155,11 +160,15 @@ class AgentSessionRuntime:
         iterations = 0
         backoff_seconds = initial_backoff_seconds
         while True:
+            started_at = time.monotonic()
+            healthy_session = False
             try:
                 self.run_session()
-                backoff_seconds = initial_backoff_seconds
+                healthy_session = True
             except Exception as exc:
                 logger.warning("Agent session connection failed: %s", exc)
+            if healthy_session or time.monotonic() - started_at >= max_backoff_seconds:
+                backoff_seconds = initial_backoff_seconds
             iterations += 1
             self.sleep(backoff_seconds)
             if max_iterations is not None and iterations >= max_iterations:
@@ -176,7 +185,13 @@ class AgentSessionRuntime:
             self._send_hello(socket)
             handled = 0
             while max_messages is None or handled < max_messages:
-                raw_message = socket.recv()
+                try:
+                    raw_message = socket.recv()
+                except (TimeoutError, WebSocketTimeoutException):
+                    ping = getattr(socket, "ping", None)
+                    if callable(ping):
+                        ping()
+                    continue
                 message = json.loads(raw_message)
                 if isinstance(message, dict) and message.get("type") == "command":
                     self._handle_command(socket, message)
