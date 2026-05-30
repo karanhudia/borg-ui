@@ -213,9 +213,17 @@ const fillLocalLocation = async (name = 'Test Repo', path = '/backups/test') => 
   setInputValue(screen.getByLabelText(/Repository Path/i), path)
 }
 
+const selectRepositoryDestination = async (
+  user: ReturnType<typeof userEvent.setup>,
+  label: string
+) => {
+  await user.click(screen.getByRole('combobox', { name: /Where should backups be stored/i }))
+  const listbox = await screen.findByRole('listbox')
+  await user.click(within(listbox).getByText(label))
+}
+
 const chooseRemoteRepository = async (user: ReturnType<typeof userEvent.setup>) => {
-  const remoteCard = screen.getByText('Remote Client').closest('button')
-  await user.click(remoteCard!)
+  await selectRepositoryDestination(user, 'Remote Client')
 
   await waitFor(() => {
     expect(screen.getAllByText('Select SSH Connection').length).toBeGreaterThanOrEqual(1)
@@ -355,8 +363,7 @@ describe('RepositoryWizard', () => {
       renderWizard('create')
       await fillLocalLocation()
 
-      const remoteCard = screen.getByText('Remote Client').closest('button')
-      await user.click(remoteCard!)
+      await selectRepositoryDestination(user, 'Remote Client')
 
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
     })
@@ -501,7 +508,7 @@ describe('RepositoryWizard', () => {
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-repo')
 
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await selectRepositoryDestination(user, 'Managed Agent')
 
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
 
@@ -713,7 +720,7 @@ describe('RepositoryWizard', () => {
       await waitForLocationStep()
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Cloud Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-cloud-repo')
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await selectRepositoryDestination(user, 'Managed Agent')
       await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
       const agentListbox = await screen.findByRole('listbox')
       await user.click(within(agentListbox).getByText('workstation.local'))
@@ -895,7 +902,7 @@ describe('RepositoryWizard', () => {
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Browse Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg')
 
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await selectRepositoryDestination(user, 'Managed Agent')
       await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
       const agentListbox = await screen.findByRole('listbox')
       await user.click(within(agentListbox).getByText('workstation.local'))
@@ -929,12 +936,17 @@ describe('RepositoryWizard', () => {
       await user.clear(pathInput)
       setInputValue(pathInput, '/backups/pi')
 
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await selectRepositoryDestination(user, 'Managed Agent')
       await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
       const agentListbox = await screen.findByRole('listbox')
       await user.click(within(agentListbox).getByText('workstation.local'))
 
-      expect(screen.getByRole('button', { name: /Remote Client/i })).not.toBeDisabled()
+      await user.click(screen.getByRole('combobox', { name: /Where should backups be stored/i }))
+      const destinationListbox = await screen.findByRole('listbox')
+      expect(
+        within(destinationListbox).getByText('Remote Client').closest('[role="option"]')
+      ).not.toHaveAttribute('aria-disabled', 'true')
+      await user.keyboard('{Escape}')
       expect(screen.queryByText('Select SSH Connection')).not.toBeInTheDocument()
       expect(
         screen.getByText(/Backups will be stored on the selected agent's filesystem/i)
@@ -1220,9 +1232,11 @@ describe('RepositoryWizard', () => {
       renderWizard('create')
 
       await waitFor(() => {
-        expect(screen.getByText('Remote Client')).toBeInTheDocument()
+        expect(
+          screen.getByRole('combobox', { name: /Where should backups be stored/i })
+        ).toBeInTheDocument()
       })
-      await user.click(screen.getByText('Remote Client').closest('button')!)
+      await selectRepositoryDestination(user, 'Remote Client')
 
       await waitFor(() => {
         expect(screen.getByText(/No SSH connections configured/i)).toBeInTheDocument()
