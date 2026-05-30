@@ -2,7 +2,6 @@
 API endpoints for configuration export/import.
 """
 
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -13,6 +12,7 @@ from app.database.database import get_db
 from app.services.borgmatic_service import (
     BorgmaticExportService,
     BorgmaticImportService,
+    build_borgmatic_export_artifact,
 )
 from app.core.security import get_current_user
 
@@ -42,7 +42,8 @@ async def export_borgmatic_config(
     """
     Export Borg UI configurations to borgmatic YAML format.
 
-    Returns a ZIP file containing separate config files for each repository.
+    Returns a YAML file for one repository or a ZIP file with one YAML file per
+    repository for multiple repositories.
     """
     export_service = BorgmaticExportService(db)
 
@@ -52,66 +53,18 @@ async def export_borgmatic_config(
             include_schedules=request.include_schedules,
         )
 
-        if not configs:
-            raise HTTPException(
-                status_code=404, detail="No repositories found to export"
-            )
-
-        # If only one repository, return single YAML file
-        if len(configs) == 1:
-            import yaml
-
-            repo_name, config = configs[0]
-            yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
-
-            # Generate timestamp prefix
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-            # Sanitize filename
-            safe_name = "".join(
-                c for c in repo_name if c.isalnum() or c in ("-", "_")
-            ).lower()
-            base_filename = (
-                f"{safe_name}.yaml" if safe_name else "borgmatic-config.yaml"
-            )
-            filename = f"{timestamp}_{base_filename}"
-
-            return Response(
-                content=yaml_content,
-                media_type="application/x-yaml",
-                headers={"Content-Disposition": f"attachment; filename={filename}"},
-            )
-
-        # Multiple repositories: create ZIP with separate config files
-        import io
-        import zipfile
-        import yaml
-
-        # Generate timestamp prefix
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for i, (repo_name, config) in enumerate(configs):
-                # Sanitize filename
-                safe_name = "".join(
-                    c for c in repo_name if c.isalnum() or c in ("-", "_")
-                ).lower()
-                if not safe_name:
-                    safe_name = f"repo-{i + 1}"
-
-                yaml_content = yaml.dump(
-                    config, default_flow_style=False, sort_keys=False
-                )
-                zip_file.writestr(f"{safe_name}.yaml", yaml_content)
-
-        zip_buffer.seek(0)
-        filename = f"{timestamp}_borgmatic-configs.zip"
+        artifact = build_borgmatic_export_artifact(configs)
         return Response(
-            content=zip_buffer.getvalue(),
-            media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
+            content=artifact.content,
+            media_type=artifact.media_type,
+            headers={
+                "Content-Disposition": f"attachment; filename={artifact.filename}"
+            },
         )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 

@@ -40,6 +40,39 @@ Keep repository passphrases outside Borg UI too. If the only copy of a passphras
 
 The generated `/data/.secret_key` is part of app state. If it changes, existing sessions are invalidated and stored encrypted app secrets, such as SSH private keys and script secrets, may no longer decrypt.
 
+## Automated Configuration Export
+
+Back up `/data` for full Borg UI recovery. In addition, keep an automated
+configuration export as a script-friendly migration and audit artifact. It uses
+the same borgmatic-compatible format as the Settings > Management >
+Export/Import page.
+
+Run the command where Borg UI can read its configured database, for example
+inside the Borg UI container:
+
+```bash
+mkdir -p /data/config-exports
+python3 -m app.scripts.export_config --output /data/config-exports/borg-ui-config.export
+```
+
+For a pre-backup script, write a timestamped export before the data volume is
+captured:
+
+```bash
+#!/bin/sh
+set -eu
+
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -p /data/config-exports
+python3 -m app.scripts.export_config \
+  --output "/data/config-exports/${stamp}_borg-ui-config.export"
+```
+
+Treat these exports as sensitive because they can contain repository paths and
+stored repository passphrases. They do not include users, sessions, API tokens,
+logs, encrypted SSH key material, rclone config files, or the generated
+`/data/.secret_key`.
+
 ## Repository Checks vs Restore Checks
 
 Use both.

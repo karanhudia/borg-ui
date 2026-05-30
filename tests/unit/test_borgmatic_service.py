@@ -2,11 +2,16 @@
 Tests for borgmatic export/import service.
 """
 
+from datetime import datetime
+import io
+import zipfile
+
 import pytest
 import yaml
 from app.services.borgmatic_service import (
     BorgmaticExportService,
     BorgmaticImportService,
+    build_borgmatic_export_artifact,
 )
 from app.database.models import Repository, ScheduledJob
 
@@ -121,6 +126,56 @@ class TestBorgmaticExportService:
 
         # New flat format - path is returned as-is (already full SSH URL)
         assert config["repositories"] == [ssh_url]
+
+
+class TestBorgmaticExportArtifact:
+    """Tests for packaging exported borgmatic configs for download or CLI use."""
+
+    def test_single_repository_artifact_is_yaml_with_timestamped_filename(self):
+        artifact = build_borgmatic_export_artifact(
+            [
+                (
+                    "Test Repo",
+                    {
+                        "source_directories": ["/srv/app"],
+                        "repositories": ["/backups/test-repo"],
+                    },
+                )
+            ],
+            timestamp=datetime(2026, 5, 30, 7, 30, 0),
+        )
+
+        assert artifact.media_type == "application/x-yaml"
+        assert artifact.filename == "2026-05-30_07-30-00_testrepo.yaml"
+        assert yaml.safe_load(artifact.content) == {
+            "source_directories": ["/srv/app"],
+            "repositories": ["/backups/test-repo"],
+        }
+
+    def test_multiple_repository_artifact_is_zip_with_one_yaml_per_repository(self):
+        artifact = build_borgmatic_export_artifact(
+            [
+                ("Repo One", {"repositories": ["/backups/one"]}),
+                ("Repo Two", {"repositories": ["/backups/two"]}),
+            ],
+            timestamp=datetime(2026, 5, 30, 7, 30, 0),
+        )
+
+        assert artifact.media_type == "application/zip"
+        assert artifact.filename == "2026-05-30_07-30-00_borgmatic-configs.zip"
+
+        with zipfile.ZipFile(io.BytesIO(artifact.content)) as archive:
+            assert sorted(archive.namelist()) == ["repoone.yaml", "repotwo.yaml"]
+            assert yaml.safe_load(archive.read("repoone.yaml")) == {
+                "repositories": ["/backups/one"]
+            }
+            assert yaml.safe_load(archive.read("repotwo.yaml")) == {
+                "repositories": ["/backups/two"]
+            }
+
+    def test_empty_export_artifact_raises_value_error(self):
+        with pytest.raises(ValueError, match="No repositories found to export"):
+            build_borgmatic_export_artifact([])
 
 
 class TestBorgmaticImportService:

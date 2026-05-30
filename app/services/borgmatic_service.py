@@ -8,6 +8,10 @@ This service handles:
 """
 
 import json
+import io
+import zipfile
+from dataclasses import dataclass
+from datetime import datetime
 import yaml
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
@@ -19,6 +23,54 @@ from app.utils.schedule_time import (
     calculate_next_cron_run,
     normalize_schedule_timezone,
 )
+
+
+@dataclass(frozen=True)
+class BorgmaticExportArtifact:
+    """Packaged borgmatic export content ready for download or script output."""
+
+    content: bytes
+    filename: str
+    media_type: str
+
+
+def _safe_export_name(name: str, fallback: str) -> str:
+    safe_name = "".join(c for c in name if c.isalnum() or c in ("-", "_")).lower()
+    return safe_name or fallback
+
+
+def build_borgmatic_export_artifact(
+    configs: List[Tuple[str, Dict[str, Any]]],
+    timestamp: Optional[datetime] = None,
+) -> BorgmaticExportArtifact:
+    """Build the YAML or ZIP artifact used by UI downloads and local scripts."""
+    if not configs:
+        raise ValueError("No repositories found to export")
+
+    timestamp_text = (timestamp or datetime.now()).strftime("%Y-%m-%d_%H-%M-%S")
+
+    if len(configs) == 1:
+        repo_name, config = configs[0]
+        yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
+        base_filename = f"{_safe_export_name(repo_name, 'borgmatic-config')}.yaml"
+        return BorgmaticExportArtifact(
+            content=yaml_content.encode("utf-8"),
+            filename=f"{timestamp_text}_{base_filename}",
+            media_type="application/x-yaml",
+        )
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for index, (repo_name, config) in enumerate(configs):
+            yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
+            filename = f"{_safe_export_name(repo_name, f'repo-{index + 1}')}.yaml"
+            zip_file.writestr(filename, yaml_content)
+
+    return BorgmaticExportArtifact(
+        content=zip_buffer.getvalue(),
+        filename=f"{timestamp_text}_borgmatic-configs.zip",
+        media_type="application/zip",
+    )
 
 
 class BorgmaticExportService:
