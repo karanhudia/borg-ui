@@ -210,7 +210,9 @@ instead of rclone's local loopback callback. This is the recommended mode for
 Docker, remote-server, and reverse-proxy deployments where a user's browser
 cannot reach `127.0.0.1` inside the Borg UI container.
 
-Configure these values only on the backend/container:
+`PUBLIC_BASE_URL` is still configured on the backend/container. Provider OAuth
+app credentials can either be saved by an admin from the Cloud Storage add/edit
+remote dialog or supplied through backend environment variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -219,6 +221,12 @@ Configure these values only on the backend/container:
 | `GOOGLE_DRIVE_OAUTH_CLIENT_SECRET` | empty | Google OAuth web application client secret |
 | `ONEDRIVE_OAUTH_CLIENT_ID` | empty | Microsoft Entra application client ID for Borg UI-owned OneDrive callbacks |
 | `ONEDRIVE_OAUTH_CLIENT_SECRET` | empty | Microsoft Entra application client secret |
+
+Complete credentials saved in Borg UI take precedence over environment values.
+Environment variables remain useful for local development, immutable
+deployments, and secret-store-driven production setups. Borg UI stores UI-saved
+client secrets encrypted in the backend database and returns only credential
+source/status metadata to the frontend.
 
 `PUBLIC_BASE_URL` must be the normal browser URL for the deployment and must
 use HTTPS, except for localhost development URLs. If Borg UI is served from a
@@ -272,7 +280,16 @@ when `PORT=8081`.
 Keep provider client secrets in Compose secrets, an `.env` file that is not
 committed, or your orchestrator's secret store. They are never needed by the
 frontend. Borg UI returns only OAuth setup state and callback URLs to the
-browser, and stores completed tokens in the server-managed rclone config.
+browser, and stores completed tokens in the server-managed rclone config. In
+the default Borg UI-owned path, the callback page tells the user to return to
+Borg UI and the setup dialog saves a server-side session marker instead of
+displaying raw access or refresh token JSON.
+
+Google and Microsoft control access-token expiry and refresh-token issuance.
+Borg UI shows token status, expiry, and whether a refresh token is stored, but
+does not make expiry configurable. rclone refreshes access when the provider
+issued a usable refresh token.
+
 OneDrive app registrations need delegated Microsoft Graph permissions matching
 the scopes Borg UI requests, including `offline_access`, `User.Read`,
 `Files.Read`, `Files.ReadWrite`, `Files.Read.All`, and `Files.ReadWrite.All`.
@@ -282,6 +299,12 @@ SharePoint site discovery or document libraries.
 When provider credentials or `PUBLIC_BASE_URL` are missing, Cloud Storage keeps
 Google Drive and OneDrive available through the existing rclone loopback/manual
 authorization path.
+
+Google Drive and Microsoft OneDrive are the supported Borg UI-owned OAuth
+providers. Other OAuth-backed rclone providers, including Dropbox and Box, keep
+using rclone loopback/manual authorization until Borg UI implements their
+provider-specific redirect registration, token exchange, and rclone config
+requirements.
 
 ## Licensing and Activation
 

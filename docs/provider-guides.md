@@ -36,8 +36,10 @@ Cloud Storage manages reusable rclone remotes. Open Cloud Storage, choose
 template before saving. Google Drive and OneDrive use Borg UI-owned OAuth
 callbacks when `PUBLIC_BASE_URL` and provider client credentials are configured;
 start authorization from Borg UI, complete the provider login, and check
-authorization to add the returned token JSON to the managed config editor.
-Provider secrets stay on the backend and are not exposed in the browser. For
+authorization to save the server-side token result. Provider credentials can be
+saved in the dialog or supplied through backend environment variables; provider
+secrets and Borg UI-owned access/refresh tokens are not exposed in ordinary
+browser responses. For
 OneDrive, Borg UI also records the default Microsoft Graph drive ID and drive
 type returned for the signed-in account. Enter a specific drive ID manually when
 targeting a SharePoint document library or another non-default drive.
@@ -47,6 +49,10 @@ Dropbox or Box, Cloud Storage keeps the rclone loopback/manual authorization
 path available for advanced setups. Access-key providers such as S3,
 Backblaze B2, and Azure Blob store their keys in Borg UI's server-managed
 `rclone.conf` and return redacted values through the API.
+
+OAuth access-token expiry is controlled by the provider. Cloud Storage shows
+token status, expiry, and refresh-token availability for managed OAuth remotes;
+rclone refreshes access when the provider issued a refresh token.
 
 Use **Custom rclone backend** when the provider is not listed. Keep the `type`
 field set to the exact rclone backend name and add any provider-specific keys

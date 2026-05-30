@@ -17,6 +17,9 @@ const providers: RcloneProvider[] = [
     oauth_configured: true,
     oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
     oauth_setup_key: null,
+    oauth_credentials_source: 'environment',
+    oauth_client_id_set: true,
+    oauth_client_secret_set: true,
     fields: [
       {
         name: 'token',
@@ -40,6 +43,9 @@ const providers: RcloneProvider[] = [
     oauth_configured: true,
     oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/onedrive',
     oauth_setup_key: null,
+    oauth_credentials_source: 'database',
+    oauth_client_id_set: true,
+    oauth_client_secret_set: true,
     fields: [
       {
         name: 'token',
@@ -118,11 +124,17 @@ export const CreateManagedRemote: Story = {
       local_authorization_url: null,
       config: {
         type: 'drive',
-        token: '{"access_token":"storybook","refresh_token":"storybook"}',
         _borg_ui_oauth_provider: 'drive',
+        _borg_ui_oauth_session_id: 'storybook-oauth',
+      },
+      token_status: {
+        status: 'valid',
+        expires_at: '2026-05-30T01:00:00Z',
+        refresh_available: true,
       },
       error: null,
     }),
+    onSaveOAuthCredentials: async () => {},
   },
   render: renderDialog,
 }
@@ -177,6 +189,35 @@ export const BorgUiOAuthSetupMissing: Story = {
             oauth_configured: false,
             oauth_callback_url: null,
             oauth_setup_key: 'backend.errors.rclone.oauthPublicBaseUrlRequired',
+            oauth_credentials_source: 'unset',
+            oauth_client_id_set: false,
+            oauth_client_secret_set: false,
+          }
+        : provider
+    ),
+  },
+  render: renderDialog,
+}
+
+export const BorgUiOAuthCredentialsMissing: Story = {
+  args: {
+    ...CreateManagedRemote.args,
+    initialRemote: {
+      name: 'gdrive-prod',
+      provider: 'drive',
+      config_source: 'managed',
+      redacted_config: { type: 'drive', scope: 'drive', token: '' },
+    },
+    providers: providers.map((provider) =>
+      provider.type === 'drive'
+        ? {
+            ...provider,
+            oauth_configured: false,
+            oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
+            oauth_setup_key: 'backend.errors.rclone.oauthProviderCredentialsRequired',
+            oauth_credentials_source: 'unset',
+            oauth_client_id_set: false,
+            oauth_client_secret_set: false,
           }
         : provider
     ),
