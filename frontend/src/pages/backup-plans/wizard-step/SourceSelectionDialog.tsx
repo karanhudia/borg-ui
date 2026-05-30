@@ -77,6 +77,7 @@ type SourceChoiceView = 'paths' | 'database' | 'database-detail'
 type ScriptMode = 'create' | 'reuse' | 'skip'
 type SourceKey = 'local' | `remote:${number}` | `agent:${number}`
 type SnapshotProviderDraft = 'none' | 'btrfs' | 'zfs'
+type ScanTargetState = { type: 'local' | 'remote'; sshId: number | '' }
 
 const DEFAULT_SNAPSHOT_STAGING_PATH = '/var/tmp/borg-ui/snapshots'
 
@@ -174,6 +175,22 @@ function classifyScanError(err: unknown): ScanErrorState {
   return { kind: 'OTHER', detail: null }
 }
 
+function initialDatabaseScanTarget(
+  initialScanTarget: ScanTargetState | undefined,
+  sshConnections: SSHConnection[]
+): ScanTargetState {
+  if (initialScanTarget?.type !== 'remote') {
+    return { type: 'local', sshId: '' }
+  }
+
+  const requestedId = initialScanTarget.sshId || sshConnections[0]?.id
+  const resolvedId = sshConnections.some((connection) => connection.id === requestedId)
+    ? requestedId
+    : sshConnections[0]?.id
+
+  return resolvedId ? { type: 'remote', sshId: resolvedId } : { type: 'local', sshId: '' }
+}
+
 interface SourceSelectionDialogProps {
   open: boolean
   wizardState: WizardState
@@ -188,6 +205,10 @@ interface SourceSelectionDialogProps {
   t: TFunction
   /** Override the initial view. Defaults to 'paths'. Used by Storybook to deep-link into specific views. */
   initialView?: SourceChoiceView
+  /** Override the initial database scan target. Defaults to local. Used by Storybook for specific states. */
+  initialScanTarget?: ScanTargetState
+  /** Open the local capture-mode accordion initially. Used by Storybook for specific states. */
+  initialCaptureModeExpanded?: boolean
 }
 
 interface DatabaseBrand {
@@ -491,15 +512,16 @@ export function SourceSelectionDialog({
   onCreateScript,
   t,
   initialView = 'paths',
+  initialScanTarget,
+  initialCaptureModeExpanded = false,
 }: SourceSelectionDialogProps) {
   const [view, setView] = useState<SourceChoiceView>(initialView)
   const [scanResult, setScanResult] = useState<DatabaseScanResponse | null>(null)
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState<ScanErrorState | null>(null)
-  const [scanTarget, setScanTarget] = useState<{ type: 'local' | 'remote'; sshId: number | '' }>({
-    type: 'local',
-    sshId: '',
-  })
+  const [scanTarget, setScanTarget] = useState<ScanTargetState>(() =>
+    initialDatabaseScanTarget(initialScanTarget, sshConnections)
+  )
   const [scanPaths, setScanPaths] = useState<string[]>(DEFAULT_DB_SCAN_PATHS)
   const [scanPathDraft, setScanPathDraft] = useState('')
   const [fallbackTemplates, setFallbackTemplates] = useState<SourceDiscoveryDatabase[]>([])
@@ -522,6 +544,7 @@ export function SourceSelectionDialog({
     Record<string, SnapshotDraft>
   >({})
   const [snapshotDraft, setSnapshotDraft] = useState<SnapshotDraft>(() => emptySnapshotDraft())
+  const [captureModeExpanded, setCaptureModeExpanded] = useState(initialCaptureModeExpanded)
 
   useEffect(() => {
     if (!open) return
@@ -541,18 +564,27 @@ export function SourceSelectionDialog({
           nextLocations.find((location) => locationKey(location) === nextSourceKey)
         )
     )
+    setCaptureModeExpanded(initialCaptureModeExpanded)
     setSourcePath('')
     setSelectedDatabase(null)
     setScriptMode('create')
     setPreExistingScriptId(wizardState.preBackupScriptId || '')
     setPostExistingScriptId(wizardState.postBackupScriptId || '')
-    setScanTarget({ type: 'local', sshId: '' })
+    setScanTarget(initialDatabaseScanTarget(initialScanTarget, sshConnections))
     setScanPaths(DEFAULT_DB_SCAN_PATHS)
     setScanPathDraft('')
     setScanResult(null)
     setScanError(null)
     setFallbackTemplates([])
-  }, [open, wizardState, initialView, fullRepositories])
+  }, [
+    open,
+    wizardState,
+    initialView,
+    initialScanTarget,
+    initialCaptureModeExpanded,
+    sshConnections,
+    fullRepositories,
+  ])
 
   useEffect(() => {
     if (!open) return
@@ -1053,13 +1085,15 @@ export function SourceSelectionDialog({
           <Accordion
             disableGutters
             elevation={0}
+            expanded={captureModeExpanded}
+            onChange={(_, expanded) => setCaptureModeExpanded(expanded)}
             sx={{
               border: '1px solid',
               borderColor: 'divider',
               borderRadius: 1,
               bgcolor: 'background.paper',
               '&:before': { display: 'none' },
-              '&.Mui-expanded': { my: 0 },
+              '&.Mui-expanded': { mt: 2, mb: 0 },
             }}
           >
             <AccordionSummary
@@ -1093,7 +1127,7 @@ export function SourceSelectionDialog({
                     : t('backupPlans.sourceChooser.snapshotModeZfs')}
               </Typography>
             </AccordionSummary>
-            <AccordionDetails sx={{ px: 1.75, pt: 0, pb: 1.75 }}>
+            <AccordionDetails sx={{ px: 1.75, pt: 2, pb: 1.75 }}>
               <Stack spacing={1.25}>
                 <FormControl fullWidth size="small">
                   <InputLabel id="snapshot-mode-label">
@@ -1436,6 +1470,34 @@ export function SourceSelectionDialog({
       (scanTarget.type === 'local'
         ? t('backupPlans.sourceChooser.borgUiServer')
         : t('backupPlans.sourceChooser.remoteMachine'))
+    const selectedScanConnection =
+      scanTarget.type === 'remote' && scanTarget.sshId
+        ? sshConnections.find((connection) => connection.id === scanTarget.sshId) || null
+        : null
+    const selectedScanSshConfig = selectedScanConnection
+      ? {
+          ssh_key_id: selectedScanConnection.ssh_key_id,
+          host: selectedScanConnection.host,
+          username: selectedScanConnection.username,
+          port: selectedScanConnection.port,
+        }
+      : undefined
+
+    const addScanPaths = (paths: string[]) => {
+      const nextPaths = paths.map((path) => path.trim()).filter(Boolean)
+      if (nextPaths.length === 0) {
+        setScanPathDraft('')
+        return
+      }
+      setScanPaths((current) => {
+        const next = [...current]
+        nextPaths.forEach((path) => {
+          if (!next.includes(path)) next.push(path)
+        })
+        return next
+      })
+      setScanPathDraft('')
+    }
 
     const addPath = () => {
       const next = scanPathDraft.trim()
@@ -1443,8 +1505,7 @@ export function SourceSelectionDialog({
         setScanPathDraft('')
         return
       }
-      setScanPaths((current) => [...current, next])
-      setScanPathDraft('')
+      addScanPaths([next])
     }
 
     const removePath = (path: string) => {
@@ -1495,34 +1556,13 @@ export function SourceSelectionDialog({
         />
 
         {scanTarget.type === 'remote' && hasRemoteOptions ? (
-          <FormControl fullWidth sx={{ height: 56 }}>
-            <InputLabel id="scan-remote-target-label">
-              {t('backupPlans.sourceChooser.selectRemoteMachine')}
-            </InputLabel>
-            <Select
-              labelId="scan-remote-target-label"
-              value={scanTarget.sshId || ''}
-              label={t('backupPlans.sourceChooser.selectRemoteMachine')}
-              onChange={(event) =>
-                setScanTarget({ type: 'remote', sshId: Number(event.target.value) })
-              }
-              sx={{
-                height: 56,
-                '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
-              }}
-            >
-              {sshConnections.map((connection) => (
-                <MenuItem key={connection.id} value={connection.id}>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
-                    <Server size={14} style={{ flexShrink: 0, opacity: 0.7 }} />
-                    <Typography variant="body2" noWrap>
-                      {`${connection.username}@${connection.host}:${connection.port}`}
-                    </Typography>
-                  </Stack>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <SshConnectionSelect
+            value={scanTarget.sshId || ''}
+            onChange={(id) => setScanTarget({ type: 'remote', sshId: id })}
+            connections={sshConnections}
+            label={t('backupPlans.sourceChooser.selectRemoteMachine')}
+            emptyMessage={t('backupPlans.sourceChooser.noRemoteMachines')}
+          />
         ) : (
           <Box
             sx={{
@@ -1547,87 +1587,95 @@ export function SourceSelectionDialog({
           </Box>
         )}
 
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{ mb: 1 }}
-          >
-            <Typography variant="subtitle2">
-              {t('backupPlans.sourceChooser.pathsToScan')}
-            </Typography>
-            <Button
-              size="small"
-              variant="text"
-              startIcon={
-                scanLoading ? (
-                  <CircularProgress size={12} color="inherit" />
-                ) : (
-                  <RefreshCw size={14} />
-                )
-              }
-              onClick={() => runDatabaseScan(true)}
-              disabled={scanLoading || remoteDisabled || scanPaths.length === 0}
-              sx={{ textTransform: 'none', fontWeight: 500 }}
-            >
-              {scanLoading
-                ? t('backupPlans.sourceChooser.scanning')
-                : t('backupPlans.sourceChooser.rescan')}
-            </Button>
-          </Stack>
-          <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
-            {scanPaths.map((path) => (
-              <Chip
-                key={path}
-                size="small"
-                label={path}
-                onDelete={() => removePath(path)}
-                deleteIcon={<X size={14} />}
-                sx={{
-                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
-                  fontSize: '0.75rem',
-                }}
-              />
-            ))}
-            {scanPaths.length === 0 && (
-              <Typography variant="caption" color="text.secondary">
-                {t('backupPlans.sourceChooser.noScanPaths')}
-              </Typography>
-            )}
-          </Stack>
-          <Stack direction="row" spacing={1} alignItems="stretch">
-            <TextField
-              size="small"
-              placeholder="/path/to/scan"
+        <Stack spacing={1}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="flex-start">
+            <PathSelectorField
+              label={t('backupPlans.sourceChooser.sourcePath')}
               value={scanPathDraft}
-              onChange={(event) => setScanPathDraft(event.target.value)}
+              onChange={setScanPathDraft}
+              placeholder="/path/to/scan"
+              size="small"
+              fullWidth
+              disabled={remoteDisabled}
+              initialPath={
+                selectedScanConnection ? selectedScanConnection.default_path || '/' : '/'
+              }
+              multiSelect
+              selectMode="both"
+              connectionType={selectedScanConnection ? 'ssh' : 'local'}
+              sshConfig={selectedScanSshConfig}
+              showSshMountPoints={false}
+              onSelectPaths={addScanPaths}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault()
                   addPath()
                 }
               }}
-              fullWidth
-              sx={{
-                '& .MuiInputBase-input': {
-                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
-                  fontSize: '0.8125rem',
-                },
-              }}
             />
             <Button
-              variant="outlined"
-              startIcon={<Plus size={14} />}
+              variant="contained"
+              startIcon={<Plus size={16} />}
               onClick={addPath}
-              disabled={!scanPathDraft.trim()}
+              disabled={!scanPathDraft.trim() || remoteDisabled}
               sx={{ flexShrink: 0 }}
             >
               {t('backupPlans.sourceChooser.addPath')}
             </Button>
           </Stack>
-        </Box>
+
+          <Box>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ mb: 1 }}
+            >
+              <Typography variant="subtitle2">
+                {t('backupPlans.sourceChooser.pathsToScan')}
+              </Typography>
+              <Button
+                size="small"
+                variant="text"
+                startIcon={
+                  scanLoading ? (
+                    <CircularProgress size={12} color="inherit" />
+                  ) : (
+                    <RefreshCw size={14} />
+                  )
+                }
+                onClick={() => runDatabaseScan(true)}
+                disabled={scanLoading || remoteDisabled || scanPaths.length === 0}
+                sx={{ textTransform: 'none', fontWeight: 500 }}
+              >
+                {scanLoading
+                  ? t('backupPlans.sourceChooser.scanning')
+                  : t('backupPlans.sourceChooser.rescan')}
+              </Button>
+            </Stack>
+            <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+              {scanPaths.map((path) => (
+                <Chip
+                  key={path}
+                  size="small"
+                  label={path}
+                  onDelete={() => removePath(path)}
+                  deleteIcon={<X size={14} />}
+                  sx={{
+                    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+                    fontSize: '0.75rem',
+                  }}
+                />
+              ))}
+              {scanPaths.length === 0 && (
+                <Typography variant="caption" color="text.secondary">
+                  {t('backupPlans.sourceChooser.noScanPaths')}
+                </Typography>
+              )}
+            </Stack>
+          </Box>
+        </Stack>
 
         {showSkeleton && (
           <>
@@ -1995,7 +2043,7 @@ export function SourceSelectionDialog({
         </DialogActions>
       }
     >
-      <DialogTitle sx={{ pb: 1 }}>
+      <DialogTitle sx={{ pb: 1.5 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
           {view === 'database-detail' && (
             <IconButton
@@ -2016,8 +2064,8 @@ export function SourceSelectionDialog({
           </Typography>
         </Stack>
       </DialogTitle>
-      <DialogContent sx={{ pt: 1, flex: 1, overflowY: 'auto' }}>
-        <Stack spacing={2}>
+      <DialogContent sx={{ pt: 1.5, flex: 1, overflowY: 'auto' }}>
+        <Stack spacing={2.5}>
           {view !== 'database-detail' && (
             <SourceKindPivot view={view} onChange={(next) => setView(next)} t={t} />
           )}
@@ -2075,8 +2123,8 @@ function SourceKindPivot({ view, onChange, t }: SourceKindPivotProps) {
       sx={{
         display: 'inline-flex',
         alignSelf: 'flex-start',
-        p: '4px',
-        gap: '2px',
+        p: 0.5,
+        gap: 0.5,
         bgcolor: 'action.hover',
         borderRadius: '10px',
       }}
@@ -2097,9 +2145,10 @@ function SourceKindPivot({ view, onChange, t }: SourceKindPivotProps) {
             sx={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 0.75,
-              px: 1.5,
-              py: 0.75,
+              gap: 1,
+              minHeight: 38,
+              px: 1.75,
+              py: 1,
               borderRadius: '8px',
               bgcolor: selected ? 'background.paper' : 'transparent',
               boxShadow: selected ? 1 : 0,
