@@ -38,8 +38,10 @@ Google Drive and OneDrive Borg UI-owned OAuth can run against the local dev
 server. Because the public URL is `localhost`, Borg UI allows HTTP for this
 development case.
 
-Set the backend OAuth values in the repository root `.env` file before starting
-`./scripts/dev.sh`:
+Set `PUBLIC_BASE_URL` in the repository root `.env` file before starting
+`./scripts/dev.sh`. Provider OAuth app credentials can be saved from the Cloud
+Storage dialog after the app starts, or supplied as backend environment
+variables for repeatable local runs:
 
 ```dotenv
 PUBLIC_BASE_URL=http://localhost:7879
@@ -65,8 +67,9 @@ not configured, Google Drive and OneDrive fall back to rclone's loopback/manual
 authorization flow.
 
 The callback hits Vite on port `7879`, and Vite proxies `/api` to the backend
-container on `DEV_PORT` (`8083` by default). The client secrets stay in the
-backend environment; they are not sent to the frontend.
+container on `DEV_PORT` (`8083` by default). Client secrets stay in the backend
+environment or encrypted Borg UI settings; ordinary provider metadata only
+reports whether credentials are configured and where they came from.
 
 ## Production-Style Local Run
 

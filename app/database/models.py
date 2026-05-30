@@ -1274,6 +1274,12 @@ class SystemSettings(Base):
     metrics_require_auth = Column(Boolean, default=False, nullable=False)
     metrics_token = Column(String, nullable=True)
 
+    # Cloud Storage Borg UI-owned OAuth provider credentials
+    google_drive_oauth_client_id = Column(String, nullable=True)
+    google_drive_oauth_client_secret_encrypted = Column(String, nullable=True)
+    onedrive_oauth_client_id = Column(String, nullable=True)
+    onedrive_oauth_client_secret_encrypted = Column(String, nullable=True)
+
     # Built-in OIDC / SSO settings
     oidc_enabled = Column(Boolean, default=False, nullable=False)
     oidc_disable_local_auth = Column(Boolean, default=False, nullable=False)
