@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import ManagedAgents, {
   AgentList,
@@ -8,6 +8,7 @@ import ManagedAgents, {
   JobsTable,
   TokensTable,
 } from '../ManagedAgents'
+import { buildAgentInstallCommand } from '../managed-agents/agentInstallCommandText'
 import { isLocalAgentServerUrl, resolveAgentServerUrl } from '../managed-agents/agentServerUrl'
 import { renderWithProviders, userEvent } from '../../test/test-utils'
 import {
@@ -17,6 +18,7 @@ import {
   settingsAPI,
 } from '../../services/api'
 import type { AxiosResponse } from 'axios'
+import { buildAgentReinstallCommand } from '../managed-agents/agentInstallCommandText'
 
 vi.mock('../../services/api', () => ({
   settingsAPI: {
@@ -85,6 +87,32 @@ describe('ManagedAgents', () => {
     expect(resolveAgentServerUrl('/api', 'http://localhost:7879')).toBe('http://localhost:8083')
     expect(resolveAgentServerUrl('/api', 'http://localhost:8093')).toBe('http://localhost:8093')
     expect(isLocalAgentServerUrl('http://127.0.0.1:8083')).toBe(true)
+  })
+
+  it('builds service-user installer arguments only for non-default modes', () => {
+    expect(
+      buildAgentInstallCommand('http://192.168.0.29:8083', 'agent-token-secret', 'Client laptop')
+    ).not.toContain('--service-user')
+
+    expect(
+      buildAgentInstallCommand(
+        'http://192.168.0.29:8083',
+        'agent-token-secret',
+        'Dedicated client',
+        'borg1',
+        'dedicated'
+      )
+    ).toContain('--service-user borg-ui-agent')
+
+    expect(
+      buildAgentInstallCommand(
+        'http://192.168.0.29:8083',
+        'agent-token-secret',
+        'Root client',
+        'borg1',
+        'root'
+      )
+    ).toContain('--service-user root')
   })
 
   it('opens from the shared system settings cache without redirecting to dashboard', async () => {
@@ -184,12 +212,11 @@ describe('ManagedAgents', () => {
     expect(managedAgentsAPI.createEnrollmentToken).not.toHaveBeenCalled()
 
     await screen.findByRole('dialog', { name: /add agent/i })
+    await user.clear(screen.getByLabelText(/server url/i))
+    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
     await user.click(screen.getByRole('button', { name: /next/i }))
     await user.clear(screen.getByLabelText(/agent name/i))
     await user.type(screen.getByLabelText(/agent name/i), 'Client laptop')
-    await user.click(screen.getByRole('button', { name: /next/i }))
-    await user.clear(screen.getByLabelText(/server url/i))
-    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
     await user.click(screen.getByRole('button', { name: /generate install command/i }))
 
     expect(vi.mocked(managedAgentsAPI.createEnrollmentToken).mock.calls[0][0]).toEqual({
@@ -226,13 +253,12 @@ describe('ManagedAgents', () => {
 
     await user.click(await screen.findByRole('button', { name: /add agent/i }))
     await screen.findByRole('dialog', { name: /add agent/i })
+    await user.clear(screen.getByLabelText(/server url/i))
+    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
     await user.click(screen.getByRole('button', { name: /next/i }))
     await user.click(screen.getByRole('radio', { name: /borg 2\.x beta only/i }))
     await user.clear(screen.getByLabelText(/agent name/i))
     await user.type(screen.getByLabelText(/agent name/i), 'Borg 2 client')
-    await user.click(screen.getByRole('button', { name: /next/i }))
-    await user.clear(screen.getByLabelText(/server url/i))
-    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
     await user.click(screen.getByRole('button', { name: /generate install command/i }))
 
     expect(
@@ -253,8 +279,7 @@ describe('ManagedAgents', () => {
     renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
 
     await user.click(await screen.findByRole('button', { name: /add agent/i }))
-    await user.click(screen.getByRole('button', { name: /next/i }))
-    await user.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByRole('dialog', { name: /add agent/i })
 
     expect(screen.getByText(/localhost only works when the agent/i)).toBeInTheDocument()
   }, 60000)
@@ -283,6 +308,8 @@ describe('ManagedAgents', () => {
     renderWithProviders(
       <AgentList
         agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
         onRevoke={onRevoke}
         onDelete={onDelete}
         onViewLogs={vi.fn()}
@@ -300,6 +327,73 @@ describe('ManagedAgents', () => {
     await user.click(screen.getByRole('button', { name: /revoke agent/i }))
     expect(onRevoke).toHaveBeenCalledWith(agent)
   })
+
+  it('builds a tokenless reinstall command for existing agents', () => {
+    const command = buildAgentReinstallCommand('https://borg-ui.example.com')
+
+    expect(command).toBe(
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall'
+    )
+    expect(command).not.toContain('--token')
+    expect(command).not.toContain('<enrollment-token>')
+    expect(command).not.toContain('--name')
+    expect(command).not.toContain(' register ')
+  })
+
+  it('opens a tokenless reinstall script from an agent card', async () => {
+    const user = userEvent.setup()
+    const onCopy = vi.fn()
+    const agent = {
+      id: 7,
+      agent_id: 'agent-client-7',
+      name: 'client',
+      hostname: 'client-01',
+      status: 'online',
+      os: 'linux',
+      arch: 'arm64',
+      agent_version: '0.4.0',
+      last_seen_at: '2026-05-18T10:00:00.000Z',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={onCopy}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /reinstall agent/i }))
+
+    const dialog = screen.getByRole('dialog', { name: /reinstall agent/i })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText(/client-01/i)).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(/No enrollment token or registration step is required/i)
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByText((content) =>
+        ['curl -fsSL https://borg-ui.example.com/agent/install.sh', '--reinstall'].every((part) =>
+          content.includes(part)
+        )
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/--token/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/<enrollment-token>/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('Copy reinstall command'))
+
+    expect(onCopy).toHaveBeenCalledWith(
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall'
+    )
+  }, 60000)
 
   it('opens recent agent session logs from an agent card', async () => {
     const user = userEvent.setup()
@@ -357,6 +451,8 @@ describe('ManagedAgents', () => {
     renderWithProviders(
       <AgentList
         agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
         onRevoke={vi.fn()}
         onDelete={vi.fn()}
         onViewLogs={vi.fn()}
@@ -384,6 +480,8 @@ describe('ManagedAgents', () => {
     renderWithProviders(
       <AgentList
         agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
         onRevoke={vi.fn()}
         onDelete={onDelete}
         onViewLogs={vi.fn()}

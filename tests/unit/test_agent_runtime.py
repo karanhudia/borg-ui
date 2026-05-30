@@ -1050,6 +1050,41 @@ def test_repository_operation_payload_builds_agent_local_commands():
     ]
 
 
+@pytest.mark.unit
+def test_repository_archive_contents_payload_builds_agent_list_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.list_archive_contents",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {"archive": "archive-1", "max_lines": 1000},
+        }
+    )
+    v2_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.list_archive_contents",
+            "repository": {"path": "/agent/v2-repo", "borg_version": 2},
+            "operation": {"archive": "archive-2", "path": "home/user"},
+        }
+    )
+
+    assert "repository.list_archive_contents" in get_capabilities()
+    assert payload.build_command() == [
+        "borg",
+        "list",
+        "/agent/repo::archive-1",
+        "--json-lines",
+    ]
+    assert v2_payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/v2-repo",
+        "list",
+        "--json-lines",
+        "archive-2",
+        "home/user",
+    ]
+
+
 class FakeStdout:
     def __init__(self, lines):
         self.lines = lines

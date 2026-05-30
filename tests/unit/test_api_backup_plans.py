@@ -1720,10 +1720,15 @@ class TestBackupPlanRoutes:
                 side_effect=fake_wait_for_agent_job,
                 create=True,
             ) as wait_for_agent_job,
+            patch(
+                "app.services.backup_plan_execution_service.dispatch_agent_job_best_effort",
+                new_callable=AsyncMock,
+            ) as dispatch_agent_job,
         ):
             await backup_plan_execution_service.execute_run(run.id)
 
         execute_backup.assert_not_awaited()
+        dispatch_agent_job.assert_awaited_once()
         wait_for_agent_job.assert_awaited_once()
         backup_job = (
             test_db.query(BackupJob)

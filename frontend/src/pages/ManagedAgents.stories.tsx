@@ -13,6 +13,7 @@ import { buildAgentInstallCommand } from './managed-agents/agentInstallCommandTe
 import {
   AgentDeleteConfirmationDialog,
   AgentList,
+  AgentReinstallDialog,
   AgentSessionLogsDialog,
   AgentSetupGuide,
   AgentSetupHelpContent,
@@ -226,6 +227,8 @@ export const FleetOverview: Story = {
           </Typography>
           <AgentList
             agents={agents}
+            serverUrl="https://borg-ui.example.com"
+            onCopy={() => {}}
             onRevoke={() => {}}
             onDelete={() => {}}
             onViewLogs={() => {}}
@@ -300,7 +303,7 @@ export const AddAgentPlatformStep: Story = {
   ),
 }
 
-export const AddAgentBorgOptionsStep: Story = {
+export const AddAgentDetailsStep: Story = {
   render: () => (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
       <AddAgentDialog
@@ -321,12 +324,34 @@ export const AddAgentBorgOptionsStep: Story = {
   ),
 }
 
+export const AddAgentRootServiceUserWarning: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AddAgentDialog
+        open
+        initialStep={1}
+        initialServiceUserMode="root"
+        onClose={() => {}}
+        defaultServerUrl="https://borg-ui.example.com"
+        agents={agents}
+        onCreateToken={async () => ({
+          ...tokens[0],
+          token: 'borgui_enroll_example_token',
+          expires_at: '2026-05-28T12:00:00.000Z',
+        })}
+        creatingToken={false}
+        onCopy={() => {}}
+      />
+    </Box>
+  ),
+}
+
 export const AddAgentInstallCommandStep: Story = {
   render: () => (
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
       <AddAgentDialog
         open
-        initialStep={3}
+        initialStep={2}
         initialAgentName="media-node"
         initialCreatedToken={{
           ...tokens[0],
@@ -368,7 +393,7 @@ export const AddAgentLocalhostWarning: Story = {
     <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
       <AddAgentDialog
         open
-        initialStep={2}
+        initialStep={0}
         onClose={() => {}}
         defaultServerUrl="http://localhost:8083"
         agents={agents}
@@ -393,6 +418,20 @@ export const DeleteConfirmation: Story = {
         isDeleting={false}
         onCancel={() => {}}
         onConfirm={() => {}}
+      />
+    </Box>
+  ),
+}
+
+export const AgentReinstallDialogOpen: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AgentReinstallDialog
+        open
+        agent={agents[0]}
+        serverUrl="https://borg-ui.example.com"
+        onCancel={() => {}}
+        onCopy={() => {}}
       />
     </Box>
   ),

@@ -436,6 +436,7 @@ class TestRepositoriesCreate:
         test_db.add(agent)
         test_db.commit()
         test_db.refresh(agent)
+        dispatch_init = AsyncMock(return_value=True)
         wait_for_init = AsyncMock(return_value={"status": "completed"})
 
         with (
@@ -446,6 +447,10 @@ class TestRepositoriesCreate:
             patch(
                 "app.api.repositories.wait_for_agent_repository_operation_job",
                 wait_for_init,
+            ),
+            patch(
+                "app.api.repositories.dispatch_agent_job_best_effort",
+                dispatch_init,
             ),
             patch("app.api.repositories.mqtt_service.sync_state_with_db"),
         ):
@@ -472,6 +477,12 @@ class TestRepositoriesCreate:
         assert agent_job.payload["repository"]["path"] == "/agent/repo"
         assert agent_job.payload["operation"]["encryption"] == "none"
         repo = test_db.query(Repository).filter_by(name="Agent Repo").first()
+        dispatch_init.assert_awaited_once_with(
+            test_db, agent_job, repository_id=repo.id
+        )
+        wait_for_init.assert_awaited_once_with(
+            test_db, agent_job.id, timeout_seconds=300
+        )
         assert repo.execution_target == "agent"
         assert repo.executor_type == "agent"
         assert repo.agent_machine_id == agent.id

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import WizardStepLocation from '../WizardStepLocation'
@@ -43,6 +43,11 @@ const defaultData = {
   rcloneExtraFlags: '',
 }
 
+const openDestinationSelect = async (user: ReturnType<typeof userEvent.setup>) => {
+  const combobox = screen.getByRole('combobox', { name: /Where should backups be stored/i })
+  await user.click(combobox)
+}
+
 describe('WizardStepLocation', () => {
   describe('Create Mode', () => {
     it('renders Repository Name input', () => {
@@ -73,7 +78,8 @@ describe('WizardStepLocation', () => {
       expect(screen.getByLabelText(/Repository Path/i)).toBeInTheDocument()
     })
 
-    it('renders only primary repository location cards', () => {
+    it('renders destination Select with the three primary destinations', async () => {
+      const user = userEvent.setup()
       render(
         <WizardStepLocation
           mode="create"
@@ -88,13 +94,17 @@ describe('WizardStepLocation', () => {
       )
 
       expect(
-        screen.queryByRole('button', { name: 'Filesystem destinations' })
+        screen.getByRole('combobox', { name: /Where should backups be stored/i })
+      ).toBeInTheDocument()
+
+      await openDestinationSelect(user)
+      const listbox = await screen.findByRole('listbox')
+      expect(within(listbox).getByRole('option', { name: /Borg UI Server/i })).toBeInTheDocument()
+      expect(within(listbox).getByRole('option', { name: /Remote Client/i })).toBeInTheDocument()
+      expect(within(listbox).getByRole('option', { name: /Managed Agent/i })).toBeInTheDocument()
+      expect(
+        within(listbox).queryByRole('option', { name: /Cloud Storage/i })
       ).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Cloud sources' })).not.toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Borg UI Server/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Remote Client/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Managed Agent/i })).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /Cloud Storage/i })).not.toBeInTheDocument()
     })
 
     it('does NOT show Repository Mode selector in create mode', () => {
@@ -184,7 +194,7 @@ describe('WizardStepLocation', () => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
 
-    it('shows direct Borg 2 rclone as an advanced option instead of a location card', () => {
+    it('shows direct Borg 2 rclone as an advanced option and hides the destination Select', () => {
       render(
         <WizardStepLocation
           mode="create"
@@ -199,8 +209,26 @@ describe('WizardStepLocation', () => {
       expect(
         screen.getByRole('checkbox', { name: /Use direct Borg 2 rclone repository/i })
       ).toBeInTheDocument()
+    })
+
+    it('hides destination Select when direct rclone is active', () => {
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={{
+            ...defaultData,
+            borgVersion: 2,
+            repositoryLocation: 'rclone',
+            path: 'rclone://prod-s3/borg-ui/direct',
+          }}
+          sshConnections={[]}
+          onChange={vi.fn()}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
       expect(
-        screen.queryByRole('button', { name: /Direct Borg 2 rclone/i })
+        screen.queryByRole('combobox', { name: /Where should backups be stored/i })
       ).not.toBeInTheDocument()
     })
 
@@ -275,8 +303,8 @@ describe('WizardStepLocation', () => {
     })
   })
 
-  describe('Location Card Selection', () => {
-    it('calls onChange when Borg UI Server is clicked', async () => {
+  describe('Destination Selection', () => {
+    it('calls onChange with local when Borg UI Server is selected', async () => {
       const user = userEvent.setup()
       const onChange = vi.fn()
       const sshData = { ...defaultData, repositoryLocation: 'ssh' as const }
@@ -291,8 +319,9 @@ describe('WizardStepLocation', () => {
         />
       )
 
-      const localCard = screen.getByText('Borg UI Server').closest('button')
-      await user.click(localCard!)
+      await openDestinationSelect(user)
+      const option = await screen.findByRole('option', { name: /Borg UI Server/i })
+      await user.click(option)
 
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -301,7 +330,7 @@ describe('WizardStepLocation', () => {
       )
     })
 
-    it('calls onChange when Remote Client is clicked', async () => {
+    it('calls onChange with ssh when Remote Client is selected', async () => {
       const user = userEvent.setup()
       const onChange = vi.fn()
 
@@ -315,12 +344,41 @@ describe('WizardStepLocation', () => {
         />
       )
 
-      const remoteCard = screen.getByText('Remote Client').closest('button')
-      await user.click(remoteCard!)
+      await openDestinationSelect(user)
+      const option = await screen.findByRole('option', { name: /Remote Client/i })
+      await user.click(option)
 
       expect(onChange).toHaveBeenCalledWith(
         expect.objectContaining({
           repositoryLocation: 'ssh',
+        })
+      )
+    })
+
+    it('calls onChange with agent execution target when Managed Agent is selected', async () => {
+      const user = userEvent.setup()
+      const onChange = vi.fn()
+
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={defaultData}
+          sshConnections={[]}
+          agentMachines={[
+            { id: 7, name: 'Workstation', hostname: 'workstation.local', status: 'online' },
+          ]}
+          onChange={onChange}
+          onBrowsePath={vi.fn()}
+        />
+      )
+
+      await openDestinationSelect(user)
+      const option = await screen.findByRole('option', { name: /Managed Agent/i })
+      await user.click(option)
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionTarget: 'agent',
         })
       )
     })

@@ -26,3 +26,11 @@ These instructions apply to the entire repository.
 
 - Do not use heavy left accent borders for cards, panels, alerts, list items, or status surfaces.
 - Prefer balanced borders, subtle full-outline treatments, background tinting, icons, chips, or typography for emphasis instead.
+
+## Shared UI Components
+
+Reach for existing shared components before introducing new patterns. Adding a raw MUI `Dialog` or a hand-rolled step indicator is almost always wrong — these patterns already exist and are used by the rest of the app.
+
+- **Modals / dialogs** — Always use `frontend/src/components/ResponsiveDialog.tsx` instead of raw `@mui/material` `Dialog`. It renders a normal centered dialog on desktop and a bottom-anchored `SwipeableDrawer` (with drag handle, close button, sticky footer, safe-area inset) on mobile (`< md`). Place action buttons in the `footer` prop so they stay sticky above the safe area on mobile rather than scrolling away with the body.
+- **Multi-step wizards** — Use `frontend/src/components/wizard/WizardDialog.tsx`, which composes `ResponsiveDialog` + `WizardStepIndicator`. Pass `steps` (array of `{ key, label, icon }`), `currentStep`, optional `onStepClick` (gate it to completed steps if you want to prevent jumping forward), and the action bar via `footer`. Do not build a custom chip row or stepper — `WizardStepIndicator` already provides the desktop tab row and mobile compact circle row used by `RepositoryWizard`, `ScheduleWizard`, and `AddAgentDialog`.
+- **Step color keys** — The `key` on each step picks a color from the palette in `WizardStepIndicator.tsx` (`location`, `source`, `security`, `config`, `review`, `basic`, `schedule`, `scripts`, `maintenance`). Reuse these keys for visual consistency with other wizards rather than introducing new color tokens.

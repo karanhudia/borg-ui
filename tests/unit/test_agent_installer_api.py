@@ -27,6 +27,75 @@ def test_agent_installer_script_supports_borg_install_modes(test_client: TestCli
     assert 'verify_borg_major "borg2" "2"' in response.text
 
 
+def test_agent_installer_script_supports_tokenless_reinstall_mode(
+    test_client: TestClient,
+):
+    response = test_client.get("/agent/install.sh")
+
+    assert "--reinstall" in response.text
+    assert 'REINSTALL="0"' in response.text
+    assert "Reinstall mode requires an existing /etc/borg-ui-agent/config.toml" in (
+        response.text
+    )
+    assert "Preserving existing agent registration" in response.text
+    assert "By default, reinstall mode skips" in response.text
+    assert "Skipping Borg installation by default for reinstall mode." in response.text
+
+    reinstall_register_branch = response.text.split(
+        'if [[ "${REINSTALL}" == "1" ]]; then\n'
+        '  echo "Preserving existing agent registration',
+        1,
+    )[1].split("else", 1)[0]
+    assert " register " not in reinstall_register_branch
+    assert '--token "${TOKEN}"' not in reinstall_register_branch
+    assert '--name "${AGENT_NAME}"' not in reinstall_register_branch
+
+
+def test_agent_installer_script_supports_service_user_modes(
+    test_client: TestClient,
+):
+    response = test_client.get("/agent/install.sh")
+
+    assert "[--service-user current|borg-ui-agent|root|USERNAME]" in response.text
+    assert 'SERVICE_USER_MODE="current"' in response.text
+    assert "--service-user" in response.text
+    assert 'if [[ $# -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then' in (
+        response.text
+    )
+    assert "resolve_current_service_user" in response.text
+    assert "resolve_service_identity" in response.text
+    assert (
+        "export DEBIAN_FRONTEND=noninteractive\nresolve_service_identity\n\napt-get update"
+        in (response.text)
+    )
+    assert (
+        "SUDO_USER is not set. Re-run with sudo from a non-root user" in response.text
+    )
+    assert "Run as the user who invoked sudo" in response.text
+    assert "Run as the dedicated borg-ui-agent system user" in response.text
+    assert "Run as root. Advanced; grants root-level Borg operations" in response.text
+
+
+def test_agent_installer_script_uses_selected_service_identity(
+    test_client: TestClient,
+):
+    response = test_client.get("/agent/install.sh")
+
+    assert (
+        'install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 /etc/borg-ui-agent'
+        in (response.text)
+    )
+    assert (
+        'runuser -u "${SERVICE_USER}" -- /opt/borg-ui-agent/.venv/bin/borg-ui-agent'
+        in (response.text)
+    )
+    assert "User=${SERVICE_USER}" in response.text
+    assert "Group=${SERVICE_GROUP}" in response.text
+    assert "WorkingDirectory=${SERVICE_HOME}" in response.text
+    assert '--user "${SERVICE_USER}"' in response.text
+    assert '--group "${SERVICE_GROUP}"' in response.text
+
+
 def test_agent_installer_script_allows_borg2_prereleases(test_client: TestClient):
     response = test_client.get("/agent/install.sh")
 

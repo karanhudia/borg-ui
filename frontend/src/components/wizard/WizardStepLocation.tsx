@@ -9,21 +9,20 @@ import {
   MenuItem,
   Typography,
   Alert,
-  Card,
-  CardContent,
-  CardActionArea,
   InputAdornment,
   IconButton,
   alpha,
   ButtonBase,
   Tooltip,
   Chip,
+  Stack,
 } from '@mui/material'
-import { Server, Cloud, Laptop } from 'lucide-react'
+import { Cloud, Laptop } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
-import type { SxProps, Theme } from '@mui/material/styles'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../PlanGate'
+import { getDestinations, type DestinationKey } from './destinations'
+import RichSelectRow from './RichSelectRow'
 
 interface SSHConnection {
   id: number
@@ -60,8 +59,8 @@ interface WizardStepLocationProps {
   data: LocationStepData
   sshConnections: SSHConnection[]
   agentMachines?: AgentMachine[]
-  dataSource?: 'local' | 'remote' // Data source from step 2
-  sourceSshConnectionId?: number | '' // Source SSH connection ID
+  dataSource?: 'local' | 'remote'
+  sourceSshConnectionId?: number | ''
   onChange: (data: Partial<LocationStepData>) => void
   onBrowsePath: () => void
 }
@@ -83,28 +82,42 @@ export default function WizardStepLocation({
   const isDirectRclone = data.repositoryLocation === 'rclone'
   const borgVersion = data.borgVersion ?? 1
 
-  // Disable SSH repository location if data source is remote (prevent remote-to-remote)
-  // Only enforce this in edit mode when we know the data source
-  const isRemoteLocationDisabled =
-    isAgentExecution || (mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId)
+  // Legacy v1 repos with an attached remote data source can't be retargeted to another
+  // remote — remote-to-remote was never supported in the v1 mapping model.
+  const isLegacyRemoteSource = mode === 'edit' && dataSource === 'remote' && !!sourceSshConnectionId
+  const isRemoteLocationDisabled = isLegacyRemoteSource
+  const isAgentLocationDisabled = isLegacyRemoteSource
 
-  const handleLocationChange = (location: 'local' | 'ssh') => {
-    if (location === 'ssh' && isRemoteLocationDisabled) {
-      return // Don't allow switching to SSH if data source is remote
+  const queueableAgents = agentMachines.filter(
+    (agent) => agent.status !== 'revoked' && agent.status !== 'disabled'
+  )
+
+  const destinations = getDestinations({ isRemoteLocationDisabled, isAgentLocationDisabled })
+
+  const selectedDestinationKey: DestinationKey = isAgentExecution
+    ? 'agent'
+    : data.repositoryLocation === 'ssh'
+      ? 'ssh'
+      : 'server'
+
+  const handleDestinationChange = (key: DestinationKey) => {
+    if (key === 'ssh' && isRemoteLocationDisabled) return
+    if (key === 'agent' && isAgentLocationDisabled) return
+
+    if (key === 'agent') {
+      onChange({
+        repositoryLocation: 'local',
+        executionTarget: 'agent',
+        repoSshConnectionId: '',
+      })
+      return
     }
+
     onChange({
-      repositoryLocation: location,
+      repositoryLocation: key === 'ssh' ? 'ssh' : 'local',
       executionTarget: 'local',
       agentMachineId: '',
-      repoSshConnectionId: location === 'ssh' ? data.repoSshConnectionId : '',
-    })
-  }
-
-  const handleAgentLocationChange = () => {
-    onChange({
-      repositoryLocation: 'local',
-      executionTarget: 'agent',
-      repoSshConnectionId: '',
+      repoSshConnectionId: key === 'ssh' ? data.repoSshConnectionId : '',
     })
   }
 
@@ -118,63 +131,6 @@ export default function WizardStepLocation({
     })
   }
 
-  const queueableAgents = agentMachines.filter(
-    (agent) => agent.status !== 'revoked' && agent.status !== 'disabled'
-  )
-  const locationCardSx = (selected: boolean, disabled = false): SxProps<Theme> => ({
-    flex: 1,
-    minWidth: 0,
-    border: '1px solid',
-    borderColor: selected ? 'primary.main' : 'divider',
-    boxShadow: selected
-      ? (theme: Theme) =>
-          `0 0 0 1px ${alpha(theme.palette.primary.main, 0.34)}, 0 2px 8px ${alpha(theme.palette.primary.main, 0.12)}`
-      : 'none',
-    bgcolor: selected
-      ? (theme: Theme) => alpha(theme.palette.primary.main, 0.07)
-      : 'background.paper',
-    opacity: disabled ? 0.56 : 1,
-    transition: 'border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease',
-    '&:hover': disabled
-      ? {}
-      : {
-          borderColor: selected ? 'primary.main' : 'text.secondary',
-          boxShadow: (theme: Theme) =>
-            selected
-              ? `0 0 0 1px ${alpha(theme.palette.primary.main, 0.4)}, 0 3px 10px ${alpha(theme.palette.primary.main, 0.14)}`
-              : `0 2px 8px ${alpha(theme.palette.text.primary, 0.08)}`,
-        },
-  })
-  const locationActionSx: SxProps<Theme> = { p: 1.25, height: '100%', alignItems: 'stretch' }
-  const locationContentSx: SxProps<Theme> = {
-    p: 0,
-    width: '100%',
-    '&:last-child': { pb: 0 },
-  }
-  const locationIconSx = (selected: boolean): SxProps<Theme> => ({
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 36,
-    height: 36,
-    borderRadius: 1.5,
-    flexShrink: 0,
-    bgcolor: selected ? 'primary.main' : 'action.hover',
-    color: selected ? 'white' : 'text.secondary',
-    transition: 'background-color 180ms ease, color 180ms ease, box-shadow 180ms ease',
-    boxShadow: selected
-      ? (theme: Theme) => `0 2px 8px ${alpha(theme.palette.primary.main, 0.26)}`
-      : 'none',
-  })
-  const locationTitleSx: SxProps<Theme> = { fontSize: '0.95rem', lineHeight: 1.25, fontWeight: 700 }
-  const locationDescSx: SxProps<Theme> = {
-    fontSize: '0.76rem',
-    lineHeight: 1.35,
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-    overflow: 'hidden',
-  }
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Name Input */}
@@ -304,155 +260,52 @@ export default function WizardStepLocation({
         />
       )}
 
-      {/* Location Selection Cards */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography variant="subtitle2" gutterBottom sx={{ mb: 2, fontWeight: 600 }}>
-          {t('wizard.location.whereToStore')}
+      {/* Destination picker */}
+      {!isDirectRclone && (
+        <FormControl fullWidth>
+          <InputLabel id="destination-select-label">{t('wizard.location.whereToStore')}</InputLabel>
+          <Select
+            labelId="destination-select-label"
+            id="destination-select"
+            value={selectedDestinationKey}
+            label={t('wizard.location.whereToStore')}
+            onChange={(e) => handleDestinationChange(e.target.value as DestinationKey)}
+            renderValue={(value) => {
+              const dest = destinations.find((d) => d.key === value)
+              if (!dest) return null
+              return (
+                <RichSelectRow
+                  icon={dest.icon}
+                  primary={t(dest.labelKey)}
+                  secondary={t(dest.descriptionKey)}
+                />
+              )
+            }}
+            sx={{ '& .MuiSelect-select': { minHeight: 36 } }}
+          >
+            {destinations.map((dest) => (
+              <MenuItem key={dest.key} value={dest.key} disabled={dest.disabled} sx={{ py: 1 }}>
+                <RichSelectRow
+                  icon={dest.icon}
+                  primary={t(dest.labelKey)}
+                  secondary={t(dest.descriptionKey)}
+                />
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
+
+      {isRemoteLocationDisabled && (
+        <Typography variant="body2" color="text.secondary">
+          <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
+          {t('wizard.location.remoteDisabledInfo')}
         </Typography>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-            gap: 2,
-            p: 0.5,
-            m: -0.5,
-          }}
-        >
-          <Card
-            variant="outlined"
-            sx={locationCardSx(data.repositoryLocation === 'local' && !isAgentExecution)}
-          >
-            <CardActionArea onClick={() => handleLocationChange('local')} sx={locationActionSx}>
-              <CardContent sx={locationContentSx}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                  <Box
-                    sx={locationIconSx(data.repositoryLocation === 'local' && !isAgentExecution)}
-                  >
-                    <Server size={20} />
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="subtitle2" sx={locationTitleSx}>
-                      {t('wizard.borgUiServer')}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
-                      {t('wizard.location.borgUiServerDesc')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
+      )}
 
-          <Card
-            variant="outlined"
-            sx={locationCardSx(
-              data.repositoryLocation === 'ssh' && !isAgentExecution,
-              isRemoteLocationDisabled
-            )}
-          >
-            <CardActionArea
-              onClick={() => handleLocationChange('ssh')}
-              disabled={isRemoteLocationDisabled}
-              sx={locationActionSx}
-            >
-              <CardContent sx={locationContentSx}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                  <Box sx={locationIconSx(data.repositoryLocation === 'ssh' && !isAgentExecution)}>
-                    <Cloud size={20} />
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="subtitle2" sx={locationTitleSx}>
-                      {t('wizard.remoteClient')}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
-                      {t('wizard.location.remoteClientDesc')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-
-          <Card variant="outlined" sx={locationCardSx(isAgentExecution)}>
-            <CardActionArea onClick={handleAgentLocationChange} sx={locationActionSx}>
-              <CardContent sx={locationContentSx}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                  <Box sx={locationIconSx(isAgentExecution)}>
-                    <Laptop size={20} />
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="subtitle2" sx={locationTitleSx}>
-                      {t('wizard.location.managedAgent')}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={locationDescSx}>
-                      {t('wizard.location.managedAgentDesc')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </CardContent>
-            </CardActionArea>
-          </Card>
-        </Box>
-
-        {isRemoteLocationDisabled && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-            <strong>{t('wizard.dataSource.remoteToRemoteTitle')}</strong>{' '}
-            {t('wizard.location.remoteDisabledInfo')}
-          </Typography>
-        )}
-      </Box>
-
-      <Box
-        sx={{
-          border: '1px solid',
-          borderColor: isDirectRclone ? 'warning.main' : 'divider',
-          bgcolor: (theme) => alpha(theme.palette.warning.main, isDirectRclone ? 0.08 : 0.03),
-          borderRadius: 1,
-          p: 2,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 1,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          <Typography variant="subtitle2" fontWeight={700}>
-            {t('wizard.location.directRcloneAdvancedTitle')}
-          </Typography>
-          <Chip
-            label="Borg 2"
-            size="small"
-            variant="outlined"
-            color="warning"
-            sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
-          />
-        </Box>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={isDirectRclone}
-              disabled={borgVersion !== 2}
-              onChange={(event) => handleDirectRcloneChange(event.target.checked)}
-            />
-          }
-          label={
-            <Box>
-              <Typography variant="body2" fontWeight={600}>
-                {t('wizard.location.directRcloneLabel')}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {t(
-                  borgVersion === 2
-                    ? 'wizard.location.directRcloneHelper'
-                    : 'wizard.location.directRcloneUnavailable'
-                )}
-              </Typography>
-            </Box>
-          }
-        />
-      </Box>
-
-      {isAgentExecution && (
-        <>
+      {/* Agent sub-form */}
+      {isAgentExecution && !isDirectRclone && (
+        <Stack spacing={1.25}>
           {queueableAgents.length === 0 ? (
             <Alert severity="warning">{t('wizard.location.noActiveManagedAgents')}</Alert>
           ) : (
@@ -469,24 +322,17 @@ export default function WizardStepLocation({
                   const value = e.target.value
                   onChange({ agentMachineId: value ? Number(value) : '' })
                 }}
-                sx={{
-                  '& .MuiSelect-select': {
-                    display: 'flex',
-                    alignItems: 'center',
-                  },
+                renderValue={(selected) => {
+                  if (!selected) return null
+                  const agent = queueableAgents.find((a) => String(a.id) === selected)
+                  if (!agent) return null
+                  return renderAgentRow(agent)
                 }}
+                sx={{ '& .MuiSelect-select': { minHeight: 36 } }}
               >
                 {queueableAgents.map((agent) => (
-                  <MenuItem key={agent.id} value={String(agent.id)}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <Laptop size={16} style={{ flexShrink: 0, opacity: 0.7 }} />
-                      <Typography variant="body2" noWrap>
-                        {agent.hostname || agent.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        · {agent.status}
-                      </Typography>
-                    </Box>
+                  <MenuItem key={agent.id} value={String(agent.id)} sx={{ py: 1 }}>
+                    {renderAgentRow(agent)}
                   </MenuItem>
                 ))}
               </Select>
@@ -495,10 +341,10 @@ export default function WizardStepLocation({
           <Typography variant="body2" color="text.secondary">
             {t('wizard.location.agentStorageNote')}
           </Typography>
-        </>
+        </Stack>
       )}
 
-      {/* SSH Connection Selection */}
+      {/* SSH sub-form */}
       {!isAgentExecution && data.repositoryLocation === 'ssh' && (
         <>
           {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
@@ -515,45 +361,69 @@ export default function WizardStepLocation({
                     onChange({ repoSshConnectionId: Number(value) })
                   }
                 }}
-                sx={{
-                  '& .MuiSelect-select': {
-                    py: '16.5px',
-                    display: 'flex',
-                    alignItems: 'center',
-                  },
+                renderValue={(selected) => {
+                  if (!selected) return null
+                  const conn = sshConnections.find((c) => String(c.id) === selected)
+                  if (!conn) return null
+                  return renderSshRow(conn, t('wizard.location.connected'))
                 }}
+                sx={{ '& .MuiSelect-select': { minHeight: 36 } }}
               >
                 {sshConnections.map((conn) => (
-                  <MenuItem key={conn.id} value={String(conn.id)}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <Cloud size={16} />
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2">
-                          {conn.username}@{conn.host}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Port {conn.port}
-                          {conn.mount_point && ` • ${conn.mount_point}`}
-                        </Typography>
-                      </Box>
-                      {conn.status === 'connected' && (
-                        <Box
-                          sx={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            bgcolor: 'success.main',
-                          }}
-                          title={t('wizard.location.connected')}
-                        />
-                      )}
-                    </Box>
+                  <MenuItem key={conn.id} value={String(conn.id)} sx={{ py: 1 }}>
+                    {renderSshRow(conn, t('wizard.location.connected'))}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           )}
         </>
+      )}
+
+      {borgVersion === 2 && (
+        <Box
+          sx={{
+            border: '1px solid',
+            borderColor: isDirectRclone ? 'warning.main' : 'divider',
+            bgcolor: (theme) => alpha(theme.palette.warning.main, isDirectRclone ? 0.08 : 0.03),
+            borderRadius: 1,
+            p: 2,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              {t('wizard.location.directRcloneAdvancedTitle')}
+            </Typography>
+            <Chip
+              label="Borg 2"
+              size="small"
+              variant="outlined"
+              color="warning"
+              sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+            />
+          </Box>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={isDirectRclone}
+                onChange={(event) => handleDirectRcloneChange(event.target.checked)}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" fontWeight={600}>
+                  {t('wizard.location.directRcloneLabel')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t('wizard.location.directRcloneHelper')}
+                </Typography>
+              </Box>
+            }
+          />
+        </Box>
       )}
 
       {/* Path Input */}
@@ -600,5 +470,53 @@ export default function WizardStepLocation({
         }}
       />
     </Box>
+  )
+}
+
+function StatusDot({ color }: { color: string }) {
+  return (
+    <Box
+      sx={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        bgcolor: color,
+        flexShrink: 0,
+      }}
+    />
+  )
+}
+
+function renderAgentRow(agent: AgentMachine) {
+  const isOnline = agent.status === 'online'
+  const displayName = agent.hostname || agent.name
+  const metaSecondary = agent.hostname && agent.name !== agent.hostname ? agent.name : undefined
+  const secondary = [metaSecondary, agent.status].filter(Boolean).join(' · ')
+
+  return (
+    <RichSelectRow
+      icon={<Laptop size={16} />}
+      primary={displayName}
+      secondary={secondary}
+      indicator={<StatusDot color={isOnline ? 'success.main' : 'text.disabled'} />}
+    />
+  )
+}
+
+function renderSshRow(conn: SSHConnection, connectedLabel: string) {
+  const secondary = `Port ${conn.port}${conn.mount_point ? ` • ${conn.mount_point}` : ''}`
+  return (
+    <RichSelectRow
+      icon={<Cloud size={16} />}
+      primary={`${conn.username}@${conn.host}`}
+      secondary={secondary}
+      indicator={
+        conn.status === 'connected' ? (
+          <Box title={connectedLabel} sx={{ display: 'flex' }}>
+            <StatusDot color="success.main" />
+          </Box>
+        ) : undefined
+      }
+    />
   )
 }
