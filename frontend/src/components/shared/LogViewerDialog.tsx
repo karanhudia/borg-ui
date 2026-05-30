@@ -96,7 +96,17 @@ export default function LogViewerDialog<T extends JobWithLogs>({
   if (!job) return null
 
   return (
-    <ResponsiveDialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+    <ResponsiveDialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      footer={
+        <DialogActions>
+          <Button onClick={onClose}>{t('dialogs.logViewer.close')}</Button>
+        </DialogActions>
+      }
+    >
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Typography variant="h6">
@@ -125,9 +135,6 @@ export default function LogViewerDialog<T extends JobWithLogs>({
           onFetchLogs={handleFetchLogs}
         />
       </DialogContent>
-      <DialogActions sx={{ display: { xs: 'none', md: 'flex' } }}>
-        <Button onClick={onClose}>{t('dialogs.logViewer.close')}</Button>
-      </DialogActions>
     </ResponsiveDialog>
   )
 }

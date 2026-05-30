@@ -26,6 +26,7 @@ export interface TerminalLogViewerProps {
   status: string
   jobType?: string // 'backup', 'restore', 'check', 'compact', etc.
   showHeader?: boolean
+  /** Memoize this callback with useCallback when it is derived inside a component. */
   onFetchLogs: (offset: number) => Promise<LogFetchResult>
 }
 
@@ -246,7 +247,8 @@ export const TerminalLogViewer = React.forwardRef<TerminalLogViewerHandle, Termi
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `backup_${jobId}_logs.txt`
+      const safeJobType = jobType.replace(/[^a-z0-9_-]+/gi, '_') || 'job'
+      a.download = `${safeJobType}_${jobId}_logs.txt`
       a.click()
       URL.revokeObjectURL(url)
       toast.success(t('terminalLogViewer.toasts.logsDownloaded'))
