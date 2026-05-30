@@ -21,6 +21,7 @@ interface PathSelectorFieldProps {
   connectionType?: 'local' | 'ssh' | 'agent'
   agentId?: number
   agentName?: string
+  agentDefaultPath?: string | null
   sshConfig?: {
     ssh_key_id: number
     host: string
@@ -49,6 +50,7 @@ export default function PathSelectorField({
   connectionType = 'local',
   agentId,
   agentName,
+  agentDefaultPath,
   sshConfig,
   showSshMountPoints,
   fullWidth = true,
@@ -112,6 +114,7 @@ export default function PathSelectorField({
         connectionType={connectionType}
         agentId={agentId}
         agentName={agentName}
+        agentDefaultPath={agentDefaultPath}
         sshConfig={sshConfig}
         selectMode={selectMode}
         showSshMountPoints={showSshMountPoints}

@@ -1,4 +1,4 @@
-import { Box, Button, Chip, Stack, Tooltip, Typography } from '@mui/material'
+import { Box, Button, Stack, Tooltip, Typography } from '@mui/material'
 import { alpha, keyframes } from '@mui/material/styles'
 import { CheckCircle, Copy, Loader2 } from 'lucide-react'
 import type { AgentMachineResponse } from '../../services/api'
@@ -11,11 +11,6 @@ import {
 const spin = keyframes`
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-`
-
-const pulseDot = keyframes`
-  0%, 100% { opacity: 0.35; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1); }
 `
 
 export default function AgentInstallCommand({
@@ -45,33 +40,9 @@ export default function AgentInstallCommand({
 
   return (
     <Stack spacing={1.5}>
-      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-        <Typography variant="subtitle2" fontWeight={700}>
-          Install command
-        </Typography>
-        <Chip
-          size="small"
-          icon={
-            connectedAgent ? (
-              <CheckCircle size={14} />
-            ) : (
-              <Box
-                component="span"
-                sx={{
-                  display: 'inline-flex',
-                  animation: `${spin} 1s linear infinite`,
-                  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
-                }}
-              >
-                <Loader2 size={14} />
-              </Box>
-            )
-          }
-          color={connectedAgent ? 'success' : 'default'}
-          label={connectedAgent ? 'Connected' : 'Waiting…'}
-          variant={connectedAgent ? 'filled' : 'outlined'}
-        />
-      </Stack>
+      <Typography variant="subtitle2" fontWeight={700}>
+        Install command
+      </Typography>
       <Box sx={{ position: 'relative', minWidth: 0 }}>
         <Box
           component="code"
@@ -170,36 +141,11 @@ export default function AgentInstallCommand({
               ? `${connectedAgent.name || connectedAgent.hostname || 'Agent'} connected`
               : 'Waiting for agent to connect…'}
           </Typography>
-          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'text.secondary' }}>
-            {!connectedAgent && (
-              <Box
-                aria-hidden
-                sx={{
-                  display: 'inline-flex',
-                  gap: 0.4,
-                  '& > span': {
-                    width: 4,
-                    height: 4,
-                    borderRadius: '50%',
-                    bgcolor: 'primary.main',
-                    animation: `${pulseDot} 1.2s ease-in-out infinite`,
-                    '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
-                  },
-                  '& > span:nth-of-type(2)': { animationDelay: '0.2s' },
-                  '& > span:nth-of-type(3)': { animationDelay: '0.4s' },
-                }}
-              >
-                <span />
-                <span />
-                <span />
-              </Box>
-            )}
-            <Typography variant="caption">
-              {connectedAgent
-                ? 'You can close this dialog — the agent will keep running.'
-                : 'This page will update automatically once the install completes.'}
-            </Typography>
-          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            {connectedAgent
+              ? 'You can close this dialog; the agent will keep running.'
+              : 'This page will update automatically once the install completes.'}
+          </Typography>
         </Stack>
       </Box>
     </Stack>

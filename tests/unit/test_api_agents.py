@@ -140,6 +140,31 @@ class TestAgentEnrollmentTokens:
 
 @pytest.mark.unit
 class TestAgentRegistrationAndHeartbeat:
+    def test_register_agent_copies_enrollment_default_path_to_machine(
+        self, test_client: TestClient, test_db, admin_headers
+    ):
+        enrollment = test_client.post(
+            "/api/managed-machines/enrollment-tokens",
+            json={
+                "name": "odroid setup",
+                "expires_in_minutes": 60,
+                "default_path": " /home/karanhudia ",
+            },
+            headers=admin_headers,
+        )
+        assert enrollment.status_code == 201
+        assert enrollment.json()["default_path"] == "/home/karanhudia"
+
+        registered = _register_agent(test_client, enrollment.json()["token"])
+        agent = _get_agent(test_db, registered["agent_id"])
+        assert agent.default_path == "/home/karanhudia"
+
+        response = test_client.get(
+            "/api/managed-machines/agents", headers=admin_headers
+        )
+        assert response.status_code == 200
+        assert response.json()[0]["default_path"] == "/home/karanhudia"
+
     def test_register_agent_consumes_enrollment_token_and_lists_machine(
         self, test_client: TestClient, test_db, admin_headers
     ):

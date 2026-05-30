@@ -101,6 +101,7 @@ vi.mock('../../../components/FileExplorerDialog', () => ({
     initialPath,
     sshConfig,
     agentId,
+    agentDefaultPath,
   }: {
     open: boolean
     onSelect: (paths: string[]) => void
@@ -109,6 +110,7 @@ vi.mock('../../../components/FileExplorerDialog', () => ({
     initialPath?: string
     sshConfig?: { host: string }
     agentId?: number
+    agentDefaultPath?: string | null
   }) =>
     open ? (
       <div
@@ -119,6 +121,7 @@ vi.mock('../../../components/FileExplorerDialog', () => ({
         data-initial-path={initialPath}
         data-ssh-host={sshConfig?.host || ''}
         data-agent-id={agentId || ''}
+        data-agent-default-path={agentDefaultPath || ''}
       >
         <button type="button" onClick={() => onSelect(['/selected/from-browser'])}>
           Select browsed path
@@ -390,6 +393,7 @@ function StatefulSourceStep({
     name: string
     agent_id: string
     hostname?: string | null
+    default_path?: string | null
     status: string
     created_at: string
     updated_at: string
@@ -808,6 +812,7 @@ describe('SourceStep', () => {
         name: 'pi',
         agent_id: 'agt_pi',
         hostname: 'pi.local',
+        default_path: '/home/pi',
         status: 'online',
         created_at: '2026-05-21T00:00:00.000Z',
         updated_at: '2026-05-21T00:00:00.000Z',
@@ -825,6 +830,7 @@ describe('SourceStep', () => {
     const explorer = screen.getByTestId('file-explorer-dialog')
     expect(explorer).toHaveAttribute('data-connection-type', 'agent')
     expect(explorer).toHaveAttribute('data-agent-id', '77')
+    expect(explorer).toHaveAttribute('data-agent-default-path', '/home/pi')
 
     clickExistingTextButton(/select browsed path/i)
     clickExistingTextButton(/use these paths/i)

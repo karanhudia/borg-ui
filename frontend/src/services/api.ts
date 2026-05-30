@@ -902,6 +902,7 @@ export interface AgentMachineResponse {
   os?: string | null
   arch?: string | null
   agent_version?: string | null
+  default_path?: string | null
   borg_versions?: Array<Record<string, unknown>> | null
   capabilities?: string[] | null
   labels?: Record<string, unknown> | null
@@ -917,6 +918,7 @@ export interface AgentEnrollmentTokenSummary {
   id: number
   name: string
   token_prefix: string
+  default_path?: string | null
   expires_at: string | null
   used_at?: string | null
   used_by_agent_id?: number | null
@@ -999,6 +1001,7 @@ export interface AgentFilesystemBrowseResponse {
 
 export interface AgentEnrollmentTokenCreate {
   name: string
+  default_path?: string | null
   expires_in_minutes?: number
   expires_in_hours?: number
   expires_in_days?: number

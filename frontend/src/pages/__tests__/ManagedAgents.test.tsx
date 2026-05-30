@@ -8,6 +8,7 @@ import ManagedAgents, {
   JobsTable,
   TokensTable,
 } from '../ManagedAgents'
+import AgentInstallCommand from '../managed-agents/AgentInstallCommand'
 import { buildAgentInstallCommand } from '../managed-agents/agentInstallCommandText'
 import { isLocalAgentServerUrl, resolveAgentServerUrl } from '../managed-agents/agentServerUrl'
 import { renderWithProviders, userEvent } from '../../test/test-utils'
@@ -193,6 +194,21 @@ describe('ManagedAgents', () => {
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('git clone'))
   })
 
+  it('uses a single waiting indicator in the add-agent install command', () => {
+    const { container } = renderWithProviders(
+      <AgentInstallCommand
+        serverUrl="http://192.168.0.29:8083"
+        token="agent-token-secret"
+        agentName="Client laptop"
+        onCopy={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/waiting for agent to connect/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^Waiting…$/)).not.toBeInTheDocument()
+    expect(container.querySelectorAll('[aria-hidden="true"] > span')).toHaveLength(0)
+  })
+
   it('creates enrollment tokens from the Add Agent wizard only after confirming details', async () => {
     const user = userEvent.setup()
     vi.mocked(managedAgentsAPI.createEnrollmentToken).mockResolvedValue({
@@ -234,6 +250,39 @@ describe('ManagedAgents', () => {
         ].every((part) => content.includes(part))
       )
     ).toBeInTheDocument()
+  }, 60000)
+
+  it('includes the default browse path when creating a managed-agent enrollment token', async () => {
+    const user = userEvent.setup()
+    vi.mocked(managedAgentsAPI.createEnrollmentToken).mockResolvedValue({
+      data: {
+        id: 1,
+        name: 'Odroid M1',
+        token: 'agent-token-secret',
+        token_prefix: 'agent-token-secret',
+        expires_at: '2026-05-28T00:00:00.000Z',
+        created_at: '2026-05-21T00:00:00.000Z',
+        default_path: '/home/karanhudia',
+      },
+    } as AxiosResponse)
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    await user.click(await screen.findByRole('button', { name: /add agent/i }))
+    await screen.findByRole('dialog', { name: /add agent/i })
+    await user.clear(screen.getByLabelText(/server url/i))
+    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
+    await user.click(screen.getByRole('button', { name: /next/i }))
+    await user.clear(screen.getByLabelText(/agent name/i))
+    await user.type(screen.getByLabelText(/agent name/i), 'Odroid M1')
+    await user.type(screen.getByLabelText(/default path/i), ' /home/karanhudia ')
+    await user.click(screen.getByRole('button', { name: /generate install command/i }))
+
+    expect(vi.mocked(managedAgentsAPI.createEnrollmentToken).mock.calls[0][0]).toEqual({
+      name: 'Odroid M1',
+      default_path: '/home/karanhudia',
+      expires_in_days: 7,
+    })
   }, 60000)
 
   it('generates Borg 2 beta installer commands from the Add Agent wizard', async () => {

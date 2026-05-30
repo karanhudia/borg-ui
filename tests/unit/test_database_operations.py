@@ -506,3 +506,81 @@ class TestMigration081:
             ).fetchall()
 
         assert roles == [("admin", "admin"), ("viewer", "viewer")]
+
+
+@pytest.mark.unit
+class TestMigration116:
+    """Tests for migration 116: managed agent default browse paths."""
+
+    def _make_engine(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import StaticPool
+
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                CREATE TABLE agent_machines (
+                    id INTEGER PRIMARY KEY,
+                    name VARCHAR NOT NULL,
+                    agent_id VARCHAR NOT NULL UNIQUE,
+                    token_hash VARCHAR NOT NULL,
+                    token_prefix VARCHAR(20) NOT NULL,
+                    hostname VARCHAR,
+                    os VARCHAR,
+                    arch VARCHAR,
+                    agent_version VARCHAR,
+                    status VARCHAR NOT NULL DEFAULT 'pending',
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """)
+            )
+            conn.execute(
+                text("""
+                CREATE TABLE agent_enrollment_tokens (
+                    id INTEGER PRIMARY KEY,
+                    name VARCHAR NOT NULL,
+                    token_hash VARCHAR NOT NULL,
+                    token_prefix VARCHAR(20) NOT NULL,
+                    expires_at DATETIME,
+                    used_at DATETIME,
+                    used_by_agent_id INTEGER,
+                    revoked_at DATETIME,
+                    created_at DATETIME NOT NULL
+                )
+                """)
+            )
+            conn.commit()
+        return engine
+
+    def test_adds_default_path_columns_and_is_idempotent(self):
+        import importlib
+
+        migration = importlib.import_module(
+            "app.database.migrations.116_add_agent_default_path"
+        )
+        engine = self._make_engine()
+
+        with engine.connect() as conn:
+            migration.upgrade(conn)
+            migration.upgrade(conn)
+            conn.commit()
+
+            agent_columns = {
+                row[1]
+                for row in conn.execute(text("PRAGMA table_info(agent_machines)"))
+            }
+            token_columns = {
+                row[1]
+                for row in conn.execute(
+                    text("PRAGMA table_info(agent_enrollment_tokens)")
+                )
+            }
+
+        assert "default_path" in agent_columns
+        assert "default_path" in token_columns

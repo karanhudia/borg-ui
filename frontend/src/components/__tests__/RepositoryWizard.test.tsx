@@ -73,17 +73,20 @@ vi.mock('../FileExplorerDialog', () => ({
     onSelect,
     connectionType,
     agentId,
+    agentDefaultPath,
   }: {
     open: boolean
     onSelect: (paths: string[]) => void
     connectionType?: string
     agentId?: number
+    agentDefaultPath?: string | null
   }) =>
     open ? (
       <div
         data-testid="file-explorer-dialog"
         data-connection-type={connectionType}
         data-agent-id={agentId || ''}
+        data-agent-default-path={agentDefaultPath || ''}
       >
         <button type="button" onClick={() => onSelect(['/selected/from-browser'])}>
           Select browsed path
@@ -150,6 +153,7 @@ const mockManagedAgents = [
     name: 'workstation',
     agent_id: 'agent-workstation',
     hostname: 'workstation.local',
+    default_path: '/home/workstation',
     status: 'online',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -925,6 +929,10 @@ describe('RepositoryWizard', () => {
         'agent'
       )
       expect(screen.getByTestId('file-explorer-dialog')).toHaveAttribute('data-agent-id', '101')
+      expect(screen.getByTestId('file-explorer-dialog')).toHaveAttribute(
+        'data-agent-default-path',
+        '/home/workstation'
+      )
 
       await user.click(
         within(screen.getByTestId('file-explorer-dialog')).getByRole('button', {

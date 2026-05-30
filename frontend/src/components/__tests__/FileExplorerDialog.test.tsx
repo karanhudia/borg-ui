@@ -180,6 +180,27 @@ describe('FileExplorerDialog', () => {
       })
     })
 
+    it('starts managed-agent browsing from the agent default path when root is selected', async () => {
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          connectionType="agent"
+          agentId={42}
+          agentDefaultPath="/home/karanhudia"
+        />
+      )
+
+      await waitFor(() => {
+        expect(managedAgentsAPI.browseFilesystem).toHaveBeenCalledWith(
+          42,
+          '/home/karanhudia',
+          false
+        )
+      })
+    })
+
     it('shows search input', async () => {
       renderWithProviders(
         <FileExplorerDialog open={true} onClose={mockOnClose} onSelect={mockOnSelect} />
