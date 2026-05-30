@@ -467,6 +467,83 @@ describe('RepositoryWizard', () => {
       })
     }, 90000)
 
+    it('composes direct Borg 2 rclone URLs from selected connected storage and browsed folders', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('create')
+      ;(rcloneAPI.browseRemote as Mock)
+        .mockResolvedValueOnce({
+          data: {
+            remote_id: 10,
+            path: '',
+            entries: [{ name: 'repositories', path: 'borg-ui/repositories', is_dir: true }],
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            remote_id: 10,
+            path: 'borg-ui/repositories',
+            entries: [],
+          },
+        })
+
+      await waitForLocationStep()
+      await user.click(screen.getByRole('button', { name: /v2/i }))
+      await user.click(
+        await screen.findByRole('checkbox', { name: /Use direct Borg 2 rclone repository/i })
+      )
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Browsed Direct Cloud Repo')
+
+      await user.click(await screen.findByRole('combobox', { name: /Rclone Remote/i }))
+      const remoteListbox = await screen.findByRole('listbox')
+      await user.click(within(remoteListbox).getByText('prod-s3'))
+
+      expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue(
+        'rclone://prod-s3/'
+      )
+
+      await user.click(screen.getByRole('button', { name: /Browse rclone remote/i }))
+      await waitFor(() => {
+        expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, '')
+      })
+      await user.click(await screen.findByText('repositories'))
+      await waitFor(() => {
+        expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui/repositories')
+      })
+      await user.click(screen.getByRole('button', { name: /Use folder/i }))
+
+      expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue(
+        'rclone://prod-s3/borg-ui/repositories'
+      )
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^Passphrase/i)).toBeInTheDocument()
+      })
+      setInputValue(screen.getByLabelText(/^Passphrase/i), 'directpass')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Create Repository/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Browsed Direct Cloud Repo',
+            borg_version: 2,
+            path: 'rclone://prod-s3/borg-ui/repositories',
+            storage_backend: 'rclone_direct',
+            cloud_mirror_enabled: false,
+            rclone_remote_id: null,
+            rclone_remote_path: null,
+            rclone_remote_path_verified: false,
+          }),
+          null
+        )
+      })
+    }, 90000)
+
     it('submits a remote repository connection id', async () => {
       const user = userEvent.setup()
       const { onSubmit } = renderWizard('create')

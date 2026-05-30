@@ -24,6 +24,15 @@ const agentMachines = [
   },
 ]
 
+const rcloneRemotes = [
+  {
+    id: 10,
+    name: 'prod-s3',
+    provider: 's3',
+    last_test_status: 'connected',
+  },
+]
+
 const meta = {
   title: 'Components/Wizard/Repository Location',
   component: WizardStepLocation,
@@ -120,8 +129,12 @@ export const DirectBorg2Rclone: Story = {
       name: 'Direct Cloud Repository',
       borgVersion: 2,
       repositoryLocation: 'rclone',
+      rcloneRemoteId: 10,
+      rcloneRemotePath: 'borg-ui/direct',
       path: 'rclone://prod-s3/borg-ui/direct',
     },
+    rcloneStatus: { available: true, version: 'rclone v1.66.0' },
+    rcloneRemotes,
   },
   render: (args) => (
     <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
