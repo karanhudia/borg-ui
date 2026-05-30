@@ -56,7 +56,7 @@ import CodeEditor from '../../../components/CodeEditor'
 import DestinationSelect, { type DestinationOption } from '../../../components/DestinationSelect'
 import ManagedAgentSelect from '../../../components/ManagedAgentSelect'
 import PathSelectorField from '../../../components/PathSelectorField'
-import ResponsiveDialog from '../../../components/ResponsiveDialog'
+import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
 import SshConnectionSelect from '../../../components/SshConnectionSelect'
 import {
   type AgentMachineResponse,

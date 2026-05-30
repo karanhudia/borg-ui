@@ -15,7 +15,7 @@ import {
 } from '@mui/material'
 import { Eraser, Save, AlertTriangle, CheckCircle2 } from 'lucide-react'
 
-import ResponsiveDialog from '../../components/ResponsiveDialog'
+import ResponsiveDialog from '../../components/shared/ResponsiveDialog'
 import type { LegacySourceRepositoryReview } from './legacySourceSettings'
 
 interface LegacySourceSettingsReviewDialogProps {

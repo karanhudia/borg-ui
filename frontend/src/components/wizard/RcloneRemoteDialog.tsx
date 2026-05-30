@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import CodeEditor from '../CodeEditor'
-import ResponsiveDialog from '../ResponsiveDialog'
+import ResponsiveDialog from '../shared/ResponsiveDialog'
 import type {
   RcloneOAuthCredentialUpdate,
   RcloneOAuthSession,

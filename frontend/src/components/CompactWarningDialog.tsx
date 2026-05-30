@@ -11,7 +11,7 @@ import {
   ListItemText,
   CircularProgress,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import Compress from '@mui/icons-material/Compress'
 import Lock from '@mui/icons-material/Lock'
 import Warning from '@mui/icons-material/Warning'

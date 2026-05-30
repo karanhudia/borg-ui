@@ -8,7 +8,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { Clock } from 'lucide-react'
 import CronBuilder from './CronBuilder'
 import { useTranslation } from 'react-i18next'

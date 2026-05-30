@@ -32,7 +32,7 @@ import {
   TriangleAlert,
   XCircle,
 } from 'lucide-react'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { formatDateShort, formatDateTimeFull } from '../utils/dateUtils'
 import type { Repository, RepositoryWipeExecuteRequest, RepositoryWipeJob } from '../types'
 

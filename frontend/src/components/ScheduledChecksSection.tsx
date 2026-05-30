@@ -17,7 +17,7 @@ import {
   MenuItem,
   Autocomplete,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { Shield, Info } from 'lucide-react'
 import { repositoriesAPI } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'

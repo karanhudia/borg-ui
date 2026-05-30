@@ -11,7 +11,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { useEffect, useState } from 'react'
 import CalendarMonth from '@mui/icons-material/CalendarMonth'
 import FileDownload from '@mui/icons-material/FileDownload'

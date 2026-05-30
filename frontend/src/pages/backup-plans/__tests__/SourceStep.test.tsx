@@ -72,7 +72,7 @@ vi.mock('../../../components/CodeEditor', () => ({
   ),
 }))
 
-vi.mock('../../../components/ResponsiveDialog', () => ({
+vi.mock('../../../components/shared/ResponsiveDialog', () => ({
   default: ({
     open,
     children,

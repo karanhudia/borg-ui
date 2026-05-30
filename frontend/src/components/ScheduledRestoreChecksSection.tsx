@@ -35,7 +35,7 @@ import {
 } from '../utils/dateUtils'
 import { usePermissions } from '../hooks/usePermissions'
 import DataTable, { ActionButton, Column } from './DataTable'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import RepoSelect from './RepoSelect'
 import CronBuilderDialog from './CronBuilderDialog'
 import ScheduleRestoreCheckCard from './ScheduleRestoreCheckCard'

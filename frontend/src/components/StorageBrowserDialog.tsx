@@ -14,7 +14,7 @@ import {
   Typography,
 } from '@mui/material'
 import { Download, FileText, Folder, FolderOpen, Inbox, ShieldCheck } from 'lucide-react'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { normalizeBrowserPath } from '../utils/storageBrowserPaths'
 
 export interface StorageBrowserItem {

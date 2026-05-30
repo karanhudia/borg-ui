@@ -30,7 +30,7 @@ vi.mock('../../hooks/useAnalytics', () => ({
   }),
 }))
 
-vi.mock('../ResponsiveDialog', () => ({
+vi.mock('../shared/ResponsiveDialog', () => ({
   default: ({
     open,
     children,

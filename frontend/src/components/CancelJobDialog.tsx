@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { DialogContent, DialogActions, Button, Typography } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 
 interface CancelJobDialogProps {
   open: boolean
