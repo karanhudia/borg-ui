@@ -207,15 +207,57 @@ describe('CheckWarningDialog', () => {
         />
       )
 
-      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '7200' } })
+      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '0' } })
       fireEvent.change(screen.getByLabelText('Advanced check flags'), {
         target: { value: '--repair --verify-data' },
       })
       fireEvent.click(screen.getByRole('button', { name: /Run Check/ }))
 
       expect(mockOnConfirm).toHaveBeenCalledWith({
-        maxDuration: 7200,
+        maxDuration: 0,
         checkExtraFlags: '--repair --verify-data',
+      })
+    })
+
+    it('warns and blocks full-check flags when max duration is positive', () => {
+      render(
+        <CheckWarningDialog
+          open={true}
+          repositoryName="test-repo"
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+          initialMaxDuration={3600}
+          initialCheckExtraFlags="--verify-data"
+        />
+      )
+
+      expect(
+        screen.getByText(/Set max duration to 0 \(unlimited\) to use --verify-data/)
+      ).toBeInTheDocument()
+      const runButton = screen.getByRole('button', { name: /Run Check/ })
+      expect(runButton).toBeDisabled()
+
+      fireEvent.click(runButton)
+      expect(mockOnConfirm).not.toHaveBeenCalled()
+    })
+
+    it('allows full-check flags when max duration is unlimited', () => {
+      render(
+        <CheckWarningDialog
+          open={true}
+          repositoryName="test-repo"
+          onConfirm={mockOnConfirm}
+          onCancel={mockOnCancel}
+          initialMaxDuration={0}
+          initialCheckExtraFlags="--verify-data"
+        />
+      )
+
+      expect(screen.queryByText(/Set max duration to 0 \(unlimited\)/)).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /Run Check/ }))
+      expect(mockOnConfirm).toHaveBeenCalledWith({
+        maxDuration: 0,
+        checkExtraFlags: '--verify-data',
       })
     })
 

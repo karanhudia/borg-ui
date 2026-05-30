@@ -2959,7 +2959,7 @@
     "checkScheduleLabel": "Überprüfungszeitplan",
     "timezoneLabel": "Zeitzone",
     "maxDuration": "Maximale Dauer (Sekunden)",
-    "maxDurationHint": "Zeitlimit für den Überprüfungsvorgang (3600 = 1 Stunde)",
+    "maxDurationHint": "Zeitlimit für den Überprüfungsvorgang (3600 = 1 Stunde). Verwende 0 für unbegrenzte/vollständige Checks.",
     "maxDurationHintBorg2": "Bei Borg 2 startet ein Zeitlimit eine partielle Repository-Prüfung (3600 = 1 Stunde). Verwende 0, um Archivprüfungen einzuschließen.",
     "extraFlags": "Erweiterte Check-Flags",
     "extraFlagsHint": "Zusätzliche borg check Optionen, die an geplante Checks angehängt werden.",
@@ -4036,6 +4036,9 @@
   "terminalLog": {
     "inProgress": "{{type}} läuft..."
   },
+  "checkFlagConflicts": {
+    "durationConflict": "Setze die maximale Dauer auf 0 (unbegrenzt), um {{flags}} zu verwenden. Positive Dauern starten partielle Repository-only-Checks, die mit vollständigen archivbezogenen Borg-Check-Flags kollidieren."
+  },
   "backend": {
     "errors": {
       "auth": {
@@ -4130,6 +4133,7 @@
         "cannotSwitchToFullModeNoSourceDirs": "Wechsel in den vollständigen Modus nicht möglich: mindestens ein Quellverzeichnis ist erforderlich",
         "cannotDeleteRepoWithArchives": "Repository mit vorhandenen Archiven kann nicht gelöscht werden. Bitte löschen Sie zuerst alle Archive.",
         "checkAlreadyRunning": "Für dieses Repository wird bereits eine Überprüfungsoperation ausgeführt",
+        "checkFlagsRequireUnlimitedDuration": "Setze die maximale Dauer auf 0 (unbegrenzt), wenn {{flags}} verwendet wird, da diese Borg-Check-Flags eine vollständige archivbezogene Prüfung erfordern.",
         "compactAlreadyRunning": "Für dieses Repository wird bereits eine Komprimierungsoperation ausgeführt",
         "restoreCheckCanaryUnsupportedObserve": "Canary-Restore-Prüfungen sind für Observe-only-Repositories nicht verfügbar. Nutze ausgewählte Probe-Pfade oder einen vollständigen Archiv-Drill.",
         "breakLockTimeout": "Timeout beim Versuch, die Sperre aufzuheben",

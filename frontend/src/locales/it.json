@@ -2959,7 +2959,7 @@
     "checkScheduleLabel": "Pianificazione Controllo",
     "timezoneLabel": "Fuso orario",
     "maxDuration": "Durata Massima (secondi)",
-    "maxDurationHint": "Limite di tempo per l'operazione di controllo (3600 = 1 ora)",
+    "maxDurationHint": "Limite di tempo per l'operazione di controllo (3600 = 1 ora). Usa 0 per controlli completi/illimitati.",
     "maxDurationHintBorg2": "Con Borg 2, un limite di tempo esegue un controllo parziale del solo repository (3600 = 1 ora). Usa 0 per includere i controlli degli archivi.",
     "extraFlags": "Flag avanzati di check",
     "extraFlagsHint": "Opzioni aggiuntive di borg check aggiunte ai controlli pianificati.",
@@ -4036,6 +4036,9 @@
   "terminalLog": {
     "inProgress": "{{type}} in corso..."
   },
+  "checkFlagConflicts": {
+    "durationConflict": "Imposta la durata massima a 0 (illimitata) per usare {{flags}}. Le durate positive eseguono controlli parziali solo del repository, in conflitto con i flag Borg check completi con archivi."
+  },
   "backend": {
     "errors": {
       "auth": {
@@ -4130,6 +4133,7 @@
         "cannotSwitchToFullModeNoSourceDirs": "Impossibile passare alla modalità completa: è richiesta almeno una directory sorgente",
         "cannotDeleteRepoWithArchives": "Impossibile eliminare il repository con archivi esistenti. Elimina prima tutti gli archivi.",
         "checkAlreadyRunning": "Un'operazione di controllo è già in esecuzione per questo repository",
+        "checkFlagsRequireUnlimitedDuration": "Imposta la durata massima a 0 (illimitata) quando usi {{flags}} perché questi flag di Borg check richiedono un controllo completo con archivi.",
         "compactAlreadyRunning": "Un'operazione di compattazione è già in esecuzione per questo repository",
         "restoreCheckCanaryUnsupportedObserve": "I controlli di ripristino canary non sono disponibili per i repository solo osservazione. Usa percorsi di prova selezionati o una verifica dell'intero archivio.",
         "breakLockTimeout": "Timeout durante il tentativo di rompere il blocco",

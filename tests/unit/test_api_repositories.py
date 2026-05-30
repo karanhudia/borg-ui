@@ -2560,6 +2560,39 @@ class TestRepositoryCheck:
             "extra_flags": "--repair --archives-only",
         }
 
+    def test_start_check_rejects_full_check_flags_with_partial_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Full-check flags should require unlimited/manual full check duration."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        with patch(
+            "app.api.repositories.start_background_maintenance_job"
+        ) as mock_start:
+            response = test_client.post(
+                f"/api/repositories/{repo.id}/check",
+                headers=admin_headers,
+                json={
+                    "max_duration": 600,
+                    "check_extra_flags": " --verify-data ",
+                },
+            )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
+        )
+        assert response.json()["detail"]["params"]["flags"] == "--verify-data"
+        mock_start.assert_not_called()
+
 
 @pytest.mark.unit
 class TestRepositoryCheckSchedule:
@@ -2638,7 +2671,7 @@ class TestRepositoryCheckSchedule:
         # Update check schedule
         payload = {
             "cron_expression": "0 3 * * *",  # Daily at 3 AM
-            "max_duration": 7200,
+            "max_duration": 0,
             "check_extra_flags": "  --repair --save-space  ",
             "notify_on_success": True,
             "notify_on_failure": False,
@@ -2653,11 +2686,70 @@ class TestRepositoryCheckSchedule:
         data = response.json()
         assert data["success"] == True
         assert data["repository"]["check_cron_expression"] == "0 3 * * *"
-        assert data["repository"]["check_max_duration"] == 7200
+        assert data["repository"]["check_max_duration"] == 0
         assert data["repository"]["check_extra_flags"] == "--repair --save-space"
         assert data["repository"]["notify_on_check_success"] == True
         assert data["repository"]["notify_on_check_failure"] == False
         assert data["repository"]["next_scheduled_check"] is not None
+
+    def test_update_check_schedule_rejects_full_check_flags_with_partial_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Scheduled full-check flags must be paired with max_duration 0."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 3 * * *",
+                "max_duration": 3600,
+                "check_extra_flags": " --verify-data ",
+            },
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
+        )
+        assert response.json()["detail"]["params"]["flags"] == "--verify-data"
+
+    def test_update_check_schedule_allows_verify_data_with_unlimited_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """`--verify-data` is valid when scheduled checks run without a max duration."""
+        repo = Repository(
+            name="Test Repo",
+            path="/tmp/test",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        response = test_client.put(
+            f"/api/repositories/{repo.id}/check-schedule",
+            headers=admin_headers,
+            json={
+                "cron_expression": "0 3 * * *",
+                "max_duration": 0,
+                "check_extra_flags": " --verify-data ",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["repository"]["check_max_duration"] == 0
+        assert data["repository"]["check_extra_flags"] == "--verify-data"
 
     def test_update_check_schedule_disable(
         self, test_client: TestClient, admin_headers, test_db

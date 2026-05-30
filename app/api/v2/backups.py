@@ -30,12 +30,26 @@ from app.core.security import get_current_user
 from app.core.features import require_feature
 from app.core.borg_router import BorgRouter
 from app.services.backup_service import backup_service
+from app.services.check_flag_validation import (
+    CheckFlagConflictError,
+    validate_check_flags_for_max_duration,
+)
 from app.services.v2.check_service import check_v2_service
 from app.services.v2.compact_service import compact_v2_service
 from app.services.v2.prune_service import prune_v2_service
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Backup v2"], dependencies=[require_feature("borg_v2")])
+
+
+def _raise_check_flag_conflict(exc: CheckFlagConflictError) -> None:
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "key": "backend.errors.repo.checkFlagsRequireUnlimitedDuration",
+            "params": {"flags": ", ".join(exc.conflicting_flags)},
+        },
+    ) from exc
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -299,6 +313,11 @@ async def check_repository(
     check_extra_flags = (
         data.check_extra_flags.strip() if data.check_extra_flags else None
     )
+    try:
+        validate_check_flags_for_max_duration(check_extra_flags, data.max_duration)
+    except CheckFlagConflictError as exc:
+        _raise_check_flag_conflict(exc)
+
     extra_fields = {"max_duration": data.max_duration}
     if check_extra_flags:
         extra_fields["extra_flags"] = check_extra_flags

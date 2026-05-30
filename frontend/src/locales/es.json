@@ -2959,7 +2959,7 @@
     "checkScheduleLabel": "Programación de comprobación",
     "timezoneLabel": "Zona horaria",
     "maxDuration": "Duración máxima (segundos)",
-    "maxDurationHint": "Límite de tiempo para la operación de comprobación (3600 = 1 hora)",
+    "maxDurationHint": "Límite de tiempo para la operación de comprobación (3600 = 1 hora). Usa 0 para comprobaciones completas/sin límite.",
     "maxDurationHintBorg2": "En Borg 2, un límite de tiempo ejecuta una comprobación parcial solo del repositorio (3600 = 1 hora). Usa 0 para incluir comprobaciones de archivos.",
     "extraFlags": "Opciones avanzadas de check",
     "extraFlagsHint": "Opciones adicionales de borg check añadidas a comprobaciones programadas.",
@@ -4036,6 +4036,9 @@
   "terminalLog": {
     "inProgress": "{{type}} en progreso..."
   },
+  "checkFlagConflicts": {
+    "durationConflict": "Establece la duración máxima en 0 (sin límite) para usar {{flags}}. Las duraciones positivas ejecutan comprobaciones parciales solo del repositorio, que entran en conflicto con las opciones completas de Borg check con archivos."
+  },
   "backend": {
     "errors": {
       "auth": {
@@ -4130,6 +4133,7 @@
         "cannotSwitchToFullModeNoSourceDirs": "No se puede cambiar al modo completo: se requiere al menos un directorio de origen",
         "cannotDeleteRepoWithArchives": "No se puede eliminar el repositorio con archivos existentes. Elimine todos los archivos primero.",
         "checkAlreadyRunning": "Ya hay una operación de verificación en curso para este repositorio",
+        "checkFlagsRequireUnlimitedDuration": "Establece la duración máxima en 0 (sin límite) al usar {{flags}} porque estas opciones de Borg check requieren una comprobación completa con archivos.",
         "compactAlreadyRunning": "Ya hay una operación de compactación en curso para este repositorio",
         "restoreCheckCanaryUnsupportedObserve": "Las comprobaciones de restauración canaria no están disponibles para repositorios solo de observación. Usa rutas de prueba seleccionadas o una prueba de archivo completo.",
         "breakLockTimeout": "Tiempo de espera al intentar romper el bloqueo",

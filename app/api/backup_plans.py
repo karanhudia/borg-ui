@@ -31,6 +31,10 @@ from app.services.backup_plan_policy import (
 )
 from app.services.backup_plan_execution_service import backup_plan_execution_service
 from app.services.backup_route_planner import plan_repository_route
+from app.services.check_flag_validation import (
+    CheckFlagConflictError,
+    validate_check_flags_for_max_duration,
+)
 from app.services.backup_progress_contract import serialize_backup_progress_details
 from app.services.repository_executor import repository_executor_type
 from app.utils.datetime_utils import serialize_datetime
@@ -47,6 +51,16 @@ from app.utils.source_locations import (
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["backup-plans"])
+
+
+def _raise_check_flag_conflict(exc: CheckFlagConflictError) -> None:
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "key": "backend.errors.repo.checkFlagsRequireUnlimitedDuration",
+            "params": {"flags": ", ".join(exc.conflicting_flags)},
+        },
+    ) from exc
 
 
 class BackupPlanRepositoryPayload(BaseModel):
@@ -609,6 +623,13 @@ def _validate_payload(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"key": "backend.errors.backupPlans.invalidUploadLimit"},
         )
+    if payload.run_check_after:
+        try:
+            validate_check_flags_for_max_duration(
+                payload.check_extra_flags, payload.check_max_duration
+            )
+        except CheckFlagConflictError as exc:
+            _raise_check_flag_conflict(exc)
     if (
         payload.repository_run_mode == "series"
         and payload.max_parallel_repositories != 1
