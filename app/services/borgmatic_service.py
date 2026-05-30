@@ -39,6 +39,21 @@ def _safe_export_name(name: str, fallback: str) -> str:
     return safe_name or fallback
 
 
+def _unique_yaml_filename(base_name: str, used_names: set[str]) -> str:
+    filename = f"{base_name}.yaml"
+    if filename not in used_names:
+        used_names.add(filename)
+        return filename
+
+    suffix = 2
+    while True:
+        filename = f"{base_name}-{suffix}.yaml"
+        if filename not in used_names:
+            used_names.add(filename)
+            return filename
+        suffix += 1
+
+
 def build_borgmatic_export_artifact(
     configs: List[Tuple[str, Dict[str, Any]]],
     timestamp: Optional[datetime] = None,
@@ -61,9 +76,11 @@ def build_borgmatic_export_artifact(
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        used_names: set[str] = set()
         for index, (repo_name, config) in enumerate(configs):
             yaml_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
-            filename = f"{_safe_export_name(repo_name, f'repo-{index + 1}')}.yaml"
+            base_name = _safe_export_name(repo_name, f"repo-{index + 1}")
+            filename = _unique_yaml_filename(base_name, used_names)
             zip_file.writestr(filename, yaml_content)
 
     return BorgmaticExportArtifact(

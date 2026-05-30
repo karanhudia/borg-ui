@@ -173,6 +173,24 @@ class TestBorgmaticExportArtifact:
                 "repositories": ["/backups/two"]
             }
 
+    def test_multiple_repository_artifact_disambiguates_duplicate_safe_names(self):
+        artifact = build_borgmatic_export_artifact(
+            [
+                ("Repo One", {"repositories": ["/backups/one"]}),
+                ("RepoOne", {"repositories": ["/backups/two"]}),
+            ],
+            timestamp=datetime(2026, 5, 30, 7, 30, 0),
+        )
+
+        with zipfile.ZipFile(io.BytesIO(artifact.content)) as archive:
+            assert sorted(archive.namelist()) == ["repoone-2.yaml", "repoone.yaml"]
+            assert yaml.safe_load(archive.read("repoone.yaml")) == {
+                "repositories": ["/backups/one"]
+            }
+            assert yaml.safe_load(archive.read("repoone-2.yaml")) == {
+                "repositories": ["/backups/two"]
+            }
+
     def test_empty_export_artifact_raises_value_error(self):
         with pytest.raises(ValueError, match="No repositories found to export"):
             build_borgmatic_export_artifact([])
