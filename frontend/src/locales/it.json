@@ -276,6 +276,8 @@
       "title": "Salute Repository",
       "upToDate": "Backup aggiornati",
       "needsAttention": "Richiede attenzione",
+      "needsAttentionSection": "Richiede attenzione",
+      "healthySection": "In salute",
       "next24h": "Prossime 24 ore",
       "maintenanceNeeded": "Manutenzione Necessaria",
       "allHealthy": "Tutti i sistemi sono in salute!",
@@ -314,7 +316,9 @@
     "storageDonut": {
       "archivesCount": "{{count}} archivi",
       "noData": "Nessun dato",
-      "dedupRatio": "Rapporto dedup."
+      "dedupRatio": "Rapporto dedup.",
+      "otherRepos_one": "Altri ({{count}} repo)",
+      "otherRepos_other": "Altri ({{count}} repo)"
     },
     "successDonut": {
       "label": "Successo 30 giorni",
@@ -359,6 +363,7 @@
         "lastBackup": "Ultimo backup",
         "schedules": "Pianificazioni",
         "automations": "Automazioni",
+        "automationsCta": "Configura una pianificazione",
         "storage": "Archiviazione"
       }
     },

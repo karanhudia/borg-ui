@@ -276,6 +276,8 @@
       "title": "Repository-Zustand",
       "upToDate": "Sicherungen aktuell",
       "needsAttention": "Erfordert Aufmerksamkeit",
+      "needsAttentionSection": "Erfordert Aufmerksamkeit",
+      "healthySection": "In Ordnung",
       "next24h": "Nächste 24 Stunden",
       "maintenanceNeeded": "Wartung erforderlich",
       "allHealthy": "Alle Systeme in Ordnung!",
@@ -314,7 +316,9 @@
     "storageDonut": {
       "archivesCount": "{{count}} Archive",
       "noData": "Keine Daten",
-      "dedupRatio": "Dedup-Verhältnis"
+      "dedupRatio": "Dedup-Verhältnis",
+      "otherRepos_one": "Andere ({{count}} Repo)",
+      "otherRepos_other": "Andere ({{count}} Repos)"
     },
     "successDonut": {
       "label": "30-Tage-Erfolg",
@@ -359,6 +363,7 @@
         "lastBackup": "Letztes Backup",
         "schedules": "Zeitpläne",
         "automations": "Automatisierungen",
+        "automationsCta": "Zeitplan einrichten",
         "storage": "Speicher"
       }
     },

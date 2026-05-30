@@ -276,6 +276,8 @@
       "title": "Estado de repositorios",
       "upToDate": "Copias de seguridad al día",
       "needsAttention": "Necesita atención",
+      "needsAttentionSection": "Necesita atención",
+      "healthySection": "En buen estado",
       "next24h": "Próximas 24 horas",
       "maintenanceNeeded": "Mantenimiento necesario",
       "allHealthy": "¡Todos los sistemas en buen estado!",
@@ -314,7 +316,9 @@
     "storageDonut": {
       "archivesCount": "{{count}} archivos",
       "noData": "Sin datos",
-      "dedupRatio": "Ratio de dedup."
+      "dedupRatio": "Ratio de dedup.",
+      "otherRepos_one": "Otros ({{count}} repo)",
+      "otherRepos_other": "Otros ({{count}} repos)"
     },
     "successDonut": {
       "label": "Éxito en 30 días",
@@ -359,6 +363,7 @@
         "lastBackup": "Último backup",
         "schedules": "Programaciones",
         "automations": "Automatizaciones",
+        "automationsCta": "Configurar una programación",
         "storage": "Almacenamiento"
       }
     },

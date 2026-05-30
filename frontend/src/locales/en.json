@@ -276,6 +276,8 @@
       "title": "Repository Health",
       "upToDate": "Backups up to date",
       "needsAttention": "Needs attention",
+      "needsAttentionSection": "Needs attention",
+      "healthySection": "Healthy",
       "next24h": "Next 24 hours",
       "maintenanceNeeded": "Maintenance Needed",
       "allHealthy": "All systems healthy!",
@@ -314,7 +316,9 @@
     "storageDonut": {
       "archivesCount": "{{count}} archives",
       "noData": "No data",
-      "dedupRatio": "Dedup ratio"
+      "dedupRatio": "Dedup ratio",
+      "otherRepos_one": "Other ({{count}} repo)",
+      "otherRepos_other": "Other ({{count}} repos)"
     },
     "successDonut": {
       "label": "30-day success",
@@ -359,6 +363,7 @@
         "lastBackup": "Last backup",
         "schedules": "Schedules",
         "automations": "Automations",
+        "automationsCta": "Set up a schedule",
         "storage": "Storage"
       }
     },
