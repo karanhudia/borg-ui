@@ -13,7 +13,7 @@ The first browse of a large archive can still be slow because Borg has to list a
 There are two separate caches involved in normal Docker deployments:
 
 - Borg UI archive cache: Redis or the in-memory fallback used by archive browsing.
-- Borg files cache: Borg's own cache under `/home/borg/.cache/borg`, used by `borg create` to avoid reprocessing unchanged files during backups.
+- Borg files cache: Borg's own cache under the default `BORG_CACHE_DIR` (`/home/borg/.cache/borg`), used by `borg create` to avoid reprocessing unchanged files during backups.
 
 Redis does not make backup creation faster. If backup jobs are slow after a container pull or restart, troubleshoot the Borg files cache and source mounts first. See [Slow first backup after a pull or restart](troubleshooting#slow-first-backup-after-a-pull-or-restart).
 
