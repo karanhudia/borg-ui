@@ -1,9 +1,9 @@
 import { ReactNode } from 'react'
 import { Box, Tooltip } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import { Feature, FEATURES, PLAN_LABEL } from '../core/features'
-import { usePlan } from '../hooks/usePlan'
-import UpgradePrompt from './UpgradePrompt'
+import { Feature, FEATURES, PLAN_LABEL } from '../../core/features'
+import { usePlan } from '../../hooks/usePlan'
+import UpgradePrompt from '../UpgradePrompt'
 
 interface PlanGateProps {
   feature: Feature

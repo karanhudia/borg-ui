@@ -57,7 +57,7 @@ import DestinationSelect, {
   type DestinationOption,
 } from '../../../components/shared/DestinationSelect'
 import ManagedAgentSelect from '../../../components/shared/ManagedAgentSelect'
-import PathSelectorField from '../../../components/PathSelectorField'
+import PathSelectorField from '../../../components/shared/PathSelectorField'
 import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
 import SshConnectionSelect from '../../../components/shared/SshConnectionSelect'
 import {

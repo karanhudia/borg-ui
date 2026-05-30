@@ -18,7 +18,7 @@ import {
 } from '@mui/material'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
-import PlanGate from '../PlanGate'
+import PlanGate from '../shared/PlanGate'
 import { getDestinations, type DestinationKey } from './destinations'
 import SshConnectionSelect from '../shared/SshConnectionSelect'
 import ManagedAgentSelect from '../shared/ManagedAgentSelect'
