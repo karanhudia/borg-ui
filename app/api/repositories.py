@@ -107,6 +107,7 @@ V2_ONLY_ENCRYPTION_MODES = {
 }
 
 AGENT_RCLONE_SYNC_CAPABILITY = "repository.rclone_sync"
+AGENT_REPOSITORY_INIT_CAPABILITY = "repository.init"
 DIRECT_RCLONE_STORAGE_BACKEND = "rclone_direct"
 
 # Initialize Borg interface
@@ -1645,6 +1646,8 @@ async def _create_agent_repository_record(
     cloud_mirror_remote = _validate_cloud_mirror_payload(repo_data, db)
     await _preflight_cloud_mirror_path(repo_data, cloud_mirror_remote)
     agent = _validate_agent_repository_payload(repo_data, db)
+    if not imported:
+        _require_agent_capability(agent, AGENT_REPOSITORY_INIT_CAPABILITY)
     if cloud_mirror_remote:
         _require_agent_capability(agent, AGENT_RCLONE_SYNC_CAPABILITY)
     repo_path = repo_data.path.strip()
@@ -1714,6 +1717,20 @@ async def _create_agent_repository_record(
     db.add(repository)
     db.commit()
     db.refresh(repository)
+
+    if not imported:
+        try:
+            agent_job = queue_agent_repository_operation_job(
+                db,
+                repository,
+                job_kind=AGENT_REPOSITORY_INIT_CAPABILITY,
+                operation={"encryption": repository.encryption},
+            )
+            await wait_for_agent_repository_operation_job(db, agent_job.id)
+        except HTTPException:
+            db.delete(repository)
+            db.commit()
+            raise
 
     if cloud_mirror_remote:
         storage = rclone_repository_service.build_mirror_storage(

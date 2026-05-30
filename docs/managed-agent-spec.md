@@ -367,7 +367,12 @@ Request:
   "borg_versions": [
     { "major": 1, "version": "1.2.8", "path": "/opt/homebrew/bin/borg" }
   ],
-  "capabilities": ["backup.create", "backup.cancel", "logs.stream"]
+  "capabilities": [
+    "backup.create",
+    "backup.cancel",
+    "repository.init",
+    "logs.stream"
+  ]
 }
 ```
 
@@ -400,7 +405,12 @@ Request:
   "borg_versions": [
     { "major": 1, "version": "1.2.8", "path": "/opt/homebrew/bin/borg" }
   ],
-  "capabilities": ["backup.create", "backup.cancel", "logs.stream"],
+  "capabilities": [
+    "backup.create",
+    "backup.cancel",
+    "repository.init",
+    "logs.stream"
+  ],
   "running_job_ids": [12]
 }
 ```

@@ -1663,7 +1663,7 @@ def test_create_agent_repository_with_cloud_mirror_records_agent_owned_strategy(
         token_hash=get_password_hash("borgui_agent_secret"),
         token_prefix="borgui_agent_secret"[:20],
         status="online",
-        capabilities=["repository.rclone_sync"],
+        capabilities=["repository.init", "repository.rclone_sync"],
     )
     test_db.add_all([remote, agent])
     test_db.commit()
@@ -1672,6 +1672,10 @@ def test_create_agent_repository_with_cloud_mirror_records_agent_owned_strategy(
     monkeypatch.setattr(
         "app.services.rclone_repository_service.rclone_service.lsjson",
         AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        "app.api.repositories.wait_for_agent_repository_operation_job",
+        AsyncMock(return_value={"status": "completed"}),
     )
 
     response = test_client.post(
@@ -1735,7 +1739,7 @@ def test_create_agent_repository_cloud_mirror_rejects_client_cache_path(
         token_hash=get_password_hash("borgui_agent_secret"),
         token_prefix="borgui_agent_secret"[:20],
         status="online",
-        capabilities=["repository.rclone_sync"],
+        capabilities=["repository.init", "repository.rclone_sync"],
     )
     test_db.add_all([remote, agent])
     test_db.commit()
@@ -1778,7 +1782,7 @@ def test_create_agent_repository_cloud_mirror_requires_agent_sync_capability(
         token_hash=get_password_hash("borgui_agent_secret"),
         token_prefix="borgui_agent_secret"[:20],
         status="online",
-        capabilities=["repository.info"],
+        capabilities=["repository.init"],
     )
     test_db.add_all([remote, agent])
     test_db.commit()
@@ -1902,7 +1906,7 @@ async def test_update_mirrored_agent_repository_requires_new_agent_sync_capabili
         token_hash=get_password_hash("borgui_agent_secret"),
         token_prefix="borgui_agent_secret"[:20],
         status="online",
-        capabilities=["repository.rclone_sync"],
+        capabilities=["repository.init", "repository.rclone_sync"],
     )
     replacement_agent = AgentMachine(
         name="Info Agent",
@@ -1910,7 +1914,7 @@ async def test_update_mirrored_agent_repository_requires_new_agent_sync_capabili
         token_hash=get_password_hash("borgui_agent_secret"),
         token_prefix="borgui_agent_secret"[:20],
         status="online",
-        capabilities=["repository.info"],
+        capabilities=["repository.init"],
     )
     test_db.add_all([remote, original_agent, replacement_agent])
     test_db.commit()
@@ -1976,7 +1980,7 @@ def test_create_agent_repository_cloud_mirror_first_sync_failure_preserves_repos
         token_hash=get_password_hash("borgui_agent_secret"),
         token_prefix="borgui_agent_secret"[:20],
         status="online",
-        capabilities=["repository.rclone_sync"],
+        capabilities=["repository.init", "repository.rclone_sync"],
     )
     test_db.add_all([remote, agent])
     test_db.commit()
@@ -1985,6 +1989,10 @@ def test_create_agent_repository_cloud_mirror_first_sync_failure_preserves_repos
     monkeypatch.setattr(
         "app.services.rclone_repository_service.rclone_service.lsjson",
         AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        "app.api.repositories.wait_for_agent_repository_operation_job",
+        AsyncMock(return_value={"status": "completed"}),
     )
 
     def fake_queue(db, repository, *, job_kind, operation=None, **_kwargs):
@@ -2055,7 +2063,7 @@ def test_update_agent_repository_cloud_mirror_preflight_failure_rolls_back_stora
         token_hash=get_password_hash("borgui_agent_secret"),
         token_prefix="borgui_agent_secret"[:20],
         status="online",
-        capabilities=["repository.rclone_sync"],
+        capabilities=["repository.init", "repository.rclone_sync"],
     )
     test_db.add_all([remote, agent])
     test_db.commit()
@@ -2064,6 +2072,10 @@ def test_update_agent_repository_cloud_mirror_preflight_failure_rolls_back_stora
     monkeypatch.setattr(
         "app.services.rclone_repository_service.rclone_service.lsjson",
         AsyncMock(return_value=[]),
+    )
+    monkeypatch.setattr(
+        "app.api.repositories.wait_for_agent_repository_operation_job",
+        AsyncMock(return_value={"status": "completed"}),
     )
 
     create_response = test_client.post(

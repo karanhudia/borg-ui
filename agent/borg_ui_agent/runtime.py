@@ -23,6 +23,7 @@ DEFAULT_CAPABILITIES = [
     "backup.create",
     "backup.cancel",
     "filesystem.browse",
+    "repository.init",
     "repository.info",
     "repository.list_archives",
     "repository.check",
@@ -34,6 +35,7 @@ DEFAULT_CAPABILITIES = [
 JOB_HANDLERS = {
     "backup.create": execute_backup_create_job,
     "filesystem.browse": execute_filesystem_browse_job,
+    "repository.init": execute_repository_operation_job,
     "repository.info": execute_repository_operation_job,
     "repository.list_archives": execute_repository_operation_job,
     "repository.check": execute_repository_operation_job,
