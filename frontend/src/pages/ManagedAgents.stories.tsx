@@ -13,6 +13,7 @@ import { buildAgentInstallCommand } from './managed-agents/agentInstallCommandTe
 import {
   AgentDeleteConfirmationDialog,
   AgentList,
+  AgentReinstallDialog,
   AgentSessionLogsDialog,
   AgentSetupGuide,
   AgentSetupHelpContent,
@@ -226,6 +227,8 @@ export const FleetOverview: Story = {
           </Typography>
           <AgentList
             agents={agents}
+            serverUrl="https://borg-ui.example.com"
+            onCopy={() => {}}
             onRevoke={() => {}}
             onDelete={() => {}}
             onViewLogs={() => {}}
@@ -393,6 +396,20 @@ export const DeleteConfirmation: Story = {
         isDeleting={false}
         onCancel={() => {}}
         onConfirm={() => {}}
+      />
+    </Box>
+  ),
+}
+
+export const AgentReinstallDialogOpen: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AgentReinstallDialog
+        open
+        agent={agents[0]}
+        serverUrl="https://borg-ui.example.com"
+        onCancel={() => {}}
+        onCopy={() => {}}
       />
     </Box>
   ),

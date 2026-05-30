@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import ManagedAgents, {
   AgentList,
@@ -17,6 +17,7 @@ import {
   settingsAPI,
 } from '../../services/api'
 import type { AxiosResponse } from 'axios'
+import { buildAgentReinstallCommand } from '../managed-agents/agentInstallCommandText'
 
 vi.mock('../../services/api', () => ({
   settingsAPI: {
@@ -283,6 +284,8 @@ describe('ManagedAgents', () => {
     renderWithProviders(
       <AgentList
         agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
         onRevoke={onRevoke}
         onDelete={onDelete}
         onViewLogs={vi.fn()}
@@ -300,6 +303,74 @@ describe('ManagedAgents', () => {
     await user.click(screen.getByRole('button', { name: /revoke agent/i }))
     expect(onRevoke).toHaveBeenCalledWith(agent)
   })
+
+  it('builds a tokenless reinstall command for existing agents', () => {
+    const command = buildAgentReinstallCommand('https://borg-ui.example.com')
+
+    expect(command).toBe(
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall'
+    )
+    expect(command).not.toContain('--token')
+    expect(command).not.toContain('<enrollment-token>')
+    expect(command).not.toContain('--name')
+    expect(command).not.toContain(' register ')
+  })
+
+  it('opens a tokenless reinstall script from an agent card', async () => {
+    const user = userEvent.setup()
+    const onCopy = vi.fn()
+    const agent = {
+      id: 7,
+      agent_id: 'agent-client-7',
+      name: 'client',
+      hostname: 'client-01',
+      status: 'online',
+      os: 'linux',
+      arch: 'arm64',
+      agent_version: '0.4.0',
+      last_seen_at: '2026-05-18T10:00:00.000Z',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+
+    renderWithProviders(
+      <AgentList
+        agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={onCopy}
+        onRevoke={vi.fn()}
+        onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
+        isRevoking={false}
+        isDeleting={false}
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: /reinstall agent/i }))
+
+    const dialog = screen.getByRole('dialog', { name: /reinstall agent/i })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText(/client-01/i)).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(/No enrollment token or registration step is required/i)
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByText((content) =>
+        [
+          'curl -fsSL https://borg-ui.example.com/agent/install.sh',
+          '--reinstall',
+        ].every((part) => content.includes(part))
+      )
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/--token/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/<enrollment-token>/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('Copy reinstall command'))
+
+    expect(onCopy).toHaveBeenCalledWith(
+      'curl -fsSL https://borg-ui.example.com/agent/install.sh | sudo bash -s -- --reinstall'
+    )
+  }, 60000)
 
   it('opens recent agent session logs from an agent card', async () => {
     const user = userEvent.setup()
@@ -357,6 +428,8 @@ describe('ManagedAgents', () => {
     renderWithProviders(
       <AgentList
         agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
         onRevoke={vi.fn()}
         onDelete={vi.fn()}
         onViewLogs={vi.fn()}
@@ -384,6 +457,8 @@ describe('ManagedAgents', () => {
     renderWithProviders(
       <AgentList
         agents={[agent]}
+        serverUrl="https://borg-ui.example.com"
+        onCopy={vi.fn()}
         onRevoke={vi.fn()}
         onDelete={onDelete}
         onViewLogs={vi.fn()}

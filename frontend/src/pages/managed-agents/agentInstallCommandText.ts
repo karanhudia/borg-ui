@@ -34,3 +34,9 @@ export function buildAgentInstallCommand(
     borgInstallArgs(borgInstallMode),
   ].join(' ')
 }
+
+export function buildAgentReinstallCommand(serverUrl: string) {
+  return [`curl -fsSL ${serverUrl}/agent/install.sh`, '| sudo bash -s --', '--reinstall'].join(
+    ' '
+  )
+}

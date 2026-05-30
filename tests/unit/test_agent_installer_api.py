@@ -27,6 +27,29 @@ def test_agent_installer_script_supports_borg_install_modes(test_client: TestCli
     assert 'verify_borg_major "borg2" "2"' in response.text
 
 
+def test_agent_installer_script_supports_tokenless_reinstall_mode(
+    test_client: TestClient,
+):
+    response = test_client.get("/agent/install.sh")
+
+    assert "--reinstall" in response.text
+    assert 'REINSTALL="0"' in response.text
+    assert "Reinstall mode requires an existing /etc/borg-ui-agent/config.toml" in (
+        response.text
+    )
+    assert "Preserving existing agent registration" in response.text
+    assert "Skipping Borg installation by default for reinstall mode." in response.text
+
+    reinstall_register_branch = response.text.split(
+        'if [[ "${REINSTALL}" == "1" ]]; then\n'
+        '  echo "Preserving existing agent registration',
+        1,
+    )[1].split("else", 1)[0]
+    assert " register " not in reinstall_register_branch
+    assert '--token "${TOKEN}"' not in reinstall_register_branch
+    assert '--name "${AGENT_NAME}"' not in reinstall_register_branch
+
+
 def test_agent_installer_script_allows_borg2_prereleases(test_client: TestClient):
     response = test_client.get("/agent/install.sh")
 
