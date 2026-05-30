@@ -49,6 +49,7 @@ interface WizardStepCloudMirrorProps {
   rcloneStatus?: RcloneStatus | null
   eligible: boolean
   primaryLocation?: 'local' | 'ssh' | 'agent'
+  storageMode?: 'mirror' | 'cachedRepository'
   onChange: (data: Partial<CloudMirrorStepData>) => void
   onAddRcloneRemote?: () => void
   onBrowseRemotePath?: () => void
@@ -60,20 +61,29 @@ export default function WizardStepCloudMirror({
   rcloneStatus = null,
   eligible,
   primaryLocation = 'local',
+  storageMode = 'mirror',
   onChange,
   onAddRcloneRemote,
   onBrowseRemotePath,
 }: WizardStepCloudMirrorProps) {
   const { t } = useTranslation()
   const isRcloneAvailable = rcloneStatus?.available === true
+  const isCachedRepositoryMode = storageMode === 'cachedRepository'
   const controlsDisabled = !eligible || !isRcloneAvailable
   const ineligibleMessage = t('wizard.cloudMirror.unsupportedPrimary')
-  const routePreview =
-    primaryLocation === 'agent'
+  const routePreview = isCachedRepositoryMode
+    ? t('wizard.cloudMirror.cachedRepositoryRoutePreview')
+    : primaryLocation === 'agent'
       ? t('wizard.cloudMirror.agentRoutePreview')
       : primaryLocation === 'ssh'
         ? t('wizard.cloudMirror.sshRoutePreview')
         : t('wizard.cloudMirror.routePreview')
+  const enableLabel = isCachedRepositoryMode
+    ? t('wizard.cloudMirror.cachedRepositoryLabel')
+    : t('wizard.cloudMirror.enableLabel')
+  const enableHelper = isCachedRepositoryMode
+    ? t('wizard.cloudMirror.cachedRepositoryHelper')
+    : t('wizard.cloudMirror.enableHelper')
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.25 }}>
@@ -81,8 +91,9 @@ export default function WizardStepCloudMirror({
         control={
           <Checkbox
             checked={data.cloudMirrorEnabled}
-            disabled={!eligible}
+            disabled={!eligible || isCachedRepositoryMode}
             onChange={(event) => {
+              if (isCachedRepositoryMode) return
               onChange({
                 cloudMirrorEnabled: event.target.checked,
                 rcloneRemotePathVerified: false,
@@ -93,10 +104,10 @@ export default function WizardStepCloudMirror({
         label={
           <Box>
             <Typography variant="body2" fontWeight={600}>
-              {t('wizard.cloudMirror.enableLabel')}
+              {enableLabel}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {t('wizard.cloudMirror.enableHelper')}
+              {enableHelper}
             </Typography>
           </Box>
         }

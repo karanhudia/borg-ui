@@ -3618,6 +3618,60 @@ def test_update_rclone_repository_storage_fields(
 
 
 @pytest.mark.unit
+def test_update_cached_rclone_repository_rolls_back_unsupported_storage_conversion(
+    test_client: TestClient, admin_headers, test_db
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(
+        name="Cached Rclone Repo",
+        path="/cache/repositories/1",
+        encryption="none",
+        compression="lz4",
+        repository_type="rclone",
+        borg_version=1,
+    )
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path="/cache/repositories/1",
+        sync_policy="manual",
+        sync_status="current",
+        extra_flags=["--fast-list"],
+    )
+    test_db.add(storage)
+    test_db.commit()
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "name": "Should Roll Back",
+            "storage_backend": "local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app-renamed",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["key"] == "backend.errors.rclone.updateUnsupported"
+    test_db.refresh(repository)
+    test_db.refresh(storage)
+    assert repository.name == "Cached Rclone Repo"
+    assert repository.repository_type == "rclone"
+    assert storage.rclone_remote_id == remote.id
+    assert storage.rclone_remote_path == "borg-ui/repositories/app"
+    assert storage.sync_policy == "manual"
+    assert storage.extra_flags == ["--fast-list"]
+
+
+@pytest.mark.unit
 def test_update_local_repository_enables_cloud_mirror_with_default_policy(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):

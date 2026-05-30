@@ -135,3 +135,24 @@ export const ManagedAgentPrimaryEnabled: Story = {
     </Box>
   ),
 }
+
+export const CachedRcloneRepository: Story = {
+  args: {
+    ...baseArgs,
+    storageMode: 'cachedRepository',
+    data: {
+      ...baseArgs.data,
+      cloudMirrorEnabled: true,
+      rcloneRemoteId: 4,
+      rcloneRemotePath: 'borg-ui/cached-primary',
+      rcloneRemotePathVerified: true,
+      rcloneSyncPolicy: 'manual',
+      rcloneExtraFlags: '--fast-list',
+    },
+  },
+  render: (args) => (
+    <Box sx={{ width: 720, maxWidth: 'calc(100vw - 32px)' }}>
+      <WizardStepCloudMirror {...args} />
+    </Box>
+  ),
+}

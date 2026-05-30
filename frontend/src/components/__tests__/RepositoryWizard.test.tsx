@@ -213,10 +213,21 @@ const fillLocalLocation = async (name = 'Test Repo', path = '/backups/test') => 
   setInputValue(screen.getByLabelText(/Repository Path/i), path)
 }
 
-const chooseRemoteRepository = async (user: ReturnType<typeof userEvent.setup>) => {
-  const remoteCard = screen.getByText('Remote Client').closest('button')
-  await user.click(remoteCard!)
+const openDestinationSelect = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await screen.findByRole('combobox', { name: /Where should backups be stored/i }))
+  return screen.findByRole('listbox')
+}
 
+const selectRepositoryDestination = async (
+  user: ReturnType<typeof userEvent.setup>,
+  destinationName: RegExp
+) => {
+  const listbox = await openDestinationSelect(user)
+  await user.click(within(listbox).getByRole('option', { name: destinationName }))
+}
+
+const chooseRemoteRepository = async (user: ReturnType<typeof userEvent.setup>) => {
+  await selectRepositoryDestination(user, /Remote Client/i)
   await waitFor(() => {
     expect(screen.getAllByText('Select SSH Connection').length).toBeGreaterThanOrEqual(1)
   })
@@ -226,6 +237,17 @@ const chooseRemoteRepository = async (user: ReturnType<typeof userEvent.setup>) 
   await user.click(selectButton!)
   const listbox = await screen.findByRole('listbox')
   await user.click(within(listbox).getByText(/server1.example.com/i))
+}
+
+const selectManagedAgentMachine = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await screen.findByRole('combobox', { name: /Managed Agent/i }))
+  const agentListbox = await screen.findByRole('listbox')
+  await user.click(within(agentListbox).getByText('workstation.local'))
+}
+
+const chooseManagedAgentRepository = async (user: ReturnType<typeof userEvent.setup>) => {
+  await selectRepositoryDestination(user, /Managed Agent/i)
+  await selectManagedAgentMachine(user)
 }
 
 const advanceCreateToSecurity = async (user: ReturnType<typeof userEvent.setup>) => {
@@ -355,8 +377,7 @@ describe('RepositoryWizard', () => {
       renderWizard('create')
       await fillLocalLocation()
 
-      const remoteCard = screen.getByText('Remote Client').closest('button')
-      await user.click(remoteCard!)
+      await selectRepositoryDestination(user, /Remote Client/i)
 
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
     })
@@ -501,13 +522,11 @@ describe('RepositoryWizard', () => {
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-repo')
 
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await selectRepositoryDestination(user, /Managed Agent/i)
 
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
 
-      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
-      const agentListbox = await screen.findByRole('listbox')
-      await user.click(within(agentListbox).getByText('workstation.local'))
+      await selectManagedAgentMachine(user)
 
       expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
       await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -713,10 +732,7 @@ describe('RepositoryWizard', () => {
       await waitForLocationStep()
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Cloud Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-cloud-repo')
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
-      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
-      const agentListbox = await screen.findByRole('listbox')
-      await user.click(within(agentListbox).getByText('workstation.local'))
+      await chooseManagedAgentRepository(user)
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
@@ -895,10 +911,7 @@ describe('RepositoryWizard', () => {
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Browse Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg')
 
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
-      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
-      const agentListbox = await screen.findByRole('listbox')
-      await user.click(within(agentListbox).getByText('workstation.local'))
+      await chooseManagedAgentRepository(user)
 
       const browseButton = screen.getByTitle('Browse filesystem')
       expect(browseButton).not.toBeDisabled()
@@ -929,12 +942,8 @@ describe('RepositoryWizard', () => {
       await user.clear(pathInput)
       setInputValue(pathInput, '/backups/pi')
 
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
-      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
-      const agentListbox = await screen.findByRole('listbox')
-      await user.click(within(agentListbox).getByText('workstation.local'))
+      await chooseManagedAgentRepository(user)
 
-      expect(screen.getByRole('button', { name: /Remote Client/i })).not.toBeDisabled()
       expect(screen.queryByText('Select SSH Connection')).not.toBeInTheDocument()
       expect(
         screen.getByText(/Backups will be stored on the selected agent's filesystem/i)
@@ -1171,6 +1180,80 @@ describe('RepositoryWizard', () => {
       expect(screen.queryByText('Cloud Mirror')).not.toBeInTheDocument()
     })
 
+    it('keeps cached rclone repository edits in rclone storage mode', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', {
+        id: 9,
+        name: 'Cached Cloud Repo',
+        path: '/var/lib/borg-ui/rclone-cache/repositories/9',
+        mode: 'full',
+        repository_type: 'rclone',
+        storage_backend: 'rclone',
+        borg_version: 1,
+        encryption: 'repokey',
+        compression: 'lz4',
+        source_directories: [],
+        exclude_patterns: [],
+        rclone_storage: {
+          repository_id: 9,
+          backend: 'rclone',
+          rclone_remote_id: 10,
+          rclone_remote_name: 'prod-s3',
+          rclone_remote_path: 'borg-ui/repositories/app',
+          rclone_target: 'prod-s3:borg-ui/repositories/app',
+          cache_path: '/var/lib/borg-ui/rclone-cache/repositories/9',
+          cache_present: true,
+          sync_policy: 'manual',
+          sync_direction: 'cache_to_remote',
+          sync_status: 'current',
+          sync_cron_expression: null,
+          sync_timezone: 'UTC',
+          extra_flags: ['--fast-list'],
+        },
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Cached Cloud Repo')
+      })
+
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Cached Cloud Repo Updated')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Managed rclone storage')).toBeInTheDocument()
+      })
+      const managedRcloneCheckbox = screen.getByRole('checkbox', {
+        name: /Managed rclone storage/i,
+      })
+      expect(managedRcloneCheckbox).toBeChecked()
+      expect(managedRcloneCheckbox).toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText(/Encryption settings cannot be changed/i)).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Cached Cloud Repo Updated',
+            storage_backend: 'rclone',
+            cloud_mirror_enabled: true,
+            rclone_remote_id: 10,
+            rclone_remote_path: 'borg-ui/repositories/app',
+            rclone_sync_policy: 'manual',
+            rclone_extra_flags: ['--fast-list'],
+          }),
+          null
+        )
+      })
+    })
+
     it('allows edit workflow without re-entering the passphrase', async () => {
       const user = userEvent.setup()
       renderWizard('edit', legacyRepository)
@@ -1219,10 +1302,7 @@ describe('RepositoryWizard', () => {
       const user = userEvent.setup()
       renderWizard('create')
 
-      await waitFor(() => {
-        expect(screen.getByText('Remote Client')).toBeInTheDocument()
-      })
-      await user.click(screen.getByText('Remote Client').closest('button')!)
+      await selectRepositoryDestination(user, /Remote Client/i)
 
       await waitFor(() => {
         expect(screen.getByText(/No SSH connections configured/i)).toBeInTheDocument()

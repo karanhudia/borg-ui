@@ -92,8 +92,7 @@ function startStaticServer(rootDir) {
       }
 
       response.writeHead(200, {
-        'Cache-Control': 'no-store',
-        Connection: 'close',
+        'Cache-Control': 'public, max-age=3600',
         'Content-Length': fileStat.size,
         'Content-Type': getContentType(filePath),
       })
@@ -191,55 +190,65 @@ async function captureStorySnapshots(stories, baseUrl) {
     )
   }
 
-  for (const story of stories) {
-    const outputPath = path.join(snapshotsDir, `${story.id}.png`)
-    let lastError
+  const browser = await chromium.launch({ channel: 'chromium' })
+  const context = await browser.newContext({
+    deviceScaleFactor: 1,
+    locale: 'en-US',
+    timezoneId: 'UTC',
+    viewport: { width: 720, height: 520 },
+  })
 
-    for (let attempt = 1; attempt <= 5; attempt += 1) {
-      const browser = await chromium.launch({ channel: 'chromium' })
-      const context = await browser.newContext({
-        deviceScaleFactor: 1,
-        locale: 'en-US',
-        timezoneId: 'UTC',
-        viewport: { width: 720, height: 520 },
-      })
-      const page = await context.newPage()
+  try {
+    for (const story of stories) {
+      const outputPath = path.join(snapshotsDir, `${story.id}.png`)
+      let lastError
 
-      try {
-        await withFixedDate(page)
-        await page.goto(`${baseUrl}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`, {
-          waitUntil: 'networkidle',
-        })
-        await waitForStoryRoot(page)
-        await page.addStyleTag({
-          content: `
-            *, *::before, *::after {
-              animation: none !important;
-              caret-color: transparent !important;
-              transition-duration: 0s !important;
-              transition-property: none !important;
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        const page = await context.newPage()
+
+        try {
+          await withFixedDate(page)
+          await page.goto(
+            `${baseUrl}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`,
+            {
+              waitUntil: 'domcontentloaded',
             }
-          `,
-        })
-        const snapshotBuffer = await page.locator(storyRootSelector).screenshot()
-        const result = await writeSnapshotIfChanged(outputPath, snapshotBuffer)
-        console.log(`${result.changed ? 'Wrote' : 'Kept'} ${path.relative(frontendRoot, outputPath)}`)
-        lastError = undefined
-        break
-      } catch (error) {
-        lastError = error
-        if (attempt < 5) {
-          console.warn(`Retrying ${story.id} snapshot after load failure (${attempt}/5)`)
+          )
+          await waitForStoryRoot(page)
+          await page.addStyleTag({
+            content: `
+              *, *::before, *::after {
+                animation: none !important;
+                caret-color: transparent !important;
+                transition-duration: 0s !important;
+                transition-property: none !important;
+              }
+            `,
+          })
+          const snapshotBuffer = await page.locator(storyRootSelector).screenshot()
+          const result = await writeSnapshotIfChanged(outputPath, snapshotBuffer)
+          console.log(
+            `${result.changed ? 'Wrote' : 'Kept'} ${path.relative(frontendRoot, outputPath)}`
+          )
+          lastError = undefined
+          break
+        } catch (error) {
+          lastError = error
+          if (attempt < 5) {
+            console.warn(`Retrying ${story.id} snapshot after load failure (${attempt}/5)`)
+          }
+        } finally {
+          await page.close().catch(() => {})
         }
-      } finally {
-        await context.close().catch(() => {})
-        await browser.close().catch(() => {})
+      }
+
+      if (lastError) {
+        throw lastError
       }
     }
-
-    if (lastError) {
-      throw lastError
-    }
+  } finally {
+    await context.close().catch(() => {})
+    await browser.close().catch(() => {})
   }
 }
 
