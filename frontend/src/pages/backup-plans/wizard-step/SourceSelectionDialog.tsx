@@ -52,7 +52,7 @@ import { SiMariadb, SiMongodb, SiMysql, SiPostgresql, SiRedis, SiSqlite } from '
 import type { IconType } from 'react-icons'
 import type { TFunction } from 'i18next'
 
-import CodeEditor from '../../../components/CodeEditor'
+import CodeEditor from '../../../components/shared/CodeEditor'
 import DestinationSelect, {
   type DestinationOption,
 } from '../../../components/shared/DestinationSelect'

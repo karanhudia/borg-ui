@@ -31,7 +31,7 @@ import {
   RefreshCcw,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import CodeEditor from '../CodeEditor'
+import CodeEditor from '../shared/CodeEditor'
 import ResponsiveDialog from '../shared/ResponsiveDialog'
 import type {
   RcloneOAuthCredentialUpdate,

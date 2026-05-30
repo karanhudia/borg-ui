@@ -49,7 +49,7 @@ vi.mock('../CommandPreview', () => ({
   default: () => <div data-testid="command-preview">Command Preview</div>,
 }))
 
-vi.mock('../CodeEditor', () => ({
+vi.mock('../shared/CodeEditor', () => ({
   default: ({
     label,
     value,

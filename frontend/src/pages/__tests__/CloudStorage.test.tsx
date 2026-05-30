@@ -39,7 +39,7 @@ vi.mock('react-hot-toast', async () => {
   }
 })
 
-vi.mock('../../components/CodeEditor', () => ({
+vi.mock('../../components/shared/CodeEditor', () => ({
   default: ({
     label,
     value,

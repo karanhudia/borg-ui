@@ -55,7 +55,7 @@ vi.mock('../../../components/ExcludePatternInput', () => ({
   default: () => <div data-testid="exclude-patterns">Exclude patterns</div>,
 }))
 
-vi.mock('../../../components/CodeEditor', () => ({
+vi.mock('../../../components/shared/CodeEditor', () => ({
   default: ({
     label,
     value,
