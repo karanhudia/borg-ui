@@ -291,7 +291,9 @@
         "freshness": "AKTUELL",
         "archives": "ARCHIVE"
       },
-      "archiveCountShort": "{{count}} Arx"
+      "archiveCountShort": "{{count}} Arx",
+      "planCount_one": "{{count}} Plan",
+      "planCount_other": "{{count}} Pläne"
     },
     "noRepositories": "Noch keine Repositories konfiguriert. Erstelle dein erstes Repository, um mit der Sicherung zu beginnen!",
     "noRepositoriesShort": "Keine Repositories",

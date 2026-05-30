@@ -291,7 +291,9 @@
         "freshness": "FRESH",
         "archives": "ARCHIVES"
       },
-      "archiveCountShort": "{{count}} arx"
+      "archiveCountShort": "{{count}} arx",
+      "planCount_one": "{{count}} plan",
+      "planCount_other": "{{count}} plans"
     },
     "noRepositories": "No repositories configured yet. Create your first repository to start backing up!",
     "noRepositoriesShort": "No repositories",

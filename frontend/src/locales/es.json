@@ -291,7 +291,9 @@
         "freshness": "VIGENCIA",
         "archives": "ARCHIVOS"
       },
-      "archiveCountShort": "{{count}} arx"
+      "archiveCountShort": "{{count}} arx",
+      "planCount_one": "{{count}} plan",
+      "planCount_other": "{{count}} planes"
     },
     "noRepositories": "No hay repositorios configurados. ¡Crea tu primer repositorio para empezar a hacer copias de seguridad!",
     "noRepositoriesShort": "Sin repositorios",

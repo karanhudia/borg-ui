@@ -291,7 +291,9 @@
         "freshness": "RECENTE",
         "archives": "ARCHIVI"
       },
-      "archiveCountShort": "{{count}} arx"
+      "archiveCountShort": "{{count}} arx",
+      "planCount_one": "{{count}} piano",
+      "planCount_other": "{{count}} piani"
     },
     "noRepositories": "Nessun repository configurato. Crea il tuo primo repository per iniziare a fare backup!",
     "noRepositoriesShort": "Nessun repository",

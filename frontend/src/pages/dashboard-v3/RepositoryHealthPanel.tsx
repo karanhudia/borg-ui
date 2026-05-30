@@ -92,7 +92,12 @@ export function RepositoryHealthPanel({
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2,1fr)', lg: 'repeat(3,1fr)' },
+          // Auto-fit with a 300px floor lets cards reflow from 1 column (narrow viewports)
+          // up to 4+ columns on wide screens without a hard breakpoint cap. The 300px
+          // floor is sized for the worst-case DE top row (TYPE chip + "Nur Beobachtung"
+          // observe chip + ScheduleBadge) plus padding, so the German build doesn't
+          // wrap the chip strip onto a second line.
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
           gap: 1.5,
         }}
       >
@@ -205,9 +210,9 @@ export function RepositoryHealthPanel({
                   sx={{ mb: 0.75, minWidth: 0 }}
                 >
                   <Chip
-                    label={`${repo.backup_plan_count} ${
-                      repo.backup_plan_count === 1 ? 'plan' : 'plans'
-                    }`}
+                    label={t('dashboard.repositoryHealth.planCount', {
+                      count: repo.backup_plan_count,
+                    })}
                     size="small"
                     sx={{
                       height: 20,
