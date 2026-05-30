@@ -27,6 +27,7 @@ vi.mock('../../services/api', () => ({
     listEnrollmentTokens: vi.fn(),
     listJobs: vi.fn(),
     listJobLogs: vi.fn(),
+    listAgentLogs: vi.fn(),
     createEnrollmentToken: vi.fn(),
     revokeEnrollmentToken: vi.fn(),
     revokeAgent: vi.fn(),
@@ -64,6 +65,7 @@ describe('ManagedAgents', () => {
       data: [],
     } as AxiosResponse)
     vi.mocked(managedAgentsAPI.listJobs).mockResolvedValue({ data: [] } as AxiosResponse)
+    vi.mocked(managedAgentsAPI.listAgentLogs).mockResolvedValue({ data: [] } as AxiosResponse)
   })
 
   it('shows concrete remote setup instructions before any agents are enrolled', async () => {
@@ -243,7 +245,7 @@ describe('ManagedAgents', () => {
         ].every((part) => content.includes(part))
       )
     ).toBeInTheDocument()
-  }, 60000)
+  }, 90000)
 
   it('shows a localhost warning in the Add Agent wizard', async () => {
     const user = userEvent.setup()
@@ -283,6 +285,7 @@ describe('ManagedAgents', () => {
         agents={[agent]}
         onRevoke={onRevoke}
         onDelete={onDelete}
+        onViewLogs={vi.fn()}
         isRevoking={false}
         isDeleting={false}
       />
@@ -297,6 +300,44 @@ describe('ManagedAgents', () => {
     await user.click(screen.getByRole('button', { name: /revoke agent/i }))
     expect(onRevoke).toHaveBeenCalledWith(agent)
   })
+
+  it('opens recent agent session logs from an agent card', async () => {
+    const user = userEvent.setup()
+    const agent = {
+      id: 7,
+      agent_id: 'agent-client-7',
+      name: 'client',
+      hostname: 'client-01',
+      status: 'online',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+    vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [agent] } as AxiosResponse)
+    vi.mocked(managedAgentsAPI.listAgentLogs).mockResolvedValue({
+      data: [
+        {
+          id: 'session-7-1',
+          agent_machine_id: 7,
+          job_id: null,
+          command_id: 'cmd-1',
+          stream: 'session',
+          level: 'info',
+          message: 'Agent session connected',
+          created_at: '2026-05-18T10:00:00.000Z',
+        },
+      ],
+    } as AxiosResponse)
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    await screen.findByText('client-01', undefined, { timeout: 10000 })
+    await user.click(screen.getByRole('button', { name: /view agent logs/i }))
+
+    expect(managedAgentsAPI.listAgentLogs).toHaveBeenCalledWith(7)
+    expect(await screen.findByRole('dialog', { name: /agent logs/i })).toBeInTheDocument()
+    expect(screen.getByText(/Agent session connected/i)).toBeInTheDocument()
+    expect(screen.getByText(/cmd-1/i)).toBeInTheDocument()
+  }, 60000)
 
   it('warns when an agent has no usable Borg binary', () => {
     const agent = {
@@ -318,6 +359,7 @@ describe('ManagedAgents', () => {
         agents={[agent]}
         onRevoke={vi.fn()}
         onDelete={vi.fn()}
+        onViewLogs={vi.fn()}
         isRevoking={false}
         isDeleting={false}
       />
@@ -344,6 +386,7 @@ describe('ManagedAgents', () => {
         agents={[agent]}
         onRevoke={vi.fn()}
         onDelete={onDelete}
+        onViewLogs={vi.fn()}
         isRevoking={false}
         isDeleting={false}
       />

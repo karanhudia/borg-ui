@@ -16,6 +16,7 @@ from agent.borg_ui_agent.repository_ops import execute_repository_operation_job
 DEFAULT_REPOSITORY_OPERATION_HANDLER = execute_repository_operation_job
 
 DEFAULT_CAPABILITIES = [
+    "session.commands",
     "jobs.poll",
     "jobs.claim",
     "jobs.report",
@@ -117,15 +118,21 @@ class AgentRuntime:
         return RunOnceResult(job_id=job_id, status="failed", message=message)
 
     def run_forever(
-        self, *, poll_interval_seconds: int = 15, max_iterations: Optional[int] = None
+        self,
+        *,
+        poll_interval_seconds: int = 15,
+        max_iterations: Optional[int] = None,
+        initial_backoff_seconds: float = 1,
+        max_backoff_seconds: float = 60,
     ) -> None:
-        iterations = 0
-        while True:
-            self.run_once()
-            iterations += 1
-            if max_iterations is not None and iterations >= max_iterations:
-                return
-            time.sleep(poll_interval_seconds)
+        from agent.borg_ui_agent.session import AgentSessionRuntime
+
+        _ = poll_interval_seconds
+        AgentSessionRuntime(self.config).run_forever(
+            max_iterations=max_iterations,
+            initial_backoff_seconds=initial_backoff_seconds,
+            max_backoff_seconds=max_backoff_seconds,
+        )
 
     def _build_cancel_checker(self, job_id: int) -> Callable[[], bool]:
         last_checked_at = 0.0

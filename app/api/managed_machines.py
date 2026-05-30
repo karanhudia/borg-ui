@@ -18,7 +18,12 @@ from app.database.models import (
     AgentMachine,
     User,
 )
+from app.services.agent_job_dispatcher import (
+    dispatch_agent_cancel_if_connected,
+    dispatch_agent_job_best_effort,
+)
 from app.services.agent_filesystem_service import browse_agent_filesystem
+from app.services.agent_connection_manager import agent_connection_manager
 from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
@@ -121,6 +126,17 @@ class AgentJobLogEntryResponse(BaseModel):
     class Config:
         from_attributes = True
         json_encoders = {datetime: lambda v: serialize_datetime(v)}
+
+
+class AgentSessionLogEntryResponse(BaseModel):
+    id: str
+    agent_machine_id: int
+    job_id: Optional[int] = None
+    command_id: Optional[str] = None
+    stream: str
+    level: str
+    message: str
+    created_at: str
 
 
 class AgentBackupJobCreate(BaseModel):
@@ -356,6 +372,7 @@ async def create_agent_backup_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+    await dispatch_agent_job_best_effort(db, job, source="backup_job_create")
 
     logger.info(
         "Agent backup job queued",
@@ -381,6 +398,24 @@ async def browse_agent_machine_filesystem(
         include_hidden=include_hidden,
         timeout_seconds=AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS,
     )
+
+
+@router.get(
+    "/agents/{agent_machine_id}/logs",
+    response_model=list[AgentSessionLogEntryResponse],
+)
+async def list_agent_machine_logs(
+    agent_machine_id: int,
+    _: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"key": "backend.errors.agents.agentNotFound"},
+        )
+    return agent_connection_manager.list_logs(agent.id)
 
 
 @router.post(
@@ -492,6 +527,7 @@ async def request_agent_job_cancel(
     job.updated_at = _now_utc()
     db.commit()
     db.refresh(job)
+    await dispatch_agent_cancel_if_connected(job)
     logger.info(
         "Agent job cancellation requested",
         user=current_user.username,

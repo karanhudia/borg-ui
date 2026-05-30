@@ -5,6 +5,7 @@ import type {
   AgentEnrollmentTokenSummary,
   AgentJobResponse,
   AgentMachineResponse,
+  AgentSessionLogEntryResponse,
 } from '../services/api'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import AgentInstallCommand from './managed-agents/AgentInstallCommand'
@@ -12,6 +13,7 @@ import { buildAgentInstallCommand } from './managed-agents/agentInstallCommandTe
 import {
   AgentDeleteConfirmationDialog,
   AgentList,
+  AgentSessionLogsDialog,
   AgentSetupGuide,
   AgentSetupHelpContent,
   JobsTable,
@@ -115,6 +117,29 @@ const tokens: AgentEnrollmentTokenSummary[] = [
   },
 ]
 
+const agentLogs: AgentSessionLogEntryResponse[] = [
+  {
+    id: 'session-1',
+    agent_machine_id: 1,
+    job_id: null,
+    command_id: null,
+    stream: 'session',
+    level: 'info',
+    message: 'Agent session connected',
+    created_at: '2026-05-16T11:55:00.000Z',
+  },
+  {
+    id: 'session-2',
+    agent_machine_id: 1,
+    job_id: null,
+    command_id: 'cmd-browse-home',
+    stream: 'stdout',
+    level: 'info',
+    message: 'filesystem.browse completed for /home',
+    created_at: '2026-05-16T11:56:00.000Z',
+  },
+]
+
 const agentsById = new Map(agents.map((agent) => [agent.id, agent]))
 const exampleCommand = buildAgentInstallCommand(
   'https://borg-ui.example.com',
@@ -203,6 +228,7 @@ export const FleetOverview: Story = {
             agents={agents}
             onRevoke={() => {}}
             onDelete={() => {}}
+            onViewLogs={() => {}}
             isRevoking={false}
             isDeleting={false}
           />
@@ -367,6 +393,19 @@ export const DeleteConfirmation: Story = {
         isDeleting={false}
         onCancel={() => {}}
         onConfirm={() => {}}
+      />
+    </Box>
+  ),
+}
+
+export const AgentLogs: Story = {
+  render: () => (
+    <Box sx={{ p: 3, bgcolor: 'background.default', minHeight: '100vh' }}>
+      <AgentSessionLogsDialog
+        agent={agents[0]}
+        logs={agentLogs}
+        loading={false}
+        onClose={() => {}}
       />
     </Box>
   ),

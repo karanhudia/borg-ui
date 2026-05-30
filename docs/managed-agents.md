@@ -7,8 +7,9 @@ description: "Install and run Borg UI Agent on client machines"
 # Managed Agents
 
 Managed Agents let one Borg UI server coordinate backups on client machines.
-The client runs `borg-ui-agent`, polls Borg UI for work, runs Borg locally, and
-streams progress and logs back to the server.
+The client runs `borg-ui-agent`, keeps one authenticated outbound WebSocket
+session open to Borg UI, runs Borg locally, and streams progress and logs back
+to the server. The `once` command still uses the polling path for compatibility.
 
 This feature is currently behind the Managed CLI Agents beta switch.
 
@@ -42,8 +43,8 @@ installer requires root or sudo, installs system dependencies, creates the
 `service-check`, and enables the systemd service with
 `systemctl enable --now borg-ui-agent`.
 
-The machine appears in Managed Agents after registration and its first
-heartbeat. The wizard waits for that connection while the command is displayed.
+The machine appears in Managed Agents after registration and its first live
+session. The wizard waits for that connection while the command is displayed.
 
 ## Server URL and Localhost
 
@@ -71,6 +72,8 @@ you revoke access, delete it from the fleet list, or unregister it on the client
 - **Delete agent** removes the machine from active fleet lists. Existing job and
   log records remain readable. The local systemd service may still run on the
   client until you stop, remove, or unregister it there.
+- **View agent logs** opens recent session-level logs for that machine, including
+  connection, dispatch, and live command messages kept by the Borg UI process.
 
 ## Advanced Manual Setup
 
@@ -102,13 +105,13 @@ borg-ui-agent register \
   --name laptop
 ```
 
-Poll once:
+Poll once through the compatibility job-polling path:
 
 ```bash
 borg-ui-agent once
 ```
 
-Run continuously:
+Run continuously with the live WebSocket session and reconnect backoff:
 
 ```bash
 borg-ui-agent run

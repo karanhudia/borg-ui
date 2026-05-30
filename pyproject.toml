@@ -10,7 +10,7 @@ readme = "agent/README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-only" }
 authors = [{ name = "Borg UI" }]
-dependencies = ["requests>=2.31"]
+dependencies = ["requests>=2.31", "websocket-client>=1.8"]
 
 [project.scripts]
 borg-ui-agent = "agent.borg_ui_agent.cli:main"

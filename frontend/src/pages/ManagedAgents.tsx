@@ -45,6 +45,7 @@ import {
   AgentJobLogEntryResponse,
   AgentJobResponse,
   AgentMachineResponse,
+  AgentSessionLogEntryResponse,
   managedAgentsAPI,
   settingsAPI,
 } from '../services/api'
@@ -64,6 +65,7 @@ const EMPTY_AGENTS: AgentMachineResponse[] = []
 const EMPTY_TOKENS: AgentEnrollmentTokenSummary[] = []
 const EMPTY_JOBS: AgentJobResponse[] = []
 const EMPTY_LOGS: AgentJobLogEntryResponse[] = []
+const EMPTY_AGENT_LOGS: AgentSessionLogEntryResponse[] = []
 
 function formatDate(value?: string | null): string {
   if (!value) return 'Never'
@@ -127,6 +129,7 @@ export default function ManagedAgents() {
   const [activeTab, setActiveTab] = useState<PageTab>('agents')
   const [addAgentDialogOpen, setAddAgentDialogOpen] = useState(false)
   const [logsJob, setLogsJob] = useState<AgentJobResponse | null>(null)
+  const [logsAgent, setLogsAgent] = useState<AgentMachineResponse | null>(null)
   const defaultAgentServerUrl = useMemo(
     () => resolveAgentServerUrl(undefined, window.location.origin),
     []
@@ -171,10 +174,18 @@ export default function ManagedAgents() {
     refetchInterval: logsJob && !FINAL_JOB_STATUSES.has(logsJob.status) ? 2000 : false,
   })
 
+  const agentLogsQuery = useQuery({
+    queryKey: ['managed-agent-logs', logsAgent?.id],
+    queryFn: () => managedAgentsAPI.listAgentLogs(logsAgent!.id),
+    enabled: canUseManagedAgents && !!logsAgent,
+    refetchInterval: logsAgent?.status === 'online' ? 2000 : false,
+  })
+
   const agents = agentsQuery.data?.data ?? EMPTY_AGENTS
   const tokens = tokensQuery.data?.data ?? EMPTY_TOKENS
   const jobs = jobsQuery.data?.data ?? EMPTY_JOBS
   const logs = logsQuery.data?.data ?? EMPTY_LOGS
+  const agentLogs = agentLogsQuery.data?.data ?? EMPTY_AGENT_LOGS
 
   const agentsById = useMemo(() => {
     return new Map(agents.map((agent) => [agent.id, agent]))
@@ -306,6 +317,7 @@ export default function ManagedAgents() {
           agents={agents}
           onRevoke={(agent) => revokeAgentMutation.mutate(agent.id)}
           onDelete={(agent) => deleteAgentMutation.mutate(agent.id)}
+          onViewLogs={setLogsAgent}
           isRevoking={revokeAgentMutation.isPending}
           isDeleting={deleteAgentMutation.isPending}
         />
@@ -372,6 +384,13 @@ export default function ManagedAgents() {
           <Button onClick={() => setLogsJob(null)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      <AgentSessionLogsDialog
+        agent={logsAgent}
+        logs={agentLogs}
+        loading={agentLogsQuery.isLoading}
+        onClose={() => setLogsAgent(null)}
+      />
     </Box>
   )
 }
@@ -656,12 +675,14 @@ export function AgentList({
   agents,
   onRevoke,
   onDelete,
+  onViewLogs,
   isRevoking,
   isDeleting,
 }: {
   agents: AgentMachineResponse[]
   onRevoke: (agent: AgentMachineResponse) => void
   onDelete: (agent: AgentMachineResponse) => void
+  onViewLogs: (agent: AgentMachineResponse) => void
   isRevoking: boolean
   isDeleting: boolean
 }) {
@@ -902,6 +923,25 @@ export function AgentList({
                     borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
                   }}
                 >
+                  <Tooltip title="View agent logs" arrow>
+                    <IconButton
+                      size="small"
+                      aria-label="View agent logs"
+                      onClick={() => onViewLogs(agent)}
+                      sx={{
+                        width: { xs: 40, sm: 34 },
+                        height: { xs: 40, sm: 34 },
+                        borderRadius: 1.5,
+                        color: alpha(theme.palette.info.main, 0.75),
+                        '&:hover': {
+                          color: theme.palette.info.main,
+                          bgcolor: alpha(theme.palette.info.main, isDark ? 0.15 : 0.1),
+                        },
+                      }}
+                    >
+                      <Terminal size={16} />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Revoke access" arrow>
                     <span>
                       <IconButton
@@ -965,6 +1005,58 @@ export function AgentList({
         }}
       />
     </>
+  )
+}
+
+export function AgentSessionLogsDialog({
+  agent,
+  logs,
+  loading,
+  onClose,
+}: {
+  agent: AgentMachineResponse | null
+  logs: AgentSessionLogEntryResponse[]
+  loading: boolean
+  onClose: () => void
+}) {
+  return (
+    <Dialog open={!!agent} onClose={onClose} fullWidth maxWidth="lg">
+      <DialogTitle>Agent Logs{agent ? ` - ${getAgentLabel(agent)}` : ''}</DialogTitle>
+      <DialogContent>
+        <Box
+          component="pre"
+          sx={{
+            m: 0,
+            p: 2,
+            minHeight: 320,
+            maxHeight: '60vh',
+            overflow: 'auto',
+            borderRadius: 1.5,
+            bgcolor: '#111827',
+            color: '#d1d5db',
+            fontSize: '0.8rem',
+            lineHeight: 1.6,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
+          {loading
+            ? 'Loading...'
+            : logs.length
+              ? logs
+                  .map((log) => {
+                    const command = log.command_id ? ` command=${log.command_id}` : ''
+                    const job = log.job_id ? ` job=${log.job_id}` : ''
+                    return `${formatDate(log.created_at)} ${log.level}/${log.stream}${command}${job}: ${log.message}`
+                  })
+                  .join('\n')
+              : 'No agent logs'}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
   )
 }
 
