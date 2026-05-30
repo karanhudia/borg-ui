@@ -4,7 +4,7 @@ import { Autocomplete, Box, Stack, TextField, Tooltip, Typography } from '@mui/m
 import { Info } from 'lucide-react'
 import CronExpressionParser from 'cron-parser'
 import CronExpressionInput from './CronExpressionInput'
-import { getBrowserTimeZone, getSupportedTimeZones } from '../utils/dateUtils'
+import { getBrowserTimeZone, getSupportedTimeZones } from '../../utils/dateUtils'
 
 interface SchedulePickerProps {
   cronExpression: string

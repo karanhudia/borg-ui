@@ -10,7 +10,7 @@ import {
 } from '@mui/material'
 
 import PruneSettingsInput from '../../../components/PruneSettingsInput'
-import SchedulePicker from '../../../components/SchedulePicker'
+import SchedulePicker from '../../../components/shared/SchedulePicker'
 import {
   formatCheckFlagList,
   getCheckFlagDurationConflict,

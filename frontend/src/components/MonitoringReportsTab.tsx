@@ -25,7 +25,7 @@ import { settingsAPI } from '../services/api'
 import type { SystemSettings } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
-import SchedulePicker from './SchedulePicker'
+import SchedulePicker from './shared/SchedulePicker'
 import { getBrowserTimeZone } from '../utils/dateUtils'
 
 type ReportFrequency = 'daily' | 'weekly' | 'monthly'

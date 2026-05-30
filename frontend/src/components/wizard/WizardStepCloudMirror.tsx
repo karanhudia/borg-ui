@@ -17,7 +17,7 @@ import {
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { Cloud, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import SchedulePicker from '../SchedulePicker'
+import SchedulePicker from '../shared/SchedulePicker'
 
 export interface CloudMirrorStepData {
   cloudMirrorEnabled: boolean

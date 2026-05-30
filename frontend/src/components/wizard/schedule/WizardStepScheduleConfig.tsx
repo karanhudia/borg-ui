@@ -1,7 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { Stack } from '@mui/material'
-import SchedulePicker from '../../SchedulePicker'
+import SchedulePicker from '../../shared/SchedulePicker'
 import ArchiveNameTemplateInput from '../../ArchiveNameTemplateInput'
 
 interface WizardStepScheduleConfigData {
