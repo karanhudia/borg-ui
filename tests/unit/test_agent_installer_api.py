@@ -96,6 +96,22 @@ def test_agent_installer_script_uses_selected_service_identity(
     assert '--group "${SERVICE_GROUP}"' in response.text
 
 
+def test_agent_installer_script_reinstall_preserves_existing_service_user(
+    test_client: TestClient,
+):
+    response = test_client.get("/agent/install.sh")
+
+    assert 'SERVICE_USER_MODE_SET="0"' in response.text
+    assert 'SERVICE_USER_MODE_SET="1"' in response.text
+    assert (
+        '[[ "${REINSTALL}" == "1" && "${SERVICE_USER_MODE_SET}" == "0" ]]'
+        in response.text
+    )
+    assert "/etc/systemd/system/borg-ui-agent.service" in response.text
+    assert "awk -F= '/^User=/" in response.text
+    assert "Reinstall: preserving existing service user" in response.text
+
+
 def test_agent_installer_script_allows_borg2_prereleases(test_client: TestClient):
     response = test_client.get("/agent/install.sh")
 

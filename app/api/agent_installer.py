@@ -15,6 +15,7 @@ BORG_VERSION="1"
 BORG_VERSION_SET="0"
 SKIP_BORG_INSTALL="0"
 SERVICE_USER_MODE="current"
+SERVICE_USER_MODE_SET="0"
 SERVICE_USER=""
 SERVICE_GROUP=""
 SERVICE_HOME=""
@@ -104,6 +105,7 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       SERVICE_USER_MODE="$2"
+      SERVICE_USER_MODE_SET="1"
       shift 2
       ;;
     -h|--help)
@@ -186,6 +188,22 @@ resolve_service_identity() {
       ;;
   esac
 }
+
+# In reinstall mode, preserve the existing service user from the live systemd
+# unit unless the caller explicitly chose one with --service-user. Without
+# this, a bare --reinstall would silently flip User= to the sudo invoker and
+# the service would lose read access to /etc/borg-ui-agent/config.toml.
+if [[ "${REINSTALL}" == "1" && "${SERVICE_USER_MODE_SET}" == "0" ]]; then
+  existing_unit_user=""
+  if [[ -r /etc/systemd/system/borg-ui-agent.service ]]; then
+    existing_unit_user="$(awk -F= '/^User=/ {print $2; exit}' \
+      /etc/systemd/system/borg-ui-agent.service 2>/dev/null || true)"
+  fi
+  if [[ -n "${existing_unit_user}" ]]; then
+    SERVICE_USER_MODE="${existing_unit_user}"
+    echo "Reinstall: preserving existing service user '${existing_unit_user}'."
+  fi
+fi
 
 if [[ ! -r /etc/os-release ]]; then
   echo "Cannot detect Linux distribution: /etc/os-release is missing." >&2
