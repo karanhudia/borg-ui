@@ -1,14 +1,10 @@
 /**
- * DashboardV3 — "Void" ops command center
+ * DashboardV3: operations dashboard for repository health, recent activity,
+ * upcoming work, system resources, and storage.
  *
- * Design system: Real-Time Monitoring × Modern Cinema (ui-ux-pro-max)
- * Palette:       Glass surface · Hairline border
- * Accent:        Indigo #6366f1 · Green #22c55e · Amber #f59e0b · Red #ef4444
- * Typography:    JetBrains Mono for all numeric / data values
- * Layout:        Bento grid (asymmetric) + full-width activity timeline SVG
- *
- * Padding note:  The Layout already provides Container maxWidth="xl" + p:3.
- *                This component adds NO extra outer padding or background.
+ * Numerics use a monospace stack so columns of digits align. Layout is a
+ * 2-column bento on md+, single column below. Padding comes from Layout's
+ * outer Container; this component adds none.
  */
 
 import React from 'react'
@@ -57,11 +53,10 @@ export default function DashboardV3() {
   const T = makeT(effectiveMode === 'dark')
   const [nowMs] = React.useState(() => Date.now())
 
-  const glass = {
+  const surface = {
     bgcolor: T.bgCard,
     border: `1px solid ${T.border}`,
     borderRadius: T.radius,
-    backdropFilter: 'blur(12px)',
     transition: 'border-color 0.2s',
     '&:hover': { borderColor: T.borderHover },
   } as const
@@ -123,10 +118,10 @@ export default function DashboardV3() {
     <TokenContext.Provider value={T}>
       {/* No outer bgcolor / padding — Layout's Container already provides this */}
       <Box sx={{ color: T.textPrimary }}>
-        {/* ── Health banner ─────────────────────────────────────────────────── */}
+        {/* Health banner */}
         <Box
           sx={{
-            ...glass,
+            ...surface,
             mb: 2.5,
             px: 2.5,
             py: 1.75,
@@ -135,20 +130,18 @@ export default function DashboardV3() {
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: 2,
-            borderColor: sc.color + '35',
-            boxShadow: `0 0 28px ${sc.glow}, inset 0 1px 0 ${T.insetLine}`,
+            borderColor: sc.color + '55',
           }}
         >
           <Stack direction="row" spacing={2} alignItems="center">
-            <PulseDot color={sc.color} glow={sc.glow} />
+            <PulseDot color={sc.color} />
             <Box>
               <Typography
                 sx={{
-                  fontSize: '0.62rem',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
                   color: T.textMuted,
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                  mb: 0.2,
+                  mb: 0.25,
                 }}
               >
                 {t('dashboard.banner.systemStatus')}
@@ -200,10 +193,9 @@ export default function DashboardV3() {
               <Box key={label}>
                 <Typography
                   sx={{
-                    fontSize: '0.58rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
                     color: T.textMuted,
-                    letterSpacing: 1.5,
-                    textTransform: 'uppercase',
                   }}
                 >
                   {label}
@@ -235,7 +227,7 @@ export default function DashboardV3() {
             }}
             sx={{
               color: T.textMuted,
-              fontSize: '0.68rem',
+              fontSize: '0.8125rem',
               minWidth: 0,
               px: 1.25,
               '&:hover': { color: T.textPrimary, bgcolor: T.hoverBg },
@@ -249,76 +241,91 @@ export default function DashboardV3() {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: '220px 1fr' },
+            gridTemplateColumns: { xs: '1fr', md: '200px 1fr' },
             gap: 2.5,
             alignItems: 'start',
           }}
         >
           {/* Left: donut + resources */}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Box sx={{ ...glass, p: 2.5, textAlign: 'center' }}>
-              <Typography
-                sx={{
-                  fontSize: '0.58rem',
-                  color: T.textMuted,
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                  mb: 2,
-                }}
+            <Box sx={{ ...surface, p: 2 }}>
+              {/* Header carries the label and the headline value side by side.
+                  The donut below is a glanceable shape, not the focal point. */}
+              <Stack
+                direction="row"
+                alignItems="baseline"
+                justifyContent="space-between"
+                sx={{ mb: 1.75 }}
               >
-                {t('dashboard.successDonut.label')}
-              </Typography>
+                <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: T.textPrimary }}>
+                  {t('dashboard.successDonut.label')}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontFamily: T.mono,
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    color:
+                      summary.success_rate_30d >= 90
+                        ? T.green
+                        : summary.success_rate_30d >= 70
+                          ? T.amber
+                          : T.red,
+                    lineHeight: 1,
+                  }}
+                >
+                  {summary.success_rate_30d.toFixed(0)}%
+                </Typography>
+              </Stack>
               <SuccessDonut
                 rate={summary.success_rate_30d}
                 good={summary.successful_jobs_30d}
                 total={summary.total_jobs_30d}
               />
-              <Stack direction="row" justifyContent="center" spacing={2.5} sx={{ mt: 2 }}>
-                <Box>
+              <Stack direction="row" justifyContent="space-between" sx={{ mt: 1.75, px: 0.5 }}>
+                <Stack direction="row" alignItems="baseline" spacing={0.75}>
                   <Typography
                     sx={{
                       fontFamily: T.mono,
                       fontWeight: 700,
                       color: T.green,
-                      fontSize: '1.1rem',
+                      fontSize: '0.875rem',
                       lineHeight: 1,
                     }}
                   >
                     {summary.successful_jobs_30d}
                   </Typography>
-                  <Typography sx={{ fontSize: '0.58rem', color: T.textMuted, mt: 0.25 }}>
+                  <Typography sx={{ fontSize: '0.75rem', color: T.textMuted }}>
                     {t('dashboard.successDonut.passed')}
                   </Typography>
-                </Box>
-                <Box sx={{ width: '1px', height: 28, bgcolor: T.border, flexShrink: 0 }} />
-                <Box>
+                </Stack>
+                <Stack direction="row" alignItems="baseline" spacing={0.75}>
                   <Typography
                     sx={{
                       fontFamily: T.mono,
                       fontWeight: 700,
                       color: summary.failed_jobs_30d > 0 ? T.red : T.textMuted,
-                      fontSize: '1.1rem',
+                      fontSize: '0.875rem',
                       lineHeight: 1,
                     }}
                   >
                     {summary.failed_jobs_30d}
                   </Typography>
-                  <Typography sx={{ fontSize: '0.58rem', color: T.textMuted, mt: 0.25 }}>
+                  <Typography sx={{ fontSize: '0.75rem', color: T.textMuted }}>
                     {t('dashboard.successDonut.failed')}
                   </Typography>
-                </Box>
+                </Stack>
               </Stack>
             </Box>
 
-            <Box sx={{ ...glass, p: 2.5 }}>
+            <Box sx={{ ...surface, p: 2.5 }}>
               <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 2 }}>
-                <Cpu size={13} color={T.textMuted} />
+                <Cpu size={14} color={T.textMuted} />
                 <Typography
                   sx={{
-                    fontSize: '0.58rem',
-                    color: T.textMuted,
-                    letterSpacing: 2,
-                    textTransform: 'uppercase',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    color: T.textPrimary,
                   }}
                 >
                   {t('dashboard.resources')}
@@ -349,18 +356,31 @@ export default function DashboardV3() {
             <UpcomingBackupsPanel tasks={ov.upcoming_tasks} />
 
             {/* Storage donut */}
-            <Box sx={{ ...glass, p: 2.5 }}>
-              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1.75 }}>
-                <HardDrive size={13} color={T.textMuted} />
+            <Box sx={{ ...surface, p: 2 }}>
+              {/* Total size moves into the header so it reads as data, not a
+                  centered hero number. */}
+              <Stack
+                direction="row"
+                alignItems="baseline"
+                justifyContent="space-between"
+                sx={{ mb: 1.75 }}
+              >
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                  <HardDrive size={14} color={T.textMuted} />
+                  <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: T.textPrimary }}>
+                    {t('dashboard.banner.stats.storage')}
+                  </Typography>
+                </Stack>
                 <Typography
                   sx={{
-                    fontSize: '0.58rem',
-                    color: T.textMuted,
-                    letterSpacing: 2,
-                    textTransform: 'uppercase',
+                    fontFamily: T.mono,
+                    fontSize: '0.875rem',
+                    fontWeight: 700,
+                    color: T.textPrimary,
+                    lineHeight: 1,
                   }}
                 >
-                  {t('dashboard.banner.stats.storage')}
+                  {storage.total_size}
                 </Typography>
               </Stack>
               <StorageDonut
@@ -381,13 +401,13 @@ export default function DashboardV3() {
                     justifyContent: 'space-between',
                   }}
                 >
-                  <Typography sx={{ fontSize: '0.62rem', color: T.textMuted }}>
+                  <Typography sx={{ fontSize: '0.75rem', color: T.textMuted }}>
                     {t('dashboard.storageDonut.dedupRatio')}
                   </Typography>
                   <Typography
                     sx={{
                       fontFamily: T.mono,
-                      fontSize: '0.72rem',
+                      fontSize: '0.8125rem',
                       fontWeight: 700,
                       color: T.indigo,
                     }}
@@ -403,7 +423,7 @@ export default function DashboardV3() {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             <RepositoryHealthPanel
               T={T}
-              glass={glass}
+              surface={surface}
               repos={repos}
               criticalCount={criticalCount}
               warningCount={warningCount}
@@ -420,7 +440,7 @@ export default function DashboardV3() {
             />
 
             {/* Activity timeline */}
-            <Box sx={{ ...glass, p: 2.5 }}>
+            <Box sx={{ ...surface, p: 2.5 }}>
               <Stack
                 direction="row"
                 alignItems="center"
@@ -428,13 +448,12 @@ export default function DashboardV3() {
                 sx={{ mb: 1.75 }}
               >
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <Activity size={13} color={T.textMuted} />
+                  <Activity size={14} color={T.textMuted} />
                   <Typography
                     sx={{
-                      fontSize: '0.58rem',
-                      color: T.textMuted,
-                      letterSpacing: 2,
-                      textTransform: 'uppercase',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      color: T.textPrimary,
                     }}
                   >
                     {t('dashboard.recentActivity.last14Days')}
@@ -443,7 +462,7 @@ export default function DashboardV3() {
                 <Button
                   size="small"
                   variant="text"
-                  endIcon={<ArrowRight size={12} />}
+                  endIcon={<ArrowRight size={14} />}
                   onClick={() => {
                     trackNavigation(EventAction.VIEW, {
                       section: 'dashboard',
@@ -453,7 +472,7 @@ export default function DashboardV3() {
                     navigate('/activity')
                   }}
                   sx={{
-                    fontSize: '0.65rem',
+                    fontSize: '0.8125rem',
                     color: T.textMuted,
                     '&:hover': { color: T.textPrimary, bgcolor: T.hoverBg },
                   }}
@@ -464,7 +483,7 @@ export default function DashboardV3() {
 
               {ov.activity_feed.length === 0 ? (
                 <Typography
-                  sx={{ color: T.textMuted, textAlign: 'center', py: 3, fontSize: '0.8rem' }}
+                  sx={{ color: T.textMuted, textAlign: 'center', py: 3, fontSize: '0.875rem' }}
                 >
                   {t('dashboard.recentActivity.emptyRecorded')}
                 </Typography>
@@ -476,28 +495,27 @@ export default function DashboardV3() {
                 <Box sx={{ mt: 2, borderTop: `1px solid ${T.border}`, pt: 1.5 }}>
                   <Typography
                     sx={{
-                      fontSize: '0.58rem',
-                      color: T.red,
-                      letterSpacing: 1.5,
-                      textTransform: 'uppercase',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      color: T.textPrimary,
                       mb: 1,
                     }}
                   >
                     {t('dashboard.recentFailures.title')}
                   </Typography>
-                  <Stack spacing={0.6}>
+                  <Stack spacing={0.8}>
                     {currentFailures.slice(0, 3).map((a) => (
                       <Box
                         key={`${a.type}-${a.id}`}
                         sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
                       >
-                        <XCircle size={13} color={T.red} style={{ marginTop: 2, flexShrink: 0 }} />
+                        <XCircle size={14} color={T.red} style={{ marginTop: 3, flexShrink: 0 }} />
                         <Box sx={{ minWidth: 0 }}>
-                          <Stack direction="row" spacing={1.5}>
+                          <Stack direction="row" spacing={1.5} alignItems="baseline">
                             <Typography
                               sx={{
                                 fontFamily: T.mono,
-                                fontSize: '0.68rem',
+                                fontSize: '0.8125rem',
                                 fontWeight: 600,
                                 color: T.textPrimary,
                               }}
@@ -508,8 +526,7 @@ export default function DashboardV3() {
                               <Typography
                                 sx={{
                                   cursor: 'help',
-                                  fontFamily: T.mono,
-                                  fontSize: '0.62rem',
+                                  fontSize: '0.75rem',
                                   color: T.textMuted,
                                 }}
                               >
@@ -521,10 +538,10 @@ export default function DashboardV3() {
                             <Typography
                               sx={{
                                 fontFamily: T.mono,
-                                fontSize: '0.6rem',
-                                color: T.red + 'cc',
-                                mt: 0.25,
-                                wordBreak: 'break-all',
+                                fontSize: '0.75rem',
+                                color: T.textMuted,
+                                mt: 0.3,
+                                wordBreak: 'break-word',
                               }}
                             >
                               {a.error}

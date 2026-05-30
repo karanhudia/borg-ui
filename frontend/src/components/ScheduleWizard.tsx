@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DialogActions, Box, Button } from '@mui/material'
 import { FileText, Clock, Code, Wrench, CheckCircle } from 'lucide-react'
-import { WizardDialog } from './wizard'
+import WizardDialog from './shared/WizardDialog'
 import {
   WizardStepBasicInfo,
   WizardStepScheduleConfig,

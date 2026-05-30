@@ -1,23 +1,38 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
+  Collapse,
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Link,
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
-import { CheckCircle, Cloud, ExternalLink, KeyRound, Plus, RefreshCcw } from 'lucide-react'
+import {
+  CheckCircle,
+  ChevronDown,
+  Cloud,
+  ExternalLink,
+  Info,
+  KeyRound,
+  Pencil,
+  Plus,
+  RefreshCcw,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import CodeEditor from '../CodeEditor'
-import ResponsiveDialog from '../ResponsiveDialog'
+import CodeEditor from '../shared/CodeEditor'
+import ResponsiveDialog from '../shared/ResponsiveDialog'
 import type {
   RcloneOAuthCredentialUpdate,
   RcloneOAuthSession,
@@ -145,6 +160,7 @@ export default function RcloneRemoteDialog({
   const [oauthClientSecret, setOauthClientSecret] = useState('')
   const [oauthCredentialsError, setOauthCredentialsError] = useState<string | null>(null)
   const [isSavingOAuthCredentials, setIsSavingOAuthCredentials] = useState(false)
+  const [credentialsExpanded, setCredentialsExpanded] = useState(false)
   const oauthRequestIdRef = useRef(0)
   const resolvedProviderRef = useRef('local')
 
@@ -171,6 +187,14 @@ export default function RcloneRemoteDialog({
   const setupMessage = selectedProvider.oauth_setup_key
     ? translateBackendKey(selectedProvider.oauth_setup_key)
     : t('wizard.location.rcloneOAuthSetupMissing')
+  const bothOAuthCredsSaved = useMemo(
+    () => !!selectedProvider.oauth_client_id_set && !!selectedProvider.oauth_client_secret_set,
+    [selectedProvider.oauth_client_id_set, selectedProvider.oauth_client_secret_set]
+  )
+
+  useEffect(() => {
+    setCredentialsExpanded(!bothOAuthCredsSaved)
+  }, [bothOAuthCredsSaved, providerType])
 
   useEffect(() => {
     resolvedProviderRef.current = resolvedProvider
@@ -515,6 +539,15 @@ export default function RcloneRemoteDialog({
       fullWidth
       disablePortal={disablePortal}
       footer={dialogActions}
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          height: { xs: 'auto', md: 'min(720px, calc(100vh - 64px))' },
+        },
+      }}
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Cloud size={18} />
@@ -522,223 +555,316 @@ export default function RcloneRemoteDialog({
           ? t('wizard.location.rcloneEditRemoteTitle')
           : t('wizard.location.rcloneAddRemoteTitle')}
       </DialogTitle>
-      <DialogContent sx={{ display: 'grid', gap: 2, pt: 1, pb: 0 }}>
-        {(localError || error) && <Alert severity="error">{localError || error}</Alert>}
+      <DialogContent
+        sx={{
+          p: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) minmax(180px, 0.7fr)' },
-            gap: 2,
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
           }}
         >
-          <TextField
-            label={t('wizard.location.rcloneRemoteNameLabel')}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-            disabled={isCreating}
-          />
-          <TextField
-            select
-            label={t('wizard.location.rcloneProviderLabel')}
-            value={providerType}
-            onChange={(event) => handleProviderTypeChange(event.target.value)}
-            required
-            disabled={isCreating}
+          <Box
             sx={{
-              '& .MuiSelect-select': {
-                minWidth: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              },
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2.25,
+              px: 3,
+              pt: 1.25,
+              pb: 1,
             }}
           >
-            {providerOptions.map((provider) => (
-              <MenuItem key={provider.type} value={provider.type}>
-                {provider.label}
-              </MenuItem>
-            ))}
-          </TextField>
-        </Box>
+            {(localError || error) && <Alert severity="error">{localError || error}</Alert>}
 
-        {selectedProvider.type_editable ? (
-          <TextField
-            label={t('wizard.location.rcloneCustomProviderLabel')}
-            value={customProvider}
-            onChange={(event) => handleCustomProviderChange(event.target.value)}
-            required
-            disabled={isCreating}
-            placeholder={t('wizard.location.rcloneCustomProviderPlaceholder')}
-          />
-        ) : null}
-
-        <Box
-          sx={{
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            p: 1.5,
-            bgcolor: 'action.hover',
-          }}
-        >
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1 }}>
-            <Chip size="small" label={providerTypeLabel} />
-            <Chip size="small" label={authLabel} variant="outlined" />
-            {selectedProvider.auth_type === 'oauth_token' ? (
-              <Chip
-                size="small"
-                variant={usesBorgUiOAuth ? 'filled' : 'outlined'}
-                color={usesBorgUiOAuth && borgUiOAuthConfigured ? 'success' : 'default'}
-                label={
-                  usesBorgUiOAuth
-                    ? t('wizard.location.rcloneOAuthModeBorgUi')
-                    : t('wizard.location.rcloneOAuthModeLoopback')
-                }
-              />
-            ) : null}
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-            {selectedProvider.description}
-          </Typography>
-          {selectedProvider.auth_type === 'oauth_token' && usesBorgUiOAuth ? (
             <Box
               sx={{
-                mt: 1.5,
-                p: 1.5,
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                bgcolor: 'background.paper',
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) minmax(180px, 0.7fr)' },
+                gap: 2,
+                mt: 0.5,
               }}
             >
-              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
-                <KeyRound size={16} />
-                <Typography variant="subtitle2" fontWeight={700}>
-                  {t('wizard.location.rcloneOAuthCredentialsTitle')}
-                </Typography>
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={t(
-                    `wizard.location.rcloneOAuthCredentialSources.${
-                      selectedProvider.oauth_credentials_source || 'unset'
-                    }`,
-                    {
-                      defaultValue: selectedProvider.oauth_credentials_source || 'unset',
-                    }
-                  )}
-                />
-                {selectedProvider.oauth_client_id_set ? (
-                  <Chip
-                    size="small"
-                    color="success"
-                    variant="outlined"
-                    icon={<CheckCircle size={12} />}
-                    label={t('wizard.location.rcloneOAuthClientIdSet')}
-                  />
-                ) : null}
-                {selectedProvider.oauth_client_secret_set ? (
-                  <Chip
-                    size="small"
-                    color="success"
-                    variant="outlined"
-                    icon={<CheckCircle size={12} />}
-                    label={t('wizard.location.rcloneOAuthClientSecretSet')}
-                  />
-                ) : null}
-              </Stack>
-              <Box
+              <TextField
+                label={t('wizard.location.rcloneRemoteNameLabel')}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                required
+                disabled={isCreating}
+              />
+              <TextField
+                select
+                label={t('wizard.location.rcloneProviderLabel')}
+                value={providerType}
+                onChange={(event) => handleProviderTypeChange(event.target.value)}
+                required
+                disabled={isCreating}
                 sx={{
-                  mt: 1.25,
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
-                  gap: 1,
+                  '& .MuiSelect-select': {
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  },
                 }}
               >
-                <TextField
-                  label={t('wizard.location.rcloneOAuthClientIdLabel')}
-                  value={oauthClientId}
-                  onChange={(event) => setOauthClientId(event.target.value)}
-                  disabled={isCreating || isSavingOAuthCredentials}
-                  autoComplete="off"
-                  size="small"
-                />
-                <TextField
-                  label={t('wizard.location.rcloneOAuthClientSecretLabel')}
-                  value={oauthClientSecret}
-                  onChange={(event) => setOauthClientSecret(event.target.value)}
-                  disabled={isCreating || isSavingOAuthCredentials}
-                  autoComplete="new-password"
-                  type="password"
-                  size="small"
-                />
-              </Box>
-              {oauthCredentialsError ? (
-                <Alert severity="error" sx={{ mt: 1 }}>
-                  {oauthCredentialsError}
-                </Alert>
-              ) : null}
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={handleSaveOAuthCredentials}
-                disabled={!onSaveOAuthCredentials || isCreating || isSavingOAuthCredentials}
-                startIcon={
-                  isSavingOAuthCredentials ? (
-                    <CircularProgress size={14} color="inherit" />
-                  ) : (
-                    <KeyRound size={14} />
-                  )
-                }
-                sx={{ mt: 1.25 }}
-              >
-                {isSavingOAuthCredentials
-                  ? t('wizard.location.rcloneOAuthCredentialsSaving')
-                  : t('wizard.location.rcloneOAuthCredentialsSave')}
-              </Button>
+                {providerOptions.map((provider) => (
+                  <MenuItem key={provider.type} value={provider.type}>
+                    {provider.label}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Box>
-          ) : null}
-          {selectedProvider.auth_type === 'oauth_token' ? (
-            <Alert
-              severity={
-                oauthSession?.status === 'authorized' ? 'success' : oauthError ? 'error' : 'info'
-              }
-              sx={{ mt: 1.5 }}
+
+            {selectedProvider.type_editable ? (
+              <TextField
+                label={t('wizard.location.rcloneCustomProviderLabel')}
+                value={customProvider}
+                onChange={(event) => handleCustomProviderChange(event.target.value)}
+                required
+                disabled={isCreating}
+                placeholder={t('wizard.location.rcloneCustomProviderPlaceholder')}
+              />
+            ) : null}
+
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                p: 2,
+                display: 'grid',
+                gap: 1.25,
+              }}
             >
-              <Stack spacing={1}>
-                <Typography variant="body2">
+              <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                <Box
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 1.5,
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Cloud size={18} />
+                </Box>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.25 }}>
+                    {providerTypeLabel}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {authLabel}
+                    {selectedProvider.auth_type === 'oauth_token'
+                      ? ` · ${
+                          usesBorgUiOAuth
+                            ? t('wizard.location.rcloneOAuthModeBorgUi')
+                            : t('wizard.location.rcloneOAuthModeLoopback')
+                        }`
+                      : ''}
+                  </Typography>
+                </Box>
+              </Stack>
+              {selectedProvider.description ? (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ overflowWrap: 'anywhere' }}
+                >
+                  {selectedProvider.description}
+                </Typography>
+              ) : null}
+              {selectedProvider.docs_url ? (
+                <Link
+                  href={selectedProvider.docs_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="caption"
+                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                >
+                  <ExternalLink size={12} />
+                  {t('wizard.location.rcloneProviderDocs')}
+                </Link>
+              ) : null}
+            </Box>
+
+            {selectedProvider.auth_type === 'oauth_token' && usesBorgUiOAuth ? (
+              <Box
+                sx={{
+                  border: '1px solid',
+                  borderColor: bothOAuthCredsSaved ? 'success.light' : 'divider',
+                  borderRadius: 2,
+                  bgcolor: bothOAuthCredsSaved
+                    ? (theme) =>
+                        theme.palette.mode === 'dark'
+                          ? 'rgba(46, 125, 50, 0.08)'
+                          : 'rgba(46, 125, 50, 0.05)'
+                    : 'background.paper',
+                }}
+              >
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  spacing={1}
+                  sx={{ px: 2, py: 1.25, minHeight: 48 }}
+                >
+                  {bothOAuthCredsSaved ? (
+                    <CheckCircle size={18} color="var(--mui-palette-success-main, #2e7d32)" />
+                  ) : (
+                    <KeyRound size={18} />
+                  )}
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle2" fontWeight={600}>
+                      {t('wizard.location.rcloneOAuthCredentialsTitle')}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      {t('wizard.location.rcloneOAuthCredentialsScopeHint', {
+                        provider: selectedProvider.label,
+                      })}
+                    </Typography>
+                    {bothOAuthCredsSaved ? (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block' }}
+                      >
+                        {t(
+                          `wizard.location.rcloneOAuthCredentialSources.${
+                            selectedProvider.oauth_credentials_source || 'unset'
+                          }`,
+                          { defaultValue: selectedProvider.oauth_credentials_source || 'unset' }
+                        )}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                  {bothOAuthCredsSaved ? (
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => setCredentialsExpanded((prev) => !prev)}
+                      startIcon={<Pencil size={14} />}
+                    >
+                      {t('wizard.location.rcloneOAuthEditCredentials')}
+                    </Button>
+                  ) : null}
+                </Stack>
+                <Collapse in={credentialsExpanded || !bothOAuthCredsSaved} unmountOnExit>
+                  <Box
+                    sx={{
+                      px: 2,
+                      pb: 2,
+                      pt: 0.5,
+                      borderTop: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        mt: 1.5,
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
+                        gap: 1.25,
+                      }}
+                    >
+                      <TextField
+                        label={t('wizard.location.rcloneOAuthClientIdLabel')}
+                        value={oauthClientId}
+                        onChange={(event) => setOauthClientId(event.target.value)}
+                        disabled={isCreating || isSavingOAuthCredentials}
+                        autoComplete="off"
+                        size="small"
+                      />
+                      <TextField
+                        label={t('wizard.location.rcloneOAuthClientSecretLabel')}
+                        value={oauthClientSecret}
+                        onChange={(event) => setOauthClientSecret(event.target.value)}
+                        disabled={isCreating || isSavingOAuthCredentials}
+                        autoComplete="new-password"
+                        type="password"
+                        size="small"
+                      />
+                    </Box>
+                    {oauthCredentialsError ? (
+                      <Alert severity="error" sx={{ mt: 1 }}>
+                        {oauthCredentialsError}
+                      </Alert>
+                    ) : null}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={handleSaveOAuthCredentials}
+                      disabled={!onSaveOAuthCredentials || isCreating || isSavingOAuthCredentials}
+                      startIcon={
+                        isSavingOAuthCredentials ? (
+                          <CircularProgress size={14} color="inherit" />
+                        ) : (
+                          <KeyRound size={14} />
+                        )
+                      }
+                      sx={{ mt: 1.5 }}
+                    >
+                      {isSavingOAuthCredentials
+                        ? t('wizard.location.rcloneOAuthCredentialsSaving')
+                        : t('wizard.location.rcloneOAuthCredentialsSave')}
+                    </Button>
+                  </Box>
+                </Collapse>
+              </Box>
+            ) : null}
+
+            {selectedProvider.auth_type === 'oauth_token' ? (
+              <Box
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  p: 2,
+                  display: 'grid',
+                  gap: 1.5,
+                }}
+              >
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                  <Typography variant="subtitle2" fontWeight={600}>
+                    {t('wizard.location.rcloneConnectSectionTitle')}
+                  </Typography>
+                  <Tooltip
+                    title={t('wizard.location.rcloneOAuthHelpTooltip')}
+                    arrow
+                    placement="top"
+                    componentsProps={{
+                      tooltip: { sx: { maxWidth: 320, whiteSpace: 'pre-line' } },
+                    }}
+                  >
+                    <IconButton size="small" aria-label={t('wizard.location.rcloneOAuthHelpLabel')}>
+                      <Info size={14} />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
                   {usesBorgUiOAuth
                     ? borgUiOAuthConfigured
                       ? t('wizard.location.rcloneOAuthBorgUiHelper')
                       : setupMessage
                     : t('wizard.location.rcloneOAuthLoopbackHelper')}
                 </Typography>
-                {usesBorgUiOAuth && callbackUrl ? (
-                  <Typography
-                    variant="caption"
-                    sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}
-                  >
-                    {t('wizard.location.rcloneOAuthCallbackUrl', { url: callbackUrl })}
-                  </Typography>
-                ) : null}
-                {oauthStatusMessage ? (
-                  <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
-                    {oauthStatusMessage}
-                  </Typography>
-                ) : null}
-                {oauthTokenStatusMessage ? (
-                  <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
-                    {oauthTokenStatusMessage}
-                  </Typography>
-                ) : null}
+
                 <Stack
                   direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
+                  spacing={1.5}
                   useFlexGap
                   flexWrap="wrap"
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
                 >
                   <Button
-                    size="small"
                     variant="contained"
                     onClick={() => handleStartOAuth()}
                     disabled={
@@ -759,15 +885,23 @@ export default function RcloneRemoteDialog({
                         : t('wizard.location.rcloneOAuthStart')}
                   </Button>
                   {usesBorgUiOAuth ? (
-                    <Button
-                      size="small"
-                      variant="outlined"
+                    <Link
+                      component="button"
+                      type="button"
+                      variant="body2"
                       onClick={() => handleStartOAuth('rclone_loopback')}
                       disabled={!onStartOAuth || isCreating || isStartingOAuth}
-                      startIcon={<ExternalLink size={14} />}
+                      sx={{
+                        background: 'none',
+                        border: 'none',
+                        p: 0,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        '&:disabled': { opacity: 0.5, cursor: 'not-allowed' },
+                      }}
                     >
                       {t('wizard.location.rcloneOAuthUseLoopback')}
-                    </Button>
+                    </Link>
                   ) : null}
                   {oauthSession?.authorization_url ? (
                     <Button
@@ -799,46 +933,100 @@ export default function RcloneRemoteDialog({
                     </Button>
                   ) : null}
                 </Stack>
-              </Stack>
-            </Alert>
-          ) : null}
-          {selectedProvider.fields.length ? (
-            <Box sx={{ mt: 1.5, display: 'grid', gap: 0.75 }}>
-              {selectedProvider.fields.map((field) => (
-                <Typography
-                  key={field.name}
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block', overflowWrap: 'anywhere' }}
-                >
-                  <strong>{field.label}</strong>
-                  {field.required ? ` ${t('wizard.location.rcloneRequiredFieldSuffix')}` : ''}:
-                  {field.helper ? ` ${field.helper}` : ` ${field.name}`}
-                </Typography>
-              ))}
-            </Box>
-          ) : null}
-          {selectedProvider.docs_url ? (
-            <Link
-              href={selectedProvider.docs_url}
-              target="_blank"
-              rel="noreferrer"
-              variant="caption"
-              sx={{ display: 'inline-block', mt: 1 }}
-            >
-              {t('wizard.location.rcloneProviderDocs')}
-            </Link>
-          ) : null}
-        </Box>
 
-        <CodeEditor
-          label={t('wizard.location.rcloneConfigJsonLabel')}
-          value={configJson}
-          onChange={setConfigJson}
-          language="json"
-          height="220px"
-          helperText={t('wizard.location.rcloneConfigJsonHelper')}
-        />
+                {usesBorgUiOAuth && callbackUrl ? (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}
+                  >
+                    {t('wizard.location.rcloneOAuthCallbackUrl', { url: callbackUrl })}
+                  </Typography>
+                ) : null}
+
+                {(oauthStatusMessage || oauthTokenStatusMessage || oauthError) && (
+                  <Alert
+                    severity={
+                      oauthSession?.status === 'authorized'
+                        ? 'success'
+                        : oauthError
+                          ? 'error'
+                          : 'info'
+                    }
+                    sx={{ py: 0.5 }}
+                  >
+                    <Stack spacing={0.25}>
+                      {oauthStatusMessage ? (
+                        <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
+                          {oauthStatusMessage}
+                        </Typography>
+                      ) : null}
+                      {oauthTokenStatusMessage ? (
+                        <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
+                          {oauthTokenStatusMessage}
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  </Alert>
+                )}
+              </Box>
+            ) : null}
+
+            <Accordion
+              disableGutters
+              elevation={0}
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                overflow: 'hidden',
+                '&:before': { display: 'none' },
+                '&.Mui-expanded': { margin: 0 },
+                mb: 1,
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ChevronDown size={18} />}
+                sx={{ px: 2, '& .MuiAccordionSummary-content': { my: 1.25 } }}
+              >
+                <Stack>
+                  <Typography variant="subtitle2" fontWeight={600}>
+                    {t('wizard.location.rcloneAdvancedTitle')}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {t('wizard.location.rcloneAdvancedHelper')}
+                  </Typography>
+                </Stack>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 2, pb: 2, pt: 0, display: 'grid', gap: 1.5 }}>
+                {selectedProvider.fields.length ? (
+                  <Box sx={{ display: 'grid', gap: 0.75 }}>
+                    {selectedProvider.fields.map((field) => (
+                      <Typography
+                        key={field.name}
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', overflowWrap: 'anywhere' }}
+                      >
+                        <strong>{field.label}</strong>
+                        {field.required ? ` ${t('wizard.location.rcloneRequiredFieldSuffix')}` : ''}
+                        :{field.helper ? ` ${field.helper}` : ` ${field.name}`}
+                      </Typography>
+                    ))}
+                  </Box>
+                ) : null}
+                <CodeEditor
+                  label={t('wizard.location.rcloneConfigJsonLabel')}
+                  value={configJson}
+                  onChange={setConfigJson}
+                  language="json"
+                  height="220px"
+                  helperText={t('wizard.location.rcloneConfigJsonHelper')}
+                />
+              </AccordionDetails>
+            </Accordion>
+          </Box>
+        </Box>
       </DialogContent>
     </ResponsiveDialog>
   )

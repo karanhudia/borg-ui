@@ -10,7 +10,6 @@ export const makeT = (isDark: boolean) => ({
   textDim: isDark ? '#64748b' : '#94a3b8',
   green: '#22c55e',
   greenDim: isDark ? 'rgba(34,197,94,0.1)' : 'rgba(34,197,94,0.12)',
-  greenGlow: 'rgba(34,197,94,0.25)',
   amber: '#f59e0b',
   amberDim: isDark ? 'rgba(245,158,11,0.1)' : 'rgba(245,158,11,0.12)',
   red: '#ef4444',
@@ -38,10 +37,10 @@ export const TokenContext = React.createContext<Tokens>(makeT(true))
 export const useT = () => React.useContext(TokenContext)
 
 export const STATUS = {
-  healthy: { color: '#22c55e', dim: 'rgba(34,197,94,0.10)', glow: 'rgba(34,197,94,0.3)' },
-  warning: { color: '#f59e0b', dim: 'rgba(245,158,11,0.13)', glow: 'rgba(245,158,11,0.3)' },
-  critical: { color: '#ef4444', dim: 'rgba(239,68,68,0.15)', glow: 'rgba(239,68,68,0.3)' },
-  unknown: { color: '#64748b', dim: 'rgba(100,116,139,0.05)', glow: 'transparent' },
+  healthy: { color: '#22c55e', dim: 'rgba(34,197,94,0.10)' },
+  warning: { color: '#f59e0b', dim: 'rgba(245,158,11,0.13)' },
+  critical: { color: '#ef4444', dim: 'rgba(239,68,68,0.15)' },
+  unknown: { color: '#64748b', dim: 'rgba(100,116,139,0.05)' },
 }
 
 export const SEG_COLORS = ['#6366f1', '#3b82f6', '#22c55e', '#f59e0b', '#ec4899']

@@ -22,7 +22,7 @@ import {
 import { Plus, Edit, Trash2, Play, FileCode, Clock, CheckCircle, XCircle } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import api from '../services/api'
-import CodeEditor from '../components/CodeEditor'
+import CodeEditor from '../components/shared/CodeEditor'
 import ScriptParameterInputs, { ScriptParameter } from '../components/ScriptParameterInputs'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'

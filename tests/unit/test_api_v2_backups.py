@@ -404,7 +404,7 @@ class TestV2BackupRoutes:
                 "/api/v2/backup/check",
                 json={
                     "repository_id": repo.id,
-                    "max_duration": 3600,
+                    "max_duration": 0,
                     "check_extra_flags": "  --repair --verify-data  ",
                 },
                 headers=admin_headers,
@@ -412,9 +412,33 @@ class TestV2BackupRoutes:
 
         assert response.status_code == 200
         assert mock_start.call_args.kwargs["extra_fields"] == {
-            "max_duration": 3600,
+            "max_duration": 0,
             "extra_flags": "--repair --verify-data",
         }
+
+    def test_backup_check_rejects_full_check_flags_with_partial_duration(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        _enable_borg_v2(test_db)
+        repo = _create_v2_repo(test_db, source_directories=["/data/source"])
+
+        with patch("app.api.v2.backups.start_background_maintenance_job") as mock_start:
+            response = test_client.post(
+                "/api/v2/backup/check",
+                json={
+                    "repository_id": repo.id,
+                    "max_duration": 3600,
+                    "check_extra_flags": " --verify-data ",
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 422
+        assert response.json()["detail"]["key"] == (
+            "backend.errors.repo.checkFlagsRequireUnlimitedDuration"
+        )
+        assert response.json()["detail"]["params"]["flags"] == "--verify-data"
+        mock_start.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_backup_check_dispatcher_uses_stable_repo_id(

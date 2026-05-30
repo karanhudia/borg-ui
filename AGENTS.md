@@ -29,8 +29,30 @@ These instructions apply to the entire repository.
 
 ## Shared UI Components
 
-Reach for existing shared components before introducing new patterns. Adding a raw MUI `Dialog` or a hand-rolled step indicator is almost always wrong — these patterns already exist and are used by the rest of the app.
+Reach for existing shared components before introducing new patterns. The source
+of truth is `frontend/src/components/shared/`: if a reusable Borg UI product
+primitive already exists there, use it instead of inlining a new dialog, wizard
+shell, schedule control, picker, gate, or rich select row.
 
-- **Modals / dialogs** — Always use `frontend/src/components/ResponsiveDialog.tsx` instead of raw `@mui/material` `Dialog`. It renders a normal centered dialog on desktop and a bottom-anchored `SwipeableDrawer` (with drag handle, close button, sticky footer, safe-area inset) on mobile (`< md`). Place action buttons in the `footer` prop so they stay sticky above the safe area on mobile rather than scrolling away with the body.
-- **Multi-step wizards** — Use `frontend/src/components/wizard/WizardDialog.tsx`, which composes `ResponsiveDialog` + `WizardStepIndicator`. Pass `steps` (array of `{ key, label, icon }`), `currentStep`, optional `onStepClick` (gate it to completed steps if you want to prevent jumping forward), and the action bar via `footer`. Do not build a custom chip row or stepper — `WizardStepIndicator` already provides the desktop tab row and mobile compact circle row used by `RepositoryWizard`, `ScheduleWizard`, and `AddAgentDialog`.
-- **Step color keys** — The `key` on each step picks a color from the palette in `WizardStepIndicator.tsx` (`location`, `source`, `security`, `config`, `review`, `basic`, `schedule`, `scripts`, `maintenance`). Reuse these keys for visual consistency with other wizards rather than introducing new color tokens.
+`shared/` is for Borg UI product primitives that are used across features or are
+canonical controls named by project guidance. They may know product concepts
+like plans, agents, SSH, schedules, repositories, or paths, but they should not
+know a specific page, wizard step, or business flow. Feature components and
+wizard-step components stay outside `shared/`.
+
+Current shared inventory:
+
+- `ResponsiveDialog` — required replacement for raw MUI `Dialog`.
+- `WizardDialog` and `WizardStepIndicator` — required shell for multi-step wizards.
+- `SchedulePicker`, `CronExpressionInput`, and `CronBuilderDialog` — required schedule controls.
+- `SshConnectionSelect`, `ManagedAgentSelect`, `DestinationSelect`, and `RichSelectRow` — canonical rich-row select primitives.
+- `PathSelectorField`, `PlanGate`, and `CodeEditor` — canonical path picker, plan gate, and code editor primitives.
+
+Use the existing component APIs and extend these files when a shared primitive
+needs new behavior. Do not add ad hoc replacements in pages, wizard steps, or
+feature components.
+
+Step color keys still come from `WizardStepIndicator.tsx`
+(`location`, `source`, `security`, `config`, `review`, `basic`, `schedule`,
+`scripts`, `maintenance`). Reuse those keys for visual consistency rather than
+introducing new step color tokens.

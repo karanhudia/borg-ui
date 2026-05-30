@@ -1,5 +1,5 @@
 import { DialogContent, DialogActions, Button, Typography, Alert, Box } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 

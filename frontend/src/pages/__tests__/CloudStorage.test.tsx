@@ -39,7 +39,7 @@ vi.mock('react-hot-toast', async () => {
   }
 })
 
-vi.mock('../../components/CodeEditor', () => ({
+vi.mock('../../components/shared/CodeEditor', () => ({
   default: ({
     label,
     value,
@@ -428,6 +428,7 @@ describe('CloudStorage', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
     fireEvent.click(await screen.findByRole('option', { name: /Google Drive/i }))
 
+    await user.click(await screen.findByRole('button', { name: /^Edit$/i }))
     await user.click(screen.getByRole('button', { name: /Save OAuth credentials/i }))
 
     await waitFor(() => {

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { DialogProps, SxProps, Theme } from '@mui/material'
 import { Box, DialogContent, DialogTitle, Typography } from '@mui/material'
 
-import ResponsiveDialog from '../ResponsiveDialog'
+import ResponsiveDialog from './ResponsiveDialog'
 import WizardStepIndicator from './WizardStepIndicator'
 
 export interface WizardStep {
@@ -33,8 +33,7 @@ const paperSx: SxProps<Theme> = {
   display: 'flex',
   flexDirection: 'column',
   height: { xs: 'auto', md: 'min(860px, calc(100vh - 64px))' },
-  backdropFilter: 'blur(10px)',
-  backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05))',
+  backgroundColor: (theme) => theme.palette.background.paper,
   boxShadow: (theme) =>
     theme.palette.mode === 'dark'
       ? '0 24px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1)'

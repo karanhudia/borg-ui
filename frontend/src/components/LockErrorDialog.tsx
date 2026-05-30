@@ -8,7 +8,7 @@ import {
   Box,
   CircularProgress,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { AlertCircle, Unlock } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'

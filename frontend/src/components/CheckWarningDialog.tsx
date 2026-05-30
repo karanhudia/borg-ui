@@ -12,14 +12,16 @@ import {
   TextField,
   CircularProgress,
   Tooltip,
+  Alert,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import CheckCircle from '@mui/icons-material/CheckCircle'
 import InfoOutlined from '@mui/icons-material/InfoOutlined'
 import Lock from '@mui/icons-material/Lock'
 import Warning from '@mui/icons-material/Warning'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { formatCheckFlagList, getCheckFlagDurationConflict } from '../utils/checkFlagConflicts'
 
 export interface CheckWarningConfirmOptions {
   maxDuration: number
@@ -51,6 +53,8 @@ export default function CheckWarningDialog({
   const [maxDuration, setMaxDuration] = useState<number>(initialMaxDuration)
   const [checkExtraFlags, setCheckExtraFlags] = useState(initialCheckExtraFlags)
   const isBorg2 = borgVersion === 2
+  const conflictingCheckFlags = getCheckFlagDurationConflict(checkExtraFlags, maxDuration)
+  const hasCheckFlagConflict = conflictingCheckFlags.length > 0
   return (
     <ResponsiveDialog open={open} onClose={onCancel} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -121,6 +125,14 @@ export default function CheckWarningDialog({
           />
         </Box>
 
+        {hasCheckFlagConflict && (
+          <Alert severity="warning" sx={{ mt: 1.5 }}>
+            {t('checkFlagConflicts.durationConflict', {
+              flags: formatCheckFlagList(conflictingCheckFlags),
+            })}
+          </Alert>
+        )}
+
         {isBorg2 && (
           <Box
             sx={{
@@ -187,7 +199,7 @@ export default function CheckWarningDialog({
           onClick={() => onConfirm({ maxDuration, checkExtraFlags })}
           variant="contained"
           color="warning"
-          disabled={isLoading}
+          disabled={isLoading || hasCheckFlagConflict}
           startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : <CheckCircle />}
         >
           {isLoading ? t('status.running') : t('dialogs.checkWarning.confirm')}

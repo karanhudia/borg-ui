@@ -4,8 +4,11 @@ import { SEG_COLORS, useT } from './tokens'
 
 export function SuccessDonut({ rate, good, total }: { rate: number; good: number; total: number }) {
   const T = useT()
-  const size = 148,
-    sw = 13,
+  // Shrunk from 148/13 to 96/9 so the ring reads as supporting data viz,
+  // not a hero metric. The headline percentage now lives in the panel
+  // header (label/value pair), so the centerpiece only carries the ratio.
+  const size = 96,
+    sw = 9,
     r = (size - sw) / 2
   const circ = 2 * Math.PI * r
   const filled = (rate / 100) * circ
@@ -30,10 +33,7 @@ export function SuccessDonut({ rate, good, total }: { rate: number; good: number
           strokeWidth={sw}
           strokeDasharray={`${filled} ${circ}`}
           strokeLinecap="round"
-          style={{
-            filter: `drop-shadow(0 0 8px ${color}80)`,
-            transition: 'stroke-dasharray 0.8s cubic-bezier(0.4,0,0.2,1)',
-          }}
+          style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(0.4,0,0.2,1)' }}
         />
       </svg>
       <Box
@@ -41,18 +41,21 @@ export function SuccessDonut({ rate, good, total }: { rate: number; good: number
           position: 'absolute',
           inset: 0,
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
         <Typography
-          sx={{ fontFamily: T.mono, fontSize: '1.75rem', fontWeight: 700, color, lineHeight: 1 }}
+          sx={{
+            fontFamily: T.mono,
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            color: T.textMuted,
+            lineHeight: 1,
+          }}
+          aria-label={`${good} of ${total} successful`}
         >
-          {rate.toFixed(0)}%
-        </Typography>
-        <Typography sx={{ fontSize: '0.6rem', color: T.textMuted, mt: 0.5, letterSpacing: 1 }}>
-          {good}/{total} OK
+          {good}/{total}
         </Typography>
       </Box>
     </Box>
@@ -70,8 +73,11 @@ export function StorageDonut({
 }) {
   const T = useT()
   const { t } = useTranslation()
-  const size = 148,
-    sw = 16,
+  // Shrunk from 148/16 to 96/11 to walk back the hero-metric framing.
+  // The total size now lives in the panel header; the centerpiece only
+  // carries the archives count as a quiet data label.
+  const size = 96,
+    sw = 11,
     r = (size - sw) / 2
   const circ = 2 * Math.PI * r
   const slices = breakdown.slice(0, 5)
@@ -118,10 +124,7 @@ export function StorageDonut({
               strokeDasharray={`${Math.max(seg.arc - 2, 0)} ${circ}`}
               strokeDashoffset={-seg.offset}
               strokeLinecap="butt"
-              style={{
-                filter: `drop-shadow(0 0 6px ${seg.color}70)`,
-                transition: 'stroke-dasharray 0.8s cubic-bezier(0.4,0,0.2,1)',
-              }}
+              style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(0.4,0,0.2,1)' }}
             />
           ))}
         </svg>
@@ -130,7 +133,6 @@ export function StorageDonut({
             position: 'absolute',
             inset: 0,
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -138,22 +140,13 @@ export function StorageDonut({
           <Typography
             sx={{
               fontFamily: T.mono,
-              fontSize: '1.05rem',
-              fontWeight: 800,
-              color: T.textPrimary,
-              lineHeight: 1,
-            }}
-          >
-            {totalSize}
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: '0.55rem',
+              fontSize: '0.75rem',
+              fontWeight: 600,
               color: T.textMuted,
-              mt: 0.5,
-              letterSpacing: 1.5,
-              textTransform: 'uppercase',
+              lineHeight: 1,
+              textAlign: 'center',
             }}
+            aria-label={`${totalSize} across ${totalArchives} archives`}
           >
             {t('dashboard.storageDonut.archivesCount', { count: totalArchives })}
           </Typography>
@@ -164,17 +157,16 @@ export function StorageDonut({
           <Stack key={s.name} direction="row" alignItems="center" spacing={0.75}>
             <Box
               sx={{
-                width: 7,
-                height: 7,
+                width: 8,
+                height: 8,
                 borderRadius: '50%',
                 bgcolor: SEG_COLORS[i],
-                boxShadow: `0 0 4px ${SEG_COLORS[i]}80`,
                 flexShrink: 0,
               }}
             />
             <Typography
               sx={{
-                fontSize: '0.65rem',
+                fontSize: '0.8125rem',
                 color: T.textMuted,
                 flex: 1,
                 overflow: 'hidden',
@@ -185,14 +177,21 @@ export function StorageDonut({
               {s.name}
             </Typography>
             <Typography
-              sx={{ fontFamily: T.mono, fontSize: '0.65rem', color: T.textPrimary, flexShrink: 0 }}
+              sx={{
+                fontFamily: T.mono,
+                fontSize: '0.8125rem',
+                color: T.textPrimary,
+                flexShrink: 0,
+              }}
             >
               {s.percentage}%
             </Typography>
           </Stack>
         ))}
         {slices.length === 0 && (
-          <Typography sx={{ fontSize: '0.7rem', color: T.textMuted, textAlign: 'center', py: 1 }}>
+          <Typography
+            sx={{ fontSize: '0.8125rem', color: T.textMuted, textAlign: 'center', py: 1 }}
+          >
             {t('dashboard.storageDonut.noData')}
           </Typography>
         )}
@@ -239,10 +238,7 @@ export function ArcGauge({
             strokeWidth={sw}
             strokeDasharray={`${filled} ${circ}`}
             strokeLinecap="round"
-            style={{
-              filter: `drop-shadow(0 0 4px ${color}60)`,
-              transition: 'stroke-dasharray 0.7s ease',
-            }}
+            style={{ transition: 'stroke-dasharray 0.7s ease' }}
           />
         </svg>
         <Box
@@ -255,17 +251,17 @@ export function ArcGauge({
           }}
         >
           <Typography
-            sx={{ fontFamily: T.mono, fontSize: '0.62rem', fontWeight: 700, color: T.textPrimary }}
+            sx={{ fontFamily: T.mono, fontSize: '0.75rem', fontWeight: 700, color: T.textPrimary }}
           >
             {value.toFixed(0)}%
           </Typography>
         </Box>
       </Box>
-      <Typography sx={{ fontSize: '0.62rem', fontWeight: 600, color: T.textMuted, mt: 0.5 }}>
+      <Typography sx={{ fontSize: '0.75rem', fontWeight: 600, color: T.textMuted, mt: 0.5 }}>
         {label}
       </Typography>
       {sub && (
-        <Typography sx={{ fontSize: '0.58rem', color: T.textDim, mt: 0.15 }}>{sub}</Typography>
+        <Typography sx={{ fontSize: '0.75rem', color: T.textMuted, mt: 0.25 }}>{sub}</Typography>
       )}
     </Box>
   )

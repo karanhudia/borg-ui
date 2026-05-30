@@ -20,7 +20,7 @@ import {
   Typography,
 } from '@mui/material'
 import { AlertTriangle, Globe, Laptop, Monitor, Server, Settings, Terminal } from 'lucide-react'
-import { WizardDialog, type WizardStep } from '../../components/wizard'
+import WizardDialog, { type WizardStep } from '../../components/shared/WizardDialog'
 import type {
   AgentEnrollmentTokenCreate,
   AgentEnrollmentTokenCreated,

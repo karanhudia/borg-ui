@@ -10,7 +10,7 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { AlertCircle, Trash2 } from 'lucide-react'
 
 interface DeleteArchiveDialogProps {

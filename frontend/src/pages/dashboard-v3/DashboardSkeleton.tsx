@@ -57,11 +57,11 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
         </Stack>
       </Box>
 
-      {/* Bento grid — 220px left + 1fr right (matches real layout) */}
+      {/* Bento grid — 200px left + 1fr right (matches real layout) */}
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '220px 1fr' },
+          gridTemplateColumns: { xs: '1fr', md: '200px 1fr' },
           gap: 2.5,
           alignItems: 'start',
         }}
@@ -84,7 +84,7 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
               height={10}
               sx={{ mx: 'auto', mb: 2, transform: 'none', borderRadius: 0.5 }}
             />
-            <Skeleton variant="circular" width={148} height={148} sx={{ mx: 'auto', mb: 2 }} />
+            <Skeleton variant="circular" width={96} height={96} sx={{ mx: 'auto', mb: 1.5 }} />
             <Stack direction="row" justifyContent="center" spacing={2.5}>
               <Box>
                 <Skeleton

@@ -76,7 +76,7 @@ describe('ScheduledChecksSection', () => {
         last_scheduled_check: null,
         next_scheduled_check: null,
         check_max_duration: 3600,
-        check_extra_flags: '--repair',
+        check_extra_flags: '--save-space',
         notify_on_check_success: false,
         notify_on_check_failure: true,
         enabled: true,
@@ -125,18 +125,49 @@ describe('ScheduledChecksSection', () => {
     })
 
     const flagsInput = await screen.findByLabelText('Advanced check flags')
-    expect(flagsInput).toHaveValue('--repair')
+    expect(flagsInput).toHaveValue('--save-space')
 
     fireEvent.change(flagsInput, { target: { value: '--verify-data' } })
+    fireEvent.change(screen.getByLabelText('Max Duration (seconds)'), { target: { value: '0' } })
     fireEvent.click(screen.getByRole('button', { name: 'Update' }))
 
     await waitFor(() => {
       expect(repositoriesAPI.updateCheckSchedule).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
+          max_duration: 0,
           check_extra_flags: '--verify-data',
         })
       )
     })
+  }, 60000)
+
+  it('warns that full-check flags require unlimited scheduled check duration', async () => {
+    const sectionRef = createRef<ScheduledChecksSectionRef>()
+
+    renderWithProviders(<ScheduledChecksSection ref={sectionRef} />)
+
+    await waitFor(() => {
+      expect(sectionRef.current).not.toBeNull()
+    })
+
+    await act(async () => {
+      await sectionRef.current?.openEditForRepo(1)
+    })
+
+    const flagsInput = await screen.findByLabelText('Advanced check flags')
+    fireEvent.change(flagsInput, { target: { value: '--verify-data' } })
+
+    expect(
+      screen.getByText(/Set max duration to 0 \(unlimited\) to use --verify-data/)
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Update' })).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText('Max Duration (seconds)'), { target: { value: '0' } })
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Set max duration to 0 \(unlimited\)/)).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: 'Update' })).not.toBeDisabled()
   }, 60000)
 })

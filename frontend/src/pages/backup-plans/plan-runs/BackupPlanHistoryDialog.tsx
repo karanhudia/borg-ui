@@ -11,7 +11,7 @@ import {
 import { History } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
-import ResponsiveDialog from '../../../components/ResponsiveDialog'
+import ResponsiveDialog from '../../../components/shared/ResponsiveDialog'
 import { type BackupPlanRunLogJob } from '../../../components/BackupPlanRunsPanel'
 import type { BackupPlan, BackupPlanRun } from '../../../types'
 import { PlanRunsHistoryTable } from './PlanRunsHistoryTable'

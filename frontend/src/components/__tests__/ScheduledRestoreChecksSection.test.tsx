@@ -73,7 +73,7 @@ vi.mock('../RepoSelect', () => ({
   ),
 }))
 
-vi.mock('../CronBuilderDialog', () => ({
+vi.mock('../shared/CronBuilderDialog', () => ({
   default: () => <button type="button">Cron builder</button>,
 }))
 

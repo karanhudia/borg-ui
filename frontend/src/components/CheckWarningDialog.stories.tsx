@@ -33,3 +33,21 @@ export const AdvancedFlags: Story = {
     </Box>
   ),
 }
+
+export const ConflictingAdvancedFlags: Story = {
+  args: {
+    open: true,
+    repositoryName: 'Production Archive',
+    borgVersion: 1,
+    initialMaxDuration: 3600,
+    initialCheckExtraFlags: '--verify-data',
+    isLoading: false,
+    onConfirm: noop,
+    onCancel: noop,
+  },
+  render: (args) => (
+    <Box sx={{ minHeight: 560 }}>
+      <CheckWarningDialog {...args} />
+    </Box>
+  ),
+}

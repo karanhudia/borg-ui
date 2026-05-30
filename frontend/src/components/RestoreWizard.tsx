@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DialogActions, Box, Button } from '@mui/material'
 import { Files, HardDrive, CheckCircle } from 'lucide-react'
+import WizardDialog from './shared/WizardDialog'
 import {
-  WizardDialog,
   WizardStepRestoreFiles,
   WizardStepRestoreDestination,
   WizardStepRestoreReview,

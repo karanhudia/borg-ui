@@ -1,9 +1,5 @@
 import {
   Box,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Typography,
   Alert,
   Card,
@@ -15,6 +11,7 @@ import {
 import { HardDrive, Laptop, Ban } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import SourceDirectoriesInput from '../SourceDirectoriesInput'
+import SshConnectionSelect from '../shared/SshConnectionSelect'
 
 interface SSHConnection {
   id: number
@@ -331,85 +328,35 @@ export default function WizardStepDataSource({
       {/* Remote Data Source Configuration */}
       {data.dataSource === 'remote' && !isRemoteToRemoteDisabled && (
         <>
-          {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
-            <Alert severity="warning">{t('wizard.noSshConnections')}</Alert>
-          ) : (
-            <>
-              <FormControl fullWidth>
-                <InputLabel>{t('wizard.dataSource.selectRemoteClient')}</InputLabel>
-                <Select
-                  value={
-                    data.sourceSshConnectionId === '' ? '' : String(data.sourceSshConnectionId)
-                  }
-                  label={t('wizard.dataSource.selectRemoteClient')}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    if (value) {
-                      handleSourceConnectionSelect(Number(value))
-                    }
-                  }}
-                  sx={{
-                    '& .MuiSelect-select': {
-                      py: '16.5px',
-                      display: 'flex',
-                      alignItems: 'center',
-                    },
-                  }}
-                >
-                  {availableConnections.map((conn) => (
-                    <MenuItem key={conn.id} value={String(conn.id)}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                        <Laptop size={16} />
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="body2">
-                            {conn.username}@{conn.host}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Port {conn.port}
-                            {conn.mount_point && ` • ${conn.mount_point}`}
-                          </Typography>
-                        </Box>
-                        {conn.status === 'connected' && (
-                          <Box
-                            sx={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: '50%',
-                              bgcolor: 'success.main',
-                            }}
-                            title="Connected"
-                          />
-                        )}
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              {data.sourceSshConnectionId && (
-                <Box>
-                  <SourceDirectoriesInput
-                    directories={data.sourceDirs}
-                    onChange={(newDirs) => {
-                      onChange({
-                        sourceDirs: newDirs,
-                        sourceSshConnectionId:
-                          newDirs.length === 0 ? '' : data.sourceSshConnectionId,
-                      })
-                    }}
-                    onBrowseClick={onBrowseRemoteSource}
-                    required={sourceRequired && repositoryMode !== 'observe'}
-                  />
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ mt: 0.5, display: 'block' }}
-                  >
-                    {t('wizard.dataSource.browseRemoteNote')}
-                  </Typography>
-                </Box>
-              )}
-            </>
+          <SshConnectionSelect
+            value={data.sourceSshConnectionId}
+            onChange={handleSourceConnectionSelect}
+            connections={availableConnections}
+            label={t('wizard.dataSource.selectRemoteClient')}
+            emptyMessage={t('wizard.noSshConnections')}
+            connectedTooltip={t('wizard.location.connected')}
+          />
+          {data.sourceSshConnectionId && (
+            <Box>
+              <SourceDirectoriesInput
+                directories={data.sourceDirs}
+                onChange={(newDirs) => {
+                  onChange({
+                    sourceDirs: newDirs,
+                    sourceSshConnectionId: newDirs.length === 0 ? '' : data.sourceSshConnectionId,
+                  })
+                }}
+                onBrowseClick={onBrowseRemoteSource}
+                required={sourceRequired && repositoryMode !== 'observe'}
+              />
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mt: 0.5, display: 'block' }}
+              >
+                {t('wizard.dataSource.browseRemoteNote')}
+              </Typography>
+            </Box>
           )}
 
           <Alert severity="info">

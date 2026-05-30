@@ -15,7 +15,7 @@ import {
   alpha,
   useTheme,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import {
   Scissors,
   FlaskConical,

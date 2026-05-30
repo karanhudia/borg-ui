@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
-import { renderWithProviders } from '../../test/test-utils'
+import { renderWithProviders } from '../../../test/test-utils'
 import PlanGate from '../PlanGate'
-import { BUY_URL } from '../../utils/externalLinks'
+import { BUY_URL } from '../../../utils/externalLinks'
 
-vi.mock('../../hooks/usePlan', () => ({ usePlan: vi.fn() }))
-import { usePlan } from '../../hooks/usePlan'
+vi.mock('../../../hooks/usePlan', () => ({ usePlan: vi.fn() }))
+import { usePlan } from '../../../hooks/usePlan'
 
 describe('PlanGate', () => {
   it('renders children when plan meets requirement', () => {

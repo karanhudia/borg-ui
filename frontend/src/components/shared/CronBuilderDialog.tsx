@@ -10,7 +10,7 @@ import {
 } from '@mui/material'
 import ResponsiveDialog from './ResponsiveDialog'
 import { Clock } from 'lucide-react'
-import CronBuilder from './CronBuilder'
+import CronBuilder from '../CronBuilder'
 import { useTranslation } from 'react-i18next'
 
 interface CronBuilderDialogProps {

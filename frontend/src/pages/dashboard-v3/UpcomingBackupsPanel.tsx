@@ -27,20 +27,18 @@ export function UpcomingBackupsPanel({ tasks }: { tasks: UpcomingTask[] }) {
         bgcolor: T.bgCard,
         border: `1px solid ${T.border}`,
         borderRadius: T.radius,
-        backdropFilter: 'blur(12px)',
         transition: 'border-color 0.2s',
         p: 2.5,
         '&:hover': { borderColor: T.borderHover },
       }}
     >
       <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1.75 }}>
-        <RotateCw size={13} color={T.textMuted} />
+        <RotateCw size={14} color={T.textMuted} />
         <Typography
           sx={{
-            fontSize: '0.58rem',
-            color: T.textMuted,
-            letterSpacing: 2,
-            textTransform: 'uppercase',
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            color: T.textPrimary,
           }}
         >
           {t('dashboard.upcomingBackups.title')}
@@ -66,7 +64,7 @@ export function UpcomingBackupsPanel({ tasks }: { tasks: UpcomingTask[] }) {
               sx={{
                 border: `1px solid ${T.border}`,
                 borderRadius: '8px',
-                p: 1,
+                p: 1.25,
                 bgcolor: T.bgCard,
               }}
             >
@@ -76,19 +74,19 @@ export function UpcomingBackupsPanel({ tasks }: { tasks: UpcomingTask[] }) {
                     label={typeLabel(task.type)}
                     size="small"
                     sx={{
-                      height: 18,
-                      fontSize: '0.58rem',
+                      height: 22,
+                      fontSize: '0.75rem',
                       bgcolor: T.blueDim,
                       color: T.blue,
                       border: `1px solid ${T.blue}25`,
                       fontFamily: T.mono,
-                      mb: 0.6,
+                      mb: 0.75,
                     }}
                   />
                   <Typography
                     sx={{
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
                       color: T.textPrimary,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -98,7 +96,7 @@ export function UpcomingBackupsPanel({ tasks }: { tasks: UpcomingTask[] }) {
                     {task.name ?? task.repository ?? t('upcomingJobs.types.schedule')}
                   </Typography>
                   {repoCount > 0 && (
-                    <Typography sx={{ fontSize: '0.62rem', color: T.textMuted, mt: 0.25 }}>
+                    <Typography sx={{ fontSize: '0.75rem', color: T.textMuted, mt: 0.3 }}>
                       {t('upcomingJobs.repositories', { count: repoCount })}
                     </Typography>
                   )}
@@ -112,10 +110,10 @@ export function UpcomingBackupsPanel({ tasks }: { tasks: UpcomingTask[] }) {
                     <Typography
                       sx={{
                         fontFamily: T.mono,
-                        fontSize: '0.58rem',
+                        fontSize: '0.75rem',
                         color: T.textMuted,
                         whiteSpace: 'nowrap',
-                        pt: 0.2,
+                        pt: 0.3,
                       }}
                     >
                       {nextRunLabel}

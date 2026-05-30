@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import CronBuilderDialog from '../CronBuilderDialog'
 
 // Mock CronBuilder since it's a complex component
-vi.mock('../CronBuilder', () => ({
+vi.mock('../../CronBuilder', () => ({
   default: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
     <div data-testid="mock-cron-builder">
       <input

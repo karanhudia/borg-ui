@@ -276,6 +276,8 @@
       "title": "Repository Health",
       "upToDate": "Backups up to date",
       "needsAttention": "Needs attention",
+      "needsAttentionSection": "Needs attention",
+      "healthySection": "Healthy",
       "next24h": "Next 24 hours",
       "maintenanceNeeded": "Maintenance Needed",
       "allHealthy": "All systems healthy!",
@@ -291,7 +293,9 @@
         "freshness": "FRESH",
         "archives": "ARCHIVES"
       },
-      "archiveCountShort": "{{count}} arx"
+      "archiveCountShort": "{{count}} arx",
+      "planCount_one": "{{count}} plan",
+      "planCount_other": "{{count}} plans"
     },
     "noRepositories": "No repositories configured yet. Create your first repository to start backing up!",
     "noRepositoriesShort": "No repositories",
@@ -312,7 +316,9 @@
     "storageDonut": {
       "archivesCount": "{{count}} archives",
       "noData": "No data",
-      "dedupRatio": "Dedup ratio"
+      "dedupRatio": "Dedup ratio",
+      "otherRepos_one": "Other ({{count}} repo)",
+      "otherRepos_other": "Other ({{count}} repos)"
     },
     "successDonut": {
       "label": "30-day success",
@@ -357,6 +363,7 @@
         "lastBackup": "Last backup",
         "schedules": "Schedules",
         "automations": "Automations",
+        "automationsCta": "Set up a schedule",
         "storage": "Storage"
       }
     },
@@ -765,6 +772,12 @@
       "summaryEmpty": "No source selected yet",
       "chooseSource": "Choose source",
       "title": "Choose backup source",
+      "kindFiles": "Files",
+      "kindDatabase": "Database",
+      "kindContainer": "Container",
+      "kindContainerSoonBadge": "Soon",
+      "advancedCaptureMode": "Advanced — Capture mode",
+      "captureModeDirect": "Direct (no snapshot)",
       "databaseTitle": "Database scan",
       "filesTitle": "Files and folders",
       "mixedSources": "Multiple sources",
@@ -788,7 +801,6 @@
       "selectedSourceGroups": "Selected source groups",
       "removePath": "Remove path",
       "removeSourceGroup": "Remove source group",
-      "containerPlanned": "Planned",
       "backToTypes": "Back to source types",
       "applyPaths": "Use these paths",
       "selectPaths": "Select paths",
@@ -829,14 +841,12 @@
       "selectRemoteMachine": "Select a remote machine",
       "noRemoteMachines": "No SSH connections available",
       "where": "Where are the files?",
-      "scanDatabaseInstead": "Scan a database instead",
       "readingFromLocal": "Reading directly from this server",
       "snapshotMode": "Snapshot mode",
       "snapshotModeNone": "No filesystem snapshot",
       "snapshotModeBtrfs": "btrfs snapshot",
       "snapshotModeZfs": "zfs snapshot",
       "snapshotRequirementsTitle": "Host requirements",
-      "snapshotLocalOnly": "Snapshots are only available for Borg UI server paths.",
       "snapshotBtrfsStagingPath": "Snapshot staging path",
       "snapshotZfsDataset": "ZFS dataset",
       "snapshotZfsMountpoint": "ZFS mountpoint",
@@ -2980,7 +2990,7 @@
     "checkScheduleLabel": "Check Schedule",
     "timezoneLabel": "Timezone",
     "maxDuration": "Max Duration (seconds)",
-    "maxDurationHint": "Time limit for check operation (3600 = 1 hour)",
+    "maxDurationHint": "Time limit for check operation (3600 = 1 hour). Use 0 for unlimited/full checks.",
     "maxDurationHintBorg2": "For Borg 2, a time limit runs a partial repository-only check (3600 = 1 hour). Use 0 to include archive checks.",
     "extraFlags": "Advanced check flags",
     "extraFlagsHint": "Additional borg check options appended to scheduled checks.",
@@ -3253,6 +3263,13 @@
       "rcloneOAuthTokenReady": "Token ready to save server-side.",
       "rcloneOAuthFailed": "Authorization did not complete.",
       "rcloneOAuthCredentialsTitle": "Provider OAuth app",
+      "rcloneOAuthCredentialsScopeHint": "Set once per provider. Reused by every {{provider}} remote on this server.",
+      "rcloneOAuthEditCredentials": "Edit",
+      "rcloneConnectSectionTitle": "Connect",
+      "rcloneOAuthHelpLabel": "About sign-in modes",
+      "rcloneOAuthHelpTooltip": "Borg UI callback handles OAuth on your server. Recommended for headless or remote installs.\n\nrclone loopback opens a 127.0.0.1 URL in your browser. Use it only when your browser can reach the same host as the rclone process.",
+      "rcloneAdvancedTitle": "Advanced",
+      "rcloneAdvancedHelper": "Provider fields and raw config JSON.",
       "rcloneOAuthClientIdLabel": "OAuth client ID",
       "rcloneOAuthClientSecretLabel": "OAuth client secret",
       "rcloneOAuthCredentialsSave": "Save OAuth credentials",
@@ -4084,6 +4101,9 @@
   "terminalLog": {
     "inProgress": "{{type}} in progress..."
   },
+  "checkFlagConflicts": {
+    "durationConflict": "Set max duration to 0 (unlimited) to use {{flags}}. Positive durations run partial repository-only checks, which conflict with full archive-aware Borg check flags."
+  },
   "backend": {
     "errors": {
       "auth": {
@@ -4178,6 +4198,7 @@
         "cannotSwitchToFullModeNoSourceDirs": "Cannot switch to full mode: at least one source directory is required",
         "cannotDeleteRepoWithArchives": "Cannot delete repository with existing archives. Please delete all archives first.",
         "checkAlreadyRunning": "A check operation is already running for this repository",
+        "checkFlagsRequireUnlimitedDuration": "Set max duration to 0 (unlimited) when using {{flags}} because these Borg check flags require a full archive-aware check.",
         "compactAlreadyRunning": "A compact operation is already running for this repository",
         "restoreCheckCanaryUnsupportedObserve": "Canary restore checks are unavailable for observe-only repositories. Use selected probe paths or a full archive drill.",
         "breakLockTimeout": "Timeout while trying to break lock",

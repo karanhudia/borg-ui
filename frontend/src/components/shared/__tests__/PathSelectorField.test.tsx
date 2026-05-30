@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import PathSelectorField from '../PathSelectorField'
 
 // Mock FileExplorerDialog
-vi.mock('../FileExplorerDialog', () => ({
+vi.mock('../../FileExplorerDialog', () => ({
   default: ({
     open,
     onClose,

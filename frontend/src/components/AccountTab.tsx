@@ -33,7 +33,7 @@ import AccountTabNavigation, { AccountView } from './AccountTabNavigation'
 import { createPasskeyCredential } from '../utils/webauthn'
 import { getDefaultPasskeyDeviceName } from '../utils/passkeyDeviceName'
 import AccountSecuritySettingsSection from './AccountSecuritySettingsSection'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 
 const AccountTab: React.FC = () => {
   const { t } = useTranslation()

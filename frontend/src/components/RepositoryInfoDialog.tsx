@@ -11,7 +11,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material'
-import ResponsiveDialog from './ResponsiveDialog'
+import ResponsiveDialog from './shared/ResponsiveDialog'
 import { useEffect, useState } from 'react'
 import CalendarMonth from '@mui/icons-material/CalendarMonth'
 import FileDownload from '@mui/icons-material/FileDownload'
@@ -25,7 +25,7 @@ import { toast } from 'react-hot-toast'
 import RepositoryStatsV1 from './RepositoryStatsV1'
 import RepositoryStatsV2, { type ArchiveEntry } from './RepositoryStatsV2'
 import type { CacheStats } from './RepositoryStatsV1'
-import PlanGate from './PlanGate'
+import PlanGate from './shared/PlanGate'
 import UpgradePrompt from './UpgradePrompt'
 import { Repository } from '../types'
 import { isV2Repo } from '../utils/repoCapabilities'

@@ -276,6 +276,8 @@
       "title": "Salute Repository",
       "upToDate": "Backup aggiornati",
       "needsAttention": "Richiede attenzione",
+      "needsAttentionSection": "Richiede attenzione",
+      "healthySection": "In salute",
       "next24h": "Prossime 24 ore",
       "maintenanceNeeded": "Manutenzione Necessaria",
       "allHealthy": "Tutti i sistemi sono in salute!",
@@ -291,7 +293,9 @@
         "freshness": "RECENTE",
         "archives": "ARCHIVI"
       },
-      "archiveCountShort": "{{count}} arx"
+      "archiveCountShort": "{{count}} arx",
+      "planCount_one": "{{count}} piano",
+      "planCount_other": "{{count}} piani"
     },
     "noRepositories": "Nessun repository configurato. Crea il tuo primo repository per iniziare a fare backup!",
     "noRepositoriesShort": "Nessun repository",
@@ -312,7 +316,9 @@
     "storageDonut": {
       "archivesCount": "{{count}} archivi",
       "noData": "Nessun dato",
-      "dedupRatio": "Rapporto dedup."
+      "dedupRatio": "Rapporto dedup.",
+      "otherRepos_one": "Altri ({{count}} repo)",
+      "otherRepos_other": "Altri ({{count}} repo)"
     },
     "successDonut": {
       "label": "Successo 30 giorni",
@@ -357,6 +363,7 @@
         "lastBackup": "Ultimo backup",
         "schedules": "Pianificazioni",
         "automations": "Automazioni",
+        "automationsCta": "Configura una pianificazione",
         "storage": "Archiviazione"
       }
     },
@@ -765,6 +772,12 @@
       "summaryEmpty": "No source selected yet",
       "chooseSource": "Choose source",
       "title": "Choose backup source",
+      "kindFiles": "Files",
+      "kindDatabase": "Database",
+      "kindContainer": "Container",
+      "kindContainerSoonBadge": "Soon",
+      "advancedCaptureMode": "Advanced — Capture mode",
+      "captureModeDirect": "Direct (no snapshot)",
       "databaseTitle": "Database scan",
       "filesTitle": "Files and folders",
       "mixedSources": "Multiple sources",
@@ -788,7 +801,6 @@
       "selectedSourceGroups": "Selected source groups",
       "removePath": "Remove path",
       "removeSourceGroup": "Remove source group",
-      "containerPlanned": "Planned",
       "backToTypes": "Back to source types",
       "applyPaths": "Use these paths",
       "selectPaths": "Select paths",
@@ -829,14 +841,12 @@
       "selectRemoteMachine": "Select a remote machine",
       "noRemoteMachines": "No SSH connections available",
       "where": "Where are the files?",
-      "scanDatabaseInstead": "Scan a database instead",
       "readingFromLocal": "Reading directly from this server",
       "snapshotMode": "Modalità snapshot",
       "snapshotModeNone": "Nessuno snapshot del filesystem",
       "snapshotModeBtrfs": "snapshot btrfs",
       "snapshotModeZfs": "snapshot zfs",
       "snapshotRequirementsTitle": "Requisiti dell'host",
-      "snapshotLocalOnly": "Gli snapshot sono disponibili solo per i percorsi del server Borg UI.",
       "snapshotBtrfsStagingPath": "Percorso di staging dello snapshot",
       "snapshotZfsDataset": "Dataset ZFS",
       "snapshotZfsMountpoint": "Punto di montaggio ZFS",
@@ -2980,7 +2990,7 @@
     "checkScheduleLabel": "Pianificazione Controllo",
     "timezoneLabel": "Fuso orario",
     "maxDuration": "Durata Massima (secondi)",
-    "maxDurationHint": "Limite di tempo per l'operazione di controllo (3600 = 1 ora)",
+    "maxDurationHint": "Limite di tempo per l'operazione di controllo (3600 = 1 ora). Usa 0 per controlli completi/illimitati.",
     "maxDurationHintBorg2": "Con Borg 2, un limite di tempo esegue un controllo parziale del solo repository (3600 = 1 ora). Usa 0 per includere i controlli degli archivi.",
     "extraFlags": "Flag avanzati di check",
     "extraFlagsHint": "Opzioni aggiuntive di borg check aggiunte ai controlli pianificati.",
@@ -3253,6 +3263,13 @@
       "rcloneOAuthTokenReady": "Token pronto per il salvataggio lato server.",
       "rcloneOAuthFailed": "L'autorizzazione non è stata completata.",
       "rcloneOAuthCredentialsTitle": "App OAuth del provider",
+      "rcloneOAuthCredentialsScopeHint": "Imposta una volta per provider. Viene riutilizzata da ogni remoto {{provider}} su questo server.",
+      "rcloneOAuthEditCredentials": "Modifica",
+      "rcloneConnectSectionTitle": "Connetti",
+      "rcloneOAuthHelpLabel": "Informazioni sui modi di accesso",
+      "rcloneOAuthHelpTooltip": "Il callback di Borg UI gestisce OAuth sul tuo server. Consigliato per installazioni headless o remote.\n\nIl loopback di rclone apre un URL 127.0.0.1 nel tuo browser. Usalo solo quando il tuo browser può raggiungere lo stesso host del processo rclone.",
+      "rcloneAdvancedTitle": "Avanzate",
+      "rcloneAdvancedHelper": "Campi del provider e JSON di configurazione grezzo.",
       "rcloneOAuthClientIdLabel": "ID client OAuth",
       "rcloneOAuthClientSecretLabel": "Segreto client OAuth",
       "rcloneOAuthCredentialsSave": "Salva credenziali OAuth",
@@ -4084,6 +4101,9 @@
   "terminalLog": {
     "inProgress": "{{type}} in corso..."
   },
+  "checkFlagConflicts": {
+    "durationConflict": "Imposta la durata massima a 0 (illimitata) per usare {{flags}}. Le durate positive eseguono controlli parziali solo del repository, in conflitto con i flag Borg check completi con archivi."
+  },
   "backend": {
     "errors": {
       "auth": {
@@ -4178,6 +4198,7 @@
         "cannotSwitchToFullModeNoSourceDirs": "Impossibile passare alla modalità completa: è richiesta almeno una directory sorgente",
         "cannotDeleteRepoWithArchives": "Impossibile eliminare il repository con archivi esistenti. Elimina prima tutti gli archivi.",
         "checkAlreadyRunning": "Un'operazione di controllo è già in esecuzione per questo repository",
+        "checkFlagsRequireUnlimitedDuration": "Imposta la durata massima a 0 (illimitata) quando usi {{flags}} perché questi flag di Borg check richiedono un controllo completo con archivi.",
         "compactAlreadyRunning": "Un'operazione di compattazione è già in esecuzione per questo repository",
         "restoreCheckCanaryUnsupportedObserve": "I controlli di ripristino canary non sono disponibili per i repository solo osservazione. Usa percorsi di prova selezionati o una verifica dell'intero archivio.",
         "breakLockTimeout": "Timeout durante il tentativo di rompere il blocco",

@@ -19,7 +19,7 @@ import {
 import { AlertCircle, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatRoleLabel } from '../../utils/rolePresentation'
-import ResponsiveDialog from '../ResponsiveDialog'
+import ResponsiveDialog from '../shared/ResponsiveDialog'
 import UserPermissionsPanel from '../UserPermissionsPanel'
 import { PasswordFormState, UserFormState, UserType } from './types'
 

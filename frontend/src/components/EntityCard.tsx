@@ -50,9 +50,6 @@ export interface EntityCardProps {
   isHighlighted?: boolean
 }
 
-const DEFAULT_ACCENT = '#059669'
-const HIGHLIGHT_ACCENT = '#f59e0b'
-
 export default function EntityCard({
   title,
   subtitle,
@@ -63,12 +60,14 @@ export default function EntityCard({
   toggle,
   actions,
   primaryAction,
-  accentColor = DEFAULT_ACCENT,
+  accentColor,
   isHighlighted = false,
 }: EntityCardProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
-  const effectiveAccent = isHighlighted ? HIGHLIGHT_ACCENT : accentColor
+  const defaultAccent = theme.palette.success.main
+  const highlightAccent = theme.palette.warning.main
+  const effectiveAccent = isHighlighted ? highlightAccent : (accentColor ?? defaultAccent)
 
   const iconBtnSx = {
     width: 32,
