@@ -9,7 +9,7 @@ import { isAxiosError } from 'axios'
 
 import RepositoryWizard from '../components/RepositoryWizard'
 import { type PruneSettings } from '../components/PruneSettingsInput'
-import { WizardDialog } from '../components/wizard'
+import WizardDialog from '../components/shared/WizardDialog'
 import LogViewerDialog from '../components/LogViewerDialog'
 import FileExplorerDialog from '../components/FileExplorerDialog'
 import { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'

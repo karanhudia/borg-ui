@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DialogActions, Box, Button, CircularProgress } from '@mui/material'
 import { Cloud, FolderOpen, Database, Shield, Settings, CheckCircle } from 'lucide-react'
+import WizardDialog from './shared/WizardDialog'
 import {
-  WizardDialog,
   RcloneRemoteDialog,
   RcloneRemoteFolderPickerDialog,
   WizardStepCloudMirror,

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { DialogProps, SxProps, Theme } from '@mui/material'
 import { Box, DialogContent, DialogTitle, Typography } from '@mui/material'
 
-import ResponsiveDialog from '../shared/ResponsiveDialog'
+import ResponsiveDialog from './ResponsiveDialog'
 import WizardStepIndicator from './WizardStepIndicator'
 
 export interface WizardStep {

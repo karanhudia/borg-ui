@@ -1,5 +1,3 @@
-export { default as WizardStepIndicator } from './WizardStepIndicator'
-export { default as WizardDialog } from './WizardDialog'
 export { default as WizardStepLocation } from './WizardStepLocation'
 export { default as WizardStepDataSource } from './WizardStepDataSource'
 export { default as WizardStepSecurity } from './WizardStepSecurity'
@@ -19,7 +17,6 @@ export { default as WizardStepRestoreDestination } from './WizardStepRestoreDest
 export { default as WizardStepRestoreReview } from './WizardStepRestoreReview'
 
 export type { LocationStepData } from './WizardStepLocation'
-export type { WizardStep } from './WizardDialog'
 export type { DataSourceStepData } from './WizardStepDataSource'
 export type { SecurityStepData } from './WizardStepSecurity'
 export type { RepositoryEncryptionData } from './RepositoryEncryptionFields'
