@@ -9,8 +9,10 @@ set -euo pipefail
 SERVER=""
 TOKEN=""
 AGENT_NAME=""
+REINSTALL="0"
 AGENT_REF="main"
 BORG_VERSION="1"
+BORG_VERSION_SET="0"
 SKIP_BORG_INSTALL="0"
 BORG2_VENV="/opt/borg-ui-agent/borg2-venv"
 BORG2_LINK="/usr/local/bin/borg2"
@@ -26,11 +28,22 @@ Usage:
     [--borg-version 1|2|both] \
     [--skip-borg-install]
 
+  curl -fsSL http://SERVER:PORT/agent/install.sh | sudo bash -s -- \
+    --reinstall \
+    [--version main] \
+    [--borg-version 1|2|both] \
+    [--skip-borg-install]
+
 Borg install options:
   --borg-version 1      Install/verify Borg 1 as 'borg' (default).
   --borg-version 2      Install/verify Borg 2 as 'borg2' (advanced beta).
   --borg-version both   Install/verify Borg 1 and Borg 2.
-  --skip-borg-install   Do not install Borg; register with detected binaries only.
+  --skip-borg-install   Do not install Borg; register/reinstall with detected binaries only.
+
+Reinstall mode updates the agent package and systemd unit on an already enrolled
+machine. It preserves /etc/borg-ui-agent/config.toml and does not require an
+enrollment token, agent name, or registration. By default, reinstall mode skips
+Borg installation; pass --borg-version to verify or update Borg binaries.
 USAGE
 }
 
@@ -48,6 +61,10 @@ while [[ $# -gt 0 ]]; do
       AGENT_NAME="${2:-}"
       shift 2
       ;;
+    --reinstall)
+      REINSTALL="1"
+      shift
+      ;;
     --version)
       AGENT_REF="${2:-main}"
       shift 2
@@ -62,6 +79,7 @@ while [[ $# -gt 0 ]]; do
           exit 2
           ;;
       esac
+      BORG_VERSION_SET="1"
       shift 2
       ;;
     --skip-borg-install)
@@ -85,7 +103,17 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-if [[ -z "${SERVER}" || -z "${TOKEN}" || -z "${AGENT_NAME}" ]]; then
+if [[ "${REINSTALL}" == "1" ]]; then
+  if [[ ! -r /etc/borg-ui-agent/config.toml ]]; then
+    echo "Reinstall mode requires an existing /etc/borg-ui-agent/config.toml." >&2
+    echo "Use the Add Agent install command for first-time enrollment." >&2
+    exit 2
+  fi
+  if [[ "${BORG_VERSION_SET}" == "0" ]]; then
+    SKIP_BORG_INSTALL="1"
+    echo "Skipping Borg installation by default for reinstall mode."
+  fi
+elif [[ -z "${SERVER}" || -z "${TOKEN}" || -z "${AGENT_NAME}" ]]; then
   echo "--server, --token, and --name are required." >&2
   usage >&2
   exit 2
@@ -220,16 +248,20 @@ fi
 
 python3 -m venv /opt/borg-ui-agent/.venv
 /opt/borg-ui-agent/.venv/bin/python -m pip install --upgrade pip wheel
-/opt/borg-ui-agent/.venv/bin/pip install \
+/opt/borg-ui-agent/.venv/bin/pip install --upgrade --force-reinstall \
   "git+https://github.com/karanhudia/borg-ui.git@${AGENT_REF}"
 
-# Register the machine with Borg UI using borg-ui-agent register.
-runuser -u borg-ui-agent -- /opt/borg-ui-agent/.venv/bin/borg-ui-agent \
-  --config /etc/borg-ui-agent/config.toml \
-  register \
-  --server "${SERVER}" \
-  --token "${TOKEN}" \
-  --name "${AGENT_NAME}"
+if [[ "${REINSTALL}" == "1" ]]; then
+  echo "Preserving existing agent registration at /etc/borg-ui-agent/config.toml."
+else
+  # Register the machine with Borg UI using borg-ui-agent register.
+  runuser -u borg-ui-agent -- /opt/borg-ui-agent/.venv/bin/borg-ui-agent \
+    --config /etc/borg-ui-agent/config.toml \
+    register \
+    --server "${SERVER}" \
+    --token "${TOKEN}" \
+    --name "${AGENT_NAME}"
+fi
 
 cat >/etc/systemd/system/borg-ui-agent.service <<'SERVICE'
 [Unit]
@@ -260,9 +292,15 @@ SERVICE
   --config /etc/borg-ui-agent/config.toml
 
 systemctl daemon-reload
-systemctl enable --now borg-ui-agent
+if [[ "${REINSTALL}" == "1" ]]; then
+  systemctl enable borg-ui-agent
+  systemctl restart borg-ui-agent
+  echo "Borg UI agent reinstalled and restarted."
+else
+  systemctl enable --now borg-ui-agent
+  echo "Borg UI agent installed and started."
+fi
 
-echo "Borg UI agent installed and started."
 echo "Check status with: systemctl status borg-ui-agent"
 """
 

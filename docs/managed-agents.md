@@ -46,6 +46,22 @@ installer requires root or sudo, installs system dependencies, creates the
 The machine appears in Managed Agents after registration and its first live
 session. The wizard waits for that connection while the command is displayed.
 
+## Reinstall or Update an Existing Agent
+
+Use the **Reinstall agent** action on an existing agent card when you want to
+update the installed `borg-ui-agent` package on a machine that is already
+enrolled. Borg UI shows a tokenless command:
+
+```bash
+curl -fsSL http://borg-ui-host:8083/agent/install.sh | sudo bash -s -- --reinstall
+```
+
+Run it on that enrolled machine. Reinstall mode requires the existing
+`/etc/borg-ui-agent/config.toml`, preserves the stored agent credential, skips
+the registration step, refreshes the installed package and systemd unit, and
+restarts `borg-ui-agent`. You do not need a new enrollment token unless you are
+enrolling a different machine or recreating a missing local agent config.
+
 ## Server URL and Localhost
 
 The `--server` value must be reachable from the client machine. If Borg UI and
