@@ -19,7 +19,7 @@ import { useT } from './tokens'
  * or decoration. Color alone is never the only signal (the parent surface
  * also carries the status via border and chip).
  */
-export function PulseDot({ color }: { color: string; glow?: string }) {
+export function PulseDot({ color }: { color: string }) {
   return (
     <Box
       sx={{

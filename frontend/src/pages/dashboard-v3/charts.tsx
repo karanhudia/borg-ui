@@ -4,8 +4,11 @@ import { SEG_COLORS, useT } from './tokens'
 
 export function SuccessDonut({ rate, good, total }: { rate: number; good: number; total: number }) {
   const T = useT()
-  const size = 148,
-    sw = 13,
+  // Shrunk from 148/13 to 96/9 so the ring reads as supporting data viz,
+  // not a hero metric. The headline percentage now lives in the panel
+  // header (label/value pair), so the centerpiece only carries the ratio.
+  const size = 96,
+    sw = 9,
     r = (size - sw) / 2
   const circ = 2 * Math.PI * r
   const filled = (rate / 100) * circ
@@ -38,18 +41,21 @@ export function SuccessDonut({ rate, good, total }: { rate: number; good: number
           position: 'absolute',
           inset: 0,
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
         <Typography
-          sx={{ fontFamily: T.mono, fontSize: '1.5rem', fontWeight: 700, color, lineHeight: 1 }}
+          sx={{
+            fontFamily: T.mono,
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            color: T.textMuted,
+            lineHeight: 1,
+          }}
+          aria-label={`${good} of ${total} successful`}
         >
-          {rate.toFixed(0)}%
-        </Typography>
-        <Typography sx={{ fontSize: '0.75rem', color: T.textMuted, mt: 0.5 }}>
-          {good}/{total} OK
+          {good}/{total}
         </Typography>
       </Box>
     </Box>
@@ -67,8 +73,11 @@ export function StorageDonut({
 }) {
   const T = useT()
   const { t } = useTranslation()
-  const size = 148,
-    sw = 16,
+  // Shrunk from 148/16 to 96/11 to walk back the hero-metric framing.
+  // The total size now lives in the panel header; the centerpiece only
+  // carries the archives count as a quiet data label.
+  const size = 96,
+    sw = 11,
     r = (size - sw) / 2
   const circ = 2 * Math.PI * r
   const slices = breakdown.slice(0, 5)
@@ -124,7 +133,6 @@ export function StorageDonut({
             position: 'absolute',
             inset: 0,
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -132,20 +140,13 @@ export function StorageDonut({
           <Typography
             sx={{
               fontFamily: T.mono,
-              fontSize: '1.05rem',
-              fontWeight: 700,
-              color: T.textPrimary,
-              lineHeight: 1,
-            }}
-          >
-            {totalSize}
-          </Typography>
-          <Typography
-            sx={{
               fontSize: '0.75rem',
+              fontWeight: 600,
               color: T.textMuted,
-              mt: 0.5,
+              lineHeight: 1,
+              textAlign: 'center',
             }}
+            aria-label={`${totalSize} across ${totalArchives} archives`}
           >
             {t('dashboard.storageDonut.archivesCount', { count: totalArchives })}
           </Typography>

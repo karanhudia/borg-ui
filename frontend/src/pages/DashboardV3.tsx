@@ -134,7 +134,7 @@ export default function DashboardV3() {
           }}
         >
           <Stack direction="row" spacing={2} alignItems="center">
-            <PulseDot color={sc.color} glow={sc.glow} />
+            <PulseDot color={sc.color} />
             <Box>
               <Typography
                 sx={{
@@ -241,63 +241,80 @@ export default function DashboardV3() {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: '220px 1fr' },
+            gridTemplateColumns: { xs: '1fr', md: '200px 1fr' },
             gap: 2.5,
             alignItems: 'start',
           }}
         >
           {/* Left: donut + resources */}
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <Box sx={{ ...surface, p: 2.5, textAlign: 'center' }}>
-              <Typography
-                sx={{
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  color: T.textPrimary,
-                  mb: 2,
-                }}
+            <Box sx={{ ...surface, p: 2 }}>
+              {/* Header carries the label and the headline value side by side.
+                  The donut below is a glanceable shape, not the focal point. */}
+              <Stack
+                direction="row"
+                alignItems="baseline"
+                justifyContent="space-between"
+                sx={{ mb: 1.75 }}
               >
-                {t('dashboard.successDonut.label')}
-              </Typography>
+                <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: T.textPrimary }}>
+                  {t('dashboard.successDonut.label')}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontFamily: T.mono,
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    color:
+                      summary.success_rate_30d >= 90
+                        ? T.green
+                        : summary.success_rate_30d >= 70
+                          ? T.amber
+                          : T.red,
+                    lineHeight: 1,
+                  }}
+                >
+                  {summary.success_rate_30d.toFixed(0)}%
+                </Typography>
+              </Stack>
               <SuccessDonut
                 rate={summary.success_rate_30d}
                 good={summary.successful_jobs_30d}
                 total={summary.total_jobs_30d}
               />
-              <Stack direction="row" justifyContent="center" spacing={2.5} sx={{ mt: 2 }}>
-                <Box>
+              <Stack direction="row" justifyContent="space-between" sx={{ mt: 1.75, px: 0.5 }}>
+                <Stack direction="row" alignItems="baseline" spacing={0.75}>
                   <Typography
                     sx={{
                       fontFamily: T.mono,
                       fontWeight: 700,
                       color: T.green,
-                      fontSize: '1.1rem',
+                      fontSize: '0.875rem',
                       lineHeight: 1,
                     }}
                   >
                     {summary.successful_jobs_30d}
                   </Typography>
-                  <Typography sx={{ fontSize: '0.75rem', color: T.textMuted, mt: 0.4 }}>
+                  <Typography sx={{ fontSize: '0.75rem', color: T.textMuted }}>
                     {t('dashboard.successDonut.passed')}
                   </Typography>
-                </Box>
-                <Box sx={{ width: '1px', height: 28, bgcolor: T.border, flexShrink: 0 }} />
-                <Box>
+                </Stack>
+                <Stack direction="row" alignItems="baseline" spacing={0.75}>
                   <Typography
                     sx={{
                       fontFamily: T.mono,
                       fontWeight: 700,
                       color: summary.failed_jobs_30d > 0 ? T.red : T.textMuted,
-                      fontSize: '1.1rem',
+                      fontSize: '0.875rem',
                       lineHeight: 1,
                     }}
                   >
                     {summary.failed_jobs_30d}
                   </Typography>
-                  <Typography sx={{ fontSize: '0.75rem', color: T.textMuted, mt: 0.4 }}>
+                  <Typography sx={{ fontSize: '0.75rem', color: T.textMuted }}>
                     {t('dashboard.successDonut.failed')}
                   </Typography>
-                </Box>
+                </Stack>
               </Stack>
             </Box>
 
@@ -339,17 +356,31 @@ export default function DashboardV3() {
             <UpcomingBackupsPanel tasks={ov.upcoming_tasks} />
 
             {/* Storage donut */}
-            <Box sx={{ ...surface, p: 2.5 }}>
-              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 1.75 }}>
-                <HardDrive size={14} color={T.textMuted} />
+            <Box sx={{ ...surface, p: 2 }}>
+              {/* Total size moves into the header so it reads as data, not a
+                  centered hero number. */}
+              <Stack
+                direction="row"
+                alignItems="baseline"
+                justifyContent="space-between"
+                sx={{ mb: 1.75 }}
+              >
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                  <HardDrive size={14} color={T.textMuted} />
+                  <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: T.textPrimary }}>
+                    {t('dashboard.banner.stats.storage')}
+                  </Typography>
+                </Stack>
                 <Typography
                   sx={{
-                    fontSize: '0.8125rem',
-                    fontWeight: 600,
+                    fontFamily: T.mono,
+                    fontSize: '0.875rem',
+                    fontWeight: 700,
                     color: T.textPrimary,
+                    lineHeight: 1,
                   }}
                 >
-                  {t('dashboard.banner.stats.storage')}
+                  {storage.total_size}
                 </Typography>
               </Stack>
               <StorageDonut

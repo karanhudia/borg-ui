@@ -300,7 +300,7 @@ describe('DashboardV3', () => {
     it('shows job ratio label', async () => {
       mockFetchSuccess(makeOverview())
       renderDashboard()
-      await waitFor(() => expect(screen.getByText('5/6 OK')).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByText('5/6')).toBeInTheDocument())
     })
   })
 
