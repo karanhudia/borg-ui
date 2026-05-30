@@ -27,7 +27,11 @@ async def dispatch_agent_job_if_connected(
     *,
     timeout_seconds: float = 1.0,
 ) -> bool:
-    if not agent_connection_manager.is_connected(job.agent_machine_id):
+    agent_machine_id = getattr(job, "agent_machine_id", None)
+    if agent_machine_id is None:
+        return False
+
+    if not agent_connection_manager.is_connected(agent_machine_id):
         return False
 
     previous_status = job.status
@@ -41,7 +45,7 @@ async def dispatch_agent_job_if_connected(
 
     try:
         await agent_connection_manager.send_command(
-            job.agent_machine_id,
+            agent_machine_id,
             command=agent_job_kind(job),
             payload=job.payload or {},
             job_id=job.id,
@@ -54,7 +58,7 @@ async def dispatch_agent_job_if_connected(
         job.updated_at = _now_utc()
         db.commit()
         agent_connection_manager.append_log(
-            job.agent_machine_id,
+            agent_machine_id,
             level="error",
             stream="session",
             job_id=job.id,
