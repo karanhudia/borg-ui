@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Reproduce With Failing Tests
+## Task 1: Reproduce With Failing Tests
 
 **Files:**
 - Modify: `tests/unit/test_api_rclone.py`
@@ -20,7 +20,7 @@
 - [ ] Add a frontend test in `legacy edit mode` that renders a cached rclone repository with `storage_backend: "rclone"` and `rclone_storage`, walks to review, submits the wizard, and expects `onSubmit` to receive `storage_backend: "rclone"` with the existing rclone remote/path/sync fields.
 - [ ] Run the two new tests before production code changes. Expected result: backend rollback test should pass if rollback already holds; frontend test should fail because the wizard currently submits `storage_backend: "local"`.
 
-### Task 2: Fix Cached Rclone Wizard Payloads
+## Task 2: Fix Cached Rclone Wizard Payloads
 
 **Files:**
 - Modify: `frontend/src/components/RepositoryWizard.tsx`
@@ -30,7 +30,7 @@
 - [ ] Preserve existing direct Borg 2 rclone behavior and local/SSH/agent cloud mirror behavior.
 - [ ] Run the frontend red test again. Expected result: pass.
 
-### Task 3: Clarify Unsupported Update Copy
+## Task 3: Clarify Unsupported Update Copy
 
 **Files:**
 - Modify: `frontend/src/locales/en.json`
@@ -41,7 +41,7 @@
 - [ ] Update `backend.errors.rclone.updateUnsupported` text to explain that Borg UI can edit the selected rclone remote, path, sync policy, and flags, but changing the repository storage mode requires creating or importing a new repository.
 - [ ] Run locale parity after the locale edits.
 
-### Task 4: Storybook Coverage
+## Task 4: Storybook Coverage
 
 **Files:**
 - Modify: `frontend/src/components/wizard/WizardStepCloudMirror.stories.tsx` or `frontend/src/components/RepositoryWizard.stories.tsx` if an existing repository-wizard story file exists.
@@ -50,7 +50,7 @@
 - [ ] If the wizard has no full component story and the changed UI is payload-only, record that no visual Storybook story was applicable and rely on the existing cloud mirror stories plus unit coverage.
 - [ ] If a story changes, run `cd frontend && npm run snapshots` and commit the generated files.
 
-### Task 5: Validate, Commit, And Publish
+## Task 5: Validate, Commit, And Publish
 
 **Files:**
 - Modify only files touched by the implementation and generated snapshots if applicable.
