@@ -1,7 +1,48 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders, screen, userEvent } from '../../test/test-utils'
+import { darkTheme, theme } from '../../theme'
 import PlanInfoDrawer from '../PlanInfoDrawer'
+import { getPlanDrawerContrastPairs } from '../planDrawerColors'
 import { BUY_URL } from '../../utils/externalLinks'
+import type { Plan } from '../../core/features'
+
+type Rgb = [number, number, number]
+
+function hexToRgb(color: string): Rgb {
+  const match = color.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i)
+
+  if (!match) {
+    throw new Error(`Expected a hex color, received ${color}`)
+  }
+
+  return [
+    Number.parseInt(match[1], 16),
+    Number.parseInt(match[2], 16),
+    Number.parseInt(match[3], 16),
+  ]
+}
+
+function linearizeChannel(channel: number) {
+  const value = channel / 255
+  return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+}
+
+function relativeLuminance([red, green, blue]: Rgb) {
+  return (
+    0.2126 * linearizeChannel(red) +
+    0.7152 * linearizeChannel(green) +
+    0.0722 * linearizeChannel(blue)
+  )
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const foregroundLuminance = relativeLuminance(hexToRgb(foreground))
+  const backgroundLuminance = relativeLuminance(hexToRgb(background))
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance)
+  const darker = Math.min(foregroundLuminance, backgroundLuminance)
+
+  return (lighter + 0.05) / (darker + 0.05)
+}
 
 const { trackPlan } = vi.hoisted(() => ({
   trackPlan: vi.fn(),
@@ -124,6 +165,18 @@ describe('PlanInfoDrawer', () => {
     vi.clearAllMocks()
   })
 
+  it('keeps plan drawer text colors above WCAG AA contrast in light and dark themes', () => {
+    const minimumNormalTextContrast = 4.5
+
+    for (const muiTheme of [theme, darkTheme]) {
+      for (const pair of getPlanDrawerContrastPairs(muiTheme)) {
+        expect(contrastRatio(pair.foreground, pair.background), pair.name).toBeGreaterThanOrEqual(
+          minimumNormalTextContrast
+        )
+      }
+    }
+  })
+
   it('shows upcoming features and tracks plan selection', async () => {
     const user = userEvent.setup()
 
@@ -141,6 +194,21 @@ describe('PlanInfoDrawer', () => {
       selected_plan: 'enterprise',
     })
     expect(screen.getByText('Upcoming for Enterprise')).toBeInTheDocument()
+  })
+
+  it('falls back to community styling when a runtime plan value is unknown', () => {
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan={'free' as Plan}
+        initialSelectedPlan="pro"
+        features={featureMap}
+      />
+    )
+
+    expect(screen.getByText('Community')).toBeInTheDocument()
+    expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
   })
 
   it('does not show a versioned roadmap section when the selected plan has no version-targeted features', () => {
