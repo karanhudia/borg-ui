@@ -56,3 +56,18 @@ def test_borg_cache_root_falls_back_to_xdg_cache_home(monkeypatch, tmp_path) -> 
     assert BorgInterface._get_borg_cache_root(
         {"XDG_CACHE_HOME": str(tmp_path / "xdg-cache")}
     ) == str(cache_root)
+
+
+@pytest.mark.unit
+def test_borg_cache_root_prefers_borg_cache_dir_over_other_vars(tmp_path) -> None:
+    explicit_cache = tmp_path / "explicit-cache"
+    borg_base = tmp_path / "borg-base"
+    xdg_cache = tmp_path / "xdg-cache"
+
+    assert BorgInterface._get_borg_cache_root(
+        {
+            "BORG_CACHE_DIR": str(explicit_cache),
+            "BORG_BASE_DIR": str(borg_base),
+            "XDG_CACHE_HOME": str(xdg_cache),
+        }
+    ) == str(explicit_cache)
