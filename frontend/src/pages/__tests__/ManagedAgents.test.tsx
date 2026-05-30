@@ -356,10 +356,9 @@ describe('ManagedAgents', () => {
     ).toBeInTheDocument()
     expect(
       within(dialog).getByText((content) =>
-        [
-          'curl -fsSL https://borg-ui.example.com/agent/install.sh',
-          '--reinstall',
-        ].every((part) => content.includes(part))
+        ['curl -fsSL https://borg-ui.example.com/agent/install.sh', '--reinstall'].every((part) =>
+          content.includes(part)
+        )
       )
     ).toBeInTheDocument()
     expect(screen.queryByText(/--token/)).not.toBeInTheDocument()

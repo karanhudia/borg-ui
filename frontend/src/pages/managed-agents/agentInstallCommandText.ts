@@ -36,7 +36,5 @@ export function buildAgentInstallCommand(
 }
 
 export function buildAgentReinstallCommand(serverUrl: string) {
-  return [`curl -fsSL ${serverUrl}/agent/install.sh`, '| sudo bash -s --', '--reinstall'].join(
-    ' '
-  )
+  return [`curl -fsSL ${serverUrl}/agent/install.sh`, '| sudo bash -s --', '--reinstall'].join(' ')
 }
