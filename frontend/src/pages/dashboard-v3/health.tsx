@@ -178,23 +178,19 @@ export function DimStatusGrid({
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
+        // 2x2 grid: four dimensions fit two per row. Each cell gets roughly
+        // half the card width, plenty for "BACKUP"/"RESTORE" and DE worst
+        // case without the previous BACK.../REST... ellipsis.
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
         width: '100%',
-        gap: 0,
+        columnGap: 1.5,
+        rowGap: 0.75,
       }}
     >
-      {items.map((item, i) => {
+      {items.map((item) => {
         const { color } = DIM_STATUS[item.status] ?? DIM_STATUS.unknown
         return (
-          <Box
-            key={item.label}
-            sx={{
-              minWidth: 0,
-              pl: i > 0 ? 0.8 : 0,
-              pr: i < items.length - 1 ? 0.8 : 0,
-              borderLeft: i > 0 ? `1px solid ${T.border}` : 'none',
-            }}
-          >
+          <Box key={item.label} sx={{ minWidth: 0 }}>
             {/* Label row. Translation values are already uppercase (BACKUP,
                 CHECK, RESTORE, etc.); we render at a larger size with no extra
                 tracking so the line reads as a label, not an eyebrow. */}
