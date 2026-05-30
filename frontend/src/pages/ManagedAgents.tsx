@@ -191,10 +191,14 @@ export default function ManagedAgents() {
     return new Map(agents.map((agent) => [agent.id, agent]))
   }, [agents])
 
-  const refreshAll = () => {
-    queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
-    queryClient.invalidateQueries({ queryKey: ['managed-agent-enrollment-tokens'] })
-    queryClient.invalidateQueries({ queryKey: ['managed-agent-jobs'] })
+  const [manualRefreshInFlight, setManualRefreshInFlight] = useState(false)
+  const refreshAll = async () => {
+    setManualRefreshInFlight(true)
+    try {
+      await Promise.all([agentsQuery.refetch(), tokensQuery.refetch(), jobsQuery.refetch()])
+    } finally {
+      setManualRefreshInFlight(false)
+    }
   }
 
   const createEnrollmentMutation = useMutation({
@@ -281,7 +285,12 @@ export default function ManagedAgents() {
         subtitle="Lightweight machines connected to this Borg UI server"
         actions={
           <>
-            <IconButton onClick={refreshAll} aria-label="Refresh" title="Refresh">
+            <IconButton
+              onClick={() => void refreshAll()}
+              aria-label={manualRefreshInFlight ? 'Refreshing agents' : 'Refresh'}
+              title={manualRefreshInFlight ? 'Refreshing agents' : 'Refresh'}
+              disabled={manualRefreshInFlight}
+            >
               <RefreshCw size={20} />
             </IconButton>
             <Button

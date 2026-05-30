@@ -194,6 +194,26 @@ def test_agent_filesystem_browse_endpoint_waits_longer_than_default_agent_poll_i
     assert calls[0][3] > DEFAULT_AGENT_POLL_INTERVAL_SECONDS
 
 
+def test_list_agents_reports_active_session_as_online(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    agent = _agent(test_db, status="offline")
+    monkeypatch.setattr(
+        agent_connection_manager,
+        "is_connected",
+        lambda agent_machine_id: agent_machine_id == agent.id,
+    )
+
+    response = test_client.get("/api/managed-machines/agents", headers=admin_headers)
+
+    assert response.status_code == 200
+    listed = response.json()
+    assert listed[0]["id"] == agent.id
+    assert listed[0]["status"] == "online"
+    test_db.refresh(agent)
+    assert agent.status == "online"
+
+
 def test_agent_filesystem_browse_uses_live_session_without_agent_job(
     test_client: TestClient, admin_headers, test_db
 ):
