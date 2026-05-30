@@ -1997,10 +1997,10 @@ export function SourceSelectionDialog({
     >
       <DialogTitle sx={{ pb: 1 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-          {view !== 'paths' && (
+          {view === 'database-detail' && (
             <IconButton
               aria-label={t('backupPlans.sourceChooser.back')}
-              onClick={() => setView(view === 'database-detail' ? 'database' : 'paths')}
+              onClick={() => setView('database')}
               size="small"
               edge="start"
               sx={{ mr: 0.5 }}
