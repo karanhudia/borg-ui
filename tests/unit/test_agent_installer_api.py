@@ -112,6 +112,20 @@ def test_agent_installer_script_reinstall_preserves_existing_service_user(
     assert "Reinstall: preserving existing service user" in response.text
 
 
+def test_agent_installer_script_prepares_config_for_selected_service_user(
+    test_client: TestClient,
+):
+    response = test_client.get("/agent/install.sh")
+
+    assert "prepare_agent_config_path" in response.text
+    assert "rm -f /etc/borg-ui-agent/config.toml" in response.text
+    assert (
+        'chown "${SERVICE_USER}:${SERVICE_GROUP}" /etc/borg-ui-agent/config.toml'
+        in response.text
+    )
+    assert "chmod 0600 /etc/borg-ui-agent/config.toml" in response.text
+
+
 def test_agent_installer_script_allows_borg2_prereleases(test_client: TestClient):
     response = test_client.get("/agent/install.sh")
 

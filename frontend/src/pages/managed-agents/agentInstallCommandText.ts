@@ -28,7 +28,7 @@ function serviceUserArgs(mode: AgentServiceUserMode): string | null {
       return '--service-user root'
     case 'current':
     default:
-      return null
+      return '--service-user current'
   }
 }
 

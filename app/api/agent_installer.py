@@ -231,6 +231,24 @@ if [[ "${SERVICE_USER_MODE}" == "borg-ui-agent" ]]; then
   install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 /var/lib/borg-ui-agent
 fi
 
+prepare_agent_config_path() {
+  local config_path="/etc/borg-ui-agent/config.toml"
+
+  if [[ "${REINSTALL}" == "1" ]]; then
+    if [[ ! -f "${config_path}" || -L "${config_path}" ]]; then
+      echo "Agent config '${config_path}' must be a regular file." >&2
+      exit 1
+    fi
+    chown "${SERVICE_USER}:${SERVICE_GROUP}" /etc/borg-ui-agent/config.toml
+    chmod 0600 /etc/borg-ui-agent/config.toml
+    return
+  fi
+
+  rm -f /etc/borg-ui-agent/config.toml
+}
+
+prepare_agent_config_path
+
 verify_borg_major() {
   local binary_name="$1"
   local expected_major="$2"

@@ -89,10 +89,10 @@ describe('ManagedAgents', () => {
     expect(isLocalAgentServerUrl('http://127.0.0.1:8083')).toBe(true)
   })
 
-  it('builds service-user installer arguments only for non-default modes', () => {
+  it('builds explicit service-user installer arguments', () => {
     expect(
       buildAgentInstallCommand('http://192.168.0.29:8083', 'agent-token-secret', 'Client laptop')
-    ).not.toContain('--service-user')
+    ).toContain('--service-user current')
 
     expect(
       buildAgentInstallCommand(
