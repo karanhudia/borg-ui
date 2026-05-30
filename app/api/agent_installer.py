@@ -14,6 +14,11 @@ AGENT_REF="main"
 BORG_VERSION="1"
 BORG_VERSION_SET="0"
 SKIP_BORG_INSTALL="0"
+SERVICE_USER_MODE="current"
+SERVICE_USER=""
+SERVICE_GROUP=""
+SERVICE_HOME=""
+SERVICE_READ_WRITE_PATHS="/etc/borg-ui-agent /tmp"
 BORG2_VENV="/opt/borg-ui-agent/borg2-venv"
 BORG2_LINK="/usr/local/bin/borg2"
 
@@ -26,6 +31,7 @@ Usage:
     --name AGENT_NAME \
     [--version main] \
     [--borg-version 1|2|both] \
+    [--service-user current|borg-ui-agent|root|USERNAME] \
     [--skip-borg-install]
 
   curl -fsSL http://SERVER:PORT/agent/install.sh | sudo bash -s -- \
@@ -39,6 +45,12 @@ Borg install options:
   --borg-version 2      Install/verify Borg 2 as 'borg2' (advanced beta).
   --borg-version both   Install/verify Borg 1 and Borg 2.
   --skip-borg-install   Do not install Borg; register/reinstall with detected binaries only.
+
+Service user options:
+  --service-user current        Run as the user who invoked sudo (default).
+  --service-user borg-ui-agent  Run as the dedicated borg-ui-agent system user.
+  --service-user root           Run as root. Advanced; grants root-level Borg operations.
+  --service-user USERNAME       Run as an existing local user.
 
 Reinstall mode updates the agent package and systemd unit on an already enrolled
 machine. It preserves /etc/borg-ui-agent/config.toml and does not require an
@@ -86,6 +98,14 @@ while [[ $# -gt 0 ]]; do
       SKIP_BORG_INSTALL="1"
       shift
       ;;
+    --service-user)
+      if [[ $# -lt 2 || -z "${2:-}" || "${2:-}" == --* ]]; then
+        echo "--service-user requires one of: current, borg-ui-agent, root, or an existing username." >&2
+        exit 2
+      fi
+      SERVICE_USER_MODE="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -119,6 +139,54 @@ elif [[ -z "${SERVER}" || -z "${TOKEN}" || -z "${AGENT_NAME}" ]]; then
   exit 2
 fi
 
+resolve_user_group_home() {
+  local username="$1"
+  local passwd_entry
+
+  passwd_entry="$(getent passwd "${username}" || true)"
+  if [[ -z "${passwd_entry}" ]]; then
+    echo "Service user '${username}' does not exist. Create it first or choose --service-user current, borg-ui-agent, or root." >&2
+    exit 2
+  fi
+
+  SERVICE_USER="${username}"
+  SERVICE_GROUP="$(id -gn "${username}")"
+  SERVICE_HOME="$(printf '%s\n' "${passwd_entry}" | cut -d: -f6)"
+  if [[ -z "${SERVICE_HOME}" ]]; then
+    SERVICE_HOME="/"
+  fi
+}
+
+resolve_current_service_user() {
+  if [[ -z "${SUDO_USER:-}" || "${SUDO_USER:-}" == "root" ]]; then
+    echo "SUDO_USER is not set. Re-run with sudo from a non-root user, or pass --service-user root or --service-user USERNAME." >&2
+    exit 2
+  fi
+  resolve_user_group_home "${SUDO_USER}"
+}
+
+resolve_service_identity() {
+  case "${SERVICE_USER_MODE}" in
+    current)
+      resolve_current_service_user
+      ;;
+    borg-ui-agent)
+      if ! getent passwd borg-ui-agent >/dev/null; then
+        useradd --system --user-group --home-dir /var/lib/borg-ui-agent \
+          --create-home --shell /usr/sbin/nologin borg-ui-agent
+      fi
+      resolve_user_group_home "borg-ui-agent"
+      SERVICE_READ_WRITE_PATHS="/etc/borg-ui-agent /var/lib/borg-ui-agent /tmp"
+      ;;
+    root)
+      resolve_user_group_home "root"
+      ;;
+    *)
+      resolve_user_group_home "${SERVICE_USER_MODE}"
+      ;;
+  esac
+}
+
 if [[ ! -r /etc/os-release ]]; then
   echo "Cannot detect Linux distribution: /etc/os-release is missing." >&2
   exit 1
@@ -134,17 +202,16 @@ if [[ "${OS_FAMILY}" != *debian* && "${OS_FAMILY}" != *ubuntu* && "${OS_FAMILY}"
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+resolve_service_identity
+
 apt-get update
 apt-get install -y python3 python3-venv python3-pip git curl ca-certificates
 
-if ! getent passwd borg-ui-agent >/dev/null; then
-  useradd --system --user-group --home-dir /var/lib/borg-ui-agent \
-    --create-home --shell /usr/sbin/nologin borg-ui-agent
-fi
-
 install -d -m 0755 /opt/borg-ui-agent
-install -d -o borg-ui-agent -g borg-ui-agent -m 0750 /etc/borg-ui-agent
-install -d -o borg-ui-agent -g borg-ui-agent -m 0750 /var/lib/borg-ui-agent
+install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 /etc/borg-ui-agent
+if [[ "${SERVICE_USER_MODE}" == "borg-ui-agent" ]]; then
+  install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 /var/lib/borg-ui-agent
+fi
 
 verify_borg_major() {
   local binary_name="$1"
@@ -255,7 +322,7 @@ if [[ "${REINSTALL}" == "1" ]]; then
   echo "Preserving existing agent registration at /etc/borg-ui-agent/config.toml."
 else
   # Register the machine with Borg UI using borg-ui-agent register.
-  runuser -u borg-ui-agent -- /opt/borg-ui-agent/.venv/bin/borg-ui-agent \
+  runuser -u "${SERVICE_USER}" -- /opt/borg-ui-agent/.venv/bin/borg-ui-agent \
     --config /etc/borg-ui-agent/config.toml \
     register \
     --server "${SERVER}" \
@@ -263,7 +330,7 @@ else
     --name "${AGENT_NAME}"
 fi
 
-cat >/etc/systemd/system/borg-ui-agent.service <<'SERVICE'
+cat >/etc/systemd/system/borg-ui-agent.service <<SERVICE
 [Unit]
 Description=Borg UI managed agent
 After=network-online.target
@@ -271,23 +338,23 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=borg-ui-agent
-Group=borg-ui-agent
+User=${SERVICE_USER}
+Group=${SERVICE_GROUP}
 ExecStart=/opt/borg-ui-agent/.venv/bin/borg-ui-agent --config /etc/borg-ui-agent/config.toml run
 Restart=always
 RestartSec=10
-WorkingDirectory=/var/lib/borg-ui-agent
+WorkingDirectory=${SERVICE_HOME}
 NoNewPrivileges=true
 PrivateTmp=true
-ReadWritePaths=/etc/borg-ui-agent /var/lib/borg-ui-agent /tmp
+ReadWritePaths=${SERVICE_READ_WRITE_PATHS}
 
 [Install]
 WantedBy=multi-user.target
 SERVICE
 
 /opt/borg-ui-agent/.venv/bin/borg-ui-agent service-check \
-  --user borg-ui-agent \
-  --group borg-ui-agent \
+  --user "${SERVICE_USER}" \
+  --group "${SERVICE_GROUP}" \
   --exec /opt/borg-ui-agent/.venv/bin/borg-ui-agent \
   --config /etc/borg-ui-agent/config.toml
 

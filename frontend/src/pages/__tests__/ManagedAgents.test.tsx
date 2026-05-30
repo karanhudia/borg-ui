@@ -8,6 +8,7 @@ import ManagedAgents, {
   JobsTable,
   TokensTable,
 } from '../ManagedAgents'
+import { buildAgentInstallCommand } from '../managed-agents/agentInstallCommandText'
 import { isLocalAgentServerUrl, resolveAgentServerUrl } from '../managed-agents/agentServerUrl'
 import { renderWithProviders, userEvent } from '../../test/test-utils'
 import {
@@ -86,6 +87,32 @@ describe('ManagedAgents', () => {
     expect(resolveAgentServerUrl('/api', 'http://localhost:7879')).toBe('http://localhost:8083')
     expect(resolveAgentServerUrl('/api', 'http://localhost:8093')).toBe('http://localhost:8093')
     expect(isLocalAgentServerUrl('http://127.0.0.1:8083')).toBe(true)
+  })
+
+  it('builds service-user installer arguments only for non-default modes', () => {
+    expect(
+      buildAgentInstallCommand('http://192.168.0.29:8083', 'agent-token-secret', 'Client laptop')
+    ).not.toContain('--service-user')
+
+    expect(
+      buildAgentInstallCommand(
+        'http://192.168.0.29:8083',
+        'agent-token-secret',
+        'Dedicated client',
+        'borg1',
+        'dedicated'
+      )
+    ).toContain('--service-user borg-ui-agent')
+
+    expect(
+      buildAgentInstallCommand(
+        'http://192.168.0.29:8083',
+        'agent-token-secret',
+        'Root client',
+        'borg1',
+        'root'
+      )
+    ).toContain('--service-user root')
   })
 
   it('opens from the shared system settings cache without redirecting to dashboard', async () => {
@@ -185,12 +212,11 @@ describe('ManagedAgents', () => {
     expect(managedAgentsAPI.createEnrollmentToken).not.toHaveBeenCalled()
 
     await screen.findByRole('dialog', { name: /add agent/i })
+    await user.clear(screen.getByLabelText(/server url/i))
+    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
     await user.click(screen.getByRole('button', { name: /next/i }))
     await user.clear(screen.getByLabelText(/agent name/i))
     await user.type(screen.getByLabelText(/agent name/i), 'Client laptop')
-    await user.click(screen.getByRole('button', { name: /next/i }))
-    await user.clear(screen.getByLabelText(/server url/i))
-    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
     await user.click(screen.getByRole('button', { name: /generate install command/i }))
 
     expect(vi.mocked(managedAgentsAPI.createEnrollmentToken).mock.calls[0][0]).toEqual({
@@ -227,13 +253,12 @@ describe('ManagedAgents', () => {
 
     await user.click(await screen.findByRole('button', { name: /add agent/i }))
     await screen.findByRole('dialog', { name: /add agent/i })
+    await user.clear(screen.getByLabelText(/server url/i))
+    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
     await user.click(screen.getByRole('button', { name: /next/i }))
     await user.click(screen.getByRole('radio', { name: /borg 2\.x beta only/i }))
     await user.clear(screen.getByLabelText(/agent name/i))
     await user.type(screen.getByLabelText(/agent name/i), 'Borg 2 client')
-    await user.click(screen.getByRole('button', { name: /next/i }))
-    await user.clear(screen.getByLabelText(/server url/i))
-    await user.type(screen.getByLabelText(/server url/i), 'http://192.168.0.29:8083')
     await user.click(screen.getByRole('button', { name: /generate install command/i }))
 
     expect(
@@ -254,8 +279,7 @@ describe('ManagedAgents', () => {
     renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
 
     await user.click(await screen.findByRole('button', { name: /add agent/i }))
-    await user.click(screen.getByRole('button', { name: /next/i }))
-    await user.click(screen.getByRole('button', { name: /next/i }))
+    await screen.findByRole('dialog', { name: /add agent/i })
 
     expect(screen.getByText(/localhost only works when the agent/i)).toBeInTheDocument()
   }, 60000)

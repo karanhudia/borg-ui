@@ -482,7 +482,9 @@ export function AgentSetupHelpContent({
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 1 }}>
           Run this on the Linux machine that owns the files Borg should back up. The installer
-          installs dependencies, registers the agent, and enables the systemd service.
+          installs dependencies, registers the agent, and enables the systemd service. By default,
+          the service runs as the user who invoked sudo, so repository and source paths must be
+          accessible to that user.
         </Typography>
         <CopyableCodeBlock
           value={command}

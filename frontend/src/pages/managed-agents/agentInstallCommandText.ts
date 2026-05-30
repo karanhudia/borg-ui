@@ -4,6 +4,7 @@ function shellQuote(value: string): string {
 }
 
 export type BorgInstallMode = 'borg1' | 'borg2' | 'both' | 'skip'
+export type AgentServiceUserMode = 'current' | 'dedicated' | 'root'
 
 function borgInstallArgs(mode: BorgInstallMode): string {
   switch (mode) {
@@ -19,11 +20,24 @@ function borgInstallArgs(mode: BorgInstallMode): string {
   }
 }
 
+function serviceUserArgs(mode: AgentServiceUserMode): string | null {
+  switch (mode) {
+    case 'dedicated':
+      return '--service-user borg-ui-agent'
+    case 'root':
+      return '--service-user root'
+    case 'current':
+    default:
+      return null
+  }
+}
+
 export function buildAgentInstallCommand(
   serverUrl: string,
   token: string,
   agentName: string,
-  borgInstallMode: BorgInstallMode = 'borg1'
+  borgInstallMode: BorgInstallMode = 'borg1',
+  serviceUserMode: AgentServiceUserMode = 'current'
 ) {
   return [
     `curl -fsSL ${serverUrl}/agent/install.sh`,
@@ -32,7 +46,10 @@ export function buildAgentInstallCommand(
     `--token ${shellQuote(token)}`,
     `--name ${shellQuote(agentName)}`,
     borgInstallArgs(borgInstallMode),
-  ].join(' ')
+    serviceUserArgs(serviceUserMode),
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 export function buildAgentReinstallCommand(serverUrl: string) {

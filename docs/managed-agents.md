@@ -26,6 +26,7 @@ In Managed Agents, choose **Add Agent**. The wizard asks for:
 - platform: Linux
 - agent name
 - enrollment token expiry: 1 hour, 24 hours, 7 days, 30 days, or Never
+- service user: Installing user, dedicated `borg-ui-agent` user, or Root
 - server URL reachable by the client machine
 
 The final step shows a one-line installer command:
@@ -38,10 +39,23 @@ curl -fsSL http://borg-ui-host:8083/agent/install.sh | sudo bash -s -- \
 ```
 
 Run it on the machine that owns the files you want Borg to back up. The
-installer requires root or sudo, installs system dependencies, creates the
-`borg-ui-agent` system user, registers `/etc/borg-ui-agent/config.toml`, runs
-`service-check`, and enables the systemd service with
-`systemctl enable --now borg-ui-agent`.
+installer requires root or sudo, installs system dependencies, registers
+`/etc/borg-ui-agent/config.toml`, runs `service-check`, and enables the systemd
+service with `systemctl enable --now borg-ui-agent`.
+
+By default, the service runs as the user who invoked `sudo`. That means the
+agent can read and write the same paths that user can access, matching the
+permission model used by SSH remote machines. Repository paths must be writable
+by that service user.
+
+Advanced service-user modes are available:
+
+- `--service-user current` uses the sudo-invoking user. This is the default.
+- `--service-user borg-ui-agent` uses a dedicated low-privilege system user and
+  creates it if needed.
+- `--service-user root` runs root-level Borg operations. Use it only when the
+  agent must back up root-owned paths.
+- `--service-user USERNAME` runs as another existing local user.
 
 The machine appears in Managed Agents after registration and its first live
 session. The wizard waits for that connection while the command is displayed.

@@ -1,14 +1,29 @@
 import { Box, Button, Chip, Stack, Tooltip, Typography } from '@mui/material'
-import { alpha } from '@mui/material/styles'
+import { alpha, keyframes } from '@mui/material/styles'
 import { CheckCircle, Copy, Loader2 } from 'lucide-react'
 import type { AgentMachineResponse } from '../../services/api'
-import { buildAgentInstallCommand, type BorgInstallMode } from './agentInstallCommandText'
+import {
+  buildAgentInstallCommand,
+  type AgentServiceUserMode,
+  type BorgInstallMode,
+} from './agentInstallCommandText'
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`
+
+const pulseDot = keyframes`
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+`
 
 export default function AgentInstallCommand({
   serverUrl,
   token,
   agentName,
   borgInstallMode = 'borg1',
+  serviceUserMode = 'current',
   connectedAgent,
   onCopy,
 }: {
@@ -16,10 +31,17 @@ export default function AgentInstallCommand({
   token: string
   agentName: string
   borgInstallMode?: BorgInstallMode
+  serviceUserMode?: AgentServiceUserMode
   connectedAgent?: AgentMachineResponse | null
   onCopy: (value: string) => void
 }) {
-  const command = buildAgentInstallCommand(serverUrl, token, agentName, borgInstallMode)
+  const command = buildAgentInstallCommand(
+    serverUrl,
+    token,
+    agentName,
+    borgInstallMode,
+    serviceUserMode
+  )
 
   return (
     <Stack spacing={1.5}>
@@ -29,9 +51,24 @@ export default function AgentInstallCommand({
         </Typography>
         <Chip
           size="small"
-          icon={connectedAgent ? <CheckCircle size={14} /> : <Loader2 size={14} />}
+          icon={
+            connectedAgent ? (
+              <CheckCircle size={14} />
+            ) : (
+              <Box
+                component="span"
+                sx={{
+                  display: 'inline-flex',
+                  animation: `${spin} 1s linear infinite`,
+                  '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+                }}
+              >
+                <Loader2 size={14} />
+              </Box>
+            )
+          }
           color={connectedAgent ? 'success' : 'default'}
-          label={connectedAgent ? 'Agent connected' : 'Waiting for agent to connect...'}
+          label={connectedAgent ? 'Connected' : 'Waiting…'}
           variant={connectedAgent ? 'filled' : 'outlined'}
         />
       </Stack>
@@ -92,6 +129,79 @@ export default function AgentInstallCommand({
         Run the command on the Linux machine. The installer registers the agent and enables the
         systemd service by default.
       </Typography>
+      <Box
+        sx={{
+          mt: 0.5,
+          p: 1.5,
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: connectedAgent ? 'success.main' : 'divider',
+          bgcolor: (theme) =>
+            connectedAgent
+              ? alpha(theme.palette.success.main, 0.08)
+              : alpha(theme.palette.primary.main, 0.04),
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+        }}
+      >
+        {connectedAgent ? (
+          <CheckCircle size={20} style={{ flexShrink: 0, color: 'currentColor' }} />
+        ) : (
+          <Box
+            sx={{
+              flexShrink: 0,
+              width: 20,
+              height: 20,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              animation: `${spin} 1.2s linear infinite`,
+              '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+              color: 'primary.main',
+            }}
+          >
+            <Loader2 size={18} />
+          </Box>
+        )}
+        <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+          <Typography variant="body2" fontWeight={600}>
+            {connectedAgent
+              ? `${connectedAgent.name || connectedAgent.hostname || 'Agent'} connected`
+              : 'Waiting for agent to connect…'}
+          </Typography>
+          <Stack direction="row" spacing={0.5} alignItems="center" sx={{ color: 'text.secondary' }}>
+            {!connectedAgent && (
+              <Box
+                aria-hidden
+                sx={{
+                  display: 'inline-flex',
+                  gap: 0.4,
+                  '& > span': {
+                    width: 4,
+                    height: 4,
+                    borderRadius: '50%',
+                    bgcolor: 'primary.main',
+                    animation: `${pulseDot} 1.2s ease-in-out infinite`,
+                    '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+                  },
+                  '& > span:nth-of-type(2)': { animationDelay: '0.2s' },
+                  '& > span:nth-of-type(3)': { animationDelay: '0.4s' },
+                }}
+              >
+                <span />
+                <span />
+                <span />
+              </Box>
+            )}
+            <Typography variant="caption">
+              {connectedAgent
+                ? 'You can close this dialog — the agent will keep running.'
+                : 'This page will update automatically once the install completes.'}
+            </Typography>
+          </Stack>
+        </Stack>
+      </Box>
     </Stack>
   )
 }
