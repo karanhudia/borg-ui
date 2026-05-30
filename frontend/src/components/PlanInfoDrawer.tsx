@@ -74,6 +74,14 @@ function getDefaultActiveTab(plan: Plan): ActiveTab {
   return plan === 'community' ? 'upgrade' : 'your-plan'
 }
 
+function normalizePlan(plan: Plan | string | null | undefined): Plan {
+  if (plan === 'pro' || plan === 'enterprise') {
+    return plan
+  }
+
+  return 'community'
+}
+
 export default function PlanInfoDrawer({
   open,
   onClose,
@@ -88,10 +96,11 @@ export default function PlanInfoDrawer({
   const muiTheme = useTheme()
   const { trackPlan, EventAction } = useAnalytics()
   const { features: planContentFeatures } = usePlanContent()
+  const normalizedPlan = normalizePlan(plan)
   const [selectedPlan, setSelectedPlan] = useState<Plan>(
-    getDefaultSelectedPlan(plan, initialSelectedPlan)
+    getDefaultSelectedPlan(normalizedPlan, initialSelectedPlan)
   )
-  const [activeTab, setActiveTab] = useState<ActiveTab>(getDefaultActiveTab(plan))
+  const [activeTab, setActiveTab] = useState<ActiveTab>(getDefaultActiveTab(normalizedPlan))
   const [referenceNowMs, setReferenceNowMs] = useState<number | null>(null)
 
   const fullAccessExpiry = entitlement?.expires_at
@@ -111,12 +120,12 @@ export default function PlanInfoDrawer({
       : null
 
   const drawerColors = getPlanDrawerColors(muiTheme)
-  const currentPlanColors = drawerColors.plans[isFullAccess ? 'enterprise' : plan]
+  const currentPlanColors = drawerColors.plans[isFullAccess ? 'enterprise' : normalizedPlan]
   const selectedPlanColors = drawerColors.plans[selectedPlan]
   const communityPlanColors = drawerColors.plans.community
   const fullAccessPlanColors = drawerColors.plans.enterprise
   const color = currentPlanColors.accent
-  const label = isFullAccess ? t('plan.fullAccessLabel') : planLabel(plan)
+  const label = isFullAccess ? t('plan.fullAccessLabel') : planLabel(normalizedPlan)
 
   const selectedColor = selectedPlanColors.accent
   const visibleFeatureIds = Object.entries(features ?? {}).filter(
@@ -174,11 +183,11 @@ export default function PlanInfoDrawer({
 
   useEffect(() => {
     if (open) {
-      setSelectedPlan(getDefaultSelectedPlan(plan, initialSelectedPlan))
-      setActiveTab(getDefaultActiveTab(plan))
+      setSelectedPlan(getDefaultSelectedPlan(normalizedPlan, initialSelectedPlan))
+      setActiveTab(getDefaultActiveTab(normalizedPlan))
       setReferenceNowMs(Date.now())
     }
-  }, [initialSelectedPlan, open, plan])
+  }, [initialSelectedPlan, normalizedPlan, open])
 
   const handleBuyClick = () => {
     trackPlan(EventAction.VIEW, {
@@ -199,8 +208,8 @@ export default function PlanInfoDrawer({
       container={container}
       SlideProps={{
         onExited: () => {
-          setSelectedPlan(getDefaultSelectedPlan(plan, initialSelectedPlan))
-          setActiveTab(getDefaultActiveTab(plan))
+          setSelectedPlan(getDefaultSelectedPlan(normalizedPlan, initialSelectedPlan))
+          setActiveTab(getDefaultActiveTab(normalizedPlan))
         },
       }}
       sx={{

@@ -4,6 +4,7 @@ import { darkTheme, theme } from '../../theme'
 import PlanInfoDrawer from '../PlanInfoDrawer'
 import { getPlanDrawerContrastPairs } from '../planDrawerColors'
 import { BUY_URL } from '../../utils/externalLinks'
+import type { Plan } from '../../core/features'
 
 type Rgb = [number, number, number]
 
@@ -193,6 +194,21 @@ describe('PlanInfoDrawer', () => {
       selected_plan: 'enterprise',
     })
     expect(screen.getByText('Upcoming for Enterprise')).toBeInTheDocument()
+  })
+
+  it('falls back to community styling when a runtime plan value is unknown', () => {
+    renderWithProviders(
+      <PlanInfoDrawer
+        open={true}
+        onClose={vi.fn()}
+        plan={'free' as Plan}
+        initialSelectedPlan="pro"
+        features={featureMap}
+      />
+    )
+
+    expect(screen.getByText('Community')).toBeInTheDocument()
+    expect(screen.getByText('Upcoming for Pro')).toBeInTheDocument()
   })
 
   it('does not show a versioned roadmap section when the selected plan has no version-targeted features', () => {
