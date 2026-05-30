@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { FormControl, InputLabel, MenuItem, Select } from '@mui/material'
-import RichSelectRow from './wizard/RichSelectRow'
+import RichSelectRow from './shared/RichSelectRow'
 
 export interface DestinationOption {
   key: string

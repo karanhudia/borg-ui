@@ -1,6 +1,6 @@
 import { Alert, Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material'
 import { Cloud } from 'lucide-react'
-import RichSelectRow from './wizard/RichSelectRow'
+import RichSelectRow from './shared/RichSelectRow'
 
 export interface SshConnectionSummary {
   id: number

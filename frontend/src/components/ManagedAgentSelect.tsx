@@ -1,6 +1,6 @@
 import { Alert, Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material'
 import { Laptop } from 'lucide-react'
-import RichSelectRow from './wizard/RichSelectRow'
+import RichSelectRow from './shared/RichSelectRow'
 
 export interface ManagedAgentSummary {
   id: number
