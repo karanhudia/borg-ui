@@ -137,6 +137,42 @@ describe('ManagedAgents', () => {
     expect(managedAgentsAPI.listAgents).toHaveBeenCalled()
   })
 
+  it('manually refreshes managed-agent status with visible feedback', async () => {
+    const user = userEvent.setup()
+    let resolveRefresh: ((value: AxiosResponse<AgentMachineResponse[]>) => void) | undefined
+    const agent = {
+      id: 7,
+      agent_id: 'agent-client-7',
+      name: 'client',
+      hostname: 'client-01',
+      status: 'offline',
+      created_at: '2026-05-18T09:00:00.000Z',
+      updated_at: '2026-05-18T10:00:00.000Z',
+    } as AgentMachineResponse
+    vi.mocked(managedAgentsAPI.listAgents)
+      .mockResolvedValueOnce({ data: [agent] } as AxiosResponse)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveRefresh = resolve
+        })
+      )
+
+    renderWithProviders(<ManagedAgents />, { initialRoute: '/managed-agents' })
+
+    expect(await screen.findByText('offline')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^refresh$/i }))
+
+    expect(screen.getByRole('button', { name: /refreshing agents/i })).toBeDisabled()
+    expect(managedAgentsAPI.listAgents).toHaveBeenCalledTimes(2)
+
+    resolveRefresh?.({
+      data: [{ ...agent, status: 'online' }],
+    } as AxiosResponse<AgentMachineResponse[]>)
+
+    expect(await screen.findByText('online')).toBeInTheDocument()
+  })
+
   it('keeps setup help detailed without duplicating token creation inside the guide', async () => {
     const user = userEvent.setup()
     const onCopy = vi.fn()
