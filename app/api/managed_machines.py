@@ -342,12 +342,25 @@ async def list_agent_machines(
     _: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db),
 ):
-    return (
+    agents = (
         db.query(AgentMachine)
         .filter(AgentMachine.status != "deleted")
         .order_by(AgentMachine.name.asc())
         .all()
     )
+    now = _now_utc()
+    changed = False
+    for agent in agents:
+        if agent.status == "offline" and agent_connection_manager.is_connected(
+            agent.id
+        ):
+            agent.status = "online"
+            agent.last_seen_at = now
+            agent.updated_at = now
+            changed = True
+    if changed:
+        db.commit()
+    return agents
 
 
 @router.post(
