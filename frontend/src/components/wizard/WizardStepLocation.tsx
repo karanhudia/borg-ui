@@ -20,9 +20,9 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../PlanGate'
 import { getDestinations, type DestinationKey } from './destinations'
-import RichSelectRow from './RichSelectRow'
 import SshConnectionSelect from '../SshConnectionSelect'
 import ManagedAgentSelect from '../ManagedAgentSelect'
+import DestinationSelect from '../DestinationSelect'
 
 interface SSHConnection {
   id: number
@@ -92,7 +92,7 @@ export default function WizardStepLocation({
     (agent) => agent.status !== 'revoked' && agent.status !== 'disabled'
   )
 
-  const destinations = getDestinations({ isRemoteLocationDisabled, isAgentLocationDisabled })
+  const destinations = getDestinations({ t, isRemoteLocationDisabled, isAgentLocationDisabled })
 
   const selectedDestinationKey: DestinationKey = isAgentExecution
     ? 'agent'
@@ -262,38 +262,13 @@ export default function WizardStepLocation({
 
       {/* Destination picker */}
       {!isDirectRclone && (
-        <FormControl fullWidth>
-          <InputLabel id="destination-select-label">{t('wizard.location.whereToStore')}</InputLabel>
-          <Select
-            labelId="destination-select-label"
-            id="destination-select"
-            value={selectedDestinationKey}
-            label={t('wizard.location.whereToStore')}
-            onChange={(e) => handleDestinationChange(e.target.value as DestinationKey)}
-            renderValue={(value) => {
-              const dest = destinations.find((d) => d.key === value)
-              if (!dest) return null
-              return (
-                <RichSelectRow
-                  icon={dest.icon}
-                  primary={t(dest.labelKey)}
-                  secondary={t(dest.descriptionKey)}
-                />
-              )
-            }}
-            sx={{ '& .MuiSelect-select': { minHeight: 36 } }}
-          >
-            {destinations.map((dest) => (
-              <MenuItem key={dest.key} value={dest.key} disabled={dest.disabled} sx={{ py: 1 }}>
-                <RichSelectRow
-                  icon={dest.icon}
-                  primary={t(dest.labelKey)}
-                  secondary={t(dest.descriptionKey)}
-                />
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <DestinationSelect
+          value={selectedDestinationKey}
+          onChange={(key) => handleDestinationChange(key as DestinationKey)}
+          destinations={destinations}
+          label={t('wizard.location.whereToStore')}
+          labelId="destination-select-label"
+        />
       )}
 
       {isRemoteLocationDisabled && (

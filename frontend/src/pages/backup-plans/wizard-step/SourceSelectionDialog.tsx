@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Accordion,
   AccordionDetails,
@@ -9,7 +9,6 @@ import {
   ButtonBase,
   Card,
   CardActionArea,
-  CardContent,
   Checkbox,
   Chip,
   CircularProgress,
@@ -54,6 +53,7 @@ import type { IconType } from 'react-icons'
 import type { TFunction } from 'i18next'
 
 import CodeEditor from '../../../components/CodeEditor'
+import DestinationSelect, { type DestinationOption } from '../../../components/DestinationSelect'
 import ManagedAgentSelect from '../../../components/ManagedAgentSelect'
 import PathSelectorField from '../../../components/PathSelectorField'
 import ResponsiveDialog from '../../../components/ResponsiveDialog'
@@ -476,97 +476,6 @@ function agentDisplayName(agent?: AgentMachineResponse | null) {
   return agent.hostname || agent.name || `Agent #${agent.id}`
 }
 
-interface RepoStyleSourceCardProps {
-  selected: boolean
-  disabled?: boolean
-  icon: ReactNode
-  title: string
-  description: string
-  onClick: () => void
-}
-
-function RepoStyleSourceCard({
-  selected,
-  disabled = false,
-  icon,
-  title,
-  description,
-  onClick,
-}: RepoStyleSourceCardProps) {
-  return (
-    <Card
-      variant="outlined"
-      sx={{
-        flex: 1,
-        border: 1,
-        borderColor: selected ? 'primary.main' : 'divider',
-        boxShadow: selected
-          ? (theme) =>
-              `inset 0 0 0 1px ${theme.palette.primary.main}, 0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-          : 'none',
-        bgcolor: selected ? (theme) => alpha(theme.palette.primary.main, 0.08) : 'background.paper',
-        opacity: disabled ? 0.5 : 1,
-        display: 'flex',
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        transform: selected ? 'translateY(-2px)' : 'none',
-        '&:hover': !disabled
-          ? {
-              transform: 'translateY(-2px)',
-              boxShadow: selected
-                ? (theme) =>
-                    `inset 0 0 0 1px ${theme.palette.primary.main}, 0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`
-                : (theme) => `0 4px 12px ${alpha(theme.palette.text.primary, 0.08)}`,
-              borderColor: selected ? 'primary.main' : 'text.primary',
-            }
-          : {},
-      }}
-    >
-      <CardActionArea
-        component="button"
-        aria-pressed={selected}
-        onClick={onClick}
-        disabled={disabled}
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'stretch',
-          height: '100%',
-          p: 1,
-        }}
-      >
-        <CardContent sx={{ flex: 1 }}>
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
-            <Box
-              sx={{
-                alignItems: 'center',
-                bgcolor: selected ? 'primary.main' : 'action.hover',
-                borderRadius: 3,
-                color: selected ? 'white' : 'text.secondary',
-                display: 'flex',
-                height: 48,
-                justifyContent: 'center',
-                width: 48,
-                transition: 'all 0.3s ease',
-                boxShadow: selected
-                  ? (theme) => `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`
-                  : 'none',
-              }}
-            >
-              {icon}
-            </Box>
-            <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-              {title}
-            </Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-            {description}
-          </Typography>
-        </CardContent>
-      </CardActionArea>
-    </Card>
-  )
-}
-
 export function SourceSelectionDialog({
   open,
   wizardState,
@@ -943,10 +852,73 @@ export function SourceSelectionDialog({
     const localCardDisabled = lockedByAgentRepo
     const remoteCardDisabled = !hasRemoteOptions || lockedByAgentRepo
 
+    const handleSourceKindChange = (key: string) => {
+      if (key === 'local') {
+        selectSourceKey('local')
+        return
+      }
+      if (key === 'remote') {
+        if (!hasRemoteOptions) return
+        const targetId =
+          selectedRemoteIdNum &&
+          sshConnections.some((connection) => connection.id === selectedRemoteIdNum)
+            ? selectedRemoteIdNum
+            : sshConnections[0].id
+        selectSourceKey(`remote:${targetId}`)
+        return
+      }
+      if (key === 'agent') {
+        if (!hasAgentOptions) return
+        if (agentRepoConstraint) {
+          selectSourceKey(`agent:${agentRepoConstraint.agentId}`)
+          return
+        }
+        const targetId =
+          selectedAgentIdNum && agentMachines.some((agent) => agent.id === selectedAgentIdNum)
+            ? selectedAgentIdNum
+            : agentMachines[0].id
+        selectSourceKey(`agent:${targetId}`)
+      }
+    }
+
+    const sourceKindDestinations: DestinationOption[] = [
+      {
+        key: 'local',
+        icon: lockedByAgentRepo ? <Lock size={16} /> : <HardDrive size={16} />,
+        label: t('backupPlans.sourceChooser.borgUiServer'),
+        description: lockedByAgentRepo
+          ? t('backupPlans.sourceChooser.agentRepoLockedLocal', {
+              agent: agentRepoConstraint.agentName,
+            })
+          : t('backupPlans.sourceChooser.localSourceDescription'),
+        disabled: localCardDisabled,
+      },
+      {
+        key: 'remote',
+        icon: lockedByAgentRepo ? <Lock size={16} /> : <Server size={16} />,
+        label: t('backupPlans.sourceChooser.remoteMachine'),
+        description: lockedByAgentRepo
+          ? t('backupPlans.sourceChooser.agentRepoLockedRemote', {
+              agent: agentRepoConstraint.agentName,
+            })
+          : hasRemoteOptions
+            ? t('backupPlans.sourceChooser.remoteMachineDescription')
+            : t('backupPlans.sourceChooser.noRemoteMachines'),
+        disabled: remoteCardDisabled,
+      },
+      {
+        key: 'agent',
+        icon: <Laptop size={16} />,
+        label: t('backupPlans.sourceChooser.managedAgent'),
+        description: hasAgentOptions
+          ? t('backupPlans.sourceChooser.managedAgentDescription')
+          : t('backupPlans.sourceChooser.noManagedAgents'),
+        disabled: !hasAgentOptions,
+      },
+    ]
+
     return (
       <Stack spacing={2}>
-        <Typography variant="subtitle2">{t('backupPlans.sourceChooser.where')}</Typography>
-
         {agentRepoConstraint && (
           <Alert
             severity="info"
@@ -959,79 +931,12 @@ export function SourceSelectionDialog({
           </Alert>
         )}
 
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 2,
-            alignItems: 'stretch',
-            flexDirection: { xs: 'column', sm: 'row' },
-          }}
-        >
-          <RepoStyleSourceCard
-            selected={sourceKind === 'local'}
-            disabled={localCardDisabled}
-            icon={lockedByAgentRepo ? <Lock size={28} /> : <HardDrive size={28} />}
-            title={t('backupPlans.sourceChooser.borgUiServer')}
-            description={
-              lockedByAgentRepo
-                ? t('backupPlans.sourceChooser.agentRepoLockedLocal', {
-                    agent: agentRepoConstraint.agentName,
-                  })
-                : t('backupPlans.sourceChooser.localSourceDescription')
-            }
-            onClick={() => {
-              if (localCardDisabled) return
-              selectSourceKey('local')
-            }}
-          />
-          <RepoStyleSourceCard
-            selected={sourceKind === 'remote'}
-            disabled={remoteCardDisabled}
-            icon={lockedByAgentRepo ? <Lock size={28} /> : <Server size={28} />}
-            title={t('backupPlans.sourceChooser.remoteMachine')}
-            description={
-              lockedByAgentRepo
-                ? t('backupPlans.sourceChooser.agentRepoLockedRemote', {
-                    agent: agentRepoConstraint.agentName,
-                  })
-                : hasRemoteOptions
-                  ? t('backupPlans.sourceChooser.remoteMachineDescription')
-                  : t('backupPlans.sourceChooser.noRemoteMachines')
-            }
-            onClick={() => {
-              if (remoteCardDisabled) return
-              const targetId =
-                selectedRemoteIdNum &&
-                sshConnections.some((connection) => connection.id === selectedRemoteIdNum)
-                  ? selectedRemoteIdNum
-                  : sshConnections[0].id
-              selectSourceKey(`remote:${targetId}`)
-            }}
-          />
-          <RepoStyleSourceCard
-            selected={sourceKind === 'agent'}
-            disabled={!hasAgentOptions}
-            icon={<Laptop size={28} />}
-            title={t('backupPlans.sourceChooser.managedAgent')}
-            description={
-              hasAgentOptions
-                ? t('backupPlans.sourceChooser.managedAgentDescription')
-                : t('backupPlans.sourceChooser.noManagedAgents')
-            }
-            onClick={() => {
-              if (!hasAgentOptions) return
-              if (agentRepoConstraint) {
-                selectSourceKey(`agent:${agentRepoConstraint.agentId}`)
-                return
-              }
-              const targetId =
-                selectedAgentIdNum && agentMachines.some((agent) => agent.id === selectedAgentIdNum)
-                  ? selectedAgentIdNum
-                  : agentMachines[0].id
-              selectSourceKey(`agent:${targetId}`)
-            }}
-          />
-        </Box>
+        <DestinationSelect
+          value={sourceKind}
+          onChange={handleSourceKindChange}
+          destinations={sourceKindDestinations}
+          label={t('backupPlans.sourceChooser.where')}
+        />
 
         {sourceKind === 'remote' && hasRemoteOptions ? (
           <SshConnectionSelect
@@ -1544,103 +1449,101 @@ export function SourceSelectionDialog({
       setScanPaths((current) => current.filter((item) => item !== path))
     }
 
+    const scanTargetDestinations: DestinationOption[] = [
+      {
+        key: 'local',
+        icon: <HardDrive size={16} />,
+        label: t('backupPlans.sourceChooser.borgUiServer'),
+        description: t('backupPlans.sourceChooser.localSourceDescription'),
+      },
+      {
+        key: 'remote',
+        icon: <Server size={16} />,
+        label: t('backupPlans.sourceChooser.remoteMachine'),
+        description: hasRemoteOptions
+          ? t('backupPlans.sourceChooser.remoteMachineDescription')
+          : t('backupPlans.sourceChooser.noRemoteMachines'),
+        disabled: !hasRemoteOptions,
+      },
+    ]
+
+    const handleScanTargetChange = (key: string) => {
+      if (key === 'local') {
+        setScanTarget({ type: 'local', sshId: '' })
+        return
+      }
+      if (key === 'remote') {
+        if (!hasRemoteOptions) return
+        const fallbackId =
+          scanTarget.sshId &&
+          sshConnections.some((connection) => connection.id === scanTarget.sshId)
+            ? scanTarget.sshId
+            : sshConnections[0].id
+        setScanTarget({ type: 'remote', sshId: fallbackId })
+      }
+    }
+
     return (
       <Stack spacing={2}>
-        <Box>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            {t('backupPlans.sourceChooser.scanTarget')}
-          </Typography>
+        <DestinationSelect
+          value={scanTarget.type}
+          onChange={handleScanTargetChange}
+          destinations={scanTargetDestinations}
+          label={t('backupPlans.sourceChooser.scanTarget')}
+        />
+
+        {scanTarget.type === 'remote' && hasRemoteOptions ? (
+          <FormControl fullWidth sx={{ height: 56 }}>
+            <InputLabel id="scan-remote-target-label">
+              {t('backupPlans.sourceChooser.selectRemoteMachine')}
+            </InputLabel>
+            <Select
+              labelId="scan-remote-target-label"
+              value={scanTarget.sshId || ''}
+              label={t('backupPlans.sourceChooser.selectRemoteMachine')}
+              onChange={(event) =>
+                setScanTarget({ type: 'remote', sshId: Number(event.target.value) })
+              }
+              sx={{
+                height: 56,
+                '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
+              }}
+            >
+              {sshConnections.map((connection) => (
+                <MenuItem key={connection.id} value={connection.id}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
+                    <Server size={14} style={{ flexShrink: 0, opacity: 0.7 }} />
+                    <Typography variant="body2" noWrap>
+                      {`${connection.username}@${connection.host}:${connection.port}`}
+                    </Typography>
+                  </Stack>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        ) : (
           <Box
             sx={{
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: 'action.hover',
+              color: 'text.secondary',
               display: 'flex',
-              gap: 2,
-              alignItems: 'stretch',
-              flexDirection: { xs: 'column', sm: 'row' },
+              alignItems: 'center',
+              gap: 1,
+              px: 1.5,
+              height: 56,
             }}
           >
-            <RepoStyleSourceCard
-              selected={scanTarget.type === 'local'}
-              icon={<HardDrive size={28} />}
-              title={t('backupPlans.sourceChooser.borgUiServer')}
-              description={t('backupPlans.sourceChooser.localSourceDescription')}
-              onClick={() => setScanTarget({ type: 'local', sshId: '' })}
-            />
-            <RepoStyleSourceCard
-              selected={scanTarget.type === 'remote'}
-              disabled={!hasRemoteOptions}
-              icon={<Server size={28} />}
-              title={t('backupPlans.sourceChooser.remoteMachine')}
-              description={
-                hasRemoteOptions
-                  ? t('backupPlans.sourceChooser.remoteMachineDescription')
-                  : t('backupPlans.sourceChooser.noRemoteMachines')
-              }
-              onClick={() => {
-                if (!hasRemoteOptions) return
-                const fallbackId =
-                  scanTarget.sshId &&
-                  sshConnections.some((connection) => connection.id === scanTarget.sshId)
-                    ? scanTarget.sshId
-                    : sshConnections[0].id
-                setScanTarget({ type: 'remote', sshId: fallbackId })
-              }}
-            />
+            <HardDrive size={14} />
+            <Typography variant="body2" color="text.secondary">
+              {remoteDisabled
+                ? t('backupPlans.sourceChooser.noRemoteMachines')
+                : t('backupPlans.sourceChooser.readingFromLocal')}
+            </Typography>
           </Box>
-          <Box sx={{ mt: 2.5 }}>
-            {scanTarget.type === 'remote' && hasRemoteOptions ? (
-              <FormControl fullWidth sx={{ height: 56 }}>
-                <InputLabel id="scan-remote-target-label">
-                  {t('backupPlans.sourceChooser.selectRemoteMachine')}
-                </InputLabel>
-                <Select
-                  labelId="scan-remote-target-label"
-                  value={scanTarget.sshId || ''}
-                  label={t('backupPlans.sourceChooser.selectRemoteMachine')}
-                  onChange={(event) =>
-                    setScanTarget({ type: 'remote', sshId: Number(event.target.value) })
-                  }
-                  sx={{
-                    height: 56,
-                    '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
-                  }}
-                >
-                  {sshConnections.map((connection) => (
-                    <MenuItem key={connection.id} value={connection.id}>
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ width: '100%' }}>
-                        <Server size={14} style={{ flexShrink: 0, opacity: 0.7 }} />
-                        <Typography variant="body2" noWrap>
-                          {`${connection.username}@${connection.host}:${connection.port}`}
-                        </Typography>
-                      </Stack>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            ) : (
-              <Box
-                sx={{
-                  border: 1,
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  bgcolor: 'action.hover',
-                  color: 'text.secondary',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  px: 1.5,
-                  height: 56,
-                }}
-              >
-                <HardDrive size={14} />
-                <Typography variant="body2" color="text.secondary">
-                  {remoteDisabled
-                    ? t('backupPlans.sourceChooser.noRemoteMachines')
-                    : t('backupPlans.sourceChooser.readingFromLocal')}
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        </Box>
+        )}
 
         <Box>
           <Stack

@@ -320,11 +320,19 @@ function clickExistingSummaryToggle(name: string | RegExp) {
   fireEvent.click(button as HTMLElement)
 }
 
+async function selectSourceKind(optionName: RegExp) {
+  const trigger = screen.getByRole('combobox', { name: /where are the files/i })
+  fireEvent.mouseDown(trigger)
+  const listbox = await screen.findByRole('listbox')
+  const option = within(listbox).getByRole('option', { name: optionName })
+  fireEvent.click(option)
+  await waitFor(() => {
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+}
+
 async function selectRemoteMachine(optionName: RegExp) {
-  const labels = screen.getAllByText(/^remote machine$/i)
-  const card = labels.map((label) => label.closest('button')).find(Boolean)
-  expect(card).not.toBeNull()
-  fireEvent.click(card as HTMLButtonElement)
+  await selectSourceKind(/remote machine/i)
 
   const trigger = screen.getByRole('combobox', { name: /select a remote machine/i })
   fireEvent.mouseDown(trigger)
@@ -440,8 +448,9 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
 
     expect(screen.getByRole('dialog')).toHaveAttribute('data-max-width', 'md')
-    expect(await screen.findByText('Borg UI server')).toBeInTheDocument()
-    expect(screen.getByText('Remote machine')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('combobox', { name: /where are the files/i })
+    ).toBeInTheDocument()
     // Files / Database / Container pivot replaces the old "Scan database instead" link.
     expect(screen.getByRole('tab', { name: /^files$/i })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: /^database$/i })).toBeInTheDocument()
@@ -468,7 +477,7 @@ describe('SourceStep', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^edit$/i }))
     await screen.findByRole('tab', { name: /^database$/i })
-    clickExistingTextButton(/borg ui server/i)
+    await selectSourceKind(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app-data' },
     })
@@ -507,10 +516,12 @@ describe('SourceStep', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
 
-    expect(await screen.findByText('This Borg UI server')).toBeInTheDocument()
-    expect(screen.getByText('Remote machine')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('combobox', { name: /where are the files/i })
+    ).toBeInTheDocument()
+    expect(screen.getByText('This Borg UI server')).toBeInTheDocument()
 
-    clickExistingTextButton(/borg ui server/i)
+    await selectSourceKind(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app' },
     })
@@ -553,7 +564,7 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
     await screen.findByRole('tab', { name: /^database$/i })
 
-    clickExistingTextButton(/borg ui server/i)
+    await selectSourceKind(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app' },
     })
@@ -605,7 +616,7 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
     await screen.findByRole('tab', { name: /^database$/i })
 
-    clickExistingTextButton(/borg ui server/i)
+    await selectSourceKind(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app/uploads' },
     })
@@ -705,7 +716,7 @@ describe('SourceStep', () => {
     await selectRemoteMachine(/backup-a@server-a.example/i)
     expect(screen.getByRole('button', { name: /use these paths/i })).toBeDisabled()
 
-    clickExistingTextButton(/borg ui server/i)
+    await selectSourceKind(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/zfs dataset/i), {
       target: { value: 'tank/app' },
     })
@@ -754,7 +765,7 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
     await screen.findByRole('tab', { name: /^database$/i })
 
-    clickExistingTextButton(/borg ui server/i)
+    await selectSourceKind(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app' },
     })
@@ -797,7 +808,7 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
     await screen.findByRole('tab', { name: /^database$/i })
 
-    clickExistingTextButton(/managed agent/i)
+    await selectSourceKind(/managed agent/i)
     expect(screen.queryByRole('button', { name: /browse current source/i })).not.toBeInTheDocument()
     fireEvent.click(screen.getByTitle('Browse filesystem'))
 
