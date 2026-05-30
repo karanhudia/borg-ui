@@ -18,6 +18,7 @@ Most configuration is available in the UI under Settings. Use environment variab
 | `PGID` | `1001` | Host group ID for file ownership |
 | `TZ` | host/default | Timezone used for logs and schedules |
 | `DATA_DIR` | `/data` | App database, logs, SSH material, generated secret |
+| `BORG_CACHE_DIR` | `/home/borg/.cache/borg` | Borg files/chunks cache directory. Keep the matching volume persistent for backup performance |
 | `SECRET_KEY` | generated | JWT/session signing key. Auto-generated into `/data/.secret_key` if omitted |
 | `INITIAL_ADMIN_PASSWORD` | `admin123` | Password for the first `admin` user |
 | `LOG_LEVEL` | `INFO` | Backend log level |
@@ -38,11 +39,11 @@ volumes:
 What they mean:
 
 - `/data`: Borg UI application state. Back this up.
-- `/home/borg/.cache/borg`: Borg cache. Keep it for performance.
+- `/home/borg/.cache/borg`: Borg cache. This matches the default `BORG_CACHE_DIR`; keep it for backup performance.
 - `/local`: host data exposed to Borg UI for local backups and repositories.
 
 Borg UI may update ownership for app-managed paths such as `/data`, `/backups`,
-`/home/borg`, and Borg's cache. It does not chown source bind mounts such as
+`/home/borg`, and `BORG_CACHE_DIR`. It does not chown source bind mounts such as
 `/local`; make sure the configured runtime user can read the host source path
 before starting backups.
 

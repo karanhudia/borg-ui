@@ -30,7 +30,8 @@ Keep the two cache layers separate when troubleshooting:
 
 - Borg UI archive cache: Redis or the in-memory fallback used by archive
   browsing.
-- Borg files cache: Borg's own cache under `/home/borg/.cache/borg`, used by
+- Borg files cache: Borg's own cache under the default `BORG_CACHE_DIR`
+  (`/home/borg/.cache/borg`), used by
   `borg create` to avoid reprocessing unchanged files during backups.
 
 Redis does not make backup creation faster. If Redis restarted, archive
@@ -61,8 +62,8 @@ Check these items:
 Useful checks from the Docker host:
 
 ```bash
-docker exec borg-web-ui sh -lc 'id borg && ls -ld /home/borg/.cache/borg'
-docker exec borg-web-ui sh -lc 'find /home/borg/.cache/borg -maxdepth 2 -type f | head'
+docker exec borg-web-ui sh -lc 'id borg && echo "BORG_CACHE_DIR=${BORG_CACHE_DIR:-/home/borg/.cache/borg}" && ls -ld "${BORG_CACHE_DIR:-/home/borg/.cache/borg}"'
+docker exec borg-web-ui sh -lc 'find "${BORG_CACHE_DIR:-/home/borg/.cache/borg}" -maxdepth 2 -type f | head'
 docker compose ps redis
 ```
 
