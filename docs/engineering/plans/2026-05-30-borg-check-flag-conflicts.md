@@ -10,13 +10,13 @@
 
 ---
 
-### Task 1: Backend Red Tests
+## Task 1: Backend Red Tests
 
 **Files:**
 - Modify: `tests/unit/test_api_repositories.py`
 - Modify: `tests/unit/test_schedulers.py`
 - Modify: `tests/unit/test_api_backup_plans.py`
-- Modify: `tests/unit/test_api_v2_repositories.py` or `tests/unit/test_v2_services.py`
+- Modify: `tests/unit/test_api_v2_backups.py`
 
 - [ ] Add a manual repository check test that posts `check_extra_flags: "--verify-data"` with `max_duration: 600` and expects HTTP 422.
 - [ ] Add a repository schedule update test that posts `check_extra_flags: "--verify-data"` with `max_duration: 3600` and expects HTTP 422.
@@ -24,7 +24,7 @@
 - [ ] Add a backup plan payload test that rejects `run_check_after=true`, `check_extra_flags="--repair"`, and `check_max_duration=3600`.
 - [ ] Run targeted pytest commands and confirm the new assertions fail against current behavior.
 
-### Task 2: Backend Implementation
+## Task 2: Backend Implementation
 
 **Files:**
 - Create: `app/services/check_flag_validation.py`
@@ -46,7 +46,7 @@
 - [ ] Add the backend locale error key in every locale file.
 - [ ] Run targeted backend tests and confirm they pass.
 
-### Task 3: Frontend Red Tests
+## Task 3: Frontend Red Tests
 
 **Files:**
 - Modify: `frontend/src/components/__tests__/CheckWarningDialog.test.tsx`
@@ -59,7 +59,7 @@
 - [ ] Add a backup plan schedule/maintenance test that renders a conflicting maintenance check and confirms the warning appears.
 - [ ] Run targeted Vitest commands and confirm they fail before UI implementation.
 
-### Task 4: Frontend Implementation
+## Task 4: Frontend Implementation
 
 **Files:**
 - Create: `frontend/src/utils/checkFlagConflicts.ts`
@@ -79,7 +79,7 @@
 - [ ] Add or update all locale keys required by the UI.
 - [ ] Run targeted frontend tests and confirm they pass.
 
-### Task 5: Storybook and Snapshots
+## Task 5: Storybook and Snapshots
 
 **Files:**
 - Modify: `frontend/src/components/CheckWarningDialog.stories.tsx`
@@ -90,7 +90,7 @@
 - [ ] Add a backup plan schedule step story showing the maintenance warning.
 - [ ] Run `cd frontend && npm run snapshots` and keep the updated screenshots.
 
-### Task 6: Required Validation, Publish, and Handoff
+## Task 6: Required Validation, Publish, and Handoff
 
 **Commands:**
 - `pytest tests/unit/test_api_repositories.py::TestRepositoryCheckSchedule tests/unit/test_schedulers.py::test_check_scheduler_creates_job_and_updates_next_run tests/unit/test_api_backup_plans.py::TestBackupPlanRoutes`
