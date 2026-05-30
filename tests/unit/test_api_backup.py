@@ -285,9 +285,14 @@ class TestBackupStart:
         test_db.add(repo)
         test_db.commit()
 
-        with patch(
-            "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
-        ) as execute_backup:
+        with (
+            patch(
+                "app.api.backup.backup_service.execute_backup", new_callable=AsyncMock
+            ) as execute_backup,
+            patch(
+                "app.api.backup.dispatch_agent_job_best_effort", new_callable=AsyncMock
+            ) as dispatch_agent_job,
+        ):
             response = test_client.post(
                 "/api/backup/start",
                 json={"repository": repo.path},
@@ -296,6 +301,7 @@ class TestBackupStart:
 
         assert response.status_code == 200
         execute_backup.assert_not_called()
+        dispatch_agent_job.assert_awaited_once()
 
         backup_job = test_db.query(BackupJob).filter_by(repository=repo.path).first()
         assert backup_job is not None

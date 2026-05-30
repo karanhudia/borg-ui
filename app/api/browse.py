@@ -7,12 +7,18 @@ from app.database.models import User, Repository, SystemSettings
 from app.database.database import get_db
 from app.api.auth import get_current_user
 from app.core.borg_router import BorgRouter
+from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.archive_browse_service import (
     add_managed_archive_metadata_to_items,
     build_browse_items,
     parse_archive_items,
 )
 from app.services.cache_service import archive_cache
+from app.services.repository_executor import (
+    is_agent_executor,
+    queue_agent_repository_operation_job,
+    wait_for_agent_repository_operation_job,
+)
 from app.utils.borg_env import (
     get_standard_ssh_opts,
     setup_borg_env,
@@ -50,6 +56,40 @@ def _is_browse_result_payload(items) -> bool:
     return isinstance(items, list) and all(
         isinstance(item, dict) and "name" in item and "path" in item for item in items
     )
+
+
+async def _list_archive_contents(
+    db: Session,
+    repository: Repository,
+    *,
+    archive_name: str,
+    max_items: int,
+) -> dict:
+    if is_agent_executor(repository):
+        agent_job = queue_agent_repository_operation_job(
+            db,
+            repository,
+            job_kind="repository.list_archive_contents",
+            operation={"archive": archive_name, "path": "", "max_lines": max_items},
+        )
+        await dispatch_agent_job_best_effort(
+            db,
+            agent_job,
+            repository_id=repository.id,
+            archive_name=archive_name,
+        )
+        return await wait_for_agent_repository_operation_job(db, agent_job.id)
+
+    env, temp_key_file = _build_repo_env(repository, db)
+    try:
+        return await BorgRouter(repository).list_archive_contents(
+            archive=archive_name,
+            path="",  # Always fetch all items
+            max_lines=max_items,  # Kill borg process if this limit is exceeded
+            env=env,
+        )
+    finally:
+        cleanup_temp_key_file(temp_key_file)
 
 
 @router.get("/{repository_id}/{archive_name}")
@@ -106,16 +146,12 @@ async def browse_archive_contents(
         else:
             # If not in cache, fetch from borg with streaming (prevents OOM)
             # Pass max_items as max_lines to ensure borg process is killed if limit exceeded
-            env, temp_key_file = _build_repo_env(repository, db)
-            try:
-                result = await BorgRouter(repository).list_archive_contents(
-                    archive=archive_name,
-                    path="",  # Always fetch all items
-                    max_lines=max_items,  # Kill borg process if this limit is exceeded
-                    env=env,
-                )
-            finally:
-                cleanup_temp_key_file(temp_key_file)
+            result = await _list_archive_contents(
+                db,
+                repository,
+                archive_name=archive_name,
+                max_items=max_items,
+            )
 
             # Check if line limit was exceeded (borg process was killed to prevent OOM)
             if result.get("line_count_exceeded"):

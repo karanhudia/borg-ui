@@ -27,6 +27,7 @@ from app.core.security import (
 from app.services.backup_service import backup_service
 from app.services.backup_progress_contract import serialize_backup_progress_details
 from app.services.backup_route_planner import apply_repository_route_to_backup_job
+from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     get_agent_job_for_backup,
@@ -251,6 +252,13 @@ async def _start_backup_impl(
         else:
             if repo_record and is_agent_executor(repo_record):
                 agent_job = queue_agent_backup_job(db, backup_job, repo_record)
+                await dispatch_agent_job_best_effort(
+                    db,
+                    agent_job,
+                    source="backup_api",
+                    backup_job_id=backup_job.id,
+                    repository_id=repo_record.id,
+                )
                 logger.info(
                     "Agent backup job queued from backup API",
                     backup_job_id=backup_job.id,

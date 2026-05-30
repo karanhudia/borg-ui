@@ -37,6 +37,7 @@ from app.services.backup_route_planner import (
     execution_mode_for_route,
     plan_repository_route,
 )
+from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
 from app.services.repository_executor import (
     cancel_agent_backup_job,
     is_agent_executor,
@@ -835,6 +836,14 @@ class BackupPlanExecutionService:
                     compression=repository_context.compression,
                     custom_flags=repository_context.custom_flags,
                     upload_ratelimit_kib=repository_context.upload_ratelimit_kib,
+                )
+                await dispatch_agent_job_best_effort(
+                    db,
+                    agent_job,
+                    source="backup_plan_run",
+                    run_id=run_id,
+                    backup_job_id=backup_job.id,
+                    repository_id=repo.id,
                 )
                 final_status = await wait_for_agent_backup_job(
                     db,

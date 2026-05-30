@@ -9,7 +9,8 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from app.api import browse as browse_api
-from app.database.models import Repository, SystemSettings
+from app.core.security import get_password_hash
+from app.database.models import AgentJob, AgentMachine, Repository, SystemSettings
 
 
 def _create_repository(test_db, name="Browse Test Repo"):
@@ -24,6 +25,21 @@ def _create_repository(test_db, name="Browse Test Repo"):
     test_db.commit()
     test_db.refresh(repo)
     return repo
+
+
+def _create_agent(test_db, *capabilities: str):
+    agent = AgentMachine(
+        name="Browse Agent",
+        agent_id="agt_browse",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=list(capabilities),
+    )
+    test_db.add(agent)
+    test_db.commit()
+    test_db.refresh(agent)
+    return agent
 
 
 @pytest.mark.unit
@@ -371,6 +387,91 @@ class TestBrowseArchiveBehavior:
         assert second_call[0] == repo.id
         assert second_call[1] == "parsed-archive::browse-managed-root"
         assert [item["name"] for item in second_call[2]] == ["docs", "notes.txt"]
+
+    @pytest.mark.asyncio
+    async def test_browse_agent_archive_queues_agent_contents_job(
+        self,
+        test_db,
+        admin_user,
+    ):
+        agent = _create_agent(test_db, "repository.list_archive_contents")
+        repo = Repository(
+            name="Agent Browse Repo",
+            path="/agent/repositories/app",
+            encryption="none",
+            compression="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+        stdout = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "path": "home/karan/test-backup-source/file.txt",
+                        "type": "f",
+                        "size": 842,
+                        "mtime": "2026-05-30T15:16:14",
+                    }
+                )
+            ]
+        )
+
+        with (
+            patch.object(
+                browse_api.archive_cache, "get", new=AsyncMock(return_value=None)
+            ),
+            patch.object(
+                browse_api.archive_cache, "set", new=AsyncMock(return_value=True)
+            ),
+            patch(
+                "app.api.browse.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ) as dispatch_agent,
+            patch(
+                "app.api.browse.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"stdout": stdout}),
+            ) as wait_for_agent,
+            patch.object(
+                browse_api.BorgRouter, "list_archive_contents", new=AsyncMock()
+            ) as list_local,
+        ):
+            response = await browse_api.browse_archive_contents(
+                repository_id=repo.id,
+                archive_name="archive-1",
+                path="home/karan/test-backup-source",
+                current_user=admin_user,
+                db=test_db,
+            )
+
+        assert response["items"] == [
+            {
+                "name": "file.txt",
+                "type": "file",
+                "size": 842,
+                "mtime": "2026-05-30T15:16:14",
+                "path": "home/karan/test-backup-source/file.txt",
+            }
+        ]
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["job_kind"] == "repository.list_archive_contents"
+        assert agent_job.payload["operation"] == {
+            "archive": "archive-1",
+            "path": "",
+            "max_lines": browse_api.MAX_ITEMS_IN_MEMORY,
+        }
+        dispatch_agent.assert_awaited_once_with(
+            test_db,
+            agent_job,
+            repository_id=repo.id,
+            archive_name="archive-1",
+        )
+        wait_for_agent.assert_awaited_once_with(test_db, agent_job.id)
+        list_local.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_browse_archive_uses_repo_ssh_environment_when_cache_misses(
