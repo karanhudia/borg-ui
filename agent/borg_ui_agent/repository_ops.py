@@ -114,6 +114,8 @@ class RepositoryOperationPayload:
 
         if self.job_kind == "repository.init":
             operation = self.operation or {}
+            if not isinstance(operation, dict):
+                raise ValueError("repository.init requires operation.encryption")
             encryption = operation.get("encryption")
             if not isinstance(encryption, str) or not encryption.strip():
                 raise ValueError("repository.init requires operation.encryption")

@@ -538,6 +538,54 @@ class TestRepositoriesCreate:
         assert agent_job.payload["repository"]["path"] == "/agent/fails-init"
         assert agent_job.payload["operation"]["encryption"] == "none"
 
+    def test_create_agent_repository_unexpected_init_failure_deletes_record(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        agent = AgentMachine(
+            name="Laptop",
+            agent_id="agt_laptop_init_crash",
+            token_hash=get_password_hash("borgui_agent_secret"),
+            token_prefix="borgui_agent_secret"[:20],
+            status="online",
+            capabilities=["repository.init"],
+        )
+        test_db.add(agent)
+        test_db.commit()
+        test_db.refresh(agent)
+
+        with (
+            patch(
+                "app.api.repositories.initialize_borg_repository",
+                new=AsyncMock(return_value={"success": True}),
+            ) as initialize,
+            patch(
+                "app.api.repositories.wait_for_agent_repository_operation_job",
+                new=AsyncMock(side_effect=RuntimeError("agent init crashed")),
+            ),
+            patch("app.api.repositories.mqtt_service.sync_state_with_db"),
+        ):
+            response = test_client.post(
+                "/api/repositories/",
+                json={
+                    "name": "Agent Init Crash Repo",
+                    "path": "/agent/init-crash",
+                    "encryption": "none",
+                    "compression": "lz4",
+                    "execution_target": "agent",
+                    "agent_machine_id": agent.id,
+                },
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        initialize.assert_not_awaited()
+        assert (
+            test_db.query(Repository).filter_by(name="Agent Init Crash Repo").first()
+            is None
+        )
+        agent_job = test_db.query(AgentJob).one()
+        assert agent_job.payload["job_kind"] == "repository.init"
+
     def test_create_agent_repository_without_source_paths(
         self, test_client: TestClient, admin_headers, test_db
     ):

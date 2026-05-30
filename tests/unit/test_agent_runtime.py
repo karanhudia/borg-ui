@@ -454,6 +454,23 @@ def test_repository_init_payload_builds_borg1_command():
 
 
 @pytest.mark.unit
+def test_repository_init_payload_rejects_non_mapping_operation():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "schema_version": 1,
+            "job_kind": "repository.init",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": ["not", "a", "mapping"],
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="repository.init requires operation.encryption"
+    ):
+        payload.build_command()
+
+
+@pytest.mark.unit
 def test_repository_init_payload_builds_borg2_command():
     payload = RepositoryOperationPayload.from_job_payload(
         {

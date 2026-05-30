@@ -1719,6 +1719,7 @@ async def _create_agent_repository_record(
     db.refresh(repository)
 
     if not imported:
+        repository_id = repository.id
         try:
             agent_job = queue_agent_repository_operation_job(
                 db,
@@ -1727,9 +1728,14 @@ async def _create_agent_repository_record(
                 operation={"encryption": repository.encryption},
             )
             await wait_for_agent_repository_operation_job(db, agent_job.id)
-        except HTTPException:
-            db.delete(repository)
-            db.commit()
+        except Exception:
+            db.rollback()
+            repository_to_delete = (
+                db.query(Repository).filter(Repository.id == repository_id).first()
+            )
+            if repository_to_delete:
+                db.delete(repository_to_delete)
+                db.commit()
             raise
 
     if cloud_mirror_remote:

@@ -19,7 +19,7 @@ Borg 2.
 
 ---
 
-### Task 1: Server-Side Create Contract
+## Task 1: Server-Side Create Contract
 
 **Files:**
 - Modify: `app/api/repositories.py`
@@ -46,7 +46,7 @@ Borg 2.
   `repository.init` and `repository.rclone_sync`, and missing-rclone tests still
   advertise `repository.init`.
 
-### Task 2: Agent Runtime Init Operation
+## Task 2: Agent Runtime Init Operation
 
 **Files:**
 - Modify: `agent/borg_ui_agent/repository_ops.py`
@@ -71,7 +71,7 @@ Borg 2.
   cancellation, return code, and `BORG_PASSPHRASE` behavior are shared with the
   existing operations.
 
-### Task 3: Documentation
+## Task 3: Documentation
 
 **Files:**
 - Modify: `agent/README.md`
@@ -80,7 +80,7 @@ Borg 2.
 - [ ] Add `repository.init` to managed-agent capability examples that include
   repository operations.
 
-### Task 4: Validation And Handoff
+## Task 4: Validation And Handoff
 
 **Files:**
 - Modify as needed for validation-only fixes.
@@ -93,7 +93,7 @@ Borg 2.
 - [ ] Run `.venv311/bin/python -m ruff format --check app tests agent`.
 - [ ] Record local runtime evidence that agent create success is gated on init
   wait and init failure removes the repository row.
-- [ ] Commit, push, create the PR from `.github/PULL_REQUEST_TEMPLATE.md`, attach
-  it to Linear, apply the `symphony` label, run the full PR feedback sweep, and
-  move the issue to Human Review only after checks and workpad acceptance are
-  complete.
+- [ ] Commit, push, create the PR using GitHub's
+  `.github/PULL_REQUEST_TEMPLATE.md`, attach it to Linear, apply the `symphony`
+  label, run the full PR feedback sweep, and move the issue to Human Review
+  only after checks and workpad acceptance are complete.
