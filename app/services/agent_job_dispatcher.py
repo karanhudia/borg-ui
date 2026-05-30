@@ -86,12 +86,17 @@ async def dispatch_agent_job_best_effort(
             timeout_seconds=timeout_seconds,
         )
     except Exception as exc:
+        db.rollback()
+        reserved_log_keys = {"agent_job_id", "agent_machine_id", "error"}
+        safe_context = {
+            key: value for key, value in context.items() if key not in reserved_log_keys
+        }
         logger.warning(
             "Immediate agent dispatch failed; leaving queued job for fallback handling",
             agent_job_id=getattr(job, "id", None),
             agent_machine_id=getattr(job, "agent_machine_id", None),
             error=str(exc),
-            **context,
+            **safe_context,
         )
         return False
 
