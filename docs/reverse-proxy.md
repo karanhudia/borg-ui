@@ -127,9 +127,15 @@ https://example.com/borg-ui/api/rclone/oauth/callback/onedrive
 Set `PUBLIC_BASE_URL` when the backend cannot infer the public URL from trusted
 forwarded headers. Borg UI validates this value before starting a provider-owned
 OAuth flow and rejects non-HTTPS public URLs except for localhost development.
+Provider client IDs and secrets can be saved by an admin in Cloud Storage or
+provided through backend environment variables; saved Borg UI credentials take
+precedence, while secrets are never returned to ordinary frontend responses.
 
 Make sure the proxy forwards the callback path to Borg UI without requiring a
-browser to reach rclone's loopback listener at `127.0.0.1:53682`.
+browser to reach rclone's loopback listener at `127.0.0.1:53682`. After a
+Borg UI-owned callback, the browser shows a completion page and the Cloud
+Storage dialog polls a server-side session marker. rclone loopback/manual
+authorization remains available for unsupported providers and advanced setups.
 
 ## Traefik Example
 

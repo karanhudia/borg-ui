@@ -21,9 +21,14 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.authorization import authorize_request
-from app.core.security import get_current_download_user, get_current_user
+from app.core.security import (
+    decrypt_secret,
+    encrypt_secret,
+    get_current_download_user,
+    get_current_user,
+)
 from app.database.database import get_db
-from app.database.models import RepositoryStorage, RcloneRemote, User
+from app.database.models import RepositoryStorage, RcloneRemote, SystemSettings, User
 from app.services.rclone_repository_service import normalize_rclone_relative_path
 from app.services.rclone_service import RcloneUnavailable, rclone_service
 
@@ -40,6 +45,7 @@ RCLONE_OAUTH_MAX_SESSIONS = 32
 RCLONE_OAUTH_OUTPUT_LIMIT_CHARS = 20_000
 RCLONE_OAUTH_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 BORG_UI_OAUTH_MARKER_KEY = "_borg_ui_oauth_provider"
+BORG_UI_OAUTH_SESSION_KEY = "_borg_ui_oauth_session_id"
 BORG_UI_OAUTH_PROVIDERS = {"drive", "onedrive"}
 GOOGLE_DRIVE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_DRIVE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -437,6 +443,12 @@ class RcloneOAuthStart(BaseModel):
     mode: str = "auto"
 
 
+class RcloneOAuthCredentialUpdate(BaseModel):
+    client_id: str | None = None
+    client_secret: str | None = None
+    clear_client_secret: bool = False
+
+
 def _require_admin(user: User) -> None:
     if not user.is_admin:
         raise HTTPException(status_code=403, detail={"key": "backend.errors.forbidden"})
@@ -491,18 +503,130 @@ def _strip_optional(value: str | None) -> str | None:
     return stripped or None
 
 
-def _provider_oauth_credentials(
-    provider: str, *, required: bool = False
-) -> tuple[str | None, str | None]:
+def _get_or_create_system_settings(db: Session) -> SystemSettings:
+    settings_row = db.query(SystemSettings).first()
+    if settings_row is None:
+        settings_row = SystemSettings()
+        db.add(settings_row)
+        db.flush()
+    return settings_row
+
+
+def _provider_oauth_db_field_names(provider: str) -> tuple[str, str]:
     if provider == "drive":
-        client_id = _strip_optional(settings.google_drive_oauth_client_id)
-        client_secret = _strip_optional(settings.google_drive_oauth_client_secret)
-    elif provider == "onedrive":
-        client_id = _strip_optional(settings.onedrive_oauth_client_id)
-        client_secret = _strip_optional(settings.onedrive_oauth_client_secret)
-    else:
-        client_id = None
-        client_secret = None
+        return (
+            "google_drive_oauth_client_id",
+            "google_drive_oauth_client_secret_encrypted",
+        )
+    if provider == "onedrive":
+        return ("onedrive_oauth_client_id", "onedrive_oauth_client_secret_encrypted")
+    raise HTTPException(
+        status_code=400,
+        detail={"key": "backend.errors.rclone.oauthUnsupported"},
+    )
+
+
+def _provider_oauth_label(provider: str) -> str:
+    entry = _provider_catalog_entry(provider)
+    return str(entry.get("label") or provider) if entry else provider
+
+
+def _decrypt_optional_secret(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        return _strip_optional(decrypt_secret(value))
+    except Exception:
+        logger.warning("Failed to decrypt stored rclone OAuth provider secret")
+        return None
+
+
+def _provider_env_oauth_credentials(provider: str) -> tuple[str | None, str | None]:
+    if provider == "drive":
+        return (
+            _strip_optional(settings.google_drive_oauth_client_id),
+            _strip_optional(settings.google_drive_oauth_client_secret),
+        )
+    if provider == "onedrive":
+        return (
+            _strip_optional(settings.onedrive_oauth_client_id),
+            _strip_optional(settings.onedrive_oauth_client_secret),
+        )
+    return None, None
+
+
+def _provider_stored_oauth_credentials(
+    provider: str, db: Session | None
+) -> tuple[str | None, str | None, bool]:
+    if db is None or provider not in BORG_UI_OAUTH_PROVIDERS:
+        return None, None, False
+    settings_row = db.query(SystemSettings).first()
+    if settings_row is None:
+        return None, None, False
+    client_id_field, client_secret_field = _provider_oauth_db_field_names(provider)
+    stored_client_id = _strip_optional(getattr(settings_row, client_id_field, None))
+    stored_secret_encrypted = getattr(settings_row, client_secret_field, None)
+    has_stored_credentials = bool(stored_client_id or stored_secret_encrypted)
+    return (
+        stored_client_id,
+        _decrypt_optional_secret(stored_secret_encrypted),
+        has_stored_credentials,
+    )
+
+
+def _provider_oauth_credential_state(
+    provider: str, db: Session | None = None
+) -> dict[str, Any]:
+    if provider not in BORG_UI_OAUTH_PROVIDERS:
+        return {
+            "client_id": None,
+            "client_secret": None,
+            "client_id_set": False,
+            "client_secret_set": False,
+            "configured": False,
+            "source": "unsupported",
+        }
+
+    stored_client_id, stored_secret, has_stored_credentials = (
+        _provider_stored_oauth_credentials(provider, db)
+    )
+    if has_stored_credentials:
+        return {
+            "client_id": stored_client_id,
+            "client_secret": stored_secret,
+            "client_id_set": bool(stored_client_id),
+            "client_secret_set": bool(stored_secret),
+            "configured": bool(stored_client_id and stored_secret),
+            "source": "database",
+        }
+
+    env_client_id, env_secret = _provider_env_oauth_credentials(provider)
+    if env_client_id or env_secret:
+        return {
+            "client_id": env_client_id,
+            "client_secret": env_secret,
+            "client_id_set": bool(env_client_id),
+            "client_secret_set": bool(env_secret),
+            "configured": bool(env_client_id and env_secret),
+            "source": "environment",
+        }
+
+    return {
+        "client_id": None,
+        "client_secret": None,
+        "client_id_set": False,
+        "client_secret_set": False,
+        "configured": False,
+        "source": "unset",
+    }
+
+
+def _provider_oauth_credentials(
+    provider: str, *, db: Session | None = None, required: bool = False
+) -> tuple[str | None, str | None]:
+    credential_state = _provider_oauth_credential_state(provider, db)
+    client_id = credential_state["client_id"]
+    client_secret = credential_state["client_secret"]
 
     if required and (not client_id or not client_secret):
         raise HTTPException(
@@ -545,22 +669,30 @@ def _borg_ui_oauth_callback_url(provider: str) -> str:
     return f"{_validate_public_base_url()}/api/rclone/oauth/callback/{provider}"
 
 
-def _borg_ui_oauth_setup_status(provider: str) -> dict[str, Any]:
+def _borg_ui_oauth_setup_status(
+    provider: str, db: Session | None = None
+) -> dict[str, Any]:
     if provider not in BORG_UI_OAUTH_PROVIDERS:
         return {
             "oauth_mode": "rclone_loopback",
             "oauth_configured": False,
             "oauth_callback_url": None,
             "oauth_setup_key": None,
+            "oauth_credentials_source": "unsupported",
+            "oauth_client_id_set": False,
+            "oauth_client_secret_set": False,
         }
 
-    client_id, client_secret = _provider_oauth_credentials(provider)
-    if not client_id or not client_secret:
+    credential_state = _provider_oauth_credential_state(provider, db)
+    if not credential_state["configured"]:
         return {
             "oauth_mode": "borg_ui",
             "oauth_configured": False,
             "oauth_callback_url": None,
             "oauth_setup_key": "backend.errors.rclone.oauthProviderCredentialsRequired",
+            "oauth_credentials_source": credential_state["source"],
+            "oauth_client_id_set": credential_state["client_id_set"],
+            "oauth_client_secret_set": credential_state["client_secret_set"],
         }
     try:
         callback_url = _borg_ui_oauth_callback_url(provider)
@@ -573,19 +705,27 @@ def _borg_ui_oauth_setup_status(provider: str) -> dict[str, Any]:
             "oauth_setup_key": detail.get(
                 "key", "backend.errors.rclone.oauthPublicBaseUrlInvalid"
             ),
+            "oauth_credentials_source": credential_state["source"],
+            "oauth_client_id_set": credential_state["client_id_set"],
+            "oauth_client_secret_set": credential_state["client_secret_set"],
         }
     return {
         "oauth_mode": "borg_ui",
         "oauth_configured": True,
         "oauth_callback_url": callback_url,
         "oauth_setup_key": None,
+        "oauth_credentials_source": credential_state["source"],
+        "oauth_client_id_set": credential_state["client_id_set"],
+        "oauth_client_secret_set": credential_state["client_secret_set"],
     }
 
 
-def _serialize_provider_catalog_entry(entry: dict[str, Any]) -> dict[str, Any]:
+def _serialize_provider_catalog_entry(
+    entry: dict[str, Any], db: Session | None = None
+) -> dict[str, Any]:
     serialized = dict(entry)
     if entry.get("auth_type") == "oauth_token":
-        serialized.update(_borg_ui_oauth_setup_status(str(entry["type"])))
+        serialized.update(_borg_ui_oauth_setup_status(str(entry["type"]), db))
     else:
         serialized.update(
             {
@@ -593,6 +733,9 @@ def _serialize_provider_catalog_entry(entry: dict[str, Any]) -> dict[str, Any]:
                 "oauth_configured": False,
                 "oauth_callback_url": None,
                 "oauth_setup_key": None,
+                "oauth_credentials_source": "unsupported",
+                "oauth_client_id_set": False,
+                "oauth_client_secret_set": False,
             }
         )
     return serialized
@@ -706,8 +849,11 @@ def _provider_authorization_url(
     config: dict[str, Any] | None,
     redirect_uri: str,
     state: str,
+    db: Session | None = None,
 ) -> str:
-    client_id, _client_secret = _provider_oauth_credentials(provider, required=True)
+    client_id, _client_secret = _provider_oauth_credentials(
+        provider, db=db, required=True
+    )
     if provider == "drive":
         params = {
             "client_id": client_id,
@@ -755,10 +901,80 @@ def _rclone_token_from_oauth_response(payload: dict[str, Any]) -> str:
     return json.dumps(token, separators=(",", ":"))
 
 
+def _serialize_utc_z(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _parse_token_expiry(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    raw_value = value.strip()
+    try:
+        parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _parse_oauth_token_value(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _oauth_token_status_from_value(value: Any) -> dict[str, Any]:
+    token = _parse_oauth_token_value(value)
+    if not token:
+        return {"status": "missing", "expires_at": None, "refresh_available": False}
+
+    refresh_available = bool(token.get("refresh_token"))
+    expires_at = _parse_token_expiry(token.get("expiry"))
+    if expires_at is None:
+        return {
+            "status": "unknown",
+            "expires_at": None,
+            "refresh_available": refresh_available,
+        }
+
+    status_value = "valid"
+    if expires_at <= _utc_now():
+        status_value = "refreshable" if refresh_available else "expired"
+    return {
+        "status": status_value,
+        "expires_at": _serialize_utc_z(expires_at),
+        "refresh_available": refresh_available,
+    }
+
+
+def _oauth_token_status_from_config_values(
+    provider: str, values: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    oauth_provider_types = {
+        entry["type"]
+        for entry in RCLONE_PROVIDER_CATALOG
+        if entry.get("auth_type") == "oauth_token"
+    }
+    if provider not in oauth_provider_types:
+        return None
+    return _oauth_token_status_from_value((values or {}).get("token"))
+
+
 async def _exchange_borg_ui_oauth_code(
-    provider: str, code: str, redirect_uri: str
+    provider: str, code: str, redirect_uri: str, db: Session | None = None
 ) -> dict[str, Any]:
-    client_id, client_secret = _provider_oauth_credentials(provider, required=True)
+    client_id, client_secret = _provider_oauth_credentials(
+        provider, db=db, required=True
+    )
     token_url = GOOGLE_DRIVE_TOKEN_URL if provider == "drive" else MICROSOFT_TOKEN_URL
     data = {
         "client_id": client_id,
@@ -921,9 +1137,35 @@ def _append_oauth_output(session: dict[str, Any], line: str) -> None:
     session["updated_at"] = _utc_now()
 
 
+def _borg_ui_oauth_safe_session_config(
+    session_id: str, session: dict[str, Any]
+) -> dict[str, Any] | None:
+    if session.get("status") != "authorized" or not session.get("config"):
+        return None
+    config = dict(session.get("config") or {})
+    config.pop("token", None)
+    config.pop(BORG_UI_OAUTH_MARKER_KEY, None)
+    config.pop(BORG_UI_OAUTH_SESSION_KEY, None)
+    config["type"] = session["provider"]
+    config[BORG_UI_OAUTH_MARKER_KEY] = session["provider"]
+    config[BORG_UI_OAUTH_SESSION_KEY] = session_id
+    return config
+
+
+def _session_token_status(session: dict[str, Any]) -> dict[str, Any] | None:
+    config = session.get("config")
+    if not isinstance(config, dict):
+        return None
+    return _oauth_token_status_from_config_values(session["provider"], config)
+
+
 def _oauth_session_response(session_id: str) -> dict[str, Any]:
     session = RCLONE_OAUTH_SESSIONS[session_id]
     RCLONE_OAUTH_SESSIONS.move_to_end(session_id)
+    if session.get("flow") == "borg_ui":
+        config = _borg_ui_oauth_safe_session_config(session_id, session)
+    else:
+        config = session.get("config")
     return {
         "session_id": session_id,
         "provider": session["provider"],
@@ -931,7 +1173,8 @@ def _oauth_session_response(session_id: str) -> dict[str, Any]:
         "authorization_url": session.get("authorization_url"),
         "local_authorization_url": session.get("local_authorization_url"),
         "oauth_mode": session.get("flow", "rclone_loopback"),
-        "config": session.get("config"),
+        "config": config,
+        "token_status": _session_token_status(session),
         "error": session.get("error"),
     }
 
@@ -984,12 +1227,15 @@ async def _start_oauth_process(
 
 
 async def _start_borg_ui_oauth_session(
-    session_id: str, provider: str, config: dict[str, Any] | None
+    session_id: str,
+    provider: str,
+    config: dict[str, Any] | None,
+    db: Session | None = None,
 ) -> dict[str, Any]:
     redirect_uri = _borg_ui_oauth_callback_url(provider)
     state = secrets.token_urlsafe(32)
     authorization_url = _provider_authorization_url(
-        provider, config=config, redirect_uri=redirect_uri, state=state
+        provider, config=config, redirect_uri=redirect_uri, state=state, db=db
     )
     now = _utc_now()
     base_config = dict(config or {})
@@ -1180,11 +1426,57 @@ def _serialize_browse_entry_size(value: Any) -> int | None:
     return int(size)
 
 
+def _resolve_borg_ui_oauth_session_config(
+    provider: str,
+    values: dict[str, Any],
+    *,
+    session_id: str,
+) -> dict[str, Any]:
+    session = RCLONE_OAUTH_SESSIONS.get(session_id)
+    if (
+        session is None
+        or session.get("flow") != "borg_ui"
+        or session.get("provider") != provider
+        or session.get("status") != "authorized"
+        or not isinstance(session.get("config"), dict)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.rclone.oauthNotFound"},
+        )
+
+    session_config = dict(session["config"])
+    token = session_config.get("token")
+    if not token:
+        raise HTTPException(
+            status_code=409,
+            detail={"key": "backend.errors.rclone.oauthTokenMissing"},
+        )
+
+    resolved = dict(session_config)
+    resolved.update(values)
+    resolved["type"] = provider
+    resolved["token"] = token
+    resolved[BORG_UI_OAUTH_MARKER_KEY] = provider
+    return resolved
+
+
 def _managed_config_values(
-    provider: str, redacted_config: dict[str, Any] | None
+    provider: str, redacted_config: dict[str, Any] | None, db: Session | None = None
 ) -> dict[str, str]:
     values = dict(redacted_config or {})
     borg_ui_oauth_provider = values.pop(BORG_UI_OAUTH_MARKER_KEY, None)
+    borg_ui_oauth_session_id = values.pop(BORG_UI_OAUTH_SESSION_KEY, None)
+    if borg_ui_oauth_session_id:
+        if borg_ui_oauth_provider != provider:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.oauthProviderMismatch"},
+            )
+        values = _resolve_borg_ui_oauth_session_config(
+            provider, values, session_id=str(borg_ui_oauth_session_id)
+        )
+        borg_ui_oauth_provider = provider
     values = {
         str(key): value
         for key, value in values.items()
@@ -1192,7 +1484,9 @@ def _managed_config_values(
     }
     values["type"] = str(values.get("type") or provider).strip()
     if borg_ui_oauth_provider == provider and provider in BORG_UI_OAUTH_PROVIDERS:
-        client_id, client_secret = _provider_oauth_credentials(provider, required=True)
+        client_id, client_secret = _provider_oauth_credentials(
+            provider, db=db, required=True
+        )
         values["client_id"] = client_id
         values["client_secret"] = client_secret
     return {
@@ -1220,11 +1514,12 @@ def _write_managed_remote_config(
     remote_name: str,
     provider: str,
     redacted_config: dict[str, Any] | None,
+    db: Session | None = None,
 ) -> None:
     parser = _load_config(config_path)
     if not parser.has_section(remote_name):
         parser.add_section(remote_name)
-    for key, value in _managed_config_values(provider, redacted_config).items():
+    for key, value in _managed_config_values(provider, redacted_config, db).items():
         parser.set(remote_name, key, value)
     _write_config_file(config_path, parser)
 
@@ -1246,6 +1541,7 @@ def _replace_managed_remote_config(
     remote_name: str,
     provider: str,
     redacted_config: dict[str, Any] | None,
+    db: Session | None = None,
 ) -> None:
     parser = _load_config(config_path)
     if old_remote_name != remote_name:
@@ -1253,7 +1549,7 @@ def _replace_managed_remote_config(
     else:
         parser.remove_section(remote_name)
     parser.add_section(remote_name)
-    for key, value in _managed_config_values(provider, redacted_config).items():
+    for key, value in _managed_config_values(provider, redacted_config, db).items():
         parser.set(remote_name, key, value)
     _write_config_file(config_path, parser)
 
@@ -1284,6 +1580,26 @@ def _remote_usage_count(db: Session, remote_id: int) -> int:
     )
 
 
+def _remote_oauth_token_status(remote: RcloneRemote) -> dict[str, Any] | None:
+    if (
+        not _provider_catalog_entry(remote.provider)
+        or (_provider_catalog_entry(remote.provider) or {}).get("auth_type")
+        != "oauth_token"
+    ):
+        return None
+    values: dict[str, Any] = {}
+    if remote.config_path:
+        try:
+            values = _config_section_values(
+                _load_config(Path(remote.config_path)), remote.name
+            )
+        except OSError:
+            values = {}
+    if not values:
+        values = dict(remote.redacted_config or {})
+    return _oauth_token_status_from_config_values(remote.provider, values)
+
+
 def _serialize_remote(remote: RcloneRemote) -> dict[str, Any]:
     return {
         "id": remote.id,
@@ -1295,6 +1611,7 @@ def _serialize_remote(remote: RcloneRemote) -> dict[str, Any]:
         "config_source": remote.config_source,
         "config_path": remote.config_path,
         "redacted_config": _redact_config_values(remote.redacted_config),
+        "oauth_token": _remote_oauth_token_status(remote),
         "last_tested_at": _iso(remote.last_tested_at),
         "last_test_status": remote.last_test_status,
         "last_error": remote.last_error,
@@ -1312,20 +1629,104 @@ async def get_status(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/providers")
-async def list_providers(current_user: User = Depends(get_current_user)):
+async def list_providers(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
     _require_admin(current_user)
     return {
         "providers": [
-            _serialize_provider_catalog_entry(provider)
+            _serialize_provider_catalog_entry(provider, db)
             for provider in RCLONE_PROVIDER_CATALOG
         ]
     }
+
+
+def _serialize_oauth_credential_status(provider: str, db: Session) -> dict[str, Any]:
+    if provider not in BORG_UI_OAUTH_PROVIDERS:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.oauthUnsupported"},
+        )
+    credential_state = _provider_oauth_credential_state(provider, db)
+    try:
+        callback_url = _borg_ui_oauth_callback_url(provider)
+        setup_key = None
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        callback_url = None
+        setup_key = detail.get("key", "backend.errors.rclone.oauthPublicBaseUrlInvalid")
+
+    return {
+        "provider": provider,
+        "label": _provider_oauth_label(provider),
+        "configured": bool(credential_state["configured"] and callback_url),
+        "credential_source": credential_state["source"],
+        "client_id": credential_state["client_id"],
+        "client_id_set": credential_state["client_id_set"],
+        "client_secret_set": credential_state["client_secret_set"],
+        "callback_url": callback_url,
+        "setup_key": setup_key
+        if setup_key
+        else (
+            None
+            if credential_state["configured"]
+            else "backend.errors.rclone.oauthProviderCredentialsRequired"
+        ),
+    }
+
+
+@router.get("/oauth/credentials")
+async def list_oauth_credentials(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    _require_admin(current_user)
+    return {
+        "providers": [
+            _serialize_oauth_credential_status(provider, db)
+            for provider in sorted(BORG_UI_OAUTH_PROVIDERS)
+        ]
+    }
+
+
+@router.put("/oauth/credentials/{provider}")
+async def update_oauth_credentials(
+    provider: str,
+    payload: RcloneOAuthCredentialUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin(current_user)
+    provider = _normalize_provider(provider)
+    if provider not in BORG_UI_OAUTH_PROVIDERS:
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.oauthUnsupported"},
+        )
+    settings_row = _get_or_create_system_settings(db)
+    client_id_field, client_secret_field = _provider_oauth_db_field_names(provider)
+
+    if payload.client_id is not None:
+        setattr(settings_row, client_id_field, _strip_optional(payload.client_id))
+    if payload.clear_client_secret:
+        setattr(settings_row, client_secret_field, None)
+    elif payload.client_secret is not None:
+        stripped_secret = _strip_optional(payload.client_secret)
+        setattr(
+            settings_row,
+            client_secret_field,
+            encrypt_secret(stripped_secret) if stripped_secret else None,
+        )
+
+    db.commit()
+    db.refresh(settings_row)
+    return _serialize_oauth_credential_status(provider, db)
 
 
 @router.post("/oauth/sessions", status_code=status.HTTP_201_CREATED)
 async def start_oauth_session(
     payload: RcloneOAuthStart,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     _require_admin(current_user)
     provider = _normalize_provider(payload.provider)
@@ -1341,14 +1742,16 @@ async def start_oauth_session(
     if mode == "borg_ui" or (
         mode == "auto"
         and provider in BORG_UI_OAUTH_PROVIDERS
-        and _borg_ui_oauth_setup_status(provider)["oauth_configured"]
+        and _borg_ui_oauth_setup_status(provider, db)["oauth_configured"]
     ):
-        return await _start_borg_ui_oauth_session(session_id, provider, payload.config)
+        return await _start_borg_ui_oauth_session(
+            session_id, provider, payload.config, db
+        )
     if mode == "borg_ui":
         raise HTTPException(
             status_code=409,
             detail={
-                "key": _borg_ui_oauth_setup_status(provider).get(
+                "key": _borg_ui_oauth_setup_status(provider, db).get(
                     "oauth_setup_key",
                     "backend.errors.rclone.oauthProviderCredentialsRequired",
                 )
@@ -1445,6 +1848,7 @@ async def complete_borg_ui_oauth_callback(
     code: str | None = None,
     error: str | None = None,
     error_description: str | None = None,
+    db: Session = Depends(get_db),
 ):
     provider = _normalize_provider(provider)
     if provider not in BORG_UI_OAUTH_PROVIDERS:
@@ -1485,7 +1889,7 @@ async def complete_borg_ui_oauth_callback(
         )
 
     token_response = await _exchange_borg_ui_oauth_code(
-        provider, code, session["redirect_uri"]
+        provider, code, session["redirect_uri"], db
     )
     config = dict(session.get("base_config") or {})
     if (
@@ -1513,7 +1917,14 @@ async def complete_borg_ui_oauth_callback(
     RCLONE_OAUTH_SESSIONS.move_to_end(session_id)
     return HTMLResponse(
         "<!doctype html><title>Borg UI OAuth</title>"
-        "<p>Authorization complete. You can close this tab and return to Borg UI.</p>"
+        '<main style="font-family: system-ui, sans-serif; max-width: 42rem; '
+        'margin: 4rem auto; padding: 0 1rem; line-height: 1.5;">'
+        "<h1>Authorization complete</h1>"
+        "<p>Borg UI received the provider callback and stored the token result "
+        "server-side for this setup session.</p>"
+        "<p><strong>Return to Borg UI</strong> and check authorization to save "
+        "the remote.</p>"
+        "</main>"
     )
 
 
@@ -1572,12 +1983,15 @@ async def create_remote(
             config_root = Path(settings.rclone_config_root)
             config_root.mkdir(parents=True, exist_ok=True)
             config_file = _managed_config_path(config_root)
+            resolved_config_for_db = _managed_config_values(provider, raw_config, db)
             remote.config_path = str(config_file)
+            remote.redacted_config = _redact_config_values(resolved_config_for_db)
             _write_managed_remote_config(
                 config_file,
                 remote_name=remote_name,
                 provider=provider,
                 redacted_config=raw_config,
+                db=db,
             )
             wrote_config = True
         db.commit()
@@ -1658,16 +2072,20 @@ async def update_remote(
                 config_for_write = _preserve_redacted_config_values(
                     remote.redacted_config or {}, existing_config
                 )
+            resolved_config_for_db = _managed_config_values(
+                provider, config_for_write, db
+            )
             _replace_managed_remote_config(
                 config_file,
                 old_remote_name=old_remote_name,
                 remote_name=remote_name,
                 provider=provider,
                 redacted_config=config_for_write,
+                db=db,
             )
             wrote_config = True
             remote.config_path = str(config_file)
-            redacted_config = _redact_config_values(config_for_write)
+            redacted_config = _redact_config_values(resolved_config_for_db)
         elif payload.redacted_config is not None:
             redacted_config = _redact_config_values(payload.redacted_config)
 

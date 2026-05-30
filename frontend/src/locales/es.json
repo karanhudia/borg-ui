@@ -199,6 +199,8 @@
     "remoteUpdateFailed": "No se pudo actualizar el remoto rclone.",
     "remoteDeleteFailed": "No se pudo eliminar el remoto rclone.",
     "browseFailed": "No se pudo explorar el remoto rclone.",
+    "oauthCredentialsSaved": "Credenciales de la app OAuth guardadas.",
+    "oauthCredentialsSaveFailed": "No se pudieron guardar las credenciales de la app OAuth.",
     "statusLoadFailed": "No se pudo cargar la disponibilidad de rclone.",
     "remotesLoadFailed": "No se pudieron cargar los remotos rclone.",
     "providersLoadFailed": "No se pudieron cargar los proveedores en la nube.",
@@ -227,6 +229,21 @@
       "message": "Ningún remoto coincide con \"{{search}}\".",
       "fallback": "Ningún remoto coincide con los filtros actuales.",
       "clearSearch": "Limpiar búsqueda"
+    },
+    "oauthToken": {
+      "title": "Token OAuth",
+      "validUntil": "Válido hasta {{expiresAt}}",
+      "noExpiry": "Sin caducidad informada",
+      "refreshStored": "Token de refresco guardado",
+      "refreshMissing": "No se informó token de refresco",
+      "status": {
+        "missing": "Faltante",
+        "valid": "Válido",
+        "expiring": "Caduca pronto",
+        "expired": "Caducado",
+        "refreshable": "Renovable",
+        "unknown": "Desconocido"
+      }
     }
   },
   "status": {
@@ -3229,7 +3246,32 @@
       "rcloneOAuthUseLoopback": "Usar loopback de rclone",
       "rcloneOAuthWaiting": "Esperando el callback del proveedor.",
       "rcloneOAuthAuthorized": "La autorización devolvió un token y actualizó la configuración.",
+      "rcloneOAuthTokenReady": "Token listo para guardar en el servidor.",
       "rcloneOAuthFailed": "La autorización no se completó.",
+      "rcloneOAuthCredentialsTitle": "App OAuth del proveedor",
+      "rcloneOAuthClientIdLabel": "ID de cliente OAuth",
+      "rcloneOAuthClientSecretLabel": "Secreto de cliente OAuth",
+      "rcloneOAuthCredentialsSave": "Guardar credenciales OAuth",
+      "rcloneOAuthCredentialsSaving": "Guardando credenciales...",
+      "rcloneOAuthCredentialsRequired": "Introduce un ID de cliente o un secreto de cliente para guardar.",
+      "rcloneOAuthCredentialsSaveFailed": "No se pudieron guardar las credenciales OAuth.",
+      "rcloneOAuthClientIdSet": "ID de cliente guardado",
+      "rcloneOAuthClientSecretSet": "Secreto de cliente guardado",
+      "rcloneOAuthCredentialSources": {
+        "database": "Guardado en Borg UI",
+        "environment": "Desde el entorno",
+        "unset": "No configurado",
+        "unsupported": "No compatible"
+      },
+      "rcloneOAuthTokenStatusWithExpiry": "{{status}} hasta {{expiresAt}}",
+      "rcloneOAuthTokenStatus": {
+        "missing": "Falta el token",
+        "valid": "Token válido",
+        "expiring": "Token próximo a caducar",
+        "expired": "Token caducado",
+        "refreshable": "El token de refresco puede renovar el acceso",
+        "unknown": "Estado del token desconocido"
+      },
       "rcloneRequiredFieldSuffix": "(obligatorio)",
       "rcloneProviderDocs": "Referencia de configuración del proveedor",
       "rcloneAuthTypes": {

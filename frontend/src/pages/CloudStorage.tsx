@@ -27,6 +27,7 @@ import {
   CheckCircle,
   Cloud,
   HardDrive,
+  KeyRound,
   Plus,
   RefreshCw,
   Search,
@@ -35,7 +36,9 @@ import {
 } from 'lucide-react'
 import { rcloneAPI } from '../services/api'
 import type {
+  RcloneOAuthCredentialUpdate,
   RcloneOAuthSession,
+  RcloneOAuthTokenStatus,
   RcloneProvider,
   RcloneRemote,
   RcloneStatus,
@@ -89,8 +92,13 @@ interface CloudStorageContentProps {
   onStartOAuth?: (data: {
     provider: string
     config: Record<string, unknown>
+    mode?: 'auto' | 'borg_ui' | 'rclone_loopback'
   }) => Promise<RcloneOAuthSession>
   onGetOAuthSession?: (sessionId: string) => Promise<RcloneOAuthSession>
+  onSaveOAuthCredentials?: (
+    provider: string,
+    data: RcloneOAuthCredentialUpdate
+  ) => Promise<unknown> | unknown
   onEditRemote?: (remote: RcloneRemote) => void
   onCloseEditRemote?: () => void
   onUpdateRemote?: (data: RcloneRemoteCreateInput) => Promise<void> | void
@@ -132,6 +140,34 @@ const statusColor = (
   }
 }
 
+const oauthTokenColor = (
+  status?: RcloneOAuthTokenStatus['status'] | null
+): 'default' | 'success' | 'error' | 'warning' | 'info' => {
+  switch (status) {
+    case 'valid':
+      return 'success'
+    case 'expiring':
+    case 'refreshable':
+      return 'warning'
+    case 'expired':
+      return 'error'
+    case 'missing':
+      return 'default'
+    default:
+      return 'info'
+  }
+}
+
+const formatTokenExpiry = (expiresAt?: string | null) => {
+  if (!expiresAt) return null
+  const date = new Date(expiresAt)
+  if (Number.isNaN(date.getTime())) return expiresAt
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
 interface CloudStorageRemoteCardProps {
   remote: RcloneRemote
   testingRemoteId?: number | null
@@ -158,6 +194,13 @@ function CloudStorageRemoteCard({
   const statusThemeColor = statusColor(remote.last_test_status)
   const usageCount = remote.usage_count ?? 0
   const deleteDisabled = usageCount > 0
+  const oauthToken = remote.oauth_token
+  const oauthColorKey = oauthTokenColor(oauthToken?.status)
+  const oauthColor =
+    oauthColorKey === 'default'
+      ? theme.palette.text.secondary
+      : (theme.palette[oauthColorKey] as { main: string }).main
+  const formattedExpiry = formatTokenExpiry(oauthToken?.expires_at)
 
   const iconBtnSx = {
     width: 32,
@@ -351,6 +394,50 @@ function CloudStorageRemoteCard({
           </Box>
         </Box>
 
+        {oauthToken ? (
+          <Box
+            sx={{
+              mb: 1.5,
+              px: 1.25,
+              py: 1,
+              borderRadius: 1,
+              border: '1px solid',
+              borderColor: alpha(oauthColor, isDark ? 0.32 : 0.2),
+              bgcolor: alpha(oauthColor, isDark ? 0.13 : 0.07),
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+              <Box sx={{ color: oauthColor, display: 'flex' }}>
+                <KeyRound size={14} />
+              </Box>
+              <Typography variant="caption" fontWeight={700} sx={{ color: 'text.primary' }}>
+                {t('cloudStorage.oauthToken.title')}
+              </Typography>
+              <Chip
+                size="small"
+                color={oauthColorKey}
+                variant="outlined"
+                label={t(`cloudStorage.oauthToken.status.${oauthToken.status}`, {
+                  defaultValue: oauthToken.status,
+                })}
+                sx={{ height: 20, fontSize: '0.64rem', fontWeight: 700 }}
+              />
+            </Box>
+            <Stack spacing={0.25} sx={{ mt: 0.75 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                {formattedExpiry
+                  ? t('cloudStorage.oauthToken.validUntil', { expiresAt: formattedExpiry })
+                  : t('cloudStorage.oauthToken.noExpiry')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {oauthToken.refresh_available
+                  ? t('cloudStorage.oauthToken.refreshStored')
+                  : t('cloudStorage.oauthToken.refreshMissing')}
+              </Typography>
+            </Stack>
+          </Box>
+        ) : null}
+
         {remote.last_error ? (
           <Box
             sx={{
@@ -468,6 +555,7 @@ export function CloudStorageContent({
   onCreateRemote,
   onStartOAuth,
   onGetOAuthSession,
+  onSaveOAuthCredentials,
   onEditRemote,
   onCloseEditRemote,
   onUpdateRemote,
@@ -789,6 +877,7 @@ export function CloudStorageContent({
           onCreate={onCreateRemote}
           onStartOAuth={onStartOAuth}
           onGetOAuthSession={onGetOAuthSession}
+          onSaveOAuthCredentials={onSaveOAuthCredentials}
         />
       ) : null}
 
@@ -809,6 +898,7 @@ export function CloudStorageContent({
           onCreate={onUpdateRemote}
           onStartOAuth={onStartOAuth}
           onGetOAuthSession={onGetOAuthSession}
+          onSaveOAuthCredentials={onSaveOAuthCredentials}
         />
       ) : null}
 
@@ -917,6 +1007,23 @@ export default function CloudStorage() {
     },
     onError: (error: unknown) => {
       toast.error(getApiMessage(error, t('cloudStorage.remoteUpdateFailed')))
+    },
+  })
+
+  const updateOAuthCredentialsMutation = useMutation({
+    mutationFn: ({
+      provider,
+      data,
+    }: {
+      provider: string
+      data: RcloneOAuthCredentialUpdate
+    }) => rcloneAPI.updateOAuthCredentials(provider, data),
+    onSuccess: () => {
+      toast.success(t('cloudStorage.oauthCredentialsSaved'))
+      queryClient.invalidateQueries({ queryKey: ['rclone-providers'] })
+    },
+    onError: (error: unknown) => {
+      toast.error(getApiMessage(error, t('cloudStorage.oauthCredentialsSaveFailed')))
     },
   })
 
@@ -1046,6 +1153,9 @@ export default function CloudStorage() {
       onGetOAuthSession={async (sessionId) => {
         const response = await rcloneAPI.getOAuthSession(sessionId)
         return response.data
+      }}
+      onSaveOAuthCredentials={async (provider, data) => {
+        await updateOAuthCredentialsMutation.mutateAsync({ provider, data })
       }}
       onEditRemote={(remote) => {
         updateRemoteMutation.reset()
