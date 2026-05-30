@@ -95,6 +95,11 @@ remote select and its folder icon does not open the rclone browser.
       `onBrowseDirectRclonePath`.
 - [ ] Add small helpers for parsing and composing `rclone://remote/path` values
       inside the Location step or wizard file.
+- [ ] Add dedicated helper unit tests for `parseDirectRcloneUrl`,
+      `formatDirectRcloneUrl`, and `normalizeRcloneRemotePath`, covering empty
+      strings, missing remote names, invalid schemes, missing or trailing
+      slashes, and normalized relative paths before relying on the helpers in
+      the wizard flow.
 - [ ] Render the connected remote select in direct mode when rclone is
       available and remotes are loaded.
 - [ ] On remote selection, update `rcloneRemoteId`, preserve the relative
