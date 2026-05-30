@@ -100,8 +100,11 @@ ssh://abcd@abcd.repo.borgbase.com/./repo
 ```
 
 Use `/./repo` as the Remote Machine default path and repository path. Do not
-shorten it to `/repo`. See [Provider Guides](provider-guides) for BorgBase,
-Hetzner Storage Box, Synology, Unraid, and other hosted or NAS examples.
+shorten it to `/repo`. Add Borg UI's full public key in BorgBase SSH Keys and
+grant that key access to the repository; BorgBase SFTP Access is not required
+for Borg UI's Borg-over-SSH repository setup. See
+[Provider Guides](provider-guides) for BorgBase, Hetzner Storage Box, Synology,
+Unraid, and other hosted or NAS examples.
 
 ## Remote Direct Backups
 
