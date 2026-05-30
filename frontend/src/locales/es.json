@@ -776,6 +776,7 @@
       "managedAgent": "Managed agent",
       "managedAgentDescription": "Read paths from an enrolled managed agent",
       "agentRepoConstraintBanner": "This repository runs on {{agent}}. Backup sources must come from the same agent.",
+      "agentRepoLockedLocal": "Borg UI server sources can't be pushed into an agent repository.",
       "agentRepoLockedRemote": "Remote sources aren't allowed for agent repositories.",
       "agentRepoLockedAgentPicker": "Locked to {{agent}}",
       "selectManagedAgent": "Select a managed agent",

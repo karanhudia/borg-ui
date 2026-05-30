@@ -933,8 +933,9 @@ export function SourceSelectionDialog({
       t('backupPlans.sourceChooser.snapshotLocalOnly'),
     ]
 
-    const remoteLockedByAgentRepo = !!agentRepoConstraint
-    const remoteCardDisabled = !hasRemoteOptions || remoteLockedByAgentRepo
+    const lockedByAgentRepo = !!agentRepoConstraint
+    const localCardDisabled = lockedByAgentRepo
+    const remoteCardDisabled = !hasRemoteOptions || lockedByAgentRepo
 
     return (
       <Stack spacing={2}>
@@ -973,18 +974,28 @@ export function SourceSelectionDialog({
         >
           <RepoStyleSourceCard
             selected={sourceKind === 'local'}
-            icon={<HardDrive size={28} />}
+            disabled={localCardDisabled}
+            icon={lockedByAgentRepo ? <Lock size={28} /> : <HardDrive size={28} />}
             title={t('backupPlans.sourceChooser.borgUiServer')}
-            description={t('backupPlans.sourceChooser.localSourceDescription')}
-            onClick={() => selectSourceKey('local')}
+            description={
+              lockedByAgentRepo
+                ? t('backupPlans.sourceChooser.agentRepoLockedLocal', {
+                    agent: agentRepoConstraint.agentName,
+                  })
+                : t('backupPlans.sourceChooser.localSourceDescription')
+            }
+            onClick={() => {
+              if (localCardDisabled) return
+              selectSourceKey('local')
+            }}
           />
           <RepoStyleSourceCard
             selected={sourceKind === 'remote'}
             disabled={remoteCardDisabled}
-            icon={remoteLockedByAgentRepo ? <Lock size={28} /> : <Server size={28} />}
+            icon={lockedByAgentRepo ? <Lock size={28} /> : <Server size={28} />}
             title={t('backupPlans.sourceChooser.remoteMachine')}
             description={
-              remoteLockedByAgentRepo
+              lockedByAgentRepo
                 ? t('backupPlans.sourceChooser.agentRepoLockedRemote', {
                     agent: agentRepoConstraint.agentName,
                   })
