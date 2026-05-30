@@ -1,8 +1,12 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
+  ButtonBase,
   Card,
   CardActionArea,
   CardContent,
@@ -31,7 +35,10 @@ import {
 } from '@mui/material'
 import {
   ArrowLeft,
+  ChevronRight,
+  Container as ContainerIcon,
   Database as DatabaseIcon,
+  FileText,
   HardDrive,
   Info,
   Laptop,
@@ -47,8 +54,10 @@ import type { IconType } from 'react-icons'
 import type { TFunction } from 'i18next'
 
 import CodeEditor from '../../../components/CodeEditor'
+import ManagedAgentSelect from '../../../components/ManagedAgentSelect'
 import PathSelectorField from '../../../components/PathSelectorField'
 import ResponsiveDialog from '../../../components/ResponsiveDialog'
+import SshConnectionSelect from '../../../components/SshConnectionSelect'
 import {
   type AgentMachineResponse,
   type FilesystemSnapshotCapabilitiesResponse,
@@ -929,9 +938,6 @@ export function SourceSelectionDialog({
       sourceKind === 'local' && snapshotDraft.provider === 'zfs' && !snapshotDraft.dataset.trim()
     const zfsMountpointMissing =
       sourceKind === 'local' && snapshotDraft.provider === 'zfs' && !snapshotDraft.mountpoint.trim()
-    const snapshotUnsupportedTargets = snapshotCapabilities?.unsupported_source_targets || [
-      t('backupPlans.sourceChooser.snapshotLocalOnly'),
-    ]
 
     const lockedByAgentRepo = !!agentRepoConstraint
     const localCardDisabled = lockedByAgentRepo
@@ -939,18 +945,7 @@ export function SourceSelectionDialog({
 
     return (
       <Stack spacing={2}>
-        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-          <Typography variant="subtitle2">{t('backupPlans.sourceChooser.where')}</Typography>
-          <Button
-            size="small"
-            variant="text"
-            endIcon={<DatabaseIcon size={14} />}
-            onClick={() => setView('database')}
-            sx={{ textTransform: 'none', fontWeight: 500 }}
-          >
-            {t('backupPlans.sourceChooser.scanDatabaseInstead')}
-          </Button>
-        </Stack>
+        <Typography variant="subtitle2">{t('backupPlans.sourceChooser.where')}</Typography>
 
         {agentRepoConstraint && (
           <Alert
@@ -1039,57 +1034,14 @@ export function SourceSelectionDialog({
         </Box>
 
         {sourceKind === 'remote' && hasRemoteOptions ? (
-          <FormControl fullWidth sx={{ height: 56 }}>
-            <InputLabel id="source-remote-machine-label">
-              {t('backupPlans.sourceChooser.selectRemoteMachine')}
-            </InputLabel>
-            <Select
-              labelId="source-remote-machine-label"
-              value={selectedRemoteIdNum || ''}
-              label={t('backupPlans.sourceChooser.selectRemoteMachine')}
-              onChange={(event) => selectSourceKey(`remote:${Number(event.target.value)}`)}
-              sx={{
-                height: 56,
-                '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
-              }}
-            >
-              {sshConnections.map((connection) => (
-                <MenuItem key={connection.id} value={connection.id}>
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    alignItems="center"
-                    sx={{ minWidth: 0, width: '100%' }}
-                  >
-                    <Server
-                      size={14}
-                      style={{ flexShrink: 0, color: 'currentColor', opacity: 0.7 }}
-                    />
-                    <Typography variant="body2" noWrap>
-                      {`${connection.username}@${connection.host}:${connection.port}`}
-                    </Typography>
-                    {connection.default_path && (
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        {connection.default_path}
-                      </Typography>
-                    )}
-                    {connection.status === 'connected' && (
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          bgcolor: 'success.main',
-                          flexShrink: 0,
-                          ml: 'auto',
-                        }}
-                      />
-                    )}
-                  </Stack>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <SshConnectionSelect
+            value={selectedRemoteIdNum || ''}
+            onChange={(id) => selectSourceKey(`remote:${id}`)}
+            connections={sshConnections}
+            label={t('backupPlans.sourceChooser.selectRemoteMachine')}
+            emptyMessage={t('backupPlans.sourceChooser.noRemoteMachines')}
+            hideEmptyAlert
+          />
         ) : sourceKind === 'agent' && hasAgentOptions && agentRepoConstraint ? (
           <Box
             sx={{
@@ -1113,52 +1065,15 @@ export function SourceSelectionDialog({
             </Typography>
           </Box>
         ) : sourceKind === 'agent' && hasAgentOptions ? (
-          <FormControl fullWidth sx={{ height: 56 }}>
-            <InputLabel id="source-agent-machine-label">
-              {t('backupPlans.sourceChooser.selectManagedAgent')}
-            </InputLabel>
-            <Select
-              labelId="source-agent-machine-label"
-              value={selectedAgentIdNum || ''}
-              label={t('backupPlans.sourceChooser.selectManagedAgent')}
-              onChange={(event) => selectSourceKey(`agent:${Number(event.target.value)}`)}
-              sx={{
-                height: 56,
-                '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
-              }}
-            >
-              {agentMachines.map((agent) => (
-                <MenuItem key={agent.id} value={agent.id}>
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    alignItems="center"
-                    sx={{ minWidth: 0, width: '100%' }}
-                  >
-                    <Laptop size={14} style={{ flexShrink: 0, opacity: 0.7 }} />
-                    <Typography variant="body2" noWrap>
-                      {agentDisplayName(agent)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                      {agent.status}
-                    </Typography>
-                    {agent.status === 'online' && (
-                      <Box
-                        sx={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          bgcolor: 'success.main',
-                          flexShrink: 0,
-                          ml: 'auto',
-                        }}
-                      />
-                    )}
-                  </Stack>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <ManagedAgentSelect
+            value={selectedAgentIdNum || ''}
+            onChange={(id) => selectSourceKey(`agent:${id}`)}
+            agents={agentMachines}
+            label={t('backupPlans.sourceChooser.selectManagedAgent')}
+            emptyMessage={t('backupPlans.sourceChooser.noManagedAgents')}
+            labelId="source-agent-machine-label"
+            hideEmptyAlert
+          />
         ) : (
           <Box
             sx={{
@@ -1227,10 +1142,52 @@ export function SourceSelectionDialog({
           </Button>
         </Stack>
 
-        <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 1, bgcolor: 'background.paper' }}>
-          <Stack spacing={1.25}>
-            {sourceKind === 'local' ? (
-              <>
+        {sourceKind === 'local' && (
+          <Accordion
+            disableGutters
+            elevation={0}
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              bgcolor: 'background.paper',
+              '&:before': { display: 'none' },
+              '&.Mui-expanded': { my: 0 },
+            }}
+          >
+            <AccordionSummary
+              expandIcon={<ChevronRight size={18} />}
+              sx={{
+                px: 1.75,
+                minHeight: 48,
+                '& .MuiAccordionSummary-content': {
+                  alignItems: 'center',
+                  gap: 1,
+                  my: 0,
+                },
+                '& .MuiAccordionSummary-expandIconWrapper': {
+                  transform: 'rotate(0deg)',
+                  '&.Mui-expanded': { transform: 'rotate(90deg)' },
+                },
+              }}
+            >
+              <Typography variant="body2" fontWeight={500} color="text.secondary">
+                {t('backupPlans.sourceChooser.advancedCaptureMode')}
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.primary"
+                sx={{ ml: 'auto', mr: 0.5, fontWeight: 500 }}
+              >
+                {snapshotDraft.provider === 'none'
+                  ? t('backupPlans.sourceChooser.captureModeDirect')
+                  : snapshotDraft.provider === 'btrfs'
+                    ? t('backupPlans.sourceChooser.snapshotModeBtrfs')
+                    : t('backupPlans.sourceChooser.snapshotModeZfs')}
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 1.75, pt: 0, pb: 1.75 }}>
+              <Stack spacing={1.25}>
                 <FormControl fullWidth size="small">
                   <InputLabel id="snapshot-mode-label">
                     {t('backupPlans.sourceChooser.snapshotMode')}
@@ -1347,23 +1304,10 @@ export function SourceSelectionDialog({
                     label={t('backupPlans.sourceChooser.snapshotRecursive')}
                   />
                 )}
-              </>
-            ) : (
-              <Alert severity="info">
-                <Stack spacing={0.5}>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {t('backupPlans.sourceChooser.snapshotLocalOnly')}
-                  </Typography>
-                  {snapshotUnsupportedTargets.map((target) => (
-                    <Typography key={target} variant="caption">
-                      {target}
-                    </Typography>
-                  ))}
-                </Stack>
-              </Alert>
-            )}
-          </Stack>
-        </Paper>
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+        )}
 
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -2168,8 +2112,123 @@ export function SourceSelectionDialog({
         </Stack>
       </DialogTitle>
       <DialogContent sx={{ pt: 1, flex: 1, overflowY: 'auto' }}>
-        <Stack spacing={2}>{content}</Stack>
+        <Stack spacing={2}>
+          {view !== 'database-detail' && (
+            <SourceKindPivot view={view} onChange={(next) => setView(next)} t={t} />
+          )}
+          {content}
+        </Stack>
       </DialogContent>
     </ResponsiveDialog>
+  )
+}
+
+interface SourceKindPivotProps {
+  view: SourceChoiceView
+  onChange: (next: SourceChoiceView) => void
+  t: TFunction
+}
+
+function SourceKindPivot({ view, onChange, t }: SourceKindPivotProps) {
+  const segments: {
+    key: 'files' | 'database' | 'container'
+    target: SourceChoiceView | null
+    labelKey: string
+    Icon: typeof FileText
+    disabled?: boolean
+    badgeKey?: string
+  }[] = [
+    {
+      key: 'files',
+      target: 'paths',
+      labelKey: 'backupPlans.sourceChooser.kindFiles',
+      Icon: FileText,
+    },
+    {
+      key: 'database',
+      target: 'database',
+      labelKey: 'backupPlans.sourceChooser.kindDatabase',
+      Icon: DatabaseIcon,
+    },
+    {
+      key: 'container',
+      target: null,
+      labelKey: 'backupPlans.sourceChooser.kindContainer',
+      Icon: ContainerIcon,
+      disabled: true,
+      badgeKey: 'backupPlans.sourceChooser.kindContainerSoonBadge',
+    },
+  ]
+
+  const activeKey: 'files' | 'database' | 'container' =
+    view === 'database' || view === 'database-detail' ? 'database' : 'files'
+
+  return (
+    <Box
+      role="tablist"
+      aria-label={t('backupPlans.sourceChooser.chooseSource')}
+      sx={{
+        display: 'inline-flex',
+        alignSelf: 'flex-start',
+        p: '4px',
+        gap: '2px',
+        bgcolor: 'action.hover',
+        borderRadius: '10px',
+      }}
+    >
+      {segments.map((segment) => {
+        const selected = activeKey === segment.key
+        return (
+          <ButtonBase
+            key={segment.key}
+            role="tab"
+            aria-selected={selected}
+            aria-disabled={segment.disabled || undefined}
+            disabled={segment.disabled}
+            onClick={() => {
+              if (segment.disabled || !segment.target) return
+              if (segment.target !== view) onChange(segment.target)
+            }}
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.75,
+              px: 1.5,
+              py: 0.75,
+              borderRadius: '8px',
+              bgcolor: selected ? 'background.paper' : 'transparent',
+              boxShadow: selected ? 1 : 0,
+              fontWeight: selected ? 600 : 500,
+              fontSize: '0.8125rem',
+              color: segment.disabled
+                ? 'text.disabled'
+                : selected
+                  ? 'text.primary'
+                  : 'text.secondary',
+              opacity: segment.disabled ? 0.6 : 1,
+              cursor: segment.disabled ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s ease',
+              '&:hover': segment.disabled || selected ? undefined : { color: 'text.primary' },
+            }}
+          >
+            <segment.Icon size={14} />
+            {t(segment.labelKey)}
+            {segment.badgeKey && (
+              <Chip
+                label={t(segment.badgeKey)}
+                size="small"
+                sx={{
+                  height: 16,
+                  fontSize: '0.625rem',
+                  fontWeight: 700,
+                  letterSpacing: 0.2,
+                  '& .MuiChip-label': { px: 0.75 },
+                }}
+              />
+            )}
+          </ButtonBase>
+        )
+      })}
+    </Box>
   )
 }

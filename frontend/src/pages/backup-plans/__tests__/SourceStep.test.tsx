@@ -216,7 +216,6 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.title': 'Choose backup source',
   'backupPlans.sourceChooser.databaseTitle': 'Database scan',
   'backupPlans.sourceChooser.filesTitle': 'Files and folders',
-  'backupPlans.sourceChooser.containerPlanned': 'Planned',
   'backupPlans.sourceChooser.backToTypes': 'Back to source types',
   'backupPlans.sourceChooser.applyPaths': 'Use these paths',
   'backupPlans.sourceChooser.loading': 'Scanning sources...',
@@ -266,15 +265,18 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.selectRemoteMachine': 'Select a remote machine',
   'backupPlans.sourceChooser.noRemoteMachines': 'No SSH connections available',
   'backupPlans.sourceChooser.showLessPaths': 'Show less',
-  'backupPlans.sourceChooser.scanDatabaseInstead': 'Scan a database instead',
+  'backupPlans.sourceChooser.kindFiles': 'Files',
+  'backupPlans.sourceChooser.kindDatabase': 'Database',
+  'backupPlans.sourceChooser.kindContainer': 'Container',
+  'backupPlans.sourceChooser.kindContainerSoonBadge': 'Soon',
+  'backupPlans.sourceChooser.advancedCaptureMode': 'Advanced — Capture mode',
+  'backupPlans.sourceChooser.captureModeDirect': 'Direct (no snapshot)',
   'backupPlans.sourceChooser.readingFromLocal': 'Reading directly from this server',
   'backupPlans.sourceChooser.snapshotMode': 'Snapshot mode',
   'backupPlans.sourceChooser.snapshotModeNone': 'No filesystem snapshot',
   'backupPlans.sourceChooser.snapshotModeBtrfs': 'btrfs snapshot',
   'backupPlans.sourceChooser.snapshotModeZfs': 'zfs snapshot',
   'backupPlans.sourceChooser.snapshotRequirementsTitle': 'Host requirements',
-  'backupPlans.sourceChooser.snapshotLocalOnly':
-    'Snapshots are only available for Borg UI server paths.',
   'backupPlans.sourceChooser.snapshotBtrfsStagingPath': 'Snapshot staging path',
   'backupPlans.sourceChooser.snapshotZfsDataset': 'ZFS dataset',
   'backupPlans.sourceChooser.snapshotZfsMountpoint': 'ZFS mountpoint',
@@ -299,13 +301,6 @@ const t = (key: string, options?: { count?: number }) => {
   return (translations[key] || key)
     .replace('{{command}}', String((options as { command?: string } | undefined)?.command ?? ''))
     .replace('{{provider}}', String((options as { provider?: string } | undefined)?.provider ?? ''))
-}
-
-async function clickTextButton(name: string | RegExp) {
-  const labels = await screen.findAllByText(name)
-  const button = labels.map((label) => label.closest('button')).find(Boolean)
-  expect(button).not.toBeNull()
-  fireEvent.click(button as HTMLButtonElement)
 }
 
 function clickExistingTextButton(name: string | RegExp) {
@@ -438,7 +433,7 @@ describe('SourceStep', () => {
     expect(screen.queryByTestId('wizard-data-source')).not.toBeInTheDocument()
   })
 
-  it('opens straight into the path picker with an inline database link', async () => {
+  it('opens straight into the path picker with the source-kind pivot', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
     renderSourceStep()
 
@@ -447,9 +442,16 @@ describe('SourceStep', () => {
     expect(screen.getByRole('dialog')).toHaveAttribute('data-max-width', 'md')
     expect(await screen.findByText('Borg UI server')).toBeInTheDocument()
     expect(screen.getByText('Remote machine')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /scan a database instead/i })).toBeInTheDocument()
-    expect(screen.queryByText(/docker containers/i)).not.toBeInTheDocument()
+    // Files / Database / Container pivot replaces the old "Scan database instead" link.
+    expect(screen.getByRole('tab', { name: /^files$/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /^database$/i })).toBeInTheDocument()
+    const containerTab = screen.getByRole('tab', { name: /container/i })
+    expect(containerTab).toHaveAttribute('aria-disabled', 'true')
+    expect(containerTab).toHaveTextContent(/soon/i)
     expect(screen.queryByText(/planned/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /scan a database instead/i })
+    ).not.toBeInTheDocument()
   })
 
   it('keeps a files and folders summary after selecting paths on a scripted plan', async () => {
@@ -465,7 +467,7 @@ describe('SourceStep', () => {
     expect(screen.getByText('Database scan')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /^edit$/i }))
-    await screen.findByRole('button', { name: /scan a database instead/i })
+    await screen.findByRole('tab', { name: /^database$/i })
     clickExistingTextButton(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app-data' },
@@ -549,13 +551,15 @@ describe('SourceStep', () => {
     renderSourceStep({ updateState })
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    await screen.findByRole('button', { name: /scan a database instead/i })
+    await screen.findByRole('tab', { name: /^database$/i })
 
     clickExistingTextButton(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app' },
     })
 
+    // Snapshot config lives inside the collapsed "Advanced — Capture mode" accordion.
+    fireEvent.click(screen.getByRole('button', { name: /advanced.*capture mode/i }))
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /snapshot mode/i }))
     const listbox = await screen.findByRole('listbox')
     fireEvent.click(within(listbox).getByText(/btrfs snapshot/i))
@@ -599,13 +603,14 @@ describe('SourceStep', () => {
     renderSourceStep({ updateState })
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    await screen.findByRole('button', { name: /scan a database instead/i })
+    await screen.findByRole('tab', { name: /^database$/i })
 
     clickExistingTextButton(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
       target: { value: '/srv/app/uploads' },
     })
 
+    fireEvent.click(screen.getByRole('button', { name: /advanced.*capture mode/i }))
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /snapshot mode/i }))
     const listbox = await screen.findByRole('listbox')
     fireEvent.click(within(listbox).getByText(/zfs snapshot/i))
@@ -690,7 +695,7 @@ describe('SourceStep', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: /edit/i }))
-    await screen.findByRole('button', { name: /scan a database instead/i })
+    await screen.findByRole('tab', { name: /^database$/i })
 
     expect(screen.getByLabelText(/zfs dataset/i)).toHaveValue('tank/app')
     fireEvent.change(screen.getByLabelText(/zfs dataset/i), {
@@ -747,7 +752,7 @@ describe('SourceStep', () => {
     render(<StatefulSourceStep sshConnections={sshConnections} />)
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    await screen.findByRole('button', { name: /scan a database instead/i })
+    await screen.findByRole('tab', { name: /^database$/i })
 
     clickExistingTextButton(/borg ui server/i)
     fireEvent.change(screen.getByLabelText(/source path/i), {
@@ -790,7 +795,7 @@ describe('SourceStep', () => {
     render(<StatefulSourceStep agentMachines={agentMachines} />)
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    await screen.findByRole('button', { name: /scan a database instead/i })
+    await screen.findByRole('tab', { name: /^database$/i })
 
     clickExistingTextButton(/managed agent/i)
     expect(screen.queryByRole('button', { name: /browse current source/i })).not.toBeInTheDocument()
@@ -824,7 +829,8 @@ describe('SourceStep', () => {
     renderSourceStep({ updateState, onCreateScript })
 
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
-    await clickTextButton(/scan a database instead/i)
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
     const postgresqlTemplate = await screen.findByText(/^postgresql$/i)
     fireEvent.click(postgresqlTemplate.closest('button') || postgresqlTemplate)
 

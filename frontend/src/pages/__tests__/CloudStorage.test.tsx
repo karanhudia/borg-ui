@@ -428,6 +428,7 @@ describe('CloudStorage', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /Provider/i }))
     fireEvent.click(await screen.findByRole('option', { name: /Google Drive/i }))
 
+    await user.click(await screen.findByRole('button', { name: /^Edit$/i }))
     await user.click(screen.getByRole('button', { name: /Save OAuth credentials/i }))
 
     await waitFor(() => {

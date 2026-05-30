@@ -8,7 +8,6 @@ import {
   Select,
   MenuItem,
   Typography,
-  Alert,
   InputAdornment,
   IconButton,
   alpha,
@@ -17,12 +16,13 @@ import {
   Chip,
   Stack,
 } from '@mui/material'
-import { Cloud, Laptop } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../PlanGate'
 import { getDestinations, type DestinationKey } from './destinations'
 import RichSelectRow from './RichSelectRow'
+import SshConnectionSelect from '../SshConnectionSelect'
+import ManagedAgentSelect from '../ManagedAgentSelect'
 
 interface SSHConnection {
   id: number
@@ -306,38 +306,14 @@ export default function WizardStepLocation({
       {/* Agent sub-form */}
       {isAgentExecution && !isDirectRclone && (
         <Stack spacing={1.25}>
-          {queueableAgents.length === 0 ? (
-            <Alert severity="warning">{t('wizard.location.noActiveManagedAgents')}</Alert>
-          ) : (
-            <FormControl fullWidth>
-              <InputLabel id="managed-agent-select-label">
-                {t('wizard.location.managedAgentSelectLabel')}
-              </InputLabel>
-              <Select
-                labelId="managed-agent-select-label"
-                id="managed-agent-select"
-                value={agentMachineId === '' ? '' : String(agentMachineId)}
-                label={t('wizard.location.managedAgentSelectLabel')}
-                onChange={(e) => {
-                  const value = e.target.value
-                  onChange({ agentMachineId: value ? Number(value) : '' })
-                }}
-                renderValue={(selected) => {
-                  if (!selected) return null
-                  const agent = queueableAgents.find((a) => String(a.id) === selected)
-                  if (!agent) return null
-                  return renderAgentRow(agent)
-                }}
-                sx={{ '& .MuiSelect-select': { minHeight: 36 } }}
-              >
-                {queueableAgents.map((agent) => (
-                  <MenuItem key={agent.id} value={String(agent.id)} sx={{ py: 1 }}>
-                    {renderAgentRow(agent)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
+          <ManagedAgentSelect
+            value={agentMachineId}
+            onChange={(id) => onChange({ agentMachineId: id })}
+            agents={queueableAgents}
+            label={t('wizard.location.managedAgentSelectLabel')}
+            emptyMessage={t('wizard.location.noActiveManagedAgents')}
+            labelId="managed-agent-select-label"
+          />
           <Typography variant="body2" color="text.secondary">
             {t('wizard.location.agentStorageNote')}
           </Typography>
@@ -346,38 +322,14 @@ export default function WizardStepLocation({
 
       {/* SSH sub-form */}
       {!isAgentExecution && data.repositoryLocation === 'ssh' && (
-        <>
-          {!Array.isArray(sshConnections) || sshConnections.length === 0 ? (
-            <Alert severity="warning">{t('wizard.noSshConnections')}</Alert>
-          ) : (
-            <FormControl fullWidth>
-              <InputLabel>{t('wizard.location.selectSshConnection')}</InputLabel>
-              <Select
-                value={data.repoSshConnectionId === '' ? '' : String(data.repoSshConnectionId)}
-                label={t('wizard.location.selectSshConnection')}
-                onChange={(e) => {
-                  const value = e.target.value
-                  if (value) {
-                    onChange({ repoSshConnectionId: Number(value) })
-                  }
-                }}
-                renderValue={(selected) => {
-                  if (!selected) return null
-                  const conn = sshConnections.find((c) => String(c.id) === selected)
-                  if (!conn) return null
-                  return renderSshRow(conn, t('wizard.location.connected'))
-                }}
-                sx={{ '& .MuiSelect-select': { minHeight: 36 } }}
-              >
-                {sshConnections.map((conn) => (
-                  <MenuItem key={conn.id} value={String(conn.id)} sx={{ py: 1 }}>
-                    {renderSshRow(conn, t('wizard.location.connected'))}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-        </>
+        <SshConnectionSelect
+          value={data.repoSshConnectionId}
+          onChange={(id) => onChange({ repoSshConnectionId: id })}
+          connections={sshConnections}
+          label={t('wizard.location.selectSshConnection')}
+          emptyMessage={t('wizard.noSshConnections')}
+          connectedTooltip={t('wizard.location.connected')}
+        />
       )}
 
       {borgVersion === 2 && (
@@ -470,53 +422,5 @@ export default function WizardStepLocation({
         }}
       />
     </Box>
-  )
-}
-
-function StatusDot({ color }: { color: string }) {
-  return (
-    <Box
-      sx={{
-        width: 8,
-        height: 8,
-        borderRadius: '50%',
-        bgcolor: color,
-        flexShrink: 0,
-      }}
-    />
-  )
-}
-
-function renderAgentRow(agent: AgentMachine) {
-  const isOnline = agent.status === 'online'
-  const displayName = agent.hostname || agent.name
-  const metaSecondary = agent.hostname && agent.name !== agent.hostname ? agent.name : undefined
-  const secondary = [metaSecondary, agent.status].filter(Boolean).join(' · ')
-
-  return (
-    <RichSelectRow
-      icon={<Laptop size={16} />}
-      primary={displayName}
-      secondary={secondary}
-      indicator={<StatusDot color={isOnline ? 'success.main' : 'text.disabled'} />}
-    />
-  )
-}
-
-function renderSshRow(conn: SSHConnection, connectedLabel: string) {
-  const secondary = `Port ${conn.port}${conn.mount_point ? ` • ${conn.mount_point}` : ''}`
-  return (
-    <RichSelectRow
-      icon={<Cloud size={16} />}
-      primary={`${conn.username}@${conn.host}`}
-      secondary={secondary}
-      indicator={
-        conn.status === 'connected' ? (
-          <Box title={connectedLabel} sx={{ display: 'flex' }}>
-            <StatusDot color="success.main" />
-          </Box>
-        ) : undefined
-      }
-    />
   )
 }
