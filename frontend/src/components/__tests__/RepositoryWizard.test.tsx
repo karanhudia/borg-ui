@@ -213,10 +213,23 @@ const fillLocalLocation = async (name = 'Test Repo', path = '/backups/test') => 
   setInputValue(screen.getByLabelText(/Repository Path/i), path)
 }
 
-const chooseRemoteRepository = async (user: ReturnType<typeof userEvent.setup>) => {
-  const remoteCard = screen.getByText('Remote Client').closest('button')
-  await user.click(remoteCard!)
+const openDestinationSelect = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(
+    await screen.findByRole('combobox', { name: /Where should backups be stored/i })
+  )
+  return screen.findByRole('listbox')
+}
 
+const selectRepositoryDestination = async (
+  user: ReturnType<typeof userEvent.setup>,
+  destinationName: RegExp
+) => {
+  const listbox = await openDestinationSelect(user)
+  await user.click(within(listbox).getByRole('option', { name: destinationName }))
+}
+
+const chooseRemoteRepository = async (user: ReturnType<typeof userEvent.setup>) => {
+  await selectRepositoryDestination(user, /Remote Client/i)
   await waitFor(() => {
     expect(screen.getAllByText('Select SSH Connection').length).toBeGreaterThanOrEqual(1)
   })
@@ -226,6 +239,17 @@ const chooseRemoteRepository = async (user: ReturnType<typeof userEvent.setup>) 
   await user.click(selectButton!)
   const listbox = await screen.findByRole('listbox')
   await user.click(within(listbox).getByText(/server1.example.com/i))
+}
+
+const selectManagedAgentMachine = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await screen.findByRole('combobox', { name: /Managed Agent/i }))
+  const agentListbox = await screen.findByRole('listbox')
+  await user.click(within(agentListbox).getByText('workstation.local'))
+}
+
+const chooseManagedAgentRepository = async (user: ReturnType<typeof userEvent.setup>) => {
+  await selectRepositoryDestination(user, /Managed Agent/i)
+  await selectManagedAgentMachine(user)
 }
 
 const advanceCreateToSecurity = async (user: ReturnType<typeof userEvent.setup>) => {
@@ -355,8 +379,7 @@ describe('RepositoryWizard', () => {
       renderWizard('create')
       await fillLocalLocation()
 
-      const remoteCard = screen.getByText('Remote Client').closest('button')
-      await user.click(remoteCard!)
+      await selectRepositoryDestination(user, /Remote Client/i)
 
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
     })
@@ -501,13 +524,11 @@ describe('RepositoryWizard', () => {
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-repo')
 
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
+      await selectRepositoryDestination(user, /Managed Agent/i)
 
       expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled()
 
-      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
-      const agentListbox = await screen.findByRole('listbox')
-      await user.click(within(agentListbox).getByText('workstation.local'))
+      await selectManagedAgentMachine(user)
 
       expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled()
       await user.click(screen.getByRole('button', { name: /Next/i }))
@@ -713,10 +734,7 @@ describe('RepositoryWizard', () => {
       await waitForLocationStep()
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Cloud Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg/agent-cloud-repo')
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
-      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
-      const agentListbox = await screen.findByRole('listbox')
-      await user.click(within(agentListbox).getByText('workstation.local'))
+      await chooseManagedAgentRepository(user)
 
       await user.click(screen.getByRole('button', { name: /Next/i }))
       await waitFor(() => {
@@ -895,10 +913,7 @@ describe('RepositoryWizard', () => {
       setInputValue(screen.getByLabelText(/Repository Name/i), 'Agent Browse Repo')
       setInputValue(screen.getByLabelText(/Repository Path/i), '/srv/borg')
 
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
-      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
-      const agentListbox = await screen.findByRole('listbox')
-      await user.click(within(agentListbox).getByText('workstation.local'))
+      await chooseManagedAgentRepository(user)
 
       const browseButton = screen.getByTitle('Browse filesystem')
       expect(browseButton).not.toBeDisabled()
@@ -929,12 +944,8 @@ describe('RepositoryWizard', () => {
       await user.clear(pathInput)
       setInputValue(pathInput, '/backups/pi')
 
-      await user.click(screen.getByRole('button', { name: /Managed Agent/i }))
-      await user.click(screen.getByRole('combobox', { name: /Managed Agent/i }))
-      const agentListbox = await screen.findByRole('listbox')
-      await user.click(within(agentListbox).getByText('workstation.local'))
+      await chooseManagedAgentRepository(user)
 
-      expect(screen.getByRole('button', { name: /Remote Client/i })).not.toBeDisabled()
       expect(screen.queryByText('Select SSH Connection')).not.toBeInTheDocument()
       expect(
         screen.getByText(/Backups will be stored on the selected agent's filesystem/i)
@@ -1293,10 +1304,7 @@ describe('RepositoryWizard', () => {
       const user = userEvent.setup()
       renderWizard('create')
 
-      await waitFor(() => {
-        expect(screen.getByText('Remote Client')).toBeInTheDocument()
-      })
-      await user.click(screen.getByText('Remote Client').closest('button')!)
+      await selectRepositoryDestination(user, /Remote Client/i)
 
       await waitFor(() => {
         expect(screen.getByText(/No SSH connections configured/i)).toBeInTheDocument()
