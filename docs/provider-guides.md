@@ -72,15 +72,24 @@ Repository path: /./repo
 ```
 
 Keep the `/./repo` path from BorgBase. Do not shorten it to `/repo`; the `./`
-segment is part of the hosted SSH path Borg uses for that repository.
+segment is part of the hosted SSH path Borg uses for that repository. The
+repository name may appear as `repo` in BorgBase, but Borg UI should receive the
+path form from the SSH URL.
+
+BorgBase **SFTP Access** is not required for this flow. Borg UI uses the Borg
+repository over SSH with the public key you authorize in BorgBase.
 
 Typical flow:
 
-1. Create or import the Borg UI system SSH key.
-2. Add the Borg UI public key to BorgBase.
-3. Create or select the repository in BorgBase.
-4. Add a Remote Machine in Borg UI using the host, username, port, and default path from the BorgBase URL.
-5. Create a remote repository or use Import Existing with the same repository path.
+1. In Borg UI, go to Remote Machines and create or import the system SSH key.
+   Copy the full public key value.
+2. In BorgBase, add that public key under SSH Keys and remember the key name.
+3. Create or select the BorgBase repository. Grant the key full access, leave
+   SFTP Access disabled, and copy the SSH repository URL.
+4. Add a manual Remote Machine in Borg UI using the host, username, port, and
+   default path from the BorgBase URL.
+5. Create a full remote repository or use Import Existing. Select Remote Client,
+   choose the SSH connection, and enter the same repository path from the URL.
 6. Save, then verify that archives can be listed or that repository creation succeeds.
 
 ## Hetzner Storage Box
