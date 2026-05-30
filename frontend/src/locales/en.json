@@ -199,6 +199,8 @@
     "remoteUpdateFailed": "Failed to update rclone remote.",
     "remoteDeleteFailed": "Failed to delete rclone remote.",
     "browseFailed": "Failed to browse rclone remote.",
+    "oauthCredentialsSaved": "OAuth app credentials saved.",
+    "oauthCredentialsSaveFailed": "Failed to save OAuth app credentials.",
     "statusLoadFailed": "Failed to load rclone availability.",
     "remotesLoadFailed": "Failed to load rclone remotes.",
     "providersLoadFailed": "Failed to load cloud providers.",
@@ -227,6 +229,21 @@
       "message": "No remotes match \"{{search}}\".",
       "fallback": "No remotes match the current filters.",
       "clearSearch": "Clear search"
+    },
+    "oauthToken": {
+      "title": "OAuth token",
+      "validUntil": "Valid until {{expiresAt}}",
+      "noExpiry": "No expiry reported",
+      "refreshStored": "Refresh token stored",
+      "refreshMissing": "No refresh token reported",
+      "status": {
+        "missing": "Missing",
+        "valid": "Valid",
+        "expiring": "Expiring soon",
+        "expired": "Expired",
+        "refreshable": "Refreshable",
+        "unknown": "Unknown"
+      }
     }
   },
   "status": {
@@ -3229,7 +3246,32 @@
       "rcloneOAuthUseLoopback": "Use rclone loopback",
       "rcloneOAuthWaiting": "Waiting for provider callback.",
       "rcloneOAuthAuthorized": "Authorization returned a token and updated the config.",
+      "rcloneOAuthTokenReady": "Token ready to save server-side.",
       "rcloneOAuthFailed": "Authorization did not complete.",
+      "rcloneOAuthCredentialsTitle": "Provider OAuth app",
+      "rcloneOAuthClientIdLabel": "OAuth client ID",
+      "rcloneOAuthClientSecretLabel": "OAuth client secret",
+      "rcloneOAuthCredentialsSave": "Save OAuth credentials",
+      "rcloneOAuthCredentialsSaving": "Saving credentials...",
+      "rcloneOAuthCredentialsRequired": "Enter both a client ID and client secret, or leave both empty to clear saved credentials.",
+      "rcloneOAuthCredentialsSaveFailed": "Failed to save OAuth credentials.",
+      "rcloneOAuthClientIdSet": "Client ID saved",
+      "rcloneOAuthClientSecretSet": "Client secret saved",
+      "rcloneOAuthCredentialSources": {
+        "database": "Stored in Borg UI",
+        "environment": "From environment",
+        "unset": "Not configured",
+        "unsupported": "Unsupported"
+      },
+      "rcloneOAuthTokenStatusWithExpiry": "{{status}} until {{expiresAt}}",
+      "rcloneOAuthTokenStatus": {
+        "missing": "Token missing",
+        "valid": "Token valid",
+        "expiring": "Token expiring soon",
+        "expired": "Token expired",
+        "refreshable": "Refresh token can renew access",
+        "unknown": "Token status unknown"
+      },
       "rcloneRequiredFieldSuffix": "(required)",
       "rcloneProviderDocs": "Provider setup reference",
       "rcloneAuthTypes": {
@@ -3268,7 +3310,6 @@
       "directRcloneAdvancedTitle": "Advanced storage mode",
       "directRcloneLabel": "Use direct Borg 2 rclone repository",
       "directRcloneHelper": "Borg writes directly through rclone. There is no Borg UI cache, cloud mirror, or rclone sync status.",
-      "directRcloneUnavailable": "Select Borg v2 to use direct rclone repository URLs.",
       "directRclonePathLabel": "Direct rclone repository URL",
       "directRclonePathHelper": "Use a Borg 2 rclone URL. The rclone remote must be configured for the Borg process.",
       "directRclonePathPlaceholder": "rclone://remote-name/path/to/repository",

@@ -1728,7 +1728,16 @@ async def _create_agent_repository_record(
                 job_kind=AGENT_REPOSITORY_INIT_CAPABILITY,
                 operation={"encryption": repository.encryption},
             )
-            await wait_for_agent_repository_operation_job(db, agent_job.id)
+            await dispatch_agent_job_best_effort(
+                db,
+                agent_job,
+                repository_id=repository.id,
+            )
+            await wait_for_agent_repository_operation_job(
+                db,
+                agent_job.id,
+                timeout_seconds=get_operation_timeouts(db)["init_timeout"],
+            )
         except Exception:
             db.rollback()
             repository_to_delete = (

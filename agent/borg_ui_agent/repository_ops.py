@@ -19,6 +19,7 @@ REPOSITORY_JOB_KINDS = {
     "repository.init",
     "repository.info",
     "repository.list_archives",
+    "repository.list_archive_contents",
     "repository.check",
     "repository.prune",
     "repository.compact",
@@ -142,6 +143,32 @@ class RepositoryOperationPayload:
             if self.borg_version == 2:
                 return [*self._base_borg2("list"), "--json"]
             return [*self._base_borg1("list"), "--json", self.repository_path]
+
+        if self.job_kind == "repository.list_archive_contents":
+            operation = self.operation or {}
+            if not isinstance(operation, dict):
+                raise ValueError(
+                    "repository.list_archive_contents requires operation.archive"
+                )
+            archive = operation.get("archive")
+            if not isinstance(archive, str) or not archive.strip():
+                raise ValueError(
+                    "repository.list_archive_contents requires operation.archive"
+                )
+            archive = archive.strip()
+            if self.borg_version == 2:
+                cmd = [*self._base_borg2("list"), "--json-lines", archive]
+                path = operation.get("path")
+                if isinstance(path, str) and path.strip():
+                    normalized_path = path.strip("/")
+                    if normalized_path:
+                        cmd.append(normalized_path)
+                return cmd
+            return [
+                *self._base_borg1("list"),
+                f"{self.repository_path}::{archive}",
+                "--json-lines",
+            ]
 
         if self.job_kind == "repository.check":
             extra_flags = _split_flags((self.operation or {}).get("check_extra_flags"))
@@ -319,6 +346,14 @@ def execute_repository_operation_job(
         finally:
             _remove_temp_file(rclone_config_path)
 
+    if payload.job_kind == "repository.list_archive_contents":
+        try:
+            return _execute_limited_output_repository_operation(
+                job_id, payload, client, cmd, env
+            )
+        finally:
+            _remove_temp_file(rclone_config_path)
+
     try:
         return _execute_streaming_repository_operation(
             job_id,
@@ -404,6 +439,99 @@ def _execute_short_repository_operation(
         return_code=process.returncode,
         message=error_message,
     )
+
+
+def _execute_limited_output_repository_operation(
+    job_id: int,
+    payload: RepositoryOperationPayload,
+    client: AgentClient,
+    cmd: list[str],
+    env: dict[str, str],
+) -> RepositoryOperationResult:
+    max_lines = _operation_max_lines(payload.operation)
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+            start_new_session=os.name == "posix",
+        )
+    except OSError as exc:
+        error_message = f"Failed to start {payload.job_kind}: {exc}"
+        client.send_log(job_id, sequence=1, stream="stderr", message=error_message)
+        client.fail_job(job_id, error_message=error_message)
+        return RepositoryOperationResult(
+            job_id=job_id, status="failed", message=error_message
+        )
+
+    stdout_lines: list[str] = []
+    line_count = 0
+    line_count_exceeded = False
+    return_code: int | None = None
+    if process.stdout is not None:
+        for line in process.stdout:
+            line_count += 1
+            if line_count > max_lines:
+                line_count_exceeded = True
+                return_code = _terminate_process(process)
+                break
+            stdout_lines.append(line.rstrip("\n"))
+
+    stderr = process.stderr.read() if process.stderr is not None else ""
+    if return_code is None:
+        return_code = process.wait()
+
+    result = {
+        "return_code": return_code,
+        "command": cmd,
+        "stdout": "\n".join(stdout_lines),
+        "stderr": stderr,
+        "success": return_code == 0 and not line_count_exceeded,
+        "line_count_exceeded": line_count_exceeded,
+        "lines_read": line_count,
+    }
+
+    if line_count_exceeded:
+        message = f"{payload.job_kind} exceeded max line count"
+        client.send_log(job_id, sequence=1, stream="stderr", message=message)
+        client.complete_job(job_id, result=result)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="completed",
+            return_code=return_code,
+            message=message,
+        )
+
+    if return_code == 0:
+        client.complete_job(job_id, result=result)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="completed",
+            return_code=return_code,
+            message=f"{payload.job_kind} exited with code {return_code}",
+        )
+
+    if stderr:
+        client.send_log(job_id, sequence=1, stream="stderr", message=stderr.rstrip())
+    error_message = f"{payload.job_kind} exited with code {return_code}"
+    client.fail_job(job_id, error_message=error_message, return_code=return_code)
+    return RepositoryOperationResult(
+        job_id=job_id,
+        status="failed",
+        return_code=return_code,
+        message=error_message,
+    )
+
+
+def _operation_max_lines(operation: dict[str, Any] | None) -> int:
+    value = (operation or {}).get("max_lines")
+    try:
+        max_lines = int(value)
+    except (TypeError, ValueError):
+        return 1_000_000
+    return max(1, max_lines)
 
 
 def _execute_streaming_repository_operation(

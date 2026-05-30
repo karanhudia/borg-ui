@@ -18,6 +18,7 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.init",
     "repository.info",
     "repository.list_archives",
+    "repository.list_archive_contents",
     "repository.check",
     "repository.prune",
     "repository.compact",

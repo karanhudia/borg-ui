@@ -141,6 +141,29 @@ export interface RcloneProvider {
   oauth_configured?: boolean
   oauth_callback_url?: string | null
   oauth_setup_key?: string | null
+  oauth_credentials_source?: 'database' | 'environment' | 'unset' | 'unsupported'
+  oauth_client_id_set?: boolean
+  oauth_client_secret_set?: boolean
+}
+
+export interface RcloneOAuthCredentialUpdate {
+  client_id?: string | null
+  client_secret?: string | null
+}
+
+export interface RcloneOAuthCredentialStatus {
+  provider: string
+  label: string
+  configured: boolean
+  credential_source: 'database' | 'environment' | 'unset' | 'unsupported'
+  client_id: string | null
+  client_secret_set: boolean
+}
+
+export interface RcloneOAuthTokenStatus {
+  status: 'missing' | 'valid' | 'expiring' | 'expired' | 'refreshable' | 'unknown'
+  expires_at?: string | null
+  refresh_available?: boolean
 }
 
 export interface RcloneOAuthSession {
@@ -151,6 +174,7 @@ export interface RcloneOAuthSession {
   authorization_url?: string | null
   local_authorization_url?: string | null
   config?: Record<string, unknown> | null
+  token_status?: RcloneOAuthTokenStatus | null
   error?: string | null
 }
 
@@ -164,6 +188,7 @@ export interface RcloneRemote {
   redacted_config?: Record<string, unknown> | null
   last_test_status?: string | null
   last_error?: string | null
+  oauth_token?: RcloneOAuthTokenStatus | null
 }
 
 export type { RcloneStorage } from '../types'
@@ -782,6 +807,8 @@ export const repositoriesAPI = {
 export const rcloneAPI = {
   getStatus: () => api.get<RcloneStatus>('/rclone/status'),
   getProviders: () => api.get<{ providers: RcloneProvider[] }>('/rclone/providers'),
+  updateOAuthCredentials: (provider: string, data: RcloneOAuthCredentialUpdate) =>
+    api.put<RcloneOAuthCredentialStatus>(`/rclone/oauth/credentials/${provider}`, data),
   startOAuthSession: (data: {
     provider: string
     config?: Record<string, unknown>

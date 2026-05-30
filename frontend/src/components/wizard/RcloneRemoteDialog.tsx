@@ -14,11 +14,16 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { Cloud, ExternalLink, Plus, RefreshCcw } from 'lucide-react'
+import { CheckCircle, Cloud, ExternalLink, KeyRound, Plus, RefreshCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import CodeEditor from '../CodeEditor'
 import ResponsiveDialog from '../ResponsiveDialog'
-import type { RcloneOAuthSession, RcloneProvider } from '../../services/api'
+import type {
+  RcloneOAuthCredentialUpdate,
+  RcloneOAuthSession,
+  RcloneOAuthTokenStatus,
+  RcloneProvider,
+} from '../../services/api'
 import { buildDownloadUrl } from '../../utils/downloadUrl'
 import { translateBackendKey } from '../../utils/translateBackendKey'
 
@@ -45,6 +50,10 @@ interface RcloneRemoteDialogProps {
     mode?: 'auto' | 'borg_ui' | 'rclone_loopback'
   }) => Promise<RcloneOAuthSession>
   onGetOAuthSession?: (sessionId: string) => Promise<RcloneOAuthSession>
+  onSaveOAuthCredentials?: (
+    provider: string,
+    data: RcloneOAuthCredentialUpdate
+  ) => Promise<unknown> | unknown
 }
 
 const DEFAULT_PROVIDERS: RcloneProvider[] = [
@@ -95,6 +104,16 @@ const browserAuthorizationUrl = (url: string | null | undefined) => {
   return url.startsWith('/rclone/') ? buildDownloadUrl(url) : url
 }
 
+const formatTokenExpiry = (expiresAt?: string | null) => {
+  if (!expiresAt) return null
+  const date = new Date(expiresAt)
+  if (Number.isNaN(date.getTime())) return expiresAt
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
 export default function RcloneRemoteDialog({
   open,
   mode = 'create',
@@ -107,6 +126,7 @@ export default function RcloneRemoteDialog({
   onCreate,
   onStartOAuth,
   onGetOAuthSession,
+  onSaveOAuthCredentials,
 }: RcloneRemoteDialogProps) {
   const { t } = useTranslation()
   const [name, setName] = useState('')
@@ -119,6 +139,12 @@ export default function RcloneRemoteDialog({
   const [isStartingOAuth, setIsStartingOAuth] = useState(false)
   const [isCheckingOAuth, setIsCheckingOAuth] = useState(false)
   const [borgUiOAuthProvider, setBorgUiOAuthProvider] = useState<string | null>(null)
+  const [borgUiOAuthSessionId, setBorgUiOAuthSessionId] = useState<string | null>(null)
+  const [oauthTokenStatus, setOauthTokenStatus] = useState<RcloneOAuthTokenStatus | null>(null)
+  const [oauthClientId, setOauthClientId] = useState('')
+  const [oauthClientSecret, setOauthClientSecret] = useState('')
+  const [oauthCredentialsError, setOauthCredentialsError] = useState<string | null>(null)
+  const [isSavingOAuthCredentials, setIsSavingOAuthCredentials] = useState(false)
   const oauthRequestIdRef = useRef(0)
   const resolvedProviderRef = useRef('local')
 
@@ -157,6 +183,15 @@ export default function RcloneRemoteDialog({
     setIsStartingOAuth(false)
     setIsCheckingOAuth(false)
     setBorgUiOAuthProvider(null)
+    setBorgUiOAuthSessionId(null)
+    setOauthTokenStatus(null)
+  }, [])
+
+  const resetOAuthCredentialForm = useCallback(() => {
+    setOauthClientId('')
+    setOauthClientSecret('')
+    setOauthCredentialsError(null)
+    setIsSavingOAuthCredentials(false)
   }, [])
 
   const isCurrentOAuthRequest = useCallback((requestId: number, provider: string) => {
@@ -174,7 +209,8 @@ export default function RcloneRemoteDialog({
     setConfigJson(formatConfigJson(initialRemote?.redacted_config, nextProvider))
     setLocalError(null)
     resetOAuthState()
-  }, [initialRemote, open, providerOptions, resetOAuthState])
+    resetOAuthCredentialForm()
+  }, [initialRemote, open, providerOptions, resetOAuthCredentialForm, resetOAuthState])
 
   useEffect(() => {
     if (open) return
@@ -184,13 +220,15 @@ export default function RcloneRemoteDialog({
     setConfigJson('{\n  "type": "local"\n}')
     setLocalError(null)
     resetOAuthState()
-  }, [open, resetOAuthState])
+    resetOAuthCredentialForm()
+  }, [open, resetOAuthCredentialForm, resetOAuthState])
 
   const handleProviderTypeChange = (nextProviderType: string) => {
     const nextProvider =
       providerOptions.find((provider) => provider.type === nextProviderType) ?? providerOptions[0]
     setProviderType(nextProvider.type)
     resetOAuthState()
+    resetOAuthCredentialForm()
     if (nextProvider.type_editable) {
       setCustomProvider('')
     }
@@ -223,13 +261,22 @@ export default function RcloneRemoteDialog({
       typeof sessionConfig._borg_ui_oauth_provider === 'string'
         ? sessionConfig._borg_ui_oauth_provider
         : null
+    const sessionMarker =
+      typeof sessionConfig._borg_ui_oauth_session_id === 'string'
+        ? sessionConfig._borg_ui_oauth_session_id
+        : null
+    const isBorgUiSessionMarker = marker === requestProvider && !!sessionMarker
     const visibleSessionConfig = Object.fromEntries(
       Object.entries(sessionConfig).filter(([key]) => !key.startsWith('_borg_ui_oauth'))
     )
-    if (marker === requestProvider) {
+    if (isBorgUiSessionMarker) {
       setBorgUiOAuthProvider(marker)
+      setBorgUiOAuthSessionId(sessionMarker)
+      setOauthTokenStatus(session.token_status ?? null)
     } else {
       setBorgUiOAuthProvider(null)
+      setBorgUiOAuthSessionId(null)
+      setOauthTokenStatus(session.token_status ?? null)
     }
     setConfigJson((currentJson) => {
       let currentConfig: Record<string, unknown>
@@ -238,14 +285,18 @@ export default function RcloneRemoteDialog({
       } catch {
         currentConfig = { type: requestProvider }
       }
-      return formatConfigJson(
-        {
-          ...currentConfig,
-          ...visibleSessionConfig,
-          type: visibleSessionConfig.type || requestProvider,
-        },
-        requestProvider
-      )
+      if (isBorgUiSessionMarker) {
+        delete currentConfig.token
+      }
+      const nextConfig: Record<string, unknown> = {
+        ...currentConfig,
+        ...visibleSessionConfig,
+        type: visibleSessionConfig.type || requestProvider,
+      }
+      if (isBorgUiSessionMarker) {
+        delete nextConfig.token
+      }
+      return formatConfigJson(nextConfig, requestProvider)
     })
   }
 
@@ -264,6 +315,10 @@ export default function RcloneRemoteDialog({
     }
     setLocalError(null)
     setOauthError(null)
+    setOauthSession(null)
+    setBorgUiOAuthProvider(null)
+    setBorgUiOAuthSessionId(null)
+    setOauthTokenStatus(null)
     setIsStartingOAuth(true)
     try {
       const session = await onStartOAuth({
@@ -311,15 +366,73 @@ export default function RcloneRemoteDialog({
     }
   }
 
+  const handleSaveOAuthCredentials = async () => {
+    if (!onSaveOAuthCredentials || !resolvedProvider) return
+    const clientId = oauthClientId.trim()
+    const clientSecret = oauthClientSecret.trim()
+    if (!clientId && !clientSecret) {
+      setOauthCredentialsError(null)
+      setIsSavingOAuthCredentials(true)
+      try {
+        await onSaveOAuthCredentials(resolvedProvider, {
+          client_id: null,
+          client_secret: null,
+        })
+      } catch {
+        setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsSaveFailed'))
+      } finally {
+        setIsSavingOAuthCredentials(false)
+      }
+      return
+    }
+    if (!clientId || !clientSecret) {
+      setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsRequired'))
+      return
+    }
+
+    setOauthCredentialsError(null)
+    setIsSavingOAuthCredentials(true)
+    try {
+      await onSaveOAuthCredentials(resolvedProvider, {
+        client_id: clientId || null,
+        client_secret: clientSecret || null,
+      })
+      setOauthClientSecret('')
+    } catch {
+      setOauthCredentialsError(t('wizard.location.rcloneOAuthCredentialsSaveFailed'))
+    } finally {
+      setIsSavingOAuthCredentials(false)
+    }
+  }
+
   const oauthStatusMessage = (() => {
     if (oauthError) return oauthError
     if (!oauthSession) return null
-    if (oauthSession.status === 'authorized') return t('wizard.location.rcloneOAuthAuthorized')
+    if (oauthSession.status === 'authorized') {
+      return borgUiOAuthProvider === oauthSession.provider && borgUiOAuthSessionId
+        ? t('wizard.location.rcloneOAuthTokenReady')
+        : t('wizard.location.rcloneOAuthAuthorized')
+    }
     if (oauthSession.status === 'failed') {
       return oauthSession.error || t('wizard.location.rcloneOAuthFailed')
     }
     if (oauthSession.status === 'starting') return t('wizard.location.rcloneOAuthStarting')
     return t('wizard.location.rcloneOAuthWaiting')
+  })()
+
+  const oauthTokenStatusMessage = (() => {
+    if (!oauthTokenStatus) return null
+    const expiry = formatTokenExpiry(oauthTokenStatus.expires_at)
+    const status = t(`wizard.location.rcloneOAuthTokenStatus.${oauthTokenStatus.status}`, {
+      defaultValue: oauthTokenStatus.status,
+    })
+    if (expiry) {
+      return t('wizard.location.rcloneOAuthTokenStatusWithExpiry', {
+        status,
+        expiresAt: expiry,
+      })
+    }
+    return status
   })()
 
   const handleCustomProviderChange = (value: string) => {
@@ -354,10 +467,13 @@ export default function RcloneRemoteDialog({
       setLocalError(t('wizard.location.rcloneConfigInvalidJson'))
       return
     }
-    if (borgUiOAuthProvider === remoteProvider) {
+    if (borgUiOAuthProvider === remoteProvider && borgUiOAuthSessionId) {
       redactedConfig._borg_ui_oauth_provider = borgUiOAuthProvider
+      redactedConfig._borg_ui_oauth_session_id = borgUiOAuthSessionId
+      delete redactedConfig.token
     } else {
       delete redactedConfig._borg_ui_oauth_provider
+      delete redactedConfig._borg_ui_oauth_session_id
     }
 
     setLocalError(null)
@@ -484,6 +600,104 @@ export default function RcloneRemoteDialog({
           <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
             {selectedProvider.description}
           </Typography>
+          {selectedProvider.auth_type === 'oauth_token' && usesBorgUiOAuth ? (
+            <Box
+              sx={{
+                mt: 1.5,
+                p: 1.5,
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                bgcolor: 'background.paper',
+              }}
+            >
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+                <KeyRound size={16} />
+                <Typography variant="subtitle2" fontWeight={700}>
+                  {t('wizard.location.rcloneOAuthCredentialsTitle')}
+                </Typography>
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={t(
+                    `wizard.location.rcloneOAuthCredentialSources.${
+                      selectedProvider.oauth_credentials_source || 'unset'
+                    }`,
+                    {
+                      defaultValue: selectedProvider.oauth_credentials_source || 'unset',
+                    }
+                  )}
+                />
+                {selectedProvider.oauth_client_id_set ? (
+                  <Chip
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    icon={<CheckCircle size={12} />}
+                    label={t('wizard.location.rcloneOAuthClientIdSet')}
+                  />
+                ) : null}
+                {selectedProvider.oauth_client_secret_set ? (
+                  <Chip
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    icon={<CheckCircle size={12} />}
+                    label={t('wizard.location.rcloneOAuthClientSecretSet')}
+                  />
+                ) : null}
+              </Stack>
+              <Box
+                sx={{
+                  mt: 1.25,
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
+                  gap: 1,
+                }}
+              >
+                <TextField
+                  label={t('wizard.location.rcloneOAuthClientIdLabel')}
+                  value={oauthClientId}
+                  onChange={(event) => setOauthClientId(event.target.value)}
+                  disabled={isCreating || isSavingOAuthCredentials}
+                  autoComplete="off"
+                  size="small"
+                />
+                <TextField
+                  label={t('wizard.location.rcloneOAuthClientSecretLabel')}
+                  value={oauthClientSecret}
+                  onChange={(event) => setOauthClientSecret(event.target.value)}
+                  disabled={isCreating || isSavingOAuthCredentials}
+                  autoComplete="new-password"
+                  type="password"
+                  size="small"
+                />
+              </Box>
+              {oauthCredentialsError ? (
+                <Alert severity="error" sx={{ mt: 1 }}>
+                  {oauthCredentialsError}
+                </Alert>
+              ) : null}
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleSaveOAuthCredentials}
+                disabled={!onSaveOAuthCredentials || isCreating || isSavingOAuthCredentials}
+                startIcon={
+                  isSavingOAuthCredentials ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : (
+                    <KeyRound size={14} />
+                  )
+                }
+                sx={{ mt: 1.25 }}
+              >
+                {isSavingOAuthCredentials
+                  ? t('wizard.location.rcloneOAuthCredentialsSaving')
+                  : t('wizard.location.rcloneOAuthCredentialsSave')}
+              </Button>
+            </Box>
+          ) : null}
           {selectedProvider.auth_type === 'oauth_token' ? (
             <Alert
               severity={
@@ -510,6 +724,11 @@ export default function RcloneRemoteDialog({
                 {oauthStatusMessage ? (
                   <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
                     {oauthStatusMessage}
+                  </Typography>
+                ) : null}
+                {oauthTokenStatusMessage ? (
+                  <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>
+                    {oauthTokenStatusMessage}
                   </Typography>
                 ) : null}
                 <Stack

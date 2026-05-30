@@ -18,6 +18,9 @@ const providers: RcloneProvider[] = [
     oauth_configured: true,
     oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/drive',
     oauth_setup_key: null,
+    oauth_credentials_source: 'environment',
+    oauth_client_id_set: true,
+    oauth_client_secret_set: true,
   },
   {
     type: 'onedrive',
@@ -32,6 +35,9 @@ const providers: RcloneProvider[] = [
     oauth_configured: true,
     oauth_callback_url: 'https://backups.example.com/api/rclone/oauth/callback/onedrive',
     oauth_setup_key: null,
+    oauth_credentials_source: 'database',
+    oauth_client_id_set: true,
+    oauth_client_secret_set: true,
   },
   {
     type: 's3',
@@ -87,6 +93,21 @@ const remotes: RcloneRemote[] = [
     last_error: null,
   },
   {
+    id: 3,
+    name: 'gdrive-prod',
+    provider: 'drive',
+    usage_count: 1,
+    config_source: 'managed',
+    redacted_config: { type: 'drive', scope: 'drive', token: '***' },
+    last_test_status: 'connected',
+    last_error: null,
+    oauth_token: {
+      status: 'valid',
+      expires_at: '2026-05-30T01:00:00Z',
+      refresh_available: true,
+    },
+  },
+  {
     id: 2,
     name: 'archive-b2',
     provider: 'b2',
@@ -131,11 +152,17 @@ const commonProps = {
     local_authorization_url: null,
     config: {
       type: 'drive',
-      token: '{"access_token":"storybook","refresh_token":"storybook"}',
       _borg_ui_oauth_provider: 'drive',
+      _borg_ui_oauth_session_id: 'storybook-oauth',
+    },
+    token_status: {
+      status: 'valid' as const,
+      expires_at: '2026-05-30T01:00:00Z',
+      refresh_available: true,
     },
     error: null,
   }),
+  onSaveOAuthCredentials: noopAsync,
   onEditRemote: noop,
   onCloseEditRemote: noop,
   onUpdateRemote: noopAsync,
@@ -213,6 +240,9 @@ export const AddGuidedRemoteSetupMissing: Story = {
                 oauth_configured: false,
                 oauth_callback_url: null,
                 oauth_setup_key: 'backend.errors.rclone.oauthPublicBaseUrlRequired',
+                oauth_credentials_source: 'unset',
+                oauth_client_id_set: false,
+                oauth_client_secret_set: false,
               }
             : provider
         )}

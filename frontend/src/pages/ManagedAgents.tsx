@@ -56,7 +56,10 @@ import PageTabs from '../components/PageTabs'
 import PageHeader from '../components/PageHeader'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
-import { buildAgentInstallCommand } from './managed-agents/agentInstallCommandText'
+import {
+  buildAgentInstallCommand,
+  buildAgentReinstallCommand,
+} from './managed-agents/agentInstallCommandText'
 
 type PageTab = 'agents' | 'jobs' | 'tokens'
 
@@ -315,6 +318,8 @@ export default function ManagedAgents() {
       {!isLoading && activeTab === 'agents' ? (
         <AgentList
           agents={agents}
+          serverUrl={defaultAgentServerUrl}
+          onCopy={handleCopy}
           onRevoke={(agent) => revokeAgentMutation.mutate(agent.id)}
           onDelete={(agent) => deleteAgentMutation.mutate(agent.id)}
           onViewLogs={setLogsAgent}
@@ -477,7 +482,9 @@ export function AgentSetupHelpContent({
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 1 }}>
           Run this on the Linux machine that owns the files Borg should back up. The installer
-          installs dependencies, registers the agent, and enables the systemd service.
+          installs dependencies, registers the agent, and enables the systemd service. By default,
+          the service runs as the user who invoked sudo, so repository and source paths must be
+          accessible to that user.
         </Typography>
         <CopyableCodeBlock
           value={command}
@@ -671,8 +678,55 @@ export function AgentDeleteConfirmationDialog({
   )
 }
 
+export function AgentReinstallDialog({
+  agent,
+  open,
+  serverUrl,
+  onCancel,
+  onCopy,
+}: {
+  agent: AgentMachineResponse | null
+  open: boolean
+  serverUrl: string
+  onCancel: () => void
+  onCopy: (value: string) => void
+}) {
+  const command = buildAgentReinstallCommand(serverUrl)
+
+  return (
+    <Dialog open={open} onClose={onCancel} fullWidth maxWidth="md">
+      <DialogTitle>Reinstall agent</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ mt: 0.5 }}>
+          <Box>
+            <Typography fontWeight={700}>{getAgentLabel(agent || undefined)}</Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+              Run this on the enrolled machine to update the Borg UI agent package and restart the
+              systemd service. No enrollment token or registration step is required.
+            </Typography>
+          </Box>
+          <CopyableCodeBlock
+            value={command}
+            copyLabel="Copy reinstall command"
+            onCopy={() => onCopy(command)}
+          />
+          <Alert severity="info" sx={{ borderRadius: 1.5 }}>
+            The script preserves the existing agent config at{' '}
+            <Box component="code">/etc/borg-ui-agent/config.toml</Box>.
+          </Alert>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
 export function AgentList({
   agents,
+  serverUrl,
+  onCopy,
   onRevoke,
   onDelete,
   onViewLogs,
@@ -680,6 +734,8 @@ export function AgentList({
   isDeleting,
 }: {
   agents: AgentMachineResponse[]
+  serverUrl: string
+  onCopy: (value: string) => void
   onRevoke: (agent: AgentMachineResponse) => void
   onDelete: (agent: AgentMachineResponse) => void
   onViewLogs: (agent: AgentMachineResponse) => void
@@ -689,6 +745,7 @@ export function AgentList({
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [deleteTarget, setDeleteTarget] = useState<AgentMachineResponse | null>(null)
+  const [reinstallTarget, setReinstallTarget] = useState<AgentMachineResponse | null>(null)
 
   if (!agents.length) {
     return <Alert severity="info">No agents enrolled.</Alert>
@@ -942,6 +999,25 @@ export function AgentList({
                       <Terminal size={16} />
                     </IconButton>
                   </Tooltip>
+                  <Tooltip title="Reinstall agent" arrow>
+                    <IconButton
+                      size="small"
+                      aria-label="Reinstall agent"
+                      onClick={() => setReinstallTarget(agent)}
+                      sx={{
+                        width: { xs: 40, sm: 34 },
+                        height: { xs: 40, sm: 34 },
+                        borderRadius: 1.5,
+                        color: alpha(theme.palette.primary.main, 0.75),
+                        '&:hover': {
+                          color: theme.palette.primary.main,
+                          bgcolor: alpha(theme.palette.primary.main, isDark ? 0.15 : 0.1),
+                        },
+                      }}
+                    >
+                      <RefreshCw size={16} />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Revoke access" arrow>
                     <span>
                       <IconButton
@@ -1003,6 +1079,13 @@ export function AgentList({
           onDelete(agent)
           setDeleteTarget(null)
         }}
+      />
+      <AgentReinstallDialog
+        open={!!reinstallTarget}
+        agent={reinstallTarget}
+        serverUrl={serverUrl}
+        onCopy={onCopy}
+        onCancel={() => setReinstallTarget(null)}
       />
     </>
   )

@@ -23,11 +23,18 @@ installer:
 
 - installs `python3`, `python3-venv`, `python3-pip`, `git`, `curl`, and
   `borgbackup`
-- creates the `borg-ui-agent` system user
+- runs the service as the user who invoked `sudo` by default
 - installs the agent into `/opt/borg-ui-agent/.venv`
 - registers `/etc/borg-ui-agent/config.toml`
 - validates the service configuration
 - enables and starts `borg-ui-agent` with systemd
+
+Repository and source paths must be readable or writable by the selected service
+user. The default `current` mode uses the sudo-invoking user's normal Linux
+permissions, so paths under that user's home directory work as expected. Use
+`--service-user borg-ui-agent` for the older dedicated service account model,
+`--service-user root` only when the agent must back up root-owned paths, or
+`--service-user USERNAME` to run as another existing local user.
 
 Use the Borg UI URL that the client machine can reach. `localhost` is only
 correct when the agent runs on the same machine as Borg UI. For a remote client,
