@@ -38,6 +38,7 @@ def test_agent_installer_script_supports_tokenless_reinstall_mode(
         response.text
     )
     assert "Preserving existing agent registration" in response.text
+    assert "By default, reinstall mode skips" in response.text
     assert "Skipping Borg installation by default for reinstall mode." in response.text
 
     reinstall_register_branch = response.text.split(

@@ -42,7 +42,8 @@ Borg install options:
 
 Reinstall mode updates the agent package and systemd unit on an already enrolled
 machine. It preserves /etc/borg-ui-agent/config.toml and does not require an
-enrollment token, agent name, or registration.
+enrollment token, agent name, or registration. By default, reinstall mode skips
+Borg installation; pass --borg-version to verify or update Borg binaries.
 USAGE
 }
 
