@@ -1171,6 +1171,80 @@ describe('RepositoryWizard', () => {
       expect(screen.queryByText('Cloud Mirror')).not.toBeInTheDocument()
     })
 
+    it('keeps cached rclone repository edits in rclone storage mode', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', {
+        id: 9,
+        name: 'Cached Cloud Repo',
+        path: '/var/lib/borg-ui/rclone-cache/repositories/9',
+        mode: 'full',
+        repository_type: 'rclone',
+        storage_backend: 'rclone',
+        borg_version: 1,
+        encryption: 'repokey',
+        compression: 'lz4',
+        source_directories: [],
+        exclude_patterns: [],
+        rclone_storage: {
+          repository_id: 9,
+          backend: 'rclone',
+          rclone_remote_id: 10,
+          rclone_remote_name: 'prod-s3',
+          rclone_remote_path: 'borg-ui/repositories/app',
+          rclone_target: 'prod-s3:borg-ui/repositories/app',
+          cache_path: '/var/lib/borg-ui/rclone-cache/repositories/9',
+          cache_present: true,
+          sync_policy: 'manual',
+          sync_direction: 'cache_to_remote',
+          sync_status: 'current',
+          sync_cron_expression: null,
+          sync_timezone: 'UTC',
+          extra_flags: ['--fast-list'],
+        },
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Cached Cloud Repo')
+      })
+
+      setInputValue(screen.getByLabelText(/Repository Name/i), 'Cached Cloud Repo Updated')
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText('Managed rclone storage')).toBeInTheDocument()
+      })
+      const managedRcloneCheckbox = screen.getByRole('checkbox', {
+        name: /Managed rclone storage/i,
+      })
+      expect(managedRcloneCheckbox).toBeChecked()
+      expect(managedRcloneCheckbox).toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByText(/Encryption settings cannot be changed/i)).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await waitFor(() => {
+        expect(screen.getByTestId('compression-settings')).toBeInTheDocument()
+      })
+      await user.click(screen.getByRole('button', { name: /Next/i }))
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Cached Cloud Repo Updated',
+            storage_backend: 'rclone',
+            cloud_mirror_enabled: true,
+            rclone_remote_id: 10,
+            rclone_remote_path: 'borg-ui/repositories/app',
+            rclone_sync_policy: 'manual',
+            rclone_extra_flags: ['--fast-list'],
+          }),
+          null
+        )
+      })
+    })
+
     it('allows edit workflow without re-entering the passphrase', async () => {
       const user = userEvent.setup()
       renderWizard('edit', legacyRepository)

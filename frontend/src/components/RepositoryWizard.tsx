@@ -173,6 +173,26 @@ function legacySourceLocations(source: {
   ]
 }
 
+function isDirectRcloneRepositoryRecord(repository?: Repository): boolean {
+  if (!repository) return false
+  const repoVersion = repository.borg_version === 2 ? 2 : 1
+  return Boolean(
+    repository.storage_backend === 'rclone_direct' ||
+    (repository.repository_type === 'rclone' &&
+      !repository.rclone_storage &&
+      repoVersion === 2 &&
+      (repository.path || '').startsWith('rclone:'))
+  )
+}
+
+function isCachedRcloneRepositoryRecord(repository?: Repository): boolean {
+  if (!repository || isDirectRcloneRepositoryRecord(repository)) return false
+  return Boolean(
+    repository.rclone_storage &&
+    (repository.storage_backend === 'rclone' || repository.repository_type === 'rclone')
+  )
+}
+
 const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: RepositoryWizardProps) => {
   const { track, trackRepository, EventCategory, EventAction } = useAnalytics()
   const { t } = useTranslation()
@@ -209,6 +229,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     state.executionTarget === 'agent' ||
     (state.executionTarget === 'local' &&
       (state.repositoryLocation === 'local' || state.repositoryLocation === 'ssh'))
+  const isCachedRcloneRepositoryEdit = mode === 'edit' && isCachedRcloneRepositoryRecord(repository)
   const cloudMirrorPrimaryLocation: 'local' | 'ssh' | 'agent' =
     wizardState.executionTarget === 'agent'
       ? 'agent'
@@ -340,13 +361,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         : repository.repository_type === 'ssh' || (repository.path || '').startsWith('ssh://') // Legacy fallback
 
     const repoVersion = (repository.borg_version === 2 ? 2 : 1) as 1 | 2
-    const isDirectRcloneRepository = Boolean(
-      repository.storage_backend === 'rclone_direct' ||
-      (repository.repository_type === 'rclone' &&
-        !repository.rclone_storage &&
-        repoVersion === 2 &&
-        (repository.path || '').startsWith('rclone:'))
-    )
+    const isDirectRcloneRepository = isDirectRcloneRepositoryRecord(repository)
     const hasCloudMirror = !isDirectRcloneRepository && Boolean(repository.rclone_storage)
     const executionTarget =
       repository.executor_type === 'agent' || repository.execution_target === 'agent'
@@ -711,8 +726,9 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
   }
 
   const handleSubmit = async () => {
-    const storageBackend =
-      wizardState.repositoryLocation === 'rclone'
+    const storageBackend = isCachedRcloneRepositoryEdit
+      ? 'rclone'
+      : wizardState.repositoryLocation === 'rclone'
         ? 'rclone_direct'
         : wizardState.executionTarget === 'agent'
           ? 'agent_local'
@@ -722,6 +738,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
     const directRcloneEnabled = wizardState.repositoryLocation === 'rclone'
     const cloudMirrorEnabled =
       !directRcloneEnabled && wizardState.cloudMirrorEnabled && isCloudMirrorEligible(wizardState)
+    const rcloneFieldsEnabled = isCachedRcloneRepositoryEdit || cloudMirrorEnabled
 
     const data: RepositoryData = {
       name: wizardState.name,
@@ -753,33 +770,38 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             : 'local',
       agent_machine_id:
         !directRcloneEnabled &&
+        !isCachedRcloneRepositoryEdit &&
         wizardState.executionTarget === 'agent' &&
         wizardState.agentMachineId
           ? wizardState.agentMachineId
           : null,
       storage_backend: storageBackend,
-      cloud_mirror_enabled: cloudMirrorEnabled,
+      cloud_mirror_enabled: isCachedRcloneRepositoryEdit ? true : cloudMirrorEnabled,
       rclone_remote_id:
-        cloudMirrorEnabled && wizardState.rcloneRemoteId ? wizardState.rcloneRemoteId : null,
-      rclone_remote_path: cloudMirrorEnabled ? wizardState.rcloneRemotePath : null,
+        rcloneFieldsEnabled && wizardState.rcloneRemoteId ? wizardState.rcloneRemoteId : null,
+      rclone_remote_path: rcloneFieldsEnabled ? wizardState.rcloneRemotePath : null,
       rclone_remote_path_verified: cloudMirrorEnabled
         ? wizardState.rcloneRemotePathVerified
         : false,
-      rclone_sync_policy: cloudMirrorEnabled ? wizardState.rcloneSyncPolicy : 'after_success',
+      rclone_sync_policy: rcloneFieldsEnabled ? wizardState.rcloneSyncPolicy : 'after_success',
       rclone_sync_cron_expression:
-        cloudMirrorEnabled && wizardState.rcloneSyncPolicy === 'scheduled'
+        rcloneFieldsEnabled && wizardState.rcloneSyncPolicy === 'scheduled'
           ? wizardState.rcloneSyncCronExpression
           : null,
       rclone_sync_timezone:
-        cloudMirrorEnabled && wizardState.rcloneSyncPolicy === 'scheduled'
+        rcloneFieldsEnabled && wizardState.rcloneSyncPolicy === 'scheduled'
           ? wizardState.rcloneSyncTimezone
           : null,
       rclone_extra_flags: cloudMirrorEnabled
         ? wizardState.rcloneExtraFlags.split(/\s+/).filter(Boolean)
-        : [],
+        : isCachedRcloneRepositoryEdit
+          ? wizardState.rcloneExtraFlags.split(/\s+/).filter(Boolean)
+          : [],
       // Connection IDs - single source of truth for SSH
       connection_id:
-        directRcloneEnabled || wizardState.executionTarget === 'agent'
+        directRcloneEnabled ||
+        isCachedRcloneRepositoryEdit ||
+        wizardState.executionTarget === 'agent'
           ? null
           : wizardState.repoSshConnectionId || null,
       source_connection_id:
@@ -905,6 +927,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
             rcloneRemotes={rcloneRemotes}
             eligible={isCloudMirrorEligible(wizardState)}
             primaryLocation={cloudMirrorPrimaryLocation}
+            storageMode={isCachedRcloneRepositoryEdit ? 'cachedRepository' : 'mirror'}
             onChange={handleStateChange}
             onAddRcloneRemote={() => {
               setRcloneRemoteCreateError(null)
