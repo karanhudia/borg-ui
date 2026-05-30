@@ -424,7 +424,11 @@ function CloudStorageRemoteCard({
               />
             </Box>
             <Stack spacing={0.25} sx={{ mt: 0.75 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ overflowWrap: 'anywhere' }}
+              >
                 {formattedExpiry
                   ? t('cloudStorage.oauthToken.validUntil', { expiresAt: formattedExpiry })
                   : t('cloudStorage.oauthToken.noExpiry')}
@@ -1011,13 +1015,8 @@ export default function CloudStorage() {
   })
 
   const updateOAuthCredentialsMutation = useMutation({
-    mutationFn: ({
-      provider,
-      data,
-    }: {
-      provider: string
-      data: RcloneOAuthCredentialUpdate
-    }) => rcloneAPI.updateOAuthCredentials(provider, data),
+    mutationFn: ({ provider, data }: { provider: string; data: RcloneOAuthCredentialUpdate }) =>
+      rcloneAPI.updateOAuthCredentials(provider, data),
     onSuccess: () => {
       toast.success(t('cloudStorage.oauthCredentialsSaved'))
       queryClient.invalidateQueries({ queryKey: ['rclone-providers'] })

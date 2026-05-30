@@ -296,10 +296,7 @@ export default function RcloneRemoteDialog({
       if (isBorgUiSessionMarker) {
         delete nextConfig.token
       }
-      return formatConfigJson(
-        nextConfig,
-        requestProvider
-      )
+      return formatConfigJson(nextConfig, requestProvider)
     })
   }
 
