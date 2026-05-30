@@ -214,9 +214,7 @@ const fillLocalLocation = async (name = 'Test Repo', path = '/backups/test') => 
 }
 
 const openDestinationSelect = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(
-    await screen.findByRole('combobox', { name: /Where should backups be stored/i })
-  )
+  await user.click(await screen.findByRole('combobox', { name: /Where should backups be stored/i }))
   return screen.findByRole('listbox')
 }
 
