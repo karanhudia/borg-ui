@@ -1,11 +1,31 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TFunction } from 'i18next'
 
 import { BackupPlansContent } from '../BackupPlansContent'
 import type { BackupPlan, BackupPlanRun } from '../../../types'
+
+const { mockTrack } = vi.hoisted(() => ({
+  mockTrack: vi.fn(),
+}))
+
+vi.mock('../../../hooks/useAnalytics', () => ({
+  useAnalytics: () => ({
+    track: mockTrack,
+    EventCategory: { BACKUP: 'Backup' },
+    EventAction: {
+      VIEW: 'View',
+      START: 'Start',
+      STOP: 'Stop',
+      EDIT: 'Edit',
+      DELETE: 'Delete',
+      SEARCH: 'Search',
+      FILTER: 'Filter',
+    },
+  }),
+}))
 
 const theme = createTheme()
 
@@ -157,6 +177,10 @@ function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlan
 }
 
 describe('BackupPlansContent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('renders card skeletons while backup plans are loading', () => {
     const { container } = renderContent({
       loadingPlans: true,
@@ -198,6 +222,46 @@ describe('BackupPlansContent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View repositories' }))
 
     expect(onViewRepositories).toHaveBeenCalledWith(basePlan.id)
+  })
+
+  it('tracks backup plan toolbar and card workflow analytics', async () => {
+    renderContent()
+
+    fireEvent.change(screen.getByPlaceholderText('Search backup plans...'), {
+      target: { value: 'daily' },
+    })
+    expect(mockTrack).toHaveBeenCalledWith(
+      'Backup',
+      'Search',
+      expect.objectContaining({
+        entity: 'backup_plan',
+        section: 'backup_plans',
+        query_length: 5,
+        result_count: 1,
+      })
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+    expect(mockTrack).toHaveBeenCalledWith(
+      'Backup',
+      'Start',
+      expect.objectContaining({
+        entity: 'backup_plan',
+        operation: 'run_plan',
+        schedule_enabled: false,
+      })
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'View repositories' }))
+    expect(mockTrack).toHaveBeenCalledWith(
+      'Backup',
+      'View',
+      expect.objectContaining({
+        entity: 'backup_plan',
+        operation: 'view_linked_repositories',
+        repository_count: 1,
+      })
+    )
   })
 
   it('shows and clears the linked repository filter context', async () => {

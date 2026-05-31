@@ -13,6 +13,9 @@ import type { BackupPlan, BackupPlanRun } from '../../types'
 import { BackupPlanCardSkeleton } from './BackupPlanCardSkeleton'
 import { BackupPlanIdleCard } from './PlanRunComponents'
 import { isActiveRun } from './runStatus'
+import { useAnalytics } from '../../hooks/useAnalytics'
+
+const BACKUP_PLANS_ANALYTICS_SECTION = 'backup_plans'
 
 interface ProcessedBackupPlans {
   groups: Array<{ name: string | null; plans: BackupPlan[] }>
@@ -86,6 +89,7 @@ export function BackupPlansContent({
   t,
 }: BackupPlansContentProps) {
   const theme = useTheme()
+  const { track, EventCategory, EventAction } = useAnalytics()
   const isDark = theme.palette.mode === 'dark'
   // Plans currently running are pulled into a top "Currently running" section
   // so the user can find live state in one glance. The idle plan card down in
@@ -98,6 +102,48 @@ export function BackupPlansContent({
         Boolean(entry.run) && isActiveRun(entry.run!.status)
     )
 
+  const resultCount = processedPlans.groups.reduce((sum, group) => sum + group.plans.length, 0)
+  const trackBackupPlan = (action: string, data: Record<string, unknown>) => {
+    track(EventCategory.BACKUP, action, {
+      entity: 'backup_plan',
+      section: BACKUP_PLANS_ANALYTICS_SECTION,
+      ...data,
+    })
+  }
+  const trackBackupPlanSearch = (value: string) => {
+    setSearchQuery(value)
+    const trimmed = value.trim()
+    if (!trimmed) return
+
+    trackBackupPlan(EventAction.SEARCH, {
+      operation: 'search_plans',
+      query_length: trimmed.length,
+      sort_by: sortBy,
+      group_by: groupBy,
+      result_count: resultCount,
+    })
+  }
+  const trackBackupPlanSort = (value: string) => {
+    setSortBy(value)
+    trackBackupPlan(EventAction.FILTER, {
+      operation: 'change_sort',
+      sort_by: value,
+      group_by: groupBy,
+      query_length: searchQuery.trim().length,
+      result_count: resultCount,
+    })
+  }
+  const trackBackupPlanGroup = (value: string) => {
+    setGroupBy(value)
+    trackBackupPlan(EventAction.FILTER, {
+      operation: 'change_group',
+      sort_by: sortBy,
+      group_by: value,
+      query_length: searchQuery.trim().length,
+      result_count: resultCount,
+    })
+  }
+
   return (
     <>
       <PageHeader
@@ -108,7 +154,10 @@ export function BackupPlansContent({
             <Button
               variant="contained"
               startIcon={<Plus size={18} />}
-              onClick={openCreateWizard}
+              onClick={() => {
+                trackBackupPlan(EventAction.VIEW, { operation: 'open_create_plan_wizard' })
+                openCreateWizard()
+              }}
               sx={{ width: { xs: '100%', md: 'auto' } }}
             >
               {t('backupPlans.actions.create')}
@@ -147,8 +196,26 @@ export function BackupPlansContent({
                 run={run}
                 plan={plan}
                 cancelling={cancellingRunId === run.id}
-                onCancel={(runId) => onCancelRun(runId)}
-                onViewLogs={(job) => onViewLogs(job)}
+                onCancel={(runId) => {
+                  track(EventCategory.BACKUP, EventAction.STOP, {
+                    entity: 'backup_plan_run',
+                    section: BACKUP_PLANS_ANALYTICS_SECTION,
+                    operation: 'cancel_run',
+                    status: run.status,
+                    trigger: run.trigger,
+                  })
+                  onCancelRun(runId)
+                }}
+                onViewLogs={(job) => {
+                  track(EventCategory.BACKUP, EventAction.VIEW, {
+                    entity: 'backup_plan_run',
+                    section: BACKUP_PLANS_ANALYTICS_SECTION,
+                    operation: 'view_run_logs',
+                    status: job.status,
+                    job_type: 'type' in job ? job.type : 'backup',
+                  })
+                  onViewLogs(job)
+                }}
               />
             ))}
           </Stack>
@@ -158,12 +225,12 @@ export function BackupPlansContent({
       {(loadingPlans || backupPlans.length > 0) && (
         <ListToolbar
           searchValue={searchQuery}
-          onSearchChange={setSearchQuery}
+          onSearchChange={trackBackupPlanSearch}
           searchPlaceholder={t('backupPlans.search', {
             defaultValue: 'Search backup plans...',
           })}
           sortValue={sortBy}
-          onSortChange={setSortBy}
+          onSortChange={trackBackupPlanSort}
           sortOptions={[
             {
               value: 'name-asc',
@@ -197,7 +264,7 @@ export function BackupPlansContent({
             },
           ]}
           groupValue={groupBy}
-          onGroupChange={setGroupBy}
+          onGroupChange={trackBackupPlanGroup}
           groupOptions={[
             { value: 'none', label: t('backupPlans.group.none', { defaultValue: 'No grouping' }) },
             {
@@ -248,7 +315,14 @@ export function BackupPlansContent({
           <Button
             variant="outlined"
             size="small"
-            onClick={onClearRepositoryFilter}
+            onClick={() => {
+              trackBackupPlan(EventAction.FILTER, {
+                operation: 'clear_repository_filter',
+                repository_filter_present: true,
+                result_count: resultCount,
+              })
+              onClearRepositoryFilter()
+            }}
             sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', sm: 'center' } }}
           >
             {t('backupPlans.filters.clearRepository')}
@@ -268,7 +342,14 @@ export function BackupPlansContent({
           title={t('backupPlans.empty.title')}
           description={t('backupPlans.empty.description')}
           actions={
-            <Button variant="contained" startIcon={<Plus size={16} />} onClick={openCreateWizard}>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={16} />}
+              onClick={() => {
+                trackBackupPlan(EventAction.VIEW, { operation: 'open_create_plan_wizard' })
+                openCreateWizard()
+              }}
+            >
               {t('backupPlans.actions.create')}
             </Button>
           }
@@ -294,11 +375,31 @@ export function BackupPlansContent({
           }
           actions={
             searchQuery ? (
-              <Button variant="outlined" onClick={() => setSearchQuery('')}>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  trackBackupPlan(EventAction.FILTER, {
+                    operation: 'clear_search',
+                    query_length: searchQuery.trim().length,
+                    result_count: backupPlans.length,
+                  })
+                  setSearchQuery('')
+                }}
+              >
                 {t('backupPlans.noMatch.clearSearch', { defaultValue: 'Clear search' })}
               </Button>
             ) : repositoryFilter ? (
-              <Button variant="outlined" onClick={onClearRepositoryFilter}>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  trackBackupPlan(EventAction.FILTER, {
+                    operation: 'clear_repository_filter',
+                    repository_filter_present: true,
+                    result_count: resultCount,
+                  })
+                  onClearRepositoryFilter()
+                }}
+              >
                 {t('backupPlans.filters.clearRepository')}
               </Button>
             ) : undefined
@@ -370,20 +471,62 @@ export function BackupPlansContent({
                       hasRunHistory={backupPlanRuns.some(
                         (r) => r.backup_plan_id === plan.id && !isActiveRun(r.status)
                       )}
-                      onRun={() => onRunPlan(plan.id)}
-                      onToggle={() => onTogglePlan(plan.id)}
-                      onEdit={() => onEditPlan(plan)}
+                      onRun={() => {
+                        trackBackupPlan(EventAction.START, {
+                          operation: 'run_plan',
+                          schedule_enabled: plan.schedule_enabled,
+                          source_type: plan.source_type,
+                          repository_count: plan.repository_count,
+                        })
+                        onRunPlan(plan.id)
+                      }}
+                      onToggle={() => {
+                        trackBackupPlan(EventAction.EDIT, {
+                          operation: 'toggle_plan',
+                          enabled_before: plan.enabled,
+                        })
+                        onTogglePlan(plan.id)
+                      }}
+                      onEdit={() => {
+                        trackBackupPlan(EventAction.VIEW, {
+                          operation: 'open_edit_plan_wizard',
+                          schedule_enabled: plan.schedule_enabled,
+                          source_type: plan.source_type,
+                          repository_count: plan.repository_count,
+                        })
+                        onEditPlan(plan)
+                      }}
                       onDelete={() => {
                         if (
                           window.confirm(
                             t('backupPlans.actions.deleteConfirm', { name: plan.name })
                           )
                         ) {
+                          trackBackupPlan(EventAction.DELETE, {
+                            operation: 'delete_plan',
+                            schedule_enabled: plan.schedule_enabled,
+                            source_type: plan.source_type,
+                            repository_count: plan.repository_count,
+                          })
                           onDeletePlan(plan.id)
                         }
                       }}
-                      onViewHistory={() => onViewHistory(plan.id)}
-                      onViewRepositories={() => onViewRepositories(plan.id)}
+                      onViewHistory={() => {
+                        trackBackupPlan(EventAction.VIEW, {
+                          operation: 'view_plan_history',
+                          has_run_history: backupPlanRuns.some(
+                            (r) => r.backup_plan_id === plan.id && !isActiveRun(r.status)
+                          ),
+                        })
+                        onViewHistory(plan.id)
+                      }}
+                      onViewRepositories={() => {
+                        trackBackupPlan(EventAction.VIEW, {
+                          operation: 'view_linked_repositories',
+                          repository_count: plan.repository_count,
+                        })
+                        onViewRepositories(plan.id)
+                      }}
                       planIsToggling={togglePending && toggleVariables === plan.id}
                       t={t}
                       formatStatusLabel={formatStatusLabel}

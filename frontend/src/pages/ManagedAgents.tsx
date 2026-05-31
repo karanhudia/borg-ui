@@ -65,10 +65,12 @@ import {
   agentJobLogsToViewerResult,
   agentSessionLogsToViewerResult,
 } from './managed-agents/logViewerAdapters'
+import { useAnalytics } from '../hooks/useAnalytics'
 
 type PageTab = 'agents' | 'jobs' | 'tokens'
 
 const FINAL_JOB_STATUSES = new Set(['completed', 'failed', 'canceled'])
+const MANAGED_AGENTS_ANALYTICS_SECTION = 'managed_agents'
 const EMPTY_AGENTS: AgentMachineResponse[] = []
 const EMPTY_TOKENS: AgentEnrollmentTokenSummary[] = []
 const EMPTY_JOBS: AgentJobResponse[] = []
@@ -132,6 +134,7 @@ function formatBorgBinary(binary: Record<string, unknown>): string {
 export default function ManagedAgents() {
   const queryClient = useQueryClient()
   const { hasGlobalPermission } = useAuth()
+  const { trackSystem, EventAction } = useAnalytics()
   const canManageAgents = hasGlobalPermission('settings.ssh.manage')
   const [activeTab, setActiveTab] = useState<PageTab>('agents')
   const [addAgentDialogOpen, setAddAgentDialogOpen] = useState(false)
@@ -182,6 +185,10 @@ export default function ManagedAgents() {
 
   const [manualRefreshInFlight, setManualRefreshInFlight] = useState(false)
   const refreshAll = async () => {
+    trackSystem(EventAction.START, {
+      section: MANAGED_AGENTS_ANALYTICS_SECTION,
+      operation: 'refresh',
+    })
     setManualRefreshInFlight(true)
     try {
       await Promise.all([agentsQuery.refetch(), tokensQuery.refetch(), jobsQuery.refetch()])
@@ -192,8 +199,14 @@ export default function ManagedAgents() {
 
   const createEnrollmentMutation = useMutation({
     mutationFn: managedAgentsAPI.createEnrollmentToken,
-    onSuccess: () => {
+    onSuccess: (_response, payload) => {
       queryClient.invalidateQueries({ queryKey: ['managed-agent-enrollment-tokens'] })
+      trackSystem(EventAction.CREATE, {
+        section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'create_enrollment_token',
+        has_default_path: Boolean(payload.default_path),
+        expires_never: Boolean(payload.expires_never),
+      })
       toast.success('Enrollment token created')
     },
     onError: (error: unknown) => {
@@ -205,6 +218,10 @@ export default function ManagedAgents() {
     mutationFn: managedAgentsAPI.revokeEnrollmentToken,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-agent-enrollment-tokens'] })
+      trackSystem(EventAction.DELETE, {
+        section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'revoke_enrollment_token',
+      })
       toast.success('Enrollment token revoked')
     },
     onError: (error: unknown) => {
@@ -216,6 +233,10 @@ export default function ManagedAgents() {
     mutationFn: managedAgentsAPI.revokeAgent,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
+      trackSystem(EventAction.DELETE, {
+        section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'revoke_agent',
+      })
       toast.success('Agent revoked')
     },
     onError: (error: unknown) => {
@@ -227,6 +248,10 @@ export default function ManagedAgents() {
     mutationFn: managedAgentsAPI.deleteAgent,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['managed-agents'] })
+      trackSystem(EventAction.DELETE, {
+        section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'delete_agent',
+      })
       toast.success('Agent deleted')
     },
     onError: (error: unknown) => {
@@ -236,8 +261,13 @@ export default function ManagedAgents() {
 
   const cancelJobMutation = useMutation({
     mutationFn: managedAgentsAPI.cancelJob,
-    onSuccess: () => {
+    onSuccess: (_response, jobId) => {
       queryClient.invalidateQueries({ queryKey: ['managed-agent-jobs'] })
+      trackSystem(EventAction.STOP, {
+        section: MANAGED_AGENTS_ANALYTICS_SECTION,
+        operation: 'cancel_job',
+        job_id_present: Boolean(jobId),
+      })
       toast.success('Cancellation requested')
     },
     onError: (error: unknown) => {
@@ -249,8 +279,13 @@ export default function ManagedAgents() {
     return <Navigate to="/dashboard" replace />
   }
 
-  const handleCopy = async (value: string) => {
+  const handleCopy = async (value: string, source = 'unknown') => {
     await navigator.clipboard.writeText(value)
+    trackSystem(EventAction.VIEW, {
+      section: MANAGED_AGENTS_ANALYTICS_SECTION,
+      operation: 'copy_command',
+      source,
+    })
     toast.success('Copied')
   }
 
@@ -280,7 +315,13 @@ export default function ManagedAgents() {
             <Button
               variant="contained"
               startIcon={<Plus size={18} />}
-              onClick={() => setAddAgentDialogOpen(true)}
+              onClick={() => {
+                trackSystem(EventAction.VIEW, {
+                  section: MANAGED_AGENTS_ANALYTICS_SECTION,
+                  operation: 'open_add_agent_dialog',
+                })
+                setAddAgentDialogOpen(true)
+              }}
               sx={{ width: { xs: '100%', md: 'auto' } }}
             >
               Add Agent
@@ -291,7 +332,17 @@ export default function ManagedAgents() {
 
       <AgentSetupGuide command={setupCommand} onCopy={handleCopy} />
 
-      <PageTabs value={activeTab} onChange={(_, value: PageTab) => setActiveTab(value)}>
+      <PageTabs
+        value={activeTab}
+        onChange={(_, value: PageTab) => {
+          trackSystem(EventAction.FILTER, {
+            section: MANAGED_AGENTS_ANALYTICS_SECTION,
+            operation: 'change_tab',
+            tab: value,
+          })
+          setActiveTab(value)
+        }}
+      >
         <Tab label="Agents" value="agents" />
         <Tab label="Jobs" value="jobs" />
         <Tab label="Enrollment Tokens" value="tokens" />
@@ -312,7 +363,14 @@ export default function ManagedAgents() {
           onCopy={handleCopy}
           onRevoke={(agent) => revokeAgentMutation.mutate(agent.id)}
           onDelete={(agent) => deleteAgentMutation.mutate(agent.id)}
-          onViewLogs={setLogsAgent}
+          onViewLogs={(agent) => {
+            trackSystem(EventAction.VIEW, {
+              section: MANAGED_AGENTS_ANALYTICS_SECTION,
+              operation: 'view_agent_logs',
+              status: agent.status,
+            })
+            setLogsAgent(agent)
+          }}
           isRevoking={revokeAgentMutation.isPending}
           isDeleting={deleteAgentMutation.isPending}
         />
@@ -323,7 +381,15 @@ export default function ManagedAgents() {
           jobs={jobs}
           agentsById={agentsById}
           onCancel={(job) => cancelJobMutation.mutate(job.id)}
-          onViewLogs={setLogsJob}
+          onViewLogs={(job) => {
+            trackSystem(EventAction.VIEW, {
+              section: MANAGED_AGENTS_ANALYTICS_SECTION,
+              operation: 'view_job_logs',
+              job_type: getJobKind(job),
+              status: job.status,
+            })
+            setLogsJob(job)
+          }}
           isCanceling={cancelJobMutation.isPending}
         />
       ) : null}
@@ -699,6 +765,7 @@ export function AgentList({
   isDeleting: boolean
 }) {
   const theme = useTheme()
+  const { trackSystem, EventAction } = useAnalytics()
   const isDark = theme.palette.mode === 'dark'
   const [deleteTarget, setDeleteTarget] = useState<AgentMachineResponse | null>(null)
   const [reinstallTarget, setReinstallTarget] = useState<AgentMachineResponse | null>(null)
@@ -959,7 +1026,15 @@ export function AgentList({
                     <IconButton
                       size="small"
                       aria-label="Reinstall agent"
-                      onClick={() => setReinstallTarget(agent)}
+                      onClick={() => {
+                        trackSystem(EventAction.VIEW, {
+                          section: MANAGED_AGENTS_ANALYTICS_SECTION,
+                          operation: 'open_reinstall_dialog',
+                          status: agent.status,
+                          has_borg_versions: Boolean(agent.borg_versions?.length),
+                        })
+                        setReinstallTarget(agent)
+                      }}
                       sx={{
                         width: { xs: 40, sm: 34 },
                         height: { xs: 40, sm: 34 },

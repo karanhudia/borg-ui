@@ -24,6 +24,7 @@ import {
 } from '../services/api'
 import { BorgApiClient } from '../services/borgApi'
 import { usePlan } from '../hooks/usePlan'
+import { useAnalytics } from '../hooks/useAnalytics'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { buildBackupPlanPayload } from '../utils/backupPlanPayload'
 import { getCheckFlagDurationConflict } from '../utils/checkFlagConflicts'
@@ -77,6 +78,8 @@ const stepDefinitions = [
   { key: 'review', labelKey: 'backupPlans.wizard.steps.review', icon: <ListChecks size={14} /> },
 ]
 
+const BACKUP_PLANS_ANALYTICS_SECTION = 'backup_plans'
+
 function errorMessage(error: unknown, fallback: string): string {
   const detail = isAxiosError(error) ? error.response?.data?.detail : undefined
   return translateBackendKey(detail) || fallback
@@ -88,6 +91,7 @@ export default function BackupPlans() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
+  const { track, EventCategory, EventAction } = useAnalytics()
   const { can } = usePlan()
   const canUseMultiRepository = can('backup_plan_multi_repository')
   const canUseBorg2 = can('borg_v2')
@@ -118,6 +122,20 @@ export default function BackupPlans() {
     () => localStorage.getItem('backup_plans_group') || 'none'
   )
   const handledInitialRepositoryRef = useRef(false)
+  const trackBackupPlanSubmit = (action: string, data: BackupPlanData) => {
+    track(EventCategory.BACKUP, action, {
+      entity: 'backup_plan',
+      section: BACKUP_PLANS_ANALYTICS_SECTION,
+      operation: action === EventAction.CREATE ? 'create_plan' : 'update_plan',
+      source_type: data.source_type,
+      repository_count: data.repositories.length,
+      schedule_enabled: data.schedule_enabled,
+      run_repository_scripts: data.run_repository_scripts,
+      run_prune_after: data.run_prune_after,
+      run_compact_after: data.run_compact_after,
+      run_check_after: data.run_check_after,
+    })
+  }
   const selectedRepositoryFilterId = useMemo(
     () => parseRepositoryFilterId(searchParams.get('repositoryId')),
     [searchParams]
@@ -288,8 +306,9 @@ export default function BackupPlans() {
 
   const createMutation = useMutation({
     mutationFn: (data: BackupPlanData) => backupPlansAPI.create(data),
-    onSuccess: () => {
+    onSuccess: (_response, data) => {
       toast.success(t('backupPlans.toasts.created'))
+      trackBackupPlanSubmit(EventAction.CREATE, data)
       queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       setWizardOpen(false)
@@ -319,8 +338,9 @@ export default function BackupPlans() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: BackupPlanData }) =>
       backupPlansAPI.update(id, data),
-    onSuccess: () => {
+    onSuccess: (_response, { data }) => {
       toast.success(t('backupPlans.toasts.updated'))
+      trackBackupPlanSubmit(EventAction.EDIT, data)
       queryClient.invalidateQueries({ queryKey: ['backup-plans'] })
       queryClient.invalidateQueries({ queryKey: ['repositories'] })
       setWizardOpen(false)
