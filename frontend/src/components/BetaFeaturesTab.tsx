@@ -225,7 +225,6 @@ const BetaFeaturesTab: React.FC = () => {
               }
             />
           </Box>
-
         </Stack>
       </SettingsCard>
     </Box>

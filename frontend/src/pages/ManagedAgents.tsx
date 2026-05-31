@@ -263,8 +263,7 @@ export default function ManagedAgents() {
     '<machine-name>'
   )
 
-  const isLoading =
-    agentsQuery.isLoading || tokensQuery.isLoading || jobsQuery.isLoading
+  const isLoading = agentsQuery.isLoading || tokensQuery.isLoading || jobsQuery.isLoading
 
   return (
     <Box>

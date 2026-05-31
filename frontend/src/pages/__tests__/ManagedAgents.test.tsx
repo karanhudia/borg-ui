@@ -12,11 +12,7 @@ import AgentInstallCommand from '../managed-agents/AgentInstallCommand'
 import { buildAgentInstallCommand } from '../managed-agents/agentInstallCommandText'
 import { isLocalAgentServerUrl, resolveAgentServerUrl } from '../managed-agents/agentServerUrl'
 import { renderWithProviders, userEvent } from '../../test/test-utils'
-import {
-  AgentJobResponse,
-  AgentMachineResponse,
-  managedAgentsAPI,
-} from '../../services/api'
+import { AgentJobResponse, AgentMachineResponse, managedAgentsAPI } from '../../services/api'
 import type { AxiosResponse } from 'axios'
 import { buildAgentReinstallCommand } from '../managed-agents/agentInstallCommandText'
 
