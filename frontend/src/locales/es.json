@@ -743,7 +743,8 @@
       "series": "Serie",
       "nextRun": "Próxima ejecución: {{date}}",
       "repositoryFallback": "Repositorio",
-      "moreRepositories": "+{{count}} más"
+      "moreRepositories": "+{{count}} más",
+      "runningNow": "En curso"
     },
     "statuses": {
       "unknown": "Desconocido",
