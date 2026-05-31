@@ -790,48 +790,42 @@ export default function BackupPlanRunsPanel({
   return (
     <Stack spacing={3} sx={{ mb: 4 }}>
       {activeRuns.length > 0 && (
-        <Card
-          component="section"
-          aria-labelledby="backup-plan-active-runs-heading"
-          sx={{ overflow: 'visible' }}
-        >
-          <CardContent>
-            <Stack
-              direction="row"
-              spacing={1.5}
-              alignItems="center"
-              sx={{ mb: 1, color: 'text.secondary' }}
-            >
-              <Box sx={{ display: 'flex', color: 'success.main' }}>
-                <RefreshCw size={20} className="animate-spin" />
-              </Box>
-              <Typography id="backup-plan-active-runs-heading" variant="h6" fontWeight={600}>
-                {t('backupPlans.runsPanel.activeTitle')}
-              </Typography>
-              <Chip
-                size="small"
-                color="primary"
-                label={t('backupPlans.runsPanel.activeCount', { count: activeRuns.length })}
-              />
-            </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-              {t('backupPlans.runsPanel.activeSubtitle')}
+        <Box component="section" aria-labelledby="backup-plan-active-runs-heading">
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+            sx={{ mb: 1, color: 'text.secondary' }}
+          >
+            <Box sx={{ display: 'flex', color: 'success.main' }}>
+              <RefreshCw size={20} className="animate-spin" />
+            </Box>
+            <Typography id="backup-plan-active-runs-heading" variant="h6" fontWeight={600}>
+              {t('backupPlans.runsPanel.activeTitle')}
             </Typography>
+            <Chip
+              size="small"
+              color="primary"
+              label={t('backupPlans.runsPanel.activeCount', { count: activeRuns.length })}
+            />
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+            {t('backupPlans.runsPanel.activeSubtitle')}
+          </Typography>
 
-            <Stack spacing={2}>
-              {activeRuns.map((run) => (
-                <ActiveBackupPlanRunCard
-                  key={run.id}
-                  run={run}
-                  plan={findPlan(run, plans)}
-                  cancelling={cancellingRunId === run.id}
-                  onCancel={onCancel}
-                  onViewLogs={onViewLogs}
-                />
-              ))}
-            </Stack>
-          </CardContent>
-        </Card>
+          <Stack spacing={2}>
+            {activeRuns.map((run) => (
+              <ActiveBackupPlanRunCard
+                key={run.id}
+                run={run}
+                plan={findPlan(run, plans)}
+                cancelling={cancellingRunId === run.id}
+                onCancel={onCancel}
+                onViewLogs={onViewLogs}
+              />
+            ))}
+          </Stack>
+        </Box>
       )}
 
       {renderRunSection(
