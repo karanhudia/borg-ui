@@ -196,6 +196,7 @@ export function DatabaseScanDialog({
   // debounce to coalesce rapid input. Storybook captures rely on the initial
   // scan resolving before screenshot, which the debounce would otherwise miss.
   const initialScanDone = useRef(false)
+  const scanPathsKey = scanPaths.join('|')
   useEffect(() => {
     if (!open) {
       initialScanDone.current = false
@@ -210,7 +211,7 @@ export function DatabaseScanDialog({
     open,
     scanTarget.type,
     scanTarget.sshId,
-    scanPaths.join('|'),
+    scanPathsKey,
     scanMaxDepth,
     scanTimeoutSeconds,
     scanIgnorePatternsText,

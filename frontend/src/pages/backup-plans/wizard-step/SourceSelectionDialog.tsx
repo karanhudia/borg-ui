@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Accordion,
   AccordionDetails,
@@ -535,6 +535,15 @@ export function SourceSelectionDialog({
   >({})
   const [snapshotDraft, setSnapshotDraft] = useState<SnapshotDraft>(() => emptySnapshotDraft())
   const [captureModeExpanded, setCaptureModeExpanded] = useState(initialCaptureModeExpanded)
+  const hydratedDatabaseLocation = useMemo(
+    () => locationsFromWizardState(wizardState).find((location) => location.database),
+    [
+      wizardState.sourceLocations,
+      wizardState.sourceDirectories,
+      wizardState.sourceType,
+      wizardState.sourceSshConnectionId,
+    ]
+  )
 
   useEffect(() => {
     if (!open) return
@@ -632,17 +641,11 @@ export function SourceSelectionDialog({
     setPostScriptName(match.script_drafts.post_backup.name)
     setPreScriptContent(match.script_drafts.pre_backup.content)
     setPostScriptContent(match.script_drafts.post_backup.content)
-    const databaseLocation = locationsFromWizardState(wizardState).find(
-      (location) => location.database
-    )
-    setScriptMode(databaseLocation?.database?.pre_backup_script_id ? 'reuse' : 'create')
+    setScriptMode(hydratedDatabaseLocation?.database?.pre_backup_script_id ? 'reuse' : 'create')
   }, [
     open,
     wizardState.databaseTemplateId,
-    wizardState.sourceLocations,
-    wizardState.sourceDirectories,
-    wizardState.sourceType,
-    wizardState.sourceSshConnectionId,
+    hydratedDatabaseLocation,
     fallbackTemplates,
     selectedDatabase,
   ])
