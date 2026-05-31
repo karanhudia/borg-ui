@@ -101,8 +101,8 @@
     "appName": "Borg UI",
     "sections": {
       "dashboard": "PANEL",
-      "hosts": "EQUIPOS",
-      "targets": "DESTINOS",
+      "infrastructure": "INFRAESTRUCTURA",
+      "storage": "ALMACENAMIENTO",
       "backups": "COPIAS DE SEGURIDAD",
       "settings": "CONFIGURACIÓN"
     },

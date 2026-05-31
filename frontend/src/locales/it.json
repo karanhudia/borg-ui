@@ -101,8 +101,8 @@
     "appName": "Borg UI",
     "sections": {
       "dashboard": "DASHBOARD",
-      "hosts": "HOST",
-      "targets": "DESTINAZIONI",
+      "infrastructure": "INFRASTRUTTURA",
+      "storage": "ARCHIVIAZIONE",
       "backups": "BACKUP",
       "settings": "IMPOSTAZIONI"
     },
