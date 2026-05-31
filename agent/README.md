@@ -209,6 +209,7 @@ The first implementation supports:
 - `backup.create` using Borg 1 or Borg 2
 - `filesystem.browse` for source path selection from the central Borg UI
 - `repository.init`, `repository.info`, `repository.list_archives`,
+  `repository.list_archive_contents`, `repository.extract_archive_file`,
   `repository.check`, `repository.prune`, `repository.compact`, and
   `repository.rclone_sync` for agent-owned repositories
 - log and progress upload

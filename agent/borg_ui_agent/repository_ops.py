@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shlex
@@ -20,6 +21,7 @@ REPOSITORY_JOB_KINDS = {
     "repository.info",
     "repository.list_archives",
     "repository.list_archive_contents",
+    "repository.extract_archive_file",
     "repository.check",
     "repository.prune",
     "repository.compact",
@@ -145,20 +147,10 @@ class RepositoryOperationPayload:
             return [*self._base_borg1("list"), "--json", self.repository_path]
 
         if self.job_kind == "repository.list_archive_contents":
-            operation = self.operation or {}
-            if not isinstance(operation, dict):
-                raise ValueError(
-                    "repository.list_archive_contents requires operation.archive"
-                )
-            archive = operation.get("archive")
-            if not isinstance(archive, str) or not archive.strip():
-                raise ValueError(
-                    "repository.list_archive_contents requires operation.archive"
-                )
-            archive = archive.strip()
+            archive = _operation_archive(self.operation, self.job_kind)
             if self.borg_version == 2:
                 cmd = [*self._base_borg2("list"), "--json-lines", archive]
-                path = operation.get("path")
+                path = (self.operation or {}).get("path")
                 if isinstance(path, str) and path.strip():
                     normalized_path = path.strip("/")
                     if normalized_path:
@@ -168,6 +160,23 @@ class RepositoryOperationPayload:
                 *self._base_borg1("list"),
                 f"{self.repository_path}::{archive}",
                 "--json-lines",
+            ]
+
+        if self.job_kind == "repository.extract_archive_file":
+            archive = _operation_archive(self.operation, self.job_kind)
+            file_path = _operation_file_path(self.operation, self.job_kind)
+            if self.borg_version == 2:
+                return [
+                    *self._base_borg2("extract"),
+                    "--stdout",
+                    archive,
+                    file_path,
+                ]
+            return [
+                *self._base_borg1("extract"),
+                "--stdout",
+                f"{self.repository_path}::{archive}",
+                file_path,
             ]
 
         if self.job_kind == "repository.check":
@@ -263,6 +272,27 @@ def _rclone_operation(operation: dict[str, Any] | None) -> dict[str, Any]:
     return rclone
 
 
+def _operation_archive(operation: dict[str, Any] | None, job_kind: str) -> str:
+    if not isinstance(operation, dict):
+        raise ValueError(f"{job_kind} requires operation.archive")
+    archive = operation.get("archive")
+    if not isinstance(archive, str) or not archive.strip():
+        raise ValueError(f"{job_kind} requires operation.archive")
+    return archive.strip()
+
+
+def _operation_file_path(operation: dict[str, Any] | None, job_kind: str) -> str:
+    if not isinstance(operation, dict):
+        raise ValueError(f"{job_kind} requires operation.file_path")
+    file_path = operation.get("file_path")
+    if not isinstance(file_path, str) or not file_path.strip():
+        raise ValueError(f"{job_kind} requires operation.file_path")
+    normalized = file_path.strip().strip("/")
+    if not normalized:
+        raise ValueError(f"{job_kind} requires operation.file_path")
+    return normalized
+
+
 def _write_temp_rclone_config(payload: RepositoryOperationPayload) -> str:
     rclone = _rclone_operation(payload.operation)
     remote_name = _require_non_empty_string(rclone.get("remote_name"), "remote_name")
@@ -349,6 +379,14 @@ def execute_repository_operation_job(
     if payload.job_kind == "repository.list_archive_contents":
         try:
             return _execute_limited_output_repository_operation(
+                job_id, payload, client, cmd, env
+            )
+        finally:
+            _remove_temp_file(rclone_config_path)
+
+    if payload.job_kind == "repository.extract_archive_file":
+        try:
+            return _execute_binary_output_repository_operation(
                 job_id, payload, client, cmd, env
             )
         finally:
@@ -532,6 +570,77 @@ def _operation_max_lines(operation: dict[str, Any] | None) -> int:
     except (TypeError, ValueError):
         return 1_000_000
     return max(1, max_lines)
+
+
+def _execute_binary_output_repository_operation(
+    job_id: int,
+    payload: RepositoryOperationPayload,
+    client: AgentClient,
+    cmd: list[str],
+    env: dict[str, str],
+) -> RepositoryOperationResult:
+    try:
+        process = subprocess.run(cmd, capture_output=True, env=env, timeout=300)
+    except OSError as exc:
+        error_message = f"Failed to start {payload.job_kind}: {exc}"
+        client.send_log(job_id, sequence=1, stream="stderr", message=error_message)
+        client.complete_job(
+            job_id,
+            result={
+                "return_code": None,
+                "command": cmd,
+                "stdout": "",
+                "stderr": error_message,
+                "success": False,
+            },
+        )
+        return RepositoryOperationResult(
+            job_id=job_id, status="completed", message=error_message
+        )
+    except subprocess.TimeoutExpired:
+        error_message = f"{payload.job_kind} timed out"
+        client.send_log(job_id, sequence=1, stream="stderr", message=error_message)
+        client.complete_job(
+            job_id,
+            result={
+                "return_code": None,
+                "command": cmd,
+                "stdout": "",
+                "stderr": error_message,
+                "success": False,
+            },
+        )
+        return RepositoryOperationResult(
+            job_id=job_id, status="completed", message=error_message
+        )
+
+    stderr = process.stderr.decode("utf-8", errors="replace")
+    result = {
+        "return_code": process.returncode,
+        "command": cmd,
+        "stdout": "",
+        "stderr": stderr,
+        "success": process.returncode == 0,
+    }
+    if process.returncode == 0:
+        result["content_base64"] = base64.b64encode(process.stdout).decode("ascii")
+        client.complete_job(job_id, result=result)
+        return RepositoryOperationResult(
+            job_id=job_id,
+            status="completed",
+            return_code=process.returncode,
+            message=f"{payload.job_kind} exited with code {process.returncode}",
+        )
+
+    if stderr:
+        client.send_log(job_id, sequence=1, stream="stderr", message=stderr.rstrip())
+    client.complete_job(job_id, result=result)
+    return RepositoryOperationResult(
+        job_id=job_id,
+        status="completed",
+        return_code=process.returncode,
+        message=f"{payload.job_kind} exited with code {process.returncode}",
+    )
 
 
 def _execute_streaming_repository_operation(
