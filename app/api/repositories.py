@@ -1234,6 +1234,68 @@ def _strip_direct_rclone_noop_update_fields(update_data: dict[str, Any]) -> None
         update_data.pop(key, None)
 
 
+def _strip_cached_rclone_noop_update_fields(
+    repo_data: RepositoryUpdate, update_data: dict[str, Any]
+) -> None:
+    if "storage_backend" in update_data and repo_data.storage_backend != "rclone":
+        raise HTTPException(
+            status_code=400,
+            detail={"key": "backend.errors.rclone.updateUnsupported"},
+        )
+
+    if "connection_id" in update_data:
+        if repo_data.connection_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        update_data.pop("connection_id", None)
+
+    if "execution_target" in update_data:
+        if _normalize_execution_target(repo_data.execution_target) != "local":
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        update_data.pop("execution_target", None)
+
+    if "executor_type" in update_data:
+        if _normalize_repository_executor(repo_data) != "server":
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        update_data.pop("executor_type", None)
+
+    if "agent_machine_id" in update_data:
+        if repo_data.agent_machine_id is not None:
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.rclone.updateUnsupported"},
+            )
+        update_data.pop("agent_machine_id", None)
+
+
+def _strip_disabled_rclone_noop_update_fields(update_data: dict[str, Any]) -> None:
+    default_values = {
+        "cloud_mirror_enabled": {None, False},
+        "rclone_remote_id": {None},
+        "rclone_remote_path": {None, ""},
+        "rclone_remote_path_verified": {None, False},
+        "rclone_sync_policy": {None, "after_success"},
+        "rclone_sync_cron_expression": {None, ""},
+        "rclone_sync_timezone": {None, ""},
+    }
+    for key, allowed_values in default_values.items():
+        if key in update_data and update_data[key] in allowed_values:
+            update_data.pop(key, None)
+    if "rclone_extra_flags" in update_data and update_data["rclone_extra_flags"] in (
+        None,
+        [],
+    ):
+        update_data.pop("rclone_extra_flags", None)
+
+
 def _raise_rclone_schedule_error(exc: Exception) -> None:
     message = str(exc) or exc.__class__.__name__
     if isinstance(exc, InvalidScheduleTimezone):
@@ -3555,6 +3617,12 @@ async def update_repository(
         existing_direct_rclone_repository = _is_direct_rclone_repository(
             repository, existing_rclone_storage
         )
+        existing_cached_rclone_repository = bool(
+            existing_rclone_storage
+            and existing_rclone_storage.backend == "rclone"
+            and repository.repository_type == "rclone"
+            and not existing_direct_rclone_repository
+        )
         rclone_update_fields = {
             "storage_backend",
             "rclone_remote_id",
@@ -3567,6 +3635,14 @@ async def update_repository(
             "cloud_mirror_enabled",
             "rclone_remote_path_verified",
         }
+        if existing_cached_rclone_repository:
+            _strip_cached_rclone_noop_update_fields(repo_data, update_data)
+        elif (
+            not existing_rclone_storage
+            and not existing_direct_rclone_repository
+            and repo_data.cloud_mirror_enabled is not True
+        ):
+            _strip_disabled_rclone_noop_update_fields(update_data)
         requested_rclone_updates = rclone_update_fields.intersection(update_data)
         if (
             _is_direct_rclone_payload(repo_data)
@@ -3610,11 +3686,13 @@ async def update_repository(
                 existing_rclone_storage = None
                 storage = None
 
-            should_enable_or_update_mirror = repo_data.cloud_mirror_enabled is True or (
-                bool(storage)
-                and storage.backend == "rclone"
-                and not is_direct_rclone_repository
-                and repo_data.cloud_mirror_enabled is not False
+            should_enable_or_update_mirror = not is_direct_rclone_repository and (
+                repo_data.cloud_mirror_enabled is True
+                or (
+                    bool(storage)
+                    and storage.backend == "rclone"
+                    and repo_data.cloud_mirror_enabled is not False
+                )
             )
 
             should_update_direct_rclone = (

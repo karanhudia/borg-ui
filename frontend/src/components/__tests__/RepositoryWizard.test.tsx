@@ -1278,6 +1278,65 @@ describe('RepositoryWizard', () => {
       expect(screen.queryByText('Cloud Mirror')).not.toBeInTheDocument()
     })
 
+    it('submits cached rclone repository edits without primary storage conversion fields', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', {
+        id: 9,
+        name: 'Cached Cloud Repo',
+        path: '/cache/repositories/9',
+        mode: 'full',
+        repository_type: 'rclone',
+        storage_backend: 'rclone',
+        execution_target: 'local',
+        executor_type: 'server',
+        borg_version: 1,
+        encryption: 'none',
+        compression: 'lz4',
+        connection_id: null,
+        rclone_storage: {
+          repository_id: 9,
+          backend: 'rclone',
+          rclone_remote_id: 10,
+          rclone_remote_name: 'prod-s3',
+          rclone_remote_path: 'borg-ui/repositories/app',
+          cache_path: '/cache/repositories/9',
+          sync_policy: 'manual',
+          sync_status: 'current',
+          extra_flags: ['--fast-list'],
+        },
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Cached Cloud Repo')
+      })
+
+      const reviewStep = screen.getByText('Review').closest('div')
+      expect(reviewStep).not.toBeNull()
+      fireEvent.click(reviewStep!)
+
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalled()
+      })
+      const [submittedPayload] = onSubmit.mock.calls[0]
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({
+          name: 'Cached Cloud Repo',
+          path: '/cache/repositories/9',
+          storage_backend: 'rclone',
+          rclone_remote_id: 10,
+          rclone_remote_path: 'borg-ui/repositories/app',
+          rclone_sync_policy: 'manual',
+          rclone_extra_flags: ['--fast-list'],
+        })
+      )
+      expect(submittedPayload).not.toHaveProperty('connection_id')
+      expect(submittedPayload).not.toHaveProperty('execution_target')
+      expect(submittedPayload).not.toHaveProperty('executor_type')
+      expect(submittedPayload).not.toHaveProperty('agent_machine_id')
+    })
+
     it('allows edit workflow without re-entering the passphrase', async () => {
       const user = userEvent.setup()
       renderWizard('edit', legacyRepository)
@@ -1316,6 +1375,55 @@ describe('RepositoryWizard', () => {
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Save Changes/i })).toBeInTheDocument()
       })
+    })
+
+    it('submits local repository edits without disabled rclone defaults', async () => {
+      const user = userEvent.setup()
+      const { onSubmit } = renderWizard('edit', {
+        id: 10,
+        name: 'Local Repo',
+        path: '/backups/local',
+        mode: 'full',
+        repository_type: 'local',
+        storage_backend: 'local',
+        execution_target: 'local',
+        executor_type: 'server',
+        borg_version: 1,
+        encryption: 'none',
+        compression: 'lz4',
+        connection_id: null,
+        rclone_storage: null,
+      })
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/Repository Name/i)).toHaveValue('Local Repo')
+      })
+
+      const reviewStep = screen.getByText('Review').closest('div')
+      expect(reviewStep).not.toBeNull()
+      fireEvent.click(reviewStep!)
+
+      await user.click(screen.getByRole('button', { name: /Save Changes/i }))
+
+      await waitFor(() => {
+        expect(onSubmit).toHaveBeenCalled()
+      })
+      const [submittedPayload] = onSubmit.mock.calls[0]
+      expect(submittedPayload).toEqual(
+        expect.objectContaining({
+          name: 'Local Repo',
+          path: '/backups/local',
+          storage_backend: 'local',
+        })
+      )
+      expect(submittedPayload).not.toHaveProperty('cloud_mirror_enabled')
+      expect(submittedPayload).not.toHaveProperty('rclone_remote_id')
+      expect(submittedPayload).not.toHaveProperty('rclone_remote_path')
+      expect(submittedPayload).not.toHaveProperty('rclone_remote_path_verified')
+      expect(submittedPayload).not.toHaveProperty('rclone_sync_policy')
+      expect(submittedPayload).not.toHaveProperty('rclone_sync_cron_expression')
+      expect(submittedPayload).not.toHaveProperty('rclone_sync_timezone')
+      expect(submittedPayload).not.toHaveProperty('rclone_extra_flags')
     })
   })
 
