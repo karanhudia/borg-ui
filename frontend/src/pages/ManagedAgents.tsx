@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'react-hot-toast'
@@ -33,6 +33,7 @@ import {
   Ban,
   CheckCircle,
   Copy,
+  Eye,
   Info,
   Plus,
   RefreshCw,
@@ -54,12 +55,17 @@ import { getApiErrorDetail } from '../utils/apiErrors'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import PageTabs from '../components/PageTabs'
 import PageHeader from '../components/PageHeader'
+import LogViewerDialog, { type LogViewerFetchLogs } from '../components/shared/LogViewerDialog'
 import AddAgentDialog from './managed-agents/AddAgentDialog'
 import { resolveAgentServerUrl } from './managed-agents/agentServerUrl'
 import {
   buildAgentInstallCommand,
   buildAgentReinstallCommand,
 } from './managed-agents/agentInstallCommandText'
+import {
+  agentJobLogsToViewerResult,
+  agentSessionLogsToViewerResult,
+} from './managed-agents/logViewerAdapters'
 
 type PageTab = 'agents' | 'jobs' | 'tokens'
 
@@ -67,8 +73,7 @@ const FINAL_JOB_STATUSES = new Set(['completed', 'failed', 'canceled'])
 const EMPTY_AGENTS: AgentMachineResponse[] = []
 const EMPTY_TOKENS: AgentEnrollmentTokenSummary[] = []
 const EMPTY_JOBS: AgentJobResponse[] = []
-const EMPTY_LOGS: AgentJobLogEntryResponse[] = []
-const EMPTY_AGENT_LOGS: AgentSessionLogEntryResponse[] = []
+const EMPTY_LOG_RESULT = { lines: [], total_lines: 0, has_more: false }
 
 function formatDate(value?: string | null): string {
   if (!value) return 'Never'
@@ -170,25 +175,17 @@ export default function ManagedAgents() {
     refetchInterval: 5000,
   })
 
-  const logsQuery = useQuery({
-    queryKey: ['managed-agent-job-logs', logsJob?.id],
-    queryFn: () => managedAgentsAPI.listJobLogs(logsJob!.id),
-    enabled: canUseManagedAgents && !!logsJob,
-    refetchInterval: logsJob && !FINAL_JOB_STATUSES.has(logsJob.status) ? 2000 : false,
-  })
-
-  const agentLogsQuery = useQuery({
-    queryKey: ['managed-agent-logs', logsAgent?.id],
-    queryFn: () => managedAgentsAPI.listAgentLogs(logsAgent!.id),
-    enabled: canUseManagedAgents && !!logsAgent,
-    refetchInterval: logsAgent?.status === 'online' ? 2000 : false,
-  })
-
   const agents = agentsQuery.data?.data ?? EMPTY_AGENTS
   const tokens = tokensQuery.data?.data ?? EMPTY_TOKENS
   const jobs = jobsQuery.data?.data ?? EMPTY_JOBS
-  const logs = logsQuery.data?.data ?? EMPTY_LOGS
-  const agentLogs = agentLogsQuery.data?.data ?? EMPTY_AGENT_LOGS
+  const selectedLogsJob = useMemo(
+    () => (logsJob ? jobs.find((job) => job.id === logsJob.id) || logsJob : null),
+    [jobs, logsJob]
+  )
+  const selectedLogsAgent = useMemo(
+    () => (logsAgent ? agents.find((agent) => agent.id === logsAgent.id) || logsAgent : null),
+    [agents, logsAgent]
+  )
 
   const agentsById = useMemo(() => {
     return new Map(agents.map((agent) => [agent.id, agent]))
@@ -368,43 +365,9 @@ export default function ManagedAgents() {
         onCopy={handleCopy}
       />
 
-      <Dialog open={!!logsJob} onClose={() => setLogsJob(null)} fullWidth maxWidth="lg">
-        <DialogTitle>Agent Job Logs</DialogTitle>
-        <DialogContent>
-          <Box
-            component="pre"
-            sx={{
-              m: 0,
-              p: 2,
-              minHeight: 320,
-              maxHeight: '60vh',
-              overflow: 'auto',
-              borderRadius: 1.5,
-              bgcolor: '#111827',
-              color: '#d1d5db',
-              fontSize: '0.8rem',
-              lineHeight: 1.6,
-              whiteSpace: 'pre-wrap',
-            }}
-          >
-            {logsQuery.isLoading
-              ? 'Loading...'
-              : logs.length
-                ? logs.map((log) => `${log.sequence} ${log.stream}: ${log.message}`).join('\n')
-                : 'No logs'}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLogsJob(null)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <AgentJobLogsDialog job={selectedLogsJob} onClose={() => setLogsJob(null)} />
 
-      <AgentSessionLogsDialog
-        agent={logsAgent}
-        logs={agentLogs}
-        loading={agentLogsQuery.isLoading}
-        onClose={() => setLogsAgent(null)}
-      />
+      <AgentSessionLogsDialog agent={selectedLogsAgent} onClose={() => setLogsAgent(null)} />
     </Box>
   )
 }
@@ -1005,7 +968,7 @@ export function AgentList({
                         },
                       }}
                     >
-                      <Terminal size={16} />
+                      <Eye size={16} />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Reinstall agent" arrow>
@@ -1107,48 +1070,64 @@ export function AgentSessionLogsDialog({
   onClose,
 }: {
   agent: AgentMachineResponse | null
-  logs: AgentSessionLogEntryResponse[]
-  loading: boolean
+  logs?: AgentSessionLogEntryResponse[]
+  loading?: boolean
   onClose: () => void
 }) {
+  const handleFetchLogs = useCallback<LogViewerFetchLogs>(
+    async (offset: number) => {
+      if (!agent || loading) return EMPTY_LOG_RESULT
+      if (logs) return agentSessionLogsToViewerResult(logs, offset)
+
+      const response = await managedAgentsAPI.listAgentLogs(agent.id)
+      return agentSessionLogsToViewerResult(response.data, offset)
+    },
+    [agent, loading, logs]
+  )
+
+  const status = agent?.status === 'online' && !logs ? 'running' : 'completed'
+
   return (
-    <Dialog open={!!agent} onClose={onClose} fullWidth maxWidth="lg">
-      <DialogTitle>Agent Logs{agent ? ` - ${getAgentLabel(agent)}` : ''}</DialogTitle>
-      <DialogContent>
-        <Box
-          component="pre"
-          sx={{
-            m: 0,
-            p: 2,
-            minHeight: 320,
-            maxHeight: '60vh',
-            overflow: 'auto',
-            borderRadius: 1.5,
-            bgcolor: '#111827',
-            color: '#d1d5db',
-            fontSize: '0.8rem',
-            lineHeight: 1.6,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
-        >
-          {loading
-            ? 'Loading...'
-            : logs.length
-              ? logs
-                  .map((log) => {
-                    const command = log.command_id ? ` command=${log.command_id}` : ''
-                    const job = log.job_id ? ` job=${log.job_id}` : ''
-                    return `${formatDate(log.created_at)} ${log.level}/${log.stream}${command}${job}: ${log.message}`
-                  })
-                  .join('\n')
-              : 'No agent logs'}
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
+    <LogViewerDialog
+      job={agent ? { id: agent.id, status, type: 'agent' } : null}
+      open={!!agent}
+      onClose={onClose}
+      title={agent ? `Agent Logs - ${getAgentLabel(agent)}` : 'Agent Logs'}
+      jobTypeLabel="Agent"
+      onFetchLogs={handleFetchLogs}
+    />
+  )
+}
+
+export function AgentJobLogsDialog({
+  job,
+  logs,
+  onClose,
+}: {
+  job: AgentJobResponse | null
+  logs?: AgentJobLogEntryResponse[]
+  onClose: () => void
+}) {
+  const handleFetchLogs = useCallback<LogViewerFetchLogs>(
+    async (offset: number) => {
+      if (!job) return EMPTY_LOG_RESULT
+      if (logs) return agentJobLogsToViewerResult(logs, offset)
+
+      const response = await managedAgentsAPI.listJobLogs(job.id)
+      return agentJobLogsToViewerResult(response.data, offset)
+    },
+    [job, logs]
+  )
+
+  return (
+    <LogViewerDialog
+      job={job ? { ...job, type: 'agent job' } : null}
+      open={!!job}
+      onClose={onClose}
+      title={job ? `Agent Job Logs - Job #${job.id}` : 'Agent Job Logs'}
+      jobTypeLabel="Agent Job"
+      onFetchLogs={handleFetchLogs}
+    />
   )
 }
 
@@ -1212,7 +1191,7 @@ export function JobsTable({
                 <TableCell align="right">
                   <Tooltip title="View logs">
                     <IconButton onClick={() => onViewLogs(job)}>
-                      <Terminal size={18} />
+                      <Eye size={18} />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Cancel job">
