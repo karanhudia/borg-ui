@@ -99,11 +99,14 @@ export function processBackupPlans({
     const local = sorted.filter((p) => p.source_type === 'local')
     const remote = sorted.filter((p) => p.source_type === 'remote')
     const agent = sorted.filter((p) => p.source_type === 'agent')
+    const mixed = sorted.filter((p) => p.source_type === 'mixed')
     if (local.length > 0) groups.push({ name: t('backupPlans.groups.localSource'), plans: local })
     if (remote.length > 0)
       groups.push({ name: t('backupPlans.groups.remoteSource'), plans: remote })
     if (agent.length > 0)
       groups.push({ name: t('backupPlans.sourceChooser.managedAgent'), plans: agent })
+    if (mixed.length > 0)
+      groups.push({ name: t('backupPlans.sourceChooser.mixedSources'), plans: mixed })
   }
 
   return { groups: groups.length > 0 ? groups : [{ name: null, plans: sorted }] }

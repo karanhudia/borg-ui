@@ -855,7 +855,7 @@ async def list_backup_plans(
     if repository_id is not None:
         query = query.join(BackupPlanRepository).filter(
             BackupPlanRepository.repository_id == repository_id,
-            BackupPlanRepository.enabled == True,
+            BackupPlanRepository.enabled.is_(True),
         )
     plans = query.order_by(BackupPlan.name.asc()).all()
     visible = [plan for plan in plans if _can_view_plan(db, current_user, plan)]

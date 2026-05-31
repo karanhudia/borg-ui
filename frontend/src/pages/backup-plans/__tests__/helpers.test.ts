@@ -75,4 +75,27 @@ describe('processBackupPlans', () => {
 
     expect(result.groups).toEqual([{ name: null, plans: [secondaryPlan] }])
   })
+
+  it('groups mixed-source backup plans with source grouping', () => {
+    const mixedPlan: BackupPlan = {
+      ...basePlan,
+      id: 2,
+      name: 'Mixed Source Plan',
+      source_type: 'mixed',
+    }
+
+    const result = processBackupPlans({
+      backupPlans: [basePlan, mixedPlan],
+      repositoryFilterId: null,
+      searchQuery: '',
+      sortBy: 'name-asc',
+      groupBy: 'source',
+      t: ((key: string) => key) as never,
+    })
+
+    expect(result.groups).toEqual([
+      { name: 'backupPlans.groups.localSource', plans: [basePlan] },
+      { name: 'backupPlans.sourceChooser.mixedSources', plans: [mixedPlan] },
+    ])
+  })
 })
