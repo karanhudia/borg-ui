@@ -566,7 +566,7 @@ async def list_recent_activity(
                     "schedule_id": None,
                     "archive_name": None,
                     "package_name": None,
-                    "has_logs": bool(job.log_text or job.error_text),
+                    "has_logs": bool(job.log_path or job.log_text or job.error_text),
                     "_sort_at": job.started_at or job.created_at,
                 }
             )
@@ -1131,6 +1131,19 @@ async def delete_job(
                 status_code=400,
                 detail={"key": "backend.errors.activity.cannotDeleteRunningJob"},
             )
+        if job.log_path and os.path.exists(job.log_path):
+            try:
+                os.remove(job.log_path)
+                logger.info(
+                    f"Deleted log file for {job_type} job {job_id}",
+                    path=job.log_path,
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to delete log file for {job_type} job {job_id}",
+                    path=job.log_path,
+                    error=str(e),
+                )
         try:
             db.delete(job)
             db.commit()

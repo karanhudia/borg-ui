@@ -1211,7 +1211,7 @@
         "prune": "Bereinigung",
         "package": "Paket",
         "rcloneSync": "Cloud-Sync",
-        "rcloneHydrate": "Cloud-Hydratation",
+        "rcloneHydrate": "Cloud-Hydratisierung",
         "scriptExecution": "Skript"
       },
       "statuses": {
@@ -1229,12 +1229,12 @@
   },
   "cloudStorageJobs": {
     "title": "Aktive Cloud-Speicherjobs",
-    "subtitle": "Cloud-Spiegel-Sync und Hydratation laufen im Hintergrund",
+    "subtitle": "Cloud-Spiegel-Sync und Hydratisierung laufen im Hintergrund",
     "unknownRepository": "Unbekanntes Repository",
     "operations": {
       "initialSync": "Initialer Sync",
       "sync": "Cloud-Sync",
-      "hydrate": "Cache-Hydratation"
+      "hydrate": "Cache-Hydratisierung"
     },
     "triggers": {
       "initial": "Initial",
@@ -2170,7 +2170,7 @@
       "prune": "Bereinigen",
       "package": "Paketinstallation",
       "rcloneSync": "Cloud-Sync",
-      "rcloneHydrate": "Cloud-Hydratation",
+      "rcloneHydrate": "Cloud-Hydratisierung",
       "scriptExecution": "Skript"
     },
     "scheduledById": "Geplant (ID: {{id}})",
@@ -4099,7 +4099,7 @@
     "typePrune": "Bereinigen",
     "typePackage": "Paket",
     "typeRcloneSync": "Cloud-Sync",
-    "typeRcloneHydrate": "Cloud-Hydratation",
+    "typeRcloneHydrate": "Cloud-Hydratisierung",
     "typeScript": "Skript"
   },
   "mounts": {

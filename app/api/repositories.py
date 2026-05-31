@@ -1557,7 +1557,9 @@ def _serialize_rclone_storage(
             "completed_at": format_datetime(latest_job.completed_at),
             "error_text": latest_job.error_text,
             "operation": latest_job.operation,
-            "has_log": bool(latest_job.log_text),
+            "has_log": bool(
+                latest_job.log_path or latest_job.log_text or latest_job.error_text
+            ),
         }
         if latest_job
         else None
@@ -1582,7 +1584,9 @@ def _mark_background_rclone_sync_failed(job_id: int, message: str) -> None:
         job.status = "failed"
         job.completed_at = datetime.now(timezone.utc)
         job.error_text = message
-        job.log_text = message
+        job.log_text = (
+            f"{job.log_text.rstrip()}\n{message}" if job.log_text else message
+        )
         db.commit()
     finally:
         db.close()
@@ -1611,14 +1615,21 @@ async def _run_background_rclone_sync_job(job_id: int) -> None:
             )
 
         await run_serialized_repository_command(repository.id, run_sync, scope="rclone")
+    except asyncio.CancelledError:
+        message = "Background rclone sync job was cancelled"
+        logger.info(message, job_id=job_id)
+        db.rollback()
+        _mark_background_rclone_sync_failed(job_id, message)
+        raise
     except Exception as exc:
+        message = str(exc) or exc.__class__.__name__
         logger.error(
             "Background rclone sync job failed",
             job_id=job_id,
-            error=str(exc),
+            error=message,
         )
         db.rollback()
-        _mark_background_rclone_sync_failed(job_id, str(exc))
+        _mark_background_rclone_sync_failed(job_id, message)
     finally:
         db.close()
 
@@ -1654,6 +1665,41 @@ def _queue_initial_cloud_mirror_sync(db: Session, repository: Repository) -> Non
     db.refresh(sync_job)
     task = asyncio.create_task(_run_background_rclone_sync_job(sync_job.id))
     task.add_done_callback(_log_background_rclone_sync_task_result)
+
+
+def resume_pending_initial_cloud_mirror_sync_jobs() -> int:
+    db = SessionLocal()
+    try:
+        jobs = (
+            db.query(RcloneSyncJob)
+            .filter(
+                RcloneSyncJob.operation == "sync",
+                RcloneSyncJob.triggered_by == "initial",
+                RcloneSyncJob.status.in_(("pending", "running")),
+            )
+            .order_by(RcloneSyncJob.id.asc())
+            .all()
+        )
+        dispatched = 0
+        for job in jobs:
+            storage = (
+                db.query(RepositoryStorage)
+                .filter(RepositoryStorage.repository_id == job.repository_id)
+                .first()
+            )
+            if storage:
+                storage.sync_status = "pending"
+                storage.last_sync_error = None
+            job.status = "pending"
+            job.completed_at = None
+            job.error_text = None
+            db.commit()
+            task = asyncio.create_task(_run_background_rclone_sync_job(job.id))
+            task.add_done_callback(_log_background_rclone_sync_task_result)
+            dispatched += 1
+        return dispatched
+    finally:
+        db.close()
 
 
 def _agent_machine_summary(repository: Repository, db: Session) -> Dict[str, Any]:
@@ -4437,7 +4483,16 @@ async def update_repository(
         db.commit()
 
         if sync_cloud_mirror_after_update:
-            _queue_initial_cloud_mirror_sync(db, repository)
+            try:
+                _queue_initial_cloud_mirror_sync(db, repository)
+            except Exception as e:
+                db.rollback()
+                logger.error(
+                    "Failed to queue initial cloud mirror sync after repository update",
+                    repo_id=repository.id,
+                    repo_name=repository.name,
+                    error=str(e),
+                )
 
         logger.info("Repository updated", repo_id=repo_id, user=current_user.username)
 

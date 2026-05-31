@@ -297,6 +297,43 @@ class TestRecentActivityEndpoint:
         assert hydrate_activity["error_message"] == "remote unavailable"
         assert hydrate_activity["has_logs"] is True
 
+    def test_recent_activity_marks_file_backed_rclone_logs_available(
+        self, test_client, admin_headers, test_db
+    ):
+        from app.database.models import Repository, RcloneSyncJob
+
+        repository = Repository(
+            name="Cloud File Logs Repo",
+            path="/tmp/cloud-file-logs-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+        job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="completed",
+            triggered_by="initial",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_path="/tmp/rclone-sync.log",
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.get(
+            "/api/activity/recent?job_type=rclone_sync", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        activity = response.json()
+        assert activity[0]["id"] == job.id
+        assert activity[0]["has_logs"] is True
+
     def test_recent_activity_uses_check_creation_time_when_start_time_is_missing(
         self, test_client, admin_headers, test_db
     ):
@@ -700,6 +737,47 @@ class TestActivityLogContracts:
         assert response.status_code == 200
         assert "text/plain" in response.headers.get("content-type", "")
         assert response.content.decode() == "hydrated repository"
+
+    def test_delete_rclone_sync_job_removes_log_path(
+        self, test_client, admin_headers, test_db, tmp_path
+    ):
+        from app.database.models import Repository, RcloneSyncJob
+
+        repository = Repository(
+            name="Cloud Delete Logs Repo",
+            path="/tmp/cloud-delete-logs-repo",
+            encryption="none",
+            repository_type="local",
+        )
+        log_path = tmp_path / "rclone-sync.log"
+        log_path.write_text("sync log", encoding="utf-8")
+        test_db.add(repository)
+        test_db.commit()
+        test_db.refresh(repository)
+        job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="primary_to_remote",
+            operation="sync",
+            status="completed",
+            triggered_by="initial",
+            started_at=datetime.now(),
+            completed_at=datetime.now(),
+            log_path=str(log_path),
+        )
+        test_db.add(job)
+        test_db.commit()
+        test_db.refresh(job)
+
+        response = test_client.delete(
+            f"/api/activity/rclone_sync/{job.id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert not log_path.exists()
+        assert (
+            test_db.query(RcloneSyncJob).filter(RcloneSyncJob.id == job.id).first()
+            is None
+        )
 
     def test_download_job_logs_uses_database_logs_when_no_file(
         self, test_client, admin_headers, test_db

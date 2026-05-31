@@ -24,7 +24,7 @@ scheduled policies should continue to save without starting an immediate sync.
 
 Cloud storage sync and hydration jobs should be visible in the same operational
 surfaces users already use for backup and restore job progress: repository card
-status, Activity, log viewing, and a progress-card style summary for active
+status, Activity, log viewing, and a progress-card-style summary for active
 cloud storage jobs.
 
 ## Reproduction Signal
@@ -86,7 +86,7 @@ card.
   immediate initial sync.
 - Cloud storage sync and hydration jobs appear in Activity with status, trigger,
   repository context, timestamps, errors, and logs where available.
-- Active cloud storage jobs are summarized with the same progress-card style
+- Active cloud storage jobs are summarized with the same progress-card-style
   used for other running work.
 - Repository cards continue to reflect pending, syncing, completed, failed, and
   hydrate-related cloud mirror status.
