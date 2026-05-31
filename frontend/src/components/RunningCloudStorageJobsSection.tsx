@@ -24,8 +24,7 @@ interface RunningCloudStorageJobsSectionProps {
 
 const ACTIVE_STATUSES = new Set(['pending', 'running'])
 
-const isCloudStorageJob = (job: Job) =>
-  job.type === 'rclone_sync' || job.type === 'rclone_hydrate'
+const isCloudStorageJob = (job: Job) => job.type === 'rclone_sync' || job.type === 'rclone_hydrate'
 
 const getJobLabelKey = (job: Job) => {
   if (job.type === 'rclone_hydrate') return 'cloudStorageJobs.operations.hydrate'
@@ -50,9 +49,7 @@ const RunningCloudStorageJobsSection: React.FC<RunningCloudStorageJobsSectionPro
 }) => {
   const { t } = useTranslation()
   const theme = useTheme()
-  const activeJobs = jobs.filter(
-    (job) => isCloudStorageJob(job) && ACTIVE_STATUSES.has(job.status)
-  )
+  const activeJobs = jobs.filter((job) => isCloudStorageJob(job) && ACTIVE_STATUSES.has(job.status))
 
   if (activeJobs.length === 0) return null
 

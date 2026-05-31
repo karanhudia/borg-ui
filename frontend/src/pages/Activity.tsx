@@ -137,9 +137,7 @@ const Activity: React.FC = () => {
           <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
           <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
           <MenuItem value="rclone_sync">{t('activity.filters.types.rcloneSync')}</MenuItem>
-          <MenuItem value="rclone_hydrate">
-            {t('activity.filters.types.rcloneHydrate')}
-          </MenuItem>
+          <MenuItem value="rclone_hydrate">{t('activity.filters.types.rcloneHydrate')}</MenuItem>
           <MenuItem value="script_execution">
             {t('activity.filters.types.scriptExecution')}
           </MenuItem>

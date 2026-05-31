@@ -55,7 +55,9 @@ describe('RunningCloudStorageJobsSection', () => {
   it('opens logs for the selected rclone job', async () => {
     const user = userEvent.setup()
     const onViewLogs = vi.fn()
-    renderWithProviders(<RunningCloudStorageJobsSection jobs={activeJobs} onViewLogs={onViewLogs} />)
+    renderWithProviders(
+      <RunningCloudStorageJobsSection jobs={activeJobs} onViewLogs={onViewLogs} />
+    )
 
     await user.click(screen.getAllByRole('button', { name: /view logs/i })[0])
 
