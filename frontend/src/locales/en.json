@@ -700,8 +700,14 @@
     "noMatch": {
       "title": "No matching backup plans",
       "message": "No backup plans match \"{{search}}\".",
+      "repositoryFilter": "No backup plans are linked to {{name}}.",
       "fallback": "No backup plans match the current filters.",
       "clearSearch": "Clear search"
+    },
+    "filters": {
+      "linkedRepository": "Showing plans linked to {{name}}",
+      "clearRepository": "Clear repository filter",
+      "repositoryFallback": "Repository #{{id}}"
     },
     "actions": {
       "create": "Create Backup Plan",
@@ -1256,6 +1262,8 @@
         "compact": "Compact",
         "prune": "Prune",
         "package": "Package",
+        "rcloneSync": "Cloud Sync",
+        "rcloneHydrate": "Cloud Hydrate",
         "scriptExecution": "Script"
       },
       "statuses": {
@@ -1269,6 +1277,24 @@
     "empty": {
       "title": "No activity found",
       "message": "There are no operations matching your filters"
+    }
+  },
+  "cloudStorageJobs": {
+    "title": "Active cloud storage jobs",
+    "subtitle": "Cloud mirror sync and hydration work running in the background",
+    "unknownRepository": "Unknown repository",
+    "operations": {
+      "initialSync": "Initial sync",
+      "sync": "Cloud sync",
+      "hydrate": "Hydrating cache"
+    },
+    "triggers": {
+      "initial": "Initial",
+      "manual": "Manual",
+      "schedule": "Schedule"
+    },
+    "actions": {
+      "viewLogs": "View Logs"
     }
   },
   "settings": {
@@ -1875,6 +1901,7 @@
       "legacyBackupTooltip": "Run the old repository-based backup using this repository's legacy source paths",
       "backupPlanRequired": "Create a Backup Plan to define sources",
       "viewArchives": "View Archives",
+      "viewBackupPlans": "View linked backup plans",
       "wipeContents": "Wipe contents",
       "delete": "Delete",
       "createBackupPlan": "Create Backup Plan",
@@ -2195,6 +2222,8 @@
       "compact": "Compact",
       "prune": "Prune",
       "package": "Package Install",
+      "rcloneSync": "Cloud Sync",
+      "rcloneHydrate": "Cloud Hydrate",
       "scriptExecution": "Script"
     },
     "scheduledById": "Scheduled (ID: {{id}})",
@@ -4122,6 +4151,8 @@
     "typeCompact": "Compact",
     "typePrune": "Prune",
     "typePackage": "Package",
+    "typeRcloneSync": "Cloud Sync",
+    "typeRcloneHydrate": "Cloud Hydrate",
     "typeScript": "Script"
   },
   "mounts": {

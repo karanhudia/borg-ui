@@ -1,4 +1,5 @@
 import importlib
+import asyncio
 import json
 from collections import deque
 from datetime import datetime, timedelta, timezone
@@ -3832,6 +3833,327 @@ def test_update_local_repository_enables_cloud_mirror_with_default_policy(
     assert storage.rclone_remote_path == "borg-ui/repositories/app"
     assert storage.sync_policy == "after_success"
     assert storage.extra_flags == ["--fast-list"]
+
+
+@pytest.mark.unit
+def test_update_local_repository_cloud_mirror_default_policy_queues_initial_sync_job_without_awaiting_sync(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(name="App", path="/repositories/app", encryption="none")
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+    sync_repository = AsyncMock(
+        side_effect=AssertionError("repository save must not await rclone sync")
+    )
+    monkeypatch.setattr(
+        "app.api.repositories.rclone_repository_service.sync_repository",
+        sync_repository,
+    )
+    scheduled_tasks = []
+
+    def fake_create_task(coro):
+        scheduled_tasks.append(coro)
+        if hasattr(coro, "close"):
+            coro.close()
+        return SimpleNamespace(add_done_callback=lambda callback: None)
+
+    monkeypatch.setattr("app.api.repositories.asyncio.create_task", fake_create_task)
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "storage_backend": "local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "after_success",
+            "rclone_extra_flags": ["--fast-list"],
+        },
+    )
+
+    assert response.status_code == 200
+    test_db.refresh(repository)
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    sync_job = (
+        test_db.query(RcloneSyncJob)
+        .filter(RcloneSyncJob.repository_id == repository.id)
+        .one()
+    )
+    assert repository.path == "/repositories/app"
+    assert storage.sync_policy == "after_success"
+    assert storage.sync_status == "pending"
+    assert sync_job.status == "pending"
+    assert sync_job.triggered_by == "initial"
+    assert sync_job.operation == "sync"
+    assert len(scheduled_tasks) == 1
+    sync_repository.assert_not_awaited()
+
+
+@pytest.mark.unit
+def test_update_local_repository_cloud_mirror_queue_failure_still_returns_saved_config(
+    test_client: TestClient, admin_headers, test_db, monkeypatch
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(name="App", path="/repositories/app", encryption="none")
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+
+    def raise_queue_error(db, repository):
+        raise RuntimeError("queue unavailable")
+
+    monkeypatch.setattr(
+        "app.api.repositories._queue_initial_cloud_mirror_sync",
+        raise_queue_error,
+    )
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "storage_backend": "local",
+            "cloud_mirror_enabled": True,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/app",
+            "rclone_remote_path_verified": True,
+            "rclone_sync_policy": "after_success",
+        },
+    )
+
+    assert response.status_code == 200
+    test_db.refresh(repository)
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    assert storage.sync_policy == "after_success"
+    assert storage.rclone_remote_id == remote.id
+    assert test_db.query(RcloneSyncJob).count() == 0
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("sync_policy", ["manual", "scheduled"])
+def test_update_local_repository_cloud_mirror_manual_or_scheduled_policy_does_not_queue_initial_sync(
+    test_client: TestClient, admin_headers, test_db, monkeypatch, sync_policy
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(name="App", path="/repositories/app", encryption="none")
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    monkeypatch.setattr(
+        "app.services.rclone_repository_service.rclone_service.lsjson",
+        AsyncMock(return_value=[]),
+    )
+    sync_repository = AsyncMock(
+        side_effect=AssertionError("manual and scheduled saves must not sync")
+    )
+    monkeypatch.setattr(
+        "app.api.repositories.rclone_repository_service.sync_repository",
+        sync_repository,
+    )
+    scheduled_tasks = []
+
+    def fake_create_task(coro):
+        scheduled_tasks.append(coro)
+        if hasattr(coro, "close"):
+            coro.close()
+        return SimpleNamespace(add_done_callback=lambda callback: None)
+
+    monkeypatch.setattr("app.api.repositories.asyncio.create_task", fake_create_task)
+    payload = {
+        "storage_backend": "local",
+        "cloud_mirror_enabled": True,
+        "rclone_remote_id": remote.id,
+        "rclone_remote_path": "borg-ui/repositories/app",
+        "rclone_remote_path_verified": True,
+        "rclone_sync_policy": sync_policy,
+    }
+    if sync_policy == "scheduled":
+        payload.update(
+            {
+                "rclone_sync_cron_expression": "0 */6 * * *",
+                "rclone_sync_timezone": "UTC",
+            }
+        )
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .one()
+    )
+    assert storage.sync_policy == sync_policy
+    assert test_db.query(RcloneSyncJob).count() == 0
+    assert scheduled_tasks == []
+    sync_repository.assert_not_awaited()
+
+
+@pytest.mark.unit
+def test_resume_pending_initial_cloud_mirror_sync_jobs_dispatches_stale_jobs(
+    test_db, monkeypatch
+):
+    from app.api import repositories as repositories_api
+
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(name="App", path="/repositories/app", encryption="none")
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        sync_policy="after_success",
+        sync_status="syncing",
+    )
+    job = RcloneSyncJob(
+        repository_id=repository.id,
+        direction="primary_to_remote",
+        operation="sync",
+        status="running",
+        triggered_by="initial",
+        error_text="previous process exited",
+    )
+    test_db.add_all([storage, job])
+    test_db.commit()
+    test_db.refresh(job)
+    scheduled_tasks = []
+
+    def fake_create_task(coro):
+        scheduled_tasks.append(coro)
+        if hasattr(coro, "close"):
+            coro.close()
+        return SimpleNamespace(add_done_callback=lambda callback: None)
+
+    monkeypatch.setattr("app.api.repositories.asyncio.create_task", fake_create_task)
+
+    dispatched = repositories_api.resume_pending_initial_cloud_mirror_sync_jobs()
+
+    test_db.expire_all()
+    assert dispatched == 1
+    assert len(scheduled_tasks) == 1
+    assert job.status == "pending"
+    assert job.completed_at is None
+    assert job.error_text is None
+    assert storage.sync_status == "pending"
+
+
+@pytest.mark.unit
+def test_mark_background_rclone_sync_failed_preserves_existing_log_text(test_db):
+    from app.api import repositories as repositories_api
+
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(name="App", path="/repositories/app", encryption="none")
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        sync_policy="after_success",
+        sync_status="syncing",
+    )
+    job = RcloneSyncJob(
+        repository_id=repository.id,
+        direction="primary_to_remote",
+        operation="sync",
+        status="running",
+        triggered_by="initial",
+        log_text="partial rclone output",
+    )
+    test_db.add_all([storage, job])
+    test_db.commit()
+    test_db.refresh(job)
+
+    repositories_api._mark_background_rclone_sync_failed(job.id, "task failed")
+
+    test_db.expire_all()
+    assert job.status == "failed"
+    assert job.error_text == "task failed"
+    assert job.log_text == "partial rclone output\ntask failed"
+    assert storage.sync_status == "failed"
+    assert storage.last_sync_error == "task failed"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_background_rclone_sync_job_marks_cancelled_jobs_failed(
+    test_db, monkeypatch
+):
+    from app.api import repositories as repositories_api
+
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(name="App", path="/repositories/app", encryption="none")
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        sync_policy="after_success",
+        sync_status="syncing",
+    )
+    job = RcloneSyncJob(
+        repository_id=repository.id,
+        direction="primary_to_remote",
+        operation="sync",
+        status="running",
+        triggered_by="initial",
+    )
+    test_db.add_all([storage, job])
+    test_db.commit()
+    test_db.refresh(job)
+
+    async def raise_cancelled(repository_id, runner, *, scope=None):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr(
+        "app.api.repositories.run_serialized_repository_command",
+        raise_cancelled,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await repositories_api._run_background_rclone_sync_job(job.id)
+
+    test_db.expire_all()
+    assert job.status == "failed"
+    assert job.error_text == "Background rclone sync job was cancelled"
+    assert storage.sync_status == "failed"
 
 
 @pytest.mark.unit

@@ -700,8 +700,14 @@
     "noMatch": {
       "title": "No hay planes de copia coincidentes",
       "message": "Ningún plan de copia coincide con \"{{search}}\".",
+      "repositoryFilter": "No hay planes de copia vinculados a {{name}}.",
       "fallback": "Ningún plan de copia coincide con los filtros actuales.",
       "clearSearch": "Borrar búsqueda"
+    },
+    "filters": {
+      "linkedRepository": "Mostrando planes vinculados a {{name}}",
+      "clearRepository": "Borrar filtro de repositorio",
+      "repositoryFallback": "Repositorio #{{id}}"
     },
     "actions": {
       "create": "Crear plan de copia",
@@ -1256,6 +1262,8 @@
         "compact": "Compactación",
         "prune": "Poda",
         "package": "Paquete",
+        "rcloneSync": "Sincronización en la nube",
+        "rcloneHydrate": "Hidratación en la nube",
         "scriptExecution": "Script"
       },
       "statuses": {
@@ -1269,6 +1277,24 @@
     "empty": {
       "title": "Sin actividad",
       "message": "No hay operaciones que coincidan con tus filtros"
+    }
+  },
+  "cloudStorageJobs": {
+    "title": "Trabajos activos de almacenamiento en la nube",
+    "subtitle": "La sincronización e hidratación del espejo en la nube se ejecutan en segundo plano",
+    "unknownRepository": "Repositorio desconocido",
+    "operations": {
+      "initialSync": "Sincronización inicial",
+      "sync": "Sincronización en la nube",
+      "hydrate": "Hidratando caché"
+    },
+    "triggers": {
+      "initial": "Inicial",
+      "manual": "Manual",
+      "schedule": "Programado"
+    },
+    "actions": {
+      "viewLogs": "Ver registros"
     }
   },
   "settings": {
@@ -1875,6 +1901,7 @@
       "legacyBackupTooltip": "Ejecuta la copia antigua basada en repositorio usando las rutas de origen heredadas de este repositorio",
       "backupPlanRequired": "Crea un plan de copia para definir fuentes",
       "viewArchives": "Ver archivos",
+      "viewBackupPlans": "Ver planes de copia vinculados",
       "wipeContents": "Wipe contents",
       "delete": "Eliminar",
       "createBackupPlan": "Crear plan de copia",
@@ -2195,6 +2222,8 @@
       "compact": "Compactar",
       "prune": "Podar",
       "package": "Instalación de paquete",
+      "rcloneSync": "Sincronización en la nube",
+      "rcloneHydrate": "Hidratación en la nube",
       "scriptExecution": "Script"
     },
     "scheduledById": "Programado (ID: {{id}})",
@@ -4122,6 +4151,8 @@
     "typeCompact": "Compactar",
     "typePrune": "Podar",
     "typePackage": "Paquete",
+    "typeRcloneSync": "Sincronización en la nube",
+    "typeRcloneHydrate": "Hidratación en la nube",
     "typeScript": "Script"
   },
   "mounts": {

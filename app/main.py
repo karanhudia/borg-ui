@@ -368,6 +368,18 @@ async def startup_event():
     except Exception as e:
         logger.error("Failed to cleanup orphaned mounts", error=str(e))
 
+    try:
+        resumed_cloud_syncs = (
+            repositories.resume_pending_initial_cloud_mirror_sync_jobs()
+        )
+        if resumed_cloud_syncs:
+            logger.info(
+                "Resumed pending initial cloud mirror sync jobs",
+                count=resumed_cloud_syncs,
+            )
+    except Exception as e:
+        logger.error("Failed to resume pending cloud mirror sync jobs", error=str(e))
+
     # Note: Package auto-installation now handled by entrypoint.sh startup script
     # This runs asynchronously via /app/app/scripts/startup_packages.py
     # Package installation jobs will start in the background after API is ready

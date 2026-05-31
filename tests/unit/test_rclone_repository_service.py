@@ -642,6 +642,47 @@ async def test_hydrate_repository_persists_failure_when_cache_swap_fails(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_hydrate_repository_records_completed_hydrate_job(db_session, tmp_path):
+    cache_path = tmp_path / "cache" / "repositories" / "9"
+    remote = RcloneRemote(id=3, name="prod-s3", provider="s3")
+    repository = Repository(id=9, name="App", path=str(cache_path), encryption="none")
+    storage = RepositoryStorage(
+        repository_id=9,
+        backend="rclone",
+        rclone_remote_id=3,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path=str(cache_path),
+        sync_policy="after_success",
+        sync_status="pending",
+    )
+    db_session.add_all([remote, repository, storage])
+    db_session.commit()
+    service = RcloneRepositoryService(
+        cache_root=str(tmp_path / "cache"),
+        service=_VerboseRecordingRcloneService(),
+    )
+
+    status = await service.hydrate_repository(db_session, repository)
+
+    db_session.refresh(storage)
+    hydrate_job = (
+        db_session.query(RcloneSyncJob)
+        .filter(
+            RcloneSyncJob.repository_id == repository.id,
+            RcloneSyncJob.operation == "hydrate",
+        )
+        .one()
+    )
+    assert status["sync_status"] == "current"
+    assert storage.last_hydrated_at is not None
+    assert hydrate_job.direction == "remote_to_cache"
+    assert hydrate_job.status == "completed"
+    assert hydrate_job.triggered_by == "manual"
+    assert hydrate_job.log_text == "copied 2 files"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_hydrate_repository_persists_failure_when_rclone_raises(
     db_session, tmp_path
 ):

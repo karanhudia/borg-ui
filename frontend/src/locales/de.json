@@ -700,8 +700,14 @@
     "noMatch": {
       "title": "Keine passenden Backup-Pläne",
       "message": "Keine Backup-Pläne entsprechen \"{{search}}\".",
+      "repositoryFilter": "Keine Backup-Pläne sind mit {{name}} verknüpft.",
       "fallback": "Keine Backup-Pläne entsprechen den aktuellen Filtern.",
       "clearSearch": "Suche löschen"
+    },
+    "filters": {
+      "linkedRepository": "Zeigt Pläne, die mit {{name}} verknüpft sind",
+      "clearRepository": "Repository-Filter löschen",
+      "repositoryFallback": "Repository #{{id}}"
     },
     "actions": {
       "create": "Backup-Plan erstellen",
@@ -1256,6 +1262,8 @@
         "compact": "Komprimierung",
         "prune": "Bereinigung",
         "package": "Paket",
+        "rcloneSync": "Cloud-Sync",
+        "rcloneHydrate": "Cloud-Hydratisierung",
         "scriptExecution": "Skript"
       },
       "statuses": {
@@ -1269,6 +1277,24 @@
     "empty": {
       "title": "Keine Aktivität gefunden",
       "message": "Es gibt keine Vorgänge, die deinen Filtern entsprechen"
+    }
+  },
+  "cloudStorageJobs": {
+    "title": "Aktive Cloud-Speicherjobs",
+    "subtitle": "Cloud-Spiegel-Sync und Hydratisierung laufen im Hintergrund",
+    "unknownRepository": "Unbekanntes Repository",
+    "operations": {
+      "initialSync": "Initialer Sync",
+      "sync": "Cloud-Sync",
+      "hydrate": "Cache-Hydratisierung"
+    },
+    "triggers": {
+      "initial": "Initial",
+      "manual": "Manuell",
+      "schedule": "Zeitplan"
+    },
+    "actions": {
+      "viewLogs": "Protokolle anzeigen"
     }
   },
   "settings": {
@@ -1875,6 +1901,7 @@
       "legacyBackupTooltip": "Führe die alte repositorybasierte Sicherung mit den Legacy-Quellpfaden dieses Repositorys aus",
       "backupPlanRequired": "Erstelle einen Backup-Plan, um Quellen zu definieren",
       "viewArchives": "Archive anzeigen",
+      "viewBackupPlans": "Verknüpfte Backup-Pläne anzeigen",
       "wipeContents": "Wipe contents",
       "delete": "Löschen",
       "createBackupPlan": "Backup-Plan erstellen",
@@ -2195,6 +2222,8 @@
       "compact": "Komprimieren",
       "prune": "Bereinigen",
       "package": "Paketinstallation",
+      "rcloneSync": "Cloud-Sync",
+      "rcloneHydrate": "Cloud-Hydratisierung",
       "scriptExecution": "Skript"
     },
     "scheduledById": "Geplant (ID: {{id}})",
@@ -4122,6 +4151,8 @@
     "typeCompact": "Komprimieren",
     "typePrune": "Bereinigen",
     "typePackage": "Paket",
+    "typeRcloneSync": "Cloud-Sync",
+    "typeRcloneHydrate": "Cloud-Hydratisierung",
     "typeScript": "Skript"
   },
   "mounts": {

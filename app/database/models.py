@@ -528,6 +528,7 @@ class RcloneSyncJob(Base):
         index=True,
     )
     direction = Column(String, nullable=False)
+    operation = Column(String, default="sync", nullable=False)
     status = Column(String, default="pending", nullable=False)
     triggered_by = Column(String, default="manual", nullable=False)
     scheduled_for = Column(DateTime, nullable=True)

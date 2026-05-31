@@ -78,6 +78,7 @@ const defaultArgs = {
   onDelete: noop,
   onBackupNow: noop,
   onViewArchives: noop,
+  onViewBackupPlans: noop,
   onCreateBackupPlan: noop,
   getCompressionLabel: (compression: string) => compression.toUpperCase(),
   canManageRepository: true,

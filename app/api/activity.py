@@ -27,6 +27,7 @@ from app.database.models import (
     RestoreCheckJob,
     PackageInstallJob,
     Repository,
+    RcloneSyncJob,
     InstalledPackage,
     ScheduledJob,
     ScriptExecution,
@@ -62,7 +63,7 @@ def _get_agent_log_lines(db: Session, agent_job_id: int) -> list[str]:
 
 class ActivityItem(BaseModel):
     id: int
-    type: str  # 'backup', 'restore', 'check', 'restore_check', 'compact', 'package'
+    type: str  # backup, restore, check, restore_check, compact, package, rclone_*
     status: str  # 'pending', 'running', 'completed', 'needs_backup', 'failed', 'completed_with_warnings'
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
@@ -130,6 +131,30 @@ def _format_script_execution_logs(execution: ScriptExecution) -> str:
     if execution.error_message:
         lines.extend(["", "ERROR:", execution.error_message])
     return "\n".join(lines)
+
+
+RCLONE_ACTIVITY_OPERATIONS = {
+    "rclone_sync": "sync",
+    "rclone_hydrate": "hydrate",
+}
+
+
+def _format_rclone_job_logs(job: RcloneSyncJob) -> str:
+    parts = []
+    if job.log_text:
+        parts.append(job.log_text)
+    if job.error_text and job.error_text not in (job.log_text or ""):
+        parts.append(job.error_text)
+    return "\n".join(parts)
+
+
+def _get_rclone_job(db: Session, job_type: str, job_id: int) -> RcloneSyncJob | None:
+    operation = RCLONE_ACTIVITY_OPERATIONS[job_type]
+    return (
+        db.query(RcloneSyncJob)
+        .filter(RcloneSyncJob.id == job_id, RcloneSyncJob.operation == operation)
+        .first()
+    )
 
 
 @router.get("/recent", response_model=List[ActivityItem])
@@ -502,6 +527,50 @@ async def list_recent_activity(
                 }
             )
 
+    if not job_type or job_type in RCLONE_ACTIVITY_OPERATIONS:
+        operations = (
+            [RCLONE_ACTIVITY_OPERATIONS[job_type]]
+            if job_type in RCLONE_ACTIVITY_OPERATIONS
+            else list(RCLONE_ACTIVITY_OPERATIONS.values())
+        )
+        rclone_jobs = (
+            db.query(RcloneSyncJob)
+            .filter(RcloneSyncJob.operation.in_(operations))
+            .order_by(RcloneSyncJob.id.desc())
+            .limit(limit)
+            .all()
+        )
+        for job in rclone_jobs:
+            if status and job.status != status:
+                continue
+            repo = (
+                db.query(Repository).filter(Repository.id == job.repository_id).first()
+            )
+            repo_name = repo.name if repo else f"Repository #{job.repository_id}"
+            repo_path = repo.path if repo else None
+            activity_type = (
+                "rclone_hydrate" if job.operation == "hydrate" else "rclone_sync"
+            )
+            activities.append(
+                {
+                    "id": job.id,
+                    "type": activity_type,
+                    "status": job.status,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
+                    "error_message": job.error_text,
+                    "repository": repo_name,
+                    "repository_path": repo_path,
+                    "log_file_path": job.log_path,
+                    "triggered_by": job.triggered_by,
+                    "schedule_id": None,
+                    "archive_name": None,
+                    "package_name": None,
+                    "has_logs": bool(job.log_path or job.log_text or job.error_text),
+                    "_sort_at": job.started_at or job.created_at,
+                }
+            )
+
     # Sort by start time, falling back to creation time for pending jobs.
     activities.sort(
         key=lambda x: x.get("_sort_at") or x["started_at"] or datetime.min,
@@ -559,6 +628,25 @@ async def get_job_logs(
         return _paginate_log_text(
             _format_script_execution_logs(execution), offset, limit
         )
+
+    if job_type in RCLONE_ACTIVITY_OPERATIONS:
+        job = _get_rclone_job(db, job_type, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        log_text = _format_rclone_job_logs(job)
+        if log_text:
+            return _paginate_log_text(log_text, offset, limit)
+        if job.status in {"pending", "running"}:
+            return _paginate_log_text(
+                f"Cloud storage job is {job.status}...", offset, limit
+            )
+        return {"lines": [], "total_lines": 0, "has_more": False}
 
     if job_type not in job_models:
         raise HTTPException(
@@ -869,6 +957,50 @@ async def download_job_logs(
                 os.unlink(temp_file.name)
             raise e
 
+    if job_type in RCLONE_ACTIVITY_OPERATIONS:
+        job = _get_rclone_job(db, job_type, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        if job.status == "running":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "key": "backend.errors.activity.cannotDownloadLogsForRunningJob"
+                },
+            )
+        if job.log_path and os.path.exists(job.log_path):
+            return FileResponse(
+                path=job.log_path,
+                filename=f"{job_type}_job_{job_id}_logs.txt",
+                media_type="text/plain",
+            )
+        log_text = _format_rclone_job_logs(job)
+        if not log_text.strip():
+            raise HTTPException(
+                status_code=404,
+                detail={"key": "backend.errors.activity.noLogsAvailableForJob"},
+            )
+        temp_file = tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt")
+        try:
+            temp_file.write(log_text)
+            temp_file.flush()
+            temp_file.close()
+            return FileResponse(
+                path=temp_file.name,
+                filename=f"{job_type}_job_{job_id}_logs.txt",
+                media_type="text/plain",
+            )
+        except Exception as e:
+            if os.path.exists(temp_file.name):
+                os.unlink(temp_file.name)
+            raise e
+
     if job_type not in job_models:
         raise HTTPException(
             status_code=400,
@@ -983,6 +1115,54 @@ async def delete_job(
         "package": PackageInstallJob,
         "script_execution": ScriptExecution,
     }
+
+    if job_type in RCLONE_ACTIVITY_OPERATIONS:
+        job = _get_rclone_job(db, job_type, job_id)
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "key": "backend.errors.activity.jobNotFound",
+                    "params": {"jobType": job_type},
+                },
+            )
+        if job.status == "running":
+            raise HTTPException(
+                status_code=400,
+                detail={"key": "backend.errors.activity.cannotDeleteRunningJob"},
+            )
+        if job.log_path and os.path.exists(job.log_path):
+            try:
+                os.remove(job.log_path)
+                logger.info(
+                    f"Deleted log file for {job_type} job {job_id}",
+                    path=job.log_path,
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to delete log file for {job_type} job {job_id}",
+                    path=job.log_path,
+                    error=str(e),
+                )
+        try:
+            db.delete(job)
+            db.commit()
+            logger.info(
+                f"Deleted {job_type} job {job_id} by admin user",
+                admin_user=current_user.username,
+            )
+            return {
+                "success": True,
+                "message": "backend.success.activity.jobDeleted",
+                "job_id": job_id,
+                "job_type": job_type,
+            }
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to delete {job_type} job {job_id}", error=str(e))
+            raise HTTPException(
+                status_code=500, detail=f"Failed to delete job: {str(e)}"
+            )
 
     if job_type not in job_models:
         raise HTTPException(

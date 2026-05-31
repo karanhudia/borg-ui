@@ -3,6 +3,26 @@ import { fireEvent, renderWithProviders, screen, userEvent, waitFor } from '../.
 import Activity from '../Activity'
 import { activityAPI } from '../../services/api'
 
+const { activityData } = vi.hoisted(() => ({
+  activityData: {
+    current: [
+      {
+        id: 7,
+        type: 'backup',
+        status: 'completed',
+        started_at: '2026-04-01T10:00:00Z',
+        completed_at: '2026-04-01T10:05:00Z',
+        error_message: null,
+        repository: '/backup/repo7',
+        log_file_path: '/logs/job7.log',
+        archive_name: null,
+        package_name: null,
+        repository_path: '/backup/repo7',
+        has_logs: true,
+      },
+    ] as Array<Record<string, unknown>>,
+  },
+}))
 const track = vi.fn()
 const refetchSpy = vi.fn()
 const jobsTablePropsSpy = vi.fn()
@@ -33,22 +53,7 @@ vi.mock('@tanstack/react-query', async () => {
     useQuery: ({ queryFn }: { queryFn: () => Promise<unknown> }) => {
       void queryFn()
       return {
-        data: [
-          {
-            id: 7,
-            type: 'backup',
-            status: 'completed',
-            started_at: '2026-04-01T10:00:00Z',
-            completed_at: '2026-04-01T10:05:00Z',
-            error_message: null,
-            repository: '/backup/repo7',
-            log_file_path: '/logs/job7.log',
-            archive_name: null,
-            package_name: null,
-            repository_path: '/backup/repo7',
-            has_logs: true,
-          },
-        ],
+        data: activityData.current,
         isLoading: false,
         refetch: refetchSpy,
       }
@@ -66,6 +71,22 @@ vi.mock('../../components/BackupJobsTable', () => ({
 describe('Activity page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    activityData.current = [
+      {
+        id: 7,
+        type: 'backup',
+        status: 'completed',
+        started_at: '2026-04-01T10:00:00Z',
+        completed_at: '2026-04-01T10:05:00Z',
+        error_message: null,
+        repository: '/backup/repo7',
+        log_file_path: '/logs/job7.log',
+        archive_name: null,
+        package_name: null,
+        repository_path: '/backup/repo7',
+        has_logs: true,
+      },
+    ]
     vi.spyOn(activityAPI, 'list').mockResolvedValue({ data: [] } as never)
   })
 
@@ -117,5 +138,57 @@ describe('Activity page', () => {
 
     await user.click(screen.getByRole('button', { name: /refresh/i }))
     expect(refetchSpy).toHaveBeenCalled()
+  })
+
+  it('offers cloud storage activity filters and summarizes active rclone jobs', async () => {
+    activityData.current = [
+      {
+        id: 10,
+        type: 'rclone_sync',
+        status: 'pending',
+        started_at: null,
+        completed_at: null,
+        error_message: null,
+        repository: 'Cloud Mirror Repo',
+        log_file_path: null,
+        archive_name: null,
+        package_name: null,
+        repository_path: '/repositories/cloud-mirror',
+        triggered_by: 'initial',
+        has_logs: true,
+      },
+      {
+        id: 11,
+        type: 'rclone_hydrate',
+        status: 'running',
+        started_at: '2026-04-01T10:00:00Z',
+        completed_at: null,
+        error_message: null,
+        repository: 'Cloud Hydrate Repo',
+        log_file_path: null,
+        archive_name: null,
+        package_name: null,
+        repository_path: '/repositories/cloud-hydrate',
+        triggered_by: 'manual',
+        has_logs: true,
+      },
+    ]
+    const user = userEvent.setup()
+
+    renderWithProviders(<Activity />)
+
+    expect(await screen.findByText(/Active cloud storage jobs/i)).toBeInTheDocument()
+    expect(screen.getByText('Cloud Mirror Repo')).toBeInTheDocument()
+    expect(screen.getByText('Cloud Hydrate Repo')).toBeInTheDocument()
+
+    fireEvent.mouseDown(screen.getAllByRole('combobox')[0])
+    await user.click(await screen.findByRole('option', { name: /^Cloud Sync$/i }))
+
+    await waitFor(() => {
+      expect(activityAPI.list).toHaveBeenLastCalledWith({
+        limit: 200,
+        job_type: 'rclone_sync',
+      })
+    })
   })
 })
