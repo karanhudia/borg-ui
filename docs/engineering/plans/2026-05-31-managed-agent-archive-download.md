@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Server Download Routing
+## Task 1: Server Download Routing
 
 **Files:**
 - Modify: `app/api/archives.py`
@@ -31,7 +31,7 @@ Add a test next to the existing archive download endpoint tests that creates a r
 Run:
 
 ```bash
-pytest tests/unit/test_api_archives.py::TestArchivesDownload::test_download_file_for_agent_repository_queues_extract_job -q
+pytest tests/unit/test_api_archives.py::TestDownloadFileEndpoint::test_download_file_for_agent_repository_queues_extract_job -q
 ```
 
 Expected: fails because the endpoint calls local `borg.extract_archive` for agent repositories.
@@ -52,12 +52,12 @@ Keep the existing local/SSH server executor branch unchanged.
 Run:
 
 ```bash
-pytest tests/unit/test_api_archives.py::TestArchivesDownload::test_download_file_for_agent_repository_queues_extract_job -q
+pytest tests/unit/test_api_archives.py::TestDownloadFileEndpoint::test_download_file_for_agent_repository_queues_extract_job -q
 ```
 
 Expected: passes.
 
-### Task 2: Agent Extract Capability
+## Task 2: Agent Extract Capability
 
 **Files:**
 - Modify: `agent/borg_ui_agent/runtime.py`
@@ -99,7 +99,7 @@ Add `repository.extract_archive_file` to runtime capabilities and repository job
 }
 ```
 
-For non-zero exit, fail the job with the existing error contract so the server returns `backend.errors.archives.failedExtractFile`.
+For non-zero exit, complete the job with `success: False` and the captured stderr so the server returns `backend.errors.archives.failedExtractFile`.
 
 Run:
 
@@ -109,7 +109,7 @@ pytest tests/unit/test_agent_runtime.py::test_repository_extract_file_payload_bu
 
 Expected: passes.
 
-### Task 3: Validation
+## Task 3: Validation
 
 **Files:**
 - No additional source files expected.
@@ -119,7 +119,7 @@ Expected: passes.
 Run:
 
 ```bash
-pytest tests/unit/test_api_archives.py::TestArchivesDownload::test_download_file_for_agent_repository_queues_extract_job tests/unit/test_agent_runtime.py::test_repository_extract_file_payload_builds_agent_extract_stdout_command -q
+pytest tests/unit/test_api_archives.py::TestDownloadFileEndpoint::test_download_file_for_agent_repository_queues_extract_job tests/unit/test_agent_runtime.py::test_repository_extract_file_payload_builds_agent_extract_stdout_command -q
 ```
 
 Expected: passes.
