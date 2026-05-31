@@ -15,12 +15,29 @@ Integration tests (test_api_archives_integration.py) handle:
 """
 
 import asyncio
+import base64
 import os
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from app.database.models import Repository
+from app.core.security import get_password_hash
+from app.database.models import AgentMachine, Repository
+
+
+def _create_agent(test_db, *capabilities: str) -> AgentMachine:
+    agent = AgentMachine(
+        name="Archive Download Agent",
+        agent_id="agt_archive_download",
+        token_hash=get_password_hash("borgui_agent_secret"),
+        token_prefix="borgui_agent_secret"[:20],
+        status="online",
+        capabilities=list(capabilities),
+    )
+    test_db.add(agent)
+    test_db.commit()
+    test_db.refresh(agent)
+    return agent
 
 
 @pytest.mark.unit
@@ -455,3 +472,146 @@ class TestDownloadFileEndpoint:
         assert kwargs["passphrase"] == repo.passphrase
         assert kwargs["bypass_lock"] == repo.bypass_lock
         mock_file_response.assert_called_once()
+
+    def test_download_file_for_agent_repository_queues_extract_job(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        agent = _create_agent(test_db, "repository.extract_archive_file")
+        repo = Repository(
+            name="Agent Download Repo",
+            path="/agent/repositories/app",
+            encryption="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        archive_path = tmp_path / "extract"
+        content = b"hello from the managed agent\n"
+        queued_jobs = []
+
+        def fake_queue(db, repository, *, job_kind, operation=None, **_kwargs):
+            queued_jobs.append(
+                {
+                    "repository": repository,
+                    "job_kind": job_kind,
+                    "operation": operation,
+                }
+            )
+            return Mock(id=42)
+
+        with (
+            patch(
+                "app.api.archives.tempfile.mkdtemp",
+                return_value=str(archive_path),
+            ),
+            patch(
+                "app.api.archives.queue_agent_repository_operation_job",
+                side_effect=fake_queue,
+                create=True,
+            ),
+            patch(
+                "app.api.archives.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+                create=True,
+            ) as dispatch_agent,
+            patch(
+                "app.api.archives.wait_for_agent_repository_operation_job",
+                new=AsyncMock(
+                    return_value={
+                        "success": True,
+                        "content_base64": base64.b64encode(content).decode("ascii"),
+                        "stderr": "",
+                    }
+                ),
+                create=True,
+            ) as wait_for_agent,
+            patch(
+                "app.api.archives.borg.extract_archive",
+                new=AsyncMock(return_value={"success": True, "stderr": ""}),
+            ) as local_extract,
+        ):
+            response = test_client.get(
+                f"/api/archives/download?repository={repo.id}&archive=test-archive&file_path=/extracted.txt",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 200
+        assert response.content == content
+        assert queued_jobs == [
+            {
+                "repository": repo,
+                "job_kind": "repository.extract_archive_file",
+                "operation": {
+                    "archive": "test-archive",
+                    "file_path": "/extracted.txt",
+                },
+            }
+        ]
+        dispatch_agent.assert_awaited_once()
+        wait_for_agent.assert_awaited_once_with(test_db, 42)
+        local_extract.assert_not_awaited()
+
+    def test_download_file_for_agent_repository_preserves_extract_failure(
+        self,
+        test_client: TestClient,
+        admin_headers,
+        test_db,
+        tmp_path,
+    ):
+        agent = _create_agent(test_db, "repository.extract_archive_file")
+        repo = Repository(
+            name="Agent Missing Repo",
+            path="/agent/repositories/missing",
+            encryption="none",
+            repository_type="local",
+            executor_type="agent",
+            execution_target="agent",
+            agent_machine_id=agent.id,
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        stderr = "Repository /agent/repositories/missing does not exist.\n"
+        with (
+            patch(
+                "app.api.archives.tempfile.mkdtemp",
+                return_value=str(tmp_path / "extract"),
+            ),
+            patch(
+                "app.api.archives.queue_agent_repository_operation_job",
+                return_value=Mock(id=43),
+            ),
+            patch(
+                "app.api.archives.dispatch_agent_job_best_effort",
+                new=AsyncMock(return_value=True),
+            ),
+            patch(
+                "app.api.archives.wait_for_agent_repository_operation_job",
+                new=AsyncMock(return_value={"success": False, "stderr": stderr}),
+            ),
+            patch(
+                "app.api.archives.borg.extract_archive",
+                new=AsyncMock(return_value={"success": True, "stderr": ""}),
+            ) as local_extract,
+        ):
+            response = test_client.get(
+                f"/api/archives/download?repository={repo.id}&archive=test-archive&file_path=/extracted.txt",
+                headers=admin_headers,
+            )
+
+        assert response.status_code == 500
+        assert response.json()["detail"] == {
+            "key": "backend.errors.archives.failedExtractFile",
+            "params": {"error": stderr},
+        }
+        local_extract.assert_not_awaited()
