@@ -228,7 +228,6 @@ export interface SystemSettings {
   metrics_token_set?: boolean
   borg2_fast_browse_beta_enabled?: boolean
   mqtt_beta_enabled?: boolean
-  managed_agents_beta_enabled?: boolean
   backup_monitoring_enabled?: boolean
   backup_monitoring_stale_after_days?: number
   backup_monitoring_interval_hours?: number

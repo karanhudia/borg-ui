@@ -2677,9 +2677,6 @@
     "mqttIntegrationTitle": "Integrazione MQTT",
     "enableMqtt": "Abilita MQTT",
     "mqttIntegrationDescription": "Attiva l'integrazione MQTT nell'interfaccia.",
-    "managedAgentsTitle": "Agent CLI gestiti",
-    "enableManagedAgents": "Abilita agent CLI gestiti",
-    "managedAgentsDescription": "Mostra la voce di navigazione Agenti gestiti e il flusso di registrazione agent lato server.",
     "failedToUpdateSetting": "Impossibile aggiornare l'impostazione: {{message}}"
   },
   "exportImport": {

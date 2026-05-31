@@ -140,13 +140,13 @@ describe('AppSidebar', () => {
         '/cloud-storage'
       )
       expect(screen.getAllByRole('link', { name: /manual backup/i }).length).toBeGreaterThan(0)
-      expect(screen.queryAllByRole('link', { name: /managed agents/i })).toHaveLength(0)
+      expect(screen.getAllByRole('link', { name: /managed agents/i }).length).toBeGreaterThan(0)
     })
   })
 
-  it('shows Managed Agents navigation when its beta flag is enabled', async () => {
+  it('shows Managed Agents navigation without requiring its former beta flag', async () => {
     renderSidebar({
-      systemSettings: { managed_agents_beta_enabled: true },
+      systemSettings: { managed_agents_beta_enabled: false },
     })
 
     const managedAgentLinks = screen.getAllByRole('link', { name: /managed agents/i })

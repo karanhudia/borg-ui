@@ -48,7 +48,6 @@ import {
   AgentMachineResponse,
   AgentSessionLogEntryResponse,
   managedAgentsAPI,
-  settingsAPI,
 } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import { getApiErrorDetail } from '../utils/apiErrors'
@@ -143,17 +142,7 @@ export default function ManagedAgents() {
     []
   )
 
-  const settingsQuery = useQuery({
-    queryKey: ['systemSettings'],
-    queryFn: async () => {
-      const response = await settingsAPI.getSystemSettings()
-      return response.data
-    },
-    enabled: canManageAgents,
-  })
-  const managedAgentsBetaEnabled =
-    settingsQuery.data?.settings?.managed_agents_beta_enabled ?? false
-  const canUseManagedAgents = canManageAgents && managedAgentsBetaEnabled
+  const canUseManagedAgents = canManageAgents
 
   const agentsQuery = useQuery({
     queryKey: ['managed-agents'],
@@ -260,10 +249,6 @@ export default function ManagedAgents() {
     return <Navigate to="/dashboard" replace />
   }
 
-  if (!settingsQuery.isLoading && !managedAgentsBetaEnabled) {
-    return <Navigate to="/dashboard" replace />
-  }
-
   const handleCopy = async (value: string) => {
     await navigator.clipboard.writeText(value)
     toast.success('Copied')
@@ -275,8 +260,7 @@ export default function ManagedAgents() {
     '<machine-name>'
   )
 
-  const isLoading =
-    settingsQuery.isLoading || agentsQuery.isLoading || tokensQuery.isLoading || jobsQuery.isLoading
+  const isLoading = agentsQuery.isLoading || tokensQuery.isLoading || jobsQuery.isLoading
 
   return (
     <Box>
