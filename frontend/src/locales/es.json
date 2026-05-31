@@ -700,8 +700,14 @@
     "noMatch": {
       "title": "No hay planes de copia coincidentes",
       "message": "Ningún plan de copia coincide con \"{{search}}\".",
+      "repositoryFilter": "No hay planes de copia vinculados a {{name}}.",
       "fallback": "Ningún plan de copia coincide con los filtros actuales.",
       "clearSearch": "Borrar búsqueda"
+    },
+    "filters": {
+      "linkedRepository": "Mostrando planes vinculados a {{name}}",
+      "clearRepository": "Borrar filtro de repositorio",
+      "repositoryFallback": "Repositorio #{{id}}"
     },
     "actions": {
       "create": "Crear plan de copia",
@@ -1829,6 +1835,7 @@
       "legacyBackupTooltip": "Ejecuta la copia antigua basada en repositorio usando las rutas de origen heredadas de este repositorio",
       "backupPlanRequired": "Crea un plan de copia para definir fuentes",
       "viewArchives": "Ver archivos",
+      "viewBackupPlans": "Ver planes de copia vinculados",
       "wipeContents": "Wipe contents",
       "delete": "Eliminar",
       "createBackupPlan": "Crear plan de copia",

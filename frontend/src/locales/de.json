@@ -700,8 +700,14 @@
     "noMatch": {
       "title": "Keine passenden Backup-Pläne",
       "message": "Keine Backup-Pläne entsprechen \"{{search}}\".",
+      "repositoryFilter": "Keine Backup-Pläne sind mit {{name}} verknüpft.",
       "fallback": "Keine Backup-Pläne entsprechen den aktuellen Filtern.",
       "clearSearch": "Suche löschen"
+    },
+    "filters": {
+      "linkedRepository": "Zeigt Pläne, die mit {{name}} verknüpft sind",
+      "clearRepository": "Repository-Filter löschen",
+      "repositoryFallback": "Repository #{{id}}"
     },
     "actions": {
       "create": "Backup-Plan erstellen",
@@ -1829,6 +1835,7 @@
       "legacyBackupTooltip": "Führe die alte repositorybasierte Sicherung mit den Legacy-Quellpfaden dieses Repositorys aus",
       "backupPlanRequired": "Erstelle einen Backup-Plan, um Quellen zu definieren",
       "viewArchives": "Archive anzeigen",
+      "viewBackupPlans": "Verknüpfte Backup-Pläne anzeigen",
       "wipeContents": "Wipe contents",
       "delete": "Löschen",
       "createBackupPlan": "Backup-Plan erstellen",

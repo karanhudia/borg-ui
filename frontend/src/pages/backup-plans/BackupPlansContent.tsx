@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { Box, Button, Chip, Divider, Stack, Typography } from '@mui/material'
+import { alpha, Box, Button, Chip, Divider, Stack, Typography, useTheme } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
-import { ListChecks, Plus, RefreshCw } from 'lucide-react'
+import { Database, ListChecks, Plus, RefreshCw } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import EmptyStateCard from '../../components/EmptyStateCard'
@@ -30,6 +30,8 @@ interface BackupPlansContentProps {
   setSortBy: Dispatch<SetStateAction<string>>
   groupBy: string
   setGroupBy: Dispatch<SetStateAction<string>>
+  repositoryFilter: { id: number; name: string } | null
+  onClearRepositoryFilter: () => void
   startingPlanId: number | null
   highlightedPlanId: number | null
   canUseMultiRepository: boolean
@@ -62,6 +64,8 @@ export function BackupPlansContent({
   setSortBy,
   groupBy,
   setGroupBy,
+  repositoryFilter,
+  onClearRepositoryFilter,
   startingPlanId,
   highlightedPlanId,
   canUseMultiRepository,
@@ -81,6 +85,8 @@ export function BackupPlansContent({
   formatStatusLabel,
   t,
 }: BackupPlansContentProps) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   // Plans currently running are pulled into a top "Currently running" section
   // so the user can find live state in one glance. The idle plan card down in
   // the list still gets a small "Running" pulse-dot chip on its header so the
@@ -210,13 +216,53 @@ export function BackupPlansContent({
         />
       )}
 
+      {repositoryFilter && (
+        <Box
+          role="status"
+          sx={{
+            display: 'flex',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            justifyContent: 'space-between',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 1,
+            mb: 2,
+            px: 1.5,
+            py: 1.25,
+            borderRadius: 1.5,
+            border: '1px solid',
+            borderColor: alpha(theme.palette.primary.main, isDark ? 0.32 : 0.24),
+            bgcolor: alpha(theme.palette.primary.main, isDark ? 0.1 : 0.06),
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            <Box sx={{ display: 'flex', color: 'primary.main', flexShrink: 0 }}>
+              <Database size={16} />
+            </Box>
+            <Typography
+              variant="body2"
+              sx={{ color: 'text.secondary', fontWeight: 600, minWidth: 0 }}
+            >
+              {t('backupPlans.filters.linkedRepository', { name: repositoryFilter.name })}
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={onClearRepositoryFilter}
+            sx={{ flexShrink: 0, alignSelf: { xs: 'flex-start', sm: 'center' } }}
+          >
+            {t('backupPlans.filters.clearRepository')}
+          </Button>
+        </Box>
+      )}
+
       {loadingPlans ? (
         <Stack spacing={2} aria-label={t('backupPlans.loading')}>
           {[0, 1, 2].map((index) => (
             <BackupPlanCardSkeleton key={index} index={index} />
           ))}
         </Stack>
-      ) : backupPlans.length === 0 ? (
+      ) : backupPlans.length === 0 && !repositoryFilter ? (
         <EmptyStateCard
           icon={<ListChecks size={36} />}
           title={t('backupPlans.empty.title')}
@@ -227,7 +273,7 @@ export function BackupPlansContent({
             </Button>
           }
         />
-      ) : processedPlans.groups.every((g) => g.plans.length === 0) ? (
+      ) : backupPlans.length === 0 || processedPlans.groups.every((g) => g.plans.length === 0) ? (
         <EmptyStateCard
           icon={<ListChecks size={36} />}
           title={t('backupPlans.noMatch.title', { defaultValue: 'No matching backup plans' })}
@@ -237,14 +283,23 @@ export function BackupPlansContent({
                   search: searchQuery,
                   defaultValue: `No backup plans match "${searchQuery}".`,
                 })
-              : t('backupPlans.noMatch.fallback', {
-                  defaultValue: 'No backup plans match the current filters.',
-                })
+              : repositoryFilter
+                ? t('backupPlans.noMatch.repositoryFilter', {
+                    name: repositoryFilter.name,
+                    defaultValue: `No backup plans are linked to ${repositoryFilter.name}.`,
+                  })
+                : t('backupPlans.noMatch.fallback', {
+                    defaultValue: 'No backup plans match the current filters.',
+                  })
           }
           actions={
             searchQuery ? (
               <Button variant="outlined" onClick={() => setSearchQuery('')}>
                 {t('backupPlans.noMatch.clearSearch', { defaultValue: 'Clear search' })}
+              </Button>
+            ) : repositoryFilter ? (
+              <Button variant="outlined" onClick={onClearRepositoryFilter}>
+                {t('backupPlans.filters.clearRepository')}
               </Button>
             ) : undefined
           }

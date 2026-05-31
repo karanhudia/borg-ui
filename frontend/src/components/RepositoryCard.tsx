@@ -23,6 +23,7 @@ import {
   ClipboardList,
   Bot,
   CalendarClock,
+  ListChecks,
 } from 'lucide-react'
 import { useMaintenanceJobs } from '../hooks/useMaintenanceJobs'
 import BorgVersionChip from './BorgVersionChip'
@@ -46,6 +47,7 @@ interface RepositoryCardProps {
   onDelete: () => void
   onBackupNow: () => void
   onViewArchives: () => void
+  onViewBackupPlans?: () => void
   onCreateBackupPlan?: () => void
   onRcloneSync?: () => void
   onRcloneHydrate?: () => void
@@ -79,6 +81,7 @@ export default function RepositoryCard({
   onDelete,
   onBackupNow,
   onViewArchives,
+  onViewBackupPlans,
   onCreateBackupPlan,
   onRcloneSync,
   onRcloneHydrate,
@@ -981,6 +984,27 @@ export default function RepositoryCard({
                     sx={coloredIconBtnSx('info')}
                   >
                     <FolderOpen size={16} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+
+            {canDo('view') && onViewBackupPlans && (
+              <Tooltip title={t('repositoryCard.buttons.viewBackupPlans')} arrow>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      trackRepository(EventAction.VIEW, repository, {
+                        destination: 'backup_plans',
+                      })
+                      onViewBackupPlans()
+                    }}
+                    aria-label={t('repositoryCard.buttons.viewBackupPlans')}
+                    disabled={isMaintenanceRunning}
+                    sx={coloredIconBtnSx('primary')}
+                  >
+                    <ListChecks size={16} />
                   </IconButton>
                 </span>
               </Tooltip>

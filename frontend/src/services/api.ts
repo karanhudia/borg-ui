@@ -831,7 +831,10 @@ export const rcloneAPI = {
 }
 
 export const backupPlansAPI = {
-  list: () => api.get('/backup-plans/'),
+  list: (repositoryId?: number | null) =>
+    api.get('/backup-plans/', {
+      params: repositoryId ? { repository_id: repositoryId } : undefined,
+    }),
   create: (data: BackupPlanData) => api.post('/backup-plans/', data),
   createFromRepository: (
     id: number,

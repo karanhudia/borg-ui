@@ -307,6 +307,36 @@ class TestBackupPlanRoutes:
         )
         assert get_response.status_code == 404
 
+    def test_list_filters_plans_by_linked_repository(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        primary_repo = _create_repo(test_db, "Primary", "/repos/primary")
+        archive_repo = _create_repo(test_db, "Archive", "/repos/archive")
+
+        primary_response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload([primary_repo.id], name="Primary plan"),
+            headers=admin_headers,
+        )
+        archive_response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload([archive_repo.id], name="Archive plan"),
+            headers=admin_headers,
+        )
+
+        assert primary_response.status_code == 201
+        assert archive_response.status_code == 201
+
+        list_response = test_client.get(
+            f"/api/backup-plans/?repository_id={archive_repo.id}",
+            headers=admin_headers,
+        )
+
+        assert list_response.status_code == 200
+        assert [plan["name"] for plan in list_response.json()["backup_plans"]] == [
+            "Archive plan"
+        ]
+
     def test_create_plan_rejects_full_check_flags_with_partial_duration(
         self, test_client: TestClient, admin_headers, test_db
     ):

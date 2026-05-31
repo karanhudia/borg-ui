@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { renderWithProviders } from '../../test/test-utils'
 import RepositoryCard from '../RepositoryCard'
 import * as useMaintenanceJobsModule from '../../hooks/useMaintenanceJobs'
@@ -44,6 +43,7 @@ describe('RepositoryCard', () => {
     onDelete: vi.fn(),
     onBackupNow: vi.fn(),
     onViewArchives: vi.fn(),
+    onViewBackupPlans: vi.fn(),
     onCreateBackupPlan: vi.fn(),
     onJobCompleted: vi.fn(),
     canDo: vi.fn().mockReturnValue(true),
@@ -584,8 +584,7 @@ describe('RepositoryCard', () => {
   })
 
   describe('Action Buttons', () => {
-    it('calls onEdit when Edit button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onEdit when Edit button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -596,12 +595,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Edit/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Edit/i }))
       expect(mockCallbacks.onEdit).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onViewInfo and tracks event when Info button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onViewInfo and tracks event when Info button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -612,13 +610,12 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Info/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Info/i }))
       expect(mockCallbacks.onViewInfo).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('View', mockRepository)
     })
 
-    it('calls onCheck when Check button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onCheck when Check button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -629,12 +626,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Check/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Check/i }))
       expect(mockCallbacks.onCheck).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onCompact when Compact button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onCompact when Compact button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -645,12 +641,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Compact/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Compact/i }))
       expect(mockCallbacks.onCompact).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onPrune when Prune button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onPrune when Prune button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -661,12 +656,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Prune/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Prune/i }))
       expect(mockCallbacks.onPrune).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onWipeContents when Wipe contents button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onWipeContents when Wipe contents button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -677,12 +671,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Wipe contents/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Wipe contents/i }))
       expect(mockCallbacks.onWipeContents).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onBackupNow and tracks event when Legacy Backup button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onBackupNow and tracks event when Legacy Backup button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -693,7 +686,7 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Legacy Backup/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Legacy Backup/i }))
       expect(mockCallbacks.onBackupNow).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackBackup).toHaveBeenCalledWith(
         'Start',
@@ -702,8 +695,7 @@ describe('RepositoryCard', () => {
       )
     })
 
-    it('calls onCreateBackupPlan when Create Backup Plan button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onCreateBackupPlan when Create Backup Plan button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={{ ...mockRepository, source_directories: [] }}
@@ -714,12 +706,11 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Create Backup Plan/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Create Backup Plan/i }))
       expect(mockCallbacks.onCreateBackupPlan).toHaveBeenCalledTimes(1)
     })
 
-    it('calls onViewArchives and tracks event when View Archives button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onViewArchives and tracks event when View Archives button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -730,13 +721,31 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /View Archives/i }))
+      fireEvent.click(screen.getByRole('button', { name: /View Archives/i }))
       expect(mockCallbacks.onViewArchives).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackArchive).toHaveBeenCalledWith('View', mockRepository)
     })
 
-    it('calls onDelete when Delete button is clicked', async () => {
-      const user = userEvent.setup()
+    it('calls onViewBackupPlans and tracks event when View linked backup plans button is clicked', () => {
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /View linked backup plans/i }))
+
+      expect(mockCallbacks.onViewBackupPlans).toHaveBeenCalledTimes(1)
+      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('View', mockRepository, {
+        destination: 'backup_plans',
+      })
+    })
+
+    it('calls onDelete when Delete button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -749,7 +758,7 @@ describe('RepositoryCard', () => {
 
       const deleteButtons = screen.getAllByRole('button', { name: /Delete/i })
       // The last Delete button is the main delete action (first one is Prune button icon)
-      await user.click(deleteButtons[deleteButtons.length - 1])
+      fireEvent.click(deleteButtons[deleteButtons.length - 1])
       expect(mockCallbacks.onDelete).toHaveBeenCalledTimes(1)
     })
   })
@@ -949,8 +958,7 @@ describe('RepositoryCard', () => {
   })
 
   describe('Rclone Storage', () => {
-    it('exposes enable cloud mirror for eligible local repositories', async () => {
-      const user = userEvent.setup()
+    it('exposes enable cloud mirror for eligible local repositories', () => {
       const onEdit = vi.fn()
 
       renderWithProviders(
@@ -971,13 +979,12 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
 
       expect(onEdit).toHaveBeenCalled()
     })
 
-    it('exposes enable cloud mirror for eligible SSH repositories', async () => {
-      const user = userEvent.setup()
+    it('exposes enable cloud mirror for eligible SSH repositories', () => {
       const onEdit = vi.fn()
 
       renderWithProviders(
@@ -999,13 +1006,12 @@ describe('RepositoryCard', () => {
         />
       )
 
-      await user.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
 
       expect(onEdit).toHaveBeenCalled()
     })
 
-    it('exposes enable cloud mirror for eligible managed-agent repositories', async () => {
-      const user = userEvent.setup()
+    it('exposes enable cloud mirror for eligible managed-agent repositories', () => {
       const onEdit = vi.fn()
 
       renderWithProviders(
@@ -1031,7 +1037,7 @@ describe('RepositoryCard', () => {
 
       expect(screen.getByText('Agent: workstation.local')).toBeInTheDocument()
       expect(screen.getByText('Online')).toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
+      fireEvent.click(screen.getByRole('button', { name: /Enable cloud mirror/i }))
 
       expect(onEdit).toHaveBeenCalled()
     })

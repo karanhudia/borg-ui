@@ -700,8 +700,14 @@
     "noMatch": {
       "title": "No matching backup plans",
       "message": "No backup plans match \"{{search}}\".",
+      "repositoryFilter": "No backup plans are linked to {{name}}.",
       "fallback": "No backup plans match the current filters.",
       "clearSearch": "Clear search"
+    },
+    "filters": {
+      "linkedRepository": "Showing plans linked to {{name}}",
+      "clearRepository": "Clear repository filter",
+      "repositoryFallback": "Repository #{{id}}"
     },
     "actions": {
       "create": "Create Backup Plan",
@@ -1829,6 +1835,7 @@
       "legacyBackupTooltip": "Run the old repository-based backup using this repository's legacy source paths",
       "backupPlanRequired": "Create a Backup Plan to define sources",
       "viewArchives": "View Archives",
+      "viewBackupPlans": "View linked backup plans",
       "wipeContents": "Wipe contents",
       "delete": "Delete",
       "createBackupPlan": "Create Backup Plan",
