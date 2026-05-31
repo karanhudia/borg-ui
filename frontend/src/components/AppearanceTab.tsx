@@ -139,31 +139,36 @@ export default function AppearanceTab() {
                     },
                   }}
                 >
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.25 }}>
-                    <Box
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 1.5,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        bgcolor: previewIsDark ? '#0f172a' : alpha(appearanceAccent, 0.12),
-                        color: previewIsDark ? '#cbd5e1' : appearanceAccent,
-                        border: `1px solid ${previewIsDark ? '#334155' : alpha(appearanceAccent, 0.18)}`,
-                      }}
-                    >
-                      <Icon size={16} />
-                    </Box>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography variant="subtitle2" fontWeight={700}>
+                  <Box sx={{ mb: 1.25 }}>
+                    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 0.75 }}>
+                      <Box
+                        sx={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 1.5,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          bgcolor: previewIsDark ? '#0f172a' : alpha(appearanceAccent, 0.12),
+                          color: previewIsDark ? '#cbd5e1' : appearanceAccent,
+                          border: `1px solid ${previewIsDark ? '#334155' : alpha(appearanceAccent, 0.18)}`,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Icon size={14} />
+                      </Box>
+                      <Typography variant="subtitle2" fontWeight={700} sx={{ minWidth: 0 }}>
                         {t(themeOption.labelKey)}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {t(`settings.appearance.themeDescriptions.${themeOption.id}`)}
-                      </Typography>
-                    </Box>
-                  </Stack>
+                    </Stack>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', lineHeight: 1.45 }}
+                    >
+                      {t(`settings.appearance.themeDescriptions.${themeOption.id}`)}
+                    </Typography>
+                  </Box>
 
                   <Box
                     sx={{
