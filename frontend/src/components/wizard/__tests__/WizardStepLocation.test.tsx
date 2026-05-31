@@ -30,6 +30,15 @@ const mockSshConnections = [
   },
 ]
 
+const mockRcloneRemotes = [
+  {
+    id: 10,
+    name: 'prod-s3',
+    provider: 's3',
+    last_test_status: 'connected',
+  },
+]
+
 const defaultData = {
   name: '',
   repositoryMode: 'full' as const,
@@ -232,7 +241,7 @@ describe('WizardStepLocation', () => {
       ).not.toBeInTheDocument()
     })
 
-    it('uses direct rclone URL copy and disables filesystem browsing in direct mode', () => {
+    it('shows direct rclone URL field with correct labels in direct mode', () => {
       render(
         <WizardStepLocation
           mode="create"
@@ -253,7 +262,42 @@ describe('WizardStepLocation', () => {
         screen.getByPlaceholderText(/rclone:\/\/remote-name\/path\/to\/repository/i)
       ).toBeInTheDocument()
       expect(screen.getByText(/Borg writes directly through rclone/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /Browse filesystem/i })).toBeDisabled()
+    })
+
+    it('enables rclone browsing when connected storage is selected in direct mode', async () => {
+      const user = userEvent.setup()
+      const onBrowseDirectRclonePath = vi.fn()
+
+      render(
+        <WizardStepLocation
+          mode="create"
+          data={{
+            ...defaultData,
+            borgVersion: 2,
+            repositoryLocation: 'rclone',
+            rcloneRemoteId: 10,
+            rcloneRemotePath: 'borg-ui/direct',
+            path: 'rclone://prod-s3/borg-ui/direct',
+          }}
+          sshConnections={[]}
+          rcloneStatus={{ available: true, version: 'rclone v1.66.0' }}
+          rcloneRemotes={mockRcloneRemotes}
+          onChange={vi.fn()}
+          onBrowsePath={vi.fn()}
+          onBrowseDirectRclonePath={onBrowseDirectRclonePath}
+        />
+      )
+
+      expect(screen.getByRole('combobox', { name: /Rclone Remote/i })).toHaveTextContent('prod-s3')
+      expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue(
+        'rclone://prod-s3/borg-ui/direct'
+      )
+
+      const browseButton = screen.getByRole('button', { name: /Browse rclone remote/i })
+      expect(browseButton).not.toBeDisabled()
+      await user.click(browseButton)
+
+      expect(onBrowseDirectRclonePath).toHaveBeenCalledTimes(1)
     })
   })
 

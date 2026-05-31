@@ -8,6 +8,7 @@ import {
   Select,
   MenuItem,
   Typography,
+  Alert,
   InputAdornment,
   IconButton,
   alpha,
@@ -16,10 +17,16 @@ import {
   Chip,
   Stack,
 } from '@mui/material'
+import { Cloud } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { useTranslation } from 'react-i18next'
 import PlanGate from '../shared/PlanGate'
 import { getDestinations, type DestinationKey } from './destinations'
+import {
+  formatDirectRcloneUrl,
+  normalizeRcloneRemotePath,
+  parseDirectRcloneUrl,
+} from './directRclonePath'
 import SshConnectionSelect from '../shared/SshConnectionSelect'
 import ManagedAgentSelect from '../shared/ManagedAgentSelect'
 import DestinationSelect from '../shared/DestinationSelect'
@@ -42,6 +49,19 @@ interface AgentMachine {
   status: string
 }
 
+interface RcloneRemote {
+  id: number
+  name: string
+  provider: string
+  last_test_status?: string | null
+}
+
+interface RcloneStatus {
+  available: boolean
+  version?: string | null
+  error?: string | null
+}
+
 export interface LocationStepData {
   name: string
   borgVersion?: 1 | 2
@@ -51,6 +71,8 @@ export interface LocationStepData {
   agentMachineId?: number | ''
   path: string
   repoSshConnectionId: number | ''
+  rcloneRemoteId?: number | ''
+  rcloneRemotePath?: string
   bypassLock: boolean
 }
 
@@ -59,10 +81,13 @@ interface WizardStepLocationProps {
   data: LocationStepData
   sshConnections: SSHConnection[]
   agentMachines?: AgentMachine[]
+  rcloneRemotes?: RcloneRemote[]
+  rcloneStatus?: RcloneStatus | null
   dataSource?: 'local' | 'remote'
   sourceSshConnectionId?: number | ''
   onChange: (data: Partial<LocationStepData>) => void
   onBrowsePath: () => void
+  onBrowseDirectRclonePath?: () => void
 }
 
 export default function WizardStepLocation({
@@ -70,10 +95,13 @@ export default function WizardStepLocation({
   data,
   sshConnections,
   agentMachines = [],
+  rcloneRemotes = [],
+  rcloneStatus = null,
   dataSource,
   sourceSshConnectionId,
   onChange,
   onBrowsePath,
+  onBrowseDirectRclonePath,
 }: WizardStepLocationProps) {
   const { t } = useTranslation()
   const executionTarget = data.executionTarget ?? 'local'
@@ -81,6 +109,20 @@ export default function WizardStepLocation({
   const isAgentExecution = executionTarget === 'agent'
   const isDirectRclone = data.repositoryLocation === 'rclone'
   const borgVersion = data.borgVersion ?? 1
+  const parsedDirectRclonePath = isDirectRclone ? parseDirectRcloneUrl(data.path) : null
+  const selectedDirectRcloneRemote =
+    data.rcloneRemoteId === '' || data.rcloneRemoteId == null
+      ? parsedDirectRclonePath
+        ? rcloneRemotes.find((remote) => remote.name === parsedDirectRclonePath.remoteName)
+        : undefined
+      : rcloneRemotes.find((remote) => remote.id === data.rcloneRemoteId)
+  const directRcloneRemotePath = data.rcloneRemotePath ?? parsedDirectRclonePath?.remotePath ?? ''
+  const directRcloneRemoteSelectEnabled =
+    isDirectRclone && rcloneStatus?.available === true && rcloneRemotes.length > 0
+  const directRcloneBrowseEnabled =
+    directRcloneRemoteSelectEnabled &&
+    Boolean(selectedDirectRcloneRemote) &&
+    Boolean(onBrowseDirectRclonePath)
 
   // Legacy v1 repos with an attached remote data source can't be retargeted to another
   // remote — remote-to-remote was never supported in the v1 mapping model.
@@ -128,6 +170,40 @@ export default function WizardStepLocation({
       executionTarget: 'local',
       agentMachineId: '',
       repoSshConnectionId: '',
+    })
+  }
+
+  const handleDirectRcloneRemoteChange = (remoteId: string) => {
+    const remote = rcloneRemotes.find((item) => String(item.id) === remoteId)
+    if (!remote) {
+      onChange({
+        rcloneRemoteId: '',
+      })
+      return
+    }
+
+    const remotePath = normalizeRcloneRemotePath(directRcloneRemotePath)
+    onChange({
+      rcloneRemoteId: remote.id,
+      rcloneRemotePath: remotePath,
+      path: formatDirectRcloneUrl(remote.name, remotePath),
+    })
+  }
+
+  const handleDirectRclonePathChange = (value: string) => {
+    const parsed = parseDirectRcloneUrl(value)
+    const matchingRemote = parsed
+      ? rcloneRemotes.find((remote) => remote.name === parsed.remoteName)
+      : undefined
+
+    onChange({
+      path: value,
+      ...(parsed
+        ? {
+            rcloneRemoteId: matchingRemote?.id ?? '',
+            rcloneRemotePath: parsed.remotePath,
+          }
+        : {}),
     })
   }
 
@@ -353,6 +429,47 @@ export default function WizardStepLocation({
         </Box>
       )}
 
+      {isDirectRclone && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          {rcloneStatus && !rcloneStatus.available && (
+            <Alert severity="warning">
+              {rcloneStatus.error || t('wizard.location.rcloneUnavailable')}
+            </Alert>
+          )}
+
+          {directRcloneRemoteSelectEnabled && (
+            <FormControl fullWidth>
+              <InputLabel id="direct-rclone-remote-label">
+                {t('wizard.location.rcloneRemoteLabel')}
+              </InputLabel>
+              <Select
+                labelId="direct-rclone-remote-label"
+                id="direct-rclone-remote"
+                value={selectedDirectRcloneRemote ? String(selectedDirectRcloneRemote.id) : ''}
+                label={t('wizard.location.rcloneRemoteLabel')}
+                onChange={(event) => handleDirectRcloneRemoteChange(event.target.value)}
+                renderValue={(selected) => {
+                  const remote = rcloneRemotes.find((item) => String(item.id) === selected)
+                  if (!remote) return null
+                  return renderRcloneRemoteRow(remote)
+                }}
+                sx={{ '& .MuiSelect-select': { minHeight: 36 } }}
+              >
+                {rcloneRemotes.map((remote) => (
+                  <MenuItem key={remote.id} value={String(remote.id)} sx={{ py: 1 }}>
+                    {renderRcloneRemoteRow(remote)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          {rcloneStatus?.available === true && rcloneRemotes.length === 0 && (
+            <Alert severity="info">{t('wizard.location.rcloneNoRemotes')}</Alert>
+          )}
+        </Box>
+      )}
+
       {/* Path Input */}
       <TextField
         label={
@@ -361,7 +478,11 @@ export default function WizardStepLocation({
             : t('wizard.location.repositoryPathLabel')
         }
         value={data.path}
-        onChange={(e) => onChange({ path: e.target.value })}
+        onChange={(e) =>
+          isDirectRclone
+            ? handleDirectRclonePathChange(e.target.value)
+            : onChange({ path: e.target.value })
+        }
         placeholder={
           isDirectRclone
             ? t('wizard.location.directRclonePathPlaceholder')
@@ -380,14 +501,24 @@ export default function WizardStepLocation({
           endAdornment: (
             <InputAdornment position="end">
               <IconButton
-                onClick={onBrowsePath}
+                onClick={isDirectRclone ? onBrowseDirectRclonePath : onBrowsePath}
                 edge="end"
                 size="small"
-                title={t('wizard.location.browseFilesystem')}
+                title={
+                  isDirectRclone
+                    ? t('wizard.cloudMirror.browseRemote')
+                    : t('wizard.location.browseFilesystem')
+                }
+                aria-label={
+                  isDirectRclone
+                    ? t('wizard.cloudMirror.browseRemote')
+                    : t('wizard.location.browseFilesystem')
+                }
                 disabled={
-                  isDirectRclone ||
-                  (isAgentExecution && !data.agentMachineId) ||
-                  (data.repositoryLocation === 'ssh' && !data.repoSshConnectionId)
+                  isDirectRclone
+                    ? !directRcloneBrowseEnabled
+                    : (isAgentExecution && !data.agentMachineId) ||
+                      (data.repositoryLocation === 'ssh' && !data.repoSshConnectionId)
                 }
               >
                 <FolderOpenIcon fontSize="small" />
@@ -396,6 +527,26 @@ export default function WizardStepLocation({
           ),
         }}
       />
+    </Box>
+  )
+}
+
+function renderRcloneRemoteRow(remote: RcloneRemote) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+      <Cloud size={16} />
+      <Typography variant="body2">{remote.name}</Typography>
+      <Chip
+        size="small"
+        label={remote.provider}
+        variant="outlined"
+        sx={{ height: 20, fontSize: '0.65rem' }}
+      />
+      {remote.last_test_status && (
+        <Typography variant="caption" color="text.secondary">
+          {remote.last_test_status}
+        </Typography>
+      )}
     </Box>
   )
 }

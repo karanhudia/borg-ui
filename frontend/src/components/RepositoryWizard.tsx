@@ -16,6 +16,7 @@ import {
 } from './wizard'
 import FileExplorerDialog from './FileExplorerDialog'
 import { managedAgentsAPI, rcloneAPI, sshKeysAPI, RepositoryData } from '../services/api'
+import { formatDirectRcloneUrl, parseDirectRcloneUrl } from './wizard/directRclonePath'
 import type {
   AgentMachineResponse,
   CreateRcloneRemoteRequest,
@@ -237,6 +238,17 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
         ? 'ssh'
         : 'local'
   const isDirectRclone = wizardState.repositoryLocation === 'rclone'
+  const directRclonePathParts = isDirectRclone ? parseDirectRcloneUrl(wizardState.path) : null
+  const selectedDirectRcloneRemote =
+    isDirectRclone && wizardState.rcloneRemoteId
+      ? rcloneRemotes.find((remote) => remote.id === Number(wizardState.rcloneRemoteId))
+      : directRclonePathParts
+        ? rcloneRemotes.find((remote) => remote.name === directRclonePathParts.remoteName)
+        : null
+  const directRcloneRemotePath =
+    isDirectRclone && wizardState.rcloneRemotePath
+      ? wizardState.rcloneRemotePath
+      : directRclonePathParts?.remotePath || ''
 
   // Step definitions
   const steps = useMemo(() => {
@@ -884,14 +896,22 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               agentMachineId: wizardState.agentMachineId,
               path: wizardState.path,
               repoSshConnectionId: wizardState.repoSshConnectionId,
+              rcloneRemoteId: wizardState.rcloneRemoteId || selectedDirectRcloneRemote?.id || '',
+              rcloneRemotePath: directRcloneRemotePath,
               bypassLock: wizardState.bypassLock,
             }}
             sshConnections={sshConnections}
             agentMachines={agentMachines}
+            rcloneStatus={rcloneStatus}
+            rcloneRemotes={rcloneRemotes}
             dataSource={wizardState.dataSource}
             sourceSshConnectionId={wizardState.sourceSshConnectionId}
             onChange={(updates) => {
               if (typeof updates.path === 'string' && updates.repositoryLocation === undefined) {
+                if (wizardState.repositoryLocation === 'rclone') {
+                  handleStateChange(updates)
+                  return
+                }
                 handlePathChange(updates.path)
                 return
               }
@@ -907,6 +927,7 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
               }
             }}
             onBrowsePath={() => setShowPathExplorer(true)}
+            onBrowseDirectRclonePath={() => setShowRcloneRemoteExplorer(true)}
           />
         )
 
@@ -1160,14 +1181,28 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
 
       <RcloneRemoteFolderPickerDialog
         open={showRcloneRemoteExplorer}
-        remoteId={wizardState.rcloneRemoteId === '' ? null : Number(wizardState.rcloneRemoteId)}
-        initialPath={wizardState.rcloneRemotePath}
+        remoteId={
+          isDirectRclone
+            ? selectedDirectRcloneRemote?.id || null
+            : wizardState.rcloneRemoteId === ''
+              ? null
+              : Number(wizardState.rcloneRemoteId)
+        }
+        initialPath={isDirectRclone ? directRcloneRemotePath : wizardState.rcloneRemotePath}
         onClose={() => setShowRcloneRemoteExplorer(false)}
         onSelect={(path) => {
-          handleStateChange({
-            rcloneRemotePath: path,
-            rcloneRemotePathVerified: true,
-          })
+          if (isDirectRclone && selectedDirectRcloneRemote) {
+            handleStateChange({
+              rcloneRemoteId: selectedDirectRcloneRemote.id,
+              rcloneRemotePath: path,
+              path: formatDirectRcloneUrl(selectedDirectRcloneRemote.name, path),
+            })
+          } else {
+            handleStateChange({
+              rcloneRemotePath: path,
+              rcloneRemotePathVerified: true,
+            })
+          }
           setShowRcloneRemoteExplorer(false)
         }}
       />
