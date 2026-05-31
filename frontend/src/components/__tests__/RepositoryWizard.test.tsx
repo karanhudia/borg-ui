@@ -88,7 +88,14 @@ vi.mock('../FileExplorerDialog', () => ({
         data-agent-id={agentId || ''}
         data-agent-default-path={agentDefaultPath || ''}
       >
-        <button type="button" onClick={() => onSelect(['/selected/from-browser'])}>
+        <button
+          type="button"
+          onClick={() =>
+            onSelect([
+              connectionType === 'rclone' ? 'borg-ui/repositories' : '/selected/from-browser',
+            ])
+          }
+        >
           Select browsed path
         </button>
       </div>
@@ -501,14 +508,14 @@ describe('RepositoryWizard', () => {
       )
 
       await user.click(screen.getByRole('button', { name: /Browse rclone remote/i }))
-      await waitFor(() => {
-        expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, '')
-      })
-      await user.click(await screen.findByText('repositories'))
-      await waitFor(() => {
-        expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui/repositories')
-      })
-      await user.click(screen.getByRole('button', { name: /Use folder/i }))
+      const fileExplorerDialog = await screen.findByTestId('file-explorer-dialog')
+      expect(fileExplorerDialog).toHaveAttribute('data-connection-type', 'rclone')
+      await user.click(
+        within(fileExplorerDialog).getByRole('button', {
+          name: /Select browsed path/i,
+          hidden: true,
+        })
+      )
 
       expect(screen.getByLabelText(/Direct rclone repository URL/i)).toHaveValue(
         'rclone://prod-s3/borg-ui/repositories'
@@ -894,15 +901,14 @@ describe('RepositoryWizard', () => {
       const remoteListbox = await screen.findByRole('listbox')
       await user.click(within(remoteListbox).getByText('prod-s3'))
       await user.click(screen.getByRole('button', { name: /Browse rclone remote/i }))
-
-      await waitFor(() => {
-        expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, '')
-      })
-      await user.click(await screen.findByText('repositories'))
-      await waitFor(() => {
-        expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui/repositories')
-      })
-      await user.click(screen.getByRole('button', { name: /Use folder/i }))
+      const fileExplorerDialog = await screen.findByTestId('file-explorer-dialog')
+      expect(fileExplorerDialog).toHaveAttribute('data-connection-type', 'rclone')
+      await user.click(
+        within(fileExplorerDialog).getByRole('button', {
+          name: /Select browsed path/i,
+          hidden: true,
+        })
+      )
 
       expect(screen.getByLabelText(/Relative Remote Path/i)).toHaveValue('borg-ui/repositories')
       await waitFor(() => {

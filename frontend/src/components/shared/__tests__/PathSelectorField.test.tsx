@@ -174,6 +174,26 @@ describe('PathSelectorField', () => {
       })
     })
 
+    it('can delegate browsing to a caller-provided browse handler', async () => {
+      const user = userEvent.setup()
+      const onBrowse = vi.fn()
+
+      render(
+        <PathSelectorField
+          label="Remote Path"
+          value=""
+          onChange={mockOnChange}
+          onBrowse={onBrowse}
+          browseButtonLabel="Browse rclone remote"
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /Browse rclone remote/i }))
+
+      expect(onBrowse).toHaveBeenCalledTimes(1)
+      expect(screen.queryByTestId('mock-file-explorer')).not.toBeInTheDocument()
+    })
+
     it('closes file explorer when close button clicked', async () => {
       const user = userEvent.setup()
       render(<PathSelectorField label="Path" value="" onChange={mockOnChange} />)

@@ -5,17 +5,15 @@ import {
   Checkbox,
   FormControl,
   FormControlLabel,
-  IconButton,
-  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
   TextField,
   Typography,
 } from '@mui/material'
-import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { Cloud, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import PathSelectorField from '../shared/PathSelectorField'
 import SchedulePicker from '../shared/SchedulePicker'
 import RcloneRemoteSelect from '../shared/RcloneRemoteSelect'
 
@@ -161,40 +159,26 @@ export default function WizardStepCloudMirror({
             )}
           </Box>
 
-          <TextField
+          <PathSelectorField
             label={t('wizard.location.rcloneRemotePathLabel')}
             value={data.rcloneRemotePath || ''}
-            onChange={(event) => {
+            onChange={(value) => {
               onChange({
-                rcloneRemotePath: event.target.value,
+                rcloneRemotePath: value,
                 rcloneRemotePathVerified: false,
               })
             }}
             placeholder="borg-ui/repositories/app"
             required
-            fullWidth
             disabled={controlsDisabled}
             helperText={
               data.rcloneRemotePathVerified
                 ? t('wizard.cloudMirror.remotePathVerified')
                 : t('wizard.location.rcloneRemotePathHelper')
             }
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={onBrowseRemotePath}
-                    edge="end"
-                    size="small"
-                    title={t('wizard.cloudMirror.browseRemote')}
-                    aria-label={t('wizard.cloudMirror.browseRemote')}
-                    disabled={controlsDisabled || !data.rcloneRemoteId}
-                  >
-                    <FolderOpenIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
+            onBrowse={onBrowseRemotePath}
+            browseButtonLabel={t('wizard.cloudMirror.browseRemote')}
+            browseButtonDisabled={controlsDisabled || !data.rcloneRemoteId || !onBrowseRemotePath}
           />
 
           <FormControl fullWidth disabled={controlsDisabled}>

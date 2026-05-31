@@ -35,7 +35,7 @@ import {
 } from 'lucide-react'
 import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import api from '../services/api'
-import { managedAgentsAPI, sshKeysAPI } from '../services/api'
+import { managedAgentsAPI, rcloneAPI, sshKeysAPI } from '../services/api'
 import { useTranslation } from 'react-i18next'
 
 interface FileSystemItem {
@@ -69,7 +69,7 @@ interface SSHNetworkConfig {
   port: number
 }
 
-type FileExplorerConnectionType = 'local' | 'ssh' | 'agent'
+type FileExplorerConnectionType = 'local' | 'ssh' | 'agent' | 'rclone'
 
 interface BrowseCacheEntry {
   currentPath: string
@@ -97,6 +97,11 @@ function resolveInitialBrowsePath(
   return initialPath
 }
 
+function normalizeRcloneBrowsePath(path: string) {
+  if (!path || path === '/') return ''
+  return path.replace(/^\/+/, '')
+}
+
 interface FileExplorerDialogProps {
   open: boolean
   onClose: () => void
@@ -108,6 +113,7 @@ interface FileExplorerDialogProps {
   agentId?: number
   agentName?: string
   agentDefaultPath?: string | null
+  rcloneRemoteId?: number | null
   sshConfig?: SSHNetworkConfig
   selectMode?: 'directories' | 'files' | 'both'
   showSshMountPoints?: boolean // Set to false to hide SSH mount points (e.g., when repo is SSH to prevent remote-to-remote)
@@ -126,6 +132,7 @@ export default function FileExplorerDialog({
   agentId,
   agentName,
   agentDefaultPath,
+  rcloneRemoteId,
   sshConfig,
   selectMode = 'directories',
   showSshMountPoints = true,
@@ -245,6 +252,32 @@ export default function FileExplorerDialog({
           return
         }
 
+        if (useConnectionType === 'rclone') {
+          if (!rcloneRemoteId) {
+            setError(t('wizard.cloudMirror.selectRemoteFirst', 'Select a rclone remote first.'))
+            setItems([])
+            return
+          }
+
+          const rclonePath = normalizeRcloneBrowsePath(requestedPath)
+          setLoading(true)
+          const response = await rcloneAPI.browseRemote(rcloneRemoteId, rclonePath)
+          const currentRclonePath = normalizeRcloneBrowsePath(response.data.path || rclonePath)
+          setItems(
+            (response.data.entries || []).map(
+              (entry: { name: string; path: string; is_dir?: boolean }) => ({
+                name: entry.name,
+                path: normalizeRcloneBrowsePath(entry.path || entry.name),
+                is_directory: Boolean(entry.is_dir),
+                is_borg_repo: false,
+              })
+            )
+          )
+          setCurrentPath(currentRclonePath)
+          setIsInsideLocalMount(false)
+          return
+        }
+
         setLoading(true)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const params: any = {
@@ -265,6 +298,12 @@ export default function FileExplorerDialog({
         setIsInsideLocalMount(response.data.is_inside_local_mount || false)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
+        if (useConnectionType === 'rclone') {
+          setError(t('wizard.cloudMirror.browseFailed'))
+          setItems([])
+          return
+        }
+
         const detail = err.response?.data?.detail
         if (detail && typeof detail === 'object' && detail.key) {
           setError(t(detail.key, detail.params) as string)
@@ -276,7 +315,7 @@ export default function FileExplorerDialog({
         setLoading(false)
       }
     },
-    [activeConnectionType, activeSshConfig, agentId, t]
+    [activeConnectionType, activeSshConfig, agentId, rcloneRemoteId, t]
   )
 
   // Initial load - only runs once when dialog opens
@@ -311,7 +350,7 @@ export default function FileExplorerDialog({
 
   useEffect(() => {
     browseCache.current.clear()
-  }, [agentId, connectionType, agentDefaultPath])
+  }, [agentId, connectionType, agentDefaultPath, rcloneRemoteId])
 
   const handleItemClick = (item: FileSystemItem) => {
     if (item.is_mount_point && item.ssh_connection) {
@@ -355,6 +394,8 @@ export default function FileExplorerDialog({
       setActiveConnectionType('local')
       setActiveSshConfig(undefined)
       loadDirectory('/', 'local', undefined)
+    } else if (activeConnectionType === 'rclone') {
+      loadDirectory(normalizeRcloneBrowsePath(path))
     } else {
       loadDirectory(path)
     }
@@ -379,6 +420,8 @@ export default function FileExplorerDialog({
     if (activeConnectionType === 'ssh' && activeSshConfig && connectionType === 'local') {
       // We're browsing a mount point - convert to SSH URL
       path = `ssh://${activeSshConfig.username}@${activeSshConfig.host}:${activeSshConfig.port}${currentPath}`
+    } else if (activeConnectionType === 'rclone') {
+      path = normalizeRcloneBrowsePath(path)
     }
     onSelect([path])
     onClose()
@@ -533,6 +576,13 @@ export default function FileExplorerDialog({
                 color="primary"
                 variant="outlined"
               />
+            ) : activeConnectionType === 'rclone' ? (
+              <Chip
+                label={t('wizard.location.rcloneRemoteLabel')}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
             ) : isInsideLocalMount && activeConnectionType === 'local' ? (
               <Chip
                 icon={<HardDrive size={14} />}
@@ -620,7 +670,7 @@ export default function FileExplorerDialog({
                 },
               }}
             />
-            {activeConnectionType !== 'agent' && (
+            {activeConnectionType !== 'agent' && activeConnectionType !== 'rclone' && (
               <Button
                 variant="outlined"
                 size="small"

@@ -7,6 +7,7 @@ import FileExplorerDialog from '../FileExplorerDialog'
 import api from '../../services/api'
 import {
   managedAgentsAPI,
+  rcloneAPI,
   sshKeysAPI,
   type AgentFilesystemBrowseResponse,
 } from '../../services/api'
@@ -22,6 +23,9 @@ vi.mock('../../services/api', () => ({
   },
   managedAgentsAPI: {
     browseFilesystem: vi.fn(),
+  },
+  rcloneAPI: {
+    browseRemote: vi.fn(),
   },
 }))
 
@@ -87,6 +91,28 @@ describe('FileExplorerDialog', () => {
     config: {} as any,
   }
 
+  const mockRcloneBrowseResponse = {
+    data: {
+      path: 'borg-ui',
+      entries: [
+        {
+          name: 'archives',
+          path: 'borg-ui/archives',
+          is_dir: true,
+        },
+        {
+          name: 'manifest.json',
+          path: 'borg-ui/manifest.json',
+          is_dir: false,
+        },
+      ],
+    },
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config: {} as AxiosResponse['config'],
+  } as AxiosResponse
+
   const makeAgentBrowseResponse = (
     data: AgentFilesystemBrowseResponse
   ): AxiosResponse<AgentFilesystemBrowseResponse> =>
@@ -108,6 +134,7 @@ describe('FileExplorerDialog', () => {
         items: [],
       })
     )
+    vi.mocked(rcloneAPI.browseRemote).mockResolvedValue(mockRcloneBrowseResponse)
     vi.mocked(sshKeysAPI.getSSHConnections).mockResolvedValue(mockSSHConnectionsResponse)
   })
 
@@ -360,6 +387,30 @@ describe('FileExplorerDialog', () => {
         expect(screen.getByText('No items found')).toBeInTheDocument()
         expect(screen.getByText('Empty directory')).toBeInTheDocument()
       })
+    })
+
+    it('loads rclone remote folders through the shared browser UI', async () => {
+      renderWithProviders(
+        <FileExplorerDialog
+          open={true}
+          onClose={mockOnClose}
+          onSelect={mockOnSelect}
+          title="Browse rclone remote"
+          connectionType="rclone"
+          rcloneRemoteId={10}
+          initialPath="borg-ui"
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('archives')).toBeInTheDocument()
+      })
+
+      expect(rcloneAPI.browseRemote).toHaveBeenCalledWith(10, 'borg-ui')
+      expect(api.get).not.toHaveBeenCalledWith('/filesystem/browse', expect.anything())
+      expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Use current/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /New Folder/i })).not.toBeInTheDocument()
     })
   })
 

@@ -17,8 +17,11 @@ interface PathSelectorFieldProps {
   selectMode?: 'directories' | 'files' | 'both'
   initialPath?: string
   onSelectPaths?: (paths: string[]) => void
+  onBrowse?: () => void
+  browseButtonLabel?: string
+  browseButtonDisabled?: boolean
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>
-  connectionType?: 'local' | 'ssh' | 'agent'
+  connectionType?: 'local' | 'ssh' | 'agent' | 'rclone'
   agentId?: number
   agentName?: string
   agentDefaultPath?: string | null
@@ -46,6 +49,9 @@ export default function PathSelectorField({
   selectMode = 'directories',
   initialPath,
   onSelectPaths,
+  onBrowse,
+  browseButtonLabel,
+  browseButtonDisabled = false,
   onKeyDown,
   connectionType = 'local',
   agentId,
@@ -58,6 +64,7 @@ export default function PathSelectorField({
 }: PathSelectorFieldProps) {
   const { t } = useTranslation()
   const [showFileExplorer, setShowFileExplorer] = useState(false)
+  const resolvedBrowseButtonLabel = browseButtonLabel || t('pathSelectorField.browseFilesystem')
 
   return (
     <>
@@ -77,11 +84,18 @@ export default function PathSelectorField({
           endAdornment: (
             <InputAdornment position="end">
               <IconButton
-                onClick={() => setShowFileExplorer(true)}
+                onClick={() => {
+                  if (onBrowse) {
+                    onBrowse()
+                  } else {
+                    setShowFileExplorer(true)
+                  }
+                }}
                 edge="end"
                 size="small"
-                title={t('pathSelectorField.browseFilesystem')}
-                disabled={disabled}
+                title={resolvedBrowseButtonLabel}
+                aria-label={resolvedBrowseButtonLabel}
+                disabled={disabled || browseButtonDisabled}
               >
                 <FolderOpen fontSize="small" />
               </IconButton>
@@ -90,35 +104,37 @@ export default function PathSelectorField({
         }}
       />
 
-      <FileExplorerDialog
-        open={showFileExplorer}
-        onClose={() => setShowFileExplorer(false)}
-        onSelect={(paths) => {
-          if (paths.length > 0) {
-            if (onSelectPaths) {
-              onSelectPaths(paths)
-            } else {
-              onChange(multiSelect ? paths.join(',') : paths[0])
+      {!onBrowse && (
+        <FileExplorerDialog
+          open={showFileExplorer}
+          onClose={() => setShowFileExplorer(false)}
+          onSelect={(paths) => {
+            if (paths.length > 0) {
+              if (onSelectPaths) {
+                onSelectPaths(paths)
+              } else {
+                onChange(multiSelect ? paths.join(',') : paths[0])
+              }
             }
+          }}
+          title={
+            selectMode === 'directories'
+              ? t('pathSelectorField.selectDirectory')
+              : selectMode === 'files'
+                ? t('pathSelectorField.selectFile')
+                : t('pathSelectorField.selectPath')
           }
-        }}
-        title={
-          selectMode === 'directories'
-            ? t('pathSelectorField.selectDirectory')
-            : selectMode === 'files'
-              ? t('pathSelectorField.selectFile')
-              : t('pathSelectorField.selectPath')
-        }
-        initialPath={initialPath || value || '/'}
-        multiSelect={multiSelect}
-        connectionType={connectionType}
-        agentId={agentId}
-        agentName={agentName}
-        agentDefaultPath={agentDefaultPath}
-        sshConfig={sshConfig}
-        selectMode={selectMode}
-        showSshMountPoints={showSshMountPoints}
-      />
+          initialPath={initialPath || value || '/'}
+          multiSelect={multiSelect}
+          connectionType={connectionType}
+          agentId={agentId}
+          agentName={agentName}
+          agentDefaultPath={agentDefaultPath}
+          sshConfig={sshConfig}
+          selectMode={selectMode}
+          showSshMountPoints={showSshMountPoints}
+        />
+      )}
     </>
   )
 }

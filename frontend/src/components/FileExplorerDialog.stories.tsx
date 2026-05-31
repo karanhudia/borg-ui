@@ -39,6 +39,53 @@ function useMockedAgentFilesystem() {
   }, [])
 }
 
+function useMockedRcloneRemoteFilesystem() {
+  useEffect(() => {
+    const mock = new MockAdapter(api, { onNoMatch: 'passthrough' })
+
+    mock.onGet('/rclone/remotes/10/browse').reply((config) => {
+      const path = typeof config.params?.path === 'string' ? config.params.path : ''
+
+      return [
+        200,
+        {
+          path,
+          entries:
+            path === 'borg-ui'
+              ? [
+                  {
+                    name: 'archives',
+                    path: 'borg-ui/archives',
+                    is_dir: true,
+                  },
+                  {
+                    name: 'repository-a',
+                    path: 'borg-ui/repository-a',
+                    is_dir: true,
+                  },
+                  {
+                    name: 'manifest.json',
+                    path: 'borg-ui/manifest.json',
+                    is_dir: false,
+                  },
+                ]
+              : [
+                  {
+                    name: 'borg-ui',
+                    path: 'borg-ui',
+                    is_dir: true,
+                  },
+                ],
+        },
+      ]
+    })
+
+    return () => {
+      mock.restore()
+    }
+  }, [])
+}
+
 const meta = {
   title: 'Components/FileExplorerDialog',
   component: FileExplorerDialog,
@@ -62,6 +109,17 @@ function ManagedAgentBrowserStory(args: ComponentProps<typeof FileExplorerDialog
   )
 }
 
+function RcloneRemoteBrowserStory(args: ComponentProps<typeof FileExplorerDialog>) {
+  useMockedRcloneRemoteFilesystem()
+  const [container, setContainer] = useState<HTMLDivElement | null>(null)
+
+  return (
+    <Box ref={setContainer} sx={{ minHeight: '100vh' }}>
+      {container ? <FileExplorerDialog {...args} dialogContainer={container} /> : null}
+    </Box>
+  )
+}
+
 export const ManagedAgentBrowser: Story = {
   args: {
     open: true,
@@ -76,4 +134,19 @@ export const ManagedAgentBrowser: Story = {
     selectMode: 'both',
   },
   render: (args) => <ManagedAgentBrowserStory {...args} />,
+}
+
+export const RcloneRemoteBrowser: Story = {
+  args: {
+    open: true,
+    onClose: () => {},
+    onSelect: () => {},
+    title: 'Browse rclone remote',
+    initialPath: 'borg-ui',
+    multiSelect: false,
+    connectionType: 'rclone',
+    rcloneRemoteId: 10,
+    selectMode: 'directories',
+  },
+  render: (args) => <RcloneRemoteBrowserStory {...args} />,
 }
