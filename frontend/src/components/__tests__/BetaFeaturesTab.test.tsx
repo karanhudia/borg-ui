@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient } from '@tanstack/react-query'
 import BetaFeaturesTab from '../BetaFeaturesTab'
-import { settingsAPI } from '@/services/api.ts'
+import { settingsAPI } from '../../services/api'
 import { renderWithProviders } from '../../test/test-utils'
 import { AxiosResponse } from 'axios'
 
@@ -31,7 +32,6 @@ describe('BetaFeaturesTab', () => {
       bypass_lock_on_list: false,
       borg2_fast_browse_beta_enabled: false,
       mqtt_beta_enabled: false,
-      managed_agents_beta_enabled: false,
     },
   }
 
@@ -41,6 +41,17 @@ describe('BetaFeaturesTab', () => {
       data: mockSystemSettings,
     } as AxiosResponse)
   })
+
+  function createSystemSettingsClient(settings: Record<string, unknown>) {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: Infinity },
+        mutations: { retry: false },
+      },
+    })
+    queryClient.setQueryData(['systemSettings'], { settings })
+    return queryClient
+  }
 
   describe('Rendering', () => {
     it('shows loading spinner while fetching settings', () => {
@@ -92,13 +103,6 @@ describe('BetaFeaturesTab', () => {
       })
     })
 
-    it('renders managed CLI agents toggle', async () => {
-      renderWithProviders(<BetaFeaturesTab />)
-      await waitFor(() => {
-        expect(screen.getByText('Enable managed CLI agents')).toBeInTheDocument()
-      })
-    })
-
     it('renders Borg 2 fast browse toggle', async () => {
       renderWithProviders(<BetaFeaturesTab />)
       await waitFor(() => {
@@ -113,7 +117,6 @@ describe('BetaFeaturesTab', () => {
         expect(screen.getByText('Bypass Locks for List Commands')).toBeInTheDocument()
         expect(screen.getByText('Fast Borg 2 Archive Browse')).toBeInTheDocument()
         expect(screen.getByText('MQTT Integration')).toBeInTheDocument()
-        expect(screen.getByText('Managed CLI Agents')).toBeInTheDocument()
       })
     })
   })
@@ -397,56 +400,19 @@ describe('BetaFeaturesTab', () => {
     })
   })
 
-  describe('Managed CLI Agents Beta', () => {
-    it('toggle is initially unchecked', async () => {
-      renderWithProviders(<BetaFeaturesTab />)
+  it('does not render managed CLI agents as a beta feature', async () => {
+    renderWithProviders(<BetaFeaturesTab />)
 
-      await waitFor(() => {
-        expect(screen.getByText('Enable managed CLI agents')).toBeInTheDocument()
-      })
-
-      const agentLabel = screen.getByText('Enable managed CLI agents').closest('label')
-      expect(agentLabel).not.toBeNull()
-      const agentSwitch = within(agentLabel as HTMLElement).getByRole('switch')
-      expect(agentSwitch).not.toBeChecked()
+    await waitFor(() => {
+      expect(screen.getByText('Beta Features')).toBeInTheDocument()
     })
 
-    it('can enable managed CLI agents', async () => {
-      const user = userEvent.setup()
-      vi.mocked(settingsAPI.updateSystemSettings).mockResolvedValue({} as AxiosResponse)
-
-      renderWithProviders(<BetaFeaturesTab />)
-
-      await waitFor(() => {
-        expect(screen.getByText('Enable managed CLI agents')).toBeInTheDocument()
-      })
-
-      const agentSwitch = screen
-        .getAllByRole('switch')
-        .find((sw) => sw.parentElement?.textContent?.includes('Enable managed CLI agents'))
-
-      if (agentSwitch) {
-        await user.click(agentSwitch)
-
-        await waitFor(() => {
-          expect(settingsAPI.updateSystemSettings).toHaveBeenCalledWith({
-            managed_agents_beta_enabled: true,
-          })
-        })
-      }
-    })
-
-    it('shows managed CLI agents description', async () => {
-      renderWithProviders(<BetaFeaturesTab />)
-
-      await waitFor(() => {
-        expect(
-          screen.getByText(
-            'Shows the Managed Agents navigation item and server-side agent enrollment workflow.'
-          )
-        ).toBeInTheDocument()
-      })
-    })
+    expect(screen.queryByText('Enable managed CLI agents')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Shows the Managed Agents navigation item and server-side agent enrollment workflow.'
+      )
+    ).not.toBeInTheDocument()
   })
 
   describe('Loading State', () => {
@@ -487,15 +453,12 @@ describe('BetaFeaturesTab', () => {
           bypass_lock_on_list: true,
           borg2_fast_browse_beta_enabled: true,
           mqtt_beta_enabled: true,
-          managed_agents_beta_enabled: true,
         },
       }
 
-      vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue({
-        data: existingSettings,
-      } as AxiosResponse)
-
-      renderWithProviders(<BetaFeaturesTab />)
+      renderWithProviders(<BetaFeaturesTab />, {
+        queryClient: createSystemSettingsClient(existingSettings.settings),
+      })
 
       await waitFor(() => {
         const switches = screen.getAllByRole('switch')
@@ -510,11 +473,9 @@ describe('BetaFeaturesTab', () => {
         settings: {},
       }
 
-      vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue({
-        data: settingsWithNulls,
-      } as AxiosResponse)
-
-      renderWithProviders(<BetaFeaturesTab />)
+      renderWithProviders(<BetaFeaturesTab />, {
+        queryClient: createSystemSettingsClient(settingsWithNulls.settings),
+      })
 
       await waitFor(() => {
         const switches = screen.getAllByRole('switch')
@@ -598,7 +559,6 @@ describe('BetaFeaturesTab', () => {
               ...mockSystemSettings.settings,
               borg2_fast_browse_beta_enabled: false,
               mqtt_beta_enabled: true,
-              managed_agents_beta_enabled: false,
             },
           },
         } as AxiosResponse)

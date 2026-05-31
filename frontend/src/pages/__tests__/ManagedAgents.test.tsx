@@ -16,15 +16,11 @@ import {
   AgentJobResponse,
   AgentMachineResponse,
   managedAgentsAPI,
-  settingsAPI,
 } from '../../services/api'
 import type { AxiosResponse } from 'axios'
 import { buildAgentReinstallCommand } from '../managed-agents/agentInstallCommandText'
 
 vi.mock('../../services/api', () => ({
-  settingsAPI: {
-    getSystemSettings: vi.fn(),
-  },
   managedAgentsAPI: {
     listAgents: vi.fn(),
     listEnrollmentTokens: vi.fn(),
@@ -60,9 +56,6 @@ vi.mock('react-hot-toast', async () => {
 describe('ManagedAgents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(settingsAPI.getSystemSettings).mockResolvedValue({
-      data: { settings: { managed_agents_beta_enabled: true } },
-    } as AxiosResponse)
     vi.mocked(managedAgentsAPI.listAgents).mockResolvedValue({ data: [] } as AxiosResponse)
     vi.mocked(managedAgentsAPI.listEnrollmentTokens).mockResolvedValue({
       data: [],
@@ -116,7 +109,7 @@ describe('ManagedAgents', () => {
     ).toContain('--service-user root')
   })
 
-  it('opens from the shared system settings cache without redirecting to dashboard', async () => {
+  it('opens from the shared system settings cache without requiring the former beta flag', async () => {
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -124,7 +117,7 @@ describe('ManagedAgents', () => {
       },
     })
     queryClient.setQueryData(['systemSettings'], {
-      settings: { managed_agents_beta_enabled: true },
+      settings: { managed_agents_beta_enabled: false },
     })
 
     renderWithProviders(<ManagedAgents />, {

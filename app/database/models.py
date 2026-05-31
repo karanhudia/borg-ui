@@ -1245,9 +1245,6 @@ class SystemSettings(Base):
     mqtt_beta_enabled = Column(
         Boolean, default=False, nullable=False
     )  # Expose MQTT under beta features
-    managed_agents_beta_enabled = Column(
-        Boolean, default=False, nullable=False
-    )  # Expose managed CLI agents under beta features
 
     # MQTT settings
     mqtt_enabled = Column(
