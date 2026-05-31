@@ -737,7 +737,8 @@
       "series": "Nacheinander",
       "nextRun": "Nächster Lauf: {{date}}",
       "repositoryFallback": "Repository",
-      "moreRepositories": "+{{count}} weitere"
+      "moreRepositories": "+{{count}} weitere",
+      "runningNow": "Läuft"
     },
     "statuses": {
       "unknown": "Unbekannt",

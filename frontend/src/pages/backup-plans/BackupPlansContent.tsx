@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { Box, Button, Divider, Stack, Typography } from '@mui/material'
+import { Box, Button, Chip, Divider, Stack, Typography } from '@mui/material'
 import FilterListIcon from '@mui/icons-material/FilterList'
-import { ListChecks, Plus } from 'lucide-react'
+import { ListChecks, Plus, RefreshCw } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import EmptyStateCard from '../../components/EmptyStateCard'
@@ -81,6 +81,17 @@ export function BackupPlansContent({
   formatStatusLabel,
   t,
 }: BackupPlansContentProps) {
+  // Plans currently running are pulled into a top "Currently running" section
+  // so the user can find live state in one glance. The idle plan card down in
+  // the list still gets a small "Running" pulse-dot chip on its header so the
+  // parent-child link is not lost.
+  const runningEntries = backupPlans
+    .map((plan) => ({ plan, run: latestRunByPlan.get(plan.id) }))
+    .filter(
+      (entry): entry is { plan: BackupPlan; run: BackupPlanRun } =>
+        Boolean(entry.run) && isActiveRun(entry.run!.status)
+    )
+
   return (
     <>
       <PageHeader
@@ -99,6 +110,44 @@ export function BackupPlansContent({
           ) : null
         }
       />
+
+      {runningEntries.length > 0 && (
+        <Box component="section" aria-labelledby="backup-plans-running-heading" sx={{ mb: 3 }}>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+            sx={{ mb: 1, color: 'text.secondary' }}
+          >
+            <Box sx={{ display: 'flex', color: 'success.main' }}>
+              <RefreshCw size={20} className="animate-spin" />
+            </Box>
+            <Typography id="backup-plans-running-heading" variant="h6" fontWeight={600}>
+              {t('backupPlans.runsPanel.activeTitle')}
+            </Typography>
+            <Chip
+              size="small"
+              color="primary"
+              label={t('backupPlans.runsPanel.activeCount', { count: runningEntries.length })}
+            />
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t('backupPlans.runsPanel.activeSubtitle')}
+          </Typography>
+          <Stack spacing={2}>
+            {runningEntries.map(({ plan, run }) => (
+              <ActiveBackupPlanRunCard
+                key={run.id}
+                run={run}
+                plan={plan}
+                cancelling={cancellingRunId === run.id}
+                onCancel={(runId) => onCancelRun(runId)}
+                onViewLogs={(job) => onViewLogs(job)}
+              />
+            ))}
+          </Stack>
+        </Box>
+      )}
 
       {(loadingPlans || backupPlans.length > 0) && (
         <ListToolbar
@@ -252,48 +301,38 @@ export function BackupPlansContent({
                           : t('backupPlans.status.localSource')
 
                   return (
-                    <Stack key={plan.id} spacing={1.25}>
-                      <BackupPlanIdleCard
-                        plan={plan}
-                        latestRun={latestRun}
-                        isHighlighted={isHighlighted}
-                        planUsesProFeatures={planUsesProFeatures}
-                        planBlockedByLicense={planBlockedByLicense}
-                        planIsStarting={planIsStarting}
-                        runDisabled={runDisabled}
-                        runTooltip={runTooltip}
-                        sourceTypeLabel={sourceTypeLabel}
-                        hasRunHistory={backupPlanRuns.some(
-                          (r) => r.backup_plan_id === plan.id && !isActiveRun(r.status)
-                        )}
-                        onRun={() => onRunPlan(plan.id)}
-                        onToggle={() => onTogglePlan(plan.id)}
-                        onEdit={() => onEditPlan(plan)}
-                        onDelete={() => {
-                          if (
-                            window.confirm(
-                              t('backupPlans.actions.deleteConfirm', { name: plan.name })
-                            )
-                          ) {
-                            onDeletePlan(plan.id)
-                          }
-                        }}
-                        onViewHistory={() => onViewHistory(plan.id)}
-                        onViewRepositories={() => onViewRepositories(plan.id)}
-                        planIsToggling={togglePending && toggleVariables === plan.id}
-                        t={t}
-                        formatStatusLabel={formatStatusLabel}
-                      />
-                      {planIsRunning && latestRun && (
-                        <ActiveBackupPlanRunCard
-                          run={latestRun}
-                          plan={plan}
-                          cancelling={cancellingRunId === latestRun.id}
-                          onCancel={(runId) => onCancelRun(runId)}
-                          onViewLogs={(job) => onViewLogs(job)}
-                        />
+                    <BackupPlanIdleCard
+                      key={plan.id}
+                      plan={plan}
+                      latestRun={latestRun}
+                      isHighlighted={isHighlighted}
+                      planUsesProFeatures={planUsesProFeatures}
+                      planBlockedByLicense={planBlockedByLicense}
+                      planIsStarting={planIsStarting}
+                      runDisabled={runDisabled}
+                      runTooltip={runTooltip}
+                      sourceTypeLabel={sourceTypeLabel}
+                      hasRunHistory={backupPlanRuns.some(
+                        (r) => r.backup_plan_id === plan.id && !isActiveRun(r.status)
                       )}
-                    </Stack>
+                      onRun={() => onRunPlan(plan.id)}
+                      onToggle={() => onTogglePlan(plan.id)}
+                      onEdit={() => onEditPlan(plan)}
+                      onDelete={() => {
+                        if (
+                          window.confirm(
+                            t('backupPlans.actions.deleteConfirm', { name: plan.name })
+                          )
+                        ) {
+                          onDeletePlan(plan.id)
+                        }
+                      }}
+                      onViewHistory={() => onViewHistory(plan.id)}
+                      onViewRepositories={() => onViewRepositories(plan.id)}
+                      planIsToggling={togglePending && toggleVariables === plan.id}
+                      t={t}
+                      formatStatusLabel={formatStatusLabel}
+                    />
                   )
                 })}
               </Stack>

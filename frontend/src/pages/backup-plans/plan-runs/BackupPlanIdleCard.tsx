@@ -16,8 +16,14 @@ import type { TFunction } from 'i18next'
 import BackupPlanScheduleBadge from '../../../components/BackupPlanScheduleBadge'
 import { formatRelativeTime, formatTimeRange } from '../../../utils/dateUtils'
 import type { BackupPlan, BackupPlanRun } from '../../../types'
+import { isActiveRun } from '../runStatus'
 import { RunStatusLeadIcon } from './RunStatusLeadIcon'
 import { runStatusIconColor } from './runStatusIconColor'
+
+// Brand emerald, matches the LIVE_DOT in ActiveBackupPlanRunCard. Carries the
+// "this plan is running" signal back to the idle card without re-tinting the
+// surface.
+const LIVE_DOT = '#059669'
 
 const PLAN_STAT_COLORS = ['primary', 'success', 'warning', 'info'] as const
 
@@ -69,6 +75,8 @@ export function BackupPlanIdleCard({
 
   const ACCENT_IDLE = theme.palette.success.main
   const ACCENT_HIGHLIGHT = theme.palette.primary.main
+
+  const planIsRunning = isActiveRun(latestRun?.status)
 
   const iconBtnSx = {
     width: 32,
@@ -201,6 +209,41 @@ export function BackupPlanIdleCard({
                 <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ lineHeight: 1.3 }}>
                   {plan.name}
                 </Typography>
+                {planIsRunning && (
+                  <Chip
+                    size="small"
+                    icon={
+                      <Box
+                        component="span"
+                        sx={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          bgcolor: LIVE_DOT,
+                          ml: '6px !important',
+                          animation: 'idleCardLiveDot 2s ease-in-out infinite',
+                          '@keyframes idleCardLiveDot': {
+                            '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+                            '50%': { opacity: 0.45, transform: 'scale(0.82)' },
+                          },
+                          '@media (prefers-reduced-motion: reduce)': {
+                            animation: 'none',
+                          },
+                        }}
+                      />
+                    }
+                    label={t('backupPlans.status.runningNow')}
+                    sx={{
+                      height: 20,
+                      fontSize: '0.65rem',
+                      fontWeight: 600,
+                      bgcolor: alpha(LIVE_DOT, isDark ? 0.18 : 0.1),
+                      color: isDark ? alpha(LIVE_DOT, 0.95) : '#065f46',
+                      border: `1px solid ${alpha(LIVE_DOT, isDark ? 0.4 : 0.28)}`,
+                      '& .MuiChip-label': { px: 0.75 },
+                    }}
+                  />
+                )}
                 {planUsesProFeatures && (
                   <Chip
                     size="small"

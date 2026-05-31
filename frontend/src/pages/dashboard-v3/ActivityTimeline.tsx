@@ -1,4 +1,4 @@
-import { Box, Stack, Typography } from '@mui/material'
+import { Box } from '@mui/material'
 import { useTranslation } from 'react-i18next'
 import { addDays, differenceInDays, format, startOfDay } from 'date-fns'
 import { JOB_COLOR, useT } from './tokens'
@@ -205,25 +205,6 @@ export function ActivityTimeline({
           {t('dashboard.activityTimeline.today')}
         </text>
       </svg>
-
-      {/* Compact legend: only the failed marker remains, since lane labels
-          are now part of the chart itself. */}
-      <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
-        <Stack direction="row" spacing={0.65} alignItems="center">
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              border: `1.5px solid ${T.red}`,
-              flexShrink: 0,
-            }}
-          />
-          <Typography sx={{ fontFamily: T.mono, fontSize: '0.75rem', color: T.textMuted }}>
-            {t('dashboard.activityTimeline.legendFailed')}
-          </Typography>
-        </Stack>
-      </Stack>
     </Box>
   )
 }

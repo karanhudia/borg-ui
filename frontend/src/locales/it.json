@@ -737,7 +737,8 @@
       "series": "In serie",
       "nextRun": "Prossima esecuzione: {{date}}",
       "repositoryFallback": "Repository",
-      "moreRepositories": "+{{count}} altri"
+      "moreRepositories": "+{{count}} altri",
+      "runningNow": "In corso"
     },
     "statuses": {
       "unknown": "Sconosciuto",

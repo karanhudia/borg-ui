@@ -13,6 +13,7 @@ import {
 } from '@mui/material'
 import {
   Activity,
+  AlertTriangle,
   Archive,
   CheckCircle2,
   Clock,
@@ -27,7 +28,9 @@ import {
 import type { BackupJob, BackupPlan, BackupPlanRun, BackupPlanRunRepository } from '../types'
 import { formatBytes, formatDurationSeconds, formatTimeRange } from '../utils/dateUtils'
 
-const ACCENT_BACKUP = '#059669'
+// Brand emerald is reserved for the live pulse dot (the only brand touch on
+// this otherwise neutral card). Everything else uses text.primary tints.
+const LIVE_DOT = '#059669'
 
 export type ActivePlanRunLogJob =
   | BackupJob
@@ -172,13 +175,6 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
   const currentFile = getCurrentFile(run)
   const firstLogJob = getPreferredViewableJob(run)
 
-  const stageLabel =
-    progress.pct === 0
-      ? t('backup.runningJobs.progress.initializing')
-      : progress.pct >= 100
-        ? t('backup.runningJobs.progress.finalizing')
-        : t('backup.runningJobs.progress.processing')
-
   const visibleStats: { key: string; label: string; value: string; valueColor?: string }[] = []
   visibleStats.push({
     key: 'files',
@@ -194,54 +190,35 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
     key: 'speed',
     label: t('backup.runningJobs.progress.speed'),
     value: stats.hasSpeed ? `${stats.speed.toFixed(2)} MB/s` : 'N/A',
-    valueColor: stats.hasSpeed ? theme.palette.primary.main : undefined,
+    valueColor: undefined,
   })
   visibleStats.push({
     key: 'eta',
     label: t('backup.runningJobs.progress.eta'),
     value: stats.hasEta ? formatDurationSeconds(stats.eta) : 'N/A',
-    valueColor: stats.hasEta ? theme.palette.success.main : undefined,
+    valueColor: undefined,
   })
 
-  const statColors = [
-    ACCENT_BACKUP,
-    theme.palette.primary.main,
-    theme.palette.primary.main,
-    theme.palette.success.main,
-  ]
+  const statIconColor = theme.palette.text.secondary
 
   return (
     <Box
       sx={{
         position: 'relative',
         borderRadius: 2,
-        bgcolor: isDark ? alpha(ACCENT_BACKUP, 0.07) : alpha(ACCENT_BACKUP, 0.05),
+        bgcolor: 'background.paper',
         overflow: 'hidden',
+        // Real border + elevation so the active card sits above neighboring
+        // plan cards instead of merging with the page. A faint emerald-tinted
+        // border serves as the second brand touch (the pulse dot being the
+        // first); the surface itself stays neutral.
+        border: '1px solid',
+        borderColor: alpha(LIVE_DOT, isDark ? 0.32 : 0.22),
         boxShadow: isDark
-          ? `inset 0 0 0 1px ${alpha('#fff', 0.05)}`
-          : `inset 0 0 0 1px ${alpha('#000', 0.04)}`,
+          ? '0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25)'
+          : '0 8px 24px rgba(15, 23, 42, 0.07), 0 2px 6px rgba(15, 23, 42, 0.05)',
       }}
     >
-      {/* Ambient glow blob */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: -60,
-          right: -40,
-          width: 200,
-          height: 140,
-          borderRadius: '50%',
-          bgcolor: alpha(ACCENT_BACKUP, isDark ? 0.1 : 0.05),
-          filter: 'blur(55px)',
-          pointerEvents: 'none',
-          animation: 'planRunBlobPulse 3s ease-in-out infinite',
-          '@keyframes planRunBlobPulse': {
-            '0%, 100%': { opacity: 1 },
-            '50%': { opacity: 0.25 },
-          },
-        }}
-      />
-
       <Box sx={{ position: 'relative', px: { xs: 1.75, sm: 2.25 }, pt: 2, pb: 2 }}>
         {/* Header */}
         <Box
@@ -267,12 +244,15 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                   width: 7,
                   height: 7,
                   borderRadius: '50%',
-                  bgcolor: ACCENT_BACKUP,
+                  bgcolor: LIVE_DOT,
                   flexShrink: 0,
                   animation: 'planRunLiveDot 2s ease-in-out infinite',
                   '@keyframes planRunLiveDot': {
                     '0%, 100%': { opacity: 1, transform: 'scale(1)' },
                     '50%': { opacity: 0.45, transform: 'scale(0.82)' },
+                  },
+                  '@media (prefers-reduced-motion: reduce)': {
+                    animation: 'none',
                   },
                 }}
               />
@@ -296,28 +276,6 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
               >
                 #{run.id}
               </Typography>
-              <Box
-                sx={{
-                  px: 0.8,
-                  py: 0.2,
-                  borderRadius: 0.75,
-                  bgcolor: alpha(ACCENT_BACKUP, 0.1),
-                  border: `1px solid ${alpha(ACCENT_BACKUP, 0.2)}`,
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: '0.62rem',
-                    fontWeight: 700,
-                    color: ACCENT_BACKUP,
-                    lineHeight: 1,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  {stageLabel}
-                </Typography>
-              </Box>
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
               {t('backupPlans.runsPanel.repositoryProgress', {
@@ -342,19 +300,10 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
               <Button
                 variant="outlined"
                 size="small"
+                color="inherit"
                 startIcon={<Eye size={13} />}
                 onClick={() => onViewLogs(firstLogJob)}
-                sx={{
-                  height: 28,
-                  fontSize: '0.75rem',
-                  px: 1.25,
-                  borderColor: alpha(ACCENT_BACKUP, 0.28),
-                  color: ACCENT_BACKUP,
-                  '&:hover': {
-                    bgcolor: alpha(ACCENT_BACKUP, 0.07),
-                    borderColor: alpha(ACCENT_BACKUP, 0.5),
-                  },
-                }}
+                sx={{ height: 28, fontSize: '0.75rem', px: 1.25 }}
               >
                 {t('backupPlans.runsDialog.viewLogs')}
               </Button>
@@ -387,10 +336,10 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
             >
               <Typography
                 sx={{
-                  fontSize: '0.68rem',
+                  fontSize: '0.75rem',
                   fontWeight: 600,
-                  color: ACCENT_BACKUP,
-                  letterSpacing: '0.02em',
+                  color: 'text.primary',
+                  fontVariantNumeric: 'tabular-nums',
                 }}
               >
                 {progress.pct.toFixed(1)}%
@@ -403,12 +352,12 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
               variant="determinate"
               value={progress.pct}
               sx={{
-                height: 4,
-                borderRadius: 2,
-                bgcolor: isDark ? alpha('#fff', 0.07) : alpha('#000', 0.07),
+                height: 6,
+                borderRadius: 3,
+                bgcolor: isDark ? alpha('#fff', 0.08) : alpha('#000', 0.06),
                 '& .MuiLinearProgress-bar': {
-                  borderRadius: 2,
-                  bgcolor: ACCENT_BACKUP,
+                  borderRadius: 3,
+                  bgcolor: alpha(theme.palette.text.primary, 0.75),
                 },
               }}
             />
@@ -431,20 +380,19 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
           }}
         >
           {visibleStats.map((stat, i) => {
-            const statColor = statColors[i] ?? ACCENT_BACKUP
             return (
               <Box
                 key={stat.key}
                 sx={{
                   px: 1.5,
                   py: 1.1,
-                  bgcolor: isDark ? alpha(ACCENT_BACKUP, 0.04) : 'background.paper',
+                  bgcolor: 'background.paper',
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.35 }}>
                   <Box
                     sx={{
-                      color: alpha(statColor, 0.7),
+                      color: statIconColor,
                       display: 'flex',
                       alignItems: 'center',
                     }}
@@ -453,11 +401,9 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                   </Box>
                   <Typography
                     sx={{
-                      fontSize: '0.58rem',
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.07em',
-                      color: alpha(statColor, 0.7),
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      color: 'text.secondary',
                       lineHeight: 1,
                     }}
                   >
@@ -470,7 +416,7 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                   noWrap
                   sx={{
                     fontVariantNumeric: 'tabular-nums',
-                    fontSize: '0.85rem',
+                    fontSize: '0.875rem',
                     color: stat.valueColor || 'text.primary',
                   }}
                 >
@@ -497,14 +443,21 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
             {run.repositories.map((repoRun) => {
               const repoActive = isActive(repoRun.status)
               const repoDone = repoRun.status === 'completed'
+              const repoDoneWithWarnings = repoRun.status === 'completed_with_warnings'
               const repoFailed = repoRun.status === 'failed' || repoRun.status === 'cancelled'
 
-              // Neutral paper background for every chip — state is communicated
-              // by icon color, border, and label. Avoids a wall of green when
-              // multiple repos are in flight.
-              const successColor = theme.palette.success.main
+              // Done uses brand emerald LIVE_DOT (a stronger, on-brand green
+              // than MUI's default success teal). Done-with-warnings borrows
+              // amber so the warning hint is unmistakable while the repo still
+              // reads as "this finished, no action needed urgently".
+              const successColor = LIVE_DOT
+              const warningColor = theme.palette.warning.main
               const errorColor = theme.palette.error.main
-              const runningColor = theme.palette.warning.main
+              // Running repo is communicated by a pulsing emerald LIVE_DOT (the
+              // sole brand touch) plus a neutral darker border and text. Color
+              // does not carry the "running" signal alone; the animation does.
+              const runningBorderColor = alpha(theme.palette.text.primary, isDark ? 0.32 : 0.28)
+              const runningBgColor = alpha(theme.palette.text.primary, isDark ? 0.05 : 0.03)
 
               let stateBorderColor: string
               let stateBgColor: string
@@ -521,29 +474,40 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                   </Box>
                 )
               } else if (repoDone) {
-                stateBorderColor = alpha(successColor, isDark ? 0.45 : 0.35)
-                stateBgColor = 'background.paper'
+                stateBorderColor = alpha(successColor, isDark ? 0.5 : 0.4)
+                stateBgColor = alpha(successColor, isDark ? 0.08 : 0.05)
                 statusTextColor = successColor
                 icon = (
                   <Box sx={{ color: successColor, display: 'flex', flexShrink: 0 }}>
                     <CheckCircle2 size={13} />
                   </Box>
                 )
+              } else if (repoDoneWithWarnings) {
+                stateBorderColor = alpha(warningColor, isDark ? 0.55 : 0.4)
+                stateBgColor = alpha(warningColor, isDark ? 0.08 : 0.05)
+                statusTextColor = warningColor
+                icon = (
+                  <Box sx={{ color: warningColor, display: 'flex', flexShrink: 0 }}>
+                    <AlertTriangle size={13} />
+                  </Box>
+                )
               } else if (repoActive) {
-                // Amber + thicker visual weight so the in-flight repo pops.
-                stateBorderColor = alpha(runningColor, isDark ? 0.6 : 0.5)
-                stateBgColor = alpha(runningColor, isDark ? 0.08 : 0.05)
-                statusTextColor = runningColor
+                stateBorderColor = runningBorderColor
+                stateBgColor = runningBgColor
+                statusTextColor = 'text.primary'
                 icon = (
                   <Box
                     sx={{
                       width: 7,
                       height: 7,
                       borderRadius: '50%',
-                      bgcolor: runningColor,
+                      bgcolor: LIVE_DOT,
                       flexShrink: 0,
-                      boxShadow: `0 0 0 3px ${alpha(runningColor, 0.2)}`,
+                      boxShadow: `0 0 0 3px ${alpha(LIVE_DOT, 0.2)}`,
                       animation: 'planRunLiveDot 1.4s ease-in-out infinite',
+                      '@media (prefers-reduced-motion: reduce)': {
+                        animation: 'none',
+                      },
                     }}
                   />
                 )
@@ -572,7 +536,8 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
                     alignItems: 'center',
                     gap: 0.75,
                     minWidth: 0,
-                    opacity: !repoActive && !repoDone && !repoFailed ? 0.7 : 1,
+                    opacity:
+                      !repoActive && !repoDone && !repoDoneWithWarnings && !repoFailed ? 0.7 : 1,
                   }}
                 >
                   {icon}
@@ -619,7 +584,7 @@ const ActiveBackupPlanRunCard: React.FC<ActiveBackupPlanRunCardProps> = ({
               overflow: 'hidden',
             }}
           >
-            <Box sx={{ color: alpha(ACCENT_BACKUP, 0.65), display: 'flex', flexShrink: 0 }}>
+            <Box sx={{ color: 'text.secondary', display: 'flex', flexShrink: 0 }}>
               <FileText size={13} />
             </Box>
             <Typography
