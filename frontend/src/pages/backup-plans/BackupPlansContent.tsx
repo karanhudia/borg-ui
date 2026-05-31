@@ -288,9 +288,9 @@ export function BackupPlansContent({
                     name: repositoryFilter.name,
                     defaultValue: `No backup plans are linked to ${repositoryFilter.name}.`,
                   })
-              : t('backupPlans.noMatch.fallback', {
-                  defaultValue: 'No backup plans match the current filters.',
-                })
+                : t('backupPlans.noMatch.fallback', {
+                    defaultValue: 'No backup plans match the current filters.',
+                  })
           }
           actions={
             searchQuery ? (

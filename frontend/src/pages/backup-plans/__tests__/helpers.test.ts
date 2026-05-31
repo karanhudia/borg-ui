@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BackupPlan } from '../../../types'
 
-import {
-  backupPlanUsesRepository,
-  parseRepositoryFilterId,
-  processBackupPlans,
-} from '../helpers'
+import { backupPlanUsesRepository, parseRepositoryFilterId, processBackupPlans } from '../helpers'
 
 const basePlan: BackupPlan = {
   id: 1,
