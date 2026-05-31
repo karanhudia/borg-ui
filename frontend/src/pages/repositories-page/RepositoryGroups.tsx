@@ -29,6 +29,7 @@ interface RepositoryGroupsProps {
   onDelete: (repository: Repository) => void
   onBackupNow: (repository: Repository) => void
   onViewArchives: (repository: Repository) => void
+  onViewBackupPlans: (repository: Repository) => void
   onCreateBackupPlan: (repository: Repository) => void
   onRcloneSync: (repository: Repository) => void
   onRcloneHydrate: (repository: Repository) => void
@@ -55,6 +56,7 @@ export function RepositoryGroups({
   onDelete,
   onBackupNow,
   onViewArchives,
+  onViewBackupPlans,
   onCreateBackupPlan,
   onRcloneSync,
   onRcloneHydrate,
@@ -175,6 +177,7 @@ export function RepositoryGroups({
                 onDelete={() => onDelete(repository)}
                 onBackupNow={() => onBackupNow(repository)}
                 onViewArchives={() => onViewArchives(repository)}
+                onViewBackupPlans={() => onViewBackupPlans(repository)}
                 onCreateBackupPlan={() => onCreateBackupPlan(repository)}
                 onRcloneSync={() => onRcloneSync(repository)}
                 onRcloneHydrate={() => onRcloneHydrate(repository)}

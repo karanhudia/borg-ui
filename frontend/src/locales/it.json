@@ -700,8 +700,14 @@
     "noMatch": {
       "title": "Nessun piano di backup corrispondente",
       "message": "Nessun piano di backup corrisponde a \"{{search}}\".",
+      "repositoryFilter": "Nessun piano di backup è collegato a {{name}}.",
       "fallback": "Nessun piano di backup corrisponde ai filtri correnti.",
       "clearSearch": "Cancella ricerca"
+    },
+    "filters": {
+      "linkedRepository": "Mostra piani collegati a {{name}}",
+      "clearRepository": "Cancella filtro repository",
+      "repositoryFallback": "Repository #{{id}}"
     },
     "actions": {
       "create": "Crea piano di backup",
@@ -1828,6 +1834,7 @@
       "legacyBackupTooltip": "Esegui il vecchio backup basato sul repository usando i percorsi sorgente legacy di questo repository",
       "backupPlanRequired": "Crea un piano di backup per definire le sorgenti",
       "viewArchives": "Visualizza Archivi",
+      "viewBackupPlans": "Visualizza piani di backup collegati",
       "wipeContents": "Wipe contents",
       "delete": "Elimina",
       "createBackupPlan": "Crea piano di backup",

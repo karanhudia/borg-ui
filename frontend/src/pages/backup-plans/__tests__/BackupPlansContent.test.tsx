@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
@@ -9,11 +9,18 @@ import type { BackupPlan, BackupPlanRun } from '../../../types'
 
 const theme = createTheme()
 
-const t = ((key: string, options?: { defaultValue?: string; count?: number; id?: number }) => {
+const t = ((
+  key: string,
+  options?: { defaultValue?: string; count?: number; id?: number; name?: string }
+) => {
   const translations: Record<string, string> = {
     'backupPlans.title': 'Backup Plans',
     'backupPlans.subtitle': 'Define sources, settings, schedules, and repositories.',
     'backupPlans.loading': 'Loading backup plans...',
+    'backupPlans.filters.linkedRepository': `Showing plans linked to ${
+      options?.name ?? 'Repository'
+    }`,
+    'backupPlans.filters.clearRepository': 'Clear repository filter',
     'backupPlans.actions.create': 'Create Backup Plan',
     'backupPlans.actions.edit': 'Edit',
     'backupPlans.actions.viewRepositories': 'View repositories',
@@ -119,6 +126,8 @@ function renderContent(overrides: Partial<React.ComponentProps<typeof BackupPlan
     setSortBy: vi.fn(),
     groupBy: 'none',
     setGroupBy: vi.fn(),
+    repositoryFilter: null,
+    onClearRepositoryFilter: vi.fn(),
     startingPlanId: null,
     highlightedPlanId: null,
     canUseMultiRepository: true,
@@ -182,14 +191,29 @@ describe('BackupPlansContent', () => {
   })
 
   it('calls the repository navigation action from a backup plan card', async () => {
-    const user = userEvent.setup()
     const onViewRepositories = vi.fn()
 
     renderContent({ onViewRepositories })
 
-    await user.click(screen.getByRole('button', { name: 'View repositories' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View repositories' }))
 
     expect(onViewRepositories).toHaveBeenCalledWith(basePlan.id)
+  })
+
+  it('shows and clears the linked repository filter context', async () => {
+    const user = userEvent.setup()
+    const onClearRepositoryFilter = vi.fn()
+
+    renderContent({
+      repositoryFilter: { id: 11, name: 'Primary Repo' },
+      onClearRepositoryFilter,
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent('Showing plans linked to Primary Repo')
+
+    await user.click(screen.getByRole('button', { name: 'Clear repository filter' }))
+
+    expect(onClearRepositoryFilter).toHaveBeenCalledTimes(1)
   })
 
   it('labels managed-agent backup plan sources after save', () => {

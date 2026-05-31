@@ -44,6 +44,7 @@ describe('RepositoryCard', () => {
     onDelete: vi.fn(),
     onBackupNow: vi.fn(),
     onViewArchives: vi.fn(),
+    onViewBackupPlans: vi.fn(),
     onCreateBackupPlan: vi.fn(),
     onJobCompleted: vi.fn(),
     canDo: vi.fn().mockReturnValue(true),
@@ -733,6 +734,23 @@ describe('RepositoryCard', () => {
       await user.click(screen.getByRole('button', { name: /View Archives/i }))
       expect(mockCallbacks.onViewArchives).toHaveBeenCalledTimes(1)
       expect(mockAnalyticsTracking.trackArchive).toHaveBeenCalledWith('View', mockRepository)
+    })
+
+    it('calls onViewBackupPlans when View linked backup plans button is clicked', async () => {
+      const user = userEvent.setup()
+      renderWithProviders(
+        <RepositoryCard
+          repository={mockRepository}
+          isInJobsSet={false}
+          canManageRepository={true}
+          getCompressionLabel={mockGetCompressionLabel}
+          {...mockCallbacks}
+        />
+      )
+
+      await user.click(screen.getByRole('button', { name: /View linked backup plans/i }))
+
+      expect(mockCallbacks.onViewBackupPlans).toHaveBeenCalledTimes(1)
     })
 
     it('calls onDelete when Delete button is clicked', async () => {

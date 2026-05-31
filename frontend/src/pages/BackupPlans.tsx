@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Box, Button, DialogActions } from '@mui/material'
 import { CalendarClock, Edit, ListChecks } from 'lucide-react'
@@ -40,6 +40,7 @@ import {
   type LegacySourceRepositoryReview,
 } from './backup-plans/legacySourceSettings'
 import { BackupPlanHistoryDialog } from './backup-plans/PlanRunComponents'
+import { parseRepositoryFilterId, processBackupPlans } from './backup-plans/helpers'
 import { buildRoutePreviews } from './backup-plans/routePreview'
 import { formatRunStatus, isActiveRun } from './backup-plans/runStatus'
 import {
@@ -85,6 +86,7 @@ export default function BackupPlans() {
   const queryClient = useQueryClient()
   const location = useLocation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
   const { can } = usePlan()
   const canUseMultiRepository = can('backup_plan_multi_repository')
@@ -116,10 +118,14 @@ export default function BackupPlans() {
     () => localStorage.getItem('backup_plans_group') || 'none'
   )
   const handledInitialRepositoryRef = useRef(false)
+  const selectedRepositoryFilterId = useMemo(
+    () => parseRepositoryFilterId(searchParams.get('repositoryId')),
+    [searchParams]
+  )
 
   const { data: plansData, isLoading: loadingPlans } = useQuery({
-    queryKey: ['backup-plans'],
-    queryFn: () => backupPlansAPI.list(),
+    queryKey: ['backup-plans', selectedRepositoryFilterId],
+    queryFn: () => backupPlansAPI.list(selectedRepositoryFilterId),
   })
   const backupPlans: BackupPlan[] = useMemo(() => plansData?.data?.backup_plans || [], [plansData])
 
@@ -139,78 +145,18 @@ export default function BackupPlans() {
     return latest
   }, [backupPlanRuns])
 
-  const processedPlans = useMemo(() => {
-    let filtered = backupPlans
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(
-        (plan) =>
-          plan.name.toLowerCase().includes(query) ||
-          (plan.description?.toLowerCase().includes(query) ?? false)
-      )
-    }
-
-    const compareDateDesc = (a?: string | null, b?: string | null) => {
-      if (!a && !b) return 0
-      if (!a) return 1
-      if (!b) return -1
-      return new Date(b).getTime() - new Date(a).getTime()
-    }
-    const compareDateAsc = (a?: string | null, b?: string | null) => -compareDateDesc(a, b)
-
-    const sorted = [...filtered].sort((a, b) => {
-      switch (sortBy) {
-        case 'name-asc':
-          return a.name.localeCompare(b.name)
-        case 'name-desc':
-          return b.name.localeCompare(a.name)
-        case 'last-run-recent':
-          return compareDateDesc(a.last_run, b.last_run)
-        case 'last-run-oldest':
-          return compareDateAsc(a.last_run, b.last_run)
-        case 'next-run-soonest':
-          return compareDateAsc(a.next_run, b.next_run)
-        case 'created-newest':
-          return compareDateDesc(a.created_at, b.created_at)
-        case 'created-oldest':
-          return compareDateAsc(a.created_at, b.created_at)
-        default:
-          return 0
-      }
-    })
-
-    if (groupBy === 'none') {
-      return { groups: [{ name: null as string | null, plans: sorted }] }
-    }
-
-    const groups: { name: string; plans: BackupPlan[] }[] = []
-
-    if (groupBy === 'status') {
-      const enabled = sorted.filter((p) => p.enabled)
-      const disabled = sorted.filter((p) => !p.enabled)
-      if (enabled.length > 0) groups.push({ name: t('backupPlans.groups.enabled'), plans: enabled })
-      if (disabled.length > 0)
-        groups.push({ name: t('backupPlans.groups.disabled'), plans: disabled })
-    } else if (groupBy === 'schedule') {
-      const scheduled = sorted.filter((p) => p.schedule_enabled)
-      const manual = sorted.filter((p) => !p.schedule_enabled)
-      if (scheduled.length > 0)
-        groups.push({ name: t('backupPlans.groups.scheduled'), plans: scheduled })
-      if (manual.length > 0) groups.push({ name: t('backupPlans.groups.manual'), plans: manual })
-    } else if (groupBy === 'source') {
-      const local = sorted.filter((p) => p.source_type === 'local')
-      const remote = sorted.filter((p) => p.source_type === 'remote')
-      const agent = sorted.filter((p) => p.source_type === 'agent')
-      if (local.length > 0) groups.push({ name: t('backupPlans.groups.localSource'), plans: local })
-      if (remote.length > 0)
-        groups.push({ name: t('backupPlans.groups.remoteSource'), plans: remote })
-      if (agent.length > 0)
-        groups.push({ name: t('backupPlans.sourceChooser.managedAgent'), plans: agent })
-    }
-
-    return { groups: groups.length > 0 ? groups : [{ name: null as string | null, plans: sorted }] }
-  }, [backupPlans, searchQuery, sortBy, groupBy, t])
+  const processedPlans = useMemo(
+    () =>
+      processBackupPlans({
+        backupPlans,
+        repositoryFilterId: selectedRepositoryFilterId,
+        searchQuery,
+        sortBy,
+        groupBy,
+        t,
+      }),
+    [backupPlans, selectedRepositoryFilterId, searchQuery, sortBy, groupBy, t]
+  )
   const { data: repositoriesData, isLoading: loadingRepositories } = useQuery({
     queryKey: ['repositories'],
     queryFn: repositoriesAPI.getRepositories,
@@ -219,6 +165,16 @@ export default function BackupPlans() {
     () => repositoriesData?.data?.repositories || [],
     [repositoriesData]
   )
+  const selectedRepositoryFilter = useMemo(() => {
+    if (selectedRepositoryFilterId === null) return null
+    const repository = repositories.find((repo) => repo.id === selectedRepositoryFilterId)
+    return {
+      id: selectedRepositoryFilterId,
+      name:
+        repository?.name ||
+        t('backupPlans.filters.repositoryFallback', { id: selectedRepositoryFilterId }),
+    }
+  }, [repositories, selectedRepositoryFilterId, t])
   const { data: sshConnectionsData } = useQuery({
     queryKey: ['ssh-connections'],
     queryFn: sshKeysAPI.getSSHConnections,
@@ -477,6 +433,12 @@ export default function BackupPlans() {
     setWizardOpen(true)
   }
 
+  const clearRepositoryFilter = () => {
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('repositoryId')
+    setSearchParams(nextParams, { replace: true })
+  }
+
   const openEditWizard = async (plan: BackupPlan) => {
     const response = await backupPlansAPI.get(plan.id)
     const detailedPlan = response.data as BackupPlan
@@ -709,6 +671,8 @@ export default function BackupPlans() {
         setSortBy={setSortBy}
         groupBy={groupBy}
         setGroupBy={setGroupBy}
+        repositoryFilter={selectedRepositoryFilter}
+        onClearRepositoryFilter={clearRepositoryFilter}
         startingPlanId={startingPlanId}
         highlightedPlanId={highlightedPlanId}
         canUseMultiRepository={canUseMultiRepository}

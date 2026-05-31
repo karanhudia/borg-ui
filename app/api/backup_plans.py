@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
@@ -845,20 +845,25 @@ def _replace_repository_links(
 
 @router.get("/")
 async def list_backup_plans(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    repository_id: int | None = Query(default=None, ge=1),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    plans = (
-        db.query(BackupPlan)
-        .options(
-            joinedload(BackupPlan.repositories).joinedload(
-                BackupPlanRepository.repository
-            )
-        )
-        .order_by(BackupPlan.name.asc())
-        .all()
+    query = db.query(BackupPlan).options(
+        joinedload(BackupPlan.repositories).joinedload(BackupPlanRepository.repository)
     )
+    if repository_id is not None:
+        query = query.join(BackupPlanRepository).filter(
+            BackupPlanRepository.repository_id == repository_id,
+            BackupPlanRepository.enabled == True,
+        )
+    plans = query.order_by(BackupPlan.name.asc()).all()
     visible = [plan for plan in plans if _can_view_plan(db, current_user, plan)]
-    return {"backup_plans": [_serialize_plan(plan) for plan in visible]}
+    return {
+        "backup_plans": [
+            _serialize_plan(plan, detail=repository_id is not None) for plan in visible
+        ]
+    }
 
 
 @router.get("/runs")

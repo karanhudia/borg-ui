@@ -609,6 +609,10 @@ export default function Repositories() {
     navigate('/archives', { state: { repositoryId: repository.id } })
   }
 
+  const handleViewBackupPlans = (repository: Repository) => {
+    navigate(`/backup-plans?repositoryId=${repository.id}`)
+  }
+
   const handleCreateBackupPlan = (repository: Repository) => {
     if (!repository.source_directories?.length) {
       navigate('/backup-plans', { state: { createPlanForRepositoryId: repository.id } })
@@ -830,6 +834,7 @@ export default function Repositories() {
         onDelete={handleDeleteRepository}
         onBackupNow={handleBackupNow}
         onViewArchives={handleViewArchives}
+        onViewBackupPlans={handleViewBackupPlans}
         onCreateBackupPlan={handleCreateBackupPlan}
         onRcloneSync={handleRcloneSync}
         onRcloneHydrate={handleRcloneHydrate}

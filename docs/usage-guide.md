@@ -203,6 +203,14 @@ For a local repository, the plan can back up local container paths such as `/loc
 
 For a remote repository, the plan can back up local or remote sources into the SSH repository. If you want both a local copy and an off-site copy, add both repositories to the plan when your license allows multiple repositories.
 
+## Find Plans for a Repository
+
+1. Go to Repositories.
+2. Find the repository.
+3. Choose View linked backup plans.
+
+Backup Plans opens with a repository filter applied, so the list only shows plans that write to that repository. Use Clear repository filter to return to all plans.
+
 ## Run a Backup Plan
 
 1. Go to Backup Plans.
