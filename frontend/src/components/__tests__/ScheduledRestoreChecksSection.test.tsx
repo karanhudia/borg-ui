@@ -77,7 +77,7 @@ vi.mock('../shared/CronBuilderDialog', () => ({
   default: () => <button type="button">Cron builder</button>,
 }))
 
-vi.mock('../TerminalLogViewer', () => ({
+vi.mock('../shared/TerminalLogViewer', () => ({
   TerminalLogViewer: () => <div data-testid="terminal-log-viewer" />,
 }))
 
