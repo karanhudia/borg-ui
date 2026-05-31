@@ -7,6 +7,8 @@ import { activityAPI } from '../services/api'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import BackupJobsTable from '../components/BackupJobsTable'
+import LogViewerDialog from '../components/LogViewerDialog'
+import RunningCloudStorageJobsSection from '../components/RunningCloudStorageJobsSection'
 
 interface ActivityItem {
   id: number
@@ -36,6 +38,7 @@ const Activity: React.FC = () => {
   const canManageActivityJobs = hasGlobalPermission('repositories.manage_all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [logJob, setLogJob] = useState<ActivityItem | null>(null)
 
   // Fetch activity data
   const {
@@ -76,6 +79,15 @@ const Activity: React.FC = () => {
     if (!activities) return { grouped: [], individual: [] }
     return { grouped: [], individual: activities }
   }, [activities])
+  const activeCloudStorageJobs = React.useMemo(
+    () =>
+      ((activities || []) as ActivityItem[]).filter(
+        (activity: ActivityItem) =>
+          (activity.type === 'rclone_sync' || activity.type === 'rclone_hydrate') &&
+          (activity.status === 'pending' || activity.status === 'running')
+      ),
+    [activities]
+  )
 
   return (
     <Box>
@@ -124,6 +136,10 @@ const Activity: React.FC = () => {
           <MenuItem value="compact">{t('activity.filters.types.compact')}</MenuItem>
           <MenuItem value="prune">{t('activity.filters.types.prune')}</MenuItem>
           <MenuItem value="package">{t('activity.filters.types.package')}</MenuItem>
+          <MenuItem value="rclone_sync">{t('activity.filters.types.rcloneSync')}</MenuItem>
+          <MenuItem value="rclone_hydrate">
+            {t('activity.filters.types.rcloneHydrate')}
+          </MenuItem>
           <MenuItem value="script_execution">
             {t('activity.filters.types.scriptExecution')}
           </MenuItem>
@@ -143,6 +159,11 @@ const Activity: React.FC = () => {
           <MenuItem value="pending">{t('activity.filters.statuses.pending')}</MenuItem>
         </Select>
       </Box>
+
+      <RunningCloudStorageJobsSection
+        jobs={activeCloudStorageJobs}
+        onViewLogs={(job) => setLogJob(job as ActivityItem)}
+      />
 
       {/* Activity List */}
       {isLoading ? (
@@ -191,6 +212,7 @@ const Activity: React.FC = () => {
           }}
         />
       )}
+      <LogViewerDialog job={logJob} open={Boolean(logJob)} onClose={() => setLogJob(null)} />
     </Box>
   )
 }

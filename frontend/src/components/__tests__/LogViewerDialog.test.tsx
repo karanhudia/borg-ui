@@ -160,6 +160,18 @@ describe('LogViewerDialog', () => {
       expect(screen.getByText(/Script Logs/)).toBeInTheDocument()
     })
 
+    it('displays Cloud Sync label for rclone sync logs', () => {
+      const syncJob = { ...mockJob, type: 'rclone_sync' }
+      render(<LogViewerDialog job={syncJob} open={true} onClose={vi.fn()} />)
+      expect(screen.getByText(/Cloud Sync Logs/)).toBeInTheDocument()
+    })
+
+    it('displays Cloud Hydrate label for rclone hydrate logs', () => {
+      const hydrateJob = { ...mockJob, type: 'rclone_hydrate' }
+      render(<LogViewerDialog job={hydrateJob} open={true} onClose={vi.fn()} />)
+      expect(screen.getByText(/Cloud Hydrate Logs/)).toBeInTheDocument()
+    })
+
     it('uses custom jobTypeLabel when provided', () => {
       render(
         <LogViewerDialog

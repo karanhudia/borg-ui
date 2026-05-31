@@ -100,6 +100,10 @@ const getTypeLabel = (type: string, t: (key: string) => string): string => {
       return t('backupJobsTable.types.prune')
     case 'package':
       return t('backupJobsTable.types.package')
+    case 'rclone_sync':
+      return t('backupJobsTable.types.rcloneSync')
+    case 'rclone_hydrate':
+      return t('backupJobsTable.types.rcloneHydrate')
     case 'script_execution':
       return t('backupJobsTable.types.scriptExecution')
     default:
@@ -125,6 +129,10 @@ const getTypeColor = (
       return 'warning'
     case 'package':
       return 'success'
+    case 'rclone_sync':
+      return 'info'
+    case 'rclone_hydrate':
+      return 'primary'
     case 'script_execution':
       return 'secondary'
     default:

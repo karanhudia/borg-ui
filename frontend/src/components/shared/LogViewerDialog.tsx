@@ -156,6 +156,10 @@ function getTypeLabel(type: string, t: (key: string) => string): string {
       return t('logViewer.typePrune')
     case 'package':
       return t('logViewer.typePackage')
+    case 'rclone_sync':
+      return t('logViewer.typeRcloneSync')
+    case 'rclone_hydrate':
+      return t('logViewer.typeRcloneHydrate')
     case 'script_execution':
       return t('logViewer.typeScript')
     default:

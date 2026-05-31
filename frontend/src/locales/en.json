@@ -1209,6 +1209,8 @@
         "compact": "Compact",
         "prune": "Prune",
         "package": "Package",
+        "rcloneSync": "Cloud Sync",
+        "rcloneHydrate": "Cloud Hydrate",
         "scriptExecution": "Script"
       },
       "statuses": {
@@ -1222,6 +1224,24 @@
     "empty": {
       "title": "No activity found",
       "message": "There are no operations matching your filters"
+    }
+  },
+  "cloudStorageJobs": {
+    "title": "Active cloud storage jobs",
+    "subtitle": "Cloud mirror sync and hydration work running in the background",
+    "unknownRepository": "Unknown repository",
+    "operations": {
+      "initialSync": "Initial sync",
+      "sync": "Cloud sync",
+      "hydrate": "Hydrating cache"
+    },
+    "triggers": {
+      "initial": "Initial",
+      "manual": "Manual",
+      "schedule": "Schedule"
+    },
+    "actions": {
+      "viewLogs": "View Logs"
     }
   },
   "settings": {
@@ -2148,6 +2168,8 @@
       "compact": "Compact",
       "prune": "Prune",
       "package": "Package Install",
+      "rcloneSync": "Cloud Sync",
+      "rcloneHydrate": "Cloud Hydrate",
       "scriptExecution": "Script"
     },
     "scheduledById": "Scheduled (ID: {{id}})",
@@ -4075,6 +4097,8 @@
     "typeCompact": "Compact",
     "typePrune": "Prune",
     "typePackage": "Package",
+    "typeRcloneSync": "Cloud Sync",
+    "typeRcloneHydrate": "Cloud Hydrate",
     "typeScript": "Script"
   },
   "mounts": {

@@ -1209,6 +1209,8 @@
         "compact": "Komprimierung",
         "prune": "Bereinigung",
         "package": "Paket",
+        "rcloneSync": "Cloud-Sync",
+        "rcloneHydrate": "Cloud-Hydratation",
         "scriptExecution": "Skript"
       },
       "statuses": {
@@ -1222,6 +1224,24 @@
     "empty": {
       "title": "Keine Aktivität gefunden",
       "message": "Es gibt keine Vorgänge, die deinen Filtern entsprechen"
+    }
+  },
+  "cloudStorageJobs": {
+    "title": "Aktive Cloud-Speicherjobs",
+    "subtitle": "Cloud-Spiegel-Sync und Hydratation laufen im Hintergrund",
+    "unknownRepository": "Unbekanntes Repository",
+    "operations": {
+      "initialSync": "Initialer Sync",
+      "sync": "Cloud-Sync",
+      "hydrate": "Cache-Hydratation"
+    },
+    "triggers": {
+      "initial": "Initial",
+      "manual": "Manuell",
+      "schedule": "Zeitplan"
+    },
+    "actions": {
+      "viewLogs": "Protokolle anzeigen"
     }
   },
   "settings": {
@@ -2148,6 +2168,8 @@
       "compact": "Komprimieren",
       "prune": "Bereinigen",
       "package": "Paketinstallation",
+      "rcloneSync": "Cloud-Sync",
+      "rcloneHydrate": "Cloud-Hydratation",
       "scriptExecution": "Skript"
     },
     "scheduledById": "Geplant (ID: {{id}})",
@@ -4075,6 +4097,8 @@
     "typeCompact": "Komprimieren",
     "typePrune": "Bereinigen",
     "typePackage": "Paket",
+    "typeRcloneSync": "Cloud-Sync",
+    "typeRcloneHydrate": "Cloud-Hydratation",
     "typeScript": "Skript"
   },
   "mounts": {
