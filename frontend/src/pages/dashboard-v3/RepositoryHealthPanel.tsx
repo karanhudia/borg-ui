@@ -243,7 +243,13 @@ export function RepositoryHealthPanel({
           // floor is sized for the worst-case DE top row (TYPE chip + "Nur Beobachtung"
           // observe chip + ScheduleBadge) plus padding, so the German build doesn't
           // wrap the chip strip onto a second line.
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          // Single column on xs (any min larger than the viewport would
+          // overflow). Auto-fit at sm+ where the 300px floor fits cleanly
+          // and reflows from 1 to 4+ columns as width grows.
+          gridTemplateColumns: {
+            xs: 'minmax(0, 1fr)',
+            sm: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+          },
           gap: 1.5,
         }}
       >

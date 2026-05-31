@@ -116,20 +116,27 @@ export default function DashboardV3() {
 
   return (
     <TokenContext.Provider value={T}>
-      {/* No outer bgcolor / padding — Layout's Container already provides this */}
-      <Box sx={{ color: T.textPrimary }}>
+      {/* No outer bgcolor / padding — Layout's Container already provides this.
+          overflowX: 'clip' prevents any internal min-content overflow from
+          becoming a horizontal page scrollbar on mobile. */}
+      <Box sx={{ color: T.textPrimary, minWidth: 0, overflowX: 'clip', width: '100%' }}>
         {/* Health banner */}
         <Box
           sx={{
             ...surface,
             mb: 2.5,
-            px: 2.5,
-            py: 1.75,
+            px: { xs: 2, sm: 2.5 },
+            py: { xs: 1.5, sm: 1.75 },
             display: 'flex',
-            alignItems: 'center',
+            // Stack vertically on mobile so the health label, the 2x2 stats
+            // grid, and the refresh button each get their own clean row
+            // instead of awkward flex wrapping. Horizontal flow returns at
+            // md+ where the row fits in one line.
+            flexDirection: { xs: 'column', md: 'row' },
+            alignItems: { xs: 'stretch', md: 'center' },
             justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 2,
+            flexWrap: { md: 'wrap' },
+            gap: { xs: 1.75, md: 2 },
             borderColor: alpha(sc.color, 0.33),
           }}
         >
@@ -167,8 +174,22 @@ export default function DashboardV3() {
             </Box>
           </Stack>
 
-          {/* Quick stats */}
-          <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+          {/* Quick stats: 2x2 grid on xs (so labels do not get cramped or
+              orphaned by flex wrap), natural row-with-gaps on sm+ where the
+              4-up layout fits comfortably. */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: 'repeat(2, minmax(0, 1fr))',
+                sm: 'repeat(4, auto)',
+              },
+              columnGap: { xs: 2, sm: 3 },
+              rowGap: { xs: 1.25, sm: 0 },
+              alignItems: 'start',
+              width: { xs: '100%', md: 'auto' },
+            }}
+          >
             {(
               [
                 {
@@ -277,7 +298,7 @@ export default function DashboardV3() {
                 )}
               </Box>
             ))}
-          </Stack>
+          </Box>
 
           <Button
             size="small"
@@ -293,6 +314,9 @@ export default function DashboardV3() {
               color: T.textMuted,
               fontSize: '0.8125rem',
               minWidth: 0,
+              // Right-align the refresh row on mobile (since it sits on its
+              // own row under the stats grid) so it does not look orphaned.
+              alignSelf: { xs: 'flex-end', md: 'auto' },
               px: 1.25,
               '&:hover': { color: T.textPrimary, bgcolor: T.hoverBg },
             }}
@@ -305,7 +329,11 @@ export default function DashboardV3() {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: '200px 1fr' },
+            // minmax(0, ...) on both tracks overrides the implicit min-content
+            // floor that 1fr/auto would otherwise inherit. Without this, a
+            // single child wider than its share of the row (e.g. a long repo
+            // name) forces the column to grow and the grid to overflow.
+            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '200px minmax(0, 1fr)' },
             gap: 2.5,
             alignItems: 'start',
           }}
@@ -524,26 +552,48 @@ export default function DashboardV3() {
                     {t('dashboard.recentActivity.last14Days')}
                   </Typography>
                 </Stack>
-                <Button
-                  size="small"
-                  variant="text"
-                  endIcon={<ArrowRight size={14} />}
-                  onClick={() => {
-                    trackNavigation(EventAction.VIEW, {
-                      section: 'dashboard',
-                      destination: 'activity',
-                      source: 'recent_activity',
-                    })
-                    navigate('/activity')
-                  }}
-                  sx={{
-                    fontSize: '0.8125rem',
-                    color: T.textMuted,
-                    '&:hover': { color: T.textPrimary, bgcolor: T.hoverBg },
-                  }}
-                >
-                  {t('dashboard.recentActivity.fullLog')}
-                </Button>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  {/* Failed-marker legend lives in the header next to the
+                      Full Log button so it does not claim its own row under
+                      the chart. The ringed circle here visually matches the
+                      ring drawn around failed dots in the SVG. */}
+                  <Stack direction="row" spacing={0.65} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        border: `1.5px solid ${T.red}`,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Typography
+                      sx={{ fontFamily: T.mono, fontSize: '0.75rem', color: T.textMuted }}
+                    >
+                      {t('dashboard.activityTimeline.legendFailed')}
+                    </Typography>
+                  </Stack>
+                  <Button
+                    size="small"
+                    variant="text"
+                    endIcon={<ArrowRight size={14} />}
+                    onClick={() => {
+                      trackNavigation(EventAction.VIEW, {
+                        section: 'dashboard',
+                        destination: 'activity',
+                        source: 'recent_activity',
+                      })
+                      navigate('/activity')
+                    }}
+                    sx={{
+                      fontSize: '0.8125rem',
+                      color: T.textMuted,
+                      '&:hover': { color: T.textPrimary, bgcolor: T.hoverBg },
+                    }}
+                  >
+                    {t('dashboard.recentActivity.fullLog')}
+                  </Button>
+                </Stack>
               </Stack>
 
               {ov.activity_feed.length === 0 ? (

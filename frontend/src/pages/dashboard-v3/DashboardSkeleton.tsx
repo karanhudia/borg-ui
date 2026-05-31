@@ -29,21 +29,28 @@ const fadeIn = {
 
 export function DashboardSkeleton({ T }: { T: Tokens }) {
   return (
-    <Box sx={{ color: T.textPrimary }}>
-      {/* Health banner */}
+    // overflowX: 'clip' + minWidth: 0 are a safety net: if any inner element
+    // has a min-content larger than the viewport (e.g. fixed-width skeleton
+    // children that resist shrinking), clip prevents that overflow from
+    // becoming a horizontal page scrollbar on mobile.
+    <Box sx={{ color: T.textPrimary, minWidth: 0, overflowX: 'clip', width: '100%' }}>
+      {/* Health banner: mirrors the live banner's responsive layout so the
+          page does not jump on data arrival. Column stack on xs (label, 2x2
+          stats, refresh) collapsing to a single row on md+. */}
       <Box
         sx={{
           bgcolor: T.bgCard,
           border: `1px solid ${T.border}`,
           borderRadius: '14px',
           mb: 2.5,
-          px: 2.5,
-          py: 1.75,
+          px: { xs: 2, sm: 2.5 },
+          py: { xs: 1.5, sm: 1.75 },
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: { xs: 'column', md: 'row' },
+          alignItems: { xs: 'stretch', md: 'center' },
           justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 2,
+          flexWrap: { md: 'wrap' },
+          gap: { xs: 1.75, md: 2 },
         }}
       >
         <Stack direction="row" spacing={2} alignItems="center">
@@ -63,7 +70,19 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
             />
           </Box>
         </Stack>
-        <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: 'repeat(2, minmax(0, 1fr))',
+              sm: 'repeat(4, auto)',
+            },
+            columnGap: { xs: 2, sm: 3 },
+            rowGap: { xs: 1.25, sm: 0 },
+            alignItems: 'start',
+            width: { xs: '100%', md: 'auto' },
+          }}
+        >
           {[64, 96, 110, 76].map((w, i) => (
             <Box key={i}>
               <Skeleton
@@ -80,12 +99,16 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
               />
             </Box>
           ))}
-        </Stack>
+        </Box>
         <Skeleton
           variant="text"
           width={56}
           height={20}
-          sx={{ transform: 'none', borderRadius: 0.5 }}
+          sx={{
+            transform: 'none',
+            borderRadius: 0.5,
+            alignSelf: { xs: 'flex-end', md: 'auto' },
+          }}
         />
       </Box>
 
@@ -93,7 +116,11 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '200px 1fr' },
+          // minmax(0, ...) overrides the implicit min-content floor that
+          // 1fr/auto inherits. Without it, an internal child wider than its
+          // fractional share forces the column to grow and the grid to
+          // overflow the page on narrow viewports.
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '200px minmax(0, 1fr)' },
           gap: 2.5,
           alignItems: 'start',
         }}
@@ -298,24 +325,35 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
               </Stack>
               <Stack spacing={0.4}>
                 {Array.from({ length: FAILURES_PLACEHOLDER_COUNT }).map((_, i) => (
-                  <Stack key={i} direction="row" spacing={1} alignItems="baseline">
+                  <Stack
+                    key={i}
+                    direction="row"
+                    spacing={1}
+                    alignItems="baseline"
+                    sx={{ minWidth: 0 }}
+                  >
                     <Skeleton
                       variant="text"
                       width={[110, 90, 130][i]}
                       height={14}
-                      sx={{ transform: 'none', borderRadius: 0.5 }}
+                      sx={{ transform: 'none', borderRadius: 0.5, minWidth: 0, flexShrink: 1 }}
                     />
                     <Skeleton
                       variant="text"
                       width={[80, 56, 96][i]}
                       height={12}
-                      sx={{ transform: 'none', borderRadius: 0.5 }}
+                      sx={{ transform: 'none', borderRadius: 0.5, minWidth: 0, flexShrink: 1 }}
                     />
                     <Skeleton
                       variant="text"
                       width={[220, 280, 180][i]}
                       height={12}
-                      sx={{ transform: 'none', borderRadius: 0.5, flex: 1 }}
+                      sx={{
+                        transform: 'none',
+                        borderRadius: 0.5,
+                        flex: '1 1 0',
+                        minWidth: 0,
+                      }}
                     />
                   </Stack>
                 ))}
@@ -323,12 +361,15 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
             </Box>
 
             {/* Card grid: mix of full (critical/warning) + compact (healthy)
-                cards. The real grid auto-fits at minmax(300px, 1fr); the
-                skeleton uses the same. */}
+                cards. Single column on xs so the 300px floor cannot overflow
+                the viewport; auto-fit at sm+ where 300px fits comfortably. */}
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                gridTemplateColumns: {
+                  xs: 'minmax(0, 1fr)',
+                  sm: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+                },
                 gap: 1.5,
               }}
             >
@@ -383,7 +424,10 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                   </Stack>
                   {/* Divider */}
                   <Box sx={{ height: '1px', bgcolor: T.border, mb: 0.9 }} />
-                  {/* DimStatusGrid: 2x2 inline cells */}
+                  {/* DimStatusGrid: 2x2 inline cells. minWidth: 0 on the
+                      inner skeletons lets the flex children shrink below
+                      their declared widths so the cells never push the card
+                      wider than its column on narrow viewports. */}
                   <Box
                     sx={{
                       display: 'grid',
@@ -393,19 +437,40 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                     }}
                   >
                     {[0, 1, 2, 3].map((j) => (
-                      <Stack key={j} direction="row" spacing={0.5} alignItems="center">
-                        <Skeleton variant="circular" width={12} height={12} />
+                      <Stack
+                        key={j}
+                        direction="row"
+                        spacing={0.5}
+                        alignItems="center"
+                        sx={{ minWidth: 0 }}
+                      >
+                        <Skeleton
+                          variant="circular"
+                          width={12}
+                          height={12}
+                          sx={{ flexShrink: 0 }}
+                        />
                         <Skeleton
                           variant="text"
                           width={[52, 44, 60, 56][j]}
                           height={12}
-                          sx={{ transform: 'none', borderRadius: 0.5, flexGrow: 1 }}
+                          sx={{
+                            transform: 'none',
+                            borderRadius: 0.5,
+                            flexGrow: 1,
+                            minWidth: 0,
+                          }}
                         />
                         <Skeleton
                           variant="text"
                           width={[36, 32, 28, 44][j]}
                           height={12}
-                          sx={{ transform: 'none', borderRadius: 0.5 }}
+                          sx={{
+                            transform: 'none',
+                            borderRadius: 0.5,
+                            minWidth: 0,
+                            flexShrink: 1,
+                          }}
                         />
                       </Stack>
                     ))}
@@ -427,31 +492,41 @@ export function DashboardSkeleton({ T }: { T: Tokens }) {
                     ...fadeIn,
                   }}
                 >
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Skeleton variant="circular" width={10} height={10} />
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                    <Skeleton variant="circular" width={10} height={10} sx={{ flexShrink: 0 }} />
                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                       <Skeleton
                         variant="text"
                         width={NAME_WIDTHS_COMPACT[i] ?? 100}
                         height={16}
-                        sx={{ transform: 'none', borderRadius: 0.5 }}
+                        sx={{ transform: 'none', borderRadius: 0.5, maxWidth: '100%' }}
                       />
-                      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 0.4 }}>
+                      <Stack
+                        direction="row"
+                        spacing={0.75}
+                        alignItems="center"
+                        sx={{ mt: 0.4, minWidth: 0 }}
+                      >
                         <Skeleton
                           variant="rounded"
                           width={48}
                           height={20}
-                          sx={{ borderRadius: 1 }}
+                          sx={{ borderRadius: 1, flexShrink: 0 }}
                         />
                         <Skeleton
                           variant="text"
                           width={120}
                           height={12}
-                          sx={{ transform: 'none', borderRadius: 0.5 }}
+                          sx={{
+                            transform: 'none',
+                            borderRadius: 0.5,
+                            minWidth: 0,
+                            flexShrink: 1,
+                          }}
                         />
                       </Stack>
                     </Box>
-                    <Stack alignItems="flex-end" spacing={0.4}>
+                    <Stack alignItems="flex-end" spacing={0.4} sx={{ flexShrink: 0 }}>
                       <Skeleton
                         variant="text"
                         width={60}
