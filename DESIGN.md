@@ -2,6 +2,11 @@
 name: Borg UI
 description: Calm, modern, precise web interface for BorgBackup operations.
 colors:
+  # Brand identity (logo, address bar, brand-tinted surfaces).
+  brand: "#059669"
+  brand-deep: "#065f46"
+  # Framework primary used in MUI/Tailwind (NOT the brand color; see "Open Issues"
+  # for the known divergence between framework primary and brand identity).
   primary: "#2563eb"
   primary-light: "#3b82f6"
   primary-dark: "#1e40af"
@@ -60,7 +65,8 @@ colors:
   step-review-dark: "#4fc3f7"
   entity-accent-default: "#059669"
   entity-accent-highlight: "#f59e0b"
-  meta-theme-color: "#00dd00"
+  meta-theme-color-light: "#059669"
+  meta-theme-color-dark: "#065f46"
 typography:
   display:
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
@@ -176,9 +182,9 @@ components:
 
 **Creative North Star: "The Safe Pair of Hands"**
 
-Borg UI sits in the same homelab tab as Plex, Linear, Tailscale, and Proxmox. It is operational, not aspirational. The user is opening it at 3am because a backup failed, or on a quiet Sunday to set up a new SFTP repository; in both cases the surface needs to feel like a dependable instrument rather than a marketing site. The visual register matches that: a restrained blue accent on calm neutrals, generous spacing, real motion only where it earns its place, and a dual MUI plus Tailwind token stack that has been tuned in both light and dark modes.
+Borg UI sits in the same homelab tab as Plex, Linear, Tailscale, and Proxmox. It is operational, not aspirational. The user is opening it at 3am because a backup failed, or on a quiet Sunday to set up a new SFTP repository; in both cases the surface needs to feel like a dependable instrument rather than a marketing site. The visual register matches that: emerald-tinted neutrals carrying the brand, restrained accents on status, generous spacing, real motion only where it earns its place, and a dual MUI plus Tailwind token stack tuned in both light and dark modes.
 
-The system is "Restrained" in color strategy. One blue (`#2563eb`) carries primary intent across the entire app. Status semantics (green, amber, red) appear only on actual status, never as decoration. The dashboard introduces a small set of named accent dyes (indigo `#6366f1`, blue `#3b82f6`, pink `#ec4899`) for charts; the rest of the product treats color as load-bearing signal, not flavor. Wizards earn one named-step color each (blue location, green source, purple security, orange config, cyan review) so that the user always knows which phase of which wizard they are in, in both themes.
+The system is "Restrained" in color strategy. The brand identity is **emerald** (`#059669` on the logo, `#065f46` deep); surface tints across the dashboard pick up a low-alpha version of that hue so the page feels brand-anchored without being colored. Status semantics (green, amber, red) appear only on actual status, never as decoration. The framework primary in MUI and Tailwind is currently blue (`#2563eb`), which is a known divergence from the brand identity captured in **Open Issues** below; until that's reconciled, components that route through `theme.palette.primary.main` still render blue. The dashboard introduces a small set of named accent dyes (indigo `#6366f1`, blue `#3b82f6`, pink `#ec4899`) for charts; the rest of the product treats color as load-bearing signal, not flavor. Wizards earn one named-step color each (blue location, green source, purple security, orange config, cyan review) so that the user always knows which phase of which wizard they are in, in both themes.
 
 Density is product-grade: 8px spacing baseline, 8px to 14px corner radii, page gutters of 12px on mobile growing to 24px on desktop, a fixed 240px sidebar drawer, and a 64px header. Type rhythm is system-font driven. Numbers and identifiers on the dashboard switch to `JetBrains Mono` to read as data.
 
@@ -196,11 +202,14 @@ This system explicitly rejects:
 
 ## 2. Colors
 
-The palette is a restrained blue-primary system with green, amber, and red reserved for true status. Indigo and pink appear only inside the dashboard chart vocabulary. Wizard step keys have their own named light/dark color pair.
+The palette is a restrained emerald-brand system: brand-tinted neutrals across surfaces, a (currently blue) framework primary for interactive controls, and green/amber/red reserved for true status. Indigo and pink appear only inside the dashboard chart vocabulary. Wizard step keys have their own named light/dark color pair. The brand-vs-framework gap is documented in Open Issues.
 
-### Primary
-- **Borg Blue** (`#2563eb` light, `#3b82f6` dark): the single primary accent. Defined in `frontend/src/theme.ts` as MUI `palette.primary.main` and in `frontend/tailwind.config.js` as `primary.600`. Carries primary buttons, primary focus rings, active nav, link text, primary CTAs. Light theme uses `#2563eb`; dark theme shifts to `#3b82f6` so it stays legible on the dark paper.
-- **Borg Blue Deep** (`#1e40af`, Tailwind `primary.800`, MUI `palette.primary.dark`): hover state for primary surfaces.
+### Brand
+- **Borg Emerald** (`#059669` light, `#065f46` deep): the brand identity. Pulled directly from `assets/logo-light.png` / `assets/logo-dark.png` and the `BORG UI 2.0` badge. Drives the address-bar `theme-color` in `frontend/index.html`, the dashboard's tinted `bgCard` / `border` surfaces in `dashboard-v3/tokens.tsx`, and is the canonical emerald to reach for when a chrome surface needs to feel "of Borg UI".
+
+### Framework Primary (out of sync with brand)
+- **Framework Blue** (`#2563eb` light, `#3b82f6` dark): MUI `palette.primary.main` in `frontend/src/theme.ts` and Tailwind `primary.600` in `frontend/tailwind.config.js`. Currently carries primary buttons, primary focus rings, active nav, link text, primary CTAs. This is the legacy framework default; until reconciled with the brand emerald (see Open Issues), components routing through `palette.primary` will render blue. New chrome surfaces should reach for the brand emerald; new interactive controls keep using `palette.primary` until the migration.
+- **Framework Blue Deep** (`#1e40af`, Tailwind `primary.800`, MUI `palette.primary.dark`): hover state for primary surfaces.
 
 ### Secondary
 - **Violet Accent** (`#7c3aed` light, `#8b5cf6` dark): MUI `palette.secondary.main`. Used sparingly: secondary chips, occasional emphasis. Not a brand color; treat as a tertiary highlight.
@@ -236,7 +245,7 @@ Defined in `frontend/src/components/wizard/WizardStepIndicator.tsx` as named lig
 - **Border / Divider**: MUI `divider` token; on dashboard glass surfaces the hairline border replaces it.
 
 ### Named Rules
-**The One Blue Rule.** There is exactly one primary accent: blue. `#2563eb` in light, `#3b82f6` in dark. Violet, indigo, pink exist only as dashboard chart hues or as one specific wizard step color. Do not introduce a second product-level accent.
+**The Brand-Anchored Surface Rule.** The brand identity is emerald (`#059669` light, `#065f46` deep). Surface tints, address-bar `theme-color`, and the dashboard's `bgCard` / `border` tokens carry a low-alpha version of that hue so the page reads as Borg UI without colored cards. Status colors (green, amber, red) still carry semantic state on top. The framework primary (MUI `palette.primary.main = #2563eb`, Tailwind `primary.600`) currently anchors buttons and links and is OUT OF SYNC with the brand identity; see Open Issues. Until reconciled, follow this rule: tinted neutrals and chrome use the emerald brand; primary CTAs continue to use whatever `palette.primary` resolves to.
 
 **The Color-Is-Signal Rule.** Green, amber, and red appear only when the surface actually reports success, warning, or failure status. They are never used as decoration, gradients, or section eyebrows. A green chip means the thing is connected. A red chip means the thing failed. If you cannot defend the semantic, use a neutral.
 
@@ -357,7 +366,7 @@ Step keys map to fixed light/dark color pairs (see Colors). Reuse the keys (`loc
 ## 6. Do's and Don'ts
 
 ### Do
-- **Do** anchor primary intent on Borg Blue (`#2563eb` light, `#3b82f6` dark). Buttons, links, focus rings, active nav items.
+- **Do** anchor brand chrome (address bar, tinted surfaces, brand artwork) on Borg Emerald (`#059669` light, `#065f46` deep). Anchor interactive primary controls (buttons, links, focus rings, active nav) on whatever `theme.palette.primary.main` resolves to. Today those are different colors; see Open Issues for the reconciliation plan.
 - **Do** keep status semantics load-bearing. Green only when something is healthy or connected; amber only on warning; red only on failure.
 - **Do** use sentence case on buttons. `theme.ts` sets `textTransform: 'none'`; never override it.
 - **Do** compose new dialogs from `ResponsiveDialog`. Wizards must compose `WizardDialog`. Place action buttons in the `footer` prop so they stay sticky above the iOS safe area on mobile.
@@ -370,7 +379,7 @@ Step keys map to fixed light/dark color pairs (see Colors). Reuse the keys (`loc
 - **Do** size touch targets to at least 40x40 on mobile (the wizard step circles do this with 1.5x gap).
 
 ### Don't
-- **Don't** introduce a second product-level accent color. There is one blue. Violet, indigo, and pink belong to dashboard charts or one wizard step, not to general UI.
+- **Don't** introduce a third product-level accent color. The brand emerald anchors chrome; the framework primary anchors controls. Violet, indigo, and pink belong to dashboard charts or one wizard step, not to general UI.
 - **Don't** use heavy left-accent borders on cards, alerts, list items, or status surfaces (AGENTS.md and PRODUCT.md both prohibit this). Carry emphasis with background tint plus icon plus label.
 - **Don't** ship cream / sand / beige body backgrounds, tiny tracked all-caps eyebrows, numbered `01 . 02 . 03` section scaffolding, gradient text, or decorative glassmorphism outside `WizardDialog` and `DashboardV3` glass cards. These read as "AI made that".
 - **Don't** rename borg vocabulary. "Archive" stays "archive", "repository" stays "repository", "prune" stays "prune". The user came here knowing borg; speak the same language.
@@ -386,7 +395,7 @@ Step keys map to fixed light/dark color pairs (see Colors). Reuse the keys (`loc
 
 These are real inconsistencies and unfilled gaps in the current visual system. Resolve before treating them as ground truth.
 
-1. **Brand color story is split between blue and green.** `frontend/index.html` declares `<meta name="theme-color" content="#00dd00">` (a saturated green), while MUI `palette.primary.main` is `#2563eb` (blue) and the Tailwind `primary` ramp is also blue. The favicon and `theme-color` either reflect an older brand or an intentional "borg green" associated with the upstream BorgBackup logo. Pick one: either keep `#00dd00` as a hardware-chrome-only color (browser address bar tint, PWA splash) and document the rule, or update `theme-color` to match `#2563eb`. Do not silently reconcile without a decision.
+1. **Framework primary is blue but brand identity is emerald.** The logo (`assets/logo-light.png`, `app/static/logo*.png`) is unmistakably emerald green at roughly `#059669`/`#065f46`. The dashboard's `theme-color`, surface tints, and brand-tinted neutrals (`dashboard-v3/tokens.tsx`) have been aligned to that brand identity. The framework primary in MUI (`theme.ts` `palette.primary.main = #2563eb`) and the Tailwind `primary` ramp (also blue) are still the legacy framework default and are OUT OF SYNC with the brand. Until reconciled, every primary button, link, focus ring, and active nav item routing through `palette.primary` will render blue against an emerald-tinted page. The right fix is to update MUI primary to the emerald ramp (and align Tailwind), but that's a large surface area change and warrants a dedicated migration. Document this divergence explicitly so the gap is visible and not papered over.
 
 2. **Dual color system (MUI plus Tailwind) with non-identical values.** Status colors are defined twice with slightly different hex codes:
    - Warning: MUI `palette.warning.main = #ea580c` vs Tailwind `warning.500 = #f59e0b` vs dashboard amber `#f59e0b`.

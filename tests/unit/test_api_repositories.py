@@ -21,6 +21,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
 from app.database.models import (
@@ -1842,6 +1843,49 @@ class TestRepositoriesDelete:
         )
 
         assert response.status_code == 200
+
+    def test_delete_observe_repository_with_restore_check_jobs(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        """Deleting observe-only repositories should clean up restore-check jobs."""
+        test_db.execute(text("PRAGMA foreign_keys=ON"))
+        test_db.commit()
+
+        repo = Repository(
+            name="Delete Observe Repo",
+            path="/tmp/delete-observe-repo",
+            encryption="none",
+            compression="lz4",
+            repository_type="local",
+            mode="observe",
+        )
+        test_db.add(repo)
+        test_db.commit()
+        test_db.refresh(repo)
+
+        restore_check_job = RestoreCheckJob(
+            repository_id=repo.id,
+            repository_path=repo.path,
+            archive_name="archive-2026-05-31",
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+        )
+        test_db.add(restore_check_job)
+        test_db.commit()
+        repo_id = repo.id
+
+        response = test_client.delete(
+            f"/api/repositories/{repo_id}", headers=admin_headers
+        )
+
+        assert response.status_code == 200
+        assert (
+            test_db.query(RestoreCheckJob)
+            .filter(RestoreCheckJob.repository_id == repo_id)
+            .count()
+            == 0
+        )
 
     def test_delete_nonexistent_repository(
         self, test_client: TestClient, admin_headers

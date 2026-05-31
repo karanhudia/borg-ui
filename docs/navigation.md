@@ -27,10 +27,10 @@ For a new setup, follow the sidebar in this order:
 | --- | --- | --- |
 | Main | Dashboard | Check repository health, recent activity, backup freshness, and restore-check status. |
 | Main | Activity | Review job history, live or recent logs, failures, and completed backup, restore, check, prune, compact, script, or package work. |
-| Hosts | Remote Machines | Add SSH-connected machines for remote repositories, remote backup sources, and SSH restore destinations. |
-| Hosts | Managed Agents | Enroll and manage Borg UI agents on remote machines. |
-| Targets | Repositories | Create, import, inspect, maintain, and restore from Borg repositories. A repository is the storage target. |
-| Targets | Cloud Storage | Configure reusable rclone remotes for Cloud Mirror targets and advanced direct Borg 2 rclone repository URLs. |
+| Infrastructure | Remote Machines | Add SSH-connected machines for remote repositories, remote backup sources, and SSH restore destinations. |
+| Infrastructure | Managed Agents | Enroll and manage Borg UI agents on remote machines. |
+| Infrastructure | Cloud Storage | Configure reusable rclone remotes for Cloud Mirror targets and advanced direct Borg 2 rclone repository URLs. |
+| Storage | Repositories | Create, import, inspect, maintain, and restore from Borg repositories. A repository is the storage target. |
 | Backups | Backup Plans | Define what to back up, where it should go, when it should run, and what maintenance should run afterward. |
 | Backups | Backup | Run older repository-based backups or legacy backup jobs. New workflows should usually start from Backup Plans. |
 | Backups | Schedule | Review scheduled repository work, scheduled restore checks, and plan schedules from one operational view. |

@@ -75,13 +75,6 @@ export default function SSHConnectionsSingleKey() {
   const keyExists = systemKeyData?.data?.exists
   const connections: SSHConnection[] = connectionsData?.data?.connections || []
 
-  // Statistics
-  const stats = {
-    totalConnections: connections.length,
-    activeConnections: connections.filter((c) => c.status === 'connected').length,
-    failedConnections: connections.filter((c) => c.status === 'failed').length,
-  }
-
   // Mutations
   const generateKeyMutation = useMutation({
     mutationFn: (data: { name: string; key_type: string; description?: string }) =>
@@ -437,7 +430,6 @@ export default function SSHConnectionsSingleKey() {
       keyExists={keyExists}
       systemKey={systemKey}
       connections={connections}
-      stats={stats}
       canManageSsh={canManageSsh}
       keyVisible={keyVisible}
       setKeyVisible={setKeyVisible}

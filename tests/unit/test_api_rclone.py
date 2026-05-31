@@ -3672,6 +3672,124 @@ def test_update_cached_rclone_repository_rolls_back_unsupported_storage_conversi
 
 
 @pytest.mark.unit
+def test_update_cached_rclone_repository_preserves_primary_mode_with_edit_payload(
+    test_client: TestClient, admin_headers, test_db
+):
+    remote = RcloneRemote(name="prod-s3", provider="s3", config_source="managed")
+    repository = Repository(
+        name="Cached Rclone Repo",
+        path="/cache/repositories/1",
+        encryption="none",
+        compression="lz4",
+        repository_type="rclone",
+        borg_version=1,
+        executor_type="server",
+        execution_target="local",
+    )
+    test_db.add_all([remote, repository])
+    test_db.commit()
+    test_db.refresh(remote)
+    test_db.refresh(repository)
+    storage = RepositoryStorage(
+        repository_id=repository.id,
+        backend="rclone",
+        rclone_remote_id=remote.id,
+        rclone_remote_path="borg-ui/repositories/app",
+        cache_path="/cache/repositories/1",
+        sync_policy="after_success",
+        sync_status="current",
+        extra_flags=[],
+    )
+    test_db.add(storage)
+    test_db.commit()
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "name": "Cached Rclone Repo Updated",
+            "path": "/cache/repositories/1",
+            "storage_backend": "rclone",
+            "cloud_mirror_enabled": True,
+            "connection_id": None,
+            "executor_type": "server",
+            "execution_target": "local",
+            "agent_machine_id": None,
+            "rclone_remote_id": remote.id,
+            "rclone_remote_path": "borg-ui/repositories/archive",
+            "rclone_remote_path_verified": False,
+            "rclone_sync_policy": "manual",
+            "rclone_extra_flags": ["--fast-list"],
+        },
+    )
+
+    assert response.status_code == 200
+    test_db.refresh(repository)
+    test_db.refresh(storage)
+    assert repository.name == "Cached Rclone Repo Updated"
+    assert repository.repository_type == "rclone"
+    assert repository.path == "/cache/repositories/1"
+    assert repository.connection_id is None
+    assert repository.executor_type == "server"
+    assert repository.execution_target == "local"
+    assert repository.agent_machine_id is None
+    assert storage.rclone_remote_id == remote.id
+    assert storage.rclone_remote_path == "borg-ui/repositories/archive"
+    assert storage.sync_policy == "manual"
+    assert storage.extra_flags == ["--fast-list"]
+    assert storage.cache_path == "/cache/repositories/1"
+    assert storage.sync_direction != "primary_to_remote"
+
+
+@pytest.mark.unit
+def test_update_local_repository_ignores_disabled_rclone_defaults_from_edit_payload(
+    test_client: TestClient, admin_headers, test_db
+):
+    repository = Repository(
+        name="Local Repo",
+        path="/repositories/local",
+        encryption="none",
+        compression="lz4",
+        repository_type="local",
+        borg_version=1,
+        executor_type="server",
+        execution_target="local",
+    )
+    test_db.add(repository)
+    test_db.commit()
+    test_db.refresh(repository)
+
+    response = test_client.put(
+        f"/api/repositories/{repository.id}",
+        headers=admin_headers,
+        json={
+            "name": "Local Repo Updated",
+            "path": "/repositories/local",
+            "storage_backend": "local",
+            "cloud_mirror_enabled": False,
+            "rclone_remote_id": None,
+            "rclone_remote_path": None,
+            "rclone_remote_path_verified": False,
+            "rclone_sync_policy": "after_success",
+            "rclone_sync_cron_expression": None,
+            "rclone_sync_timezone": None,
+            "rclone_extra_flags": [],
+        },
+    )
+
+    assert response.status_code == 200
+    test_db.refresh(repository)
+    storage = (
+        test_db.query(RepositoryStorage)
+        .filter(RepositoryStorage.repository_id == repository.id)
+        .first()
+    )
+    assert repository.name == "Local Repo Updated"
+    assert repository.repository_type == "local"
+    assert storage is None
+
+
+@pytest.mark.unit
 def test_update_local_repository_enables_cloud_mirror_with_default_policy(
     test_client: TestClient, admin_headers, test_db, monkeypatch
 ):

@@ -11,7 +11,7 @@ The client runs `borg-ui-agent`, keeps one authenticated outbound WebSocket
 session open to Borg UI, runs Borg locally, and streams progress and logs back
 to the server. The `once` command still uses the polling path for compatibility.
 
-Open Managed Agents from the Hosts navigation group.
+Open Managed Agents from the Infrastructure navigation group.
 
 ## Add a Linux Agent
 

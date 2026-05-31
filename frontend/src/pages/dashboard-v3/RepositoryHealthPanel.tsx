@@ -1,11 +1,59 @@
-import { Box, Chip, Stack, Typography } from '@mui/material'
-import { Server } from 'lucide-react'
+import { Box, Chip, Stack, Tooltip, Typography } from '@mui/material'
+import { alpha } from '@mui/material/styles'
+import { Server, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { formatDistanceToNow } from 'date-fns'
+import { formatDateTimeFull } from '../../utils/dateUtils'
+import { translateBackendKey } from '../../utils/translateBackendKey'
 import { DimStatusGrid, PulseDot, ScheduleBadge } from './health'
-import { STATUS, type Tokens } from './tokens'
+import { STATUS, TYPE_COLOR, type Tokens } from './tokens'
 import type { DashboardOverview } from './types'
 
 type RepositoryHealth = DashboardOverview['repository_health']
+type RepoCardData = RepositoryHealth[number]
+type ActivityFeed = DashboardOverview['activity_feed']
+
+/**
+ * Two small chips rendered identically on both the compact and full repo
+ * card variants: the destination-type chip (colored by `TYPE_COLOR`) and an
+ * optional "Observe Only" chip when the repo is in observe mode.
+ */
+function RepoTypeChips({ repo, T }: { repo: RepoCardData; T: Tokens }) {
+  const { t } = useTranslation()
+  const tColor = TYPE_COLOR[repo.type.toLowerCase()] ?? T.textMuted
+  return (
+    <>
+      <Chip
+        label={repo.type.toUpperCase()}
+        size="small"
+        sx={{
+          height: 20,
+          fontSize: '0.6875rem',
+          bgcolor: alpha(tColor, 0.08),
+          color: tColor,
+          border: `1px solid ${alpha(tColor, 0.25)}`,
+          fontFamily: T.mono,
+          px: 0.5,
+        }}
+      />
+      {repo.mode === 'observe' && (
+        <Chip
+          label={t('repositories.observeOnly')}
+          size="small"
+          sx={{
+            height: 20,
+            fontSize: '0.6875rem',
+            bgcolor: T.indigoDim,
+            color: T.indigo,
+            border: `1px solid ${alpha(T.indigo, 0.19)}`,
+            fontFamily: T.mono,
+            px: 0.5,
+          }}
+        />
+      )}
+    </>
+  )
+}
 
 export function RepositoryHealthPanel({
   T,
@@ -15,6 +63,7 @@ export function RepositoryHealthPanel({
   warningCount,
   healthyCount,
   nowMs,
+  currentFailures,
   onOpenRepositories,
 }: {
   T: Tokens
@@ -24,6 +73,7 @@ export function RepositoryHealthPanel({
   warningCount: number
   healthyCount: number
   nowMs: number
+  currentFailures: ActivityFeed
   onOpenRepositories: () => void
 }) {
   const { t } = useTranslation()
@@ -53,7 +103,7 @@ export function RepositoryHealthPanel({
                 fontSize: '0.75rem',
                 bgcolor: T.redDim,
                 color: T.red,
-                border: `1px solid ${T.red}30`,
+                border: `1px solid ${alpha(T.red, 0.19)}`,
                 fontFamily: T.mono,
               }}
             />
@@ -67,7 +117,7 @@ export function RepositoryHealthPanel({
                 fontSize: '0.75rem',
                 bgcolor: T.amberDim,
                 color: T.amber,
-                border: `1px solid ${T.amber}30`,
+                border: `1px solid ${alpha(T.amber, 0.19)}`,
                 fontFamily: T.mono,
               }}
             />
@@ -81,13 +131,109 @@ export function RepositoryHealthPanel({
                 fontSize: '0.75rem',
                 bgcolor: T.greenDim,
                 color: T.green,
-                border: `1px solid ${T.green}30`,
+                border: `1px solid ${alpha(T.green, 0.19)}`,
                 fontFamily: T.mono,
               }}
             />
           )}
         </Stack>
       </Stack>
+
+      {currentFailures.length > 0 && (
+        // Recent failures strip lives here, alongside the cards they reference,
+        // instead of inside the Activity Timeline panel. Failure context is
+        // operational and belongs next to the repos the user would act on.
+        <Box
+          sx={{
+            mb: 2,
+            border: `1px solid ${alpha(T.red, 0.2)}`,
+            borderRadius: '10px',
+            bgcolor: alpha(T.red, 0.05),
+            p: 1.25,
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.75 }}>
+            <XCircle size={14} color={T.red} />
+            <Typography
+              sx={{
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                color: T.textPrimary,
+              }}
+            >
+              {t('dashboard.recentFailures.title')}
+            </Typography>
+          </Stack>
+          <Stack spacing={0.4}>
+            {currentFailures.slice(0, 3).map((a) => (
+              <Stack
+                key={`${a.type}-${a.id}`}
+                direction="row"
+                spacing={1}
+                alignItems="baseline"
+                sx={{ minWidth: 0 }}
+              >
+                <Typography
+                  sx={{
+                    fontFamily: T.mono,
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    color: T.textPrimary,
+                    flexShrink: 0,
+                  }}
+                >
+                  {a.repository}
+                </Typography>
+                <Tooltip title={formatDateTimeFull(a.timestamp)} arrow placement="top">
+                  <Typography
+                    sx={{
+                      cursor: 'help',
+                      fontSize: '0.75rem',
+                      color: T.textMuted,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
+                  </Typography>
+                </Tooltip>
+                {a.error && (
+                  <Tooltip title={translateBackendKey(a.error)} arrow placement="top">
+                    <Typography
+                      sx={{
+                        fontFamily: T.mono,
+                        fontSize: '0.75rem',
+                        color: T.textMuted,
+                        flexGrow: 1,
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        cursor: 'help',
+                      }}
+                    >
+                      {translateBackendKey(a.error)}
+                    </Typography>
+                  </Tooltip>
+                )}
+              </Stack>
+            ))}
+            {currentFailures.length > 3 && (
+              <Typography
+                sx={{
+                  fontSize: '0.75rem',
+                  color: T.textMuted,
+                  fontStyle: 'italic',
+                  pt: 0.25,
+                }}
+              >
+                {t('dashboard.recentFailures.moreCount', {
+                  count: currentFailures.length - 3,
+                })}
+              </Typography>
+            )}
+          </Stack>
+        </Box>
+      )}
 
       <Box
         sx={{
@@ -112,24 +258,124 @@ export function RepositoryHealthPanel({
                 : 'healthy'
           const cs = STATUS[cardStatus]
 
+          // Compact one-liner card for healthy repos. The dimension footer on a
+          // healthy card is just "everything's fine" four times; collapse to a
+          // single horizontal row so urgency (warning/critical) gets the visual
+          // weight. Same outer surface, border, hover, and click target.
+          if (repo.health_status === 'healthy') {
+            const lastBackupLabel = repo.last_backup
+              ? formatDistanceToNow(new Date(repo.last_backup), { addSuffix: false })
+              : t('common.never')
+
+            return (
+              <Box
+                key={repo.id}
+                onClick={onOpenRepositories}
+                sx={{
+                  bgcolor: T.bgCard,
+                  border: `1px solid ${alpha(cs.color, 0.38)}`,
+                  borderRadius: '10px',
+                  p: 1.25,
+                  cursor: 'pointer',
+                  transition: 'border-color 0.18s, background-color 0.18s',
+                  '&:hover': {
+                    borderColor: alpha(cs.color, 0.5),
+                    bgcolor: alpha(cs.color, 0.03),
+                  },
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <PulseDot color={cs.color} />
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Typography
+                      sx={{
+                        fontSize: '0.875rem',
+                        fontWeight: 600,
+                        color: T.textPrimary,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {repo.name}
+                    </Typography>
+                    <Stack
+                      direction="row"
+                      spacing={0.75}
+                      alignItems="center"
+                      sx={{ mt: 0.25, minWidth: 0 }}
+                    >
+                      <RepoTypeChips repo={repo} T={T} />
+                      <Typography
+                        sx={{
+                          fontFamily: T.mono,
+                          fontSize: '0.75rem',
+                          color: T.textMuted,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          minWidth: 0,
+                        }}
+                      >
+                        {t('dashboard.repositoryHealth.archiveCountShort', {
+                          count: repo.archive_count,
+                        })}
+                        {' · '}
+                        {repo.total_size}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                  <Stack alignItems="flex-end" spacing={0.4} sx={{ flexShrink: 0 }}>
+                    <Typography
+                      sx={{
+                        fontFamily: T.mono,
+                        fontSize: '0.75rem',
+                        color: T.textMuted,
+                        lineHeight: 1.2,
+                        textAlign: 'right',
+                      }}
+                    >
+                      {lastBackupLabel}
+                    </Typography>
+                    {repo.has_schedule && (
+                      <ScheduleBadge
+                        nextRun={repo.next_run}
+                        hasSchedule={repo.has_schedule}
+                        scheduleEnabled={repo.schedule_enabled}
+                        scheduleName={repo.schedule_name}
+                        scheduleTimezone={repo.schedule_timezone}
+                        nowMs={nowMs}
+                      />
+                    )}
+                  </Stack>
+                </Stack>
+              </Box>
+            )
+          }
+
           return (
             <Box
               key={repo.id}
               onClick={onOpenRepositories}
               sx={{
-                bgcolor: cs.dim,
-                border: `1px solid ${cs.color}30`,
+                // Subtle status tint (~5% alpha) on critical/warning cards so they
+                // register as different at a glance, without the wall-of-color
+                // effect the original 15% tints created. Healthy cards stay on
+                // the brand-emerald T.bgCard via the compact branch above.
+                // See `tokens.tsx` for the two-tone surface documentation.
+                bgcolor: alpha(cs.color, 0.05),
+                border: `1px solid ${alpha(cs.color, 0.38)}`,
                 borderRadius: '10px',
                 p: 1.25,
                 cursor: 'pointer',
                 transition: 'border-color 0.18s, background-color 0.18s',
                 '&:hover': {
-                  borderColor: cs.color + '80',
-                  bgcolor: cs.color + '12',
+                  borderColor: alpha(cs.color, 0.5),
+                  bgcolor: alpha(cs.color, 0.08),
                 },
               }}
             >
-              {/* ── Top row: status dot + type chip | next-run pill ── */}
+              {/* Top row: status dot + type chip | next-run pill */}
               <Stack
                 direction="row"
                 alignItems="center"
@@ -138,43 +384,20 @@ export function RepositoryHealthPanel({
               >
                 <Stack direction="row" spacing={0.75} alignItems="center">
                   <PulseDot color={cs.color} />
-                  <Chip
-                    label={repo.type.toUpperCase()}
-                    size="small"
-                    sx={{
-                      height: 20,
-                      fontSize: '0.6875rem',
-                      bgcolor: T.repoBadgeBg,
-                      color: T.textMuted,
-                      border: `1px solid ${T.border}`,
-                      fontFamily: T.mono,
-                      px: 0.5,
-                    }}
-                  />
-                  {repo.mode === 'observe' && (
-                    <Chip
-                      label={t('repositories.observeOnly')}
-                      size="small"
-                      sx={{
-                        height: 20,
-                        fontSize: '0.6875rem',
-                        bgcolor: T.indigoDim,
-                        color: T.indigo,
-                        border: `1px solid ${T.indigo}30`,
-                        fontFamily: T.mono,
-                        px: 0.5,
-                      }}
-                    />
-                  )}
+                  <RepoTypeChips repo={repo} T={T} />
                 </Stack>
-                <ScheduleBadge
-                  nextRun={repo.next_run}
-                  hasSchedule={repo.has_schedule}
-                  scheduleEnabled={repo.schedule_enabled}
-                  scheduleName={repo.schedule_name}
-                  scheduleTimezone={repo.schedule_timezone}
-                  nowMs={nowMs}
-                />
+                {/* Skip the badge entirely when there is no schedule. The absence of a */}
+                {/* schedule pill already conveys "manual"; the literal label was noise. */}
+                {repo.has_schedule && (
+                  <ScheduleBadge
+                    nextRun={repo.next_run}
+                    hasSchedule={repo.has_schedule}
+                    scheduleEnabled={repo.schedule_enabled}
+                    scheduleName={repo.schedule_name}
+                    scheduleTimezone={repo.schedule_timezone}
+                    nowMs={nowMs}
+                  />
+                )}
               </Stack>
 
               {/* Name + stats */}
@@ -219,7 +442,7 @@ export function RepositoryHealthPanel({
                       fontSize: '0.75rem',
                       bgcolor: T.blueDim,
                       color: T.blue,
-                      border: `1px solid ${T.blue}25`,
+                      border: `1px solid ${alpha(T.blue, 0.15)}`,
                       fontFamily: T.mono,
                     }}
                   />

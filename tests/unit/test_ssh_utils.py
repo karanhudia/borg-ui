@@ -62,6 +62,9 @@ def _make_connection(ssh_key_id=None) -> MagicMock:
     conn = MagicMock(spec=SSHConnection)
     conn.id = 7
     conn.ssh_key_id = ssh_key_id
+    conn.host = "host"
+    conn.username = "user"
+    conn.port = 23
     return conn
 
 
@@ -120,6 +123,30 @@ class TestResolveRepoSshKeyFile:
             connection_id=None, ssh_key_id=ssh_key.id, repository_type="ssh"
         )
         db = self._make_db(ssh_key=ssh_key)
+
+        with patch("app.utils.ssh_utils.settings") as mock_settings:
+            mock_settings.secret_key = self.SECRET
+            result = resolve_repo_ssh_key_file(repo, db)
+
+        try:
+            assert result is not None
+            assert os.path.exists(result)
+        finally:
+            if result and os.path.exists(result):
+                os.unlink(result)
+
+    def test_ssh_url_without_connection_id_infers_matching_connection_key(self):
+        """Imported SSH URL repos can reuse a matching SSH connection key."""
+        from app.utils.ssh_utils import resolve_repo_ssh_key_file
+
+        ssh_key = _make_ssh_key(self.SECRET)
+        connection = _make_connection(ssh_key_id=ssh_key.id)
+        repo = _make_repo(
+            connection_id=None,
+            ssh_key_id=None,
+            repository_type="local",
+        )
+        db = self._make_db(connection=connection, ssh_key=ssh_key)
 
         with patch("app.utils.ssh_utils.settings") as mock_settings:
             mock_settings.secret_key = self.SECRET

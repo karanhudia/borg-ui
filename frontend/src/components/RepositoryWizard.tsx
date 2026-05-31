@@ -825,6 +825,29 @@ const RepositoryWizard = ({ open, onClose, mode, repository, onSubmit }: Reposit
           : null,
     }
 
+    if (mode === 'edit' && !rcloneFieldsEnabled) {
+      const shouldSubmitCloudMirrorDisable = Boolean(
+        repository?.rclone_storage && !isDirectRcloneRepositoryRecord(repository)
+      )
+      if (!shouldSubmitCloudMirrorDisable) {
+        delete data.cloud_mirror_enabled
+      }
+      delete data.rclone_remote_id
+      delete data.rclone_remote_path
+      delete data.rclone_remote_path_verified
+      delete data.rclone_sync_policy
+      delete data.rclone_sync_cron_expression
+      delete data.rclone_sync_timezone
+      delete data.rclone_extra_flags
+    }
+
+    if (isCachedRcloneRepositoryEdit) {
+      delete data.connection_id
+      delete data.execution_target
+      delete data.executor_type
+      delete data.agent_machine_id
+    }
+
     track(
       EventCategory.REPOSITORY,
       mode === 'create'

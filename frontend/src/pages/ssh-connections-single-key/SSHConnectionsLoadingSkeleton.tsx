@@ -23,49 +23,6 @@ export function SSHConnectionsLoadingSkeleton({ isDark }: SSHConnectionsLoadingS
         />
       </Box>
 
-      {/* Stats band skeleton */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          borderRadius: 2,
-          border: '1px solid',
-          borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
-          overflow: 'hidden',
-          mb: 3,
-          bgcolor: isDark ? alpha('#fff', 0.025) : alpha('#000', 0.018),
-        }}
-      >
-        {[0, 1, 2].map((i) => (
-          <Box
-            key={i}
-            sx={{
-              px: { xs: 1.25, sm: 2 },
-              py: { xs: 1.5, sm: 1.75 },
-              borderRight: i < 2 ? '1px solid' : 0,
-              borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
-            }}
-          >
-            <Box
-              sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: { xs: 0.75, sm: 0.5 } }}
-            >
-              <Skeleton variant="rounded" width={13} height={13} sx={{ borderRadius: 0.5 }} />
-              <Skeleton
-                variant="text"
-                width={80}
-                height={12}
-                sx={{ transform: 'none', borderRadius: 0.5 }}
-              />
-            </Box>
-            <Skeleton
-              variant="text"
-              width={32}
-              sx={{ transform: 'none', borderRadius: 0.5, height: { xs: 28, sm: 24 } }}
-            />
-          </Box>
-        ))}
-      </Box>
-
       {/* System SSH Key card skeleton */}
       <Box
         sx={{

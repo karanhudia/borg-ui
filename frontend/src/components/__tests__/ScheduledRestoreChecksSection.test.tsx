@@ -353,10 +353,10 @@ describe('ScheduledRestoreChecksSection', () => {
     renderWithProviders(<ScheduledRestoreChecksSection />)
 
     expect(await screen.findByText('No backup yet')).toBeInTheDocument()
-    expect(screen.getByText('Needs backup')).toBeInTheDocument()
+    expect(screen.getByText('Behind')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View logs' })).toBeInTheDocument()
 
-    await user.hover(screen.getByText('Needs backup'))
+    await user.hover(screen.getByText('Behind'))
     expect(await screen.findByText(/Run a backup/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'View logs' }))

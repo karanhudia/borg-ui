@@ -101,8 +101,8 @@
     "appName": "Borg UI",
     "sections": {
       "dashboard": "DASHBOARD",
-      "hosts": "HOSTS",
-      "targets": "ZIELE",
+      "infrastructure": "INFRASTRUKTUR",
+      "storage": "SPEICHER",
       "backups": "SICHERUNGEN",
       "settings": "EINSTELLUNGEN"
     },
@@ -249,7 +249,7 @@
   "status": {
     "completed": "Abgeschlossen",
     "completedWithWarnings": "Abgeschlossen mit Warnungen",
-    "needsBackup": "Backup erforderlich",
+    "needsBackup": "Veraltet",
     "failed": "Fehlgeschlagen",
     "running": "Läuft",
     "pending": "Ausstehend",
@@ -368,7 +368,9 @@
       }
     },
     "recentFailures": {
-      "title": "Aktuelle Fehler"
+      "title": "Aktuelle Fehler",
+      "moreCount_one": "und {{count}} weiterer Fehler",
+      "moreCount_other": "und {{count}} weitere Fehler"
     },
     "error": {
       "unavailable": "Dashboard nicht verfügbar",
@@ -2979,7 +2981,7 @@
     "schedule": "Zeitplan",
     "lastCheck": "Letzte Überprüfung",
     "nextCheck": "Nächste Überprüfung",
-    "notConfigured": "Nicht konfiguriert",
+    "notConfigured": "Inaktiv",
     "notScheduled": "Nicht geplant",
     "never": "Nie",
     "editCheckSchedule": "Überprüfungszeitplan bearbeiten",

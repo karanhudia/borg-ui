@@ -127,8 +127,8 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
   }
 
   const sectionHeadingLabel = (heading: string): string => {
-    if (heading === 'HOSTS') return t('navigation.sections.hosts')
-    if (heading === 'TARGETS') return t('navigation.sections.targets')
+    if (heading === 'INFRASTRUCTURE') return t('navigation.sections.infrastructure')
+    if (heading === 'STORAGE') return t('navigation.sections.storage')
     if (heading === 'BACKUPS') return t('navigation.sections.backups')
     if (heading === 'SETTINGS') return t('navigation.sections.settings')
     return heading
@@ -155,30 +155,38 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
     backupPlansData !== undefined && (backupPlansData?.data?.backup_plans?.length ?? 0) === 0
 
   const navigationSections = React.useMemo(() => {
-    const hostItems: Array<{
+    const infrastructureItems: Array<{
       name: string
       href: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       icon: React.ComponentType<any>
-      key: 'connections'
-    }> = canManageSsh
-      ? [
-          {
-            name: 'Remote Machines',
-            href: '/ssh-connections',
-            icon: Computer,
-            key: 'connections' as const,
-          },
-          {
-            name: 'Managed Agents',
-            href: '/managed-agents',
-            icon: Server,
-            key: 'connections' as const,
-          },
-        ]
-      : []
+      key: 'connections' | 'repositories'
+    }> = [
+      ...(canManageSsh
+        ? [
+            {
+              name: 'Remote Machines',
+              href: '/ssh-connections',
+              icon: Computer,
+              key: 'connections' as const,
+            },
+            {
+              name: 'Managed Agents',
+              href: '/managed-agents',
+              icon: Server,
+              key: 'connections' as const,
+            },
+          ]
+        : []),
+      {
+        name: 'Cloud Storage',
+        href: '/cloud-storage',
+        icon: Cloud,
+        key: 'repositories' as const,
+      },
+    ]
 
-    const targetItems: Array<{
+    const storageItems: Array<{
       name: string
       href: string
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -186,12 +194,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       key: 'repositories'
     }> = [
       { name: 'Repositories', href: '/repositories', icon: Database, key: 'repositories' as const },
-      {
-        name: 'Cloud Storage',
-        href: '/cloud-storage',
-        icon: Cloud,
-        key: 'repositories' as const,
-      },
     ]
 
     const backupItems: Array<{
@@ -220,8 +222,8 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
           { name: 'Activity', href: '/activity', icon: History, key: 'dashboard' as const },
         ],
       },
-      ...(hostItems.length > 0 ? [{ heading: 'HOSTS', items: hostItems }] : []),
-      { heading: 'TARGETS', items: targetItems },
+      { heading: 'INFRASTRUCTURE', items: infrastructureItems },
+      { heading: 'STORAGE', items: storageItems },
       { heading: 'BACKUPS', items: backupItems },
       {
         heading: 'SETTINGS',
@@ -232,7 +234,6 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             key: 'dashboard' as const,
             subItems: [
               { name: 'Account', href: '/settings/account', icon: User },
-              ...(canManageUsers ? [{ name: 'Users', href: '/settings/users', icon: Users }] : []),
               { name: 'Appearance', href: '/settings/appearance', icon: Palette },
               { name: 'Preferences', href: '/settings/preferences', icon: Sliders },
               { name: 'Notifications', href: '/settings/notifications', icon: Bell },
@@ -271,18 +272,15 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
             icon: HardDrive,
             key: 'dashboard' as const,
             subItems: [
+              ...(canManageUsers ? [{ name: 'Users', href: '/settings/users', icon: Users }] : []),
               ...(canManageMounts
                 ? [{ name: 'Mounts', href: '/settings/mounts', icon: HardDrive }]
                 : []),
-              ...(canManageScripts || canManageExportImport
-                ? [
-                    ...(canManageScripts
-                      ? [{ name: 'Scripts', href: '/settings/scripts', icon: FileCode }]
-                      : []),
-                    ...(canManageExportImport
-                      ? [{ name: 'Export/Import', href: '/settings/export', icon: DownloadIcon }]
-                      : []),
-                  ]
+              ...(canManageScripts
+                ? [{ name: 'Scripts', href: '/settings/scripts', icon: FileCode }]
+                : []),
+              ...(canManageExportImport
+                ? [{ name: 'Export/Import', href: '/settings/export', icon: DownloadIcon }]
                 : []),
             ],
           },
@@ -321,8 +319,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
         path.includes('/account') ||
         path.includes('/appearance') ||
         path.includes('/preferences') ||
-        path.includes('/notifications') ||
-        path.includes('/users')
+        path.includes('/notifications')
       ) {
         setExpandedMenus((prev) => ({ ...prev, Personal: true }))
       } else if (
@@ -335,6 +332,7 @@ export default function AppSidebar({ mobileOpen, onClose }: AppSidebarProps) {
       ) {
         setExpandedMenus((prev) => ({ ...prev, System: true }))
       } else if (
+        path.includes('/users') ||
         path.includes('/mounts') ||
         path.includes('/scripts') ||
         path.includes('/export')
