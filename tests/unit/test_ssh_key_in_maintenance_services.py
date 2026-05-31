@@ -432,9 +432,13 @@ class TestCheckServiceSSHKey:
             ):
                 with patch("app.services.check_service.settings") as mock_settings:
                     mock_settings.data_dir = tempfile.mkdtemp()
-                    with patch("app.services.check_service.NotificationService"):
-                        service = CheckService()
-                        await service.execute_check(job_id=1, repository_id=1)
+                    with patch(
+                        "app.services.check_service.build_repository_borg_env",
+                        return_value=({}, None),
+                    ):
+                        with patch("app.services.check_service.NotificationService"):
+                            service = CheckService()
+                            await service.execute_check(job_id=1, repository_id=1)
 
         assert "--verify-data" in captured_cmd
         assert "--save-space" in captured_cmd
