@@ -6,7 +6,6 @@ import { SSHConnectionDialogs } from './SSHConnectionDialogs'
 import { SSHConnectionsLoadingSkeleton } from './SSHConnectionsLoadingSkeleton'
 import { RemoteConnectionsSection } from './view/RemoteConnectionsSection'
 import { SSHPageHeader } from './view/SSHPageHeader'
-import { SSHStatsBand } from './view/SSHStatsBand'
 import { SystemKeyCard } from './view/SystemKeyCard'
 import type {
   DeployConnectionPayload,
@@ -17,12 +16,6 @@ import type {
   UpdateConnectionPayload,
 } from './types'
 
-interface Stats {
-  totalConnections: number
-  activeConnections: number
-  failedConnections: number
-}
-
 interface SSHConnectionsSingleKeyViewProps {
   t: TFunction
   theme: Theme
@@ -32,7 +25,6 @@ interface SSHConnectionsSingleKeyViewProps {
   keyExists: boolean | undefined
   systemKey: SystemSSHKey | undefined
   connections: SSHConnection[]
-  stats: Stats
   canManageSsh: boolean
   keyVisible: boolean
   setKeyVisible: Dispatch<SetStateAction<boolean>>
@@ -108,7 +100,6 @@ export function SSHConnectionsSingleKeyView({
   keyExists,
   systemKey,
   connections,
-  stats,
   canManageSsh,
   keyVisible,
   setKeyVisible,
@@ -181,7 +172,6 @@ export function SSHConnectionsSingleKeyView({
   return (
     <Box>
       <SSHPageHeader t={t} />
-      {keyExists && <SSHStatsBand t={t} theme={theme} isDark={isDark} stats={stats} />}
       <SystemKeyCard
         t={t}
         theme={theme}

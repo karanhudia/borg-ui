@@ -182,6 +182,13 @@ describe('SSHConnectionsSingleKey', () => {
     expect(await screen.findByTestId('navigate')).toHaveTextContent('redirect:/dashboard')
   })
 
+  it('does not show the remote machines summary stats band', async () => {
+    renderWithProviders(<SSHConnectionsSingleKey />)
+
+    expect(await screen.findByText('Remote Machines')).toBeInTheDocument()
+    expect(screen.queryByText('Total Connections')).not.toBeInTheDocument()
+  })
+
   it('generates a system SSH key with the selected algorithm', async () => {
     const user = userEvent.setup()
     const { sshKeysAPI } = await import('../../services/api')
