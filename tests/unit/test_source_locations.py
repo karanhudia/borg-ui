@@ -119,6 +119,142 @@ def test_normalize_local_zfs_snapshot_location_requires_dataset_and_mountpoint()
     }
 
 
+def test_normalize_source_location_preserves_database_metadata():
+    locations = normalize_source_locations(
+        [
+            {
+                "source_type": "remote",
+                "source_ssh_connection_id": "12",
+                "paths": [" /var/tmp/borg-ui/database-dumps/postgresql "],
+                "database": {
+                    "template_id": " postgresql ",
+                    "engine": " PostgreSQL ",
+                    "display_name": " Main PostgreSQL ",
+                    "backup_strategy": " logical_dump ",
+                    "detected_source_path": " /var/lib/postgresql/16/main ",
+                    "detection_label": " backup@db.example ",
+                    "capture_mode": "dump",
+                    "dump_path": " /var/tmp/borg-ui/database-dumps/postgresql ",
+                    "backup_paths": [" /var/tmp/borg-ui/database-dumps/postgresql "],
+                    "script_execution_target": "source",
+                    "ignored": "value",
+                },
+            }
+        ]
+    )
+
+    assert locations == [
+        {
+            "source_type": "remote",
+            "source_ssh_connection_id": 12,
+            "agent_machine_id": None,
+            "paths": ["/var/tmp/borg-ui/database-dumps/postgresql"],
+            "database": {
+                "template_id": "postgresql",
+                "engine": "PostgreSQL",
+                "display_name": "Main PostgreSQL",
+                "backup_strategy": "logical_dump",
+                "detected_source_path": "/var/lib/postgresql/16/main",
+                "detection_label": "backup@db.example",
+                "capture_mode": "dump",
+                "dump_path": "/var/tmp/borg-ui/database-dumps/postgresql",
+                "backup_paths": ["/var/tmp/borg-ui/database-dumps/postgresql"],
+                "script_execution_target": "source",
+            },
+        }
+    ]
+
+
+def test_normalize_source_location_preserves_database_script_assignments():
+    locations = normalize_source_locations(
+        [
+            {
+                "source_type": "local",
+                "paths": [" /var/tmp/borg-ui/database-dumps/sqlite "],
+                "database": {
+                    "template_id": " sqlite ",
+                    "engine": " SQLite ",
+                    "display_name": " App SQLite ",
+                    "backup_strategy": " online_backup ",
+                    "detected_source_path": " /srv/app/app.db ",
+                    "capture_mode": "dump",
+                    "dump_path": " /var/tmp/borg-ui/database-dumps/sqlite/app ",
+                    "backup_paths": [" /var/tmp/borg-ui/database-dumps/sqlite/app "],
+                    "script_execution_target": "source",
+                    "pre_backup_script_id": "42",
+                    "post_backup_script_id": "43",
+                    "pre_backup_script_parameters": {
+                        "SQLITE_DATABASE_PATH": " /srv/app/app.db ",
+                        "SQLITE_DUMP_DIR": " /var/tmp/borg-ui/database-dumps/sqlite/app ",
+                        "": "ignored",
+                    },
+                    "post_backup_script_parameters": {
+                        "SQLITE_DUMP_DIR": " /var/tmp/borg-ui/database-dumps/sqlite/app "
+                    },
+                    "script_execution_order": "2",
+                },
+            }
+        ]
+    )
+
+    assert locations[0]["database"]["pre_backup_script_id"] == 42
+    assert locations[0]["database"]["post_backup_script_id"] == 43
+    assert locations[0]["database"]["pre_backup_script_parameters"] == {
+        "SQLITE_DATABASE_PATH": "/srv/app/app.db",
+        "SQLITE_DUMP_DIR": "/var/tmp/borg-ui/database-dumps/sqlite/app",
+    }
+    assert locations[0]["database"]["post_backup_script_parameters"] == {
+        "SQLITE_DUMP_DIR": "/var/tmp/borg-ui/database-dumps/sqlite/app"
+    }
+    assert locations[0]["database"]["script_execution_order"] == 2
+
+
+def test_normalize_database_original_capture_uses_source_path_as_backup_path():
+    locations = normalize_source_locations(
+        [
+            {
+                "source_type": "local",
+                "paths": ["/var/lib/postgresql/16/main"],
+                "database": {
+                    "template_id": "postgresql",
+                    "engine": "PostgreSQL",
+                    "display_name": "PostgreSQL database",
+                    "backup_strategy": "physical_path",
+                    "detected_source_path": "/var/lib/postgresql/16/main",
+                    "capture_mode": "original",
+                    "dump_path": "",
+                    "backup_paths": ["/var/lib/postgresql/16/main"],
+                    "script_execution_target": "source",
+                },
+            }
+        ]
+    )
+
+    assert locations[0]["database"]["capture_mode"] == "original"
+    assert locations[0]["database"]["dump_path"] is None
+    assert locations[0]["database"]["backup_paths"] == ["/var/lib/postgresql/16/main"]
+
+
+def test_database_source_location_rejects_invalid_capture_mode():
+    with pytest.raises(ValueError, match="database capture mode"):
+        normalize_source_locations(
+            [
+                {
+                    "source_type": "local",
+                    "paths": ["/var/tmp/borg-ui/database-dumps/postgresql"],
+                    "database": {
+                        "template_id": "postgresql",
+                        "engine": "PostgreSQL",
+                        "display_name": "PostgreSQL database",
+                        "backup_strategy": "logical_dump",
+                        "capture_mode": "snapshot",
+                        "backup_paths": ["/var/tmp/borg-ui/database-dumps/postgresql"],
+                    },
+                }
+            ]
+        )
+
+
 @pytest.mark.parametrize(
     "location",
     [

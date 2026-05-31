@@ -10,12 +10,33 @@ export interface SourceSnapshotConfig {
   recursive?: boolean
 }
 
+export type DatabaseCaptureMode = 'dump' | 'original'
+
+export interface SourceDatabaseSelection {
+  template_id: string
+  engine: string
+  display_name: string
+  backup_strategy: string
+  detected_source_path?: string | null
+  detection_label?: string | null
+  capture_mode: DatabaseCaptureMode
+  dump_path?: string | null
+  backup_paths: string[]
+  script_execution_target: 'source' | 'server'
+  pre_backup_script_id?: number | null
+  post_backup_script_id?: number | null
+  pre_backup_script_parameters?: Record<string, string> | null
+  post_backup_script_parameters?: Record<string, string> | null
+  script_execution_order?: number
+}
+
 export interface SourceLocation {
   source_type: SourceLocationKind
   source_ssh_connection_id?: number | null
   agent_machine_id?: number | null
   paths: string[]
   snapshot?: SourceSnapshotConfig
+  database?: SourceDatabaseSelection
 }
 
 export interface Repository {
@@ -227,6 +248,7 @@ export interface BackupPlan {
   source_directories: string[]
   source_locations?: SourceLocation[]
   exclude_patterns: string[]
+  database_template_id?: string | null
   archive_name_template: string
   compression: string
   custom_flags?: string | null
@@ -308,6 +330,7 @@ export interface BackupPlanData {
   source_directories: string[]
   source_locations?: SourceLocation[]
   exclude_patterns?: string[]
+  database_template_id?: string | null
   archive_name_template: string
   compression: string
   custom_flags?: string | null

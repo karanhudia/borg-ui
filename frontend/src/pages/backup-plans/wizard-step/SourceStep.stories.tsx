@@ -104,10 +104,26 @@ const databaseDumpState: WizardState = {
       source_type: 'local',
       source_ssh_connection_id: null,
       paths: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+      database: {
+        template_id: 'postgresql',
+        engine: 'PostgreSQL',
+        display_name: 'PostgreSQL database',
+        backup_strategy: 'logical_dump',
+        detected_source_path: '/var/lib/postgresql',
+        detection_label: 'Borg UI server',
+        capture_mode: 'dump',
+        dump_path: '/var/tmp/borg-ui/database-dumps/postgresql',
+        backup_paths: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+        script_execution_target: 'source',
+        pre_backup_script_id: 101,
+        post_backup_script_id: 102,
+        pre_backup_script_parameters: {},
+        post_backup_script_parameters: {},
+        script_execution_order: 1,
+      },
     },
   ],
-  preBackupScriptId: 101,
-  postBackupScriptId: 102,
+  databaseTemplateId: 'postgresql',
 }
 
 const btrfsSnapshotState: WizardState = {

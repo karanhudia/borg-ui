@@ -2122,6 +2122,375 @@ class TestBackupPlanRoutes:
         assert executions[1].stdout == "post-backup stdout"
 
     @pytest.mark.asyncio
+    async def test_plan_script_env_includes_database_source_metadata(self, test_db):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        pre_script = _create_script(test_db, "Prepare Database")
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            pre_backup_script_id=pre_script.id,
+            source_directories=json.dumps(
+                ["/var/tmp/borg-ui/database-dumps/postgresql"]
+            ),
+            source_locations=json.dumps(
+                [
+                    {
+                        "source_type": "local",
+                        "source_ssh_connection_id": None,
+                        "agent_machine_id": None,
+                        "paths": ["/var/tmp/borg-ui/database-dumps/postgresql"],
+                        "database": {
+                            "template_id": "postgresql",
+                            "engine": "PostgreSQL",
+                            "display_name": "PostgreSQL database",
+                            "backup_strategy": "logical_dump",
+                            "detected_source_path": "/var/lib/postgresql/16/main",
+                            "detection_label": "This Borg UI server",
+                            "capture_mode": "dump",
+                            "dump_path": "/var/tmp/borg-ui/database-dumps/postgresql",
+                            "backup_paths": [
+                                "/var/tmp/borg-ui/database-dumps/postgresql"
+                            ],
+                            "script_execution_target": "source",
+                        },
+                    }
+                ]
+            ),
+        )
+        script_path = Path(settings.data_dir) / "scripts" / pre_script.file_path
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        script_path.write_text("echo prepare database\n")
+
+        async def fake_execute_script(script, timeout, env, context):
+            assert env["BORG_UI_DB_TEMPLATE_ID"] == "postgresql"
+            assert env["BORG_UI_DB_ENGINE"] == "PostgreSQL"
+            assert env["BORG_UI_DB_CAPTURE_MODE"] == "dump"
+            assert env["BORG_UI_DB_SOURCE_PATH"] == "/var/lib/postgresql/16/main"
+            assert (
+                env["BORG_UI_DB_DUMP_DIR"]
+                == "/var/tmp/borg-ui/database-dumps/postgresql"
+            )
+            assert json.loads(env["BORG_UI_DB_BACKUP_PATHS"]) == [
+                "/var/tmp/borg-ui/database-dumps/postgresql"
+            ]
+            assert env["BORG_UI_DB_SCRIPT_EXECUTION_TARGET"] == "source"
+            return {
+                "success": True,
+                "exit_code": 0,
+                "stdout": "prepared",
+                "stderr": "",
+                "execution_time": 0.01,
+            }
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.execute_script",
+                side_effect=fake_execute_script,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.backup_service.execute_backup",
+                side_effect=fake_execute_backup,
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        execution = (
+            test_db.query(ScriptExecution)
+            .filter(ScriptExecution.backup_plan_run_id == run.id)
+            .one()
+        )
+        assert execution.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_database_source_scripts_run_per_source_with_parameters(
+        self, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        pre_script = _create_script(
+            test_db,
+            "Prepare SQLite backup",
+            parameters=json.dumps(
+                [
+                    {
+                        "name": "SQLITE_DATABASE_PATH",
+                        "type": "text",
+                        "default": "",
+                        "description": "",
+                        "required": True,
+                    },
+                    {
+                        "name": "SQLITE_DUMP_DIR",
+                        "type": "text",
+                        "default": "",
+                        "description": "",
+                        "required": True,
+                    },
+                ]
+            ),
+        )
+        post_script = _create_script(
+            test_db,
+            "Clean SQLite backup",
+            parameters=json.dumps(
+                [
+                    {
+                        "name": "SQLITE_DUMP_DIR",
+                        "type": "text",
+                        "default": "",
+                        "description": "",
+                        "required": True,
+                    }
+                ]
+            ),
+        )
+        source_locations = [
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/var/tmp/borg-ui/database-dumps/sqlite/app-a"],
+                "database": {
+                    "template_id": "sqlite",
+                    "engine": "SQLite",
+                    "display_name": "App A SQLite",
+                    "backup_strategy": "online_backup",
+                    "detected_source_path": "/srv/app-a/app.db",
+                    "capture_mode": "dump",
+                    "dump_path": "/var/tmp/borg-ui/database-dumps/sqlite/app-a",
+                    "backup_paths": ["/var/tmp/borg-ui/database-dumps/sqlite/app-a"],
+                    "script_execution_target": "source",
+                    "pre_backup_script_id": pre_script.id,
+                    "post_backup_script_id": post_script.id,
+                    "pre_backup_script_parameters": {
+                        "SQLITE_DATABASE_PATH": "/srv/app-a/app.db",
+                        "SQLITE_DUMP_DIR": "/var/tmp/borg-ui/database-dumps/sqlite/app-a",
+                    },
+                    "post_backup_script_parameters": {
+                        "SQLITE_DUMP_DIR": "/var/tmp/borg-ui/database-dumps/sqlite/app-a"
+                    },
+                    "script_execution_order": 2,
+                },
+            },
+            {
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "agent_machine_id": None,
+                "paths": ["/var/tmp/borg-ui/database-dumps/sqlite/app-b"],
+                "database": {
+                    "template_id": "sqlite",
+                    "engine": "SQLite",
+                    "display_name": "App B SQLite",
+                    "backup_strategy": "online_backup",
+                    "detected_source_path": "/srv/app-b/app.db",
+                    "capture_mode": "dump",
+                    "dump_path": "/var/tmp/borg-ui/database-dumps/sqlite/app-b",
+                    "backup_paths": ["/var/tmp/borg-ui/database-dumps/sqlite/app-b"],
+                    "script_execution_target": "source",
+                    "pre_backup_script_id": pre_script.id,
+                    "pre_backup_script_parameters": {
+                        "SQLITE_DATABASE_PATH": "/srv/app-b/app.db",
+                        "SQLITE_DUMP_DIR": "/var/tmp/borg-ui/database-dumps/sqlite/app-b",
+                    },
+                    "script_execution_order": 1,
+                },
+            },
+        ]
+        plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            source_directories=json.dumps(
+                [
+                    "/var/tmp/borg-ui/database-dumps/sqlite/app-a",
+                    "/var/tmp/borg-ui/database-dumps/sqlite/app-b",
+                ]
+            ),
+            source_locations=json.dumps(source_locations),
+        )
+        for script in (pre_script, post_script):
+            script_path = Path(settings.data_dir) / "scripts" / script.file_path
+            script_path.parent.mkdir(parents=True, exist_ok=True)
+            script_path.write_text("echo source script\n")
+        calls = []
+
+        async def fake_execute_script(script, timeout, env, context):
+            calls.append(
+                (
+                    "script",
+                    context,
+                    env.get("BORG_UI_DB_DISPLAY_NAME"),
+                    env.get("SQLITE_DATABASE_PATH"),
+                    env.get("SQLITE_DUMP_DIR"),
+                )
+            )
+            return {
+                "success": True,
+                "exit_code": 0,
+                "stdout": "source script",
+                "stderr": "",
+                "execution_time": 0.01,
+            }
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            calls.append(("backup", repository))
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.execute_script",
+                side_effect=fake_execute_script,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.backup_service.execute_backup",
+                side_effect=fake_execute_backup,
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        assert calls == [
+            (
+                "script",
+                f"backup-plan:{plan.id}:source-pre-backup:script:{pre_script.id}:source:1",
+                "App B SQLite",
+                "/srv/app-b/app.db",
+                "/var/tmp/borg-ui/database-dumps/sqlite/app-b",
+            ),
+            (
+                "script",
+                f"backup-plan:{plan.id}:source-pre-backup:script:{pre_script.id}:source:2",
+                "App A SQLite",
+                "/srv/app-a/app.db",
+                "/var/tmp/borg-ui/database-dumps/sqlite/app-a",
+            ),
+            ("backup", repo.path),
+            (
+                "script",
+                f"backup-plan:{plan.id}:source-post-backup:script:{post_script.id}:source:2",
+                "App A SQLite",
+                None,
+                "/var/tmp/borg-ui/database-dumps/sqlite/app-a",
+            ),
+        ]
+        test_db.expire_all()
+        executions = (
+            test_db.query(ScriptExecution)
+            .filter(ScriptExecution.backup_plan_run_id == run.id)
+            .order_by(ScriptExecution.id.asc())
+            .all()
+        )
+        assert [execution.hook_type for execution in executions] == [
+            "source-pre-backup",
+            "source-pre-backup",
+            "source-post-backup",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_remote_database_plan_script_runs_on_source_connection(self, test_db):
+        source_connection = _create_ssh_connection(
+            test_db,
+            host="db.example",
+            username="backup",
+            is_backup_source=True,
+        )
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        pre_script = _create_script(test_db, "Prepare Remote Database")
+        _plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            source_type="remote",
+            source_ssh_connection_id=source_connection.id,
+            pre_backup_script_id=pre_script.id,
+            source_directories=json.dumps(
+                ["/var/tmp/borg-ui/database-dumps/postgresql"]
+            ),
+            source_locations=json.dumps(
+                [
+                    {
+                        "source_type": "remote",
+                        "source_ssh_connection_id": source_connection.id,
+                        "agent_machine_id": None,
+                        "paths": ["/var/tmp/borg-ui/database-dumps/postgresql"],
+                        "database": {
+                            "template_id": "postgresql",
+                            "engine": "PostgreSQL",
+                            "display_name": "PostgreSQL database",
+                            "backup_strategy": "logical_dump",
+                            "detected_source_path": "/var/lib/postgresql/16/main",
+                            "capture_mode": "dump",
+                            "dump_path": "/var/tmp/borg-ui/database-dumps/postgresql",
+                            "backup_paths": [
+                                "/var/tmp/borg-ui/database-dumps/postgresql"
+                            ],
+                            "script_execution_target": "source",
+                        },
+                    }
+                ]
+            ),
+        )
+        script_path = Path(settings.data_dir) / "scripts" / pre_script.file_path
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        script_path.write_text("echo remote prepare database\n")
+
+        remote_calls = []
+        local_script_mock = AsyncMock()
+
+        async def fake_remote_source_script(**kwargs):
+            remote_calls.append(
+                {
+                    "source_connection_id": kwargs["source_connection"].id,
+                    "env": kwargs["env"],
+                }
+            )
+            return {
+                "success": True,
+                "exit_code": 0,
+                "stdout": "remote prepared",
+                "stderr": "",
+                "execution_time": 0.01,
+            }
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with (
+            patch(
+                "app.services.backup_plan_execution_service.execute_script",
+                local_script_mock,
+            ),
+            patch.object(
+                backup_plan_execution_service,
+                "_execute_remote_source_script",
+                side_effect=fake_remote_source_script,
+                create=True,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.backup_service.execute_backup",
+                side_effect=fake_execute_backup,
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        local_script_mock.assert_not_called()
+        assert len(remote_calls) == 1
+        assert remote_calls[0]["source_connection_id"] == source_connection.id
+        assert (
+            remote_calls[0]["env"]["BORG_UI_DB_DUMP_DIR"]
+            == "/var/tmp/borg-ui/database-dumps/postgresql"
+        )
+
+    @pytest.mark.asyncio
     async def test_pre_plan_script_failure_aborts_plan_before_backups(self, test_db):
         repo = _create_repo(test_db, "Primary", "/repos/primary")
         pre_script = _create_script(test_db, "Prepare Source")

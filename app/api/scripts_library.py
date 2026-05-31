@@ -6,8 +6,9 @@ and script execution history.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 from pathlib import Path
@@ -160,6 +161,38 @@ def read_script_file(file_path: Path) -> str:
     return full_path.read_text()
 
 
+def compute_script_usage_counts(
+    db: Session, script_ids: Optional[List[int]] = None
+) -> Dict[int, int]:
+    """Sum a script's references across repositories, backup plans, and scheduled jobs.
+
+    The stored ``Script.usage_count`` field only tracks ``RepositoryScript`` assignments
+    and is not updated when a script is wired into a ``BackupPlan`` or ``ScheduledJob``
+    pre/post hook. The Script Library UI shows a single "places used" number, so the
+    listing endpoints derive it on the fly from the source-of-truth tables.
+    """
+
+    def _ref_counts(column):
+        q = db.query(column, func.count()).filter(column.isnot(None))
+        if script_ids is not None:
+            q = q.filter(column.in_(script_ids))
+        return dict(q.group_by(column).all())
+
+    sources = (
+        _ref_counts(RepositoryScript.script_id),
+        _ref_counts(BackupPlan.pre_backup_script_id),
+        _ref_counts(BackupPlan.post_backup_script_id),
+        _ref_counts(ScheduledJob.pre_backup_script_id),
+        _ref_counts(ScheduledJob.post_backup_script_id),
+    )
+
+    totals: Dict[int, int] = {}
+    for source in sources:
+        for sid, count in source.items():
+            totals[sid] = totals.get(sid, 0) + count
+    return totals
+
+
 # API Endpoints
 
 
@@ -191,6 +224,8 @@ async def list_scripts(
 
     scripts = query.order_by(Script.created_at.desc()).all()
 
+    usage_counts = compute_script_usage_counts(db, script_ids=[s.id for s in scripts])
+
     return [
         ScriptResponse(
             id=script.id,
@@ -200,7 +235,7 @@ async def list_scripts(
             category=script.category,
             timeout=script.timeout,
             run_on=script.run_on,
-            usage_count=script.usage_count,
+            usage_count=usage_counts.get(script.id, 0),
             is_template=script.is_template,
             created_at=script.created_at,
             updated_at=script.updated_at,
@@ -294,6 +329,8 @@ async def get_script(
         for ex in executions
     ]
 
+    usage_counts = compute_script_usage_counts(db, script_ids=[script.id])
+
     return ScriptDetailResponse(
         id=script.id,
         name=script.name,
@@ -302,7 +339,7 @@ async def get_script(
         category=script.category,
         timeout=script.timeout,
         run_on=script.run_on,
-        usage_count=script.usage_count,
+        usage_count=usage_counts.get(script.id, 0),
         is_template=script.is_template,
         created_at=script.created_at,
         updated_at=script.updated_at,
@@ -533,6 +570,8 @@ async def update_script(
         "Script updated", script_id=script.id, name=script.name, user_id=current_user.id
     )
 
+    usage_counts = compute_script_usage_counts(db, script_ids=[script.id])
+
     return ScriptResponse(
         id=script.id,
         name=script.name,
@@ -541,7 +580,7 @@ async def update_script(
         category=script.category,
         timeout=script.timeout,
         run_on=script.run_on,
-        usage_count=script.usage_count,
+        usage_count=usage_counts.get(script.id, 0),
         is_template=script.is_template,
         created_at=script.created_at,
         updated_at=script.updated_at,

@@ -316,105 +316,113 @@ export default function Scripts() {
         return 'error'
       case 'warning':
         return 'warning'
-      case 'always':
-        return 'info'
       default:
         return 'default'
     }
   }
 
-  const getCategoryColor = (category: string) => {
-    return category === 'template' ? 'secondary' : 'default'
-  }
+  // Status is load-bearing only when the trigger actually narrows the run window.
+  // "always" is the default and carries no semantic, so it renders as neutral.
+  const isLoadBearingTrigger = (runOn: string) =>
+    runOn === 'success' || runOn === 'failure' || runOn === 'warning'
 
   if (!canManageScripts) {
     return null
   }
 
+  const MONO_FONT = '"JetBrains Mono","Fira Code",ui-monospace,monospace'
+
   const columns: Column<Script>[] = [
     {
       id: 'name',
       label: t('scripts.table.name'),
-      render: (script) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-          <FileCode size={18} />
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              {script.name}
-            </Typography>
-            {script.description && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: { xs: 'block', md: 'none' } }}
-              >
-                {script.description}
+      minWidth: '320px',
+      render: (script) => {
+        const paramCount = script.parameters?.length ?? 0
+        const subParts = [
+          script.description,
+          paramCount > 0 ? t('scriptParameters.paramCount', { count: paramCount }) : null,
+        ].filter(Boolean) as string[]
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, minWidth: 0 }}>
+            <FileCode size={18} style={{ marginTop: 2, flexShrink: 0 }} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                {script.name}
               </Typography>
-            )}
+              {subParts.length > 0 && (
+                <Typography variant="caption" color="text.secondary" noWrap component="div">
+                  {subParts.join(' · ')}
+                </Typography>
+              )}
+            </Box>
           </Box>
-          {script.parameters && script.parameters.length > 0 && (
-            <Chip
-              label={`${script.parameters.length} param${script.parameters.length > 1 ? 's' : ''}`}
-              size="small"
-              color="info"
-              variant="outlined"
-              sx={{ fontSize: '0.7rem', flexShrink: 0 }}
-            />
-          )}
-        </Box>
-      ),
-    },
-    {
-      id: 'description',
-      label: t('scripts.table.description'),
-      render: (script) => (
-        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 300 }}>
-          {script.description || '-'}
-        </Typography>
-      ),
+        )
+      },
     },
     {
       id: 'category',
       label: t('scripts.table.category'),
+      width: '120px',
       render: (script) => (
-        <Chip
-          label={script.category}
-          size="small"
-          color={getCategoryColor(script.category) as 'default' | 'secondary'}
-        />
+        <Typography variant="body2" color="text.secondary">
+          {script.category}
+        </Typography>
       ),
     },
     {
       id: 'run_on',
       label: t('scripts.table.runOn'),
-      render: (script) => (
-        <Chip
-          label={script.run_on}
-          size="small"
-          color={
-            getRunOnColor(script.run_on) as 'default' | 'success' | 'error' | 'warning' | 'info'
-          }
-        />
-      ),
+      width: '120px',
+      render: (script) => {
+        const loadBearing = isLoadBearingTrigger(script.run_on)
+        return (
+          <Chip
+            label={script.run_on}
+            size="small"
+            variant={loadBearing ? 'filled' : 'outlined'}
+            color={
+              loadBearing
+                ? (getRunOnColor(script.run_on) as 'success' | 'error' | 'warning')
+                : 'default'
+            }
+          />
+        )
+      },
     },
     {
       id: 'timeout',
       label: t('scripts.table.timeout'),
+      width: '110px',
       render: (script) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <Clock size={14} />
-          <Typography variant="body2">{script.timeout}s</Typography>
+          <Typography
+            variant="body2"
+            sx={{ fontFamily: MONO_FONT, fontVariantNumeric: 'tabular-nums' }}
+          >
+            {script.timeout}s
+          </Typography>
         </Box>
       ),
     },
     {
       id: 'usage_count',
       label: t('scripts.table.usage'),
-      render: (script) => (
-        <Typography variant="body2">
-          {t('scripts.usedInCount', { count: script.usage_count })}
-        </Typography>
-      ),
+      width: '90px',
+      align: 'right',
+      render: (script) => {
+        const unused = script.usage_count === 0
+        return (
+          <Typography
+            variant="body2"
+            color={unused ? 'text.secondary' : 'text.primary'}
+            sx={{ fontFamily: MONO_FONT, fontVariantNumeric: 'tabular-nums' }}
+          >
+            {unused ? '—' : script.usage_count}
+          </Typography>
+        )
+      },
     },
   ]
 

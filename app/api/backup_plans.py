@@ -83,6 +83,9 @@ class BackupPlanPayload(BaseModel):
     source_directories: list[str]
     source_locations: Optional[list[dict[str, Any]]] = None
     exclude_patterns: Optional[list[str]] = None
+    # Set when the plan source came from the database scan / template flow.
+    # Keeps the wizard from forgetting that this is a DB-backed plan.
+    database_template_id: Optional[str] = None
     archive_name_template: str = "{plan_name}-{now}"
     compression: str = "lz4"
     custom_flags: Optional[str] = None
@@ -345,6 +348,7 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
         "source_directories": source_directories,
         "source_locations": source_locations,
         "exclude_patterns": _decode_json_list(plan.exclude_patterns),
+        "database_template_id": plan.database_template_id,
         "archive_name_template": plan.archive_name_template,
         "compression": plan.compression,
         "custom_flags": plan.custom_flags,
@@ -777,6 +781,7 @@ def _apply_payload(plan: BackupPlan, payload: BackupPlanPayload) -> None:
     plan.source_directories = json.dumps(payload.source_directories)
     plan.source_locations = json.dumps(payload.source_locations or [])
     plan.exclude_patterns = json.dumps(payload.exclude_patterns or [])
+    plan.database_template_id = payload.database_template_id
     plan.archive_name_template = (
         payload.archive_name_template.strip() or "{plan_name}-{now}"
     )

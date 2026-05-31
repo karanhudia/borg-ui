@@ -340,6 +340,72 @@ const zfsIncompleteSnapshotState: WizardState = {
   ],
 }
 
+const databaseQueuedState: WizardState = {
+  ...createInitialState(),
+  sourceType: 'local',
+  sourceDirectories: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+  sourceLocations: [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+      database: {
+        template_id: 'postgresql',
+        engine: 'PostgreSQL',
+        display_name: 'PostgreSQL database',
+        backup_strategy: 'logical_dump',
+        detected_source_path: '/var/lib/postgresql',
+        detection_label: 'This Borg UI server',
+        capture_mode: 'dump',
+        dump_path: '/var/tmp/borg-ui/database-dumps/postgresql',
+        backup_paths: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+        script_execution_target: 'source',
+        pre_backup_script_id: 101,
+        post_backup_script_id: 102,
+        pre_backup_script_parameters: {},
+        post_backup_script_parameters: {},
+        script_execution_order: 1,
+      },
+    },
+  ],
+  databaseTemplateId: 'postgresql',
+}
+
+const databaseMultiQueuedState: WizardState = {
+  ...databaseQueuedState,
+  sourceDirectories: [
+    '/var/tmp/borg-ui/database-dumps/postgresql',
+    '/var/tmp/borg-ui/database-dumps/mysql',
+  ],
+  sourceLocations: [
+    ...(databaseQueuedState.sourceLocations || []),
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/var/tmp/borg-ui/database-dumps/mysql'],
+      database: {
+        template_id: 'mysql',
+        engine: 'MySQL / MariaDB',
+        display_name: 'MySQL or MariaDB database',
+        backup_strategy: 'logical_dump',
+        detected_source_path: '/var/lib/mysql',
+        detection_label: 'This Borg UI server',
+        capture_mode: 'dump',
+        dump_path: '/var/tmp/borg-ui/database-dumps/mysql',
+        backup_paths: ['/var/tmp/borg-ui/database-dumps/mysql'],
+        script_execution_target: 'source',
+        pre_backup_script_id: 103,
+        post_backup_script_id: 104,
+        pre_backup_script_parameters: {},
+        post_backup_script_parameters: {},
+        script_execution_order: 2,
+      },
+    },
+  ],
+}
+
 const translations: Record<string, string> = {
   'backupPlans.sourceChooser.title': 'Choose backup source',
   'backupPlans.sourceChooser.where': 'Where are the files?',
@@ -377,17 +443,55 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.kindContainerSoonBadge': 'Soon',
   'backupPlans.sourceChooser.advancedCaptureMode': 'Advanced — Capture mode',
   'backupPlans.sourceChooser.captureModeDirect': 'Direct (no snapshot)',
+  'backupPlans.sourceChooser.captureModeDatabase': 'Database capture mode',
+  'backupPlans.sourceChooser.captureModeDump': 'Dump to staging path',
+  'backupPlans.sourceChooser.captureModeOriginal': 'Back up original path',
+  'backupPlans.sourceChooser.captureModeOriginalWarning':
+    'Borg will read the live database files directly. Use this only when the database is stopped or you have another consistency mechanism.',
+  'backupPlans.sourceChooser.captureModeOriginalUnavailable':
+    'Original path mode requires a detected filesystem path.',
   'backupPlans.sourceChooser.databaseBackupTitle': 'Add database backup',
+  'backupPlans.sourceChooser.databaseSourceMachine': 'Source machine',
+  'backupPlans.sourceChooser.databaseLivePath': 'Live database path',
+  'backupPlans.sourceChooser.databaseDumpPath': 'Dump path',
+  'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
+  'backupPlans.sourceChooser.borgWillBackUpHint':
+    'Dump output staging directory. The pre-backup script writes the dump here; Borg captures it.',
+  'backupPlans.sourceChooser.selectedDatabases': 'Selected databases',
+  'backupPlans.sourceChooser.databaseScriptsAssigned': 'Source scripts assigned',
+  'backupPlans.sourceChooser.databaseScriptsSkipped': 'No source scripts',
+  'backupPlans.sourceChooser.showTemplates': 'Show templates',
+  'backupPlans.sourceChooser.hideTemplates': 'Hide templates',
   'backupPlans.sourceChooser.scanTarget': 'Scan where?',
   'backupPlans.sourceChooser.pathsToScan': 'Paths to scan',
+  'backupPlans.sourceChooser.rootScanSuggestion':
+    'Not sure where the database lives? Add root (/) to scan broadly.',
+  'backupPlans.sourceChooser.addRootScanPath': 'Add /',
   'backupPlans.sourceChooser.noScanPaths': 'Add at least one path to scan.',
   'backupPlans.sourceChooser.scanning': 'Scanning…',
   'backupPlans.sourceChooser.rescan': 'Re-scan',
+  'backupPlans.sourceChooser.advancedScanOptions': 'Advanced scan options',
+  'backupPlans.sourceChooser.scanMaxDepth': 'Max depth',
+  'backupPlans.sourceChooser.scanMaxDepthHelp':
+    '0 = check the path only. Higher = walk that many levels deep.',
+  'backupPlans.sourceChooser.scanTimeout': 'Timeout (seconds)',
+  'backupPlans.sourceChooser.scanTimeoutHelp': 'Hard cap on the scan duration.',
+  'backupPlans.sourceChooser.scanIgnorePatterns': 'Ignore patterns (one per line)',
+  'backupPlans.sourceChooser.scanIgnorePatternsHelp':
+    'Directory names to skip during the walk. Wildcards (*) are allowed.',
+  'backupPlans.sourceChooser.scanForDatabases': 'Scan for databases',
+  'backupPlans.sourceChooser.scanForDatabasesHint': 'Find databases running on the source machine.',
+  'backupPlans.sourceChooser.scanForDatabasesTitle': 'Scan for databases',
+  'backupPlans.sourceChooser.scanForDatabasesSubtitle':
+    'Pick a detected database, or close this dialog and choose a template manually.',
+  'backupPlans.sourceChooser.closeScanDialog': 'Close',
+  'backupPlans.sourceChooser.noQueuedDatabases': 'No databases selected yet.',
   'backupPlans.sourceChooser.scanFailedBody': 'Check the connection or try again.',
   'backupPlans.sourceChooser.scanEndpointMissing':
-    "Database scanning isn't available on this server yet. Pick a template below to configure manually.",
+    "Database scanning isn't available on this server yet. Open templates to configure manually.",
   'backupPlans.sourceChooser.nothingFoundBody':
-    'Add another path above, or pick a template below to set one up manually.',
+    'Add another path above, search from root, or open templates to set one up manually.',
+  'backupPlans.sourceChooser.checkedPaths': 'Checked:',
   'backupPlans.sourceChooser.detectedSection': 'Detected',
   'backupPlans.sourceChooser.detectedBadge': 'Detected',
   'backupPlans.sourceChooser.orPickTemplate': 'Or pick a template',
@@ -411,6 +515,18 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.loading': 'Loading',
   'backupPlans.sourceChooser.summaryEmpty': 'No source selected yet',
   'backupPlans.sourceChooser.back': 'Back',
+  'backupPlans.sourceChooser.applyDatabase': 'Add database',
+  'backupPlans.sourceChooser.scriptDrafts': 'Script drafts',
+  'backupPlans.sourceChooser.preScriptDraft': 'Pre-backup script draft',
+  'backupPlans.sourceChooser.postScriptDraft': 'Post-backup script draft',
+  'backupPlans.sourceChooser.createScripts': 'Create new scripts',
+  'backupPlans.sourceChooser.reuseScripts': 'Use existing scripts',
+  'backupPlans.sourceChooser.skipScripts': 'Skip script assignment',
+  'backupPlans.sourceChooser.preScriptName': 'Pre-backup script name',
+  'backupPlans.sourceChooser.postScriptName': 'Post-backup script name',
+  'backupPlans.sourceChooser.preExistingScript': 'Existing pre-backup script',
+  'backupPlans.sourceChooser.postExistingScript': 'Existing post-backup script',
+  'backupPlans.sourceChooser.notesLabel': 'Notes',
   'common.buttons.cancel': 'Cancel',
   'backupPlans.wizard.fileExplorer.sourceTitle': 'Select source paths',
 }
@@ -437,6 +553,8 @@ interface DialogStoryArgs {
   initialView?: 'paths' | 'database' | 'database-detail'
   initialScanTarget?: { type: 'local' | 'remote'; sshId: number | '' }
   initialCaptureModeExpanded?: boolean
+  initialSelectedDatabase?: SourceDiscoveryDatabase
+  initialScanDialogOpen?: boolean
   scrollToText?: string
 }
 
@@ -446,6 +564,8 @@ function DialogStory({
   initialView,
   initialScanTarget,
   initialCaptureModeExpanded,
+  initialSelectedDatabase,
+  initialScanDialogOpen,
   scrollToText,
 }: DialogStoryArgs) {
   useMockedDiscovery(mockOptions)
@@ -497,6 +617,8 @@ function DialogStory({
         initialView={initialView}
         initialScanTarget={initialScanTarget}
         initialCaptureModeExpanded={initialCaptureModeExpanded}
+        initialSelectedDatabase={initialSelectedDatabase}
+        initialScanDialogOpen={initialScanDialogOpen}
       />
     </Box>
   )
@@ -595,14 +717,69 @@ export const DatabaseScanDetected: Story = {
       wizardState={emptyWizardState}
       mockOptions={{ scanStatus: 'detected' }}
       initialView="database"
-      scrollToText="SQLite"
+      initialScanDialogOpen
     />
   ),
   parameters: {
     docs: {
       description: {
         story:
-          'Open the Database view from "Scan a database instead". Mocked endpoint returns two detected engines plus all five templates, including SQLite.',
+          'Scan sub-dialog open over the Database tab. Mocked endpoint returns two detected engines; the dialog shows the scan target picker, paths, and detected tiles.',
+      },
+    },
+  },
+}
+
+export const DatabaseQueuedSelection: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={databaseQueuedState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="database"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Database tab with an already queued PostgreSQL selection. The tab badge and selected database summary persist when the dialog is reopened.',
+      },
+    },
+  },
+}
+
+export const DatabaseQueuedMultipleSelection: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={databaseMultiQueuedState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="database"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Database tab with PostgreSQL and MySQL queued together. The badge and selected database list show multiple selections without collapsing them into one.',
+      },
+    },
+  },
+}
+
+export const DatabaseTemplateDetail: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="database-detail"
+      initialSelectedDatabase={postgresqlTemplate}
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Database template detail view after selecting PostgreSQL. The header shows the template title without a redundant Back button because Cancel is already available in the footer.',
       },
     },
   },
@@ -614,6 +791,7 @@ export const DatabaseScanRemoteTarget: Story = {
       wizardState={emptyWizardState}
       mockOptions={{ scanStatus: 'detected' }}
       initialView="database"
+      initialScanDialogOpen
       initialScanTarget={{ type: 'remote', sshId: 11 }}
     />
   ),
@@ -621,7 +799,7 @@ export const DatabaseScanRemoteTarget: Story = {
     docs: {
       description: {
         story:
-          'Database scan view with a remote SSH target selected, showing the shared SSH connection picker row.',
+          'Scan sub-dialog open with a remote SSH target selected, showing the shared SSH connection picker row.',
       },
     },
   },
@@ -633,13 +811,14 @@ export const DatabaseScanNothingFound: Story = {
       wizardState={emptyWizardState}
       mockOptions={{ scanStatus: 'nothing-found' }}
       initialView="database"
+      initialScanDialogOpen
     />
   ),
   parameters: {
     docs: {
       description: {
         story:
-          'Scan completed successfully but found nothing — info banner explains and templates render below as fallback.',
+          'Scan completed successfully but found nothing. The empty-state banner inside the sub-dialog explains next actions; templates remain visible on the parent Database tab when the user closes the sub-dialog.',
       },
     },
   },
@@ -651,13 +830,14 @@ export const DatabaseScanFailed: Story = {
       wizardState={emptyWizardState}
       mockOptions={{ scanStatus: 'failed' }}
       initialView="database"
+      initialScanDialogOpen
     />
   ),
   parameters: {
     docs: {
       description: {
         story:
-          '502 from the scan endpoint. Warning banner with inline Re-scan, plus templates from the legacy GET fallback.',
+          '502 from the scan endpoint. The warning banner with inline Re-scan lives inside the sub-dialog; templates remain accessible on the parent tab.',
       },
     },
   },
@@ -669,13 +849,14 @@ export const DatabaseScanEndpointMissing: Story = {
       wizardState={emptyWizardState}
       mockOptions={{ scanStatus: 'endpoint-missing' }}
       initialView="database"
+      initialScanDialogOpen
     />
   ),
   parameters: {
     docs: {
       description: {
         story:
-          'New POST endpoint not deployed yet (404). Info banner, templates render from the legacy GET fallback.',
+          'New POST endpoint not deployed yet (404). Info banner, with templates available from the legacy GET fallback after the user opens them.',
       },
     },
   },

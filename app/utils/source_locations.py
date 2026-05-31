@@ -16,6 +16,107 @@ def clean_source_paths(paths: Optional[list[str]]) -> list[str]:
     return cleaned
 
 
+def _clean_optional_string(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    return cleaned or None
+
+
+def _clean_optional_int(value: Any) -> Optional[int]:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _clean_parameter_values(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    cleaned: dict[str, str] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key).strip()
+        if not key:
+            continue
+        if raw_value is None:
+            cleaned[key] = ""
+            continue
+        cleaned[key] = str(raw_value).strip()
+    return cleaned
+
+
+def normalize_database_config(
+    database: Any,
+    *,
+    source_paths: list[str],
+) -> Optional[dict[str, Any]]:
+    if not isinstance(database, dict):
+        return None
+
+    capture_mode = _clean_optional_string(database.get("capture_mode")) or "dump"
+    if capture_mode not in {"dump", "original"}:
+        raise ValueError("Invalid database capture mode")
+
+    backup_paths = clean_source_paths(database.get("backup_paths"))
+    if not backup_paths:
+        backup_paths = list(source_paths)
+    if not backup_paths:
+        raise ValueError("Database source locations require backup paths")
+
+    dump_path = _clean_optional_string(database.get("dump_path"))
+    if capture_mode == "dump" and not dump_path:
+        dump_path = backup_paths[0]
+    if capture_mode == "original":
+        dump_path = None
+
+    script_execution_target = (
+        _clean_optional_string(database.get("script_execution_target")) or "source"
+    )
+    if script_execution_target not in {"source", "server"}:
+        raise ValueError("Invalid database script execution target")
+
+    normalized: dict[str, Any] = {
+        "template_id": _clean_optional_string(database.get("template_id"))
+        or "database",
+        "engine": _clean_optional_string(database.get("engine")) or "Database",
+        "display_name": _clean_optional_string(database.get("display_name"))
+        or _clean_optional_string(database.get("engine"))
+        or "Database",
+        "backup_strategy": _clean_optional_string(database.get("backup_strategy"))
+        or "logical_dump",
+        "detected_source_path": _clean_optional_string(
+            database.get("detected_source_path")
+        ),
+        "detection_label": _clean_optional_string(database.get("detection_label")),
+        "capture_mode": capture_mode,
+        "dump_path": dump_path,
+        "backup_paths": backup_paths,
+        "script_execution_target": script_execution_target,
+    }
+    pre_script_id = _clean_optional_int(database.get("pre_backup_script_id"))
+    if pre_script_id is not None:
+        normalized["pre_backup_script_id"] = pre_script_id
+        normalized["pre_backup_script_parameters"] = _clean_parameter_values(
+            database.get("pre_backup_script_parameters")
+        )
+
+    post_script_id = _clean_optional_int(database.get("post_backup_script_id"))
+    if post_script_id is not None:
+        normalized["post_backup_script_id"] = post_script_id
+        normalized["post_backup_script_parameters"] = _clean_parameter_values(
+            database.get("post_backup_script_parameters")
+        )
+
+    execution_order = _clean_optional_int(database.get("script_execution_order"))
+    if execution_order is not None:
+        normalized["script_execution_order"] = execution_order
+
+    return normalized
+
+
 def normalize_source_locations(
     source_locations: Optional[list[dict[str, Any]]] = None,
     *,
@@ -87,6 +188,12 @@ def normalize_source_locations(
             )
             if snapshot:
                 normalized_location["snapshot"] = snapshot
+            database = normalize_database_config(
+                location.get("database"),
+                source_paths=paths,
+            )
+            if database:
+                normalized_location["database"] = database
 
             normalized.append(normalized_location)
         return normalized
