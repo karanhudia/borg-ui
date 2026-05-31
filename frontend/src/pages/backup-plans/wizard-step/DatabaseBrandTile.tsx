@@ -19,7 +19,7 @@ const DATABASE_BRANDS: Record<string, DatabaseBrand> = {
   sqlite: { Icon: SiSqlite, color: '#003B57' },
 }
 
-export function brandFor(engine: string): DatabaseBrand {
+function brandFor(engine: string): DatabaseBrand {
   const normalised = engine.trim().toLowerCase()
   if (DATABASE_BRANDS[normalised]) return DATABASE_BRANDS[normalised]
   const key = Object.keys(DATABASE_BRANDS).find((name) => normalised.includes(name))

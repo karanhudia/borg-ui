@@ -535,14 +535,10 @@ export function SourceSelectionDialog({
   >({})
   const [snapshotDraft, setSnapshotDraft] = useState<SnapshotDraft>(() => emptySnapshotDraft())
   const [captureModeExpanded, setCaptureModeExpanded] = useState(initialCaptureModeExpanded)
+  const wizardSourceLocations = wizardState.sourceLocations
   const hydratedDatabaseLocation = useMemo(
-    () => locationsFromWizardState(wizardState).find((location) => location.database),
-    [
-      wizardState.sourceLocations,
-      wizardState.sourceDirectories,
-      wizardState.sourceType,
-      wizardState.sourceSshConnectionId,
-    ]
+    () => cleanLocations(wizardSourceLocations || []).find((location) => location.database),
+    [wizardSourceLocations]
   )
 
   useEffect(() => {
