@@ -549,6 +549,91 @@ describe('BackupPlans payload', () => {
     expect(payload.post_backup_script_parameters).toEqual({ STATUS_FILE: '/tmp/status' })
     expect(payload.run_repository_scripts).toBe(false)
   })
+
+  it('keeps database source script assignments separate from plan scripts', () => {
+    const payload = buildBackupPlanPayload({
+      name: 'Database Sources',
+      description: '',
+      enabled: true,
+      sourceType: 'local',
+      sourceSshConnectionId: '',
+      sourceDirectories: ['/var/tmp/borg-ui/database-dumps/sqlite'],
+      sourceLocations: [
+        {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          agent_machine_id: null,
+          paths: ['/var/tmp/borg-ui/database-dumps/sqlite'],
+          database: {
+            template_id: 'sqlite',
+            engine: 'SQLite',
+            display_name: 'SQLite database',
+            backup_strategy: 'online_backup',
+            detected_source_path: '/home/app/state.sqlite',
+            detection_label: 'Borg UI server',
+            capture_mode: 'dump',
+            dump_path: '/var/tmp/borg-ui/database-dumps/sqlite',
+            backup_paths: ['/var/tmp/borg-ui/database-dumps/sqlite'],
+            script_execution_target: 'source',
+            pre_backup_script_id: 11,
+            post_backup_script_id: 12,
+            pre_backup_script_parameters: {
+              SQLITE_DATABASE_PATH: '  /home/app/state.sqlite  ',
+              EMPTY_VALUE: '   ',
+            },
+            post_backup_script_parameters: {
+              CLEAN_TARGET: ' /var/tmp/borg-ui/database-dumps/sqlite ',
+            },
+            script_execution_order: 3,
+          },
+        },
+      ],
+      excludePatterns: [],
+      repositoryIds: [10],
+      compression: 'lz4',
+      archiveNameTemplate: '{plan_name}-{repo_name}-{now}',
+      customFlags: '',
+      uploadRatelimitMb: '',
+      repositoryRunMode: 'series',
+      maxParallelRepositories: 1,
+      failureBehavior: 'continue',
+      scheduleEnabled: false,
+      cronExpression: '0 21 * * *',
+      timezone: 'UTC',
+      preBackupScriptId: 99,
+      postBackupScriptId: null,
+      preBackupScriptParameters: { PLAN_ONLY: 'yes' },
+      postBackupScriptParameters: {},
+      runRepositoryScripts: true,
+      runPruneAfter: false,
+      runCompactAfter: false,
+      runCheckAfter: false,
+      checkMaxDuration: 3600,
+      checkExtraFlags: '',
+      pruneKeepHourly: 0,
+      pruneKeepDaily: 7,
+      pruneKeepWeekly: 4,
+      pruneKeepMonthly: 6,
+      pruneKeepQuarterly: 0,
+      pruneKeepYearly: 1,
+    })
+
+    expect(payload.pre_backup_script_id).toBe(99)
+    expect(payload.pre_backup_script_parameters).toEqual({ PLAN_ONLY: 'yes' })
+    expect(payload.source_locations?.[0].database).toEqual(
+      expect.objectContaining({
+        pre_backup_script_id: 11,
+        post_backup_script_id: 12,
+        pre_backup_script_parameters: {
+          SQLITE_DATABASE_PATH: '/home/app/state.sqlite',
+        },
+        post_backup_script_parameters: {
+          CLEAN_TARGET: '/var/tmp/borg-ui/database-dumps/sqlite',
+        },
+        script_execution_order: 3,
+      })
+    )
+  })
 })
 
 describe('BackupPlans route preview', () => {

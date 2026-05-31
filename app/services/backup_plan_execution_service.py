@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,6 +31,7 @@ from app.database.models import (
     Script,
     ScriptExecution,
     SSHConnection,
+    SSHKey,
 )
 from app.services.backup_service import backup_service
 from app.services.backup_plan_policy import evaluate_backup_plan_access
@@ -48,6 +50,7 @@ from app.services.script_executor import execute_script
 from app.services.template_service import get_system_variables
 from app.utils.archive_names import build_archive_name
 from app.utils.script_params import SYSTEM_VARIABLE_PREFIX
+from app.utils.ssh_utils import write_ssh_key_to_tempfile
 from app.utils.source_locations import decode_source_locations
 from app.utils.schedule_time import calculate_next_cron_run, to_utc_naive
 
@@ -134,6 +137,145 @@ def _is_failure(status: Optional[str]) -> bool:
 
 def _is_success(status: Optional[str]) -> bool:
     return status in SUCCESS_BACKUP_STATUSES
+
+
+def _database_source_location(
+    source_locations: list[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    return next(
+        (
+            location
+            for location in source_locations
+            if isinstance(location.get("database"), dict)
+        ),
+        None,
+    )
+
+
+def _database_source_locations(
+    source_locations: list[dict[str, Any]],
+) -> list[tuple[int, dict[str, Any]]]:
+    return [
+        (index, location)
+        for index, location in enumerate(source_locations, start=1)
+        if isinstance(location.get("database"), dict)
+    ]
+
+
+def _database_script_env_for_location(
+    location: Optional[dict[str, Any]], source_index: Optional[int] = None
+) -> dict[str, str]:
+    if not location:
+        return {}
+
+    database = location.get("database") or {}
+    backup_paths = database.get("backup_paths") or location.get("paths") or []
+    if not isinstance(backup_paths, list):
+        backup_paths = []
+    capture_mode = str(database.get("capture_mode") or "dump")
+    dump_path = database.get("dump_path") or ""
+    if capture_mode == "dump" and not dump_path and backup_paths:
+        dump_path = str(backup_paths[0])
+
+    return {
+        "BORG_UI_DB_TEMPLATE_ID": str(database.get("template_id") or ""),
+        "BORG_UI_DB_ENGINE": str(database.get("engine") or ""),
+        "BORG_UI_DB_DISPLAY_NAME": str(database.get("display_name") or ""),
+        "BORG_UI_DB_BACKUP_STRATEGY": str(database.get("backup_strategy") or ""),
+        "BORG_UI_DB_CAPTURE_MODE": capture_mode,
+        "BORG_UI_DB_SOURCE_PATH": str(database.get("detected_source_path") or ""),
+        "BORG_UI_DB_DUMP_DIR": str(dump_path or ""),
+        "BORG_UI_DB_BACKUP_PATHS": json.dumps(backup_paths),
+        "BORG_UI_DB_DETECTION_LABEL": str(database.get("detection_label") or ""),
+        "BORG_UI_DB_SCRIPT_EXECUTION_TARGET": str(
+            database.get("script_execution_target") or "source"
+        ),
+        "BORG_UI_DB_SOURCE_INDEX": str(source_index or ""),
+    }
+
+
+def _database_script_env(source_locations: list[dict[str, Any]]) -> dict[str, str]:
+    location = _database_source_location(source_locations)
+    return _database_script_env_for_location(location)
+
+
+def _database_remote_source_connection_id_for_location(
+    location: Optional[dict[str, Any]],
+) -> Optional[int]:
+    if not location:
+        return None
+    database = location.get("database") or {}
+    if database.get("script_execution_target") != "source":
+        return None
+    if location.get("source_type") != "remote":
+        return None
+    connection_id = location.get("source_ssh_connection_id")
+    return int(connection_id) if connection_id not in (None, "") else None
+
+
+def _database_remote_source_connection_id(
+    source_locations: list[dict[str, Any]],
+) -> Optional[int]:
+    location = _database_source_location(source_locations)
+    return _database_remote_source_connection_id_for_location(location)
+
+
+def _database_source_script_assignments(
+    source_locations: list[dict[str, Any]], hook_type: str
+) -> list[dict[str, Any]]:
+    script_id_key = (
+        "pre_backup_script_id"
+        if hook_type == "source-pre-backup"
+        else "post_backup_script_id"
+    )
+    parameters_key = (
+        "pre_backup_script_parameters"
+        if hook_type == "source-pre-backup"
+        else "post_backup_script_parameters"
+    )
+    assignments: list[dict[str, Any]] = []
+    for source_index, location in _database_source_locations(source_locations):
+        database = location.get("database") or {}
+        script_id = database.get(script_id_key)
+        if script_id in (None, ""):
+            continue
+        try:
+            script_id_int = int(script_id)
+        except (TypeError, ValueError):
+            continue
+        if script_id_int <= 0:
+            continue
+        execution_order = database.get("script_execution_order") or source_index
+        try:
+            execution_order_int = int(execution_order)
+        except (TypeError, ValueError):
+            execution_order_int = source_index
+        assignments.append(
+            {
+                "source_index": source_index,
+                "execution_order": execution_order_int,
+                "location": location,
+                "script_id": script_id_int,
+                "parameters": database.get(parameters_key) or {},
+            }
+        )
+
+    return sorted(
+        assignments,
+        key=lambda assignment: (
+            assignment["execution_order"],
+            assignment["source_index"],
+        ),
+    )
+
+
+def _remote_script_body(script: str, env: dict[str, str]) -> str:
+    export_lines = []
+    for key, value in sorted(env.items()):
+        if not key.replace("_", "").isalnum() or key[0].isdigit():
+            continue
+        export_lines.append(f"export {key}={shlex.quote(str(value))}")
+    return "\n".join(export_lines + ["", script])
 
 
 class BackupPlanExecutionService:
@@ -401,14 +543,36 @@ class BackupPlanExecutionService:
                 self._mark_pending_repositories_failed(run_id, error_message)
                 raise ValueError(error_message)
 
+            source_pre_ok, source_pre_error = await self._execute_source_scripts(
+                run_id,
+                context,
+                hook_type="source-pre-backup",
+            )
+            if not source_pre_ok:
+                error_message = (
+                    source_pre_error or "Database source pre-backup script failed"
+                )
+                self._mark_pending_repositories_failed(run_id, error_message)
+                raise ValueError(error_message)
+
             if context.repository_run_mode == "parallel":
                 await self._execute_parallel(run_id, context, repositories)
             else:
                 await self._execute_series(run_id, context, repositories)
 
-            post_script_warning = None
+            post_script_warnings: list[str] = []
             if not self._is_run_cancelled(run_id):
                 backup_result = self._plan_backup_result(run_id)
+                source_post_ok, source_post_error = await self._execute_source_scripts(
+                    run_id,
+                    context,
+                    hook_type="source-post-backup",
+                    backup_result=backup_result,
+                )
+                if not source_post_ok:
+                    post_script_warnings.append(
+                        source_post_error or "Database source post-backup script failed"
+                    )
                 post_script_ok, post_script_error = await self._execute_plan_script(
                     run_id,
                     context,
@@ -416,11 +580,16 @@ class BackupPlanExecutionService:
                     backup_result=backup_result,
                 )
                 if not post_script_ok:
-                    post_script_warning = (
+                    post_script_warnings.append(
                         post_script_error or "Plan post-backup script failed"
                     )
 
-            self._finalize_run(run_id, warning_message=post_script_warning)
+            self._finalize_run(
+                run_id,
+                warning_message="; ".join(post_script_warnings)
+                if post_script_warnings
+                else None,
+            )
         except Exception as exc:
             logger.error("Backup plan run failed", run_id=run_id, error=str(exc))
             self._mark_run_failed(run_id, str(exc))
@@ -590,7 +759,7 @@ class BackupPlanExecutionService:
 
         await asyncio.gather(*(worker(repository) for repository in repositories))
 
-    async def _execute_plan_script(
+    async def _execute_source_scripts(
         self,
         run_id: int,
         context: PlanRunContext,
@@ -598,19 +767,50 @@ class BackupPlanExecutionService:
         hook_type: str,
         backup_result: Optional[str] = None,
     ) -> tuple[bool, Optional[str]]:
-        script_id = (
-            context.pre_backup_script_id
-            if hook_type == "pre-backup"
-            else context.post_backup_script_id
-        )
+        for assignment in _database_source_script_assignments(
+            context.source_locations, hook_type
+        ):
+            ok, error = await self._execute_plan_script(
+                run_id,
+                context,
+                hook_type=hook_type,
+                backup_result=backup_result,
+                script_id=assignment["script_id"],
+                script_parameters=assignment["parameters"],
+                source_location=assignment["location"],
+                source_index=assignment["execution_order"],
+            )
+            if not ok:
+                return False, error
+        return True, None
+
+    async def _execute_plan_script(
+        self,
+        run_id: int,
+        context: PlanRunContext,
+        *,
+        hook_type: str,
+        backup_result: Optional[str] = None,
+        script_id: Optional[int] = None,
+        script_parameters: Optional[dict[str, Any]] = None,
+        source_location: Optional[dict[str, Any]] = None,
+        source_index: Optional[int] = None,
+    ) -> tuple[bool, Optional[str]]:
+        if script_id is None:
+            script_id = (
+                context.pre_backup_script_id
+                if hook_type == "pre-backup"
+                else context.post_backup_script_id
+            )
         if not script_id:
             return True, None
 
-        script_parameters = (
-            context.pre_backup_script_parameters
-            if hook_type == "pre-backup"
-            else context.post_backup_script_parameters
-        )
+        if script_parameters is None:
+            script_parameters = (
+                context.pre_backup_script_parameters
+                if hook_type == "pre-backup"
+                else context.post_backup_script_parameters
+            )
 
         db = SessionLocal()
         execution: Optional[ScriptExecution] = None
@@ -638,10 +838,20 @@ class BackupPlanExecutionService:
                 raise FileNotFoundError(f"Script file not found: {script.file_path}")
 
             source_connection = None
-            if context.source_type == "remote" and context.source_ssh_connection_id:
+            database_remote_connection_id = (
+                _database_remote_source_connection_id_for_location(source_location)
+                if source_location is not None
+                else _database_remote_source_connection_id(context.source_locations)
+            )
+            source_connection_id = database_remote_connection_id or (
+                context.source_ssh_connection_id
+                if context.source_type == "remote"
+                else None
+            )
+            if source_connection_id:
                 source_connection = (
                     db.query(SSHConnection)
-                    .filter(SSHConnection.id == context.source_ssh_connection_id)
+                    .filter(SSHConnection.id == source_connection_id)
                     .first()
                 )
 
@@ -670,6 +880,11 @@ class BackupPlanExecutionService:
                     "BORG_UI_SOURCE_LOCATIONS": json.dumps(context.source_locations),
                 }
             )
+            script_env.update(
+                _database_script_env_for_location(source_location, source_index)
+                if source_location is not None
+                else _database_script_env(context.source_locations)
+            )
             if source_connection:
                 script_env.update(
                     {
@@ -681,12 +896,29 @@ class BackupPlanExecutionService:
 
             self._inject_script_parameters(script_env, script, script_parameters)
 
-            result = await execute_script(
-                script=file_path.read_text(),
-                timeout=float(script.timeout),
-                env=script_env,
-                context=f"backup-plan:{context.plan_id}:{hook_type}:script:{script.id}",
+            script_content = file_path.read_text()
+            execution_context = (
+                f"backup-plan:{context.plan_id}:{hook_type}:script:{script.id}"
             )
+            if source_location is not None:
+                execution_context = f"{execution_context}:source:{source_index or ''}"
+            if database_remote_connection_id and source_connection:
+                result = await self._execute_remote_source_script(
+                    source_connection=source_connection,
+                    script=script_content,
+                    timeout=float(script.timeout),
+                    env=script_env,
+                    context=execution_context,
+                    run_id=run_id,
+                    db=db,
+                )
+            else:
+                result = await execute_script(
+                    script=script_content,
+                    timeout=float(script.timeout),
+                    env=script_env,
+                    context=execution_context,
+                )
 
             execution.status = "completed" if result.get("success") else "failed"
             execution.completed_at = datetime.utcnow()
@@ -733,6 +965,110 @@ class BackupPlanExecutionService:
             return False, str(exc)
         finally:
             db.close()
+
+    async def _execute_remote_source_script(
+        self,
+        *,
+        source_connection: SSHConnection,
+        script: str,
+        timeout: float,
+        env: dict[str, str],
+        context: str,
+        run_id: int,
+        db: Session,
+    ) -> dict[str, Any]:
+        if not source_connection.ssh_key_id:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "Remote source has no SSH key configured",
+                "exit_code": -1,
+                "execution_time": 0.0,
+            }
+
+        ssh_key = (
+            db.query(SSHKey).filter(SSHKey.id == source_connection.ssh_key_id).first()
+        )
+        if not ssh_key:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": f"SSH key {source_connection.ssh_key_id} not found",
+                "exit_code": -1,
+                "execution_time": 0.0,
+            }
+
+        key_file_path = write_ssh_key_to_tempfile(ssh_key)
+        start_time = time.time()
+        try:
+            ssh_cmd = [
+                "ssh",
+                "-i",
+                key_file_path,
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ServerAliveInterval=60",
+                "-o",
+                "ServerAliveCountMax=3",
+                "-p",
+                str(source_connection.port or 22),
+                f"{source_connection.username}@{source_connection.host}",
+                "/bin/bash -s",
+            ]
+            logger.info(
+                "Executing backup plan script on remote source",
+                backup_plan_run_id=run_id,
+                host=source_connection.host,
+                context=context,
+            )
+            process = await asyncio.create_subprocess_exec(
+                *ssh_cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(_remote_script_body(script, env).encode()),
+                    timeout=timeout,
+                )
+                exit_code = process.returncode
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                execution_time = time.time() - start_time
+                return {
+                    "success": False,
+                    "stdout": "",
+                    "stderr": f"Script execution timed out after {timeout} seconds",
+                    "exit_code": -1,
+                    "execution_time": execution_time,
+                }
+
+            execution_time = time.time() - start_time
+            stdout_str = stdout.decode("utf-8", errors="replace") if stdout else ""
+            stderr_str = stderr.decode("utf-8", errors="replace") if stderr else ""
+            return {
+                "success": exit_code == 0,
+                "stdout": stdout_str,
+                "stderr": stderr_str,
+                "exit_code": exit_code,
+                "execution_time": execution_time,
+            }
+        except Exception as exc:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": str(exc),
+                "exit_code": -1,
+                "execution_time": time.time() - start_time,
+            }
+        finally:
+            if os.path.exists(key_file_path):
+                os.unlink(key_file_path)
 
     def _inject_script_parameters(
         self,

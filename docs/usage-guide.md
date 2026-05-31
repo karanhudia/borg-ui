@@ -175,6 +175,19 @@ Then use `/documents`, `/photos`, and `/backups` in the UI.
 
 For remote sources, choose a Remote Machine in the Backup Plan and select paths from that machine.
 
+For database sources, open the Database tab in the source chooser, scan the Borg
+UI server or a Remote Machine, select the detected database or a template, then
+choose Add database. This queues the database in the Database tab; choose Use
+these paths to save the source selection to the plan. By default Borg UI backs
+up a generated dump directory on the same machine where the database was found.
+Use Database capture mode only if you need to back up the original live path
+instead of a generated dump.
+
+You can add more than one database before choosing Use these paths. When you use
+generated database scripts, Borg UI saves one pre-backup script and one
+post-backup script for the plan; each script runs the selected database template
+blocks with that database's own dump path and metadata.
+
 ## Create a Backup Plan
 
 Create a Backup Plan after the repository exists.

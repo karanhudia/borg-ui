@@ -407,6 +407,12 @@ export interface DatabaseScanRequest {
   source_type: 'local' | 'remote'
   source_ssh_connection_id: number | null
   paths: string[]
+  /** Recursive walk depth (0 = legacy non-recursive, max 10). Omit to use server default. */
+  max_depth?: number
+  /** Directory basenames to skip during the walk. Omit to use server default. */
+  ignore_patterns?: string[]
+  /** Per-scan wall-clock cap in seconds. Omit to use server default. */
+  timeout_seconds?: number
 }
 
 export interface DatabaseScanWarning {

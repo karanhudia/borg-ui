@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Accordion,
   AccordionDetails,
@@ -7,11 +7,8 @@ import {
   Box,
   Button,
   ButtonBase,
-  Card,
-  CardActionArea,
   Checkbox,
   Chip,
-  CircularProgress,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -25,15 +22,12 @@ import {
   Radio,
   RadioGroup,
   Select,
-  Skeleton,
   Stack,
   TextField,
   Tooltip,
   Typography,
-  alpha,
 } from '@mui/material'
 import {
-  ArrowLeft,
   ChevronRight,
   Container as ContainerIcon,
   Database as DatabaseIcon,
@@ -43,13 +37,11 @@ import {
   Laptop,
   Lock,
   Plus,
-  RefreshCw,
+  Search,
   Server,
   Trash2,
   X,
 } from 'lucide-react'
-import { SiMariadb, SiMongodb, SiMysql, SiPostgresql, SiRedis, SiSqlite } from 'react-icons/si'
-import type { IconType } from 'react-icons'
 import type { TFunction } from 'i18next'
 
 import CodeEditor from '../../../components/shared/CodeEditor'
@@ -64,36 +56,51 @@ import {
   type AgentMachineResponse,
   type FilesystemSnapshotCapabilitiesResponse,
   sourceDiscoveryAPI,
-  type DatabaseScanResponse,
   type SourceDiscoveryDatabase,
   type SourceDiscoveryResponse,
   type SourceDiscoveryScriptDraft,
 } from '../../../services/api'
-import type { Repository, SourceLocation, SourceSnapshotConfig, SourceType } from '../../../types'
+import type {
+  DatabaseCaptureMode,
+  Repository,
+  SourceDatabaseSelection,
+  SourceLocation,
+  SourceSnapshotConfig,
+  SourceType,
+} from '../../../types'
 import type { ScriptOption, SSHConnection, WizardState } from '../types'
 import type { SourceScriptCreateInput } from './types'
+import { DatabaseBrandTile } from './DatabaseBrandTile'
+import {
+  DatabaseScanDialog,
+  type DatabaseScanChoice,
+  type ScanTargetState,
+} from './DatabaseScanDialog'
 
 type SourceChoiceView = 'paths' | 'database' | 'database-detail'
 type ScriptMode = 'create' | 'reuse' | 'skip'
 type SourceKey = 'local' | `remote:${number}` | `agent:${number}`
 type SnapshotProviderDraft = 'none' | 'btrfs' | 'zfs'
-type ScanTargetState = { type: 'local' | 'remote'; sshId: number | '' }
+
+interface QueuedDatabaseScriptDraft {
+  databaseName: string
+  database: SourceDatabaseSelection
+  preBackup: SourceDiscoveryScriptDraft
+  postBackup: SourceDiscoveryScriptDraft
+  preScriptName: string
+  postScriptName: string
+  preScriptContent: string
+  postScriptContent: string
+}
+
+interface DatabaseScriptAssignment {
+  preBackupScriptId: number | null
+  postBackupScriptId: number | null
+  preBackupScriptParameters?: Record<string, string> | null
+  postBackupScriptParameters?: Record<string, string> | null
+}
 
 const DEFAULT_SNAPSHOT_STAGING_PATH = '/var/tmp/borg-ui/snapshots'
-
-const DEFAULT_DB_SCAN_PATHS = [
-  '/var/lib/postgresql',
-  '/var/lib/mysql',
-  '/var/lib/mongodb',
-  '/var/lib/redis',
-]
-
-type ScanErrorKind = 'ENDPOINT_MISSING' | 'OTHER'
-
-interface ScanErrorState {
-  kind: ScanErrorKind
-  detail: string | null
-}
 
 interface SnapshotDraft {
   provider: SnapshotProviderDraft
@@ -161,36 +168,6 @@ function isSnapshotDraftValid(draft: SnapshotDraft, sourceKey: SourceKey): boole
   return Boolean(draft.dataset.trim() && draft.mountpoint.trim())
 }
 
-function classifyScanError(err: unknown): ScanErrorState {
-  if (err && typeof err === 'object' && 'response' in err) {
-    const response = (err as { response?: { status?: number; data?: { detail?: string } } })
-      .response
-    if (response?.status === 404 || response?.status === 405) {
-      return { kind: 'ENDPOINT_MISSING', detail: null }
-    }
-    if (response?.data?.detail) {
-      return { kind: 'OTHER', detail: String(response.data.detail) }
-    }
-  }
-  return { kind: 'OTHER', detail: null }
-}
-
-function initialDatabaseScanTarget(
-  initialScanTarget: ScanTargetState | undefined,
-  sshConnections: SSHConnection[]
-): ScanTargetState {
-  if (initialScanTarget?.type !== 'remote') {
-    return { type: 'local', sshId: '' }
-  }
-
-  const requestedId = initialScanTarget.sshId || sshConnections[0]?.id
-  const resolvedId = sshConnections.some((connection) => connection.id === requestedId)
-    ? requestedId
-    : sshConnections[0]?.id
-
-  return resolvedId ? { type: 'remote', sshId: resolvedId } : { type: 'local', sshId: '' }
-}
-
 interface SourceSelectionDialogProps {
   open: boolean
   wizardState: WizardState
@@ -209,107 +186,10 @@ interface SourceSelectionDialogProps {
   initialScanTarget?: ScanTargetState
   /** Open the local capture-mode accordion initially. Used by Storybook for specific states. */
   initialCaptureModeExpanded?: boolean
-}
-
-interface DatabaseBrand {
-  Icon: IconType
-  color: string
-}
-
-const DATABASE_BRANDS: Record<string, DatabaseBrand> = {
-  postgresql: { Icon: SiPostgresql, color: '#336791' },
-  mysql: { Icon: SiMysql, color: '#00758F' },
-  mariadb: { Icon: SiMariadb, color: '#003545' },
-  'mysql / mariadb': { Icon: SiMysql, color: '#00758F' },
-  mongodb: { Icon: SiMongodb, color: '#00684A' },
-  redis: { Icon: SiRedis, color: '#FF4438' },
-  sqlite: { Icon: SiSqlite, color: '#003B57' },
-}
-
-function brandFor(engine: string): DatabaseBrand {
-  const normalised = engine.trim().toLowerCase()
-  if (DATABASE_BRANDS[normalised]) return DATABASE_BRANDS[normalised]
-  const key = Object.keys(DATABASE_BRANDS).find((name) => normalised.includes(name))
-  if (key) return DATABASE_BRANDS[key]
-  return { Icon: SiPostgresql, color: '#5C6B7A' }
-}
-
-interface DatabaseBrandTileProps {
-  database: SourceDiscoveryDatabase
-  detectedLabel: string
-  onClick: () => void
-}
-
-function DatabaseBrandTile({ database, detectedLabel, onClick }: DatabaseBrandTileProps) {
-  const brand = brandFor(database.engine)
-  const BrandIcon = brand.Icon
-
-  return (
-    <Card
-      variant="outlined"
-      sx={{
-        borderRadius: 1,
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        '&:hover': {
-          transform: 'translateY(-2px)',
-          boxShadow: (theme) => `0 2px 6px ${alpha(theme.palette.text.primary, 0.08)}`,
-          borderColor: 'text.primary',
-        },
-      }}
-    >
-      <CardActionArea
-        component="button"
-        onClick={onClick}
-        sx={{ height: '100%', p: 1.25, display: 'flex', justifyContent: 'flex-start' }}
-      >
-        <Stack
-          direction="row"
-          spacing={1.25}
-          alignItems="center"
-          sx={{ width: '100%', minWidth: 0 }}
-        >
-          <Box
-            sx={{
-              alignItems: 'center',
-              bgcolor: brand.color,
-              borderRadius: 1.5,
-              boxShadow: `0 4px 12px ${alpha(brand.color, 0.35)}`,
-              color: 'common.white',
-              display: 'flex',
-              height: 36,
-              justifyContent: 'center',
-              width: 36,
-              flexShrink: 0,
-            }}
-            aria-hidden
-          >
-            <BrandIcon size={20} />
-          </Box>
-          <Stack spacing={0.25} sx={{ minWidth: 0, textAlign: 'left' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }} noWrap>
-              {database.engine}
-            </Typography>
-            {database.detected && (
-              <Stack direction="row" spacing={0.5} alignItems="center">
-                <Box
-                  sx={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    bgcolor: 'success.main',
-                    flexShrink: 0,
-                  }}
-                />
-                <Typography variant="caption" color="success.main" sx={{ fontWeight: 500 }} noWrap>
-                  {detectedLabel}
-                </Typography>
-              </Stack>
-            )}
-          </Stack>
-        </Stack>
-      </CardActionArea>
-    </Card>
-  )
+  /** Open directly on a database detail state. Used by Storybook for specific states. */
+  initialSelectedDatabase?: SourceDiscoveryDatabase
+  /** Open the scan sub-dialog on mount. Used by Storybook to capture stacked states. */
+  initialScanDialogOpen?: boolean
 }
 
 function scriptPayload(draft: SourceDiscoveryScriptDraft, name: string): SourceScriptCreateInput {
@@ -321,6 +201,91 @@ function scriptPayload(draft: SourceDiscoveryScriptDraft, name: string): SourceS
     run_on: 'always',
     category: 'template',
   }
+}
+
+function cleanOptionalScriptId(value?: number | null | ''): number | null {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function cleanScriptParameters(parameters?: Record<string, string> | null): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(parameters || {})
+      .map(([key, value]) => [key.trim(), String(value).trim()] as const)
+      .filter(([key, value]) => key.length > 0 && value.length > 0)
+  )
+}
+
+function defaultDatabaseScriptParameters(
+  database: SourceDatabaseSelection,
+  hook: 'pre' | 'post'
+): Record<string, string> {
+  if (hook !== 'pre') return {}
+  if (database.template_id !== 'sqlite' || !database.detected_source_path) return {}
+  return { SQLITE_DATABASE_PATH: database.detected_source_path }
+}
+
+function databaseWithScriptAssignment(
+  database: SourceDatabaseSelection,
+  assignment: DatabaseScriptAssignment,
+  scriptExecutionOrder: number
+): SourceDatabaseSelection {
+  const preScriptId = cleanOptionalScriptId(assignment.preBackupScriptId)
+  const postScriptId = cleanOptionalScriptId(assignment.postBackupScriptId)
+  return {
+    ...database,
+    ...(preScriptId ? { pre_backup_script_id: preScriptId } : {}),
+    ...(postScriptId ? { post_backup_script_id: postScriptId } : {}),
+    pre_backup_script_parameters: cleanScriptParameters({
+      ...defaultDatabaseScriptParameters(database, 'pre'),
+      ...(assignment.preBackupScriptParameters || {}),
+    }),
+    post_backup_script_parameters: cleanScriptParameters({
+      ...defaultDatabaseScriptParameters(database, 'post'),
+      ...(assignment.postBackupScriptParameters || {}),
+    }),
+    script_execution_order: scriptExecutionOrder,
+  }
+}
+
+function cleanDatabaseSelection(
+  database: SourceDatabaseSelection | undefined,
+  paths: string[]
+): SourceDatabaseSelection | undefined {
+  if (!database) return undefined
+  const backupPaths = (database.backup_paths || paths).map((path) => path.trim()).filter(Boolean)
+  if (backupPaths.length === 0) return undefined
+  const captureMode: DatabaseCaptureMode =
+    database.capture_mode === 'original' ? 'original' : 'dump'
+  const cleaned: SourceDatabaseSelection = {
+    template_id: database.template_id?.trim() || 'database',
+    engine: database.engine?.trim() || 'Database',
+    display_name: database.display_name?.trim() || database.engine?.trim() || 'Database',
+    backup_strategy: database.backup_strategy?.trim() || 'logical_dump',
+    detected_source_path: database.detected_source_path?.trim() || null,
+    detection_label: database.detection_label?.trim() || null,
+    capture_mode: captureMode,
+    dump_path: captureMode === 'dump' ? database.dump_path?.trim() || backupPaths[0] : null,
+    backup_paths: backupPaths,
+    script_execution_target: database.script_execution_target || 'source',
+  }
+  const preScriptId = cleanOptionalScriptId(database.pre_backup_script_id)
+  const postScriptId = cleanOptionalScriptId(database.post_backup_script_id)
+  if (preScriptId) cleaned.pre_backup_script_id = preScriptId
+  if (postScriptId) cleaned.post_backup_script_id = postScriptId
+  if (preScriptId || database.pre_backup_script_parameters) {
+    cleaned.pre_backup_script_parameters = cleanScriptParameters(
+      database.pre_backup_script_parameters
+    )
+  }
+  if (postScriptId || database.post_backup_script_parameters) {
+    cleaned.post_backup_script_parameters = cleanScriptParameters(
+      database.post_backup_script_parameters
+    )
+  }
+  const scriptExecutionOrder = cleanOptionalScriptId(database.script_execution_order)
+  if (scriptExecutionOrder) cleaned.script_execution_order = scriptExecutionOrder
+  return cleaned
 }
 
 function cleanLocations(locations: SourceLocation[]): SourceLocation[] {
@@ -336,6 +301,10 @@ function cleanLocations(locations: SourceLocation[]): SourceLocation[] {
       }
       if (location.source_type === 'local' && location.snapshot) {
         cleaned.snapshot = location.snapshot
+      }
+      const database = cleanDatabaseSelection(location.database, paths)
+      if (database) {
+        cleaned.database = database
       }
       return cleaned
     })
@@ -374,6 +343,17 @@ function locationKey(location: SourceLocation): SourceKey {
     return `agent:${location.agent_machine_id}`
   }
   return 'local'
+}
+
+function draftLocationKey(location: SourceLocation) {
+  const baseKey = locationKey(location)
+  if (!location.database) return `${baseKey}:files`
+  return `${baseKey}:database:${JSON.stringify([
+    location.database.template_id,
+    location.database.detected_source_path || '',
+    location.database.dump_path || '',
+    location.database.backup_paths,
+  ])}`
 }
 
 function locationForKey(
@@ -514,20 +494,25 @@ export function SourceSelectionDialog({
   initialView = 'paths',
   initialScanTarget,
   initialCaptureModeExpanded = false,
+  initialSelectedDatabase,
+  initialScanDialogOpen = false,
 }: SourceSelectionDialogProps) {
   const [view, setView] = useState<SourceChoiceView>(initialView)
-  const [scanResult, setScanResult] = useState<DatabaseScanResponse | null>(null)
-  const [scanLoading, setScanLoading] = useState(false)
-  const [scanError, setScanError] = useState<ScanErrorState | null>(null)
-  const [scanTarget, setScanTarget] = useState<ScanTargetState>(() =>
-    initialDatabaseScanTarget(initialScanTarget, sshConnections)
-  )
-  const [scanPaths, setScanPaths] = useState<string[]>(DEFAULT_DB_SCAN_PATHS)
-  const [scanPathDraft, setScanPathDraft] = useState('')
+  const [scanDialogOpen, setScanDialogOpen] = useState(initialScanDialogOpen)
+  // Carries the scan target (and, when known, its display label) over from
+  // the DatabaseScanDialog so applyDatabase places the chosen database on the
+  // right source machine. Updated when the sub-modal returns a choice; reset
+  // to local when the parent dialog opens.
+  const [lastScanContext, setLastScanContext] = useState<{
+    scanTarget: ScanTargetState
+    label: string | null
+  }>(() => ({
+    scanTarget: { type: 'local', sshId: '' },
+    label: null,
+  }))
   const [fallbackTemplates, setFallbackTemplates] = useState<SourceDiscoveryDatabase[]>([])
   const [snapshotCapabilities, setSnapshotCapabilities] =
     useState<FilesystemSnapshotCapabilitiesResponse | null>(null)
-  const scanRequestId = useRef(0)
   const [selectedDatabase, setSelectedDatabase] = useState<SourceDiscoveryDatabase | null>(null)
   const [scriptMode, setScriptMode] = useState<ScriptMode>('create')
   const [preScriptName, setPreScriptName] = useState('')
@@ -536,6 +521,11 @@ export function SourceSelectionDialog({
   const [postScriptContent, setPostScriptContent] = useState('')
   const [preExistingScriptId, setPreExistingScriptId] = useState<number | ''>('')
   const [postExistingScriptId, setPostExistingScriptId] = useState<number | ''>('')
+  const [databaseCaptureMode, setDatabaseCaptureMode] = useState<DatabaseCaptureMode>('dump')
+  const [databaseDumpPath, setDatabaseDumpPath] = useState('')
+  const [queuedDatabaseScriptDrafts, setQueuedDatabaseScriptDrafts] = useState<
+    Record<string, QueuedDatabaseScriptDraft>
+  >({})
   const [applying, setApplying] = useState(false)
   const [selectedSourceKey, setSelectedSourceKey] = useState<SourceKey>('local')
   const [sourcePath, setSourcePath] = useState('')
@@ -548,8 +538,18 @@ export function SourceSelectionDialog({
 
   useEffect(() => {
     if (!open) return
-    setView(initialView)
     const nextLocations = locationsFromWizardState(wizardState)
+    const databaseLocation = nextLocations.find((location) => location.database)
+    const hydratedTemplateId =
+      wizardState.databaseTemplateId ?? databaseLocation?.database?.template_id ?? null
+    const initialDetailDatabase =
+      initialView === 'database-detail' ? initialSelectedDatabase || null : null
+    const initialViewWithDb: SourceChoiceView = initialDetailDatabase
+      ? 'database-detail'
+      : hydratedTemplateId
+        ? 'database'
+        : initialView
+    setView(initialViewWithDb)
     const nextSnapshotDrafts = snapshotDraftsFromLocations(nextLocations)
     const defaultAgentKey = selectedAgentRepositoryKey(wizardState, fullRepositories)
     setDraftSourceLocations(nextLocations)
@@ -566,15 +566,27 @@ export function SourceSelectionDialog({
     )
     setCaptureModeExpanded(initialCaptureModeExpanded)
     setSourcePath('')
-    setSelectedDatabase(null)
+    setSelectedDatabase(initialDetailDatabase)
     setScriptMode('create')
-    setPreExistingScriptId(wizardState.preBackupScriptId || '')
-    setPostExistingScriptId(wizardState.postBackupScriptId || '')
-    setScanTarget(initialDatabaseScanTarget(initialScanTarget, sshConnections))
-    setScanPaths(DEFAULT_DB_SCAN_PATHS)
-    setScanPathDraft('')
-    setScanResult(null)
-    setScanError(null)
+    setPreScriptName(initialDetailDatabase?.script_drafts.pre_backup.name || '')
+    setPostScriptName(initialDetailDatabase?.script_drafts.post_backup.name || '')
+    setPreScriptContent(initialDetailDatabase?.script_drafts.pre_backup.content || '')
+    setPostScriptContent(initialDetailDatabase?.script_drafts.post_backup.content || '')
+    setPreExistingScriptId(databaseLocation?.database?.pre_backup_script_id || '')
+    setPostExistingScriptId(databaseLocation?.database?.post_backup_script_id || '')
+    setQueuedDatabaseScriptDrafts({})
+    setDatabaseCaptureMode(databaseLocation?.database?.capture_mode || 'dump')
+    setDatabaseDumpPath(
+      databaseLocation?.database?.dump_path ||
+        databaseLocation?.database?.backup_paths?.[0] ||
+        initialDetailDatabase?.source_directories[0] ||
+        ''
+    )
+    setScanDialogOpen(initialScanDialogOpen)
+    setLastScanContext({
+      scanTarget: initialScanTarget ?? { type: 'local', sshId: '' },
+      label: null,
+    })
     setFallbackTemplates([])
   }, [
     open,
@@ -582,6 +594,8 @@ export function SourceSelectionDialog({
     initialView,
     initialScanTarget,
     initialCaptureModeExpanded,
+    initialSelectedDatabase,
+    initialScanDialogOpen,
     sshConnections,
     fullRepositories,
   ])
@@ -601,6 +615,37 @@ export function SourceSelectionDialog({
       active = false
     }
   }, [open])
+
+  // When the dialog opens for a plan that already has a database template
+  // recorded, rehydrate selectedDatabase from the fetched template list as
+  // soon as it lands. We restore the saved pre/post script names + bodies
+  // from wizardState so the editor reflects what the user previously saved.
+  useEffect(() => {
+    if (!open) return
+    const hydratedTemplateId = wizardState.databaseTemplateId ?? null
+    if (!hydratedTemplateId || hydratedTemplateId === 'sqlite') return
+    if (selectedDatabase?.id === hydratedTemplateId) return
+    const match = fallbackTemplates.find((tpl) => tpl.id === hydratedTemplateId)
+    if (!match) return
+    setSelectedDatabase(match)
+    setPreScriptName(match.script_drafts.pre_backup.name)
+    setPostScriptName(match.script_drafts.post_backup.name)
+    setPreScriptContent(match.script_drafts.pre_backup.content)
+    setPostScriptContent(match.script_drafts.post_backup.content)
+    const databaseLocation = locationsFromWizardState(wizardState).find(
+      (location) => location.database
+    )
+    setScriptMode(databaseLocation?.database?.pre_backup_script_id ? 'reuse' : 'create')
+  }, [
+    open,
+    wizardState.databaseTemplateId,
+    wizardState.sourceLocations,
+    wizardState.sourceDirectories,
+    wizardState.sourceType,
+    wizardState.sourceSshConnectionId,
+    fallbackTemplates,
+    selectedDatabase,
+  ])
 
   useEffect(() => {
     if (!open) return
@@ -654,54 +699,23 @@ export function SourceSelectionDialog({
     })
   }
 
-  const runDatabaseScan = (immediate = false) => {
-    if (!open) return
-    if (scanTarget.type === 'remote' && !scanTarget.sshId) return
-    if (scanPaths.length === 0) return
-
-    const requestId = scanRequestId.current + 1
-    scanRequestId.current = requestId
-    const delay = immediate ? 0 : 300
-
-    const handle = setTimeout(() => {
-      setScanLoading(true)
-      setScanError(null)
-      sourceDiscoveryAPI
-        .scanDatabases({
-          source_type: scanTarget.type,
-          source_ssh_connection_id: scanTarget.type === 'remote' ? Number(scanTarget.sshId) : null,
-          paths: scanPaths,
-        })
-        .then((response) => {
-          if (scanRequestId.current !== requestId) return
-          setScanResult(response.data)
-        })
-        .catch((err) => {
-          if (scanRequestId.current !== requestId) return
-          setScanError(classifyScanError(err))
-        })
-        .finally(() => {
-          if (scanRequestId.current !== requestId) return
-          setScanLoading(false)
-        })
-    }, delay)
-
-    return () => clearTimeout(handle)
-  }
-
-  useEffect(() => {
-    const cleanup = runDatabaseScan()
-    return cleanup
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, scanTarget.type, scanTarget.sshId, scanPaths.join('|')])
-
   const chooseDatabase = (database: SourceDiscoveryDatabase) => {
     setSelectedDatabase(database)
     setPreScriptName(database.script_drafts.pre_backup.name)
     setPostScriptName(database.script_drafts.post_backup.name)
     setPreScriptContent(database.script_drafts.pre_backup.content)
     setPostScriptContent(database.script_drafts.post_backup.content)
+    setDatabaseCaptureMode('dump')
+    setDatabaseDumpPath(
+      database.source_directories[0] || `/var/tmp/borg-ui/database-dumps/${database.id}`
+    )
     setView('database-detail')
+  }
+
+  const handleScanChoice = (choice: DatabaseScanChoice) => {
+    setLastScanContext({ scanTarget: choice.scanTarget, label: choice.scanTargetLabel })
+    setScanDialogOpen(false)
+    chooseDatabase(choice.database)
   }
 
   const applyDatabase = async () => {
@@ -709,63 +723,111 @@ export function SourceSelectionDialog({
 
     setApplying(true)
     try {
-      let preBackupScriptId: number | null = null
-      let postBackupScriptId: number | null = null
-
-      if (scriptMode === 'create') {
-        const preScript = await onCreateScript(
-          scriptPayload(
-            { ...selectedDatabase.script_drafts.pre_backup, content: preScriptContent },
-            preScriptName.trim() || selectedDatabase.script_drafts.pre_backup.name
-          )
-        )
-        const postScript = await onCreateScript(
-          scriptPayload(
-            { ...selectedDatabase.script_drafts.post_backup, content: postScriptContent },
-            postScriptName.trim() || selectedDatabase.script_drafts.post_backup.name
-          )
-        )
-        preBackupScriptId = preScript.id
-        postBackupScriptId = postScript.id
-      } else if (scriptMode === 'reuse') {
-        preBackupScriptId = preExistingScriptId ? Number(preExistingScriptId) : null
-        postBackupScriptId = postExistingScriptId ? Number(postExistingScriptId) : null
+      const contextTarget = lastScanContext.scanTarget
+      const targetKey: SourceKey =
+        contextTarget.type === 'remote' && contextTarget.sshId
+          ? `remote:${contextTarget.sshId}`
+          : 'local'
+      const locationBase = locationForKey(targetKey)
+      const detectedSourcePath =
+        selectedDatabase.detected && selectedDatabase.detection_source?.startsWith('/')
+          ? selectedDatabase.detection_source
+          : null
+      const requestedCaptureMode: DatabaseCaptureMode =
+        databaseCaptureMode === 'original' && detectedSourcePath ? 'original' : 'dump'
+      const dumpPath =
+        databaseDumpPath.trim() ||
+        selectedDatabase.source_directories[0] ||
+        `/var/tmp/borg-ui/database-dumps/${selectedDatabase.id}`
+      const backupPaths =
+        requestedCaptureMode === 'original' && detectedSourcePath
+          ? [detectedSourcePath]
+          : [dumpPath]
+      let database: SourceDatabaseSelection = {
+        template_id: selectedDatabase.id,
+        engine: selectedDatabase.engine,
+        display_name: selectedDatabase.display_name,
+        backup_strategy: selectedDatabase.backup_strategy,
+        detected_source_path: detectedSourcePath,
+        detection_label:
+          lastScanContext.label ||
+          (contextTarget.type === 'remote'
+            ? t('backupPlans.sourceChooser.remoteMachine')
+            : t('backupPlans.sourceChooser.borgUiServer')),
+        capture_mode: requestedCaptureMode,
+        dump_path: requestedCaptureMode === 'dump' ? dumpPath : null,
+        backup_paths: backupPaths,
+        script_execution_target: 'source',
       }
-
-      updateState({
-        sourceType: 'local',
-        sourceSshConnectionId: '',
-        sourceDirectories: selectedDatabase.source_directories,
-        sourceLocations: [
+      if (scriptMode === 'reuse') {
+        database = databaseWithScriptAssignment(
+          database,
           {
-            source_type: 'local',
-            source_ssh_connection_id: null,
-            paths: selectedDatabase.source_directories,
+            preBackupScriptId: preExistingScriptId ? Number(preExistingScriptId) : null,
+            postBackupScriptId: postExistingScriptId ? Number(postExistingScriptId) : null,
           },
-        ],
-        preBackupScriptId,
-        postBackupScriptId,
-        preBackupScriptParameters: {},
-        postBackupScriptParameters: {},
+          draftSourceLocations.filter((location) => location.database).length + 1
+        )
+      }
+      const nextLocation: SourceLocation = {
+        ...locationBase,
+        paths: backupPaths,
+        database,
+      }
+      const nextLocationKey = draftLocationKey(nextLocation)
+
+      setDraftSourceLocations((current) => [
+        ...current.filter((location) => draftLocationKey(location) !== nextLocationKey),
+        nextLocation,
+      ])
+      setQueuedDatabaseScriptDrafts((current) => {
+        if (scriptMode !== 'create') {
+          const remaining = { ...current }
+          delete remaining[nextLocationKey]
+          return remaining
+        }
+        return {
+          ...current,
+          [nextLocationKey]: {
+            databaseName: selectedDatabase.display_name,
+            database,
+            preBackup: selectedDatabase.script_drafts.pre_backup,
+            postBackup: selectedDatabase.script_drafts.post_backup,
+            preScriptName: preScriptName.trim() || selectedDatabase.script_drafts.pre_backup.name,
+            postScriptName:
+              postScriptName.trim() || selectedDatabase.script_drafts.post_backup.name,
+            preScriptContent,
+            postScriptContent,
+          },
+        }
       })
-      onClose()
+      setSelectedSourceKey(targetKey)
+      setView('database')
     } finally {
       setApplying(false)
     }
   }
 
-  const addPathsToSelectedSource = (paths: string[]) => {
+  const handleFooterCancel = () => {
+    if (view === 'database-detail') {
+      setSelectedDatabase(null)
+      setView('database')
+      return
+    }
+    onClose()
+  }
+
+  const addPathsToSourceKey = (sourceKey: SourceKey, paths: string[]) => {
     const nextPaths = paths.map((path) => path.trim()).filter(Boolean)
     if (nextPaths.length === 0) return
-    const locationBase = locationForKey(selectedSourceKey)
+    const locationBase = locationForKey(sourceKey)
 
     setDraftSourceLocations((current) => {
       const existingIndex = current.findIndex(
-        (location) => locationKey(location) === selectedSourceKey
+        (location) => locationKey(location) === sourceKey && !location.database
       )
       if (existingIndex === -1) {
-        const snapshot =
-          selectedSourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
+        const snapshot = sourceKey === 'local' ? snapshotFromDraft(snapshotDraft) : undefined
         return [
           ...current,
           {
@@ -779,9 +841,7 @@ export function SourceSelectionDialog({
       return current.map((location, index) => {
         if (index !== existingIndex) return location
         const snapshot =
-          selectedSourceKey === 'local'
-            ? snapshotFromDraft(snapshotDraft, location.snapshot)
-            : undefined
+          sourceKey === 'local' ? snapshotFromDraft(snapshotDraft, location.snapshot) : undefined
         return {
           ...location,
           paths: Array.from(new Set([...location.paths, ...nextPaths])),
@@ -791,16 +851,19 @@ export function SourceSelectionDialog({
     })
   }
 
+  const addPathsToSelectedSource = (paths: string[]) =>
+    addPathsToSourceKey(selectedSourceKey, paths)
+
   const addSourcePath = () => {
     addPathsToSelectedSource([sourcePath])
     setSourcePath('')
   }
 
-  const removeSourcePath = (sourceKey: SourceKey, path: string) => {
+  const removeSourcePath = (sourceKey: string, path: string) => {
     setDraftSourceLocations((current) =>
       current
         .map((location) =>
-          locationKey(location) === sourceKey
+          draftLocationKey(location) === sourceKey
             ? { ...location, paths: location.paths.filter((item) => item !== path) }
             : location
         )
@@ -808,13 +871,103 @@ export function SourceSelectionDialog({
     )
   }
 
-  const removeSourceLocation = (sourceKey: SourceKey) => {
+  const removeSourceLocation = (sourceKey: string) => {
     setDraftSourceLocations((current) =>
-      current.filter((location) => locationKey(location) !== sourceKey)
+      current.filter((location) => draftLocationKey(location) !== sourceKey)
     )
   }
 
-  const applyPaths = () => {
+  const resolveDatabaseSourceScripts = async (
+    sourceLocations: SourceLocation[]
+  ): Promise<SourceLocation[]> => {
+    const createdScripts = new Map<string, Promise<number>>()
+    let databaseOrder = 0
+
+    const createReusableScript = async (
+      database: SourceDatabaseSelection,
+      hook: 'pre' | 'post',
+      payload: SourceScriptCreateInput
+    ) => {
+      const cacheKey = JSON.stringify([
+        database.template_id,
+        hook,
+        payload.name,
+        payload.content,
+        payload.timeout,
+      ])
+      if (!createdScripts.has(cacheKey)) {
+        createdScripts.set(
+          cacheKey,
+          onCreateScript(payload).then((script) => script.id)
+        )
+      }
+      return createdScripts.get(cacheKey)!
+    }
+
+    const resolvedLocations: SourceLocation[] = []
+    for (const location of sourceLocations) {
+      if (!location.database) {
+        resolvedLocations.push(location)
+        continue
+      }
+
+      databaseOrder += 1
+      const draft = queuedDatabaseScriptDrafts[draftLocationKey(location)]
+      if (draft) {
+        const preBackupScriptId = await createReusableScript(
+          location.database,
+          'pre',
+          scriptPayload(
+            { ...draft.preBackup, content: draft.preScriptContent },
+            draft.preScriptName
+          )
+        )
+        const postBackupScriptId = await createReusableScript(
+          location.database,
+          'post',
+          scriptPayload(
+            { ...draft.postBackup, content: draft.postScriptContent },
+            draft.postScriptName
+          )
+        )
+        resolvedLocations.push({
+          ...location,
+          database: databaseWithScriptAssignment(
+            location.database,
+            {
+              preBackupScriptId,
+              postBackupScriptId,
+            },
+            databaseOrder
+          ),
+        })
+        continue
+      }
+
+      if (location.database.pre_backup_script_id || location.database.post_backup_script_id) {
+        resolvedLocations.push({
+          ...location,
+          database: databaseWithScriptAssignment(
+            location.database,
+            {
+              preBackupScriptId: location.database.pre_backup_script_id ?? null,
+              postBackupScriptId: location.database.post_backup_script_id ?? null,
+              preBackupScriptParameters: location.database.pre_backup_script_parameters,
+              postBackupScriptParameters: location.database.post_backup_script_parameters,
+            },
+            databaseOrder
+          ),
+        })
+        continue
+      }
+
+      resolvedLocations.push(location)
+    }
+
+    return resolvedLocations
+  }
+
+  const applyPaths = async () => {
     const sourceLocations = cleanLocations(
       draftSourceLocations.map((location) => {
         if (location.source_type !== 'local') return location
@@ -831,13 +984,21 @@ export function SourceSelectionDialog({
         }
       })
     )
-    updateState({
-      sourceType: sourceTypeFromLocations(sourceLocations),
-      sourceSshConnectionId: sourceConnectionFromLocations(sourceLocations),
-      sourceDirectories: sourceLocations.flatMap((location) => location.paths),
-      sourceLocations,
-    })
-    onClose()
+    setApplying(true)
+    try {
+      const sourceLocationsWithScripts = await resolveDatabaseSourceScripts(sourceLocations)
+      const databaseLocation = sourceLocationsWithScripts.find((location) => location.database)
+      updateState({
+        sourceType: sourceTypeFromLocations(sourceLocationsWithScripts),
+        sourceSshConnectionId: sourceConnectionFromLocations(sourceLocationsWithScripts),
+        sourceDirectories: sourceLocationsWithScripts.flatMap((location) => location.paths),
+        sourceLocations: sourceLocationsWithScripts,
+        databaseTemplateId: databaseLocation?.database?.template_id ?? null,
+      })
+      onClose()
+    } finally {
+      setApplying(false)
+    }
   }
 
   const selectedSourceConnection = !selectedSourceKey.startsWith('remote:')
@@ -881,6 +1042,7 @@ export function SourceSelectionDialog({
       sourceKind === 'local' && snapshotDraft.provider === 'zfs' && !snapshotDraft.dataset.trim()
     const zfsMountpointMissing =
       sourceKind === 'local' && snapshotDraft.provider === 'zfs' && !snapshotDraft.mountpoint.trim()
+    const fileDraftSourceLocations = draftSourceLocations.filter((location) => !location.database)
 
     const lockedByAgentRepo = !!agentRepoConstraint
     const localCardDisabled = lockedByAgentRepo
@@ -1255,14 +1417,14 @@ export function SourceSelectionDialog({
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
             {t('backupPlans.sourceChooser.selectedSourceGroups')}
           </Typography>
-          {draftSourceLocations.length === 0 ? (
+          {fileDraftSourceLocations.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               {t('backupPlans.sourceChooser.summaryEmpty')}
             </Typography>
           ) : (
             <Stack spacing={1}>
-              {draftSourceLocations.map((location) => {
-                const key = locationKey(location)
+              {fileDraftSourceLocations.map((location) => {
+                const key = draftLocationKey(location)
                 const isSinglePath = location.paths.length === 1
                 const monospacePathSx = {
                   fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
@@ -1455,381 +1617,101 @@ export function SourceSelectionDialog({
   }
 
   const renderDatabaseList = () => {
-    const detections = scanResult?.detections || []
-    const scanTemplates = scanResult?.templates || []
-    const detectedIds = new Set(detections.map((item) => item.id))
-    const effectiveTemplates = scanTemplates.length > 0 ? scanTemplates : fallbackTemplates
-    const remainingTemplates = effectiveTemplates.filter((item) => !detectedIds.has(item.id))
-    const hasRemoteOptions = sshConnections.length > 0
-    const remoteDisabled = scanTarget.type === 'remote' && !hasRemoteOptions
-    const scanCompleted = scanResult !== null
-    const nothingFound = !scanLoading && !scanError && scanCompleted && detections.length === 0
-    const awaitingFirstScan = !scanCompleted && !scanError
-    const showSkeleton = scanLoading || awaitingFirstScan
-    const targetLabel =
-      scanResult?.scan_target.label ??
-      (scanTarget.type === 'local'
-        ? t('backupPlans.sourceChooser.borgUiServer')
-        : t('backupPlans.sourceChooser.remoteMachine'))
-    const selectedScanConnection =
-      scanTarget.type === 'remote' && scanTarget.sshId
-        ? sshConnections.find((connection) => connection.id === scanTarget.sshId) || null
-        : null
-    const selectedScanSshConfig = selectedScanConnection
-      ? {
-          ssh_key_id: selectedScanConnection.ssh_key_id,
-          host: selectedScanConnection.host,
-          username: selectedScanConnection.username,
-          port: selectedScanConnection.port,
-        }
-      : undefined
-
-    const addScanPaths = (paths: string[]) => {
-      const nextPaths = paths.map((path) => path.trim()).filter(Boolean)
-      if (nextPaths.length === 0) {
-        setScanPathDraft('')
-        return
-      }
-      setScanPaths((current) => {
-        const next = [...current]
-        nextPaths.forEach((path) => {
-          if (!next.includes(path)) next.push(path)
-        })
-        return next
-      })
-      setScanPathDraft('')
-    }
-
-    const addPath = () => {
-      const next = scanPathDraft.trim()
-      if (!next || scanPaths.includes(next)) {
-        setScanPathDraft('')
-        return
-      }
-      addScanPaths([next])
-    }
-
-    const removePath = (path: string) => {
-      setScanPaths((current) => current.filter((item) => item !== path))
-    }
-
-    const scanTargetDestinations: DestinationOption[] = [
-      {
-        key: 'local',
-        icon: <HardDrive size={16} />,
-        label: t('backupPlans.sourceChooser.borgUiServer'),
-        description: t('backupPlans.sourceChooser.localSourceDescription'),
-      },
-      {
-        key: 'remote',
-        icon: <Server size={16} />,
-        label: t('backupPlans.sourceChooser.remoteMachine'),
-        description: hasRemoteOptions
-          ? t('backupPlans.sourceChooser.remoteMachineDescription')
-          : t('backupPlans.sourceChooser.noRemoteMachines'),
-        disabled: !hasRemoteOptions,
-      },
-    ]
-
-    const handleScanTargetChange = (key: string) => {
-      if (key === 'local') {
-        setScanTarget({ type: 'local', sshId: '' })
-        return
-      }
-      if (key === 'remote') {
-        if (!hasRemoteOptions) return
-        const fallbackId =
-          scanTarget.sshId &&
-          sshConnections.some((connection) => connection.id === scanTarget.sshId)
-            ? scanTarget.sshId
-            : sshConnections[0].id
-        setScanTarget({ type: 'remote', sshId: fallbackId })
-      }
-    }
+    const queuedDatabaseLocations = draftSourceLocations.filter((location) => location.database)
 
     return (
-      <Stack spacing={2}>
-        <DestinationSelect
-          value={scanTarget.type}
-          onChange={handleScanTargetChange}
-          destinations={scanTargetDestinations}
-          label={t('backupPlans.sourceChooser.scanTarget')}
-        />
-
-        {scanTarget.type === 'remote' && hasRemoteOptions ? (
-          <SshConnectionSelect
-            value={scanTarget.sshId || ''}
-            onChange={(id) => setScanTarget({ type: 'remote', sshId: id })}
-            connections={sshConnections}
-            label={t('backupPlans.sourceChooser.selectRemoteMachine')}
-            emptyMessage={t('backupPlans.sourceChooser.noRemoteMachines')}
-          />
-        ) : (
-          <Box
-            sx={{
-              border: 1,
-              borderColor: 'divider',
-              borderRadius: 1,
-              bgcolor: 'action.hover',
-              color: 'text.secondary',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              px: 1.5,
-              height: 56,
-            }}
-          >
-            <HardDrive size={14} />
-            <Typography variant="body2" color="text.secondary">
-              {remoteDisabled
-                ? t('backupPlans.sourceChooser.noRemoteMachines')
-                : t('backupPlans.sourceChooser.readingFromLocal')}
-            </Typography>
-          </Box>
-        )}
-
-        <Stack spacing={1}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems="flex-start">
-            <PathSelectorField
-              label={t('backupPlans.sourceChooser.sourcePath')}
-              value={scanPathDraft}
-              onChange={setScanPathDraft}
-              placeholder="/path/to/scan"
-              size="small"
-              fullWidth
-              disabled={remoteDisabled}
-              initialPath={
-                selectedScanConnection ? selectedScanConnection.default_path || '/' : '/'
-              }
-              multiSelect
-              selectMode="both"
-              connectionType={selectedScanConnection ? 'ssh' : 'local'}
-              sshConfig={selectedScanSshConfig}
-              showSshMountPoints={false}
-              onSelectPaths={addScanPaths}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  addPath()
-                }
-              }}
-            />
-            <Button
-              variant="contained"
-              startIcon={<Plus size={16} />}
-              onClick={addPath}
-              disabled={!scanPathDraft.trim() || remoteDisabled}
-              sx={{ flexShrink: 0 }}
-            >
-              {t('backupPlans.sourceChooser.addPath')}
-            </Button>
-          </Stack>
-
-          <Box>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 1 }}
-            >
-              <Typography variant="subtitle2">
-                {t('backupPlans.sourceChooser.pathsToScan')}
-              </Typography>
-              <Button
-                size="small"
-                variant="text"
-                startIcon={
-                  scanLoading ? (
-                    <CircularProgress size={12} color="inherit" />
-                  ) : (
-                    <RefreshCw size={14} />
-                  )
-                }
-                onClick={() => runDatabaseScan(true)}
-                disabled={scanLoading || remoteDisabled || scanPaths.length === 0}
-                sx={{ textTransform: 'none', fontWeight: 500 }}
-              >
-                {scanLoading
-                  ? t('backupPlans.sourceChooser.scanning')
-                  : t('backupPlans.sourceChooser.rescan')}
-              </Button>
-            </Stack>
-            <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
-              {scanPaths.map((path) => (
-                <Chip
-                  key={path}
-                  size="small"
-                  label={path}
-                  onDelete={() => removePath(path)}
-                  deleteIcon={<X size={14} />}
-                  sx={{
-                    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
-                    fontSize: '0.75rem',
-                  }}
-                />
-              ))}
-              {scanPaths.length === 0 && (
-                <Typography variant="caption" color="text.secondary">
-                  {t('backupPlans.sourceChooser.noScanPaths')}
-                </Typography>
-              )}
-            </Stack>
-          </Box>
-        </Stack>
-
-        {showSkeleton && (
-          <>
-            <Skeleton
-              variant="rounded"
-              height={88}
-              sx={{ borderRadius: 1 }}
-              animation={scanLoading ? 'wave' : 'pulse'}
-            />
-            <Box
-              sx={{
-                display: 'grid',
-                gap: 1.25,
-                p: 0.75,
-                mx: -0.75,
-                gridTemplateColumns: {
-                  xs: 'repeat(2, minmax(0, 1fr))',
-                  sm: 'repeat(3, minmax(0, 1fr))',
-                  md: 'repeat(4, minmax(0, 1fr))',
-                },
-              }}
-            >
-              {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton
-                  key={index}
-                  variant="rounded"
-                  height={64}
-                  sx={{ borderRadius: 1 }}
-                  animation={scanLoading ? 'wave' : 'pulse'}
-                />
-              ))}
-            </Box>
-          </>
-        )}
-
-        {!showSkeleton && scanResult && scanResult.warnings.length > 0 && (
-          <Alert severity="warning">
-            <Stack spacing={0.25}>
-              {scanResult.warnings.map((warning, index) => (
-                <Typography key={`${warning.code}-${index}`} variant="caption">
-                  {warning.path ? `${warning.path}: ` : ''}
-                  {warning.message}
-                </Typography>
-              ))}
-            </Stack>
-          </Alert>
-        )}
-
-        {!showSkeleton && scanError?.kind === 'ENDPOINT_MISSING' && (
-          <Alert severity="info">{t('backupPlans.sourceChooser.scanEndpointMissing')}</Alert>
-        )}
-
-        {!showSkeleton && scanError?.kind === 'OTHER' && (
-          <Alert
-            severity="warning"
-            action={
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => runDatabaseScan(true)}
-                disabled={scanLoading}
-              >
-                {t('backupPlans.sourceChooser.rescan')}
-              </Button>
-            }
-          >
-            <Stack spacing={0.25}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {t('backupPlans.sourceChooser.scanFailedTitle', { target: targetLabel })}
-              </Typography>
-              <Typography variant="caption">
-                {scanError.detail ?? t('backupPlans.sourceChooser.scanFailedBody')}
-              </Typography>
-            </Stack>
-          </Alert>
-        )}
-
-        {!showSkeleton && nothingFound && (
-          <Alert severity="info">
-            <Stack spacing={0.5}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {t('backupPlans.sourceChooser.nothingFoundTitle', { target: targetLabel })}
-              </Typography>
-              {scanResult && scanResult.scanned_paths.length > 0 && (
-                <Stack
-                  direction="row"
-                  spacing={0.5}
-                  useFlexGap
-                  flexWrap="wrap"
-                  alignItems="baseline"
-                >
-                  <Typography variant="caption" sx={{ flexShrink: 0 }}>
-                    {t('backupPlans.sourceChooser.checkedPaths')}
-                  </Typography>
-                  {scanResult.scanned_paths.map((path, index) => (
-                    <Typography
-                      key={path}
-                      component="span"
-                      variant="caption"
-                      sx={{
-                        fontFamily:
-                          'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                      }}
-                    >
-                      {path}
-                      {index < scanResult.scanned_paths.length - 1 ? ',' : ''}
-                    </Typography>
-                  ))}
-                </Stack>
-              )}
-              <Typography variant="caption">
-                {t('backupPlans.sourceChooser.nothingFoundBody')}
-              </Typography>
-            </Stack>
-          </Alert>
-        )}
-
-        {!showSkeleton && detections.length > 0 && (
+      <Stack spacing={2.5}>
+        {queuedDatabaseLocations.length > 0 && (
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              {t('backupPlans.sourceChooser.detectedSection')}
+              {t('backupPlans.sourceChooser.selectedDatabases')}
             </Typography>
-            <Box
-              sx={{
-                display: 'grid',
-                gap: 1.25,
-                p: 0.75,
-                mx: -0.75,
-                gridTemplateColumns: {
-                  xs: 'repeat(2, minmax(0, 1fr))',
-                  sm: 'repeat(3, minmax(0, 1fr))',
-                  md: 'repeat(4, minmax(0, 1fr))',
-                },
-              }}
-            >
-              {detections.map((database) => (
-                <DatabaseBrandTile
-                  key={database.id}
-                  database={database}
-                  detectedLabel={t('backupPlans.sourceChooser.detectedBadge')}
-                  onClick={() => chooseDatabase(database)}
-                />
-              ))}
-            </Box>
+            <Stack spacing={1}>
+              {queuedDatabaseLocations.map((location) => {
+                const key = draftLocationKey(location)
+                const database = location.database
+                if (!database) return null
+                const hasSourceScript =
+                  Boolean(database.pre_backup_script_id || database.post_backup_script_id) ||
+                  Boolean(queuedDatabaseScriptDrafts[key])
+                return (
+                  <Paper
+                    key={key}
+                    variant="outlined"
+                    sx={{ p: 1.25, borderRadius: 1, bgcolor: 'background.default' }}
+                  >
+                    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+                      <DatabaseIcon size={16} />
+                      <Stack spacing={0.25} sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="subtitle2" noWrap>
+                          {database.display_name}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          title={database.backup_paths.join(', ')}
+                          sx={{
+                            fontFamily:
+                              'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {sourceLocationLabel(location, sshConnections, agentMachines, t)} ·{' '}
+                          {database.backup_paths.join(', ')}
+                        </Typography>
+                      </Stack>
+                      <Chip
+                        size="small"
+                        variant={hasSourceScript ? 'filled' : 'outlined'}
+                        color={hasSourceScript ? 'primary' : 'default'}
+                        label={
+                          hasSourceScript
+                            ? t('backupPlans.sourceChooser.databaseScriptsAssigned')
+                            : t('backupPlans.sourceChooser.databaseScriptsSkipped')
+                        }
+                      />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={
+                          database.capture_mode === 'original'
+                            ? t('backupPlans.sourceChooser.captureModeOriginal')
+                            : t('backupPlans.sourceChooser.captureModeDump')
+                        }
+                      />
+                      <Tooltip title={t('backupPlans.sourceChooser.removeSourceGroup')}>
+                        <IconButton
+                          aria-label={t('backupPlans.sourceChooser.removeSourceGroup')}
+                          onClick={() => removeSourceLocation(key)}
+                          size="small"
+                        >
+                          <Trash2 size={14} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Paper>
+                )
+              })}
+            </Stack>
           </Box>
         )}
 
-        {!showSkeleton && remainingTemplates.length > 0 && (
+        <Button
+          variant="contained"
+          size="large"
+          startIcon={<Search size={18} />}
+          onClick={() => setScanDialogOpen(true)}
+          sx={{ alignSelf: 'flex-start' }}
+        >
+          {t('backupPlans.sourceChooser.scanForDatabases')}
+        </Button>
+
+        {fallbackTemplates.length > 0 && (
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              {detections.length > 0
-                ? t('backupPlans.sourceChooser.orPickTemplate')
-                : t('backupPlans.sourceChooser.pickTemplateManually')}
+              {t('backupPlans.sourceChooser.pickTemplateManually')}
             </Typography>
             <Box
               sx={{
@@ -1844,7 +1726,7 @@ export function SourceSelectionDialog({
                 },
               }}
             >
-              {remainingTemplates.map((database) => (
+              {fallbackTemplates.map((database) => (
                 <DatabaseBrandTile
                   key={database.id}
                   database={database}
@@ -1893,13 +1775,80 @@ export function SourceSelectionDialog({
   const renderDatabaseDetail = () => {
     if (!selectedDatabase) return null
 
+    // detection_source can be either a real filesystem path (when the scan
+    // located a data dir) or a string like "pg_dump available on PATH" (when
+    // only the client CLI was found). Show the discovered path only when it
+    // looks like a real path, since that is the case where naming the
+    // instance is useful.
+    const detectedPath =
+      selectedDatabase.detected && selectedDatabase.detection_source?.startsWith('/')
+        ? selectedDatabase.detection_source
+        : null
+
+    // Per-engine clarification of how the pre-backup script targets the
+    // discovered instance. logical_dump engines (PG / MySQL / Mongo) talk
+    // to the daemon, not the filesystem, so the discovered path is purely
+    // contextual; tell the user how to retarget. rdb_snapshot (Redis) also
+    // uses the daemon but the dump file lands in the discovered dir. SQLite
+    // never reaches this view (Task 10 routes it to file-source mode).
+    const strategyHint = ((): string => {
+      const engineId = selectedDatabase.id
+      const strategy = selectedDatabase.backup_strategy
+      if (strategy === 'logical_dump' && engineId === 'postgresql') {
+        return t('backupPlans.sourceChooser.strategyHint.postgresql', {
+          defaultValue:
+            'The script runs pg_dump against the local PostgreSQL daemon. Set PGHOST, PGPORT, PGUSER, or PGDATABASE in the script to target a non-default instance.',
+        })
+      }
+      if (strategy === 'logical_dump' && engineId === 'mysql') {
+        return t('backupPlans.sourceChooser.strategyHint.mysql', {
+          defaultValue:
+            'The script runs mysqldump against the local MySQL/MariaDB daemon (default --host=localhost). Set MYSQL_HOST or MYSQL_DATABASE in the script to target a non-default instance.',
+        })
+      }
+      if (strategy === 'logical_dump' && engineId === 'mongodb') {
+        return t('backupPlans.sourceChooser.strategyHint.mongodb', {
+          defaultValue:
+            'The script runs mongodump against the local MongoDB daemon (default --uri=mongodb://localhost). Adjust --uri in the script to target a non-default instance.',
+        })
+      }
+      if (strategy === 'rdb_snapshot' && engineId === 'redis') {
+        return t('backupPlans.sourceChooser.strategyHint.redis', {
+          defaultValue:
+            'The script triggers a SAVE on the local Redis daemon and copies the resulting dump.rdb into the staging dir below.',
+        })
+      }
+      return t('backupPlans.sourceChooser.discoveredAtHint', {
+        defaultValue:
+          'Live data directory. The pre-backup script targets this instance; Borg does not read these files directly.',
+      })
+    })()
+    const detailScanTarget = lastScanContext.scanTarget
+    const detailScanConnection =
+      detailScanTarget.type === 'remote' && detailScanTarget.sshId
+        ? sshConnections.find((connection) => connection.id === detailScanTarget.sshId)
+        : null
+    const sourceMachineLabel =
+      lastScanContext.label ||
+      (detailScanConnection
+        ? `${detailScanConnection.username}@${detailScanConnection.host}`
+        : detailScanTarget.type === 'remote'
+          ? t('backupPlans.sourceChooser.remoteMachine')
+          : t('backupPlans.sourceChooser.borgUiServer'))
+    const canUseOriginalPath = Boolean(detectedPath)
+    const effectiveCaptureMode: DatabaseCaptureMode =
+      databaseCaptureMode === 'original' && canUseOriginalPath ? 'original' : 'dump'
+    const effectiveDumpPath =
+      databaseDumpPath.trim() ||
+      selectedDatabase.source_directories[0] ||
+      `/var/tmp/borg-ui/database-dumps/${selectedDatabase.id}`
+    const effectiveBackupPaths =
+      effectiveCaptureMode === 'original' && detectedPath ? [detectedPath] : [effectiveDumpPath]
+
     return (
       <Stack spacing={2}>
         <Box>
-          <Typography variant="subtitle1" fontWeight={600}>
-            {selectedDatabase.display_name}
-          </Typography>
-          <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 0.75 }}>
+          <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
             <Chip size="small" label={selectedDatabase.engine} />
             <Chip size="small" label={selectedDatabase.backup_strategy.replace(/_/g, ' ')} />
             <Tooltip title={selectedDatabase.notes.join(' ')}>
@@ -1912,14 +1861,171 @@ export function SourceSelectionDialog({
             </Tooltip>
           </Stack>
         </Box>
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            {t('backupPlans.sourceChooser.sourcePaths')}
-          </Typography>
-          <Typography variant="body2" sx={{ fontFamily: 'monospace', mt: 0.25 }}>
-            {selectedDatabase.source_directories.join(', ')}
-          </Typography>
+        {/* Single info block that explicitly names two distinct things:
+            the live DB instance the pre-backup script targets, and the dump
+            directory Borg actually captures. Previously these sat in two
+            unconnected sections and users assumed they should match. */}
+        <Box
+          sx={{
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 1,
+            p: 1.5,
+            bgcolor: 'background.default',
+          }}
+        >
+          <Stack spacing={1.5}>
+            <Stack spacing={0.25}>
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <Server size={14} />
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  {t('backupPlans.sourceChooser.databaseSourceMachine')}
+                </Typography>
+              </Stack>
+              <Typography variant="body2" sx={{ pl: 2.5 }}>
+                {sourceMachineLabel}
+              </Typography>
+            </Stack>
+            {detectedPath && (
+              <Stack spacing={0.25}>
+                <Stack direction="row" spacing={0.75} alignItems="center">
+                  <DatabaseIcon size={14} />
+                  <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                    {t('backupPlans.sourceChooser.databaseLivePath')}
+                  </Typography>
+                </Stack>
+                <Typography
+                  sx={{
+                    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+                    fontSize: '0.8125rem',
+                    wordBreak: 'break-all',
+                    pl: 2.5,
+                  }}
+                >
+                  {detectedPath}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ pl: 2.5, fontStyle: 'italic' }}
+                >
+                  {strategyHint}
+                </Typography>
+              </Stack>
+            )}
+            <Stack spacing={0.25}>
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <HardDrive size={14} />
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  {t('backupPlans.sourceChooser.databaseBackupPaths')}
+                </Typography>
+              </Stack>
+              <Typography
+                sx={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+                  fontSize: '0.8125rem',
+                  wordBreak: 'break-all',
+                  pl: 2.5,
+                }}
+              >
+                {effectiveBackupPaths.join(', ')}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ pl: 2.5, fontStyle: 'italic' }}
+              >
+                {t('backupPlans.sourceChooser.borgWillBackUpHint', {
+                  defaultValue:
+                    'Dump output staging directory. The pre-backup script writes the dump here; Borg captures it.',
+                })}
+              </Typography>
+            </Stack>
+          </Stack>
         </Box>
+        <Accordion
+          disableGutters
+          elevation={0}
+          expanded={captureModeExpanded}
+          onChange={(_, expanded) => setCaptureModeExpanded(expanded)}
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: 'background.paper',
+            '&:before': { display: 'none' },
+          }}
+        >
+          <AccordionSummary
+            expandIcon={<ChevronRight size={18} />}
+            sx={{
+              px: 1.75,
+              minHeight: 48,
+              '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 1, my: 0 },
+              '& .MuiAccordionSummary-expandIconWrapper': {
+                transform: 'rotate(0deg)',
+                '&.Mui-expanded': { transform: 'rotate(90deg)' },
+              },
+            }}
+          >
+            <Typography variant="body2" fontWeight={500} color="text.secondary">
+              {t('backupPlans.sourceChooser.captureModeDatabase')}
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.primary"
+              sx={{ ml: 'auto', mr: 0.5, fontWeight: 500 }}
+            >
+              {effectiveCaptureMode === 'original'
+                ? t('backupPlans.sourceChooser.captureModeOriginal')
+                : t('backupPlans.sourceChooser.captureModeDump')}
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails sx={{ px: 1.75, pt: 2, pb: 1.75 }}>
+            <Stack spacing={1.5}>
+              <RadioGroup
+                value={databaseCaptureMode}
+                onChange={(event) =>
+                  setDatabaseCaptureMode(event.target.value as DatabaseCaptureMode)
+                }
+              >
+                <FormControlLabel
+                  value="dump"
+                  control={<Radio size="small" />}
+                  label={t('backupPlans.sourceChooser.captureModeDump')}
+                />
+                <FormControlLabel
+                  value="original"
+                  control={<Radio size="small" />}
+                  disabled={!canUseOriginalPath}
+                  label={t('backupPlans.sourceChooser.captureModeOriginal')}
+                />
+              </RadioGroup>
+              {databaseCaptureMode === 'dump' ? (
+                <TextField
+                  label={t('backupPlans.sourceChooser.databaseDumpPath')}
+                  value={databaseDumpPath}
+                  onChange={(event) => setDatabaseDumpPath(event.target.value)}
+                  size="small"
+                  fullWidth
+                />
+              ) : (
+                <Alert severity="warning" icon={<Info size={16} />}>
+                  <Typography variant="body2">
+                    {canUseOriginalPath
+                      ? t('backupPlans.sourceChooser.captureModeOriginalWarning', {
+                          defaultValue:
+                            'Borg will read the live database files directly. Use this only when the database is stopped or you have another consistency mechanism.',
+                        })
+                      : t('backupPlans.sourceChooser.captureModeOriginalUnavailable', {
+                          defaultValue: 'Original path mode requires a detected filesystem path.',
+                        })}
+                  </Typography>
+                </Alert>
+              )}
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
         <Divider />
         <Box>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -1947,6 +2053,27 @@ export function SourceSelectionDialog({
             />
           </RadioGroup>
         </Box>
+        {scriptMode === 'skip' && (
+          // Without a pre-backup script the staging dir is never populated,
+          // so Borg captures an empty (or stale) archive. Loud, inline
+          // warning so an operator who knows what they are doing can pick
+          // skip deliberately, but a casual user does not silently end up
+          // with a useless backup.
+          <Alert severity="warning" icon={<Info size={16} />}>
+            <Typography variant="body2" sx={{ mb: 0.5 }}>
+              {t('backupPlans.sourceChooser.skipScriptsWarningTitle', {
+                defaultValue: 'No script will populate the dump.',
+              })}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('backupPlans.sourceChooser.skipScriptsWarningBody', {
+                defaultValue:
+                  'Borg will only capture what is already in {{path}}. If you do not have an external job populating this directory, the backup will be empty. Pick "Create new scripts" to have Borg UI generate the dump for you.',
+                path: selectedDatabase.source_directories.join(', '),
+              })}
+            </Typography>
+          </Alert>
+        )}
         {scriptMode === 'create' && (
           <Stack spacing={1.5}>
             <TextField
@@ -2018,12 +2145,18 @@ export function SourceSelectionDialog({
       }}
       footer={
         <DialogActions>
-          <Button onClick={onClose}>{t('common.buttons.cancel')}</Button>
-          {view === 'paths' && (
+          <Button onClick={handleFooterCancel}>{t('common.buttons.cancel')}</Button>
+          {/* Apply works the same on the file-paths view and the database
+              scan list: commit whatever sources are queued in drafts. We
+              surface the same button on both so the user can quick-add a
+              detected SQLite from the database tab and apply without
+              bouncing to the files tab. */}
+          {(view === 'paths' || view === 'database') && (
             <Button
               variant="contained"
               onClick={applyPaths}
               disabled={
+                applying ||
                 cleanLocations(draftSourceLocations).length === 0 ||
                 !areSnapshotDraftsValid(
                   draftSourceLocations,
@@ -2037,7 +2170,19 @@ export function SourceSelectionDialog({
             </Button>
           )}
           {view === 'database-detail' && (
-            <Button variant="contained" onClick={applyDatabase} disabled={applying}>
+            <Button
+              variant="contained"
+              onClick={applyDatabase}
+              disabled={
+                applying ||
+                (databaseCaptureMode === 'original' &&
+                  !(
+                    selectedDatabase?.detected && selectedDatabase.detection_source?.startsWith('/')
+                  )) ||
+                (databaseCaptureMode === 'dump' &&
+                  !(databaseDumpPath.trim() || selectedDatabase?.source_directories[0]))
+              }
+            >
               {t('backupPlans.sourceChooser.applyDatabase')}
             </Button>
           )}
@@ -2046,17 +2191,6 @@ export function SourceSelectionDialog({
     >
       <DialogTitle sx={{ pb: 1.5 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
-          {view === 'database-detail' && (
-            <IconButton
-              aria-label={t('backupPlans.sourceChooser.back')}
-              onClick={() => setView('database')}
-              size="small"
-              edge="start"
-              sx={{ mr: 0.5 }}
-            >
-              <ArrowLeft size={18} />
-            </IconButton>
-          )}
           <Typography component="span" variant="h6" sx={{ fontWeight: 600 }} noWrap>
             {view === 'database' && t('backupPlans.sourceChooser.databaseBackupTitle')}
             {view === 'database-detail' &&
@@ -2068,22 +2202,43 @@ export function SourceSelectionDialog({
       <DialogContent sx={{ pt: 1.5, flex: 1, overflowY: 'auto' }}>
         <Stack spacing={2.5}>
           {view !== 'database-detail' && (
-            <SourceKindPivot view={view} onChange={(next) => setView(next)} t={t} />
+            <SourceKindPivot
+              view={view}
+              onChange={(next) => setView(next)}
+              counts={{
+                files: draftSourceLocations
+                  .filter((location) => !location.database)
+                  .reduce((sum, location) => sum + location.paths.length, 0),
+                database: draftSourceLocations.filter((location) => location.database).length,
+              }}
+              t={t}
+            />
           )}
           {content}
         </Stack>
       </DialogContent>
+      <DatabaseScanDialog
+        open={scanDialogOpen}
+        onClose={() => setScanDialogOpen(false)}
+        onChoose={handleScanChoice}
+        sshConnections={sshConnections}
+        t={t}
+        initialScanTarget={initialScanTarget}
+      />
     </ResponsiveDialog>
   )
 }
 
+type SourceKindCounts = { files: number; database: number }
+
 interface SourceKindPivotProps {
   view: SourceChoiceView
   onChange: (next: SourceChoiceView) => void
+  counts: SourceKindCounts
   t: TFunction
 }
 
-function SourceKindPivot({ view, onChange, t }: SourceKindPivotProps) {
+function SourceKindPivot({ view, onChange, counts, t }: SourceKindPivotProps) {
   const segments: {
     key: 'files' | 'database' | 'container'
     target: SourceChoiceView | null
@@ -2168,6 +2323,23 @@ function SourceKindPivot({ view, onChange, t }: SourceKindPivotProps) {
           >
             <segment.Icon size={14} />
             {t(segment.labelKey)}
+            {/* Count chip surfaces "this tab has N items queued" so the user
+                knows where things landed without switching tabs to check. */}
+            {segment.key !== 'container' &&
+              (segment.key === 'files' ? counts.files : counts.database) > 0 && (
+                <Chip
+                  label={segment.key === 'files' ? counts.files : counts.database}
+                  size="small"
+                  color="success"
+                  sx={{
+                    height: 18,
+                    minWidth: 18,
+                    fontSize: '0.6875rem',
+                    fontWeight: 700,
+                    '& .MuiChip-label': { px: 0.625 },
+                  }}
+                />
+              )}
             {segment.badgeKey && (
               <Chip
                 label={t(segment.badgeKey)}

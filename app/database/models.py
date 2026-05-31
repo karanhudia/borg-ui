@@ -782,6 +782,12 @@ class BackupPlan(Base):
     source_directories = Column(Text, nullable=False)
     source_locations = Column(Text, nullable=True)
     exclude_patterns = Column(Text, nullable=True)
+    # Origin of the source selection: 'postgresql', 'mysql', 'mongodb',
+    # 'redis', 'sqlite' when the plan was created from a detected DB or
+    # picked from a DB template; NULL for plain file sources. The dialog
+    # uses this on edit to default back to the Database tab and rehydrate
+    # the template view rather than treating the plan as a plain file plan.
+    database_template_id = Column(String, nullable=True)
 
     archive_name_template = Column(String, default="{plan_name}-{now}", nullable=False)
     compression = Column(String, default="lz4", nullable=False)

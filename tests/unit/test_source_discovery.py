@@ -5,6 +5,7 @@ import pytest
 from app.api import source_discovery
 from app.core.security import encrypt_secret
 from app.database.models import SSHConnection, SSHKey
+from app.utils.script_params import parse_script_parameters
 
 
 @pytest.mark.unit
@@ -71,7 +72,10 @@ class TestSourceDiscovery:
         pre_backup = sqlite["script_drafts"]["pre_backup"]["content"]
         post_backup = sqlite["script_drafts"]["post_backup"]["content"]
         assert "sqlite3" in pre_backup
+        assert "BORG_UI_DB_SOURCE_PATH" in pre_backup
         assert "SQLITE_DATABASE_PATH" in pre_backup
+        assert "SQLITE_DATABASE_NAME" not in pre_backup
+        assert parse_script_parameters(pre_backup) == []
         assert "/var/tmp/borg-ui/database-dumps/sqlite" in pre_backup
         assert "/var/tmp/borg-ui/database-dumps/sqlite" in post_backup
 
@@ -434,3 +438,174 @@ class TestSourceDiscovery:
             "redis",
             "sqlite",
         }
+
+    def test_database_scan_walks_recursively_to_find_nested_db(
+        self, test_client, admin_headers, tmp_path, monkeypatch
+    ):
+        # PG_VERSION lives 3 levels below the scan root. Default depth (6)
+        # should discover it.
+        monkeypatch.setattr(source_discovery, "which", lambda command: None)
+        nested_pg = tmp_path / "var" / "lib" / "postgresql" / "16" / "main"
+        nested_pg.mkdir(parents=True)
+        (nested_pg / "PG_VERSION").write_text("16\n")
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": [str(tmp_path)],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        detections = body["detections"]
+        assert [d["id"] for d in detections] == ["postgresql"]
+        assert detections[0]["detection_source"] == str(nested_pg)
+
+    def test_database_scan_respects_max_depth(
+        self, test_client, admin_headers, tmp_path, monkeypatch
+    ):
+        # PG_VERSION sits 4 levels below the scan root. max_depth=2 means
+        # the walk stops before reaching it, so nothing is detected.
+        monkeypatch.setattr(source_discovery, "which", lambda command: None)
+        nested_pg = tmp_path / "a" / "b" / "c" / "d"
+        nested_pg.mkdir(parents=True)
+        (nested_pg / "PG_VERSION").write_text("16\n")
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": [str(tmp_path)],
+                "max_depth": 2,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["detections"] == []
+
+    def test_database_scan_skips_ignored_directories(
+        self, test_client, admin_headers, tmp_path, monkeypatch
+    ):
+        # A PG signature inside an ignored dir should be missed. The same
+        # signature outside it should be picked up.
+        monkeypatch.setattr(source_discovery, "which", lambda command: None)
+        ignored_pg = tmp_path / "node_modules" / "fixture-pg"
+        ignored_pg.mkdir(parents=True)
+        (ignored_pg / "PG_VERSION").write_text("16\n")
+
+        kept_mysql = tmp_path / "data" / "mysql"
+        kept_mysql.mkdir(parents=True)
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": [str(tmp_path)],
+                "ignore_patterns": ["node_modules"],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        ids = [d["id"] for d in response.json()["detections"]]
+        assert "mysql" in ids
+        assert "postgresql" not in ids
+
+    def test_database_scan_rejects_out_of_range_max_depth(
+        self, test_client, admin_headers
+    ):
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": ["/tmp"],
+                "max_depth": 999,
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert "max_depth" in str(response.json()["detail"])
+
+    def test_database_scan_rejects_ignore_pattern_with_shell_chars(
+        self, test_client, admin_headers
+    ):
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": ["/tmp"],
+                "ignore_patterns": ["nope; rm -rf /"],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert "ignore pattern" in str(response.json()["detail"])
+
+    def test_database_scan_keeps_pre_script_generic_for_detected_path(
+        self, test_client, admin_headers, tmp_path, monkeypatch
+    ):
+        # Detected paths are stored on the source selection, not baked into
+        # script drafts. That keeps engine scripts reusable across databases.
+        monkeypatch.setattr(source_discovery, "which", lambda command: None)
+        pg_dir = tmp_path / "custom-pg"
+        pg_dir.mkdir()
+        (pg_dir / "PG_VERSION").write_text("16\n")
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": [str(pg_dir)],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        detections = response.json()["detections"]
+        assert len(detections) == 1
+        assert detections[0]["detection_source"] == str(pg_dir)
+        script_content = detections[0]["script_drafts"]["pre_backup"]["content"]
+        assert "Discovered by Borg UI at:" not in script_content
+        assert str(pg_dir) not in script_content
+
+    def test_database_scan_does_not_inject_path_for_command_only_detection(
+        self, test_client, admin_headers, tmp_path, monkeypatch
+    ):
+        # When detection happens only because the client CLI is on PATH (no
+        # data dir found), the script should remain unmodified.
+        missing_path = tmp_path / "no-pg-here"
+        monkeypatch.setattr(
+            source_discovery,
+            "which",
+            lambda command: f"/usr/bin/{command}" if command == "pg_dump" else None,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": [str(missing_path)],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        detections = response.json()["detections"]
+        assert detections[0]["detection_source"] == "pg_dump available on PATH"
+        assert (
+            "BORG_UI_DETECTED_PATH"
+            not in detections[0]["script_drafts"]["pre_backup"]["content"]
+        )

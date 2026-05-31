@@ -182,6 +182,32 @@ const discoveryResponse = {
         },
       },
     },
+    {
+      id: 'mysql',
+      engine: 'MySQL',
+      display_name: 'MySQL database',
+      backup_strategy: 'logical_dump',
+      source_directories: ['/var/tmp/borg-ui/database-dumps/mysql'],
+      client_commands: ['mysqldump'],
+      documentation_url: 'https://dev.mysql.com/doc/refman/8.0/en/mysqldump.html',
+      detected: false,
+      detection_source: null,
+      notes: ['Uses mysqldump.'],
+      script_drafts: {
+        pre_backup: {
+          name: 'Prepare MySQL dump',
+          description: 'Create a MySQL dump.',
+          content: '#!/usr/bin/env bash\nset -euo pipefail\nmysqldump --all-databases\n',
+          timeout: 900,
+        },
+        post_backup: {
+          name: 'Clean MySQL dump',
+          description: 'Remove transient MySQL dump files.',
+          content: '#!/usr/bin/env bash\nset -euo pipefail\nrm -rf /var/tmp/borg-ui/mysql\n',
+          timeout: 120,
+        },
+      },
+    },
   ],
 }
 
@@ -220,6 +246,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseTitle': 'Database scan',
   'backupPlans.sourceChooser.filesTitle': 'Files and folders',
   'backupPlans.sourceChooser.backToTypes': 'Back to source types',
+  'backupPlans.sourceChooser.back': 'Back',
   'backupPlans.sourceChooser.applyPaths': 'Use these paths',
   'backupPlans.sourceChooser.loading': 'Scanning sources...',
   'backupPlans.sourceChooser.noDatabaseTemplates': 'No database templates available',
@@ -235,7 +262,19 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.postScriptName': 'Post-backup script name',
   'backupPlans.sourceChooser.preExistingScript': 'Existing pre-backup script',
   'backupPlans.sourceChooser.postExistingScript': 'Existing post-backup script',
-  'backupPlans.sourceChooser.applyDatabase': 'Use database source',
+  'backupPlans.sourceChooser.applyDatabase': 'Add database',
+  'backupPlans.sourceChooser.selectedDatabases': 'Selected databases',
+  'backupPlans.sourceChooser.databaseScriptsAssigned': 'Source scripts assigned',
+  'backupPlans.sourceChooser.databaseScriptsSkipped': 'No source scripts',
+  'backupPlans.sourceChooser.showTemplates': 'Show templates',
+  'backupPlans.sourceChooser.hideTemplates': 'Hide templates',
+  'backupPlans.sourceChooser.captureModeDatabase': 'Database capture mode',
+  'backupPlans.sourceChooser.captureModeDump': 'Dump to staging path',
+  'backupPlans.sourceChooser.captureModeOriginal': 'Back up original path',
+  'backupPlans.sourceChooser.databaseSourceMachine': 'Source machine',
+  'backupPlans.sourceChooser.databaseLivePath': 'Live database path',
+  'backupPlans.sourceChooser.databaseDumpPath': 'Dump path',
+  'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
   'backupPlans.sourceChooser.addSourceGroup': 'Add source group',
   'backupPlans.sourceChooser.localSource': 'Borg UI server',
   'backupPlans.sourceChooser.borgUiServer': 'Borg UI server',
@@ -268,6 +307,30 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.selectRemoteMachine': 'Select a remote machine',
   'backupPlans.sourceChooser.noRemoteMachines': 'No SSH connections available',
   'backupPlans.sourceChooser.scanTarget': 'Scan where?',
+  'backupPlans.sourceChooser.pathsToScan': 'Paths to scan',
+  'backupPlans.sourceChooser.rootScanSuggestion':
+    'Not sure where the database lives? Add root (/) to scan broadly.',
+  'backupPlans.sourceChooser.addRootScanPath': 'Add /',
+  'backupPlans.sourceChooser.noScanPaths': 'Add at least one path to scan.',
+  'backupPlans.sourceChooser.scanning': 'Scanning...',
+  'backupPlans.sourceChooser.rescan': 'Re-scan',
+  'backupPlans.sourceChooser.scanEndpointMissing':
+    "Database scanning isn't available on this server yet. Open templates to configure manually.",
+  'backupPlans.sourceChooser.nothingFoundTitle': 'No databases found on {{target}}',
+  'backupPlans.sourceChooser.nothingFoundBody':
+    'Add another path above, search from root, or open templates to set one up manually.',
+  'backupPlans.sourceChooser.checkedPaths': 'Checked:',
+  'backupPlans.sourceChooser.detectedSection': 'Detected',
+  'backupPlans.sourceChooser.detectedBadge': 'Detected',
+  'backupPlans.sourceChooser.orPickTemplate': 'Or pick a template',
+  'backupPlans.sourceChooser.pickTemplateManually': 'Pick a template to configure manually',
+  'backupPlans.sourceChooser.scanForDatabases': 'Scan for databases',
+  'backupPlans.sourceChooser.scanForDatabasesHint': 'Find databases running on the source machine.',
+  'backupPlans.sourceChooser.scanForDatabasesTitle': 'Scan for databases',
+  'backupPlans.sourceChooser.scanForDatabasesSubtitle':
+    'Pick a detected database, or close this dialog and choose a template manually.',
+  'backupPlans.sourceChooser.closeScanDialog': 'Close',
+  'backupPlans.sourceChooser.noQueuedDatabases': 'No databases selected yet.',
   'backupPlans.sourceChooser.showLessPaths': 'Show less',
   'backupPlans.sourceChooser.kindFiles': 'Files',
   'backupPlans.sourceChooser.kindDatabase': 'Database',
@@ -305,6 +368,7 @@ const t = (key: string, options?: { count?: number }) => {
   return (translations[key] || key)
     .replace('{{command}}', String((options as { command?: string } | undefined)?.command ?? ''))
     .replace('{{provider}}', String((options as { provider?: string } | undefined)?.provider ?? ''))
+    .replace('{{target}}', String((options as { target?: string } | undefined)?.target ?? ''))
 }
 
 function clickExistingTextButton(name: string | RegExp) {
@@ -489,7 +553,10 @@ describe('SourceStep', () => {
     clickExistingTextButton(/add path/i)
     clickExistingTextButton(/use these paths/i)
 
-    fireEvent.click(screen.getByRole('button', { name: /borg ui server/i }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+    clickExistingSummaryToggle(/borg ui server/i)
     expect(screen.getByTitle('/srv/app-data')).toBeInTheDocument()
     expect(screen.getByText('Files and folders')).toBeInTheDocument()
     expect(screen.queryByText('Database scan')).not.toBeInTheDocument()
@@ -658,7 +725,9 @@ describe('SourceStep', () => {
     expect(applyButton).toBeEnabled()
     fireEvent.click(applyButton)
 
-    expect(updateState).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(updateState).toHaveBeenCalledTimes(1)
+    })
     expect(updateState.mock.calls[0][0].sourceLocations).toEqual([
       {
         source_type: 'local',
@@ -738,7 +807,9 @@ describe('SourceStep', () => {
     expect(applyButton).toBeEnabled()
     fireEvent.click(applyButton)
 
-    expect(updateState).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(updateState).toHaveBeenCalledTimes(1)
+    })
     expect(updateState.mock.calls[0][0].sourceLocations).toEqual([
       {
         source_type: 'local',
@@ -797,8 +868,11 @@ describe('SourceStep', () => {
     clickExistingTextButton(/select browsed path/i)
     clickExistingTextButton(/use these paths/i)
 
-    fireEvent.click(screen.getByRole('button', { name: /borg ui server/i }))
-    fireEvent.click(screen.getByRole('button', { name: /backup-a@server-a.example/i }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+    clickExistingSummaryToggle(/borg ui server/i)
+    clickExistingSummaryToggle(/backup-a@server-a.example/i)
     expect(screen.getByTitle('/srv/app')).toBeInTheDocument()
     expect(screen.getByTitle('/selected/from-browser')).toBeInTheDocument()
     expect(screen.getByText('backup-a@server-a.example')).toBeInTheDocument()
@@ -835,7 +909,10 @@ describe('SourceStep', () => {
     clickExistingTextButton(/select browsed path/i)
     clickExistingTextButton(/use these paths/i)
 
-    fireEvent.click(screen.getByRole('button', { name: /pi.local/i }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+    clickExistingSummaryToggle(/pi.local/i)
     expect(screen.getByTitle('/selected/from-browser')).toBeInTheDocument()
   }, 30000)
 
@@ -858,6 +935,7 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
     const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
     fireEvent.click(databaseTab)
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
 
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /scan where/i }))
     let listbox = await screen.findByRole('listbox')
@@ -879,6 +957,7 @@ describe('SourceStep', () => {
     fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
     const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
     fireEvent.click(databaseTab)
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
 
     const sourcePathInput = screen.getByLabelText(/source path/i)
     fireEvent.click(screen.getByTitle('Browse filesystem'))
@@ -896,7 +975,7 @@ describe('SourceStep', () => {
     ).toBeTruthy()
   })
 
-  it('applies database templates with code-editor script drafts', async () => {
+  it('queues database templates in the database tab without closing the modal', async () => {
     apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
     apiMocks.scanDatabases.mockResolvedValue({
       data: {
@@ -918,6 +997,10 @@ describe('SourceStep', () => {
     const postgresqlTemplate = await screen.findByText(/^postgresql$/i)
     fireEvent.click(postgresqlTemplate.closest('button') || postgresqlTemplate)
 
+    expect(screen.getAllByText(/^PostgreSQL database$/i)).toHaveLength(1)
+    expect(screen.queryByRole('button', { name: /^back$/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
+
     expect(
       (screen.getByLabelText(/pre-backup script draft/i) as HTMLTextAreaElement).value
     ).toContain('pg_dump')
@@ -925,7 +1008,33 @@ describe('SourceStep', () => {
       (screen.getByLabelText(/post-backup script draft/i) as HTMLTextAreaElement).value
     ).toContain('rm -rf')
 
-    fireEvent.click(screen.getByRole('button', { name: /use database source/i }))
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: /^database$/i })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+      expect(screen.queryByLabelText(/pre-backup script draft/i)).not.toBeInTheDocument()
+      expect(updateState).not.toHaveBeenCalled()
+    })
+
+    fireEvent.click(await screen.findByText(/^postgresql$/i))
+    fireEvent.click(screen.getByRole('button', { name: /add database/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: /database.*1/i })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+      expect(screen.getByText(/selected databases/i)).toBeInTheDocument()
+      expect(onCreateScript).not.toHaveBeenCalled()
+      expect(updateState).not.toHaveBeenCalled()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
 
     await waitFor(() => {
       expect(onCreateScript).toHaveBeenCalledTimes(2)
@@ -933,10 +1042,133 @@ describe('SourceStep', () => {
         expect.objectContaining({
           sourceType: 'local',
           sourceDirectories: ['/var/tmp/borg-ui/database-dumps/postgresql'],
-          preBackupScriptId: 101,
-          postBackupScriptId: 102,
+          databaseTemplateId: 'postgresql',
+          sourceLocations: [
+            expect.objectContaining({
+              source_type: 'local',
+              paths: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+              database: expect.objectContaining({
+                template_id: 'postgresql',
+                capture_mode: 'dump',
+                dump_path: '/var/tmp/borg-ui/database-dumps/postgresql',
+                backup_paths: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+                script_execution_target: 'source',
+                pre_backup_script_id: 101,
+                post_backup_script_id: 102,
+                pre_backup_script_parameters: {},
+                post_backup_script_parameters: {},
+                script_execution_order: 1,
+              }),
+            }),
+          ],
         })
       )
+      const updatePayload = updateState.mock.calls[0][0]
+      expect(updatePayload.preBackupScriptId).toBeUndefined()
+      expect(updatePayload.postBackupScriptId).toBeUndefined()
+    })
+  })
+
+  it('shows the templates grid inline on the Database tab without a Show templates toggle', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+
+    render(<StatefulSourceStep />)
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
+
+    expect(await screen.findByText(/pick a template to configure manually/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /show templates/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /hide templates/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /scan for databases/i })).toBeInTheDocument()
+  })
+
+  it('queues multiple database templates instead of replacing the previous database', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.scanDatabases.mockResolvedValue({
+      data: {
+        ...emptyScanResponse,
+        templates: discoveryResponse.templates,
+      },
+    })
+    const updateState = vi.fn()
+    const onCreateScript = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 201 })
+      .mockResolvedValueOnce({ id: 202 })
+      .mockResolvedValueOnce({ id: 203 })
+      .mockResolvedValueOnce({ id: 204 })
+
+    renderSourceStep({ updateState, onCreateScript })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
+
+    const postgresqlTemplate = await screen.findByText(/^postgresql$/i)
+    fireEvent.click(postgresqlTemplate.closest('button') || postgresqlTemplate)
+    fireEvent.click(screen.getByRole('button', { name: /add database/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /database.*1/i })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+      expect(screen.getByText('PostgreSQL database')).toBeInTheDocument()
+    })
+
+    const mysqlTemplate = await screen.findByText(/^mysql$/i)
+    fireEvent.click(mysqlTemplate.closest('button') || mysqlTemplate)
+    fireEvent.click(screen.getByRole('button', { name: /add database/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /database.*2/i })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+      expect(screen.getByText('PostgreSQL database')).toBeInTheDocument()
+      expect(screen.getByText('MySQL database')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
+
+    await waitFor(() => {
+      expect(onCreateScript).toHaveBeenCalledTimes(4)
+      expect(onCreateScript.mock.calls[0][0].content).toContain('pg_dump')
+      expect(onCreateScript.mock.calls[2][0].content).toContain('mysqldump')
+      expect(onCreateScript.mock.calls[0][0].content).not.toContain('export BORG_UI_DB_DUMP_DIR=')
+      expect(updateState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceDirectories: [
+            '/var/tmp/borg-ui/database-dumps/postgresql',
+            '/var/tmp/borg-ui/database-dumps/mysql',
+          ],
+          sourceLocations: [
+            expect.objectContaining({
+              paths: ['/var/tmp/borg-ui/database-dumps/postgresql'],
+              database: expect.objectContaining({
+                template_id: 'postgresql',
+                pre_backup_script_id: 201,
+                post_backup_script_id: 202,
+                script_execution_order: 1,
+              }),
+            }),
+            expect.objectContaining({
+              paths: ['/var/tmp/borg-ui/database-dumps/mysql'],
+              database: expect.objectContaining({
+                template_id: 'mysql',
+                pre_backup_script_id: 203,
+                post_backup_script_id: 204,
+                script_execution_order: 2,
+              }),
+            }),
+          ],
+        })
+      )
+      const updatePayload = updateState.mock.calls[0][0]
+      expect(updatePayload.preBackupScriptId).toBeUndefined()
+      expect(updatePayload.postBackupScriptId).toBeUndefined()
     })
   })
 })

@@ -49,16 +49,22 @@ export function SourceStep({
   const sourceLocations = getWizardSourceLocations(wizardState)
   const sourcePaths = sourceLocations.flatMap((location) => location.paths)
   const hasSources = sourcePaths.length > 0
-  const isDatabaseSource =
+  const hasDatabaseSource = sourceLocations.some((location) => Boolean(location.database))
+  const hasFileSource = sourceLocations.some((location) => !location.database)
+  const isLegacyDatabaseSource =
+    !hasDatabaseSource &&
     sourcePaths.length > 0 &&
     sourcePaths.every(
       (sourceDirectory) =>
         sourceDirectory === DATABASE_DUMP_ROOT ||
         sourceDirectory.startsWith(`${DATABASE_DUMP_ROOT}/`)
     )
+  const isDatabaseSource = (hasDatabaseSource && !hasFileSource) || isLegacyDatabaseSource
   const sourceKindLabel = isDatabaseSource
     ? t('backupPlans.sourceChooser.databaseTitle')
-    : t('backupPlans.sourceChooser.filesTitle')
+    : hasDatabaseSource && hasFileSource
+      ? t('backupPlans.sourceChooser.mixedSources')
+      : t('backupPlans.sourceChooser.filesTitle')
 
   return (
     <Stack spacing={3}>
@@ -317,10 +323,11 @@ export function SourceStep({
 }
 
 function sourceLocationKey(location: SourceLocation) {
+  const suffix = location.database ? `:database:${location.database.template_id}` : ''
   if (location.source_type === 'agent') {
-    return `agent:${location.agent_machine_id || 'agent'}`
+    return `agent:${location.agent_machine_id || 'agent'}${suffix}`
   }
-  return `${location.source_type}:${location.source_ssh_connection_id || 'local'}`
+  return `${location.source_type}:${location.source_ssh_connection_id || 'local'}${suffix}`
 }
 
 function commonDirectoryPrefix(paths: string[]): string {

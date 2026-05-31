@@ -79,6 +79,18 @@ Injected variables include:
 | `BORG_UI_SOURCE_HOST` | remote source host for legacy inline repository hooks, when available |
 | `BORG_UI_SOURCE_PORT` | remote source SSH port for legacy inline repository hooks |
 | `BORG_UI_SOURCE_USERNAME` | remote source username for legacy inline repository hooks |
+| `BORG_UI_DB_TEMPLATE_ID` | selected database template ID for backup-plan database sources |
+| `BORG_UI_DB_ENGINE` | selected database engine label |
+| `BORG_UI_DB_CAPTURE_MODE` | `dump` or `original` |
+| `BORG_UI_DB_SOURCE_PATH` | detected live database path, when a scan found one |
+| `BORG_UI_DB_DUMP_DIR` | staging directory the database script should populate in dump mode |
+| `BORG_UI_DB_BACKUP_PATHS` | JSON array of final source paths Borg will back up |
+| `BORG_UI_DB_SCRIPT_EXECUTION_TARGET` | where the generated database script is expected to run |
+
+Generated scripts for multiple selected databases run as one plan-level
+pre/post pair. Borg UI scopes the database variables inside each generated
+database block so every block sees its own `BORG_UI_DB_DUMP_DIR`,
+`BORG_UI_DB_SOURCE_PATH`, and backup paths.
 
 If a script must work in both paths, read `REMOTE` first and fall back to `SOURCE`:
 
