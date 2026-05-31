@@ -1216,6 +1216,8 @@
         "compact": "Compattazione",
         "prune": "Pulizia",
         "package": "Pacchetto",
+        "rcloneSync": "Sync cloud",
+        "rcloneHydrate": "Idratazione cloud",
         "scriptExecution": "Script"
       },
       "statuses": {
@@ -1229,6 +1231,24 @@
     "empty": {
       "title": "Nessuna attività trovata",
       "message": "Non ci sono operazioni corrispondenti ai tuoi filtri"
+    }
+  },
+  "cloudStorageJobs": {
+    "title": "Job di archiviazione cloud attivi",
+    "subtitle": "Sync del mirror cloud e idratazione in esecuzione in background",
+    "unknownRepository": "Repository sconosciuto",
+    "operations": {
+      "initialSync": "Sync iniziale",
+      "sync": "Sync cloud",
+      "hydrate": "Idratazione cache"
+    },
+    "triggers": {
+      "initial": "Iniziale",
+      "manual": "Manuale",
+      "schedule": "Pianificato"
+    },
+    "actions": {
+      "viewLogs": "Visualizza Log"
     }
   },
   "settings": {
@@ -2156,6 +2176,8 @@
       "compact": "Compattazione",
       "prune": "Pulizia",
       "package": "Installazione Pacchetto",
+      "rcloneSync": "Sync cloud",
+      "rcloneHydrate": "Idratazione cloud",
       "scriptExecution": "Script"
     },
     "scheduledById": "Pianificato (ID: {{id}})",
@@ -4083,6 +4105,8 @@
     "typeCompact": "Compattazione",
     "typePrune": "Pulizia",
     "typePackage": "Pacchetto",
+    "typeRcloneSync": "Sync cloud",
+    "typeRcloneHydrate": "Idratazione cloud",
     "typeScript": "Script"
   },
   "mounts": {

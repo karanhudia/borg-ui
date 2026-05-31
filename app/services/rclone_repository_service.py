@@ -391,20 +391,44 @@ class RcloneRepositoryService:
         timeout: int | None = None,
         triggered_by: str = "manual",
         scheduled_for: datetime | None = None,
+        job_id: int | None = None,
     ) -> dict[str, Any]:
         storage = self.get_storage(db, repository.id)
         remote = self.get_remote(db, storage)
         target = self.compose_target(remote, storage.rclone_remote_path)
         started_at = datetime.now(timezone.utc)
-        sync_job = RcloneSyncJob(
-            repository_id=repository.id,
-            direction=storage.sync_direction,
-            status="running",
-            triggered_by=triggered_by,
-            scheduled_for=to_utc_naive(scheduled_for) if scheduled_for else None,
-            started_at=started_at,
-        )
-        db.add(sync_job)
+        if job_id is not None:
+            sync_job = (
+                db.query(RcloneSyncJob)
+                .filter(
+                    RcloneSyncJob.id == job_id,
+                    RcloneSyncJob.repository_id == repository.id,
+                )
+                .first()
+            )
+            if sync_job is None:
+                raise ValueError(f"rclone sync job {job_id} was not found")
+            sync_job.direction = storage.sync_direction
+            sync_job.operation = "sync"
+            sync_job.status = "running"
+            sync_job.triggered_by = triggered_by
+            sync_job.scheduled_for = (
+                to_utc_naive(scheduled_for) if scheduled_for else None
+            )
+            sync_job.started_at = started_at
+            sync_job.completed_at = None
+            sync_job.error_text = None
+        else:
+            sync_job = RcloneSyncJob(
+                repository_id=repository.id,
+                direction=storage.sync_direction,
+                operation="sync",
+                status="running",
+                triggered_by=triggered_by,
+                scheduled_for=to_utc_naive(scheduled_for) if scheduled_for else None,
+                started_at=started_at,
+            )
+            db.add(sync_job)
         storage.sync_status = "syncing"
         storage.last_sync_error = None
         db.commit()
@@ -493,9 +517,19 @@ class RcloneRepositoryService:
         temp_dir = tempfile.mkdtemp(
             prefix=f".hydrate-{repository.id}-", dir=str(parent)
         )
+        hydrate_job = RcloneSyncJob(
+            repository_id=repository.id,
+            direction="remote_to_cache",
+            operation="hydrate",
+            status="running",
+            triggered_by="manual",
+            started_at=datetime.now(timezone.utc),
+        )
+        db.add(hydrate_job)
         storage.sync_status = "hydrating"
         storage.last_sync_error = None
         db.commit()
+        db.refresh(hydrate_job)
         try:
             result = await self.service.sync(
                 target,
@@ -507,9 +541,14 @@ class RcloneRepositoryService:
             shutil.rmtree(temp_dir, ignore_errors=True)
             storage.sync_status = "failed"
             storage.last_sync_error = _exception_message(exc)
+            hydrate_job.status = "failed"
+            hydrate_job.completed_at = datetime.now(timezone.utc)
+            hydrate_job.error_text = storage.last_sync_error
+            hydrate_job.log_text = storage.last_sync_error
             db.commit()
             return self.serialize_status(repository, storage, remote)
         now = datetime.now(timezone.utc)
+        log_text = _sync_result_log_text(result)
         if result.success:
             try:
                 if os.path.exists(storage.cache_path):
@@ -519,14 +558,22 @@ class RcloneRepositoryService:
                 storage.sync_status = "current"
                 storage.last_hydrated_at = now
                 storage.last_sync_error = None
+                hydrate_job.status = "completed"
+                hydrate_job.error_text = None
             except Exception as exc:
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 storage.sync_status = "failed"
                 storage.last_sync_error = _exception_message(exc)
+                hydrate_job.status = "failed"
+                hydrate_job.error_text = storage.last_sync_error
         else:
             shutil.rmtree(temp_dir, ignore_errors=True)
             storage.sync_status = "failed"
             storage.last_sync_error = result.stderr or "rclone hydrate failed"
+            hydrate_job.status = "failed"
+            hydrate_job.error_text = storage.last_sync_error
+        hydrate_job.completed_at = now
+        hydrate_job.log_text = log_text or hydrate_job.error_text
         db.commit()
         return self.serialize_status(repository, storage, remote)
 

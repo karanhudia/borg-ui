@@ -1216,6 +1216,8 @@
         "compact": "Compactación",
         "prune": "Poda",
         "package": "Paquete",
+        "rcloneSync": "Sincronización en la nube",
+        "rcloneHydrate": "Hidratación en la nube",
         "scriptExecution": "Script"
       },
       "statuses": {
@@ -1229,6 +1231,24 @@
     "empty": {
       "title": "Sin actividad",
       "message": "No hay operaciones que coincidan con tus filtros"
+    }
+  },
+  "cloudStorageJobs": {
+    "title": "Trabajos activos de almacenamiento en la nube",
+    "subtitle": "La sincronización e hidratación del espejo en la nube se ejecutan en segundo plano",
+    "unknownRepository": "Repositorio desconocido",
+    "operations": {
+      "initialSync": "Sincronización inicial",
+      "sync": "Sincronización en la nube",
+      "hydrate": "Hidratando caché"
+    },
+    "triggers": {
+      "initial": "Inicial",
+      "manual": "Manual",
+      "schedule": "Programado"
+    },
+    "actions": {
+      "viewLogs": "Ver registros"
     }
   },
   "settings": {
@@ -2156,6 +2176,8 @@
       "compact": "Compactar",
       "prune": "Podar",
       "package": "Instalación de paquete",
+      "rcloneSync": "Sincronización en la nube",
+      "rcloneHydrate": "Hidratación en la nube",
       "scriptExecution": "Script"
     },
     "scheduledById": "Programado (ID: {{id}})",
@@ -4083,6 +4105,8 @@
     "typeCompact": "Compactar",
     "typePrune": "Podar",
     "typePackage": "Paquete",
+    "typeRcloneSync": "Sincronización en la nube",
+    "typeRcloneHydrate": "Hidratación en la nube",
     "typeScript": "Script"
   },
   "mounts": {
