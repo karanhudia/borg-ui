@@ -1,6 +1,7 @@
+import base64
+import json
 from pathlib import Path
 from types import SimpleNamespace
-import json
 
 import pytest
 
@@ -98,7 +99,7 @@ def test_save_and_load_config(tmp_path: Path):
 
 @pytest.mark.unit
 def test_detect_borg_binaries(monkeypatch):
-    paths = {"borg": "/usr/bin/borg", "borg2": "/usr/local/bin/borg2"}
+    paths = {"borg": "/usr/bin/borg", "borg2": "/custom/bin/borg2"}
 
     def fake_which(name):
         return paths.get(name)
@@ -123,7 +124,7 @@ def test_detect_borg_binaries(monkeypatch):
         {
             "major": 2,
             "version": "2.0.0b10",
-            "path": "/usr/local/bin/borg2",
+            "path": "/custom/bin/borg2",
             "install_source": "custom-path",
         },
     ]
@@ -1083,6 +1084,94 @@ def test_repository_archive_contents_payload_builds_agent_list_command():
         "archive-2",
         "home/user",
     ]
+
+
+@pytest.mark.unit
+def test_repository_extract_file_payload_builds_agent_extract_stdout_command():
+    payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.extract_archive_file",
+            "repository": {"path": "/agent/repo", "borg_version": 1},
+            "operation": {
+                "archive": "archive-1",
+                "file_path": "/docs/report.txt",
+            },
+        }
+    )
+    v2_payload = RepositoryOperationPayload.from_job_payload(
+        {
+            "job_kind": "repository.extract_archive_file",
+            "repository": {"path": "/agent/v2-repo", "borg_version": 2},
+            "operation": {
+                "archive": "archive-2",
+                "file_path": "docs/report.txt",
+            },
+        }
+    )
+
+    assert "repository.extract_archive_file" in get_capabilities()
+    assert payload.build_command() == [
+        "borg",
+        "extract",
+        "--stdout",
+        "/agent/repo::archive-1",
+        "docs/report.txt",
+    ]
+    assert v2_payload.build_command() == [
+        "borg2",
+        "-r",
+        "/agent/v2-repo",
+        "extract",
+        "--stdout",
+        "archive-2",
+        "docs/report.txt",
+    ]
+
+
+@pytest.mark.unit
+def test_repository_extract_file_job_returns_base64_content(monkeypatch):
+    def fake_run(cmd, *, capture_output, env, timeout):
+        assert cmd == [
+            "borg",
+            "extract",
+            "--stdout",
+            "/agent/repo::archive-1",
+            "docs/report.txt",
+        ]
+        assert capture_output is True
+        assert env["BORG_PASSPHRASE"] == "secret"
+        assert timeout == 300
+        return SimpleNamespace(returncode=0, stdout=b"\x00hello\n", stderr=b"")
+
+    monkeypatch.setattr(
+        "agent.borg_ui_agent.repository_ops.subprocess.run",
+        fake_run,
+    )
+    client = FakeRuntimeClient([])
+
+    result = execute_repository_operation_job(
+        {
+            "id": 91,
+            "payload": {
+                "job_kind": "repository.extract_archive_file",
+                "repository": {"path": "/agent/repo", "borg_version": 1},
+                "operation": {
+                    "archive": "archive-1",
+                    "file_path": "docs/report.txt",
+                },
+                "secrets": {"BORG_PASSPHRASE": {"value": "secret"}},
+            },
+        },
+        client,
+    )
+
+    complete_call = [call for call in client.calls if call[0] == "complete_job"][0]
+    assert result.status == "completed"
+    assert complete_call[2]["success"] is True
+    assert complete_call[2]["stdout"] == ""
+    assert complete_call[2]["content_base64"] == base64.b64encode(
+        b"\x00hello\n"
+    ).decode("ascii")
 
 
 class FakeStdout:

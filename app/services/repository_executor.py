@@ -19,6 +19,7 @@ REPOSITORY_OPERATION_CAPABILITIES = {
     "repository.info",
     "repository.list_archives",
     "repository.list_archive_contents",
+    "repository.extract_archive_file",
     "repository.check",
     "repository.prune",
     "repository.compact",

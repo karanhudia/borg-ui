@@ -1,33 +1,42 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse  # noqa: F401 - retained as a patch target in download endpoint tests
-from sqlalchemy.orm import Session
-import structlog
+import asyncio
+import base64
+import binascii
 import json
 import os
 import tempfile  # noqa: F401 - retained as a patch target in download endpoint tests
 from types import SimpleNamespace
 
-from app.api.archive_download import extract_file_download
-from app.database.database import get_db
-from app.database.models import User, Repository, DeleteArchiveJob
-from app.core.security import (
-    get_current_user,
-    get_current_download_user,
-    check_repo_access,
-    require_repository_access_by_path,
-)
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse  # noqa: F401 - retained as a patch target in download endpoint tests
+from sqlalchemy.orm import Session
+
+from app.api.archive_download import extract_file_download, resolve_extracted_file_path
 from app.core.borg import borg
 from app.core.borg_router import BorgRouter
+from app.core.security import (
+    check_repo_access,
+    get_current_download_user,
+    get_current_user,
+    require_repository_access_by_path,
+)
+from app.database.database import get_db
+from app.database.models import DeleteArchiveJob, Repository, User
+from app.services.agent_job_dispatcher import dispatch_agent_job_best_effort
+from app.services.repository_executor import (
+    is_agent_executor,
+    queue_agent_repository_operation_job,
+    wait_for_agent_repository_operation_job,
+)
 from app.utils.borg_env import (
+    cleanup_temp_key_file,
     get_standard_ssh_opts,
     setup_borg_env,
-    cleanup_temp_key_file,
 )
 from app.utils.ssh_utils import (
     resolve_repo_ssh_key_file,
 )  # Backward-compatible patch target for tests
 from app.utils.datetime_utils import serialize_datetime
-import asyncio
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -38,6 +47,40 @@ def _build_repo_env(repo: Repository, db: Session):
     ssh_opts = get_standard_ssh_opts(include_key_path=temp_key_file)
     env = setup_borg_env(passphrase=repo.passphrase, ssh_opts=ssh_opts)
     return env, temp_key_file
+
+
+def _write_agent_extracted_file(result: dict, *, temp_dir: str, file_path: str) -> dict:
+    if not result.get("success"):
+        return {
+            "success": False,
+            "stderr": result.get("stderr")
+            or result.get("message")
+            or "Agent archive extraction failed",
+        }
+
+    content_base64 = result.get("content_base64")
+    if not isinstance(content_base64, str):
+        return {
+            "success": False,
+            "stderr": "Agent archive extraction did not return file content",
+        }
+
+    try:
+        content = base64.b64decode(content_base64, validate=True)
+    except (binascii.Error, ValueError):
+        return {
+            "success": False,
+            "stderr": "Agent archive extraction returned invalid file content",
+        }
+
+    extracted_file_path = resolve_extracted_file_path(temp_dir, file_path)
+    extracted_parent = os.path.dirname(extracted_file_path)
+    if extracted_parent:
+        os.makedirs(extracted_parent, exist_ok=True)
+    with open(extracted_file_path, "wb") as extracted_file:
+        extracted_file.write(content)
+
+    return {"success": True, "stderr": result.get("stderr", "")}
 
 
 @router.get("/list")
@@ -339,6 +382,27 @@ async def download_file_from_archive(
         )
 
         async def extract(temp_dir: str):
+            if is_agent_executor(repo):
+                agent_job = queue_agent_repository_operation_job(
+                    db,
+                    repo,
+                    job_kind="repository.extract_archive_file",
+                    operation={"archive": archive, "file_path": file_path},
+                )
+                await dispatch_agent_job_best_effort(
+                    db,
+                    agent_job,
+                    repository_id=repo.id,
+                    archive=archive,
+                    file_path=file_path,
+                )
+                result = await wait_for_agent_repository_operation_job(db, agent_job.id)
+                return _write_agent_extracted_file(
+                    result,
+                    temp_dir=temp_dir,
+                    file_path=file_path,
+                )
+
             env, temp_key_file = _build_repo_env(repo, db)
             try:
                 return await borg.extract_archive(
