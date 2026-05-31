@@ -65,6 +65,11 @@ describe('WizardStepCloudMirror', () => {
     expect(screen.getByLabelText(/Extra rclone Flags/i)).toBeInTheDocument()
     expect(screen.queryByText(/Local Cache Path/i)).not.toBeInTheDocument()
 
+    const remoteSelect = screen.getByRole('combobox', { name: /Rclone Remote/i })
+    expect(remoteSelect).toHaveTextContent('prod-s3')
+    expect(remoteSelect).toHaveTextContent('s3')
+    expect(remoteSelect).toHaveTextContent('connected')
+
     fireEvent.change(screen.getByLabelText(/Relative Remote Path/i), {
       target: { value: 'borg-ui/repositories/app' },
     })

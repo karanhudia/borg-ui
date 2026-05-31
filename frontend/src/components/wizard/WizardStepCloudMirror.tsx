@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Checkbox,
-  Chip,
   FormControl,
   FormControlLabel,
   IconButton,
@@ -18,6 +17,7 @@ import FolderOpenIcon from '@mui/icons-material/FolderOpen'
 import { Cloud, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import SchedulePicker from '../shared/SchedulePicker'
+import RcloneRemoteSelect from '../shared/RcloneRemoteSelect'
 
 export interface CloudMirrorStepData {
   cloudMirrorEnabled: boolean
@@ -131,48 +131,23 @@ export default function WizardStepCloudMirror({
               alignItems: 'start',
             }}
           >
-            <FormControl fullWidth disabled={controlsDisabled}>
-              <InputLabel id="cloud-mirror-rclone-remote-label">
-                {t('wizard.location.rcloneRemoteLabel')}
-              </InputLabel>
-              <Select
-                labelId="cloud-mirror-rclone-remote-label"
-                id="cloud-mirror-rclone-remote"
-                value={
-                  data.rcloneRemoteId === '' || data.rcloneRemoteId == null
-                    ? ''
-                    : String(data.rcloneRemoteId)
-                }
-                label={t('wizard.location.rcloneRemoteLabel')}
-                onChange={(event) => {
-                  const value = event.target.value
-                  onChange({
-                    rcloneRemoteId: value ? Number(value) : '',
-                    rcloneRemotePathVerified: false,
-                  })
-                }}
-              >
-                {rcloneRemotes.map((remote) => (
-                  <MenuItem key={remote.id} value={String(remote.id)}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
-                      <Cloud size={16} />
-                      <Typography variant="body2">{remote.name}</Typography>
-                      <Chip
-                        size="small"
-                        label={remote.provider}
-                        variant="outlined"
-                        sx={{ height: 20, fontSize: '0.65rem' }}
-                      />
-                      {remote.last_test_status && (
-                        <Typography variant="caption" color="text.secondary">
-                          {remote.last_test_status}
-                        </Typography>
-                      )}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <RcloneRemoteSelect
+              value={
+                data.rcloneRemoteId === '' || data.rcloneRemoteId == null ? '' : data.rcloneRemoteId
+              }
+              onChange={(id) =>
+                onChange({
+                  rcloneRemoteId: id,
+                  rcloneRemotePathVerified: false,
+                })
+              }
+              remotes={rcloneRemotes}
+              label={t('wizard.location.rcloneRemoteLabel')}
+              emptyMessage={t('wizard.location.rcloneNoRemotes')}
+              labelId="cloud-mirror-rclone-remote-label"
+              selectId="cloud-mirror-rclone-remote"
+              disabled={controlsDisabled}
+            />
             {onAddRcloneRemote && (
               <Button
                 variant="outlined"
@@ -185,10 +160,6 @@ export default function WizardStepCloudMirror({
               </Button>
             )}
           </Box>
-
-          {rcloneRemotes.length === 0 && (
-            <Alert severity="info">{t('wizard.location.rcloneNoRemotes')}</Alert>
-          )}
 
           <TextField
             label={t('wizard.location.rcloneRemotePathLabel')}

@@ -45,7 +45,7 @@ Current shared inventory:
 - `ResponsiveDialog` — required replacement for raw MUI `Dialog`.
 - `WizardDialog` and `WizardStepIndicator` — required shell for multi-step wizards.
 - `SchedulePicker`, `CronExpressionInput`, and `CronBuilderDialog` — required schedule controls.
-- `SshConnectionSelect`, `ManagedAgentSelect`, `DestinationSelect`, and `RichSelectRow` — canonical rich-row select primitives.
+- `SshConnectionSelect`, `ManagedAgentSelect`, `RcloneRemoteSelect`, `DestinationSelect`, and `RichSelectRow` — canonical rich-row select primitives.
 - `PathSelectorField`, `PlanGate`, and `CodeEditor` — canonical path picker, plan gate, and code editor primitives.
 
 Use the existing component APIs and extend these files when a shared primitive
