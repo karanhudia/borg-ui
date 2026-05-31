@@ -30,7 +30,10 @@ type SourceStepProps = Pick<
   | 'openExcludeExplorer'
   | 'onCreateScript'
   | 't'
->
+> & {
+  canUseManagedAgents?: boolean
+  canUseMixedSourceTypes?: boolean
+}
 
 export function SourceStep({
   wizardState,
@@ -39,6 +42,8 @@ export function SourceStep({
   fullRepositories,
   scripts,
   loadingScripts,
+  canUseManagedAgents = true,
+  canUseMixedSourceTypes = true,
   updateState,
   openExcludeExplorer,
   onCreateScript,
@@ -313,6 +318,8 @@ export function SourceStep({
         fullRepositories={fullRepositories}
         scripts={scripts}
         loadingScripts={loadingScripts}
+        canUseManagedAgents={canUseManagedAgents}
+        canUseMixedSourceTypes={canUseMixedSourceTypes}
         updateState={updateState}
         onCreateScript={onCreateScript}
         onClose={() => setSourceDialogOpen(false)}

@@ -22,6 +22,8 @@ export interface BackupPlanWizardStepProps {
   loadingScripts: boolean
   canUseMultiRepository: boolean
   canUseBorg2: boolean
+  canUseManagedAgents: boolean
+  canUseMixedSourceTypes: boolean
   repositoryCreatePending: boolean
   updateState: (updates: Partial<WizardState>) => void
   onCreateScript: (input: SourceScriptCreateInput) => Promise<{ id: number }>

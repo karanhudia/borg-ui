@@ -9,6 +9,7 @@ import { backupPlansAPI, repositoriesAPI, RepositoryData } from '../services/api
 import { BorgApiClient } from '../services/borgApi'
 import { translateBackendKey } from '../utils/translateBackendKey'
 import { useAuth } from '../hooks/useAuth'
+import { usePlan } from '../hooks/usePlan'
 import { usePermissions } from '../hooks/usePermissions'
 import { useAppState } from '../context/AppContext'
 import { AxiosResponse } from 'axios'
@@ -56,7 +57,10 @@ function parseBackupPlanFilterId(value: string | null): number | null {
 export default function Repositories() {
   const { t } = useTranslation()
   const { hasGlobalPermission } = useAuth()
+  const { can } = usePlan()
   const canManageRepositoriesGlobally = hasGlobalPermission('repositories.manage_all')
+  const canUseManagedAgents = can('managed_agents')
+  const canUseRclone = can('rclone')
   const permissions = usePermissions()
   const queryClient = useQueryClient()
   const appState = useAppState()
@@ -929,6 +933,8 @@ export default function Repositories() {
         onClose={closeWizard}
         mode={wizardMode}
         repository={wizardRepository || undefined}
+        canUseManagedAgents={canUseManagedAgents}
+        canUseRclone={canUseRclone}
         onSubmit={handleWizardSubmit}
       />
     </Box>

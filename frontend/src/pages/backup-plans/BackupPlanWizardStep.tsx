@@ -22,6 +22,8 @@ export function BackupPlanWizardStep({
   loadingScripts,
   canUseMultiRepository,
   canUseBorg2,
+  canUseManagedAgents,
+  canUseMixedSourceTypes,
   repositoryCreatePending,
   updateState,
   onCreateScript,
@@ -46,6 +48,8 @@ export function BackupPlanWizardStep({
         fullRepositories={fullRepositories}
         scripts={scripts}
         loadingScripts={loadingScripts}
+        canUseManagedAgents={canUseManagedAgents}
+        canUseMixedSourceTypes={canUseMixedSourceTypes}
         updateState={updateState}
         onCreateScript={onCreateScript}
         openExcludeExplorer={openExcludeExplorer}

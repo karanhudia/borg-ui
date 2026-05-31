@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.agent_constants import (
@@ -10,8 +11,23 @@ from app.core.agent_constants import (
 )
 from app.core.agent_auth import AGENT_AUTH_HEADER
 from app.core.security import get_password_hash
-from app.database.models import AgentJob, AgentJobLog, AgentMachine
+from app.database.models import AgentJob, AgentJobLog, AgentMachine, LicensingState
 from app.services.agent_connection_manager import agent_connection_manager
+
+
+def _set_plan(test_db, plan: str) -> None:
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="test-instance-managed-machines")
+        test_db.add(state)
+    state.plan = plan
+    state.status = "active"
+    test_db.commit()
+
+
+@pytest.fixture(autouse=True)
+def _enable_paid_managed_agent_features(test_db):
+    _set_plan(test_db, "pro")
 
 
 def _agent(test_db, **overrides):
@@ -64,6 +80,17 @@ def _agent_job(test_db, agent: AgentMachine) -> AgentJob:
     test_db.commit()
     test_db.refresh(job)
     return job
+
+
+def test_managed_machine_admin_api_requires_pro_plan(
+    test_client: TestClient, admin_headers, test_db
+):
+    _set_plan(test_db, "community")
+
+    response = test_client.get("/api/managed-machines/agents", headers=admin_headers)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["feature"] == "managed_agents"
 
 
 def test_create_enrollment_token_accepts_days(test_client: TestClient, admin_headers):

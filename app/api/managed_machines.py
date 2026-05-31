@@ -9,6 +9,7 @@ import structlog
 
 from app.core.agent_auth import AGENT_TOKEN_PREFIX_LENGTH
 from app.core.agent_constants import AGENT_FILESYSTEM_BROWSE_TIMEOUT_SECONDS
+from app.core.features import require_feature_access
 from app.core.security import get_current_admin_user, get_password_hash
 from app.database.database import get_db
 from app.database.models import (
@@ -28,6 +29,14 @@ from app.utils.datetime_utils import serialize_datetime
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/managed-machines", tags=["managed-machines"])
+
+
+def require_managed_agents_admin_user(
+    current_user: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+) -> User:
+    require_feature_access(db, "managed_agents")
+    return current_user
 
 
 def _now_utc() -> datetime:
@@ -253,7 +262,7 @@ def _enrollment_expires_at(
 )
 async def create_enrollment_token(
     payload: AgentEnrollmentTokenCreate,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     name = payload.name.strip()
@@ -298,7 +307,7 @@ async def create_enrollment_token(
 
 @router.get("/enrollment-tokens", response_model=list[AgentEnrollmentTokenSummary])
 async def list_enrollment_tokens(
-    _: User = Depends(get_current_admin_user),
+    _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     return (
@@ -313,7 +322,7 @@ async def list_enrollment_tokens(
 )
 async def revoke_enrollment_token(
     token_id: int,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     token = (
@@ -339,7 +348,7 @@ async def revoke_enrollment_token(
 
 @router.get("/agents", response_model=list[AgentMachineResponse])
 async def list_agent_machines(
-    _: User = Depends(get_current_admin_user),
+    _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     agents = (
@@ -371,7 +380,7 @@ async def list_agent_machines(
 async def create_agent_backup_job(
     agent_machine_id: int,
     payload: AgentBackupJobCreate,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -414,7 +423,7 @@ async def browse_agent_machine_filesystem(
     agent_machine_id: int,
     path: str = "/",
     include_hidden: bool = False,
-    _: User = Depends(get_current_admin_user),
+    _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     return await browse_agent_filesystem(
@@ -432,7 +441,7 @@ async def browse_agent_machine_filesystem(
 )
 async def list_agent_machine_logs(
     agent_machine_id: int,
-    _: User = Depends(get_current_admin_user),
+    _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -449,7 +458,7 @@ async def list_agent_machine_logs(
 )
 async def revoke_agent_machine(
     agent_machine_id: int,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -473,7 +482,7 @@ async def revoke_agent_machine(
 @router.delete("/agents/{agent_machine_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_agent_machine(
     agent_machine_id: int,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     agent = db.query(AgentMachine).filter(AgentMachine.id == agent_machine_id).first()
@@ -498,7 +507,7 @@ async def delete_agent_machine(
 
 @router.get("/agent-jobs", response_model=list[AgentJobResponse])
 async def list_agent_jobs(
-    _: User = Depends(get_current_admin_user),
+    _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     return db.query(AgentJob).order_by(AgentJob.created_at.desc()).all()
@@ -510,7 +519,7 @@ async def list_agent_jobs(
 )
 async def list_agent_job_logs(
     job_id: int,
-    _: User = Depends(get_current_admin_user),
+    _: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     job = db.query(AgentJob).filter(AgentJob.id == job_id).first()
@@ -534,7 +543,7 @@ async def list_agent_job_logs(
 )
 async def request_agent_job_cancel(
     job_id: int,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(require_managed_agents_admin_user),
     db: Session = Depends(get_db),
 ):
     job = db.query(AgentJob).filter(AgentJob.id == job_id).first()

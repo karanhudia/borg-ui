@@ -90,6 +90,9 @@ export default function BackupPlans() {
   const { t } = useTranslation()
   const { can } = usePlan()
   const canUseMultiRepository = can('backup_plan_multi_repository')
+  const canUseMixedSourceTypes = can('backup_plan_mixed_sources')
+  const canUseManagedAgents = can('managed_agents')
+  const canUseRclone = can('rclone')
   const canUseBorg2 = can('borg_v2')
   const [wizardOpen, setWizardOpen] = useState(false)
   const [activeStep, setActiveStep] = useState(0)
@@ -186,6 +189,7 @@ export default function BackupPlans() {
   const { data: agentMachinesData } = useQuery({
     queryKey: ['managed-agents'],
     queryFn: managedAgentsAPI.listAgents,
+    enabled: canUseManagedAgents,
   })
   const agentMachines: AgentMachineResponse[] = useMemo(
     () => agentMachinesData?.data || [],
@@ -531,10 +535,15 @@ export default function BackupPlans() {
   const canProceed = () => {
     const stepKey = stepDefinitions[activeStep]?.key
     if (stepKey === 'source') {
+      const sourceLocations = wizardState.sourceLocations || []
+      const sourceTypes = new Set(sourceLocations.map((location) => location.source_type))
       return Boolean(
         wizardState.name.trim() &&
         wizardState.sourceDirectories.length > 0 &&
-        (wizardState.sourceType !== 'remote' || wizardState.sourceSshConnectionId)
+        (wizardState.sourceType !== 'remote' || wizardState.sourceSshConnectionId) &&
+        (canUseManagedAgents ||
+          !sourceLocations.some((location) => location.source_type === 'agent')) &&
+        (canUseMixedSourceTypes || sourceTypes.size <= 1)
       )
     }
     if (stepKey === 'repositories') {
@@ -590,6 +599,21 @@ export default function BackupPlans() {
       toast.error(t('backupPlans.toasts.multiRepositoryRequiresPro'))
       return
     }
+    const sourceLocations = wizardState.sourceLocations || []
+    if (
+      !canUseManagedAgents &&
+      sourceLocations.some((location) => location.source_type === 'agent')
+    ) {
+      toast.error(t('backupPlans.sourceChooser.managedAgentRequiresPro'))
+      return
+    }
+    if (
+      !canUseMixedSourceTypes &&
+      new Set(sourceLocations.map((location) => location.source_type)).size > 1
+    ) {
+      toast.error(t('backupPlans.sourceChooser.mixedSourceTypesRequiresPro'))
+      return
+    }
     const selectedRepositories = wizardState.repositoryIds
       .map((repositoryId) => fullRepositories.find((repository) => repository.id === repositoryId))
       .filter((repository): repository is Repository => Boolean(repository))
@@ -634,6 +658,8 @@ export default function BackupPlans() {
       loadingScripts={loadingScripts}
       canUseMultiRepository={canUseMultiRepository}
       canUseBorg2={canUseBorg2}
+      canUseManagedAgents={canUseManagedAgents}
+      canUseMixedSourceTypes={canUseMixedSourceTypes}
       repositoryCreatePending={repositoryCreateMutation.isPending}
       updateState={updateState}
       onCreateScript={createSourceScript}
@@ -758,6 +784,8 @@ export default function BackupPlans() {
         open={repositoryWizardOpen}
         onClose={() => setRepositoryWizardOpen(false)}
         mode="create"
+        canUseManagedAgents={canUseManagedAgents}
+        canUseRclone={canUseRclone}
         onSubmit={async (data) => {
           await repositoryCreateMutation.mutateAsync(data)
         }}

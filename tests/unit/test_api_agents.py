@@ -11,7 +11,23 @@ from app.database.models import (
     AgentJob,
     AgentJobLog,
     AgentMachine,
+    LicensingState,
 )
+
+
+def _set_plan(test_db, plan: str) -> None:
+    state = test_db.query(LicensingState).first()
+    if state is None:
+        state = LicensingState(instance_id="test-instance-agents")
+        test_db.add(state)
+    state.plan = plan
+    state.status = "active"
+    test_db.commit()
+
+
+@pytest.fixture(autouse=True)
+def _enable_paid_managed_agent_features(test_db):
+    _set_plan(test_db, "pro")
 
 
 def _create_enrollment_token(test_client: TestClient, admin_headers, name="agent"):
