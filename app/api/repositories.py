@@ -4395,6 +4395,7 @@ async def delete_repository(
             RepositoryScript,
             RestoreJob,
             CheckJob,
+            RestoreCheckJob,
             PruneJob,
             CompactJob,
             ScheduledJob,
@@ -4420,6 +4421,20 @@ async def delete_repository(
             db.delete(job)
         if check_jobs:
             logger.info("Deleted check jobs", repo_id=repo_id, count=len(check_jobs))
+
+        restore_check_jobs = (
+            db.query(RestoreCheckJob)
+            .filter(RestoreCheckJob.repository_id == repo_id)
+            .all()
+        )
+        for job in restore_check_jobs:
+            db.delete(job)
+        if restore_check_jobs:
+            logger.info(
+                "Deleted restore check jobs",
+                repo_id=repo_id,
+                count=len(restore_check_jobs),
+            )
 
         prune_jobs = db.query(PruneJob).filter(PruneJob.repository_id == repo_id).all()
         for job in prune_jobs:
