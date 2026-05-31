@@ -585,6 +585,16 @@ export function CloudStorageContent({
     () => localStorage.getItem('cloud_storage_group') || 'none'
   )
 
+  const getRemoteResultCount = (queryValue: string) => {
+    const query = queryValue.trim().toLowerCase()
+    if (!query) return remotes.length
+
+    return remotes.filter(
+      (remote) =>
+        remote.name.toLowerCase().includes(query) || remote.provider.toLowerCase().includes(query)
+    ).length
+  }
+
   const handleSortChange = (value: string) => {
     setSortBy(value)
     localStorage.setItem('cloud_storage_sort', value)
@@ -594,7 +604,7 @@ export function CloudStorageContent({
       sort_by: value,
       group_by: groupBy,
       query_length: searchQuery.trim().length,
-      result_count: totalAfterFilter,
+      result_count: getRemoteResultCount(searchQuery),
     })
   }
   const handleGroupChange = (value: string) => {
@@ -606,7 +616,7 @@ export function CloudStorageContent({
       sort_by: sortBy,
       group_by: value,
       query_length: searchQuery.trim().length,
-      result_count: totalAfterFilter,
+      result_count: getRemoteResultCount(searchQuery),
     })
   }
 
@@ -700,7 +710,7 @@ export function CloudStorageContent({
       query_length: trimmed.length,
       sort_by: sortBy,
       group_by: groupBy,
-      result_count: totalAfterFilter,
+      result_count: getRemoteResultCount(value),
     })
   }
   const hasUnfilteredRemotes = remotes.length > 0

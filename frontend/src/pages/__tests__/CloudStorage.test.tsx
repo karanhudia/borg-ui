@@ -357,6 +357,24 @@ describe('CloudStorage', () => {
     })
   }, 60000)
 
+  it('tracks cloud storage search result counts with the submitted query', async () => {
+    renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })
+
+    await screen.findByText('prod-s3')
+    fireEvent.change(screen.getByPlaceholderText(/Search cloud storage/i), {
+      target: { value: 'missing' },
+    })
+
+    expect(mockTrackSystem).toHaveBeenCalledWith('Search', {
+      section: 'cloud_storage',
+      operation: 'search_remotes',
+      query_length: 7,
+      sort_by: 'name-asc',
+      group_by: 'none',
+      result_count: 0,
+    })
+  })
+
   it('loads guided providers and creates a Google Drive remote from the template', async () => {
     const user = userEvent.setup()
     renderWithProviders(<CloudStorage />, { initialRoute: '/cloud-storage' })

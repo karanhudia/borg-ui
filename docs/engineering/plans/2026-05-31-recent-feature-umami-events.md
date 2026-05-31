@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Cloud Storage Analytics
+## Task 1: Cloud Storage Analytics
 
 **Files:**
 - Modify: `frontend/src/pages/CloudStorage.tsx`
@@ -23,7 +23,7 @@
 - [ ] Keep payloads limited to operation, provider, auth mode/status, sort/group value, and path presence/count metadata.
 - [ ] Re-run the targeted CloudStorage test and confirm it passes.
 
-### Task 2: Managed Agents Analytics
+## Task 2: Managed Agents Analytics
 
 **Files:**
 - Modify: `frontend/src/pages/ManagedAgents.tsx`
@@ -36,7 +36,7 @@
 - [ ] Keep payloads limited to operation, source, tab, status, job type, and boolean state metadata.
 - [ ] Re-run the targeted ManagedAgents test and confirm it passes.
 
-### Task 3: Backup Plans Analytics
+## Task 3: Backup Plans Analytics
 
 **Files:**
 - Modify: `frontend/src/pages/BackupPlans.tsx`
@@ -50,7 +50,7 @@
 - [ ] Track create/update success after mutation success using the submitted payload and edit/create mode.
 - [ ] Re-run the backup plan targeted tests and confirm they pass.
 
-### Task 4: Final Validation
+## Task 4: Final Validation
 
 **Files:**
 - No additional files expected.
