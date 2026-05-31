@@ -4,6 +4,7 @@ import base64
 import os
 import tempfile
 from typing import Optional
+from urllib.parse import urlparse
 
 import structlog
 from cryptography.fernet import Fernet, InvalidToken
@@ -23,6 +24,31 @@ def _decrypt_with_module_secret(encrypted_value: str) -> str:
     return cipher.decrypt(encrypted_value.encode()).decode()
 
 
+def _find_matching_ssh_connection(path: str, db) -> Optional[SSHConnection]:
+    """Find an SSH connection matching an ssh:// repository URL."""
+    if not path.startswith("ssh://"):
+        return None
+
+    parsed = urlparse(path)
+    try:
+        port = parsed.port or 22
+    except ValueError:
+        return None
+
+    if not parsed.hostname or not parsed.username:
+        return None
+
+    return (
+        db.query(SSHConnection)
+        .filter(
+            SSHConnection.host == parsed.hostname,
+            SSHConnection.username == parsed.username,
+            SSHConnection.port == port,
+        )
+        .first()
+    )
+
+
 def resolve_repo_ssh_key_file(repository, db) -> Optional[str]:
     """Decrypt and write the SSH private key for a repository to a temporary file.
 
@@ -39,21 +65,36 @@ def resolve_repo_ssh_key_file(repository, db) -> Optional[str]:
         The caller is responsible for deleting the file via os.unlink().
     """
     ssh_key = None
+    repo_path = getattr(repository, "path", "") or ""
+    connection_id = getattr(repository, "connection_id", None)
+    repository_type = getattr(repository, "repository_type", None)
+    ssh_key_id = getattr(repository, "ssh_key_id", None)
+    is_ssh_path = repo_path.startswith("ssh://")
 
-    if repository.connection_id:
+    if connection_id:
         connection = (
-            db.query(SSHConnection)
-            .filter(SSHConnection.id == repository.connection_id)
-            .first()
+            db.query(SSHConnection).filter(SSHConnection.id == connection_id).first()
         )
         if connection and connection.ssh_key_id:
             ssh_key = (
                 db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
             )
-    elif getattr(repository, "repository_type", None) == "ssh" and getattr(
-        repository, "ssh_key_id", None
-    ):
-        ssh_key = db.query(SSHKey).filter(SSHKey.id == repository.ssh_key_id).first()
+    elif ssh_key_id and (repository_type == "ssh" or is_ssh_path):
+        ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
+    elif is_ssh_path:
+        connection = _find_matching_ssh_connection(repo_path, db)
+        if connection and connection.ssh_key_id:
+            logger.info(
+                "Resolved SSH key from matching connection",
+                repository_id=getattr(repository, "id", None),
+                connection_id=connection.id,
+                host=connection.host,
+                username=connection.username,
+                port=connection.port,
+            )
+            ssh_key = (
+                db.query(SSHKey).filter(SSHKey.id == connection.ssh_key_id).first()
+            )
 
     if not ssh_key:
         return None
