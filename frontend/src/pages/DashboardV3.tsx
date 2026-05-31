@@ -11,13 +11,13 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Alert, Box, Button, Stack, Tooltip, Typography } from '@mui/material'
-import { Activity, ArrowRight, Cpu, HardDrive, XCircle } from 'lucide-react'
+import { Alert, Box, Button, Stack, Typography } from '@mui/material'
+import { alpha } from '@mui/material/styles'
+import { Activity, ArrowRight, Cpu, HardDrive } from 'lucide-react'
 import { differenceInDays, formatDistanceToNow } from 'date-fns'
 import { useTheme } from '../context/ThemeContext'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { dashboardAPI } from '../services/api'
-import { formatDateTimeFull } from '../utils/dateUtils'
 import { ActivityTimeline } from './dashboard-v3/ActivityTimeline'
 import { ArcGauge, StorageDonut, SuccessDonut } from './dashboard-v3/charts'
 import { DashboardSkeleton } from './dashboard-v3/DashboardSkeleton'
@@ -130,7 +130,7 @@ export default function DashboardV3() {
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: 2,
-            borderColor: sc.color + '55',
+            borderColor: alpha(sc.color, 0.33),
           }}
         >
           <Stack direction="row" spacing={2} alignItems="center">
@@ -147,7 +147,13 @@ export default function DashboardV3() {
                 {t('dashboard.banner.systemStatus')}
               </Typography>
               <Typography
-                sx={{ fontFamily: T.mono, fontSize: '1rem', fontWeight: 700, color: sc.color }}
+                sx={{
+                  fontFamily: T.mono,
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  lineHeight: 1.3,
+                  color: sc.color,
+                }}
               >
                 {sysStatus === 'healthy'
                   ? t('dashboard.banner.allNominal')
@@ -163,33 +169,54 @@ export default function DashboardV3() {
 
           {/* Quick stats */}
           <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap>
-            {[
-              {
-                label: t('dashboard.stats.repositories'),
-                value: summary.total_repositories,
-                color: T.blue,
-              },
-              {
-                label: t('dashboard.banner.stats.lastBackup'),
-                value: lastBackupDate
-                  ? formatDistanceToNow(lastBackupDate, { addSuffix: true })
-                  : t('common.never'),
-                color:
-                  lastBackupDate && differenceInDays(new Date(), lastBackupDate) > 1
-                    ? T.amber
-                    : T.green,
-              },
-              {
-                label: t('dashboard.banner.stats.automations', { defaultValue: 'Automations' }),
-                value: `${activeAutomationCount}/${totalAutomationCount}`,
-                color: T.textMuted,
-              },
-              {
-                label: t('dashboard.banner.stats.storage'),
-                value: storage.total_size,
-                color: T.textPrimary,
-              },
-            ].map(({ label, value, color }) => (
+            {(
+              [
+                {
+                  label: t('dashboard.stats.repositories'),
+                  value: summary.total_repositories,
+                  color: T.blue,
+                },
+                {
+                  label: t('dashboard.banner.stats.lastBackup'),
+                  value: lastBackupDate
+                    ? formatDistanceToNow(lastBackupDate, { addSuffix: true })
+                    : t('common.never'),
+                  color:
+                    lastBackupDate && differenceInDays(new Date(), lastBackupDate) > 1
+                      ? T.amber
+                      : T.green,
+                },
+                {
+                  label: t('dashboard.banner.stats.automations', { defaultValue: 'Automations' }),
+                  value: `${activeAutomationCount}/${totalAutomationCount}`,
+                  color: T.textMuted,
+                  cta:
+                    totalAutomationCount === 0
+                      ? {
+                          label: t('dashboard.banner.stats.automationsCta'),
+                          onClick: () => {
+                            trackNavigation(EventAction.VIEW, {
+                              section: 'dashboard',
+                              destination: 'schedule',
+                              source: 'automations_cta',
+                            })
+                            navigate('/schedule')
+                          },
+                        }
+                      : undefined,
+                },
+                {
+                  label: t('dashboard.banner.stats.storage'),
+                  value: storage.total_size,
+                  color: T.textPrimary,
+                },
+              ] as Array<{
+                label: string
+                value: React.ReactNode
+                color: string
+                cta?: { label: string; onClick: () => void }
+              }>
+            ).map(({ label, value, color, cta }) => (
               <Box key={label}>
                 <Typography
                   sx={{
@@ -200,17 +227,54 @@ export default function DashboardV3() {
                 >
                   {label}
                 </Typography>
-                <Typography
-                  sx={{
-                    fontFamily: T.mono,
-                    fontWeight: 700,
-                    color,
-                    fontSize: '0.95rem',
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {value}
-                </Typography>
+                {cta ? (
+                  // Render as the same <p>-based Typography as the non-CTA
+                  // variant so font metrics match byte-for-byte. <button>
+                  // brings user-agent font + line-box defaults that no amount
+                  // of sx reset can fully neutralise; using role + tabIndex +
+                  // keyboard handlers gets full button accessibility on a
+                  // baseline-identical element.
+                  <Typography
+                    role="button"
+                    tabIndex={0}
+                    onClick={cta.onClick}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        cta.onClick()
+                      }
+                    }}
+                    sx={{
+                      fontFamily: T.mono,
+                      fontWeight: 700,
+                      fontSize: '0.95rem',
+                      lineHeight: 1.3,
+                      color: T.blue,
+                      cursor: 'pointer',
+                      width: 'fit-content',
+                      '&:hover': { textDecoration: 'underline' },
+                      '&:focus-visible': {
+                        outline: `2px solid ${T.blue}`,
+                        outlineOffset: '2px',
+                        borderRadius: '2px',
+                      },
+                    }}
+                  >
+                    {cta.label}
+                  </Typography>
+                ) : (
+                  <Typography
+                    sx={{
+                      fontFamily: T.mono,
+                      fontWeight: 700,
+                      color,
+                      fontSize: '0.95rem',
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {value}
+                  </Typography>
+                )}
               </Box>
             ))}
           </Stack>
@@ -429,6 +493,7 @@ export default function DashboardV3() {
               warningCount={warningCount}
               healthyCount={healthyCount}
               nowMs={nowMs}
+              currentFailures={currentFailures}
               onOpenRepositories={() => {
                 trackNavigation(EventAction.VIEW, {
                   section: 'dashboard',
@@ -489,69 +554,6 @@ export default function DashboardV3() {
                 </Typography>
               ) : (
                 <ActivityTimeline activities={ov.activity_feed} />
-              )}
-
-              {currentFailures.length > 0 && (
-                <Box sx={{ mt: 2, borderTop: `1px solid ${T.border}`, pt: 1.5 }}>
-                  <Typography
-                    sx={{
-                      fontSize: '0.8125rem',
-                      fontWeight: 600,
-                      color: T.textPrimary,
-                      mb: 1,
-                    }}
-                  >
-                    {t('dashboard.recentFailures.title')}
-                  </Typography>
-                  <Stack spacing={0.8}>
-                    {currentFailures.slice(0, 3).map((a) => (
-                      <Box
-                        key={`${a.type}-${a.id}`}
-                        sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}
-                      >
-                        <XCircle size={14} color={T.red} style={{ marginTop: 3, flexShrink: 0 }} />
-                        <Box sx={{ minWidth: 0 }}>
-                          <Stack direction="row" spacing={1.5} alignItems="baseline">
-                            <Typography
-                              sx={{
-                                fontFamily: T.mono,
-                                fontSize: '0.8125rem',
-                                fontWeight: 600,
-                                color: T.textPrimary,
-                              }}
-                            >
-                              {a.repository}
-                            </Typography>
-                            <Tooltip title={formatDateTimeFull(a.timestamp)} arrow placement="top">
-                              <Typography
-                                sx={{
-                                  cursor: 'help',
-                                  fontSize: '0.75rem',
-                                  color: T.textMuted,
-                                }}
-                              >
-                                {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
-                              </Typography>
-                            </Tooltip>
-                          </Stack>
-                          {a.error && (
-                            <Typography
-                              sx={{
-                                fontFamily: T.mono,
-                                fontSize: '0.75rem',
-                                color: T.textMuted,
-                                mt: 0.3,
-                                wordBreak: 'break-word',
-                              }}
-                            >
-                              {a.error}
-                            </Typography>
-                          )}
-                        </Box>
-                      </Box>
-                    ))}
-                  </Stack>
-                </Box>
               )}
             </Box>
           </Box>

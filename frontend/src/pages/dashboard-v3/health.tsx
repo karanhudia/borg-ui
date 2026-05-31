@@ -1,4 +1,5 @@
 import { Box, Stack, Tooltip, Typography } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { useTranslation } from 'react-i18next'
 import { differenceInDays } from 'date-fns'
 import {
@@ -23,11 +24,11 @@ export function PulseDot({ color }: { color: string }) {
   return (
     <Box
       sx={{
-        width: 8,
-        height: 8,
+        width: 10,
+        height: 10,
         borderRadius: '50%',
         bgcolor: color,
-        boxShadow: `0 0 0 2px ${color}22`,
+        boxShadow: `0 0 0 2.5px ${alpha(color, 0.2)}`,
         flexShrink: 0,
       }}
     />
@@ -190,46 +191,52 @@ export function DimStatusGrid({
       {items.map((item) => {
         const { color } = DIM_STATUS[item.status] ?? DIM_STATUS.unknown
         return (
-          <Box key={item.label} sx={{ minWidth: 0 }}>
-            {/* Label row. Translation values are already uppercase (BACKUP,
-                CHECK, RESTORE, etc.); we render at a larger size with no extra
-                tracking so the line reads as a label, not an eyebrow. */}
-            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mb: 0.4, minWidth: 0 }}>
-              <DimIcon status={item.status} size={12} />
-              <Typography
-                sx={{
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  color: T.textMuted,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {item.label}
-              </Typography>
-            </Stack>
-            {/* Time value */}
+          <Stack
+            key={item.label}
+            direction="row"
+            spacing={0.5}
+            alignItems="center"
+            sx={{ minWidth: 0 }}
+          >
+            {/* Inline cell: icon and label on the left, value pushed to the
+                right edge by flexGrow on the label. Translation values are
+                already uppercase (BACKUP, CHECK, RESTORE, etc.). */}
+            <DimIcon status={item.status} size={12} />
+            <Typography
+              sx={{
+                flexGrow: 1,
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                color: T.textMuted,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {item.label}
+            </Typography>
+            {/* Value, right-aligned. Truncates with ellipsis; tooltip retains
+                the full string on hover. */}
             <Tooltip title={item.tooltip ?? ''} arrow placement="top">
               <Typography
                 sx={{
                   cursor: item.tooltip ? 'help' : 'default',
-                  display: 'inline-block',
                   fontFamily: T.mono,
                   fontSize: '0.8125rem',
                   fontWeight: 600,
                   color,
                   lineHeight: 1.2,
-                  maxWidth: '100%',
+                  minWidth: 0,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  textAlign: 'right',
                 }}
               >
                 {dimValue(item.value, t)}
               </Typography>
             </Tooltip>
-          </Box>
+          </Stack>
         )
       })}
     </Box>
@@ -298,7 +305,7 @@ export function ScheduleBadge({
           px: 1,
           py: 0.4,
           bgcolor: T.amberDim,
-          border: `1px solid ${T.amber}35`,
+          border: `1px solid ${alpha(T.amber, 0.21)}`,
           borderRadius: '99px',
           flexShrink: 0,
         }}
@@ -331,7 +338,7 @@ export function ScheduleBadge({
           px: 1,
           py: 0.4,
           bgcolor: T.blueDim,
-          border: `1px solid ${T.blue}35`,
+          border: `1px solid ${alpha(T.blue, 0.21)}`,
           borderRadius: '99px',
           flexShrink: 0,
         }}
@@ -382,10 +389,10 @@ export function ScheduleBadge({
         px: 1,
         py: 0.4,
         bgcolor: T.indigoDim,
-        border: `1px solid ${isImminent ? T.indigo : T.indigo + '35'}`,
+        border: `1px solid ${isImminent ? T.indigo : alpha(T.indigo, 0.21)}`,
         borderRadius: '99px',
         flexShrink: 0,
-        ...(isImminent && { boxShadow: `0 0 0 2px ${T.indigo}22` }),
+        ...(isImminent && { boxShadow: `0 0 0 2px ${alpha(T.indigo, 0.13)}` }),
       }}
     >
       <Play size={12} color={T.indigo} />

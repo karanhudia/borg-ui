@@ -330,10 +330,14 @@ describe('DashboardV3', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/repositories')
     })
 
-    it('shows "manual" badge for repos without a schedule', async () => {
+    it('omits the schedule badge for repos without a schedule', async () => {
       mockFetchSuccess(makeOverview())
       renderDashboard()
-      await waitFor(() => expect(screen.getByText('manual')).toBeInTheDocument())
+      // Wait for the dashboard to settle (the no-schedule repo's name renders in the grid).
+      await waitFor(() => expect(screen.getAllByText('backup-nas').length).toBeGreaterThan(0))
+      // The no-schedule repo (backup-nas) should render no "manual" label; absence of
+      // a schedule pill is what conveys "manual" now.
+      expect(screen.queryByText('manual')).not.toBeInTheDocument()
     })
 
     it('shows "paused" badge for repos with a disabled schedule', async () => {
@@ -386,7 +390,20 @@ describe('DashboardV3', () => {
     })
 
     it('shows restore verification as a health dimension for full repositories', async () => {
-      mockFetchSuccess(makeOverview())
+      // Healthy repos collapse to a compact row without the dimension footer,
+      // so promote my-server to warning to exercise the full-card RESTORE cell.
+      const data = makeOverview({
+        repository_health: makeOverview().repository_health.map((r, i) =>
+          i === 0
+            ? {
+                ...r,
+                health_status: 'warning' as const,
+                dimension_health: { ...r.dimension_health, restore: 'warning' as const },
+              }
+            : r
+        ),
+      })
+      mockFetchSuccess(data)
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
 
@@ -402,6 +419,9 @@ describe('DashboardV3', () => {
           i === 0
             ? {
                 ...r,
+                // Healthy repos collapse to a compact row without the dim grid;
+                // a warning restore dimension implies the rollup is at least warning.
+                health_status: 'warning' as const,
                 last_restore_check: null,
                 latest_restore_check_status: 'needs_backup',
                 latest_restore_check_error: 'Run a backup, then run this restore check again.',
@@ -416,18 +436,33 @@ describe('DashboardV3', () => {
       mockFetchSuccess(data)
       renderDashboard()
 
-      await waitFor(() => expect(screen.getByText('Needs backup')).toBeInTheDocument())
+      await waitFor(() => expect(screen.getByText('Behind')).toBeInTheDocument())
     })
 
     it('shows backup plan coverage on repository cards', async () => {
-      mockFetchSuccess(makeOverview())
+      // The compact healthy card omits the plan chip and plan name; promote
+      // my-server to warning so the full card (with plan coverage) renders.
+      const data = makeOverview({
+        repository_health: makeOverview().repository_health.map((r, i) =>
+          i === 0 ? { ...r, health_status: 'warning' as const } : r
+        ),
+      })
+      mockFetchSuccess(data)
       renderDashboard()
       await waitFor(() => expect(screen.getByText('Nightly Documents')).toBeInTheDocument())
       expect(screen.getByText('1 plan')).toBeInTheDocument()
     })
 
     it('adds full timestamp tooltips to relative health times', async () => {
-      mockFetchSuccess(makeOverview())
+      // Tooltips live in the full card's dimension grid; the compact healthy
+      // card has no per-dimension tooltips. Promote my-server to warning so
+      // its last_backup and last_check times render with the title attribute.
+      const data = makeOverview({
+        repository_health: makeOverview().repository_health.map((r, i) =>
+          i === 0 ? { ...r, health_status: 'warning' as const } : r
+        ),
+      })
+      mockFetchSuccess(data)
       renderDashboard()
       await waitFor(() => screen.getAllByText('my-server'))
 

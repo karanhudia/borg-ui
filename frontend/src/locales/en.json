@@ -249,7 +249,7 @@
   "status": {
     "completed": "Completed",
     "completedWithWarnings": "Completed with Warnings",
-    "needsBackup": "Needs backup",
+    "needsBackup": "Behind",
     "failed": "Failed",
     "running": "Running",
     "pending": "Pending",
@@ -368,7 +368,9 @@
       }
     },
     "recentFailures": {
-      "title": "Recent failures"
+      "title": "Recent failures",
+      "moreCount_one": "and {{count}} more failure",
+      "moreCount_other": "and {{count}} more failures"
     },
     "error": {
       "unavailable": "Dashboard unavailable",
@@ -2982,7 +2984,7 @@
     "schedule": "Schedule",
     "lastCheck": "Last Check",
     "nextCheck": "Next Check",
-    "notConfigured": "Not configured",
+    "notConfigured": "Unset",
     "notScheduled": "Not scheduled",
     "never": "Never",
     "editCheckSchedule": "Edit Check Schedule",

@@ -249,7 +249,7 @@
   "status": {
     "completed": "Completado",
     "completedWithWarnings": "Completado con advertencias",
-    "needsBackup": "Necesita copia",
+    "needsBackup": "Atrasado",
     "failed": "Fallido",
     "running": "En ejecución",
     "pending": "Pendiente",
@@ -368,7 +368,9 @@
       }
     },
     "recentFailures": {
-      "title": "Fallos recientes"
+      "title": "Fallos recientes",
+      "moreCount_one": "y {{count}} fallo más",
+      "moreCount_other": "y {{count}} fallos más"
     },
     "error": {
       "unavailable": "Panel no disponible",
@@ -2982,7 +2984,7 @@
     "schedule": "Programación",
     "lastCheck": "Última comprobación",
     "nextCheck": "Próxima comprobación",
-    "notConfigured": "No configurado",
+    "notConfigured": "Sin definir",
     "notScheduled": "No programado",
     "never": "Nunca",
     "editCheckSchedule": "Editar comprobación programada",
