@@ -1183,12 +1183,28 @@ async def get_dashboard_overview(
             },
             "repository_health": sorted(
                 repo_health,
+                # Bucket-aware sort:
+                # 1. Status bucket (critical > warning > healthy) puts urgency on top.
+                # 2. Within critical/warning: oldest last_backup first, because a
+                #    longer-running failure is more urgent. None (never backed up)
+                #    sorts first as the most urgent case.
+                # 3. Within healthy: skip the urgency dimension. Healthy means "no
+                #    action needed", so alphabetical-by-name is the predictable
+                #    table-of-contents order users want for finding a repo by name.
+                # 4. Case-insensitive name as the final tiebreaker.
                 key=lambda x: (
                     0
                     if x["health_status"] == "critical"
                     else 1
                     if x["health_status"] == "warning"
-                    else 2
+                    else 2,
+                    # Collapse the timestamp dimension to a constant for healthy
+                    # repos so name alone decides order within the healthy bucket.
+                    0
+                    if x["health_status"] == "healthy"
+                    else (0 if x["last_backup"] is None else 1),
+                    "" if x["health_status"] == "healthy" else (x["last_backup"] or ""),
+                    (x.get("name") or "").lower(),
                 ),
             ),
             "backup_trends": backup_trends,
