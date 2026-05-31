@@ -726,7 +726,7 @@ describe('RepositoryCard', () => {
       expect(mockAnalyticsTracking.trackArchive).toHaveBeenCalledWith('View', mockRepository)
     })
 
-    it('calls onViewBackupPlans when View linked backup plans button is clicked', () => {
+    it('calls onViewBackupPlans and tracks event when View linked backup plans button is clicked', () => {
       renderWithProviders(
         <RepositoryCard
           repository={mockRepository}
@@ -740,6 +740,9 @@ describe('RepositoryCard', () => {
       fireEvent.click(screen.getByRole('button', { name: /View linked backup plans/i }))
 
       expect(mockCallbacks.onViewBackupPlans).toHaveBeenCalledTimes(1)
+      expect(mockAnalyticsTracking.trackRepository).toHaveBeenCalledWith('View', mockRepository, {
+        destination: 'backup_plans',
+      })
     })
 
     it('calls onDelete when Delete button is clicked', () => {
