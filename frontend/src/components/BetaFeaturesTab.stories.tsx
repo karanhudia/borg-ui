@@ -1,34 +1,25 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { Box } from '@mui/material'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import BetaFeaturesTab from './BetaFeaturesTab'
-import { settingsAPI } from '../services/api'
 import type { SystemSettings } from '../services/api'
 
-let currentSettings: SystemSettings = {
+const initialSettings: SystemSettings = {
   bypass_lock_on_info: false,
   bypass_lock_on_list: true,
   borg2_fast_browse_beta_enabled: true,
   mqtt_beta_enabled: false,
 }
 
-settingsAPI.getSystemSettings = async () =>
-  ({
-    data: { settings: currentSettings },
-    status: 200,
-    statusText: 'OK',
-    headers: {},
-    config: {},
-  }) as Awaited<ReturnType<typeof settingsAPI.getSystemSettings>>
-
-settingsAPI.updateSystemSettings = async (settings: SystemSettings) => {
-  currentSettings = { ...currentSettings, ...settings }
-  return {
-    data: { settings: currentSettings },
-    status: 200,
-    statusText: 'OK',
-    headers: {},
-    config: {},
-  } as Awaited<ReturnType<typeof settingsAPI.updateSystemSettings>>
+function createMockQueryClient() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, staleTime: Infinity },
+      mutations: { retry: false },
+    },
+  })
+  queryClient.setQueryData(['systemSettings'], { settings: initialSettings })
+  return queryClient
 }
 
 const meta = {
@@ -37,6 +28,13 @@ const meta = {
   parameters: {
     layout: 'fullscreen',
   },
+  decorators: [
+    (Story) => (
+      <QueryClientProvider client={createMockQueryClient()}>
+        <Story />
+      </QueryClientProvider>
+    ),
+  ],
 } satisfies Meta<typeof BetaFeaturesTab>
 
 export default meta
