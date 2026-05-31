@@ -10,10 +10,8 @@ import {
   CardContent,
   CircularProgress,
   IconButton,
-  MenuItem,
   Stack,
   Tab,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material'
@@ -31,6 +29,7 @@ import CommandPreview from '../components/CommandPreview'
 import RunningBackupsSection from '../components/RunningBackupsSection'
 import BackupPlanRunsPanel, { type BackupPlanRunLogJob } from '../components/BackupPlanRunsPanel'
 import PageTabs from '../components/PageTabs'
+import BackupPlanSelect from '../components/shared/BackupPlanSelect'
 import { useAnalytics } from '../hooks/useAnalytics'
 import { useAuth } from '../hooks/useAuth'
 import { usePermissions } from '../hooks/usePermissions'
@@ -379,40 +378,38 @@ const Backup: React.FC = () => {
                 </Alert>
               ) : (
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="stretch">
-                  <TextField
-                    select
-                    fullWidth
+                  <BackupPlanSelect
                     label={t('backup.planRun.selectLabel')}
                     value={selectedBackupPlanId}
-                    onChange={(event) => {
-                      const nextValue = event.target.value
-                      setSelectedBackupPlanId(nextValue === '' ? '' : Number(nextValue))
-                    }}
+                    onChange={setSelectedBackupPlanId}
+                    plans={runnableBackupPlans}
+                    emptyMessage={t('backup.planRun.empty')}
+                    placeholder={t('backup.planRun.selectPlaceholder', {
+                      defaultValue: 'Select a backup plan',
+                    })}
                     disabled={loadingBackupPlans || runnableBackupPlans.length === 0}
-                    SelectProps={{ displayEmpty: true }}
-                    InputLabelProps={{ shrink: true }}
+                    formatSecondary={(plan) => {
+                      const sourceLabel =
+                        plan.source_type === 'remote'
+                          ? t('backupPlans.status.remoteSource')
+                          : plan.source_type === 'agent'
+                            ? t('backupPlans.sourceChooser.managedAgent')
+                            : plan.source_type === 'mixed'
+                              ? t('backupPlans.sourceChooser.mixedSources')
+                              : t('backupPlans.status.localSource')
+                      return `${sourceLabel} · ${t('backupPlans.status.repositoryCount', {
+                        count: plan.repository_count,
+                      })}`
+                    }}
+                    getIndicatorLabel={(plan) =>
+                      plan.schedule_enabled
+                        ? t('backupPlans.status.scheduledBadge')
+                        : t('backupPlans.status.manualOnly')
+                    }
                     sx={{
                       minWidth: { xs: '100%', sm: 300 },
-                      '& .MuiInputBase-root': {
-                        minHeight: { xs: 52, sm: 58 },
-                      },
-                      '& .MuiSelect-select': {
-                        display: 'flex',
-                        alignItems: 'center',
-                      },
                     }}
-                  >
-                    <MenuItem value="" disabled>
-                      {t('backup.planRun.selectPlaceholder', {
-                        defaultValue: 'Select a backup plan',
-                      })}
-                    </MenuItem>
-                    {runnableBackupPlans.map((plan) => (
-                      <MenuItem key={plan.id} value={plan.id}>
-                        {plan.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  />
                   <Button
                     variant="contained"
                     color="success"
