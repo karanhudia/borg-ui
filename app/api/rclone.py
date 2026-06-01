@@ -17,6 +17,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, model_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -452,6 +453,15 @@ class RcloneOAuthCredentialUpdate(BaseModel):
     def validate_paired_credentials(self) -> "RcloneOAuthCredentialUpdate":
         if self.clear_client_secret:
             return self
+        payload_fields = getattr(self, "model_fields_set", None)
+        if payload_fields is None:
+            payload_fields = getattr(self, "__fields_set__", set())
+        client_id_present = "client_id" in payload_fields
+        client_secret_present = "client_secret" in payload_fields
+        if client_id_present != client_secret_present:
+            raise ValueError(
+                "client_id and client_secret must both be provided or both be empty"
+            )
         client_id_set = bool((self.client_id or "").strip())
         client_secret_set = bool((self.client_secret or "").strip())
         if client_id_set != client_secret_set:
@@ -516,11 +526,20 @@ def _strip_optional(value: str | None) -> str | None:
 
 
 def _get_or_create_system_settings(db: Session) -> SystemSettings:
-    settings_row = db.query(SystemSettings).first()
+    settings_query = (
+        db.query(SystemSettings).order_by(SystemSettings.id.asc()).with_for_update()
+    )
+    settings_row = settings_query.first()
     if settings_row is None:
-        settings_row = SystemSettings()
+        settings_row = SystemSettings(id=1)
         db.add(settings_row)
-        db.flush()
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            settings_row = settings_query.first()
+            if settings_row is None:
+                raise
     return settings_row
 
 
@@ -1607,8 +1626,12 @@ def _remote_oauth_token_status(remote: RcloneRemote) -> dict[str, Any] | None:
             )
         except OSError:
             values = {}
+    used_redacted_fallback = False
     if not values:
         values = dict(remote.redacted_config or {})
+        used_redacted_fallback = True
+    if used_redacted_fallback and _is_redacted_config_value(values.get("token")):
+        return {"status": "unknown", "expires_at": None, "refresh_available": False}
     return _oauth_token_status_from_config_values(remote.provider, values)
 
 
@@ -1716,27 +1739,29 @@ async def update_oauth_credentials(
         )
     settings_row = _get_or_create_system_settings(db)
     client_id_field, client_secret_field = _provider_oauth_db_field_names(provider)
+    payload_fields = getattr(payload, "model_fields_set", None)
+    if payload_fields is None:
+        payload_fields = getattr(payload, "__fields_set__", set())
 
     client_id_stripped = _strip_optional(payload.client_id)
     secret_stripped = _strip_optional(payload.client_secret)
 
     if payload.clear_client_secret:
-        # Explicit secret-only clear (backward-compat path; validator bypassed).
-        if payload.client_id is not None:
+        # Explicit secret-only clear compatibility path; validator bypassed.
+        if "client_id" in payload_fields:
             setattr(settings_row, client_id_field, client_id_stripped)
         setattr(settings_row, client_secret_field, None)
-    elif not client_id_stripped and not secret_stripped:
-        # Both fields empty → clear all stored credentials.
-        setattr(settings_row, client_id_field, None)
-        setattr(settings_row, client_secret_field, None)
-    else:
-        # Both fields provided (validator ensures they are paired).
-        setattr(settings_row, client_id_field, client_id_stripped)
-        setattr(
-            settings_row,
-            client_secret_field,
-            encrypt_secret(secret_stripped) if secret_stripped else None,
-        )
+    elif "client_id" in payload_fields and "client_secret" in payload_fields:
+        if not client_id_stripped and not secret_stripped:
+            setattr(settings_row, client_id_field, None)
+            setattr(settings_row, client_secret_field, None)
+        else:
+            setattr(settings_row, client_id_field, client_id_stripped)
+            setattr(
+                settings_row,
+                client_secret_field,
+                encrypt_secret(secret_stripped) if secret_stripped else None,
+            )
 
     db.commit()
     db.refresh(settings_row)
@@ -2080,6 +2105,15 @@ async def update_remote(
     old_remote_name = remote.name
     try:
         if remote.config_source == "managed":
+            if (
+                payload.provider is not None
+                and provider != remote.provider
+                and payload.redacted_config is None
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail={"key": "backend.errors.rclone.updateUnsupported"},
+                )
             config_file = _managed_config_path_for_remote(remote)
             original_parser = _load_config(config_file)
             existing_config = _config_section_values(original_parser, old_remote_name)

@@ -266,7 +266,7 @@ def test_clearing_both_empty_credentials_removes_stored_values(
     assert settings_row.google_drive_oauth_client_id == "drive-client-id"
     assert settings_row.google_drive_oauth_client_secret_encrypted
 
-    # Send both fields empty → should clear stored credentials.
+    # Send both fields empty to clear stored credentials.
     response = test_client.put(
         "/api/rclone/oauth/credentials/drive",
         headers=admin_headers,
@@ -289,7 +289,7 @@ def test_clearing_both_empty_credentials_removes_stored_values(
 def test_update_rclone_oauth_credentials_rejects_partial_input(
     test_client: TestClient, admin_headers
 ):
-    # client_id provided but client_secret omitted → 422 validation error.
+    # client_id provided but client_secret omitted returns a 422 validation error.
     response = test_client.put(
         "/api/rclone/oauth/credentials/drive",
         headers=admin_headers,
@@ -297,7 +297,7 @@ def test_update_rclone_oauth_credentials_rejects_partial_input(
     )
     assert response.status_code == 422
 
-    # client_secret provided but client_id omitted → 422 validation error.
+    # client_secret provided but client_id omitted returns a 422 validation error.
     response = test_client.put(
         "/api/rclone/oauth/credentials/drive",
         headers=admin_headers,
@@ -309,7 +309,7 @@ def test_update_rclone_oauth_credentials_rejects_partial_input(
 @pytest.mark.unit
 def test_persisted_rclone_oauth_credentials_take_precedence_over_environment(
     test_client: TestClient, admin_headers, monkeypatch
-
+):
     from app.api import rclone as rclone_api
 
     rclone_api.RCLONE_OAUTH_SESSIONS.clear()
@@ -835,6 +835,32 @@ def test_list_rclone_remotes_includes_oauth_token_status_without_token_json(
     serialized = json.dumps(remote)
     assert "real-access" not in serialized
     assert "real-refresh" not in serialized
+
+
+@pytest.mark.unit
+def test_list_rclone_remotes_reports_redacted_oauth_token_status_as_unknown(
+    test_client: TestClient, admin_headers, test_db, tmp_path
+):
+    missing_config = tmp_path / "missing-rclone.conf"
+    remote = RcloneRemote(
+        name="gdrive-prod",
+        provider="drive",
+        config_source="managed",
+        config_path=str(missing_config),
+        redacted_config={"type": "drive", "token": "***", "scope": "drive"},
+    )
+    test_db.add(remote)
+    test_db.commit()
+
+    response = test_client.get("/api/rclone/remotes", headers=admin_headers)
+
+    assert response.status_code == 200
+    listed = response.json()["remotes"][0]
+    assert listed["oauth_token"] == {
+        "status": "unknown",
+        "expires_at": None,
+        "refresh_available": False,
+    }
 
 
 @pytest.mark.unit
@@ -1470,6 +1496,40 @@ def test_update_rclone_remote_renames_managed_config_section(
     assert "[archive-b2]" in config_body
     assert "type = b2" in config_body
     assert "account = redacted" in config_body
+
+
+@pytest.mark.unit
+def test_update_rclone_remote_rejects_provider_change_without_replacement_config(
+    test_client: TestClient, admin_headers, tmp_path, monkeypatch
+):
+    config_root = tmp_path / "rclone"
+    monkeypatch.setattr("app.api.rclone.settings.rclone_config_root", str(config_root))
+
+    create_response = test_client.post(
+        "/api/rclone/remotes",
+        headers=admin_headers,
+        json={
+            "name": "prod-s3",
+            "provider": "s3",
+            "config_source": "managed",
+            "redacted_config": {"type": "s3", "provider": "AWS"},
+        },
+    )
+    remote_id = create_response.json()["id"]
+
+    response = test_client.put(
+        f"/api/rclone/remotes/{remote_id}",
+        headers=admin_headers,
+        json={"provider": "b2"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == {
+        "key": "backend.errors.rclone.updateUnsupported"
+    }
+    config_body = (config_root / "rclone.conf").read_text(encoding="utf-8")
+    assert "[prod-s3]" in config_body
+    assert "type = s3" in config_body
 
 
 @pytest.mark.unit

@@ -315,6 +315,10 @@ export default function RcloneRemoteDialog({
     }
     setLocalError(null)
     setOauthError(null)
+    setOauthSession(null)
+    setBorgUiOAuthProvider(null)
+    setBorgUiOAuthSessionId(null)
+    setOauthTokenStatus(null)
     setIsStartingOAuth(true)
     try {
       const session = await onStartOAuth({
@@ -375,7 +379,7 @@ export default function RcloneRemoteDialog({
     setOauthCredentialsError(null)
     setIsSavingOAuthCredentials(true)
     try {
-      // Both empty → null payload clears stored credentials on the backend.
+      // Both empty sends nulls, which clears stored credentials on the backend.
       await onSaveOAuthCredentials(resolvedProvider, {
         client_id: clientId || null,
         client_secret: clientSecret || null,

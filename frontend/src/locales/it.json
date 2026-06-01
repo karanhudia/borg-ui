@@ -3253,7 +3253,7 @@
       "rcloneOAuthClientSecretLabel": "Segreto client OAuth",
       "rcloneOAuthCredentialsSave": "Salva credenziali OAuth",
       "rcloneOAuthCredentialsSaving": "Salvataggio credenziali...",
-      "rcloneOAuthCredentialsRequired": "Inserisci sia un ID client che un segreto client, o lascia entrambi vuoti per cancellare le credenziali salvate.",
+      "rcloneOAuthCredentialsRequired": "Inserisci ID client e segreto client, oppure lascia entrambi i campi vuoti per cancellare le credenziali salvate.",
       "rcloneOAuthCredentialsSaveFailed": "Impossibile salvare le credenziali OAuth.",
       "rcloneOAuthClientIdSet": "ID client salvato",
       "rcloneOAuthClientSecretSet": "Segreto client salvato",

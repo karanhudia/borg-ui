@@ -3253,7 +3253,7 @@
       "rcloneOAuthClientSecretLabel": "OAuth-Client-Secret",
       "rcloneOAuthCredentialsSave": "OAuth-Zugangsdaten speichern",
       "rcloneOAuthCredentialsSaving": "Zugangsdaten werden gespeichert...",
-      "rcloneOAuthCredentialsRequired": "Gib sowohl eine Client-ID als auch ein Client-Secret ein oder lass beide leer, um gespeicherte Zugangsdaten zu löschen.",
+      "rcloneOAuthCredentialsRequired": "Gib Client-ID und Client-Secret ein oder lasse beide Felder leer, um gespeicherte Zugangsdaten zu löschen.",
       "rcloneOAuthCredentialsSaveFailed": "OAuth-Zugangsdaten konnten nicht gespeichert werden.",
       "rcloneOAuthClientIdSet": "Client-ID gespeichert",
       "rcloneOAuthClientSecretSet": "Client-Secret gespeichert",
