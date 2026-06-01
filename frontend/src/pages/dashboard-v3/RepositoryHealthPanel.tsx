@@ -250,6 +250,13 @@ export function RepositoryHealthPanel({
             xs: 'minmax(0, 1fr)',
             sm: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
           },
+          // Dense packing: critical/warning cards take 2 row tracks, healthy cards
+          // take 1, so healthy cards fill the gaps next to taller cards instead of
+          // stretching to match. `minmax(64px, auto)` lets the healthy one-liner
+          // size to ~64px and lets critical rows grow if a translation pushes
+          // content past the 2-track budget.
+          gridAutoRows: 'minmax(64px, auto)',
+          gridAutoFlow: 'dense',
           gap: 1.5,
         }}
       >
@@ -278,6 +285,7 @@ export function RepositoryHealthPanel({
                 key={repo.id}
                 onClick={onOpenRepositories}
                 sx={{
+                  gridRow: 'span 1',
                   bgcolor: T.bgCard,
                   border: `1px solid ${alpha(cs.color, 0.38)}`,
                   borderRadius: '10px',
@@ -364,6 +372,11 @@ export function RepositoryHealthPanel({
               key={repo.id}
               onClick={onOpenRepositories}
               sx={{
+                // Span 2 row tracks so a critical/warning card occupies the
+                // vertical space of two healthy one-liners, letting dense flow
+                // pack adjacent healthy cards into the same row pair instead
+                // of stretching them to match this card's height.
+                gridRow: 'span 2',
                 // Subtle status tint (~5% alpha) on critical/warning cards so they
                 // register as different at a glance, without the wall-of-color
                 // effect the original 15% tints created. Healthy cards stay on
