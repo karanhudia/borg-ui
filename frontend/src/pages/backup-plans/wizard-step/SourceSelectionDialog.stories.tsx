@@ -566,6 +566,8 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseLivePath': 'Live database path',
   'backupPlans.sourceChooser.databaseDumpPath': 'Dump path',
   'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
+  'backupPlans.sourceChooser.discoveredAtHint':
+    'Live data directory. The pre-backup script targets this instance; Borg does not read these files directly.',
   'backupPlans.sourceChooser.borgWillBackUpHint':
     'Dump output staging directory. The pre-backup script writes the dump here; Borg captures it.',
   'backupPlans.sourceChooser.selectedDatabases': 'Selected databases',
@@ -992,6 +994,30 @@ export const DatabaseTemplateDetail: Story = {
       description: {
         story:
           'Database template detail view after selecting PostgreSQL. The header shows the template title without a redundant Back button because Cancel is already available in the footer.',
+      },
+    },
+  },
+}
+
+export const DatabaseDetectedSqliteDetail: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'single-sqlite' }}
+      initialView="database-detail"
+      initialCaptureModeExpanded
+      initialSelectedDatabase={{
+        ...sqliteTemplate,
+        detected: true,
+        detection_source: '/srv/app/state.sqlite',
+      }}
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Detected SQLite detail view after selecting a scan result. The live database path remains visible while the final Borg path uses a separate staging directory.',
       },
     },
   },
