@@ -1,0 +1,218 @@
+name: GitHub Pages Visual Regression
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - "frontend/.storybook/**"
+      - "frontend/scripts/**"
+      - "frontend/src/**"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/visual-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/.storybook/**"
+      - "frontend/scripts/**"
+      - "frontend/src/**"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/visual-regression.yml"
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Optional pull request number to publish a report for the selected ref."
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  visuals:
+    name: Storybook Visual Report
+    if: ${{ github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'run-visuals') && github.event.pull_request.head.repo.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Resolve visual mode
+        id: visual_mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number || '' }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ] || [ -n "$PR_NUMBER" ]; then
+            mode="pr"
+          else
+            mode="baseline"
+          fi
+
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: source/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: source/frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: source/frontend
+        run: PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --with-deps chromium
+
+      - name: Capture Storybook snapshots
+        working-directory: source/frontend
+        run: npm run visual:screenshots
+        env:
+          STORYBOOK_SNAPSHOTS_DIR: ${{ github.workspace }}/visual-actual
+
+      - name: Prepare visual state branch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          rm -rf visual-state
+          git init visual-state
+          cd visual-state
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git fetch --depth=1 origin visual-regression-state; then
+            git checkout -B visual-regression-state FETCH_HEAD
+          else
+            git checkout --orphan visual-regression-state
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          mkdir -p visual/baseline visual/reports
+
+      - name: Generate pull request visual report
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' }}
+        working-directory: source/frontend
+        run: npm run visual:report
+        env:
+          VISUAL_BASELINE_DIR: ${{ github.workspace }}/visual-state/visual/baseline
+          VISUAL_ACTUAL_DIR: ${{ github.workspace }}/visual-actual
+          VISUAL_REPORT_DIR: ${{ github.workspace }}/visual-state/visual/reports/pr-${{ steps.visual_mode.outputs.pr_number }}
+          VISUAL_REPORT_TITLE: "PR #${{ steps.visual_mode.outputs.pr_number }} visual report"
+          VISUAL_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Update main visual baseline
+        if: ${{ steps.visual_mode.outputs.mode == 'baseline' }}
+        run: |
+          rm -rf visual-state/visual/baseline
+          mkdir -p visual-state/visual/baseline
+          cp -R visual-actual/. visual-state/visual/baseline/
+
+      - name: Commit visual state
+        working-directory: visual-state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add visual
+
+          if git diff --cached --quiet; then
+            echo "No visual state changes to publish."
+            exit 0
+          fi
+
+          git commit -m "Update visual regression state"
+
+          if ! git push origin HEAD:visual-regression-state; then
+            git fetch origin visual-regression-state
+            git rebase origin/visual-regression-state
+            git push origin HEAD:visual-regression-state
+          fi
+
+      - name: Checkout docs source
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          path: docs-source
+          persist-credentials: false
+
+      - name: Set up docs Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: docs-source/docs/package-lock.json
+
+      - name: Install docs dependencies
+        working-directory: docs-source/docs
+        run: npm ci
+
+      - name: Build docs
+        working-directory: docs-source/docs
+        run: npm run build
+
+      - name: Overlay visual reports
+        run: |
+          rm -rf docs-source/docs/.vitepress/dist/visual
+          mkdir -p docs-source/docs/.vitepress/dist
+
+          if [ -d visual-state/visual ]; then
+            cp -R visual-state/visual docs-source/docs/.vitepress/dist/visual
+          fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-source/docs/.vitepress/dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Resolve report URL
+        id: report_url
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' }}
+        run: |
+          page_url="${{ steps.deployment.outputs.page_url }}"
+          case "$page_url" in
+            */) ;;
+            *) page_url="${page_url}/" ;;
+          esac
+
+          echo "url=${page_url}visual/reports/pr-${{ steps.visual_mode.outputs.pr_number }}/" >> "$GITHUB_OUTPUT"
+
+      - name: Update pull request description
+        if: ${{ steps.visual_mode.outputs.mode == 'pr' }}
+        working-directory: source/frontend
+        run: node scripts/visual-pr-description.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          VISUAL_PR_NUMBER: ${{ steps.visual_mode.outputs.pr_number }}
+          VISUAL_REPORT_URL: ${{ steps.report_url.outputs.url }}
+          VISUAL_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VISUAL_SUMMARY_PATH: ${{ github.workspace }}/visual-state/visual/reports/pr-${{ steps.visual_mode.outputs.pr_number }}/summary.json

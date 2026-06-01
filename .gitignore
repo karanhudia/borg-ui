@@ -4,7 +4,8 @@
 /frontend/dist
 /frontend/.playwright-host-libs
 /frontend/storybook-static
-/frontend/argos-screenshots
+/frontend/visual-screenshots
+/frontend/visual-report
 /frontend/storybook-snapshots
 /updates-worker/node_modules
 /updates-worker/.wrangler
