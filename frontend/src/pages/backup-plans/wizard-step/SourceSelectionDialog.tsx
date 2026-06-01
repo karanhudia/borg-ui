@@ -225,6 +225,11 @@ function databaseDefaultDumpRoot(database: SourceDiscoveryDatabase): string {
   )
 }
 
+function databaseDetectedPath(database: SourceDiscoveryDatabase): string | null {
+  const path = database.detection_source?.trim()
+  return path?.startsWith('/') ? path : null
+}
+
 function sqliteDumpSlug(detectedSourcePath: string): string {
   const filename = detectedSourcePath.trim().replace(/\/+$/, '').split('/').filter(Boolean).pop()
   const withoutExtension = (filename || 'database').replace(/\.(db|sqlite|sqlite3)$/i, '')
@@ -278,10 +283,7 @@ function defaultDatabaseDumpPath(
   existingLocations: SourceLocation[]
 ): string {
   const dumpRoot = databaseDefaultDumpRoot(database)
-  const detectedSourcePath =
-    database.detected && database.detection_source?.startsWith('/')
-      ? database.detection_source
-      : null
+  const detectedSourcePath = databaseDetectedPath(database)
 
   if (database.id !== 'sqlite' || !detectedSourcePath) {
     return dumpRoot
@@ -668,7 +670,9 @@ export function SourceSelectionDialog({
     setDatabaseDumpPath(
       databaseLocation?.database?.dump_path ||
         databaseLocation?.database?.backup_paths?.[0] ||
-        initialDetailDatabase?.source_directories[0] ||
+        (initialDetailDatabase
+          ? defaultDatabaseDumpPath(initialDetailDatabase, nextLocations)
+          : '') ||
         ''
     )
     setScanDialogOpen(initialScanDialogOpen)
@@ -810,10 +814,7 @@ export function SourceSelectionDialog({
           ? `remote:${contextTarget.sshId}`
           : 'local'
       const locationBase = locationForKey(targetKey)
-      const detectedSourcePath =
-        selectedDatabase.detected && selectedDatabase.detection_source?.startsWith('/')
-          ? selectedDatabase.detection_source
-          : null
+      const detectedSourcePath = databaseDetectedPath(selectedDatabase)
       const requestedCaptureMode: DatabaseCaptureMode =
         databaseCaptureMode === 'original' && detectedSourcePath ? 'original' : 'dump'
       const dumpPath =
@@ -2021,13 +2022,10 @@ export function SourceSelectionDialog({
 
     // detection_source can be either a real filesystem path (when the scan
     // located a data dir) or a string like "pg_dump available on PATH" (when
-    // only the client CLI was found). Show the discovered path only when it
-    // looks like a real path, since that is the case where naming the
+    // only the client CLI was found). Show and use the discovered path only
+    // when it looks like a real path, since that is the case where naming the
     // instance is useful.
-    const detectedPath =
-      selectedDatabase.detected && selectedDatabase.detection_source?.startsWith('/')
-        ? selectedDatabase.detection_source
-        : null
+    const detectedPath = databaseDetectedPath(selectedDatabase)
 
     // Per-engine clarification of how the pre-backup script targets the
     // discovered instance. logical_dump engines (PG / MySQL / Mongo) talk
@@ -2419,9 +2417,7 @@ export function SourceSelectionDialog({
               disabled={
                 applying ||
                 (databaseCaptureMode === 'original' &&
-                  !(
-                    selectedDatabase?.detected && selectedDatabase.detection_source?.startsWith('/')
-                  )) ||
+                  !(selectedDatabase && databaseDetectedPath(selectedDatabase))) ||
                 (databaseCaptureMode === 'dump' &&
                   !(
                     databaseDumpPath.trim() ||

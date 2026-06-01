@@ -352,6 +352,32 @@ class TestSourceDiscovery:
         assert [detection["id"] for detection in detections] == ["postgresql"]
         assert detections[0]["detection_source"] == "pg_dump available on PATH"
 
+    def test_database_scan_does_not_detect_sqlite_from_cli_only(
+        self, test_client, admin_headers, tmp_path, monkeypatch
+    ):
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        monkeypatch.setattr(
+            source_discovery,
+            "which",
+            lambda command: "/usr/bin/sqlite3" if command == "sqlite3" else None,
+        )
+
+        response = test_client.post(
+            "/api/source-discovery/databases/scan",
+            json={
+                "source_type": "local",
+                "source_ssh_connection_id": None,
+                "paths": [str(empty_dir)],
+            },
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["detections"] == []
+        assert "sqlite" in {template["id"] for template in body["templates"]}
+
     def test_database_scan_returns_empty_detections_with_templates(
         self, test_client, admin_headers, tmp_path, monkeypatch
     ):

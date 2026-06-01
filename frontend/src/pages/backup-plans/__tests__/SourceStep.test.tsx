@@ -503,7 +503,7 @@ const emptyScanResponse = {
   warnings: [] as never[],
 }
 
-function sqliteScanDetection(path: string) {
+function sqliteScanDetection(path: string, overrides: Record<string, unknown> = {}) {
   return {
     id: 'sqlite',
     engine: 'SQLite',
@@ -529,6 +529,7 @@ function sqliteScanDetection(path: string) {
         timeout: 120,
       },
     },
+    ...overrides,
   }
 }
 
@@ -1090,10 +1091,11 @@ describe('SourceStep', () => {
     fireEvent.click(databaseTab)
     fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
 
-    const dialogs = screen.getAllByRole('dialog')
-    const scanDialog = dialogs[dialogs.length - 1]
-    expect(within(scanDialog).getByText(/scan for databases/i)).toBeInTheDocument()
-
+    const scanDialogs = screen
+      .getAllByRole('dialog')
+      .filter((dialog) => within(dialog).queryByRole('heading', { name: /scan for databases/i }))
+    expect(scanDialogs.length).toBeGreaterThan(0)
+    const scanDialog = scanDialogs[scanDialogs.length - 1]!
     fireEvent.mouseDown(within(scanDialog).getByRole('combobox', { name: /scan where/i }))
     let listbox = await screen.findByRole('listbox')
     fireEvent.click(within(listbox).getByRole('option', { name: /remote machine/i }))
@@ -1214,6 +1216,68 @@ describe('SourceStep', () => {
 
     expect(await screen.findByText('/srv/app/state.sqlite')).toBeInTheDocument()
     expect(screen.getByText('/srv/app/cache.sqlite3')).toBeInTheDocument()
+  })
+
+  it('keeps a detected SQLite filesystem path visible in the detail view', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.scanDatabases.mockResolvedValue({
+      data: {
+        scan_target: {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          label: 'This Borg UI server',
+        },
+        scanned_paths: ['/srv'],
+        detections: [sqliteScanDetection('/srv/app/state.sqlite', { detected: false })],
+        templates: discoveryResponse.templates,
+        warnings: [],
+      },
+    })
+    const updateState = vi.fn()
+    const onCreateScript = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 401 })
+      .mockResolvedValueOnce({ id: 402 })
+
+    renderSourceStep({ updateState, onCreateScript })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
+
+    const stateSqlite = await screen.findByText('/srv/app/state.sqlite')
+    fireEvent.click(stateSqlite.closest('button') || stateSqlite)
+
+    expect(await screen.findByRole('heading', { name: /sqlite database/i })).toBeInTheDocument()
+    expect(screen.getByText('Live database path')).toBeInTheDocument()
+    expect(screen.getByText('/srv/app/state.sqlite')).toBeInTheDocument()
+    expect(
+      screen.getByDisplayValue('/var/tmp/borg-ui/database-dumps/sqlite/state')
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /add database/i }))
+    await waitFor(() => {
+      expect(
+        screen.getByText(/\/var\/tmp\/borg-ui\/database-dumps\/sqlite\/state/)
+      ).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
+
+    await waitFor(() => {
+      expect(updateState).toHaveBeenCalled()
+    })
+    const updatePayload = updateState.mock.calls[0][0]
+    expect(updatePayload.sourceDirectories).toEqual([
+      '/var/tmp/borg-ui/database-dumps/sqlite/state',
+    ])
+    expect(updatePayload.sourceLocations[0].database.detected_source_path).toBe(
+      '/srv/app/state.sqlite'
+    )
+    expect(
+      updatePayload.sourceLocations[0].database.pre_backup_script_parameters.SQLITE_DATABASE_PATH
+    ).toBe('/srv/app/state.sqlite')
   })
 
   it('uses separate staging paths for multiple detected SQLite databases', async () => {

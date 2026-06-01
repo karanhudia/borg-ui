@@ -828,6 +828,12 @@ def _detect_templates_from_probes(
                 )
             continue
 
+        # A SQLite client on PATH is not a database instance. Unlike server
+        # engines, SQLite needs an actual file path before the backup can be
+        # configured.
+        if template.id == "sqlite":
+            continue
+
         detections.append(
             template.model_copy(
                 update={

@@ -36,8 +36,8 @@ interface DatabaseBrandTileProps {
 export function DatabaseBrandTile({ database, detectedLabel, onClick }: DatabaseBrandTileProps) {
   const brand = brandFor(database.engine)
   const BrandIcon = brand.Icon
-  const detectionSource =
-    database.detected && database.detection_source?.trim() ? database.detection_source.trim() : null
+  const detectionSource = database.detection_source?.trim() || null
+  const isDetected = database.detected || Boolean(detectionSource)
 
   return (
     <Card
@@ -90,7 +90,7 @@ export function DatabaseBrandTile({ database, detectedLabel, onClick }: Database
             <Typography variant="subtitle2" sx={{ fontWeight: 600, lineHeight: 1.2 }} noWrap>
               {database.engine}
             </Typography>
-            {database.detected && (
+            {isDetected && (
               <Stack direction="row" spacing={0.5} alignItems="center">
                 <Box
                   sx={{
