@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { waitForStoryRoot } from './snapshot-capture-config.mjs'
 import { writeSnapshotIfChanged } from './snapshot-file-writer.mjs'
+import { resolveSnapshotOutputDir } from './snapshot-output-config.mjs'
 import { snapshotFileName, snapshotViewports } from './snapshot-viewport-config.mjs'
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0'
@@ -16,7 +17,7 @@ const staticDir = process.env.STORYBOOK_STATIC_DIR
   ? path.resolve(frontendRoot, process.env.STORYBOOK_STATIC_DIR)
   : path.join(frontendRoot, 'storybook-static')
 const indexPath = path.join(staticDir, 'index.json')
-const snapshotsDir = path.join(frontendRoot, 'storybook-snapshots')
+const snapshotsDir = resolveSnapshotOutputDir(frontendRoot)
 const localHostLibRoot = path.join(frontendRoot, '.playwright-host-libs', 'root')
 const fixedNowIso = '2026-05-16T12:00:00.000Z'
 

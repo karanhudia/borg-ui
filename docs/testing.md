@@ -29,6 +29,29 @@ npm test
 npm run build
 ```
 
+### Storybook Visual Regression
+
+Storybook visual snapshots are handled by the `Argos Visual Regression` GitHub
+Actions workflow on pull requests and `main` pushes that touch frontend source,
+stories, Storybook config, frontend scripts, or frontend package metadata.
+
+The workflow builds Storybook, captures screenshots with Playwright, and uploads
+the ignored `frontend/argos-screenshots/` directory to Argos. The repository must
+be connected to an Argos project; the workflow uses Argos GitHub tokenless
+authentication by default, passes `GITHUB_TOKEN` so Argos can resolve pull
+request metadata, and also passes `ARGOS_TOKEN` from repository secrets when the
+project requires token authentication.
+
+For local proof runs:
+
+```bash
+cd frontend
+npm run snapshots
+```
+
+Do not commit generated PNGs from `frontend/argos-screenshots/` or
+`frontend/storybook-snapshots/`.
+
 ## Backend
 
 ```bash
