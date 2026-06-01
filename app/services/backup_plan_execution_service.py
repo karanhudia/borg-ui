@@ -323,9 +323,9 @@ def _legacy_plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
 
 
 def _plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
-    explicit_hooks = [hook for hook in plan.script_hooks if hook.enabled]
-    if not explicit_hooks:
+    if not plan.script_hooks:
         return _legacy_plan_script_hooks(plan)
+    explicit_hooks = [hook for hook in plan.script_hooks if hook.enabled]
     hook_order = {"pre-backup": 0, "post-backup": 1}
     return [
         {

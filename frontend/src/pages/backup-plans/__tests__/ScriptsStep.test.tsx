@@ -265,6 +265,31 @@ describe('ScriptsStep', () => {
     )
   })
 
+  it('falls back to always for unsupported saved script run conditions', () => {
+    render(
+      <ScriptsStep
+        wizardState={{
+          ...createInitialState(),
+          scriptHooks: [
+            {
+              script_id: 42,
+              hook_type: 'post-backup',
+              execution_order: 1,
+              enabled: true,
+              parameter_values: {},
+            },
+          ],
+        }}
+        scripts={[{ id: 42, name: 'Legacy runner', run_on: 'manual-only' }]}
+        loadingScripts={false}
+        updateState={vi.fn()}
+        t={t as never}
+      />
+    )
+
+    expect(screen.getByRole('radio', { name: 'Always' })).toBeChecked()
+  })
+
   it('does not render legacy inline script controls', () => {
     render(
       <ScriptsStep

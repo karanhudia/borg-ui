@@ -80,7 +80,7 @@ pytest tests/unit/test_api_backup_plans.py::TestBackupPlanRoutes::test_create_pl
 
 ## Task 2: Backend Execution Contract
 
-- [ ] Add failing execution tests in `tests/unit/test_api_backup_plans.py` for ordered pre hooks, post run-condition filtering, and legacy fallback.
+- [ ] Add failing execution tests in `tests/unit/test_api_backup_plans.py` for ordered pre-hooks, post-run condition filtering, and legacy fallback.
 
 ```python
 @pytest.mark.asyncio
@@ -163,7 +163,7 @@ npm test -- src/pages/__tests__/BackupPlans.test.tsx --run
 
 ## Task 5: Backup Plan Scripts Step UI
 
-- [ ] Add failing tests in `frontend/src/pages/backup-plans/__tests__/ScriptsStep.test.tsx` for adding two scripts, choosing post run condition, configuring pre failure behavior, and not rendering inline script controls.
+- [ ] Add failing tests in `frontend/src/pages/backup-plans/__tests__/ScriptsStep.test.tsx` for adding two scripts, choosing post-run condition, configuring pre-failure behavior, and not rendering inline script controls.
 
 - [ ] Replace the `ScriptSelectorSection` usage in `ScriptsStep.tsx` with controlled chain sections for pre and post hooks.
 

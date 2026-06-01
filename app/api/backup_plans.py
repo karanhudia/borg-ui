@@ -433,9 +433,7 @@ def _serialize_legacy_script_hook(
 
 
 def _serialize_plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
-    explicit_hooks = [
-        hook for hook in plan.script_hooks if hook.enabled and hook.script is not None
-    ]
+    explicit_hooks = [hook for hook in plan.script_hooks if hook.script is not None]
     if explicit_hooks:
         hook_order = {"pre-backup": 0, "post-backup": 1}
         return [
@@ -723,14 +721,17 @@ def _load_run_or_404(db: Session, run_id: int) -> BackupPlanRun:
 def _process_hook_parameter_values(
     script: Script, parameter_values: Optional[dict[str, Any]]
 ) -> Optional[str]:
-    if not parameter_values:
-        return None
-
+    parameter_values = parameter_values or {}
     parameters = _script_parameter_defs(script)
     processed_values: dict[str, Any] = {}
     for param_def in parameters:
         param_name = param_def["name"]
         if param_name not in parameter_values:
+            if param_def.get("required"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Missing required script parameter: {param_name}",
+                )
             continue
         value = parameter_values[param_name]
         is_valid, error_msg = validate_parameter_value(param_def, value)
@@ -800,13 +801,9 @@ def _mirror_legacy_script_fields(payload: BackupPlanPayload) -> None:
     first_pre = pre_hooks[0] if pre_hooks else None
     first_post = post_hooks[0] if post_hooks else None
     payload.pre_backup_script_id = first_pre.script_id if first_pre else None
-    payload.pre_backup_script_parameters = (
-        first_pre.parameter_values if first_pre else None
-    )
+    payload.pre_backup_script_parameters = None
     payload.post_backup_script_id = first_post.script_id if first_post else None
-    payload.post_backup_script_parameters = (
-        first_post.parameter_values if first_post else None
-    )
+    payload.post_backup_script_parameters = None
 
 
 def _replace_script_hooks(
@@ -1356,12 +1353,12 @@ async def create_backup_plan(
     plan = BackupPlan(created_at=datetime.utcnow())
     _apply_payload(plan, payload)
     db.add(plan)
-    db.commit()
-    db.refresh(plan)
+    db.flush()
     _replace_repository_links(db, plan, payload)
     _replace_script_hooks(db, plan, payload)
     _clear_legacy_source_settings(payload, repositories)
     db.commit()
+    db.refresh(plan)
 
     plan = _load_plan_or_404(db, plan.id)
     logger.info(

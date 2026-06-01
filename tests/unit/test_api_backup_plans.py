@@ -479,6 +479,135 @@ class TestBackupPlanRoutes:
             == 2
         )
 
+    def test_create_plan_returns_disabled_script_hooks(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(test_db, "Optional Prepare")
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                script_hooks=[
+                    {
+                        "script_id": script.id,
+                        "hook_type": "pre-backup",
+                        "execution_order": 1,
+                        "enabled": False,
+                    }
+                ],
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert [
+            (hook["script_id"], hook["hook_type"], hook["enabled"])
+            for hook in body["script_hooks"]
+        ] == [(script.id, "pre-backup", False)]
+
+    def test_create_plan_rejects_missing_required_script_hook_parameter(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(
+            test_db,
+            "Prepare Source",
+            parameters=json.dumps(
+                [
+                    {
+                        "name": "TARGET",
+                        "type": "text",
+                        "default": "",
+                        "description": "Target name",
+                        "required": True,
+                    }
+                ]
+            ),
+        )
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                name="Missing hook parameter plan",
+                script_hooks=[
+                    {
+                        "script_id": script.id,
+                        "hook_type": "pre-backup",
+                        "execution_order": 1,
+                        "enabled": True,
+                        "parameter_values": {},
+                    }
+                ],
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Missing required script parameter: TARGET"
+        assert (
+            test_db.query(BackupPlan)
+            .filter(BackupPlan.name == "Missing hook parameter plan")
+            .count()
+            == 0
+        )
+
+    def test_create_plan_keeps_hook_parameters_out_of_legacy_columns(
+        self, test_client: TestClient, admin_headers, test_db
+    ):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        script = _create_script(
+            test_db,
+            "Prepare Source",
+            parameters=json.dumps(
+                [
+                    {
+                        "name": "TOKEN",
+                        "type": "password",
+                        "default": "",
+                        "description": "Secret token",
+                        "required": True,
+                    }
+                ]
+            ),
+        )
+
+        response = test_client.post(
+            "/api/backup-plans/",
+            json=_payload(
+                [repo.id],
+                script_hooks=[
+                    {
+                        "script_id": script.id,
+                        "hook_type": "pre-backup",
+                        "execution_order": 1,
+                        "enabled": True,
+                        "parameter_values": {"TOKEN": "topsecret"},
+                    }
+                ],
+            ),
+            headers=admin_headers,
+        )
+
+        assert response.status_code == 201
+        plan = (
+            test_db.query(BackupPlan)
+            .filter(BackupPlan.id == response.json()["id"])
+            .one()
+        )
+        assignment = (
+            test_db.query(BackupPlanScript)
+            .filter(BackupPlanScript.backup_plan_id == plan.id)
+            .one()
+        )
+        assert plan.pre_backup_script_id == script.id
+        assert plan.pre_backup_script_parameters is None
+        assert assignment.parameter_values is not None
+        assert "topsecret" not in assignment.parameter_values
+
     def test_legacy_plan_level_scripts_serialize_as_script_hooks(
         self, test_client: TestClient, admin_headers, test_db
     ):
@@ -2504,6 +2633,65 @@ class TestBackupPlanRoutes:
             ("backup", repo.path, None),
             ("post-backup", success_post.id, "success"),
         ]
+
+    @pytest.mark.asyncio
+    async def test_execute_plan_run_explicit_hooks_all_disabled(self, test_db):
+        repo = _create_repo(test_db, "Primary", "/repos/primary")
+        legacy_pre = _create_script(test_db, "Legacy Prepare")
+        disabled_pre = _create_script(test_db, "Disabled Prepare")
+        plan, run = _create_execution_plan(
+            test_db,
+            [repo],
+            pre_backup_script_id=legacy_pre.id,
+        )
+        test_db.add(
+            BackupPlanScript(
+                backup_plan_id=plan.id,
+                script_id=disabled_pre.id,
+                hook_type="pre-backup",
+                execution_order=1,
+                enabled=False,
+            )
+        )
+        test_db.commit()
+        calls = []
+
+        async def fake_plan_script(
+            run_id,
+            context,
+            *,
+            hook_type,
+            backup_result=None,
+            script_id=None,
+            **kwargs,
+        ):
+            calls.append((hook_type, script_id, backup_result))
+            return True, None
+
+        async def fake_execute_backup(job_id, repository, db, **kwargs):
+            calls.append(("backup", repository, None))
+            job = db.query(BackupJob).filter_by(id=job_id).one()
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+
+        with (
+            patch.object(
+                backup_plan_execution_service,
+                "_execute_plan_script",
+                side_effect=fake_plan_script,
+            ),
+            patch(
+                "app.services.backup_plan_execution_service.backup_service.execute_backup",
+                side_effect=fake_execute_backup,
+            ),
+        ):
+            await backup_plan_execution_service.execute_run(run.id)
+
+        test_db.expire_all()
+        run = test_db.query(BackupPlanRun).filter_by(id=run.id).one()
+        assert calls == [("backup", repo.path, None)]
+        assert run.status == "completed"
 
     @pytest.mark.asyncio
     async def test_execute_plan_run_continues_after_allowed_pre_script_failure(

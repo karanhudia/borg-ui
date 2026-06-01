@@ -70,6 +70,17 @@ const RUN_CONDITIONS: Array<{ value: BackupPlanScriptRunCondition; labelKey: str
   { value: 'warning', labelKey: 'backupPlans.wizard.scripts.runOnWarning' },
 ]
 
+const RUN_CONDITION_VALUES = new Set<BackupPlanScriptRunCondition>(
+  RUN_CONDITIONS.map((condition) => condition.value)
+)
+
+function normalizeRunCondition(value?: string | null): BackupPlanScriptRunCondition {
+  if (value && RUN_CONDITION_VALUES.has(value as BackupPlanScriptRunCondition)) {
+    return value as BackupPlanScriptRunCondition
+  }
+  return 'always'
+}
+
 function failureModeForHook(hook: BackupPlanScriptHook): FailureMode {
   if (hook.skip_on_failure) return 'skip'
   if (hook.continue_on_error) return 'continue'
@@ -256,10 +267,9 @@ export function ScriptsStep({
                 const script = scripts.find((item) => item.id === hook.script_id)
                 const scriptName = script?.name || hook.script_name || `Script #${hook.script_id}`
                 const parameters = script?.parameters || hook.parameters || []
-                const runCondition = (hook.custom_run_on ||
-                  script?.run_on ||
-                  hook.default_run_on ||
-                  'always') as BackupPlanScriptRunCondition
+                const runCondition = normalizeRunCondition(
+                  hook.custom_run_on || script?.run_on || hook.default_run_on
+                )
                 const failureMode = failureModeForHook(hook)
 
                 return (
