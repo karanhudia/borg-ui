@@ -15,7 +15,7 @@ async function readText(relativePath) {
 }
 
 describe('GitHub Pages visual regression workflow', () => {
-  it('wires frontend scripts and CI to publish opt-in visual reports on GitHub Pages', async () => {
+  it('wires frontend scripts and CI to publish automatic visual reports on GitHub Pages', async () => {
     const packageJson = JSON.parse(await readFile(path.join(frontendRoot, 'package.json'), 'utf8'))
     const workflow = await readText('.github/workflows/visual-regression.yml')
     const pagesWorkflow = await readText('.github/workflows/pages.yml')
@@ -34,8 +34,10 @@ describe('GitHub Pages visual regression workflow', () => {
 
     expect(workflow).toContain('name: GitHub Pages Visual Regression')
     expect(workflow).toContain('pull_request:')
-    expect(workflow).toContain('types: [opened, synchronize, reopened, labeled]')
-    expect(workflow).toContain('run-visuals')
+    expect(workflow).toContain('types: [opened, synchronize, reopened, closed]')
+    expect(workflow).not.toContain('run-visuals')
+    expect(workflow).toContain('group: ${{ github.workflow }}-visual-state')
+    expect(workflow).toContain('cancel-in-progress: false')
     expect(workflow).toContain('push:')
     expect(workflow).toContain('frontend/src/**')
     expect(workflow).toContain('frontend/.storybook/**')
@@ -45,7 +47,14 @@ describe('GitHub Pages visual regression workflow', () => {
     expect(workflow).toContain('npx playwright install --with-deps chromium')
     expect(workflow).toContain('npm run visual:screenshots')
     expect(workflow).toContain('npm run visual:report')
+    expect(workflow).toContain('Resolve pull request changed files')
+    expect(workflow).toContain('VISUAL_CHANGED_FILES_PATH')
+    expect(workflow).toContain('VISUAL_UNRELATED_DIFF_THRESHOLD: "0.001"')
     expect(workflow).toContain('node scripts/visual-pr-description.mjs')
+    expect(workflow).toContain('mode="cleanup"')
+    expect(workflow).toContain(
+      'rm -rf visual-state/visual/reports/pr-${{ steps.visual_mode.outputs.pr_number }}'
+    )
     expect(workflow).toContain('actions/deploy-pages@v4')
     expect(workflow).toContain('GITHUB_TOKEN: ${{ github.token }}')
     expect(workflow).toContain('pull-requests: write')
