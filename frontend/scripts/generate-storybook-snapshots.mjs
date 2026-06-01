@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { storyRootSelector, waitForStoryRoot } from './snapshot-capture-config.mjs'
+import { waitForStoryRoot } from './snapshot-capture-config.mjs'
 import { writeSnapshotIfChanged } from './snapshot-file-writer.mjs'
 import { snapshotFileName, snapshotViewports } from './snapshot-viewport-config.mjs'
 
