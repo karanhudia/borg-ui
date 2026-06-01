@@ -12,8 +12,10 @@ Replace paid Argos uploads with a GitHub-only visual regression workflow that:
 
 ## Requirements
 
-- PR visual checks are opt-in by label (`run-visuals`) or manual dispatch.
+- Same-repository PR visual checks run automatically for frontend changes.
 - `main` pushes update the visual baseline automatically.
+- Closed or merged PRs remove their `/visual/reports/pr-<number>/` report
+  directory from the visual state branch and GitHub Pages.
 - No user should need to download a workflow artifact to review visual changes.
 - The report must show before, after, and diff images for changed screenshots,
   plus added and removed screenshots.
@@ -30,11 +32,12 @@ Replace paid Argos uploads with a GitHub-only visual regression workflow that:
   PNGs, and writes a static `index.html` report.
 - `frontend/scripts/visual-pr-description.mjs` builds and replaces a marked PR
   body section using the report summary and deployed Pages URL.
-- `.github/workflows/visual-regression.yml` runs on `main`, labeled PRs, and
-  manual dispatch. It generates screenshots, maintains a
+- `.github/workflows/visual-regression.yml` runs on `main`, same-repository PRs,
+  PR close events, and manual dispatch. It generates screenshots, maintains a
   `visual-regression-state` branch containing `/visual/baseline` and
   `/visual/reports`, builds the docs site from `main`, overlays `/visual`, and
-  deploys the full Pages artifact.
+  deploys the full Pages artifact. On PR close events, it deletes the PR report
+  directory and redeploys Pages without recapturing screenshots.
 - `.github/workflows/pages.yml` overlays `/visual` from the state branch before
   docs deploys, so regular docs deployments do not wipe visual reports.
 

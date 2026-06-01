@@ -1,6 +1,6 @@
 # GitHub Pages Visual Regression Implementation Plan
 
-**Goal:** Replace Argos with opt-in GitHub Pages visual reports and automatic
+**Goal:** Replace Argos with automatic GitHub Pages visual reports and automatic
 `main` baselines.
 
 **Architecture:** Reuse the existing Storybook screenshot capture script. Add a
@@ -46,14 +46,15 @@ Vitest, `pngjs`, Storybook, Playwright.
 
 - [x] Update workflow tests to expect GitHub Pages visual regression instead of
       Argos upload.
-- [x] Replace the Argos workflow with a label-gated GitHub Pages visual workflow.
+- [x] Replace the Argos workflow with an automatic GitHub Pages visual workflow.
+- [x] Remove closed pull request report directories from `/visual/reports`.
 - [x] Update `pages.yml` so docs deployments preserve `/visual`.
 - [x] Update package scripts from `argos:*` to `visual:*`.
 - [x] Run `cd frontend && npm run test -- scripts/argos-workflow-config.test.mjs --run`.
 
 ### Task 4: Docs and Verification
 
-- [x] Update `docs/testing.md` with the label/manual review flow and Pages report
+- [x] Update `docs/testing.md` with the automatic review flow and Pages report
       URL behavior.
 - [x] Run `git diff --check`.
 - [x] Run focused frontend script tests.

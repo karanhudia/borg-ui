@@ -32,17 +32,17 @@ npm run build
 ### Storybook Visual Regression
 
 Storybook visual snapshots are handled by the `GitHub Pages Visual Regression`
-workflow. Same-repository pull request runs are opt-in: add the `run-visuals`
-label to a PR, or rerun the workflow manually with the PR number. The workflow
-also runs on `main` pushes that touch frontend source, stories, Storybook
-config, frontend scripts, or frontend package metadata.
+workflow. Same-repository pull request runs happen automatically for frontend
+changes. The workflow also runs on `main` pushes that touch frontend source,
+stories, Storybook config, frontend scripts, or frontend package metadata.
 
 The workflow builds Storybook, captures screenshots with Playwright, compares
 them against the baseline stored on the `visual-regression-state` branch, and
 publishes a static report under `/visual/reports/pr-<number>/` on GitHub Pages.
 The PR description is updated with the report link plus changed, added, and
 removed screenshot lists. Merging to `main` refreshes the baseline under
-`/visual/baseline/` for future PRs.
+`/visual/baseline/` for future PRs. When a pull request is closed or merged, its
+`/visual/reports/pr-<number>/` report directory is removed from GitHub Pages.
 
 For local proof runs:
 
