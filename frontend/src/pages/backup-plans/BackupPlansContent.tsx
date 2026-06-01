@@ -546,5 +546,6 @@ function BackupPlansContentImpl({
 // re-renders BackupPlans on every keystroke; without this gate, every plan
 // card in the list would re-render too. Handler props must stay
 // reference-stable for the memo to actually skip work (BackupPlans.tsx
-// passes mutation.mutate and useState setters directly).
+// depends useCallbacks on mutation.mutate, which is the documented stable
+// reference, instead of on the mutation object whose ref changes each render).
 export const BackupPlansContent = memo(BackupPlansContentImpl)

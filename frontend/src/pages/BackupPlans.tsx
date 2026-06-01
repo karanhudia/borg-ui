@@ -724,23 +724,19 @@ export default function BackupPlans() {
   const isSubmitting =
     createMutation.isPending || updateMutation.isPending || createScriptMutation.isPending
 
-  // Stable handler references so the memoized BackupPlansContent below can
-  // skip re-rendering its plan list on every wizard keystroke. mutation.mutate
-  // and useState setters are already reference-stable; the inline arrows below
-  // would defeat React.memo's shallow comparison without useCallback.
-  const handleRunPlan = useCallback((planId: number) => runMutation.mutate(planId), [runMutation])
-  const handleCancelRun = useCallback(
-    (runId: number) => cancelRunMutation.mutate(runId),
-    [cancelRunMutation]
-  )
-  const handleTogglePlan = useCallback(
-    (planId: number) => toggleMutation.mutate(planId),
-    [toggleMutation]
-  )
-  const handleDeletePlan = useCallback(
-    (planId: number) => deleteMutation.mutate(planId),
-    [deleteMutation]
-  )
+  // React Query mutation OBJECTS are new references on every render; only
+  // `.mutate` is reference-stable across renders (documented as such in v5).
+  // Depending on the whole mutation object made these useCallbacks recreate
+  // each render, defeating React.memo on BackupPlansContent. Dep on `.mutate`
+  // directly so the callbacks are actually stable.
+  const runMutate = runMutation.mutate
+  const cancelRunMutate = cancelRunMutation.mutate
+  const toggleMutate = toggleMutation.mutate
+  const deleteMutate = deleteMutation.mutate
+  const handleRunPlan = useCallback((planId: number) => runMutate(planId), [runMutate])
+  const handleCancelRun = useCallback((runId: number) => cancelRunMutate(runId), [cancelRunMutate])
+  const handleTogglePlan = useCallback((planId: number) => toggleMutate(planId), [toggleMutate])
+  const handleDeletePlan = useCallback((planId: number) => deleteMutate(planId), [deleteMutate])
   const handleViewRepositories = useCallback(
     (planId: number) => navigate(`/repositories?backupPlanId=${planId}`),
     [navigate]
