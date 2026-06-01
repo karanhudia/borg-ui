@@ -611,37 +611,12 @@ export function DatabaseScanDialog({
           </Stack>
 
           {showSkeleton && (
-            <>
-              <Skeleton
-                variant="rounded"
-                height={56}
-                sx={{ borderRadius: 1 }}
-                animation={scanLoading ? 'wave' : 'pulse'}
-              />
-              <Box
-                sx={{
-                  display: 'grid',
-                  gap: 1.25,
-                  p: 0.75,
-                  mx: -0.75,
-                  gridTemplateColumns: {
-                    xs: 'repeat(2, minmax(0, 1fr))',
-                    sm: 'repeat(3, minmax(0, 1fr))',
-                    md: 'repeat(4, minmax(0, 1fr))',
-                  },
-                }}
-              >
-                {Array.from({ length: 4 }).map((_, index) => (
-                  <Skeleton
-                    key={index}
-                    variant="rounded"
-                    height={64}
-                    sx={{ borderRadius: 1 }}
-                    animation={scanLoading ? 'wave' : 'pulse'}
-                  />
-                ))}
-              </Box>
-            </>
+            <Skeleton
+              variant="rounded"
+              height={56}
+              sx={{ borderRadius: 1 }}
+              animation={scanLoading ? 'wave' : 'pulse'}
+            />
           )}
 
           {!showSkeleton && scanResult && scanResult.warnings.length > 0 && (

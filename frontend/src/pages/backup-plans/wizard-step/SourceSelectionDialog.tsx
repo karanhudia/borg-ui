@@ -1721,9 +1721,95 @@ export function SourceSelectionDialog({
 
   const renderDatabaseList = () => {
     const queuedDatabaseLocations = draftSourceLocations.filter((location) => location.database)
+    // Tab-level target picker: governs both "Scan for databases" (passed in as
+    // initialScanTarget below) and template-tile clicks (chooseDatabase ->
+    // applyDatabase reads lastScanContext.scanTarget). Mirrors the modal's
+    // DestinationSelect + SshConnectionSelect pattern so the same control reads
+    // as the same control across surfaces. Only local + remote here (matching
+    // the scan modal); managed agents are not a scan target for databases yet.
+    const databaseTarget = lastScanContext.scanTarget
+    const hasRemoteOptions = sshConnections.length > 0
+    const databaseTargetDestinations: DestinationOption[] = [
+      {
+        key: 'local',
+        icon: <HardDrive size={16} />,
+        label: t('backupPlans.sourceChooser.borgUiServer'),
+        description: t('backupPlans.sourceChooser.localSourceDescription'),
+      },
+      {
+        key: 'remote',
+        icon: <Server size={16} />,
+        label: t('backupPlans.sourceChooser.remoteMachine'),
+        description: hasRemoteOptions
+          ? t('backupPlans.sourceChooser.remoteMachineDescription')
+          : t('backupPlans.sourceChooser.noRemoteMachines'),
+        disabled: !hasRemoteOptions,
+      },
+    ]
+    const handleDatabaseTargetChange = (key: string) => {
+      if (key === 'local') {
+        setLastScanContext({ scanTarget: { type: 'local', sshId: '' }, label: null })
+        return
+      }
+      if (key === 'remote') {
+        if (!hasRemoteOptions) return
+        const fallbackId =
+          databaseTarget.sshId &&
+          sshConnections.some((connection) => connection.id === databaseTarget.sshId)
+            ? databaseTarget.sshId
+            : sshConnections[0].id
+        setLastScanContext({ scanTarget: { type: 'remote', sshId: fallbackId }, label: null })
+      }
+    }
+    const databaseRemoteDisabled = databaseTarget.type === 'remote' && !hasRemoteOptions
 
     return (
       <Stack spacing={2.5}>
+        <Stack spacing={2}>
+          <DestinationSelect
+            value={databaseTarget.type}
+            onChange={handleDatabaseTargetChange}
+            destinations={databaseTargetDestinations}
+            label={t('backupPlans.sourceChooser.scanTarget')}
+          />
+          {databaseTarget.type === 'remote' && hasRemoteOptions ? (
+            <SshConnectionSelect
+              value={databaseTarget.sshId || ''}
+              onChange={(id) =>
+                setLastScanContext({
+                  scanTarget: { type: 'remote', sshId: id },
+                  label: null,
+                })
+              }
+              connections={sshConnections}
+              label={t('backupPlans.sourceChooser.selectRemoteMachine')}
+              emptyMessage={t('backupPlans.sourceChooser.noRemoteMachines')}
+            />
+          ) : (
+            <Box
+              sx={{
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                bgcolor: 'action.hover',
+                color: 'text.secondary',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                px: 1.5,
+                height: 56,
+              }}
+            >
+              <HardDrive size={14} />
+              <Typography variant="body2" color="text.secondary">
+                {databaseRemoteDisabled
+                  ? t('backupPlans.sourceChooser.noRemoteMachines')
+                  : t('backupPlans.sourceChooser.readingFromLocal')}
+              </Typography>
+            </Box>
+          )}
+        </Stack>
+
         {queuedDatabaseLocations.length > 0 && (
           <Box>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -2385,7 +2471,10 @@ export function SourceSelectionDialog({
         onChoose={handleScanChoice}
         sshConnections={sshConnections}
         t={t}
-        initialScanTarget={initialScanTarget}
+        // Seed the scan modal with the tab-level picker's current target so
+        // the user sees the machine they just chose. handleScanChoice writes
+        // the modal's final target back to lastScanContext on commit.
+        initialScanTarget={lastScanContext.scanTarget}
       />
     </ResponsiveDialog>
   )
