@@ -1090,14 +1090,20 @@ describe('SourceStep', () => {
     fireEvent.click(databaseTab)
     fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /scan where/i }))
+    const scanDialogs = screen
+      .getAllByRole('dialog')
+      .filter((dialog) => within(dialog).queryByRole('heading', { name: /scan for databases/i }))
+    const scanDialog = scanDialogs[scanDialogs.length - 1]!
+    fireEvent.mouseDown(within(scanDialog).getByRole('combobox', { name: /scan where/i }))
     let listbox = await screen.findByRole('listbox')
     fireEvent.click(within(listbox).getByRole('option', { name: /remote machine/i }))
     await waitFor(() => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     })
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /select a remote machine/i }))
+    fireEvent.mouseDown(
+      within(scanDialog).getByRole('combobox', { name: /select a remote machine/i })
+    )
     listbox = await screen.findByRole('listbox')
     expect(within(listbox).getByText('backup-a@server-a.example')).toBeInTheDocument()
     expect(within(listbox).getByText(/Port 22.*\/mnt\/server-a/i)).toBeInTheDocument()
