@@ -305,6 +305,32 @@ def test_update_rclone_oauth_credentials_clears_explicit_null_values(
 
 
 @pytest.mark.unit
+def test_update_rclone_oauth_credentials_rejects_partial_input(
+    test_client: TestClient, admin_headers
+):
+    response = test_client.put(
+        "/api/rclone/oauth/credentials/drive",
+        headers=admin_headers,
+        json={"client_id": "drive-client-id"},
+    )
+    assert response.status_code == 422
+
+    response = test_client.put(
+        "/api/rclone/oauth/credentials/drive",
+        headers=admin_headers,
+        json={"client_secret": "drive-secret"},
+    )
+    assert response.status_code == 422
+
+    response = test_client.put(
+        "/api/rclone/oauth/credentials/drive",
+        headers=admin_headers,
+        json={"client_id": "drive-client-id", "client_secret": ""},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.unit
 def test_persisted_rclone_oauth_credentials_take_precedence_over_environment(
     test_client: TestClient, admin_headers, monkeypatch
 ):
