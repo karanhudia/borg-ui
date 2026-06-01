@@ -606,7 +606,7 @@ class TestBackupPlanRoutes:
         assert plan.pre_backup_script_id == script.id
         assert plan.pre_backup_script_parameters is None
         assert assignment.parameter_values is not None
-        assert "topsecret" not in assignment.parameter_values
+        assert "topsecret" not in json.dumps(assignment.parameter_values)
 
     def test_legacy_plan_level_scripts_serialize_as_script_hooks(
         self, test_client: TestClient, admin_headers, test_db
