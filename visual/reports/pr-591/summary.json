@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-06-01T16:40:36.604Z",
+  "generatedAt": "2026-06-01T16:54:12.177Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #591 visual report",
-    "commitSha": "ba1f19411910",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26768264610"
+    "commitSha": "d7c87d0169a0",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26768940703"
   },
   "totals": {
     "baseline": 238,
-    "actual": 240,
+    "actual": 250,
     "compared": 238,
     "changed": 6,
-    "added": 2,
+    "added": 12,
     "removed": 0,
     "unchanged": 232
   },
@@ -126,6 +126,46 @@
     }
   ],
   "added": [
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-fallback--mobile.png",
+      "actualPath": "images/actual/components-emptystatecard--cloud-storage-no-match-fallback--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-fallback.png",
+      "actualPath": "images/actual/components-emptystatecard--cloud-storage-no-match-fallback.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-with-search--mobile.png",
+      "actualPath": "images/actual/components-emptystatecard--cloud-storage-no-match-with-search--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-with-search.png",
+      "actualPath": "images/actual/components-emptystatecard--cloud-storage-no-match-with-search.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-remotes--mobile.png",
+      "actualPath": "images/actual/components-emptystatecard--cloud-storage-no-remotes--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-remotes.png",
+      "actualPath": "images/actual/components-emptystatecard--cloud-storage-no-remotes.png"
+    },
+    {
+      "fileName": "components-emptystatecard--default--mobile.png",
+      "actualPath": "images/actual/components-emptystatecard--default--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--default.png",
+      "actualPath": "images/actual/components-emptystatecard--default.png"
+    },
+    {
+      "fileName": "components-emptystatecard--inline-api-tokens--mobile.png",
+      "actualPath": "images/actual/components-emptystatecard--inline-api-tokens--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--inline-api-tokens.png",
+      "actualPath": "images/actual/components-emptystatecard--inline-api-tokens.png"
+    },
     {
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved--mobile.png",
       "actualPath": "images/actual/components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved--mobile.png"
