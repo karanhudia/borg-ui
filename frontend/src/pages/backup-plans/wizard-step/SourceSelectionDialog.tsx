@@ -218,6 +218,82 @@ function cleanScriptParameters(parameters?: Record<string, string> | null): Reco
   )
 }
 
+function databaseDefaultDumpRoot(database: SourceDiscoveryDatabase): string {
+  return (
+    database.source_directories[0]?.replace(/\/+$/, '') ||
+    `/var/tmp/borg-ui/database-dumps/${database.id}`
+  )
+}
+
+function sqliteDumpSlug(detectedSourcePath: string): string {
+  const filename = detectedSourcePath.trim().replace(/\/+$/, '').split('/').filter(Boolean).pop()
+  const withoutExtension = (filename || 'database').replace(/\.(db|sqlite|sqlite3)$/i, '')
+  const slug = withoutExtension
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || 'database'
+}
+
+function usedDatabasePaths(
+  locations: SourceLocation[],
+  selectedDatabase: SourceDiscoveryDatabase
+): Set<string> {
+  const paths = new Set<string>()
+  locations.forEach((location) => {
+    if (
+      location.database?.template_id === selectedDatabase.id &&
+      location.database.detected_source_path === selectedDatabase.detection_source
+    ) {
+      return
+    }
+
+    location.paths.forEach((path) => paths.add(path))
+    const database = location.database
+    if (!database) return
+    if (database.dump_path) paths.add(database.dump_path)
+    database.backup_paths?.forEach((path) => paths.add(path))
+  })
+  return paths
+}
+
+function uniqueDatabaseDumpPath(
+  candidate: string,
+  locations: SourceLocation[],
+  selectedDatabase: SourceDiscoveryDatabase
+): string {
+  const usedPaths = usedDatabasePaths(locations, selectedDatabase)
+  if (!usedPaths.has(candidate)) return candidate
+
+  for (let suffix = 2; suffix < 1000; suffix += 1) {
+    const nextCandidate = `${candidate}-${suffix}`
+    if (!usedPaths.has(nextCandidate)) return nextCandidate
+  }
+
+  return `${candidate}-1000`
+}
+
+function defaultDatabaseDumpPath(
+  database: SourceDiscoveryDatabase,
+  existingLocations: SourceLocation[]
+): string {
+  const dumpRoot = databaseDefaultDumpRoot(database)
+  const detectedSourcePath =
+    database.detected && database.detection_source?.startsWith('/')
+      ? database.detection_source
+      : null
+
+  if (database.id !== 'sqlite' || !detectedSourcePath) {
+    return dumpRoot
+  }
+
+  return uniqueDatabaseDumpPath(
+    `${dumpRoot}/${sqliteDumpSlug(detectedSourcePath)}`,
+    existingLocations,
+    database
+  )
+}
+
 function defaultDatabaseScriptParameters(
   database: SourceDatabaseSelection,
   hook: 'pre' | 'post'
@@ -713,9 +789,7 @@ export function SourceSelectionDialog({
     setPreScriptContent(database.script_drafts.pre_backup.content)
     setPostScriptContent(database.script_drafts.post_backup.content)
     setDatabaseCaptureMode('dump')
-    setDatabaseDumpPath(
-      database.source_directories[0] || `/var/tmp/borg-ui/database-dumps/${database.id}`
-    )
+    setDatabaseDumpPath(defaultDatabaseDumpPath(database, draftSourceLocations))
     setView('database-detail')
   }
 
@@ -743,9 +817,7 @@ export function SourceSelectionDialog({
       const requestedCaptureMode: DatabaseCaptureMode =
         databaseCaptureMode === 'original' && detectedSourcePath ? 'original' : 'dump'
       const dumpPath =
-        databaseDumpPath.trim() ||
-        selectedDatabase.source_directories[0] ||
-        `/var/tmp/borg-ui/database-dumps/${selectedDatabase.id}`
+        databaseDumpPath.trim() || defaultDatabaseDumpPath(selectedDatabase, draftSourceLocations)
       const backupPaths =
         requestedCaptureMode === 'original' && detectedSourcePath
           ? [detectedSourcePath]
@@ -1677,30 +1749,26 @@ export function SourceSelectionDialog({
                     variant="outlined"
                     sx={{ p: 1.25, borderRadius: 1, bgcolor: 'background.default' }}
                   >
-                    <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
-                      <DatabaseIcon size={16} />
-                      <Stack spacing={0.2} sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography variant="subtitle2" noWrap>
-                          {database.display_name}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{
-                            fontFamily:
-                              'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {sourceLocationLabel(location, sshConnections, agentMachines, t)}
-                        </Typography>
-                        {livePath && (
+                    <Stack
+                      direction={{ xs: 'column', sm: 'row' }}
+                      spacing={1.25}
+                      alignItems={{ xs: 'stretch', sm: 'center' }}
+                      sx={{ minWidth: 0 }}
+                    >
+                      <Stack
+                        direction="row"
+                        spacing={1.25}
+                        alignItems="center"
+                        sx={{ minWidth: 0, flex: 1 }}
+                      >
+                        <DatabaseIcon size={16} />
+                        <Stack spacing={0.2} sx={{ minWidth: 0, flex: 1 }}>
+                          <Typography variant="subtitle2" noWrap>
+                            {database.display_name}
+                          </Typography>
                           <Typography
                             variant="caption"
                             color="text.secondary"
-                            title={livePath}
                             sx={{
                               fontFamily:
                                 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
@@ -1709,52 +1777,77 @@ export function SourceSelectionDialog({
                               whiteSpace: 'nowrap',
                             }}
                           >
-                            {t('backupPlans.sourceChooser.databaseLivePath')}: {livePath}
+                            {sourceLocationLabel(location, sshConnections, agentMachines, t)}
                           </Typography>
-                        )}
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          title={backupPathLabel}
-                          sx={{
-                            fontFamily:
-                              'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {t('backupPlans.sourceChooser.databaseBackupPaths')}: {backupPathLabel}
-                        </Typography>
+                          {livePath && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              title={livePath}
+                              sx={{
+                                fontFamily:
+                                  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {t('backupPlans.sourceChooser.databaseLivePath')}: {livePath}
+                            </Typography>
+                          )}
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            title={backupPathLabel}
+                            sx={{
+                              fontFamily:
+                                'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {t('backupPlans.sourceChooser.databaseBackupPaths')}: {backupPathLabel}
+                          </Typography>
+                        </Stack>
                       </Stack>
-                      <Chip
-                        size="small"
-                        variant={hasSourceScript ? 'filled' : 'outlined'}
-                        color={hasSourceScript ? 'primary' : 'default'}
-                        label={
-                          hasSourceScript
-                            ? t('backupPlans.sourceChooser.databaseScriptsAssigned')
-                            : t('backupPlans.sourceChooser.databaseScriptsSkipped')
-                        }
-                      />
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        label={
-                          database.capture_mode === 'original'
-                            ? t('backupPlans.sourceChooser.captureModeOriginal')
-                            : t('backupPlans.sourceChooser.captureModeDump')
-                        }
-                      />
-                      <Tooltip title={t('backupPlans.sourceChooser.removeSourceGroup')}>
-                        <IconButton
-                          aria-label={t('backupPlans.sourceChooser.removeSourceGroup')}
-                          onClick={() => removeSourceLocation(key)}
+                      <Stack
+                        direction="row"
+                        spacing={0.75}
+                        useFlexGap
+                        flexWrap="wrap"
+                        justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}
+                        alignItems="center"
+                      >
+                        <Chip
                           size="small"
-                        >
-                          <Trash2 size={14} />
-                        </IconButton>
-                      </Tooltip>
+                          variant={hasSourceScript ? 'filled' : 'outlined'}
+                          color={hasSourceScript ? 'primary' : 'default'}
+                          label={
+                            hasSourceScript
+                              ? t('backupPlans.sourceChooser.databaseScriptsAssigned')
+                              : t('backupPlans.sourceChooser.databaseScriptsSkipped')
+                          }
+                        />
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={
+                            database.capture_mode === 'original'
+                              ? t('backupPlans.sourceChooser.captureModeOriginal')
+                              : t('backupPlans.sourceChooser.captureModeDump')
+                          }
+                        />
+                        <Tooltip title={t('backupPlans.sourceChooser.removeSourceGroup')}>
+                          <IconButton
+                            aria-label={t('backupPlans.sourceChooser.removeSourceGroup')}
+                            onClick={() => removeSourceLocation(key)}
+                            size="small"
+                          >
+                            <Trash2 size={14} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
                     </Stack>
                   </Paper>
                 )
@@ -1904,9 +1997,7 @@ export function SourceSelectionDialog({
     const effectiveCaptureMode: DatabaseCaptureMode =
       databaseCaptureMode === 'original' && canUseOriginalPath ? 'original' : 'dump'
     const effectiveDumpPath =
-      databaseDumpPath.trim() ||
-      selectedDatabase.source_directories[0] ||
-      `/var/tmp/borg-ui/database-dumps/${selectedDatabase.id}`
+      databaseDumpPath.trim() || defaultDatabaseDumpPath(selectedDatabase, draftSourceLocations)
     const effectiveBackupPaths =
       effectiveCaptureMode === 'original' && detectedPath ? [detectedPath] : [effectiveDumpPath]
 
@@ -2246,7 +2337,12 @@ export function SourceSelectionDialog({
                     selectedDatabase?.detected && selectedDatabase.detection_source?.startsWith('/')
                   )) ||
                 (databaseCaptureMode === 'dump' &&
-                  !(databaseDumpPath.trim() || selectedDatabase?.source_directories[0]))
+                  !(
+                    databaseDumpPath.trim() ||
+                    (selectedDatabase
+                      ? defaultDatabaseDumpPath(selectedDatabase, draftSourceLocations)
+                      : '')
+                  ))
               }
             >
               {t('backupPlans.sourceChooser.applyDatabase')}

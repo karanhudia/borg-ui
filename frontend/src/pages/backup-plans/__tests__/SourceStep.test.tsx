@@ -503,6 +503,35 @@ const emptyScanResponse = {
   warnings: [] as never[],
 }
 
+function sqliteScanDetection(path: string) {
+  return {
+    id: 'sqlite',
+    engine: 'SQLite',
+    display_name: 'SQLite database',
+    backup_strategy: 'online_backup',
+    source_directories: ['/var/tmp/borg-ui/database-dumps/sqlite'],
+    client_commands: ['sqlite3'],
+    documentation_url: 'https://www.sqlite.org/backup.html',
+    detected: true,
+    detection_source: path,
+    notes: ['Uses sqlite3 .backup.'],
+    script_drafts: {
+      pre_backup: {
+        name: 'Prepare SQLite backup',
+        description: 'Create a SQLite backup.',
+        content: '#!/usr/bin/env bash\nset -euo pipefail\nsqlite3 "$SQLITE_DATABASE_PATH"\n',
+        timeout: 300,
+      },
+      post_backup: {
+        name: 'Clean SQLite backup',
+        description: 'Remove transient SQLite backup files.',
+        content: '#!/usr/bin/env bash\nset -euo pipefail\nrm -rf "$BORG_UI_DB_DUMP_DIR"\n',
+        timeout: 120,
+      },
+    },
+  }
+}
+
 describe('SourceStep', () => {
   beforeEach(() => {
     apiMocks.scanDatabases.mockResolvedValue({ data: emptyScanResponse })
@@ -1179,6 +1208,85 @@ describe('SourceStep', () => {
 
     expect(await screen.findByText('/srv/app/state.sqlite')).toBeInTheDocument()
     expect(screen.getByText('/srv/app/cache.sqlite3')).toBeInTheDocument()
+  })
+
+  it('uses separate staging paths for multiple detected SQLite databases', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+    apiMocks.scanDatabases.mockResolvedValue({
+      data: {
+        scan_target: {
+          source_type: 'local',
+          source_ssh_connection_id: null,
+          label: 'This Borg UI server',
+        },
+        scanned_paths: ['/srv'],
+        detections: [
+          sqliteScanDetection('/srv/app/state.sqlite'),
+          sqliteScanDetection('/srv/app/cache.sqlite3'),
+        ],
+        templates: discoveryResponse.templates,
+        warnings: [],
+      },
+    })
+    const updateState = vi.fn()
+    const onCreateScript = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 301 })
+      .mockResolvedValueOnce({ id: 302 })
+
+    renderSourceStep({ updateState, onCreateScript })
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
+    fireEvent.click(await screen.findByRole('button', { name: /scan for databases/i }))
+
+    const stateSqlite = await screen.findByText('/srv/app/state.sqlite')
+    fireEvent.click(stateSqlite.closest('button') || stateSqlite)
+    fireEvent.click(screen.getByRole('button', { name: /add database/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/\/var\/tmp\/borg-ui\/database-dumps\/sqlite\/state/)
+      ).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /scan for databases/i }))
+    const cacheSqlite = await screen.findByText('/srv/app/cache.sqlite3')
+    fireEvent.click(cacheSqlite.closest('button') || cacheSqlite)
+    fireEvent.click(screen.getByRole('button', { name: /add database/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/\/var\/tmp\/borg-ui\/database-dumps\/sqlite\/cache/)
+      ).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /use these paths/i }))
+
+    await waitFor(() => {
+      expect(onCreateScript).toHaveBeenCalledTimes(2)
+      expect(updateState).toHaveBeenCalled()
+    })
+    const updatePayload = updateState.mock.calls[0][0]
+    expect(updatePayload.sourceDirectories).toEqual([
+      '/var/tmp/borg-ui/database-dumps/sqlite/state',
+      '/var/tmp/borg-ui/database-dumps/sqlite/cache',
+    ])
+    expect(
+      updatePayload.sourceLocations.map(
+        (location: { database: { dump_path: string } }) => location.database.dump_path
+      )
+    ).toEqual([
+      '/var/tmp/borg-ui/database-dumps/sqlite/state',
+      '/var/tmp/borg-ui/database-dumps/sqlite/cache',
+    ])
+    expect(
+      updatePayload.sourceLocations.map(
+        (location: { database: { pre_backup_script_parameters: Record<string, string> } }) =>
+          location.database.pre_backup_script_parameters.SQLITE_DATABASE_PATH
+      )
+    ).toEqual(['/srv/app/state.sqlite', '/srv/app/cache.sqlite3'])
   })
 
   it('queues database templates in the database tab without closing the modal', async () => {

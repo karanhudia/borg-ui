@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { storyRootSelector, waitForStoryRoot } from './snapshot-capture-config.mjs'
 import { writeSnapshotIfChanged } from './snapshot-file-writer.mjs'
+import { snapshotFileName, snapshotViewports } from './snapshot-viewport-config.mjs'
 
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= '0'
 
@@ -75,7 +76,9 @@ function startStaticServer(rootDir) {
     try {
       const requestUrl = new URL(request.url || '/', 'http://127.0.0.1')
       const pathname = requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname
-      const normalizedPath = path.normalize(decodeURIComponent(pathname)).replace(/^(\.\.[/\\])+/, '')
+      const normalizedPath = path
+        .normalize(decodeURIComponent(pathname))
+        .replace(/^(\.\.[/\\])+/, '')
       let filePath = path.join(rootDir, normalizedPath)
       const rootWithSeparator = `${rootDir}${path.sep}`
 
@@ -129,7 +132,9 @@ function startStaticServer(rootDir) {
 
 async function readStoryEntries() {
   if (!(await fileExists(indexPath))) {
-    throw new Error(`Storybook build not found at ${indexPath}. Run \`npm run build-storybook\` first.`)
+    throw new Error(
+      `Storybook build not found at ${indexPath}. Run \`npm run build-storybook\` first.`
+    )
   }
 
   const storybookIndex = JSON.parse(await readFile(indexPath, 'utf8'))
@@ -176,31 +181,17 @@ async function withFixedDate(page) {
   }, fixedNowIso)
 }
 
-async function captureStorySnapshots(stories, baseUrl) {
-  let chromium
-
-  try {
-    const playwright = await import('playwright')
-    chromium = playwright.chromium
-  } catch (error) {
-    throw new Error(
-      `Unable to launch Playwright Chromium. Run \`PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium\` and retry. Original error: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    )
-  }
-
-  const browser = await chromium.launch({ channel: 'chromium' })
+async function captureStorySnapshotsForViewport(stories, baseUrl, browser, viewport) {
   const context = await browser.newContext({
     deviceScaleFactor: 1,
     locale: 'en-US',
     timezoneId: 'UTC',
-    viewport: { width: 720, height: 520 },
+    viewport: { width: viewport.width, height: viewport.height },
   })
 
   try {
     for (const story of stories) {
-      const outputPath = path.join(snapshotsDir, `${story.id}.png`)
+      const outputPath = path.join(snapshotsDir, snapshotFileName(story.id, viewport))
       let lastError
 
       for (let attempt = 1; attempt <= 5; attempt += 1) {
@@ -225,17 +216,21 @@ async function captureStorySnapshots(stories, baseUrl) {
               }
             `,
           })
-          const snapshotBuffer = await page.locator(storyRootSelector).screenshot()
+          const snapshotBuffer = await page.screenshot({ fullPage: false })
           const result = await writeSnapshotIfChanged(outputPath, snapshotBuffer)
           console.log(
-            `${result.changed ? 'Wrote' : 'Kept'} ${path.relative(frontendRoot, outputPath)}`
+            `${result.changed ? 'Wrote' : 'Kept'} ${path.relative(frontendRoot, outputPath)} (${
+              viewport.id
+            } ${viewport.width}x${viewport.height})`
           )
           lastError = undefined
           break
         } catch (error) {
           lastError = error
           if (attempt < 5) {
-            console.warn(`Retrying ${story.id} snapshot after load failure (${attempt}/5)`)
+            console.warn(
+              `Retrying ${story.id} ${viewport.id} snapshot after load failure (${attempt}/5)`
+            )
           }
         } finally {
           await page.close().catch(() => {})
@@ -248,6 +243,30 @@ async function captureStorySnapshots(stories, baseUrl) {
     }
   } finally {
     await context.close().catch(() => {})
+  }
+}
+
+async function captureStorySnapshots(stories, baseUrl) {
+  let chromium
+
+  try {
+    const playwright = await import('playwright')
+    chromium = playwright.chromium
+  } catch (error) {
+    throw new Error(
+      `Unable to launch Playwright Chromium. Run \`PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium\` and retry. Original error: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  }
+
+  const browser = await chromium.launch({ channel: 'chromium' })
+
+  try {
+    for (const viewport of snapshotViewports) {
+      await captureStorySnapshotsForViewport(stories, baseUrl, browser, viewport)
+    }
+  } finally {
     await browser.close().catch(() => {})
   }
 }
@@ -256,7 +275,11 @@ async function main() {
   prependLocalHostLibraries()
 
   const stories = await readStoryEntries()
-  const expectedFiles = new Set(stories.map((story) => `${story.id}.png`))
+  const expectedFiles = new Set(
+    stories.flatMap((story) =>
+      snapshotViewports.map((viewport) => snapshotFileName(story.id, viewport))
+    )
+  )
   await removeStaleSnapshots(expectedFiles)
 
   const { server, baseUrl } = await startStaticServer(staticDir)

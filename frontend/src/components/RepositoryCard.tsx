@@ -883,14 +883,26 @@ export default function RepositoryCard({
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 0.5,
+            columnGap: 1,
+            rowGap: 0.75,
+            flexWrap: 'wrap',
+            justifyContent: 'space-between',
             pt: 1.25,
             borderTop: '1px solid',
             borderColor: isDark ? alpha('#fff', 0.06) : alpha('#000', 0.07),
           }}
         >
           {/* Secondary icon actions — left cluster */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, flex: 1 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.25,
+              flex: '1 1 260px',
+              flexWrap: 'wrap',
+              minWidth: 0,
+            }}
+          >
             {canDo('view') && (
               <Tooltip title={t('repositoryCard.buttons.info')} arrow>
                 <span>
@@ -1097,7 +1109,17 @@ export default function RepositoryCard({
           </Box>
 
           {(canEnableCloudMirror || canCreatePlan || canRunLegacyBackup) && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.75,
+                flex: '1 1 260px',
+                flexWrap: 'wrap',
+                justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                minWidth: 0,
+              }}
+            >
               {canEnableCloudMirror && (
                 <Tooltip title={t('repositoryCard.buttons.enableCloudMirror')} arrow>
                   <span>

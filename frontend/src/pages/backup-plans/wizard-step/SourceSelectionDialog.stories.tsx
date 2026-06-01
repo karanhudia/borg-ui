@@ -207,13 +207,45 @@ const detectedScanResponse = {
   warnings: [],
 }
 
+const multipleSqliteScanResponse = {
+  ...detectedScanResponse,
+  scanned_paths: ['/srv/app'],
+  detections: [
+    { ...sqliteTemplate, detected: true, detection_source: '/srv/app/state.sqlite' },
+    { ...sqliteTemplate, detected: true, detection_source: '/srv/app/cache.sqlite3' },
+  ],
+}
+
+const singleSqliteScanResponse = {
+  ...detectedScanResponse,
+  scanned_paths: ['/srv/app'],
+  detections: [{ ...sqliteTemplate, detected: true, detection_source: '/srv/app/state.sqlite' }],
+}
+
+const multipleTypeScanResponse = {
+  ...detectedScanResponse,
+  scanned_paths: ['/var/lib/postgresql', '/var/lib/mysql', '/srv/app'],
+  detections: [
+    { ...postgresqlTemplate, detected: true, detection_source: '/var/lib/postgresql' },
+    { ...mysqlTemplate, detected: true, detection_source: '/var/lib/mysql' },
+    { ...sqliteTemplate, detected: true, detection_source: '/srv/app/state.sqlite' },
+  ],
+}
+
 const nothingFoundScanResponse = {
   ...detectedScanResponse,
   detections: [],
 }
 
 interface MockOptions {
-  scanStatus?: 'detected' | 'nothing-found' | 'failed' | 'endpoint-missing'
+  scanStatus?:
+    | 'detected'
+    | 'single-sqlite'
+    | 'multiple-sqlite'
+    | 'multiple-type'
+    | 'nothing-found'
+    | 'failed'
+    | 'endpoint-missing'
   legacyTemplates?: boolean
 }
 
@@ -228,6 +260,12 @@ function useMockedDiscovery({ scanStatus = 'detected', legacyTemplates = true }:
 
     if (scanStatus === 'detected') {
       mock.onPost('/source-discovery/databases/scan').reply(200, detectedScanResponse)
+    } else if (scanStatus === 'single-sqlite') {
+      mock.onPost('/source-discovery/databases/scan').reply(200, singleSqliteScanResponse)
+    } else if (scanStatus === 'multiple-sqlite') {
+      mock.onPost('/source-discovery/databases/scan').reply(200, multipleSqliteScanResponse)
+    } else if (scanStatus === 'multiple-type') {
+      mock.onPost('/source-discovery/databases/scan').reply(200, multipleTypeScanResponse)
     } else if (scanStatus === 'nothing-found') {
       mock.onPost('/source-discovery/databases/scan').reply(200, nothingFoundScanResponse)
     } else if (scanStatus === 'endpoint-missing') {
@@ -412,6 +450,68 @@ const databaseMultiQueuedState: WizardState = {
       },
     },
   ],
+}
+
+const databaseMultiSqliteQueuedState: WizardState = {
+  ...createInitialState(),
+  sourceType: 'local',
+  sourceDirectories: [
+    '/var/tmp/borg-ui/database-dumps/sqlite/state',
+    '/var/tmp/borg-ui/database-dumps/sqlite/cache',
+  ],
+  sourceLocations: [
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/var/tmp/borg-ui/database-dumps/sqlite/state'],
+      database: {
+        template_id: 'sqlite',
+        engine: 'SQLite',
+        display_name: 'SQLite database',
+        backup_strategy: 'online_backup',
+        detected_source_path: '/srv/app/state.sqlite',
+        detection_label: 'This Borg UI server',
+        capture_mode: 'dump',
+        dump_path: '/var/tmp/borg-ui/database-dumps/sqlite/state',
+        backup_paths: ['/var/tmp/borg-ui/database-dumps/sqlite/state'],
+        script_execution_target: 'source',
+        pre_backup_script_id: 201,
+        post_backup_script_id: 202,
+        pre_backup_script_parameters: {
+          SQLITE_DATABASE_PATH: '/srv/app/state.sqlite',
+        },
+        post_backup_script_parameters: {},
+        script_execution_order: 1,
+      },
+    },
+    {
+      source_type: 'local',
+      source_ssh_connection_id: null,
+      agent_machine_id: null,
+      paths: ['/var/tmp/borg-ui/database-dumps/sqlite/cache'],
+      database: {
+        template_id: 'sqlite',
+        engine: 'SQLite',
+        display_name: 'SQLite database',
+        backup_strategy: 'online_backup',
+        detected_source_path: '/srv/app/cache.sqlite3',
+        detection_label: 'This Borg UI server',
+        capture_mode: 'dump',
+        dump_path: '/var/tmp/borg-ui/database-dumps/sqlite/cache',
+        backup_paths: ['/var/tmp/borg-ui/database-dumps/sqlite/cache'],
+        script_execution_target: 'source',
+        pre_backup_script_id: 201,
+        post_backup_script_id: 202,
+        pre_backup_script_parameters: {
+          SQLITE_DATABASE_PATH: '/srv/app/cache.sqlite3',
+        },
+        post_backup_script_parameters: {},
+        script_execution_order: 2,
+      },
+    },
+  ],
+  databaseTemplateId: 'sqlite',
 }
 
 const translations: Record<string, string> = {
@@ -760,7 +860,65 @@ export const DatabaseScanDetected: Story = {
     docs: {
       description: {
         story:
-          'Scan sub-dialog open over the Database tab. Mocked endpoint returns two detected engines; the dialog shows the scan target picker, paths, and detected tiles.',
+          'Scan sub-dialog open over the Database tab. Mocked endpoint returns detected engines including multiple SQLite files; the dialog shows the scan target picker, paths, and detected tiles.',
+      },
+    },
+  },
+}
+
+export const DatabaseScanMultipleSqliteDetected: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'multiple-sqlite' }}
+      initialView="database"
+      initialScanDialogOpen
+      scrollToText="/srv/app/state.sqlite"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Scan sub-dialog with multiple same-type SQLite detections visible in the results grid.',
+      },
+    },
+  },
+}
+
+export const DatabaseScanSingleSqliteDetected: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'single-sqlite' }}
+      initialView="database"
+      initialScanDialogOpen
+      scrollToText="/srv/app/state.sqlite"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Scan sub-dialog with one SQLite detection visible in the results grid.',
+      },
+    },
+  },
+}
+
+export const DatabaseScanMultipleTypesDetected: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={emptyWizardState}
+      mockOptions={{ scanStatus: 'multiple-type' }}
+      initialView="database"
+      initialScanDialogOpen
+      scrollToText="MySQL / MariaDB"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Scan sub-dialog with multiple database engine types visible in the results grid.',
       },
     },
   },
@@ -797,6 +955,24 @@ export const DatabaseQueuedMultipleSelection: Story = {
       description: {
         story:
           'Database tab with PostgreSQL and MySQL queued together. The badge and selected database list show multiple selections without collapsing them into one.',
+      },
+    },
+  },
+}
+
+export const DatabaseQueuedMultipleSqliteSelection: Story = {
+  render: () => (
+    <DialogStory
+      wizardState={databaseMultiSqliteQueuedState}
+      mockOptions={{ scanStatus: 'detected' }}
+      initialView="database"
+    />
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Database tab with two detected SQLite files queued together. Each selected database keeps its own staging path under the SQLite dump directory.',
       },
     },
   },
