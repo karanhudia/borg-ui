@@ -184,9 +184,9 @@ Use Database capture mode only if you need to back up the original live path
 instead of a generated dump.
 
 You can add more than one database before choosing Use these paths. When you use
-generated database scripts, Borg UI saves one pre-backup script and one
-post-backup script for the plan; each script runs the selected database template
-blocks with that database's own dump path and metadata.
+generated database scripts, Borg UI tracks the script assignments for each
+selected database source, so each database runs with its own dump path and
+metadata.
 
 ## Create a Backup Plan
 
@@ -211,6 +211,13 @@ For a new setup, start from Backup Plans:
 5. Configure archive settings, scripts, and maintenance options.
 6. Configure the schedule, or leave it disabled for manual runs.
 7. Review and save.
+
+In the Scripts step, add saved scripts from the script library to the
+pre-backup or post-backup chain. Plan scripts can be reordered, can receive
+their own parameter values, and can define behavior such as continuing or
+skipping on pre-backup failure. Post-backup scripts can run always, only after
+success, only after failure, or only after a warning. Backup Plans use saved
+scripts only; create or edit the script body from the Scripts page first.
 
 For a local repository, the plan can back up local container paths such as `/local/Documents` into `/local/borg-backups/laptop`.
 

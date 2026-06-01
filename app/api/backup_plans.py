@@ -9,7 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.security import check_repo_access, get_current_user, require_any_role
+from app.core.security import (
+    check_repo_access,
+    encrypt_secret,
+    get_current_user,
+    require_any_role,
+)
 from app.database.database import get_db
 from app.database.models import (
     BackupJob,
@@ -17,6 +22,7 @@ from app.database.models import (
     BackupPlanRepository,
     BackupPlanRun,
     BackupPlanRunRepository,
+    BackupPlanScript,
     Repository,
     ScheduledJob,
     ScheduledJobRepository,
@@ -48,9 +54,17 @@ from app.utils.source_locations import (
     legacy_source_fields,
     normalize_source_locations,
 )
+from app.utils.script_params import (
+    filter_system_variables_from_params,
+    mask_password_values,
+    validate_parameter_value,
+)
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["backup-plans"])
+
+PLAN_SCRIPT_HOOK_TYPES = {"pre-backup", "post-backup"}
+PLAN_SCRIPT_RUN_ON_VALUES = {"success", "failure", "warning", "always"}
 
 
 def _raise_check_flag_conflict(exc: CheckFlagConflictError) -> None:
@@ -72,6 +86,18 @@ class BackupPlanRepositoryPayload(BaseModel):
     custom_flags_override: Optional[str] = None
     upload_ratelimit_kib_override: Optional[int] = None
     failure_behavior_override: Optional[str] = None
+
+
+class BackupPlanScriptPayload(BaseModel):
+    script_id: int
+    hook_type: str
+    execution_order: float = 1
+    enabled: bool = True
+    custom_timeout: Optional[int] = None
+    custom_run_on: Optional[str] = None
+    continue_on_error: Optional[bool] = False
+    skip_on_failure: Optional[bool] = False
+    parameter_values: Optional[dict[str, Any]] = None
 
 
 class BackupPlanPayload(BaseModel):
@@ -100,6 +126,7 @@ class BackupPlanPayload(BaseModel):
     post_backup_script_id: Optional[int] = None
     pre_backup_script_parameters: Optional[dict[str, Any]] = None
     post_backup_script_parameters: Optional[dict[str, Any]] = None
+    script_hooks: Optional[list[BackupPlanScriptPayload]] = None
     run_repository_scripts: bool = True
     run_prune_after: bool = False
     run_compact_after: bool = False
@@ -329,6 +356,126 @@ def _serialize_repository_link(link: BackupPlanRepository) -> dict[str, Any]:
     }
 
 
+def _script_parameter_defs(script: Optional[Script]) -> list[dict[str, Any]]:
+    if not script or not script.parameters:
+        return []
+    try:
+        decoded = json.loads(script.parameters)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(decoded, list):
+        return []
+    return filter_system_variables_from_params(decoded)
+
+
+def _decode_hook_parameter_values(value: Optional[str]) -> dict[str, Any]:
+    if not value:
+        return {}
+    try:
+        decoded = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
+def _serialize_script_hook_assignment(hook: BackupPlanScript) -> dict[str, Any]:
+    script = hook.script
+    parameters = _script_parameter_defs(script)
+    parameter_values = _decode_hook_parameter_values(hook.parameter_values)
+    return {
+        "id": hook.id,
+        "script_id": hook.script_id,
+        "script_name": script.name if script else f"Script #{hook.script_id}",
+        "script_description": script.description if script else None,
+        "hook_type": hook.hook_type,
+        "execution_order": hook.execution_order,
+        "enabled": bool(hook.enabled),
+        "custom_timeout": hook.custom_timeout,
+        "custom_run_on": hook.custom_run_on,
+        "continue_on_error": bool(hook.continue_on_error),
+        "skip_on_failure": bool(hook.skip_on_failure),
+        "default_timeout": script.timeout if script else None,
+        "default_run_on": script.run_on if script else "always",
+        "parameters": parameters,
+        "parameter_values": mask_password_values(parameters, parameter_values)
+        if parameter_values
+        else None,
+    }
+
+
+def _serialize_legacy_script_hook(
+    plan: BackupPlan,
+    script: Script,
+    *,
+    hook_type: str,
+    parameter_values: Optional[dict[str, Any]],
+) -> dict[str, Any]:
+    parameters = _script_parameter_defs(script)
+    return {
+        "id": None,
+        "script_id": script.id,
+        "script_name": script.name,
+        "script_description": script.description,
+        "hook_type": hook_type,
+        "execution_order": 1,
+        "enabled": True,
+        "custom_timeout": None,
+        "custom_run_on": None,
+        "continue_on_error": False,
+        "skip_on_failure": False,
+        "default_timeout": script.timeout,
+        "default_run_on": script.run_on,
+        "parameters": parameters,
+        "parameter_values": mask_password_values(parameters, parameter_values or {})
+        if parameter_values
+        else None,
+    }
+
+
+def _serialize_plan_script_hooks(plan: BackupPlan) -> list[dict[str, Any]]:
+    explicit_hooks = [
+        hook for hook in plan.script_hooks if hook.enabled and hook.script is not None
+    ]
+    if explicit_hooks:
+        hook_order = {"pre-backup": 0, "post-backup": 1}
+        return [
+            _serialize_script_hook_assignment(hook)
+            for hook in sorted(
+                explicit_hooks,
+                key=lambda item: (
+                    hook_order.get(item.hook_type, 99),
+                    item.execution_order,
+                    item.id,
+                ),
+            )
+        ]
+
+    hooks: list[dict[str, Any]] = []
+    if plan.pre_backup_script_id:
+        pre_script = plan.pre_backup_script or None
+        if pre_script:
+            hooks.append(
+                _serialize_legacy_script_hook(
+                    plan,
+                    pre_script,
+                    hook_type="pre-backup",
+                    parameter_values=plan.pre_backup_script_parameters,
+                )
+            )
+    if plan.post_backup_script_id:
+        post_script = plan.post_backup_script or None
+        if post_script:
+            hooks.append(
+                _serialize_legacy_script_hook(
+                    plan,
+                    post_script,
+                    hook_type="post-backup",
+                    parameter_values=plan.post_backup_script_parameters,
+                )
+            )
+    return hooks
+
+
 def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]:
     enabled_links = [link for link in plan.repositories if link.enabled]
     source_directories = _decode_json_list(plan.source_directories)
@@ -373,6 +520,7 @@ def _serialize_plan(plan: BackupPlan, *, detail: bool = False) -> dict[str, Any]
                 "post_backup_script_id": plan.post_backup_script_id,
                 "pre_backup_script_parameters": plan.pre_backup_script_parameters,
                 "post_backup_script_parameters": plan.post_backup_script_parameters,
+                "script_hooks": _serialize_plan_script_hooks(plan),
                 "run_repository_scripts": bool(plan.run_repository_scripts),
                 "run_prune_after": bool(plan.run_prune_after),
                 "run_compact_after": bool(plan.run_compact_after),
@@ -531,7 +679,10 @@ def _load_plan_or_404(db: Session, plan_id: int) -> BackupPlan:
         .options(
             joinedload(BackupPlan.repositories).joinedload(
                 BackupPlanRepository.repository
-            )
+            ),
+            joinedload(BackupPlan.script_hooks).joinedload(BackupPlanScript.script),
+            joinedload(BackupPlan.pre_backup_script),
+            joinedload(BackupPlan.post_backup_script),
         )
         .filter(BackupPlan.id == plan_id)
         .first()
@@ -567,6 +718,125 @@ def _load_run_or_404(db: Session, run_id: int) -> BackupPlanRun:
             detail={"key": "backend.errors.backupPlans.runNotFound"},
         )
     return run
+
+
+def _process_hook_parameter_values(
+    script: Script, parameter_values: Optional[dict[str, Any]]
+) -> Optional[str]:
+    if not parameter_values:
+        return None
+
+    parameters = _script_parameter_defs(script)
+    processed_values: dict[str, Any] = {}
+    for param_def in parameters:
+        param_name = param_def["name"]
+        if param_name not in parameter_values:
+            continue
+        value = parameter_values[param_name]
+        is_valid, error_msg = validate_parameter_value(param_def, value)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        if param_def.get("type", "text") == "password" and value:
+            processed_values[param_name] = encrypt_secret(str(value))
+        else:
+            processed_values[param_name] = value
+
+    return json.dumps(processed_values) if processed_values else None
+
+
+def _validate_script_hooks(db: Session, payload: BackupPlanPayload) -> None:
+    if payload.script_hooks is None:
+        return
+
+    seen: set[tuple[int, str]] = set()
+    for hook in payload.script_hooks:
+        if hook.hook_type not in PLAN_SCRIPT_HOOK_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.scripts.hookTypeMustBe"},
+            )
+        if hook.custom_run_on and hook.custom_run_on not in PLAN_SCRIPT_RUN_ON_VALUES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.scripts.invalidRunCondition"},
+            )
+        if hook.custom_timeout is not None and hook.custom_timeout <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.scripts.invalidTimeout"},
+            )
+        if hook.execution_order <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.scripts.invalidExecutionOrder"},
+            )
+        key = (hook.script_id, hook.hook_type)
+        if key in seen:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"key": "backend.errors.scripts.scriptAlreadyAssigned"},
+            )
+        seen.add(key)
+        if not db.query(Script.id).filter(Script.id == hook.script_id).first():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"key": "backend.errors.scripts.scriptNotFound"},
+            )
+
+
+def _mirror_legacy_script_fields(payload: BackupPlanPayload) -> None:
+    if payload.script_hooks is None:
+        return
+
+    enabled_hooks = [hook for hook in payload.script_hooks if hook.enabled]
+    pre_hooks = sorted(
+        (hook for hook in enabled_hooks if hook.hook_type == "pre-backup"),
+        key=lambda item: item.execution_order,
+    )
+    post_hooks = sorted(
+        (hook for hook in enabled_hooks if hook.hook_type == "post-backup"),
+        key=lambda item: item.execution_order,
+    )
+    first_pre = pre_hooks[0] if pre_hooks else None
+    first_post = post_hooks[0] if post_hooks else None
+    payload.pre_backup_script_id = first_pre.script_id if first_pre else None
+    payload.pre_backup_script_parameters = (
+        first_pre.parameter_values if first_pre else None
+    )
+    payload.post_backup_script_id = first_post.script_id if first_post else None
+    payload.post_backup_script_parameters = (
+        first_post.parameter_values if first_post else None
+    )
+
+
+def _replace_script_hooks(
+    db: Session, plan: BackupPlan, payload: BackupPlanPayload
+) -> None:
+    if payload.script_hooks is None:
+        return
+
+    db.query(BackupPlanScript).filter(
+        BackupPlanScript.backup_plan_id == plan.id
+    ).delete()
+    for hook in payload.script_hooks:
+        script = db.query(Script).filter(Script.id == hook.script_id).one()
+        db.add(
+            BackupPlanScript(
+                backup_plan_id=plan.id,
+                script_id=hook.script_id,
+                hook_type=hook.hook_type,
+                execution_order=hook.execution_order,
+                enabled=hook.enabled,
+                custom_timeout=hook.custom_timeout,
+                custom_run_on=hook.custom_run_on,
+                continue_on_error=bool(hook.continue_on_error),
+                skip_on_failure=bool(hook.skip_on_failure),
+                parameter_values=_process_hook_parameter_values(
+                    script, hook.parameter_values
+                ),
+                created_at=datetime.utcnow(),
+            )
+        )
 
 
 def _validate_payload(
@@ -678,6 +948,9 @@ def _validate_payload(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail={"key": "backend.errors.scripts.scriptNotFound"},
             )
+
+    _validate_script_hooks(db, payload)
+    _mirror_legacy_script_fields(payload)
 
     seen_ids: set[int] = set()
     repos: list[Repository] = []
@@ -1086,6 +1359,7 @@ async def create_backup_plan(
     db.commit()
     db.refresh(plan)
     _replace_repository_links(db, plan, payload)
+    _replace_script_hooks(db, plan, payload)
     _clear_legacy_source_settings(payload, repositories)
     db.commit()
 
@@ -1260,6 +1534,7 @@ async def update_backup_plan(
 
     _apply_payload(plan, payload)
     _replace_repository_links(db, plan, payload)
+    _replace_script_hooks(db, plan, payload)
     _clear_legacy_source_settings(payload, repositories)
     db.commit()
     plan = _load_plan_or_404(db, plan_id)

@@ -23,6 +23,7 @@ from app.database.models import (
     Repository,
     ScheduledJob,
     BackupPlan,
+    BackupPlanScript,
     User,
 )
 from app.core.security import get_current_user, encrypt_secret
@@ -182,6 +183,7 @@ def compute_script_usage_counts(
         _ref_counts(RepositoryScript.script_id),
         _ref_counts(BackupPlan.pre_backup_script_id),
         _ref_counts(BackupPlan.post_backup_script_id),
+        _ref_counts(BackupPlanScript.script_id),
         _ref_counts(ScheduledJob.pre_backup_script_id),
         _ref_counts(ScheduledJob.post_backup_script_id),
     )
@@ -714,6 +716,19 @@ async def delete_script(
             "Cleared script reference from backup plans",
             script_id=script_id,
             count=len(backup_plans_using_script),
+        )
+
+    backup_plan_script_count = (
+        db.query(BackupPlanScript)
+        .filter(BackupPlanScript.script_id == script_id)
+        .delete(synchronize_session=False)
+    )
+    if backup_plan_script_count:
+        db.flush()
+        logger.info(
+            "Cleared script hook assignments from backup plans",
+            script_id=script_id,
+            count=backup_plan_script_count,
         )
 
     # Delete script file

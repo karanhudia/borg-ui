@@ -1,6 +1,12 @@
 import { getDefaultRepositoryEncryption } from '../../components/wizard'
 import { getBrowserTimeZone } from '../../utils/dateUtils'
-import type { BackupPlan, SourceDatabaseSelection, SourceLocation, SourceType } from '../../types'
+import type {
+  BackupPlan,
+  BackupPlanScriptHook,
+  SourceDatabaseSelection,
+  SourceLocation,
+  SourceType,
+} from '../../types'
 import type { BasicRepositoryState, WizardState } from './types'
 
 export const createInitialState = (): WizardState => ({
@@ -27,6 +33,7 @@ export const createInitialState = (): WizardState => ({
   postBackupScriptId: null,
   preBackupScriptParameters: {},
   postBackupScriptParameters: {},
+  scriptHooks: [],
   runRepositoryScripts: true,
   runPruneAfter: false,
   runCompactAfter: false,
@@ -189,6 +196,45 @@ function sourceConnectionFromLocations(locations: SourceLocation[]): number | ''
   return locations[0].source_ssh_connection_id ? Number(locations[0].source_ssh_connection_id) : ''
 }
 
+function normalizePlanScriptHooks(plan: BackupPlan): BackupPlanScriptHook[] {
+  if (plan.script_hooks && plan.script_hooks.length > 0) {
+    return plan.script_hooks
+      .filter((hook) => Number.isInteger(Number(hook.script_id)) && Number(hook.script_id) > 0)
+      .map((hook, index) => ({
+        ...hook,
+        script_id: Number(hook.script_id),
+        execution_order: Number(hook.execution_order) > 0 ? Number(hook.execution_order) : index + 1,
+        enabled: hook.enabled !== false,
+        continue_on_error: Boolean(hook.continue_on_error),
+        skip_on_failure: Boolean(hook.skip_on_failure),
+        parameter_values: hook.parameter_values || {},
+      }))
+  }
+
+  const hooks: BackupPlanScriptHook[] = []
+  if (plan.pre_backup_script_id) {
+    hooks.push({
+      script_id: plan.pre_backup_script_id,
+      hook_type: 'pre-backup',
+      execution_order: 1,
+      enabled: true,
+      continue_on_error: false,
+      skip_on_failure: false,
+      parameter_values: plan.pre_backup_script_parameters || {},
+    })
+  }
+  if (plan.post_backup_script_id) {
+    hooks.push({
+      script_id: plan.post_backup_script_id,
+      hook_type: 'post-backup',
+      execution_order: 1,
+      enabled: true,
+      parameter_values: plan.post_backup_script_parameters || {},
+    })
+  }
+  return hooks
+}
+
 export function planToState(plan: BackupPlan): WizardState {
   const repositoryLinks = (plan.repositories || [])
     .filter((link) => link.enabled)
@@ -197,6 +243,13 @@ export function planToState(plan: BackupPlan): WizardState {
   const sourceDirectories = sourceLocations.length
     ? sourceLocations.flatMap((location) => location.paths)
     : plan.source_directories || []
+  const scriptHooks = normalizePlanScriptHooks(plan)
+  const firstPreHook = scriptHooks
+    .filter((hook) => hook.hook_type === 'pre-backup' && hook.enabled !== false)
+    .sort((left, right) => left.execution_order - right.execution_order)[0]
+  const firstPostHook = scriptHooks
+    .filter((hook) => hook.hook_type === 'post-backup' && hook.enabled !== false)
+    .sort((left, right) => left.execution_order - right.execution_order)[0]
 
   return {
     name: plan.name,
@@ -218,10 +271,13 @@ export function planToState(plan: BackupPlan): WizardState {
     scheduleEnabled: Boolean(plan.schedule_enabled),
     cronExpression: plan.cron_expression || '0 21 * * *',
     timezone: plan.timezone || getBrowserTimeZone(),
-    preBackupScriptId: plan.pre_backup_script_id || null,
-    postBackupScriptId: plan.post_backup_script_id || null,
-    preBackupScriptParameters: plan.pre_backup_script_parameters || {},
-    postBackupScriptParameters: plan.post_backup_script_parameters || {},
+    preBackupScriptId: firstPreHook?.script_id ?? plan.pre_backup_script_id ?? null,
+    postBackupScriptId: firstPostHook?.script_id ?? plan.post_backup_script_id ?? null,
+    preBackupScriptParameters:
+      firstPreHook?.parameter_values ?? plan.pre_backup_script_parameters ?? {},
+    postBackupScriptParameters:
+      firstPostHook?.parameter_values ?? plan.post_backup_script_parameters ?? {},
+    scriptHooks,
     runRepositoryScripts: plan.run_repository_scripts ?? true,
     runPruneAfter: Boolean(plan.run_prune_after),
     runCompactAfter: Boolean(plan.run_compact_after),
