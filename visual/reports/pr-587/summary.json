@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-06-01T15:41:34.861Z",
+  "generatedAt": "2026-06-01T16:28:43.690Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #587 visual report",
-    "commitSha": "7c50e36e37c5",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26765155114"
+    "commitSha": "97cd9b805db0",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26767463543"
   },
   "totals": {
     "baseline": 238,
     "actual": 238,
     "compared": 238,
-    "changed": 12,
+    "changed": 2,
     "added": 0,
     "removed": 0,
-    "unchanged": 226
+    "unchanged": 236
   },
   "changed": [
     {
@@ -50,186 +50,6 @@
       "actual": {
         "width": 1280,
         "height": 800
-      }
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png",
-      "diffPixels": 2,
-      "totalPixels": 329160,
-      "diffRatio": 0.0000060760724267833275,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png",
-      "diffPixels": 2,
-      "totalPixels": 329160,
-      "diffRatio": 0.0000060760724267833275,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
-      "diffPixels": 2,
-      "totalPixels": 329160,
-      "diffRatio": 0.0000060760724267833275,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
-      "diffPixels": 36,
-      "totalPixels": 329160,
-      "diffRatio": 0.0001093693036820999,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
-      "diffPixels": 63,
-      "totalPixels": 329160,
-      "diffRatio": 0.0001913962814436748,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-cloud-mirror--scheduled--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-cloud-mirror--scheduled--mobile.png",
-      "actualPath": "images/actual/components-wizard-cloud-mirror--scheduled--mobile.png",
-      "diffPath": "images/diff/components-wizard-cloud-mirror--scheduled--mobile.png",
-      "diffPixels": 49,
-      "totalPixels": 329160,
-      "diffRatio": 0.0001488637744561915,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png",
-      "actualPath": "images/actual/components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png",
-      "diffPath": "images/diff/components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png",
-      "diffPixels": 178,
-      "totalPixels": 329160,
-      "diffRatio": 0.0005407704459837161,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--agent-execution-with-ssh-repository.png",
-      "actualPath": "images/actual/components-wizard-repository-location--agent-execution-with-ssh-repository.png",
-      "diffPath": "images/diff/components-wizard-repository-location--agent-execution-with-ssh-repository.png",
-      "diffPixels": 9,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0000087890625,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--community-plan-locked-destinations.png",
-      "actualPath": "images/actual/components-wizard-repository-location--community-plan-locked-destinations.png",
-      "diffPath": "images/diff/components-wizard-repository-location--community-plan-locked-destinations.png",
-      "diffPixels": 7,
-      "totalPixels": 1024000,
-      "diffRatio": 0.0000068359375,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 1280,
-        "height": 800
-      },
-      "actual": {
-        "width": 1280,
-        "height": 800
-      }
-    },
-    {
-      "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "baselinePath": "images/baseline/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "actualPath": "images/actual/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "diffPath": "images/diff/components-wizard-repository-location--direct-borg-2-rclone--mobile.png",
-      "diffPixels": 23,
-      "totalPixels": 329160,
-      "diffRatio": 0.00006987483290800826,
-      "dimensionsChanged": false,
-      "baseline": {
-        "width": 390,
-        "height": 844
-      },
-      "actual": {
-        "width": 390,
-        "height": 844
       }
     }
   ],
@@ -279,6 +99,9 @@
       "fileName": "backup-plans-schedulestep--check-flag-conflict.png"
     },
     {
+      "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked--mobile.png"
+    },
+    {
       "fileName": "backup-plans-sourceselectiondialog--community-mixed-sources-locked.png"
     },
     {
@@ -286,6 +109,9 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-detected-sqlite-detail.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-selection.png"
@@ -369,7 +195,13 @@
       "fileName": "backup-plans-sourceselectiondialog--path-picker-empty.png"
     },
     {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png"
+    },
+    {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot.png"
@@ -379,6 +211,9 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png"
+    },
+    {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections.png"
@@ -690,6 +525,9 @@
       "fileName": "components-wizard-cloud-mirror--requires-pro.png"
     },
     {
+      "fileName": "components-wizard-cloud-mirror--scheduled--mobile.png"
+    },
+    {
       "fileName": "components-wizard-cloud-mirror--scheduled.png"
     },
     {
@@ -729,6 +567,9 @@
       "fileName": "components-wizard-rclone-remote-dialog--custom-backend-remote.png"
     },
     {
+      "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote--mobile.png"
+    },
+    {
       "fileName": "components-wizard-rclone-remote-dialog--guided-google-drive-remote.png"
     },
     {
@@ -747,7 +588,16 @@
       "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository--mobile.png"
     },
     {
+      "fileName": "components-wizard-repository-location--agent-execution-with-ssh-repository.png"
+    },
+    {
       "fileName": "components-wizard-repository-location--community-plan-locked-destinations--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--community-plan-locked-destinations.png"
+    },
+    {
+      "fileName": "components-wizard-repository-location--direct-borg-2-rclone--mobile.png"
     },
     {
       "fileName": "components-wizard-repository-location--direct-borg-2-rclone.png"
