@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-06-01T16:24:31.892Z",
+  "generatedAt": "2026-06-01T17:08:18.206Z",
   "reportUrl": "",
   "metadata": {
     "title": "PR #588 visual report",
-    "commitSha": "3bad4bdadf69",
-    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26767440344"
+    "commitSha": "88907fdcecb8",
+    "runUrl": "https://github.com/karanhudia/borg-ui/actions/runs/26769642699"
   },
   "totals": {
-    "baseline": 238,
-    "actual": 238,
-    "compared": 238,
-    "changed": 8,
+    "baseline": 250,
+    "actual": 250,
+    "compared": 250,
+    "changed": 9,
     "added": 0,
     "removed": 0,
-    "unchanged": 230
+    "unchanged": 241
   },
   "changed": [
     {
@@ -89,6 +89,24 @@
       }
     },
     {
+      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--database-queued-selection--mobile.png",
+      "diffPixels": 3,
+      "totalPixels": 329160,
+      "diffRatio": 0.00000911410864017499,
+      "dimensionsChanged": false,
+      "baseline": {
+        "width": 390,
+        "height": 844
+      },
+      "actual": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
       "fileName": "backup-plans-sourceselectiondialog--database-template-detail--mobile.png",
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--database-template-detail--mobile.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--database-template-detail--mobile.png",
@@ -129,9 +147,9 @@
       "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
       "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
       "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups--mobile.png",
-      "diffPixels": 24,
+      "diffPixels": 26,
       "totalPixels": 329160,
-      "diffRatio": 0.00007291286912139993,
+      "diffRatio": 0.00007898894154818325,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -143,13 +161,13 @@
       }
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
-      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
-      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
-      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png",
-      "diffPixels": 2,
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "baselinePath": "images/baseline/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "actualPath": "images/actual/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "diffPath": "images/diff/backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png",
+      "diffPixels": 60,
       "totalPixels": 329160,
-      "diffRatio": 0.0000060760724267833275,
+      "diffRatio": 0.0001822821728034998,
       "dimensionsChanged": false,
       "baseline": {
         "width": 390,
@@ -225,9 +243,6 @@
       "fileName": "backup-plans-sourceselectiondialog--database-queued-multiple-sqlite-selection.png"
     },
     {
-      "fileName": "backup-plans-sourceselectiondialog--database-queued-selection--mobile.png"
-    },
-    {
       "fileName": "backup-plans-sourceselectiondialog--database-queued-selection.png"
     },
     {
@@ -294,6 +309,9 @@
       "fileName": "backup-plans-sourceselectiondialog--path-picker-mixed-single-path-groups.png"
     },
     {
+      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot--mobile.png"
+    },
+    {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-btrfs-snapshot.png"
     },
     {
@@ -301,9 +319,6 @@
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-incomplete-zfs-snapshot.png"
-    },
-    {
-      "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections--mobile.png"
     },
     {
       "fileName": "backup-plans-sourceselectiondialog--path-picker-with-local-selections.png"
@@ -415,6 +430,36 @@
     },
     {
       "fileName": "components-destinationselect--repository-destinations.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-fallback--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-fallback.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-with-search--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-match-with-search.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-remotes--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--cloud-storage-no-remotes.png"
+    },
+    {
+      "fileName": "components-emptystatecard--default--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--default.png"
+    },
+    {
+      "fileName": "components-emptystatecard--inline-api-tokens--mobile.png"
+    },
+    {
+      "fileName": "components-emptystatecard--inline-api-tokens.png"
     },
     {
       "fileName": "components-fileexplorerdialog--managed-agent-browser--mobile.png"
@@ -631,6 +676,12 @@
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-missing.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved--mobile.png"
+    },
+    {
+      "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-credentials-partially-saved.png"
     },
     {
       "fileName": "components-wizard-rclone-remote-dialog--borg-ui-o-auth-setup-missing--mobile.png"
