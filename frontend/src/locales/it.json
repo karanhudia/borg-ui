@@ -4129,7 +4129,7 @@
         "remoteNotFound": "Remoto rclone non trovato",
         "remoteInUse": "Questo remoto è ancora usato da uno o più repository",
         "updateUnsupported": "Questo aggiornamento del remoto rclone non è supportato",
-        "mirrorUnsupportedPrimary": "Il mirror cloud al momento supporta solo repository primari locali e SSH",
+        "mirrorUnsupportedPrimary": "Il mirror cloud è supportato per i repository primari locali e SSH. I repository di agenti gestiti richiedono una strategia di mirror separata.",
         "remotePathNotVerified": "Questo percorso remoto rclone non è vuoto. Sfoglia e conferma il percorso di destinazione prima della sincronizzazione.",
         "remotePathPreflightFailed": "Impossibile verificare questo percorso remoto rclone",
         "cachePathServerOwned": "Il percorso cache rclone è gestito dal server",
