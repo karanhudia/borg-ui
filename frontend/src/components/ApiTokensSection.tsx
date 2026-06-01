@@ -19,6 +19,7 @@ import { Plus, Trash2, Key, Copy, Check } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { tokensAPI } from '../services/api'
 import { formatDateShort } from '../utils/dateUtils'
+import EmptyStateCard from './EmptyStateCard'
 
 interface Token {
   id: number
@@ -134,12 +135,7 @@ export default function ApiTokensSection() {
               <CircularProgress size={24} />
             </Box>
           ) : tokens.length === 0 ? (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Key size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
-              <Typography variant="body2" color="text.secondary">
-                No tokens yet
-              </Typography>
-            </Box>
+            <EmptyStateCard inline icon={<Key size={32} />} title="No tokens yet" />
           ) : (
             <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
               <Box component="thead">
