@@ -230,6 +230,17 @@ function databaseDetectedPath(database: SourceDiscoveryDatabase): string | null 
   return path?.startsWith('/') ? path : null
 }
 
+function databaseDisplayTitle(
+  database: SourceDiscoveryDatabase | null | undefined,
+  t: TFunction
+): string {
+  return (
+    database?.display_name?.trim() ||
+    database?.engine?.trim() ||
+    t('backupPlans.sourceChooser.databaseTitle')
+  )
+}
+
 function sqliteDumpSlug(detectedSourcePath: string): string {
   const filename = detectedSourcePath.trim().replace(/\/+$/, '').split('/').filter(Boolean).pop()
   const withoutExtension = (filename || 'database').replace(/\.(db|sqlite|sqlite3)$/i, '')
@@ -2020,6 +2031,8 @@ export function SourceSelectionDialog({
   const renderDatabaseDetail = () => {
     if (!selectedDatabase) return null
 
+    const databaseNotes = selectedDatabase.notes.map((note) => note.trim()).filter(Boolean)
+
     // detection_source can be either a real filesystem path (when the scan
     // located a data dir) or a string like "pg_dump available on PATH" (when
     // only the client CLI was found). Show and use the discovered path only
@@ -2087,20 +2100,33 @@ export function SourceSelectionDialog({
 
     return (
       <Stack spacing={2}>
-        <Box>
-          <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
-            <Chip size="small" label={selectedDatabase.engine} />
-            <Chip size="small" label={selectedDatabase.backup_strategy.replace(/_/g, ' ')} />
-            <Tooltip title={selectedDatabase.notes.join(' ')}>
-              <Chip
-                size="small"
-                icon={<Info size={14} />}
-                label={t('backupPlans.sourceChooser.notesLabel')}
-                variant="outlined"
-              />
-            </Tooltip>
-          </Stack>
-        </Box>
+        {databaseNotes.length > 0 && (
+          <Box
+            sx={{
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              p: 1.25,
+              bgcolor: 'action.hover',
+            }}
+          >
+            <Stack spacing={0.75}>
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <Info size={14} />
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                  {t('backupPlans.sourceChooser.notesLabel')}
+                </Typography>
+              </Stack>
+              <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2.5 }}>
+                {databaseNotes.map((note) => (
+                  <Typography key={note} component="li" variant="body2">
+                    {note}
+                  </Typography>
+                ))}
+              </Stack>
+            </Stack>
+          </Box>
+        )}
         {/* Single info block that explicitly names two distinct things:
             the live DB instance the pre-backup script targets, and the dump
             directory Borg actually captures. Previously these sat in two
@@ -2437,8 +2463,7 @@ export function SourceSelectionDialog({
         <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
           <Typography component="span" variant="h6" sx={{ fontWeight: 600 }} noWrap>
             {view === 'database' && t('backupPlans.sourceChooser.databaseBackupTitle')}
-            {view === 'database-detail' &&
-              (selectedDatabase?.display_name || t('backupPlans.sourceChooser.databaseTitle'))}
+            {view === 'database-detail' && databaseDisplayTitle(selectedDatabase, t)}
             {view === 'paths' && t('backupPlans.sourceChooser.title')}
           </Typography>
         </Stack>

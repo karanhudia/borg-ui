@@ -254,6 +254,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseTemplates': 'Templates',
   'backupPlans.sourceChooser.detectedDatabases': 'Detected databases',
   'backupPlans.sourceChooser.scriptDrafts': 'Script drafts',
+  'backupPlans.sourceChooser.notesLabel': 'Notes',
   'backupPlans.sourceChooser.preScriptDraft': 'Pre-backup script draft',
   'backupPlans.sourceChooser.postScriptDraft': 'Post-backup script draft',
   'backupPlans.sourceChooser.createScripts': 'Create new scripts',
@@ -276,6 +277,7 @@ const translations: Record<string, string> = {
   'backupPlans.sourceChooser.databaseLivePath': 'Live database path',
   'backupPlans.sourceChooser.databaseDumpPath': 'Dump path',
   'backupPlans.sourceChooser.databaseBackupPaths': 'Final Borg paths',
+  'backupPlans.sourceChooser.databaseBackupTitle': 'Add database backup',
   'backupPlans.sourceChooser.addSourceGroup': 'Add source group',
   'backupPlans.sourceChooser.localSource': 'Borg UI server',
   'backupPlans.sourceChooser.borgUiServer': 'Borg UI server',
@@ -1451,6 +1453,23 @@ describe('SourceStep', () => {
       expect(updatePayload.preBackupScriptId).toBeUndefined()
       expect(updatePayload.postBackupScriptId).toBeUndefined()
     })
+  }, 45000)
+
+  it('shows a template-specific database title with notes instead of metadata chips', async () => {
+    apiMocks.databases.mockResolvedValue({ data: discoveryResponse })
+
+    renderSourceStep()
+
+    fireEvent.click(screen.getByRole('button', { name: /choose source/i }))
+    const databaseTab = await screen.findByRole('tab', { name: /^database$/i })
+    fireEvent.click(databaseTab)
+    const mysqlTemplate = await screen.findByText(/^MySQL$/i)
+    fireEvent.click(mysqlTemplate.closest('button') || mysqlTemplate)
+
+    expect(screen.getByRole('heading', { name: /^MySQL database$/i })).toBeInTheDocument()
+    expect(screen.getByText('Uses mysqldump.')).toBeInTheDocument()
+    expect(screen.queryByText('MySQL')).not.toBeInTheDocument()
+    expect(screen.queryByText('logical dump')).not.toBeInTheDocument()
   })
 
   it('shows the templates grid inline on the Database tab without a Show templates toggle', async () => {
@@ -1554,5 +1573,5 @@ describe('SourceStep', () => {
       expect(updatePayload.preBackupScriptId).toBeUndefined()
       expect(updatePayload.postBackupScriptId).toBeUndefined()
     })
-  })
+  }, 45000)
 })
